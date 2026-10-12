@@ -131,6 +131,8 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
       const profileCommand=['UPDATE_ADMINISTRATIVE_PROFILE','UPDATE_LEARNER'].includes(result.rows[0].commandType);
       const onboardingCommand=['SAVE_ONBOARDING','COMPLETE_ONBOARDING'].includes(result.rows[0].commandType);
       const trainingCommand=result.rows[0].commandType==='CREATE_TRAINING';
+      // La preuve appartient déjà à son auteur (filtre ci-dessus) ; le droit de gérer les signalements est relu.
+      const observationThemesCommand=result.rows[0].commandType==='SAVE_OBSERVATION_THEMES' && (await db.query<{ok:boolean}>('SELECT drivy.can_manage_observation_themes($1) AS ok',[schoolId])).rows[0]?.ok===true;
       if(trainingCommand && !(await db.query('SELECT t.id FROM drivy.training t JOIN drivy.learner_profile l ON l.id=t.learner_id AND l.school_id=t.school_id WHERE t.school_id=$1 AND t.id=$2',[schoolId,result.rows[0].resourceId])).rowCount)throw notFound();
       const ownMemberChange=result.rows[0].commandType==='UPDATE_MEMBER' && result.rows[0].resourceId===member.id;
       if(profileCommand && !(await db.query('SELECT id FROM drivy.learner_profile WHERE school_id=$1 AND (id=$2 OR profile_id=$2)',[schoolId,result.rows[0].resourceId])).rowCount) throw notFound();
@@ -138,7 +140,7 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
         const progress=(await db.query<{kind:string}>('SELECT kind FROM drivy.onboarding_progress WHERE school_id=$1 AND id=$2',[schoolId,result.rows[0].resourceId])).rows[0];
         if(!progress || !(progress.kind==='STUDENT'?member.roles.includes('LEARNER'):member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role)))) throw notFound();
       }
-      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !planningCommand && !reportCommand && !captureCommand && !captureObservationCommand && !permitCommand && !outcomeCommand && !sharingCommand)
+      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !observationThemesCommand && !planningCommand && !reportCommand && !captureCommand && !captureObservationCommand && !permitCommand && !outcomeCommand && !sharingCommand)
         throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires à cette opération ne sont plus disponibles.');
       return {...result.rows[0],committedAt:result.rows[0].committedAt.toISOString()};
     });

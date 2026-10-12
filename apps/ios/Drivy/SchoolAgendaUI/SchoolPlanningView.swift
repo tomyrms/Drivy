@@ -120,7 +120,7 @@ struct SchoolPlanningView: View {
                         .foregroundStyle(DrivyTheme.muted)
                 }
                 if let training = model.selectedTraining {
-                    LabeledContent("Formation") { Text("Permis \(training.categoryCode)").foregroundStyle(DrivyTheme.muted) }
+                    LabeledContent("Formation") { DrivingLicenseValue(code: training.categoryCode) }
                 }
             }
         } header: { Text("Élève et formation").drivyFormSectionHeader() }
@@ -137,13 +137,15 @@ struct SchoolPlanningView: View {
     /// Une seule formation en cours : il n’y a rien à choisir, une ligne suffit (comme pour un déplacement).
     @ViewBuilder private var trainingChoice: some View {
         if model.trainings.count == 1, let training = model.trainings.first, training.id == model.trainingID {
-            LabeledContent("Formation") { Text("Permis \(training.categoryCode)").foregroundStyle(DrivyTheme.muted) }
+            LabeledContent("Formation") { DrivingLicenseValue(code: training.categoryCode) }
         } else {
             Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
                 if let id { Task { await model.selectTraining(id) } }
             })) {
                 Text("Choisir une formation").tag(nil as UUID?)
-                ForEach(model.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
+                ForEach(model.trainings) { training in
+                    DrivingLicenseLabel(title: "Permis \(training.categoryCode)", code: training.categoryCode).tag(Optional(training.id))
+                }
             }.disabled(!model.canMutate)
         }
     }

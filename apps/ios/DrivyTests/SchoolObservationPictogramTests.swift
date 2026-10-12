@@ -26,6 +26,65 @@ struct SchoolObservationPictogramTests {
         }
     }
 
+    /// La clé du thème suffit : le dessin ne dépend ni du texte relu, ni de la compétence, ni de l’affichage réglé.
+    @Test func everyThemeKeyOfTheCatalogHasItsPictogram() {
+        #expect(SchoolObservationPictogram.allCases.count == SchoolObservationThemeCatalog.embedded.count)
+        for theme in SchoolObservationThemeCatalog.embedded {
+            let pictogram = SchoolObservationPictogram(themeKey: theme.key, title: "Texte réécrit à la relecture")
+            #expect(pictogram?.rawValue == theme.key, "\(theme.key)")
+            #expect(pictogram?.glyph == .asset("Observation-\(theme.key)"), "\(theme.key)")
+            // Sans clé, le titre de la tuile et sa compétence retrouvent le même dessin.
+            #expect(SchoolObservationPictogram(title: theme.title, competencyKey: theme.competencyKeys[0])?.rawValue == theme.key, "\(theme.title)")
+            #expect(SchoolObservationPictogram(title: theme.title)?.rawValue == theme.key, "\(theme.title) sans compétence")
+        }
+        #expect(SchoolObservationPictogram(themeKey: "braking", title: "Bonne anticipation", competencyKey: "anticipation") == .braking)
+    }
+
+    /// Observations enregistrées avant les clés, ou par une app sans réponse de l’école.
+    @Test func observationsWithoutAKeyAreStillRecognised() {
+        let expected: [(String, String?, SchoolObservationPictogram)] = [
+            ("Clignotants", "observation", .indicators), ("Clignotant oublié en sortie de giratoire", "observation", .indicators),
+            ("Distance de sécurité", "vitesse", .followingDistance), ("Freinage", "vehicule", .braking),
+            ("Freinage tardif", nil, .braking), ("Changement de voie", "placement", .laneChange),
+            ("Changement de voie sans contrôle", nil, .laneChange),
+            // Une précision ne sort jamais de sa compétence : le texte relu ne déplace pas le thème.
+            ("Freinage tardif avant le giratoire", "intersections", .intersections),
+            ("Clignotant oublié", "vitesse", .speed), ("Distance de sécurité", "placement", .placement),
+            ("Adaptation de la vitesse", "vitesse", .speed), ("Observation et contrôles", "observation", .observation),
+        ]
+        for (title, key, theme) in expected {
+            #expect(SchoolObservationPictogram(title: title, competencyKey: key) == theme, "\(title)")
+        }
+        // Une clé inconnue de cette version ne casse rien : compétence et titre reprennent la main.
+        #expect(SchoolObservationPictogram(themeKey: "tunnel", title: "Vitesse", competencyKey: "vitesse") == .speed)
+        #expect(SchoolObservationPictogram(themeKey: "tunnel", title: "Note libre") == nil)
+    }
+
+    /// Démarrage, Virages, Éco-conduite : le titre précise un sous-thème de sa compétence, jamais d’une autre,
+    /// et ne reprend aucun texte qu’un mot plus ancien reconnaissait déjà.
+    @Test func theLatestThemesRefineTheirOwnCompetencyOnly() {
+        let expected: [(String, String?, SchoolObservationPictogram?)] = [
+            ("Démarrage", "vehicule", .movingOff), ("Démarrage en côte", "vehicule", .movingOff),
+            ("Calage au feu", "vehicule", .movingOff), ("Virages", "placement", .bends),
+            ("Placement en virage", "placement", .bends), ("Éco-conduite", "vehicule", .ecoDriving),
+            ("Bon réflexe eco-drive", "vehicule", .ecoDriving), ("Écoconduite : rapport trop bas", "vehicule", .ecoDriving),
+            // La compétence prime : le mot ne sort pas de la sienne.
+            ("Démarrage trop rapide", "vitesse", .speed), ("Démarrage sans regarder", "observation", .observation),
+            ("Vitesse en virage", "vitesse", .speed), ("Éco-conduite", "anticipation", .anticipation),
+            ("Démarrage", "inconnue", .movingOff), ("Freinage puis démarrage", "vehicule", .braking),
+            // Sans compétence : un mot plus ancien garde la main, un mot nouveau ne prend que ce que rien ne reconnaissait.
+            ("Démarrage du véhicule", nil, .vehicle), ("Vitesse en virage", nil, .speed),
+            ("Observation avant le virage", nil, .observation), ("Démarrage en côte", nil, .movingOff),
+            ("Virages serrés", nil, .bends), ("Éco-conduite", nil, .ecoDriving),
+            // « calage » est un mot, pas une fin de mot.
+            ("Décalage vers la gauche", nil, nil), ("Décalage vers la gauche", "vehicule", .vehicle),
+            ("A calé deux fois", nil, nil),
+        ]
+        for (title, key, theme) in expected {
+            #expect(SchoolObservationPictogram(title: title, competencyKey: key) == theme, "\(title) / \(key ?? "sans compétence")")
+        }
+    }
+
     @Test func competencyWinsOverAReviewedText() {
         #expect(SchoolObservationPictogram(title: "Trop vite à l’entrée du giratoire", competencyKey: "vitesse") == .speed)
         #expect(SchoolObservationPictogram(title: "Signalisation", competencyKey: "vitesse") == .speed)

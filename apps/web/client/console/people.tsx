@@ -25,6 +25,7 @@ const grants: readonly { value: string; label: string }[] = [
   { value: 'VALIDATE_REQUIREMENT', label: 'Valider les exigences' }, { value: 'REVIEW_REGULATORY_PROFILE', label: 'Revoir les profils réglementaires' },
   { value: 'MANAGE_LEARNER_ARCHIVES', label: 'Gérer les archives des élèves' }, { value: 'VIEW_SCHOOL_METRICS', label: 'Consulter les indicateurs de l’école' },
   { value: 'VIEW_FINANCIAL_METRICS', label: 'Consulter les indicateurs financiers' }, { value: 'EXPORT_MANAGEMENT', label: 'Exporter les données de gestion' },
+  { value: 'MANAGE_OBSERVATION_THEMES', label: 'Gérer les signalements' },
 ];
 const grantLabel = (value: string) => grants.find(item => item.value === value)?.label ?? 'Autorisation inconnue';
 const rolesText = (values: readonly Role[]) => values.length ? values.map(roleLabel).join(' · ') : 'Aucun rôle';

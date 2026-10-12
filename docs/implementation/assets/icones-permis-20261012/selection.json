@@ -1,0 +1,510 @@
+{
+ "a": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 4,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.55,
+    "ecart": "un deux-roues est déjà un trait : A et B se rejoignent, roues plus fines en A"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 3,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "roues pleines : le deux-roues devient deux pastilles à 16 pt"
+   }
+  },
+  "pourquoi": "Moto lourde : carénage, réservoir et selle d'un seul profil, grandes roues annelées."
+ },
+ "a1": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 4,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.55,
+    "ecart": "un deux-roues est déjà un trait : A et B se rejoignent, roues plus fines en A"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 3,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "roues pleines : le deux-roues devient deux pastilles à 16 pt"
+   }
+  },
+  "pourquoi": "Même profil que A sans carénage, à l'échelle de A : plus basse, plus légère."
+ },
+ "b": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.4
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 5,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 5,
+    "total": 4.8,
+    "ecart": "la voiture de référence de la famille"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "La voiture de référence : deux vitres, roues-repères mordues dans la caisse."
+ },
+ "b1": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.4
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "Voiturette à une vitre, plus haute que longue, à l'échelle de B."
+ },
+ "be": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 2,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "contour dédoublé : remorque et véhicule fusionnent à 20 pt"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.25,
+    "ecart": "ensemble large donc petit ; le timon et la roue de remorque restent lisibles à 20 pt"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.25,
+    "ecart": "les roues pleines de la remorque collent à celles du véhicule à 16 pt"
+   }
+  },
+  "pourquoi": "La voiture de B attelée à une remorque, timon visible."
+ },
+ "c": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.4
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 5,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.7,
+    "ecart": "caisse haute, cabine avancée, essieu tandem"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "Caisse haute, cabine avancée, essieu arrière tandem."
+ },
+ "c1": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.4
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 2,
+    "total": 3.35,
+    "ecart": "la coupe de roue entame la caisse et laisse un angle orphelin"
+   }
+  },
+  "pourquoi": "Le camion de C raccourci, un seul essieu arrière, à l'échelle de C."
+ },
+ "ce": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 2,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "contour dédoublé : remorque et véhicule fusionnent à 20 pt"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.25,
+    "ecart": "ensemble large donc petit ; le timon et la roue de remorque restent lisibles à 20 pt"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.25,
+    "ecart": "les roues pleines de la remorque collent à celles du véhicule à 16 pt"
+   }
+  },
+  "pourquoi": "Le camion de C et une remorque à deux essieux."
+ },
+ "c1e": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 2,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "contour dédoublé : remorque et véhicule fusionnent à 20 pt"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.25,
+    "ecart": "ensemble large donc petit ; le timon et la roue de remorque restent lisibles à 20 pt"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.25,
+    "ecart": "les roues pleines de la remorque collent à celles du véhicule à 16 pt"
+   }
+  },
+  "pourquoi": "Le camion de C1 et une remorque à un essieu."
+ },
+ "d": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.4
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 5,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.7,
+    "ecart": "rangée de quatre vitres pleines : le car à 16 pt"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "Car : quatre vitres alignées, pare-brise avant chanfreiné."
+ },
+ "d1": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.4
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "Minibus : nez court incliné, deux vitres, à l'échelle de D."
+ },
+ "de": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 2,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "contour dédoublé : remorque et véhicule fusionnent à 20 pt"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.25,
+    "ecart": "ensemble large donc petit ; le timon et la roue de remorque restent lisibles à 20 pt"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.25,
+    "ecart": "les roues pleines de la remorque collent à celles du véhicule à 16 pt"
+   }
+  },
+  "pourquoi": "Le car de D et une remorque à bagages."
+ },
+ "d1e": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 2,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "contour dédoublé : remorque et véhicule fusionnent à 20 pt"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.25,
+    "ecart": "ensemble large donc petit ; le timon et la roue de remorque restent lisibles à 20 pt"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.25,
+    "ecart": "les roues pleines de la remorque collent à celles du véhicule à 16 pt"
+   }
+  },
+  "pourquoi": "Le minibus de D1 et une remorque légère."
+ },
+ "f": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 3,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.15,
+    "ecart": "le pont ouvert au contour se confond avec une cabine vide"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "Petit utilitaire lent à pont ouvert, à l'échelle d'une voiture (convention : l'OAC ne fixe aucune silhouette)."
+ },
+ "g": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 3,
+    "reconnaissance": 5,
+    "lisibilite": 3,
+    "harmonie": 4,
+    "esthetique": 3,
+    "total": 3.65,
+    "ecart": "le tracteur au contour se lit d'emblée : grande roue, cabine vitrée"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 5,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.7,
+    "ecart": "grande roue sous la cabine, pot d'échappement : sans ambiguïté"
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.45
+   }
+  },
+  "pourquoi": "Tracteur : grande roue arrière sous la cabine vitrée, capot bas, pot d'échappement."
+ },
+ "m": {
+  "retenue": "B",
+  "notes": {
+   "A": {
+    "coherence": 4,
+    "reconnaissance": 4,
+    "lisibilite": 3,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.55,
+    "ecart": "un deux-roues est déjà un trait : A et B se rejoignent, roues plus fines en A"
+   },
+   "B": {
+    "coherence": 5,
+    "reconnaissance": 4,
+    "lisibilite": 4,
+    "harmonie": 5,
+    "esthetique": 4,
+    "total": 4.45
+   },
+   "C": {
+    "coherence": 3,
+    "reconnaissance": 3,
+    "lisibilite": 4,
+    "harmonie": 3,
+    "esthetique": 3,
+    "total": 3.2,
+    "ecart": "roues pleines : le deux-roues devient deux pastilles à 16 pt"
+   }
+  },
+  "pourquoi": "Cadre de vélo avec pédalier et bloc moteur : le cyclomoteur, à l'échelle de A."
+ }
+}

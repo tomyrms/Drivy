@@ -70,6 +70,7 @@ export function useSectionDraft<T>(key: string) {
 export function readError(error: unknown): string {
   if (error instanceof RequestFailure) {
     if (error.code === 'SETUP_ACCESS_REQUIRED' || error.code === 'ACCESS_DENIED') return 'Cette partie est réservée à l’administration de l’école. Vos accès ont peut-être changé : actualisez la page.';
+    if (error.code === 'OBSERVATION_THEMES_ACCESS_REQUIRED') return 'Vos accès ne permettent pas de consulter les signalements.';
     if (error.code === 'INVALID_CURSOR') return 'Cette liste a changé. Rechargez-la pour continuer.';
     if (error.code === 'SETUP_NOT_INITIALIZED') return commandMessage(error.code);
     if (error.status === 404) return 'Cette information n’est pas disponible avec vos accès actuels.';

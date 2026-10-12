@@ -340,13 +340,21 @@ struct InvitationCreationView: View {
                 if model.carriesTraining && !model.offerings.isEmpty {
                     Section {
                         ForEach(model.offerings) { offering in
-                            Toggle(offeringLabel(offering), isOn: Binding(
+                            let isOn = model.selectedOfferingIDs.contains(offering.id)
+                            let isFull = !isOn && model.selectedOfferingIDs.count >= 16
+                            Toggle(isOn: Binding(
                                 get: { model.selectedOfferingIDs.contains(offering.id) },
                                 set: { selected in
                                     if selected { model.selectedOfferingIDs.insert(offering.id) }
                                     else { model.selectedOfferingIDs.remove(offering.id) }
-                                }))
-                                .disabled(!model.selectedOfferingIDs.contains(offering.id) && model.selectedOfferingIDs.count >= 16)
+                                })) {
+                                HStack(spacing: DrivySpacing.s) {
+                                    DrivingLicenseIcon(code: offering.categoryCode,
+                                                       emphasis: isFull ? .disabled : isOn ? .selected : .normal)
+                                    Text(offeringLabel(offering))
+                                }
+                            }
+                                .disabled(isFull)
                                 .drivyControlTint()
                                 .accessibilityIdentifier("invitation-training-\(offering.id.uuidString)")
                         }

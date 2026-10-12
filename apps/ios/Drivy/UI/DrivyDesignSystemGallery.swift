@@ -83,6 +83,21 @@ struct DrivyDesignSystemGallery: View {
                         }
                     }
                 }
+                // La grille de « Signaler » selon le nombre de thèmes que l’école affiche : une tuile large,
+                // les thèmes affichés à l’origine, quinze, puis tout le catalogue (trois colonnes sur six rangées
+                // sur un iPhone).
+                ForEach(Self.signalGridCounts, id: \.self) { count in
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        Text(count > 1 ? "\(count) tuiles" : "1 tuile")
+                            .font(.caption).foregroundStyle(DrivyTheme.muted)
+                        SchoolSignalGridPreview(themes: Self.signalThemes(count))
+                            .background(DrivyTheme.surface, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous)
+                                    .strokeBorder(DrivyTheme.border, lineWidth: 0.5)
+                            }
+                    }
+                }
                 HStack(spacing: DrivySpacing.m) {
                     SchoolMapObservationMarker(glyph: SchoolObservationPictogram.speed.glyph, tone: .danger,
                                                badge: SchoolObservationStatus.toWorkOn.glyph)
@@ -104,6 +119,18 @@ struct DrivyDesignSystemGallery: View {
             }
             .accessibilityHidden(true)
         }
+    }
+
+    /// Trois configurations d’école : un seul thème affiché, celle d’origine, tout le catalogue.
+    private static var signalGridCounts: [Int] {
+        let catalog = SchoolObservationThemeCatalog.embedded
+        return Array(Set([1, catalog.filter(\.defaultVisible).count, 15, catalog.count])).sorted()
+    }
+
+    private static func signalThemes(_ count: Int) -> [SchoolObservationTheme] {
+        var themes = SchoolObservationThemeCatalog.embedded
+        for index in themes.indices { themes[index].visible = index < count }
+        return themes
     }
 
     private var colorsSection: some View {

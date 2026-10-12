@@ -16,6 +16,31 @@ struct SchoolVisualTrainingPage: View {
     }
 }
 
+/// Profil de l’élève → un permis : la formation en tête, puis Leçons et Progression.
+struct SchoolVisualPermitDetail: View {
+    let context: SchoolVisualContext
+    @State private var model: SchoolTrainingWorkspace?
+
+    var body: some View {
+        Group {
+            if let model {
+                SchoolLearnerPermitDetail(title: "Permis B", training: model.training, model: model, assignments: nil,
+                    open: { _ in })
+            } else {
+                ProgressView()
+            }
+        }
+        .task {
+            guard model == nil, let person = context.workspace.person, let membership = context.workspace.membership else { return }
+            let value = SchoolTrainingWorkspace(scope: context.agenda.scope(person: person, membership: membership),
+                membership: membership, learnerID: context.learner.id, trainingID: SchoolVisualData.trainingID,
+                client: context.client)
+            model = value
+            await value.load()
+        }
+    }
+}
+
 /// Formations supplémentaires et leçon annulée du rendu de contrôle. Tout reste additif : sans demande de
 /// plusieurs permis, l’élève garde sa seule formation (…005) et ses deux leçons, comme avant.
 /// Aucune de ces données ne représente une personne réelle.
@@ -38,9 +63,18 @@ extension SchoolVisualData {
     /// La leçon ouverte en fiche : la planifiée, l’annulée, ou la terminée par défaut.
     nonisolated static func reportLessonID(for screen: String) -> UUID {
         switch screen {
-        case "lesson-planned": plannedLessonID
+        case "lesson-planned", "learner-lesson-planned": plannedLessonID
         case "lesson-cancelled": cancelledLessonID
         default: lessonID
+        }
+    }
+
+    /// L’onglet ouvert d’emblée sur le récapitulatif d’une leçon terminée ; `nil` : Bilan, comme dans l’app.
+    nonisolated static func summaryTab(for screen: String) -> SchoolLessonSummaryTab? {
+        switch screen {
+        case "lesson-competencies": .competencies
+        case "lesson-route": .route
+        default: nil
         }
     }
 

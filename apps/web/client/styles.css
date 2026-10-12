@@ -985,3 +985,60 @@ select, textarea { font: inherit; color: inherit; }
   .console-main, .preparation-marker, .detail-placeholder { border-color: CanvasText; }
   .data-table tr.selected { outline: 2px solid Highlight; outline-offset: -2px; }
 }
+
+/* ---------- Signalements : ordre et affichage des thèmes ---------- */
+.themes-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem); gap: var(--space-xl); align-items: start; }
+.themes-editor { display: grid; gap: var(--space-s); min-width: 0; }
+.themes-toolbar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-m); flex-wrap: wrap; }
+.themes-counter { font: var(--type-headline); font-variant-numeric: tabular-nums; color: var(--text); }
+.themes-resets { display: flex; flex-wrap: wrap; gap: var(--space-xxs) var(--space-s); margin-inline-start: calc(var(--space-s) * -1); }
+.theme-list { list-style: none; margin: 0; padding: 0; position: relative; isolation: isolate; border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface); }
+.theme-list.is-dragging-list { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+.theme-row { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-xxs) var(--space-s) var(--space-xxs) var(--space-xxs); background: var(--surface); }
+.theme-row + .theme-row { border-block-start: 1px solid var(--border); }
+.theme-row:first-child { border-start-start-radius: var(--radius-content); border-start-end-radius: var(--radius-content); }
+.theme-row:last-child { border-end-start-radius: var(--radius-content); border-end-end-radius: var(--radius-content); }
+.theme-row.is-dragging { position: relative; z-index: 1; border-radius: var(--radius-content); border-color: transparent; background: var(--surface-detail); box-shadow: 0 6px 18px rgb(23 37 60 / .18), 0 0 0 1px var(--control-border); }
+.theme-handle { display: grid; place-items: center; flex: none; inline-size: 2.75rem; block-size: 2.75rem; padding: 0; border: 0; border-radius: var(--radius-field); background: transparent; color: var(--muted); cursor: grab; touch-action: none; }
+.theme-handle .symbol.bare { inline-size: 1.5rem; block-size: 1.5rem; }
+.theme-handle:disabled { cursor: not-allowed; color: var(--disabled-text); }
+.is-dragging .theme-handle { cursor: grabbing; color: var(--accent); }
+@media (hover: hover) and (pointer: fine) { .theme-handle:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); } }
+.theme-icon { display: grid; place-items: center; flex: none; inline-size: 2rem; block-size: 2rem; color: var(--accent); }
+.theme-icon svg { inline-size: 1.5rem; block-size: 1.5rem; }
+.theme-icon.is-fallback { color: var(--muted); }
+.theme-title { flex: 1 1 auto; min-width: 0; font: var(--type-headline); }
+.is-hidden .theme-title, .is-hidden .theme-icon { color: var(--muted); }
+.is-hidden .theme-title { font-weight: 400; }
+.theme-moves { display: inline-flex; flex: none; }
+.theme-moves .button.quiet { min-inline-size: 2.75rem; padding-inline: var(--space-xs); color: var(--muted); }
+.theme-switch { display: inline-flex; flex: none; align-items: center; gap: var(--space-xs); min-block-size: 2.75rem; cursor: pointer; }
+.theme-switch-text { min-inline-size: 3.5rem; font: var(--type-footnote); color: var(--muted); }
+.theme-switch input { appearance: none; -webkit-appearance: none; position: relative; flex: none; inline-size: 2.5rem; block-size: 1.5rem; margin: 0; border: 0; border-radius: 999px; background: var(--control-border); cursor: inherit; transition: background-color 120ms var(--ease-out); }
+.theme-switch input::before { content: ""; position: absolute; inset-block-start: .1875rem; inset-inline-start: .1875rem; inline-size: 1.125rem; block-size: 1.125rem; border-radius: 50%; background: var(--surface); transition: transform 120ms var(--ease-out); }
+.theme-switch input:checked { background: var(--accent); }
+.theme-switch input:checked::before { transform: translateX(1rem); background: var(--on-accent); }
+.theme-switch input:disabled { cursor: not-allowed; opacity: .55; }
+.theme-preview { display: grid; gap: var(--space-s); min-width: 0; position: sticky; inset-block-start: 5.5rem; padding: var(--space-m); border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface-inset); }
+.theme-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: var(--space-xs); }
+.theme-tile { display: grid; justify-items: center; align-content: center; gap: var(--space-xxs); min-block-size: 5rem; padding: var(--space-xs); border: 1px solid var(--border); border-radius: var(--radius-field); background: var(--surface); text-align: center; font: var(--type-footnote); color: var(--text); }
+.themes-savebar { position: sticky; inset-block-end: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-s) var(--space-m); flex-wrap: wrap; padding-block: var(--space-s) max(var(--space-s), env(safe-area-inset-bottom)); border-block-start: 1px solid var(--border); background: var(--surface); }
+.themes-status { display: inline-flex; align-items: center; gap: var(--space-xs); font: var(--type-subheadline); font-weight: 600; color: var(--muted); }
+.themes-status.warning { color: var(--warning); }
+.themes-status.success { color: var(--success); }
+@container workspace (max-width: 52rem) {
+  .themes-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-l); }
+  .theme-preview { position: static; }
+}
+@container workspace (max-width: 34rem) {
+  .theme-switch-text { display: none; }
+  .theme-moves .button.quiet { min-inline-size: 2.5rem; }
+  .theme-row { gap: var(--space-xxs); padding-inline-end: var(--space-xs); }
+}
+@media (forced-colors: active) {
+  .theme-list, .theme-row.is-dragging, .theme-preview, .theme-tile { border-color: CanvasText; }
+  .theme-switch input { forced-color-adjust: none; border: 2px solid CanvasText; background: Canvas; }
+  .theme-switch input::before { background: CanvasText; }
+  .theme-switch input:checked { background: Highlight; }
+  .theme-switch input:checked::before { background: HighlightText; }
+}

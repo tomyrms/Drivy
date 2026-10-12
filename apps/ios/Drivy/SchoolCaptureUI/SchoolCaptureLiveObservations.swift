@@ -23,20 +23,32 @@ struct SchoolLiveObservationReceipt: Identifiable, Equatable {
 /// `refused` : l’école a refusé définitivement le signalement dès son premier envoi ; rien n’a été enregistré.
 enum SchoolLiveObservationUndoState: Equatable { case none, pending, confirmed, refused }
 
-/// Les sous-thèmes précisent une compétence existante, sans créer de référentiel parallèle.
+/// Une tuile de « Signaler ». Les thèmes du catalogue précisent une compétence existante, sans créer de
+/// référentiel parallèle ; `key` vaut `nil` pour la tuile générique d’une compétence qu’aucun thème ne désigne.
 struct SchoolLiveObservationTheme: Identifiable, Equatable {
     let competency: SchoolCatalogCompetency
     let title: String
+    var key: String? = nil
     var id: String { "\(competency.id.uuidString):\(title)" }
 
-    static func choices(for competency: SchoolCatalogCompetency) -> [Self] {
-        let description = competency.description.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr"))
-        if competency.key == "priorites", description.contains("priorite de droite"),
-           description.contains("signalisation"), description.contains("ceder le passage") {
-            return ["Priorité à droite", "Signalisation", "Céder le passage"].map { .init(competency: competency, title: $0) }
+    /// Tuiles d’une formation : les thèmes affichés, dans l’ordre de l’école, dont la compétence existe dans le
+    /// référentiel (première clé de `competencyKeys` trouvée) ; puis une tuile générique pour chaque compétence
+    /// qu’aucun thème du catalogue, affiché ou masqué, n’a prise. `includingHidden` sert au contrôle d’un
+    /// signalement : masquer un thème ne le rend jamais inacceptable.
+    static func tiles(for themes: [SchoolObservationTheme], competencies: [SchoolCatalogCompetency],
+                      includingHidden: Bool = false) -> [Self] {
+        var result: [Self] = []
+        var claimed = Set<UUID>()
+        for theme in themes {
+            guard let key = theme.competencyKeys.first(where: { key in competencies.contains { $0.key == key } }),
+                  let competency = competencies.first(where: { $0.key == key }) else { continue }
+            claimed.insert(competency.id)
+            if theme.visible || includingHidden { result.append(.init(competency: competency, title: theme.title, key: theme.key)) }
         }
-        let label = competency.key == "vitesse" && competency.label == "Adaptation de la vitesse" ? "Vitesse" : competency.displayLabel
-        return [.init(competency: competency, title: label)]
+        for competency in competencies where !claimed.contains(competency.id) {
+            result.append(.init(competency: competency, title: competency.displayLabel))
+        }
+        return result
     }
 }
 
@@ -59,7 +71,16 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     private(set) var lastAdded: SchoolLiveObservationReceipt?
     private(set) var undoState: SchoolLiveObservationUndoState = .none
     private(set) var undoErrorMessage: String?
-    var themes: [SchoolLiveObservationTheme] { competencies.flatMap(SchoolLiveObservationTheme.choices) }
+    /// Instantané de la configuration, pris à l’ouverture de « Signaler » : une modification faite ailleurs
+    /// pendant que la palette est ouverte ne déplace aucune tuile ; elle s’applique à l’ouverture suivante.
+    private(set) var themeConfiguration: SchoolObservationThemeConfiguration
+    var themes: [SchoolLiveObservationTheme] {
+        SchoolLiveObservationTheme.tiles(for: themeConfiguration.themes, competencies: competencies)
+    }
+    /// Nombre de tuiles attendu avant la lecture du référentiel, pour donner d’emblée sa hauteur à la palette.
+    var expectedTileCount: Int {
+        competencies.isEmpty && competenciesMessage == nil ? themeConfiguration.visibleCount : themes.count
+    }
     var canRecord: Bool { !stopped && !isSending && pending == nil }
     /// Rien de durable n’empêche d’ouvrir un signalement : ni arrêt, ni demande à vérifier ou à renvoyer.
     /// L’écriture elle-même reste gardée par `canRecord`, une demande à la fois.
@@ -75,6 +96,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private let onSettlement: (@MainActor () async -> Void)?
     @ObservationIgnored private let permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)?
     @ObservationIgnored private let prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)?
+    @ObservationIgnored private let themeStore: SchoolObservationThemeStore?
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private var lastAddedCommand: PendingSchoolCommand?
     @ObservationIgnored private var lastAddedWasConfirmed = false
@@ -85,13 +107,17 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     /// Le dernier envoi a échoué faute d’école joignable : le retour du réseau le relance.
     @ObservationIgnored private var waitsForNetwork = false
 
+    /// Sans `themeStore`, la palette garde le catalogue embarqué et n’envoie aucune clé de thème.
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
+         themeStore: SchoolObservationThemeStore? = nil,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
          permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)? = nil,
          prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)? = nil,
          onSettlement: (@MainActor () async -> Void)? = nil,
          retryDelays: [Duration] = [.seconds(5), .seconds(15), .seconds(60)]) {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
+        self.themeStore = themeStore
+        themeConfiguration = themeStore?.configuration ?? .embedded
         self.onSettlement = onSettlement
         self.retryDelays = retryDelays
         self.permitsAnchor = permitsAnchor; self.prepareAnchor = prepareAnchor
@@ -127,10 +153,20 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         }
     }
 
-    /// Le thème vient du référentiel reçu, le statut est un choix explicite.
+    /// Ouverture de « Signaler » : la palette prend la dernière configuration confirmée, puis demande une
+    /// relecture dont le résultat ne servira qu’à l’ouverture suivante.
+    func openPalette() {
+        guard let themeStore else { return }
+        if themeConfiguration != themeStore.configuration { themeConfiguration = themeStore.configuration }
+        Task { await themeStore.refresh() }
+    }
+
+    /// Le thème vient du référentiel reçu, le statut est un choix explicite. Un thème masqué depuis l’ouverture
+    /// reste recevable : masquer n’est qu’un réglage d’affichage.
     @discardableResult func record(theme: SchoolLiveObservationTheme, status: SchoolObservationStatus,
                                    at instant: Date, anchor: SchoolLiveObservationAnchor? = nil) -> Bool {
-        guard themes.contains(theme) else { return false }
+        guard SchoolLiveObservationTheme.tiles(for: themeConfiguration.themes, competencies: competencies,
+                                               includingHidden: true).contains(theme) else { return false }
         return save(theme: theme, status: status, at: instant, anchor: anchor)
     }
 
@@ -150,7 +186,10 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         let value = SchoolObservationBody(operationId: operation, draftId: nil, captureId: anchor?.captureID,
             segmentId: anchor?.segmentID, pointSequence: anchor?.pointSequence, competencyId: theme?.competency.id,
             text: theme?.title ?? "Moment à revoir", origin: "LIVE", observedAt: formatter.string(from: instant),
-            eventKind: theme == nil ? "MARKER" : "QUALIFIED", eventStatus: status?.rawValue)
+            eventKind: theme == nil ? "MARKER" : "QUALIFIED", eventStatus: status?.rawValue,
+            // Une école qui n’a jamais répondu ne connaît peut-être pas ce champ, et une école plus ancienne ne
+            // connaît pas tous les thèmes : la clé ne part qu’avec sa configuration, pour un thème qu’elle liste.
+            themeKey: themeConfiguration.sendsThemeKey(theme?.key) ? theme?.key : nil)
         do {
             let command = PendingSchoolCommand(id: operation, scope: scope, kind: .createObservation, resourceVersion: 0,
                 createdAt: instant, body: try JSONEncoder().encode(value), routeResourceID: lessonID)

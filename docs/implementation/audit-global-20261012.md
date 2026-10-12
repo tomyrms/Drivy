@@ -31,7 +31,7 @@ Le P1 laissé est la règle « à venir » écrite cinq fois : le filtre du doss
 ## P1 corrigés
 
 - **Verrou Face ID et masque de confidentialité sous les feuilles** : une fiche ouverte restait visible dans le sélecteur d’apps et utilisable après annulation de Face ID. Ils vivent dans leur propre fenêtre, au-dessus des feuilles et du rideau ; le masque se pose dès que l’app devient inactive.
-- **Bilans illisibles au bureau** : la console les affichait « indisponibles » pour un administrateur non affecté. Migration 026 : l’administrateur et l’élève lisent la révision courante ; un bilan privé ou retiré reste invisible ; le moniteur affecté garde l’historique.
+- **Bilans illisibles au bureau** : la console les affichait « indisponibles » pour un administrateur non affecté. Migration 027 : l’administrateur et l’élève lisent la révision courante ; un bilan privé ou retiré reste invisible ; le moniteur affecté garde l’historique.
 - **Heure de départ fausse après un départ hors ligne** : l’app envoie l’instant du geste (`startedAt`, facultatif). Le serveur le garde s’il est passé, du jour du rendez-vous et de moins de 12 heures, sinon il prend son heure de réception : une commande en file n’est jamais bloquée par son horodatage.
 - **Un seul signalement hors réseau** : la demande repart seule (5 s, 15 s, 60 s, et au retour du réseau). L’invariant « une demande par école » est conservé : un second signalement attend toujours le premier.
 - **« Reprendre » impossible sans réseau** : la reprise rouvre un segment si le bail local est valide et que l’école est seulement injoignable ; un refus (401, 403, 404) reste un refus.
@@ -67,7 +67,7 @@ Nettoyage : quatre déclarations sans aucune référence retirées (`DrivyGuided
 
 ## Changements d’API et de données
 
-- Migration 025 : déclencheur de révocation des trajets, trois index. Migration 026 : lecture des révisions de bilan. Aucune donnée supprimée ni réécrite.
+- Migration 025 : déclencheur de révocation des trajets, trois index. Migration 027 : lecture des révisions de bilan. Aucune donnée supprimée ni réécrite.
 - `POST /lessons/:id/start` : champ facultatif `startedAt` (contrat `lesson-field-flow.json`), rétrocompatible.
 - `POST /lessons/:id/cancel` : `409 LESSON_STARTED` sur une leçon commencée.
 - Lecteurs non auteurs : `plannedWaypoints[].note` à `null`, `charges[].reason` neutre pour une correction.
@@ -89,5 +89,5 @@ Nettoyage : quatre déclarations sans aucune référence retirées (`DrivyGuided
 ## Non vérifié
 
 - Rien n’a été vu tourner sur iPhone : fenêtre du verrou au-dessus d’une feuille, défilement de l’élève sans dossier, adoption d’époque, purge, reprise hors réseau, renvoi automatique des signalements.
-- Les migrations 025 et 026 n’ont tourné que sur une base de test, jamais sur une copie de la base hébergée. Le Caddyfile modifié n’a pas été validé par `caddy validate`.
+- Les migrations 025 et 027 n’ont tourné que sur une base de test, jamais sur une copie de la base hébergée. Le Caddyfile modifié n’a pas été validé par `caddy validate`.
 - Aucune mesure de performance.

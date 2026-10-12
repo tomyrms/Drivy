@@ -333,7 +333,8 @@ struct DrivyObservationSummary: View {
     /// Le thème du signalement, teinté par son appréciation ; repère ou note sinon.
     private var glyph: DrivyObservationGlyph {
         if observation.isMarker { return .moment }
-        let theme = SchoolObservationPictogram(title: observation.text) ?? SchoolObservationPictogram(title: competency)
+        let theme = SchoolObservationPictogram(themeKey: observation.themeKey, title: observation.text)
+            ?? SchoolObservationPictogram(title: competency)
         return theme?.glyph ?? status?.glyph ?? .note
     }
     var body: some View {

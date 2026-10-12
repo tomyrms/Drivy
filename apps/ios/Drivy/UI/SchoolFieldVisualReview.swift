@@ -56,6 +56,8 @@ struct SchoolFieldVisualReview: View {
             do {
                 let loaded = try SchoolFieldVisualModels(context: context, populatedObservations: screen == "observations")
                 models = loaded
+                // Lue avant l’ouverture : la palette de contrôle montre la configuration de l’école fictive.
+                await loaded.themes.refresh()
                 await loaded.recorder.loadCompetencies()
                 if screen == "gps-choice" { route = .choice }
                 if screen == "signal" { route = .signal }
@@ -66,6 +68,7 @@ struct SchoolFieldVisualReview: View {
 
 @MainActor private final class SchoolFieldVisualModels {
     let choice: SchoolRecordingChoiceWorkspace
+    let themes: SchoolObservationThemeStore
     let recorder: SchoolLiveObservationRecorder
     let observations: SchoolObservationWorkspace
     let preparation: SchoolCapturePreparationWorkspace
@@ -86,8 +89,10 @@ struct SchoolFieldVisualReview: View {
         let store = try SQLCipherSchoolCaptureStore(url: directory.appendingPathComponent("fixture.sqlite"), key: Data(repeating: 17, count: 32))
         choice = SchoolRecordingChoiceWorkspace(scope: scope, lessonID: SchoolVisualData.plannedLessonID,
             client: agenda.captureClient, reader: agenda.reader, agenda: agenda, onRefusalConfirmed: { _, _ in }, store: store)
+        // Même configuration que l’école fictive : la palette de contrôle envoie la clé du thème, comme en vrai.
+        themes = SchoolObservationThemeStore(scope: scope, client: agenda.observationThemeClient, cache: SchoolVisualThemeCache())
         recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: SchoolVisualData.plannedLessonID,
-            client: agenda.observationClient, outbox: SchoolFieldVisualOutbox())
+            client: agenda.observationClient, themeStore: themes, outbox: SchoolFieldVisualOutbox())
         live = SchoolCaptureSessionController.visualReviewRecording(lessonID: SchoolVisualData.plannedLessonID, recorder: recorder)
         waiting = SchoolCaptureSessionController.visualReviewRecording(lessonID: SchoolVisualData.plannedLessonID,
             recorder: recorder, waitingForPosition: true)
