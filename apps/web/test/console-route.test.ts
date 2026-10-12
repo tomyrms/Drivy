@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { consolePath, parseConsoleRoute, readNavigationQuery } from '../client/console/route.js';
-import { workspaceFor } from '../client/console/navigation.js';
+import { sectionTitles, workspaceFor, workspaces } from '../client/console/navigation.js';
+import { sectionKeys } from '../client/console/sections.js';
 import { resumableDraft } from '../client/console/draft-model.js';
 
 const school = '11111111-1111-4111-8111-111111111111';
@@ -45,6 +46,21 @@ describe('Navigation entre les tâches de gestion', () => {
     expect(workspaceFor('invitations', { audience: 'team' }).home).toBe('equipe');
     expect(workspaceFor('conditions').home).toBe('formations');
     expect(workspaceFor('apercu').home).toBe('configuration');
+  });
+
+  test('les signalements ont leur URL et se rangent avec les réglages de l’école', () => {
+    expect(consolePath(school, 'signalements')).toBe(`/app/gestion/${school}/signalements`);
+    expect(restore(`/app/gestion/${school}/signalements`)).toEqual({ schoolId: school, section: 'signalements', query: {} });
+    expect(restore(`/app/gestion/${school}/signalements/`).section).toBe('signalements');
+    expect(workspaceFor('signalements').home).toBe('configuration');
+    expect(workspaces.find(workspace => workspace.key === 'settings')?.items.map(item => item.section)).toEqual(['configuration', 'champs-profil', 'signalements', 'apercu']);
+    expect(sectionTitles.signalements).toBe('Signalements');
+    // Chaque rubrique du menu existe, et aucune n'est rangée deux fois dans le même espace.
+    for (const workspace of workspaces) {
+      const sections = workspace.items.map(item => `${item.section}/${item.query?.audience ?? ''}`);
+      expect(new Set(sections).size).toBe(sections.length);
+      for (const item of workspace.items) expect(sectionKeys).toContain(item.section);
+    }
   });
 
   test('un lien vers un tarif précis ne rouvre pas le brouillon précédent', () => {

@@ -93,7 +93,7 @@ Pour une formation donnée, « Signaler » montre, dans l'ordre configuré, les 
 - `themes` : les quinze clés, chacune une fois, dans le nouvel ordre ; au moins une `visible`. Toute autre forme : 400 `INVALID_REQUEST`.
 - 200 : la même projection que la lecture, `version` augmentée de 1.
 - 403 `OBSERVATION_THEMES_ACCESS_REQUIRED` : ni administrateur ni droit. 412 `VERSION_CONFLICT` : la configuration a changé depuis la lecture (relire, puis rejouer le changement). 428 sans `If-Match`.
-- Commande `SAVE_OBSERVATION_THEMES`, audit `ObservationThemesSaved`, rejouable avec le même `operationId` et consultable par `GET /operations/{operationId}`.
+- Commande `SAVE_OBSERVATION_THEMES`, ressource `ObservationThemeSettings` (identifiant : celui de l'école), audit `ObservationThemesSaved`, rejouable avec le même `operationId` et consultable par `GET /operations/{operationId}`.
 
 ### Observations
 
