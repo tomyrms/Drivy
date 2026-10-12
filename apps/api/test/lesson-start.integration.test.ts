@@ -154,6 +154,57 @@ describe('départ explicite et durable, avec ou sans agenda',()=>{
  });
 });
 
+describe('heure réelle du départ déclarée par l’appareil (A2-03)',()=>{
+ /** Place le rendez-vous à un instant donné : le jour civil du rendez-vous est alors connu sans dépendre de l'heure du test. */
+ const plannedAt=async(lessonId:string,at:Date)=>pool.query("UPDATE drivy.lesson SET planned_start=$2,planned_end=$2::timestamptz+interval '50 minutes' WHERE id=$1",[lessonId,at]);
+ const minutesAgo=(minutes:number)=>new Date(Date.now()-minutes*60_000);
+
+ it('un départ mis en file hors ligne garde l’instant du geste, et son rejeu rend la même réponse',async()=>{
+  const lesson=await plan(),startedAt=minutesAgo(40).toISOString();await plannedAt(lesson.id,new Date(startedAt));
+  const route=`/lessons/${lesson.id}/start`,body={operationId:randomUUID(),startedAt};
+  const first=await call('POST',route,body,lesson.version);expect(first.statusCode,first.body).toBe(200);
+  expect(first.json().data).toMatchObject({actualStart:startedAt,version:2,status:'PLANNED'});
+  // Même opération, même corps : même réponse. Même opération, autre instant : refus d'idempotence.
+  const replay=await call('POST',route,body,lesson.version);expect(replay.statusCode,replay.body).toBe(200);expect(replay.json().data).toEqual(first.json().data);
+  expect((await call('POST',route,{...body,startedAt:minutesAgo(30).toISOString()},lesson.version)).json().code).toBe('IDEMPOTENCY_MISMATCH');
+  // Le constat conserve ce début : la leçon dure 40 minutes, pas le temps écoulé depuis le retour du réseau.
+  const done=await call('POST',`/lessons/${lesson.id}/complete`,completeBody(startedAt),2);expect(done.statusCode,done.body).toBe(200);
+  expect(done.json().data.lesson.actualStart).toBe(startedAt);
+ });
+
+ it('un instant futur, de plus de 12 heures ou d’un autre jour que le rendez-vous laisse l’heure du serveur, sans refus',async()=>{
+  const cases:[string,(lessonId:string)=>Promise<string>][]=[
+   ['futur',async lessonId=>{await moveToNow(pool,lessonId);return new Date(Date.now()+3_600_000).toISOString();}],
+   ['plus de 12 heures',async lessonId=>{const at=minutesAgo(13*60);await plannedAt(lessonId,at);return at.toISOString();}],
+   ['veille du jour déclaré',async lessonId=>{await plannedAt(lessonId,minutesAgo(25*60));return minutesAgo(60).toISOString();}],
+  ];
+  for(const [label,prepare] of cases){
+   const lesson=await plan(),startedAt=await prepare(lesson.id),before=Date.now();
+   const start=await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID(),startedAt},lesson.version);
+   expect(start.statusCode,`${label} : ${start.body}`).toBe(200);
+   const actual=Date.parse(start.json().data.actualStart);
+   expect(actual,label).toBeGreaterThanOrEqual(before);expect(actual,label).toBeLessThanOrEqual(Date.now());
+  }
+ });
+
+ it('un instant mal formé est refusé comme toute requête invalide',async()=>{
+  const lesson=await plan();await moveToNow(pool,lesson.id);
+  const invalid=await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID(),startedAt:'hier'},lesson.version);
+  expect(invalid.statusCode).toBe(400);expect(await read(lesson.id)).toMatchObject({actualStart:null,version:1});
+ });
+
+ it('une leçon commencée ne s’annule pas (A2-11) ; elle reste commencée et se termine',async()=>{
+  const lesson=await plan();await moveToNow(pool,lesson.id);
+  const start=await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID()},lesson.version);expect(start.statusCode,start.body).toBe(200);
+  const started=start.json().data;
+  for(const subject of ['demo-instructor','demo-admin']){
+   const cancel=await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},started.version,subject);
+   expect(cancel.statusCode,cancel.body).toBe(409);expect(cancel.json().code).toBe('LESSON_STARTED');
+  }
+  expect(await read(lesson.id)).toMatchObject({status:'PLANNED',actualStart:started.actualStart,version:started.version});
+ });
+});
+
 describe('cohérence des leçons encore ouvertes avec la formation et les affectations',()=>{
  it('les leçons dépassées, en attente ou démarrées, empêchent la clôture et restent comptées au retrait du moniteur',async()=>{
   const assignment=await call('POST',`/trainings/${id.bobTraining}/assignments`,{operationId:randomUUID(),instructorMembershipId:id.instructorMember,validFrom:'2026-01-01T00:00:00Z'},null,'demo-admin');
@@ -172,7 +223,13 @@ describe('cohérence des leçons encore ouvertes avec la formation et les affect
    }
    expect((await call('GET',`/trainings/${id.bobTraining}`,undefined,null,'demo-admin')).json().data).toMatchObject({status:'ACTIVE',version:before.version});
    const current=await read(lesson.id),cancel=await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},current.version,'demo-admin');
-   expect(cancel.statusCode,cancel.body).toBe(200);
+   // A2-11 (décision du 12 octobre 2026) : une leçon commencée ne s'annule plus ; elle se termine. L'ancienne version de ce test
+   // annulait aussi la leçon démarrée pour libérer la formation ; elle est maintenant close par son constat.
+   if(shouldStart){
+    expect(cancel.statusCode,cancel.body).toBe(409);expect(cancel.json().code).toBe('LESSON_STARTED');
+    const done=await call('POST',`/lessons/${lesson.id}/complete`,{...completeBody(current.actualStart),actualEnd:new Date(Date.now()+1_000).toISOString()},current.version);
+    expect(done.statusCode,done.body).toBe(200);
+   }else expect(cancel.statusCode,cancel.body).toBe(200);
   }
   const waiting=await create();
   const ended=await call('POST',`/trainings/${id.bobTraining}/assignments/${assignment.json().data.id}/end`,{operationId:randomUUID(),reason:'Affectation de recette terminée'},assignment.json().data.version,'demo-admin');

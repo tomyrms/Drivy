@@ -5,6 +5,7 @@ import {z} from 'zod';
 import type {Identity,TokenVerifier} from './auth.js';
 import {canonical,checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type CommandGuards,type SchoolRow} from './commands.js';
 import {ApiError,notFound} from './errors.js';
+import {reauthAge,reauthenticate} from './reauth.js';
 import {event,getLesson,lessonColumns,lessonCommandGuards,lessonProjection,openClosedAccount,releaseFutureOccupations,type LessonRow} from './lessons.js';
 
 const id=z.uuid(),empty=z.object({}).strict(),date=z.iso.datetime({offset:true});
@@ -52,12 +53,9 @@ function validateTransition(lesson:LessonRow,value:Proposal){
  if(value.actualStart!=null||value.actualEnd!=null||value.futureBooking!=null)throw new ApiError(422,'OUTCOME_FIELDS_INVALID','Heures réelles et nouveau créneau ne s’appliquent pas à ce résultat.');
  if(value.targetStatus==='NO_SHOW'&&lesson.planned_end.getTime()>Date.now())throw conflict('LESSON_NOT_ENDED','Une absence se constate après la fin prévue du rendez-vous.');
 }
-function reauthenticate(identity:Identity,age:number){
- if(identity.authenticatedAt===undefined||Math.floor(Date.now()/1000)-identity.authenticatedAt>age)throw new ApiError(401,'REAUTH_REQUIRED','Reconnectez-vous pour exécuter la correction que vous avez approuvée.');
-}
 
 export function registerLessonOutcomes(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;reauthMaxAgeSeconds?:number}){
- const base='/v1/schools/:schoolId/lessons/:lessonId',age=z.number().int().min(30).max(900).parse(options.reauthMaxAgeSeconds??300);
+ const base='/v1/schools/:schoolId/lessons/:lessonId',age=reauthAge(options.reauthMaxAgeSeconds);
  const params=(r:FastifyRequest)=>z.object({schoolId:id,lessonId:id}).parse(r.params);
  const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});
  async function run<T>(r:FastifyRequest,type:string,body:{operationId:string},roles:string[],guards:(schoolId:string,lessonId:string)=>CommandGuards<T>,
@@ -123,7 +121,7 @@ export function registerLessonOutcomes(app:FastifyInstance,options:{pool:Pool;ve
     if(!current||approval.lesson_version!==old.version||approval.account_version!==account.version||approval.publication_version!==old.publication_version||approval.proposal_hash!==proposalHash(body))
      throw conflict('APPROVAL_INVALID','La proposition, les versions ou les droits ont changé depuis l’approbation. Demandez une nouvelle approbation.');
     // Un responsable qui cumule les deux habilitations confirme séparément, après réauthentification.
-    if(approval.approver_person_id===actor.personId)reauthenticate(identity,age);
+    if(approval.approver_person_id===actor.personId)reauthenticate(identity,age,'Reconnectez-vous pour exécuter la correction que vous avez approuvée.');
    }
    let publicationVersion=old.publication_version,revisionId:string|null=old.current_published_revision_id;
    if(published){
