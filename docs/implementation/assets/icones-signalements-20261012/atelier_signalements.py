@@ -53,7 +53,7 @@ def rays(cx, cy, r0, r1, angles, w=5.0):
     return U(*[line(polar(cx, cy, r0, a), polar(cx, cy, r1, a), w=w) for a in angles])
 
 
-def car_rear(cx, top, w=38.0, lights=True):
+def car_rear(cx, top, w=38.0, lights=True, window=True):
     """Voiture vue de l'arrière : pavillon, caisse, roues ; lunette et feux évidés."""
     k = w / 38.0
     cabin = rpoly([(cx - w * 0.30, top), (cx + w * 0.30, top), (cx + w * 0.43, top + 12 * k),
@@ -61,9 +61,11 @@ def car_rear(cx, top, w=38.0, lights=True):
     lower = rrect(cx - w / 2, top + 9.5 * k, w, 15.5 * k, 4.5 * k)
     wheels = U(rrect(cx - w / 2 + 2.5 * k, top + 20 * k, 8.5 * k, 9.5 * k, 2.5 * k),
                rrect(cx + w / 2 - 11 * k, top + 20 * k, 8.5 * k, 9.5 * k, 2.5 * k))
-    window = rpoly([(cx - w * 0.235, top + 4 * k), (cx + w * 0.235, top + 4 * k),
-                    (cx + w * 0.30, top + 9.2 * k), (cx - w * 0.30, top + 9.2 * k)], 1.0 * k)
-    body = U(cabin, lower, wheels).difference(window)
+    glass = rpoly([(cx - w * 0.235, top + 4 * k), (cx + w * 0.235, top + 4 * k),
+                   (cx + w * 0.30, top + 9.2 * k), (cx - w * 0.30, top + 9.2 * k)], 1.0 * k)
+    body = U(cabin, lower, wheels)
+    if window:
+        body = body.difference(glass)
     if lights:
         body = body.difference(U(rrect(cx - w / 2 + 3.2 * k, top + 13.2 * k, 8 * k, 4.4 * k, 2.2 * k),
                                  rrect(cx + w / 2 - 11.2 * k, top + 13.2 * k, 8 * k, 4.4 * k, 2.2 * k)))
@@ -386,6 +388,240 @@ ICONS = {
         P("C", "Manœuvre", "Rabattement", "Une voie rejoint l'autre : se rabattre.", lane_change_C_t1, lane_change_C_t2),
     ]},
 }
+
+
+# ---------------------------------------------------------------- études D, E, F
+# Demandées par le porteur après avoir vu les quatre retenues : trois idées de plus par thème, pour
+# choisir sur planche. Des idées nouvelles, pas des variantes de A, B, C ; le plus simple d'abord.
+
+def stepped(x0, x1, y_bottom, y_step, r=6.0):
+    """Baïonnette : monte, passe de x0 à x1 par deux angles droits adoucis (rayon r), remonte."""
+    sx = 1 if x1 > x0 else -1
+    if sx > 0:
+        low = arc_pts(x0 + r, y_step + r, r, 180, 270, 16)
+        high = arc_pts(x1 - r, y_step - r, r, 90, 0, 16)
+    else:
+        low = arc_pts(x0 - r, y_step + r, r, 0, -90, 16)
+        high = arc_pts(x1 + r, y_step - r, r, 90, 180, 16)
+    return [(x0, y_bottom)] + low + high
+
+
+def indicators_D_t1():
+    lamp = ring(32, 32, 27, 21)
+    arr = block_arrow((47, 32), 0, hl=13, hw=24, sl=13, sh=9)
+    return U(lamp, arr)
+
+
+def indicators_E_t1():
+    car = car_top(26, 32, 20, 38)
+    flash = U(rays(36, 16, 7, 15, (-50, -10)), rays(36, 48, 7, 15, (10, 50)))
+    return U(car, flash)
+
+
+def indicators_F_t1():
+    column = disc(13, 32, 8.5)
+    stalk = line((13, 32), (44, 32), w=7)
+    knob = rrect(38, 25.5, 17, 13, 5.5)
+    ticks = U(head((46.5, 8), -90, length=9, width=15), head((46.5, 56), 90, length=9, width=15))
+    return U(column, stalk, knob, ticks)
+
+
+def following_D_t1():
+    far = car_rear(32, 4, 22, lights=False, window=False)
+    near = car_rear(32, 28, 40)
+    return U(far, near)
+
+
+def _chevron(cx, apex_y, half=12.0, w=W):
+    dy = half * math.tan(math.radians(30))
+    return line((cx - half, apex_y + dy), (cx, apex_y), (cx + half, apex_y + dy), w=w)
+
+
+def following_E_t1():
+    car = car_top(32, 15.5, 18, 24)
+    marks = U(_chevron(32, 35), _chevron(32, 48))
+    return U(car, marks)
+
+
+def following_F_t1():
+    ours = car_side_mini(-12, 44, 32).intersection(box(4, 0, 64, 64))
+    lead = car_side_mini(44, 44, 32).intersection(box(0, 0, 60, 64))
+    gap = double_arrow((23.5, 36.5), (40.5, 36.5), w=5, hl=6.5, hw=11.5)
+    return U(ours, lead, gap)
+
+
+def _foot_on_pedal(tilt=22.0, arm=True):
+    shoe = rpoly([(0, 0), (38, 0), (38, -8.5), (24, -13.5), (15, -24), (0, -24)], 4.5)
+    pedal = line((15, 7.5), (40, 7.5), w=6)
+    parts = [shoe, pedal]
+    if arm:
+        parts.append(line((29, 7.5), (35, 26), w=6))
+    return affinity.rotate(U(*parts), tilt, origin=(19, -8))
+
+
+def braking_D_t1():
+    return affinity.translate(_foot_on_pedal(), 12, 30)
+
+
+def braking_E_t1():
+    car = car_rear(32, 16, 30, lights=False)
+    y = 16 + 15.4 * 30 / 38
+    glow = U(rays(17, y, 5.5, 12, (140, 180, 220)), rays(47, y, 5.5, 12, (-40, 0, 40)))
+    return U(car, glow)
+
+
+def braking_F_t1():
+    plate = disc(32, 32, 26).difference(disc(32, 32, 9))
+    holes = U(*[disc(*polar(32, 32, 17.5, a), 2.5) for a in range(0, 360, 45)])
+    return plate.difference(holes)
+
+
+def lane_change_D_t1():
+    shift = arrow(*stepped(17, 47, 58, 34), (47, 7), hl=11, hw=16)
+    lane = U(line((32, 46), (32, 58)), line((32, 6), (32, 22)))
+    return U(shift, lane.difference(shift.buffer(G)))
+
+
+def lane_change_E_t1():
+    straight = arrow((18, 58), (18, 7), hl=11, hw=16)
+    shift = arrow(*stepped(32, 46, 58, 38), (46, 7), hl=11, hw=16)
+    return U(straight, shift)
+
+
+def lane_change_F_t1():
+    lane = U(line((32, 6), (32, 18)), line((32, 46), (32, 58)))
+    cross = arrow((9, 32), (55, 32), hl=12, hw=18)
+    return U(lane, cross)
+
+
+# Tour 2 des études : un défaut nommé par dessin ; les traits sont réglés pour valoir 6 une fois
+# le glyphe mis à sa taille optique par l'export.
+
+def indicators_D_t2():
+    # Défaut nommé : voyant maigre une fois réduit (×0,85), lu « bouton suivant ». Anneau à 7, flèche
+    # plus grosse : c'est la flèche du témoin qui porte, l'anneau l'entoure.
+    lamp = ring(32, 32, 27.5, 20.5)
+    arr = block_arrow((48, 32), 0, hl=14, hw=28, sl=13, sh=11)
+    return U(lamp, arr)
+
+
+def indicators_E_t2():
+    # Défaut nommé : quatre grands éclats lus « pattes ». Éclats courts, un à l'horizontale par feu.
+    car = car_top(25, 32, 20, 38)
+    flash = U(rays(35, 16.5, 7, 13, (-45, 0), w=5.4), rays(35, 47.5, 7, 13, (0, 45), w=5.4))
+    return U(car, flash)
+
+
+def indicators_F_t2():
+    # Défaut nommé : lu « curseur ». Le levier sort en biais d'une colonne plus grosse, ses deux
+    # sens tout contre la poignée.
+    column = disc(14, 40, 10.5)
+    tip = polar(14, 40, 34, -20)
+    stalk = line((14, 40), tip, w=7)
+    knob = line(polar(14, 40, 27, -20), polar(14, 40, 38, -20), w=13)
+    ux, uy = math.cos(math.radians(-20)), math.sin(math.radians(-20))
+    kx, ky = polar(14, 40, 32.5, -20)
+    up = head((kx + uy * 20, ky - ux * 20), -110, length=9, width=15)
+    down = head((kx - uy * 20, ky + ux * 20), 70, length=9, width=15)
+    return U(column, stalk, knob, up, down)
+
+
+def following_D_t2():
+    # Défaut nommé : la petite voiture coiffait la grande, un seul totem. Plus d'écart, grande voiture
+    # moins large : deux voitures, et de l'air entre elles.
+    far = car_rear(32, 4, 20, lights=False, window=False)
+    near = car_rear(32, 30.5, 36)
+    return U(far, near)
+
+
+def following_E_t2():
+    # Défaut nommé : voiture et chevrons empilés, lus « bonhomme » ou « grade ». Chevrons plus larges
+    # que la voiture et détachés : un marquage au sol, plus un corps.
+    car = car_top(32, 14.5, 17, 23)
+    marks = U(_chevron(32, 36.5, half=17), _chevron(32, 49, half=17))
+    return U(car, marks)
+
+
+def following_F_t2():
+    # Défaut nommé : deux moitiés de voiture illisibles, lues « pinces ». Les pare-chocs sont réduits
+    # à deux barres : il ne reste que l'écart et sa cote.
+    bumpers = U(line((8.5, 16), (8.5, 48), w=7), line((55.5, 16), (55.5, 48), w=7))
+    gap = double_arrow((17, 32), (47, 32), w=6.2, hl=10, hw=17)
+    return U(bumpers, gap)
+
+
+def braking_D_t2():
+    # Défaut nommé : lu « hachoir ». Le talon est au sol, la pointe relevée sur la pédale, dont le bras
+    # monte : la jambe pousse vers l'avant.
+    shoe = rpoly([(0, 0), (40, 0), (40, -9), (25, -14), (16, -25), (0, -25)], 4.5)
+    pad = line((14, 7.6), (43, 7.6), w=6.4)
+    low = affinity.rotate(U(shoe, pad), -38, origin=(0, 0))
+    end = affinity.rotate(line((43, 7.6), (43.01, 7.6), w=1), -38, origin=(0, 0)).centroid
+    arm = line((end.x, end.y), (end.x, end.y - 17), w=6.4)
+    return affinity.translate(U(low, arm), 8, 50)
+
+
+def braking_E_t2():
+    # Défaut nommé : six longs éclats lus « crabe ». Voiture plus grande, éclats courts et serrés.
+    car = car_rear(32, 15, 34, lights=False)
+    y = 15 + 15.4 * 34 / 38
+    glow = U(rays(15, y, 5, 10.5, (152, 180, 208), w=4.8), rays(49, y, 5, 10.5, (-28, 0, 28), w=4.8))
+    return U(car, glow)
+
+
+def braking_F_t2():
+    # Défaut nommé : trop d'encre, lu « cadran de téléphone ». Piste plus étroite, six perçages : un disque.
+    plate = disc(32, 32, 26).difference(disc(32, 32, 12.5))
+    holes = U(*[disc(*polar(32, 32, 19.25, a), 2.7) for a in range(0, 360, 60)])
+    return plate.difference(holes)
+
+
+def lane_change_D_t2():
+    # Défaut nommé : maigre une fois réduite, tiret du haut collé à la pointe. Trait à 6,3, tiret raccourci.
+    shift = arrow(*stepped(17, 47, 58, 34), (47, 6), w=6.3, hl=11.5, hw=16.5)
+    lane = U(line((32, 46.5), (32, 58), w=6.3), line((32, 6), (32, 20), w=6.3))
+    return U(shift, lane.difference(shift.buffer(G)))
+
+
+def lane_change_E_t2():
+    # Défaut nommé : la file qui se décale s'écartait de l'autre, lue « bifurcation ». Elle se range
+    # maintenant à côté de celle qui continue.
+    straight = arrow((16, 58), (16, 7), hl=11, hw=16)
+    shift = arrow(*stepped(48, 34, 58, 40), (34, 7), hl=11, hw=16)
+    return U(straight, shift)
+
+
+def lane_change_F_t2():
+    # Défaut nommé : lu « + ». Tirets courts et décalés à gauche, flèche longue : c'est elle qui domine.
+    lane = U(line((25, 6), (25, 14), w=6.9), line((25, 50), (25, 58), w=6.9))
+    cross = arrow((7, 32), (57, 32), w=6.9, hl=14, hw=21)
+    return U(lane, cross)
+
+
+ETUDES = {
+    "indicators": [
+        P("D", "Instrument", "Témoin dans son rond", "Une seule flèche de témoin dans son voyant rond.", indicators_D_t1, indicators_D_t2),
+        P("E", "Plan", "La voiture clignote", "La voiture vue du dessus, ses deux clignotants de droite allumés.", indicators_E_t1, indicators_E_t2),
+        P("F", "Instrument", "Commodo", "Le levier de clignotant : on le lève ou on l'abaisse.", indicators_F_t1, indicators_F_t2),
+    ],
+    "following-distance": [
+        P("D", "Silhouette", "Deux arrières", "Deux voitures vues de l'arrière, la plus lointaine plus petite.", following_D_t1, following_D_t2),
+        P("E", "Plan", "Deux chevrons", "Le véhicule qui précède et deux chevrons au sol jusqu'à lui.", following_E_t1, following_E_t2),
+        P("F", "Panneau", "Entre deux pare-chocs", "Une cote entre l'avant d'une voiture et l'arrière de l'autre.", following_F_t1, following_F_t2),
+    ],
+    "braking": [
+        P("D", "Instrument", "Pied sur la pédale", "Un pied appuie sur la pédale de frein.", braking_D_t1, braking_D_t2),
+        P("E", "Silhouette", "Feux stop", "L'arrière d'une voiture dont les deux feux stop s'allument.", braking_E_t1, braking_E_t2),
+        P("F", "Silhouette", "Disque percé", "Un disque de frein seul, plein, avec ses perçages.", braking_F_t1, braking_F_t2),
+    ],
+    "lane-change": [
+        P("D", "Manœuvre", "Baïonnette", "La flèche change de voie par deux angles droits, entre deux longs tirets.", lane_change_D_t1, lane_change_D_t2),
+        P("E", "Manœuvre", "Deux files", "Deux flèches parallèles : l'une continue, l'autre se décale.", lane_change_E_t1, lane_change_E_t2),
+        P("F", "Manœuvre", "Ligne franchie", "Une flèche traverse la ligne pointillée entre deux tirets.", lane_change_F_t1, lane_change_F_t2),
+    ],
+}
+for _key, _extra in ETUDES.items():
+    ICONS[_key]["directions"] += _extra
 
 
 def build_all():

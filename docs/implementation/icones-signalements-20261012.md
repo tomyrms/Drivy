@@ -2,6 +2,8 @@
 
 « Signaler » passe de onze à quinze thèmes : **Clignotants**, **Distance de sécurité**, **Freinage** et **Changement de voie**. Ce document décrit leurs pictogrammes : trois propositions par thème, la sélection, les défauts corrigés et l'intégration. Il prolonge [la refonte du 12 octobre](icones-signaler-20261012.md), dont il reprend l'atelier, la grammaire et la grille de notes. Les onze icônes existantes ne sont pas modifiées.
 
+Après avoir vu les quatre retenues, le porteur a demandé trois études de plus par thème. Elles sont décrites dans [Six études par thème](#six-études-par-thème), avec une planche pour choisir par lettre. **L'icône livrée ne change pas tant qu'il n'a pas choisi.**
+
 ## Retenues
 
 | Thème | Clé | Retenue | Note | Suivante |
@@ -39,7 +41,7 @@ Chaque icône devait se distinguer d'un coup d'œil des onze existantes, surtout
 
 ## Propositions et choix
 
-Notes sur cinq : reconnaissance (30 %), qualité graphique (20 %), identité Drivy (15 %), petite taille (20 %), intégration (15 %). La plus forte note est retenue ; `export_signalements.py` recalcule les totaux et refuse une retenue ou un argument qui ne correspond pas aux notes. Les notes sont un jugement posé après avoir regardé les rendus, pas une mesure.
+Notes sur cinq : reconnaissance (30 %), qualité graphique (20 %), identité Drivy (15 %), petite taille (20 %), intégration (15 %). La plus forte note de ce premier tour (A, B, C) est retenue ; `export_signalements.py` recalcule les totaux et refuse une retenue ou un argument qui ne correspond pas aux notes. Les notes sont un jugement posé après avoir regardé les rendus, pas une mesure.
 
 ![Propositions et notes](assets/icones-signalements-20261012/propositions.png)
 
@@ -103,6 +105,79 @@ Clichés : la flèche en S des panneaux de chantier, le « Y » de fusion. Idée
 - **B** est la sœur de « Placement sur la chaussée » : une voiture vue du dessus et une ligne pointillée.
 - Défauts corrigés. A : S mou et tirets en miettes ; diagonale franche, tirets allongés. B : colonne étroite ; voiture plus en biais. C : la lettre « h » ; la voie qui se rabat s'arrête à une contre-forme de la voie rejointe, comme la trace mordue par le repère.
 - Arbitrage laissé au porteur : la flèche va vers la droite (se rabattre, se présélectionner à droite). Un miroir dirait « déboîter » ; les deux se construisent du même script.
+
+## Six études par thème
+
+Trois études de plus par thème (D, E, F), demandées par le porteur pour choisir lui-même sur planche. Ce sont des idées nouvelles, pas des variantes de A, B, C, et les plus simples possibles. Même méthode : une idée en une phrase, construction dans l'atelier, deux tours avec un défaut nommé et corrigé par dessin, rendus regardés à 64, 28 et 16 px en clair et en sombre, flou, miroir, voisinage. Elles sont notées avec la même grille. Elles ne remplacent rien d'elles-mêmes : le catalogue Xcode et les SVG web portent toujours A, C, A, A.
+
+![Planche de choix](assets/icones-signalements-20261012/choix.png)
+
+Une planche par thème, plus grande : [Clignotants](assets/icones-signalements-20261012/choix-indicators.png), [Distance de sécurité](assets/icones-signalements-20261012/choix-following-distance.png), [Freinage](assets/icones-signalements-20261012/choix-braking.png), [Changement de voie](assets/icones-signalements-20261012/choix-lane-change.png). La carte cerclée est l'icône livrée aujourd'hui.
+
+![Études, tour 1](assets/icones-signalements-20261012/etudes-tour-1.png)
+![Études, tour 2](assets/icones-signalements-20261012/etudes-tour-2.png)
+![Études, voisinage](assets/icones-signalements-20261012/voisins-etudes.png)
+
+### Clignotants
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| D · Témoin dans son rond | Une seule flèche de témoin dans son voyant rond. | 4 | 4 | 3 | 5 | 4 | 4,05 |
+| E · La voiture clignote | La voiture vue du dessus, ses deux clignotants de droite allumés. | 4 | 3 | 4 | 3 | 3 | 3,45 |
+| F · Commodo | Le levier de clignotant : on le lève ou on l'abaisse. | 2 | 3 | 3 | 3 | 4 | 2,85 |
+
+- Défauts corrigés. D : voyant maigre une fois réduit ; anneau épaissi, flèche grossie. E : quatre grands éclats lus « pattes » ; éclats courts. F : lu « curseur » ; levier en biais, colonne plus grosse.
+- Défauts restants. D se lit « bouton suivant » hors d'une voiture. E est une voiture vue du dessus, comme « Placement », et ses éclats s'empâtent à 16 px. F ne se reconnaît pas : « louche » ou « comète ».
+- **Avis : A reste devant (4,30).** D est la plus nette à 16 px, mais c'est A que le conducteur a sous les yeux.
+
+### Distance de sécurité
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| D · Deux arrières | Deux voitures vues de l'arrière, la plus lointaine plus petite. | 4 | 4 | 3 | 4 | 3 | 3,70 |
+| E · Deux chevrons | Le véhicule qui précède et deux chevrons au sol jusqu'à lui. | 3 | 3 | 4 | 3 | 3 | 3,15 |
+| F · Entre deux pare-chocs | Une cote entre l'avant d'une voiture et l'arrière de l'autre. | 3 | 4 | 2 | 5 | 4 | 3,60 |
+
+- Défauts corrigés. D : la petite voiture coiffait la grande, un totem ; plus d'écart entre les deux. E : voiture et chevrons lus « bonhomme » ou « grade » ; chevrons plus larges et détachés. F : deux moitiés de voiture lues « pinces » ; les pare-chocs sont réduits à deux barres.
+- Défauts restants. D ajoute deux voitures à la grille et ne dit l'écart que par la perspective. E reste un empilement, et des chevrons disent aussi « avancer ». F dit « écart » sans dire « véhicule » : c'est une icône de largeur.
+- **Avis : aucune ne s'impose.** C garde la plus forte note (3,85). D est la plus parlante sans libellé ; F est la plus lisible à 16 px et la plus générique. C'est le thème où le goût du porteur compte le plus.
+
+### Freinage
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| D · Pied sur la pédale | Un pied appuie sur la pédale de frein. | 3 | 3 | 3 | 2 | 2 | 2,65 |
+| E · Feux stop | L'arrière d'une voiture dont les deux feux stop s'allument. | 4 | 3 | 3 | 3 | 2 | 3,15 |
+| F · Disque percé | Un disque de frein seul, plein, avec ses perçages. | 4 | 4 | 3 | 4 | 4 | 3,85 |
+
+- Défauts corrigés. D : lu « hachoir » ; talon au sol, pointe relevée, bras de pédale qui monte. E : six longs éclats lus « crabe » ; éclats courts et serrés. F : trop d'encre, lu « cadran de téléphone » ; piste plus étroite, six perçages.
+- Défauts restants. **D se lit comme une coche à 28 et 16 px, c'est-à-dire comme « Point positif »** : à écarter. E, avec ses éclats des deux côtés, se lit « bonbon », et c'est une voiture de plus. F peut se lire « roulement » ; il est plus lourd que ses voisines.
+- **Avis : A reste devant (4,25).** F est la seule étude nouvelle que je défendrais : un objet de frein, sans parenté avec l'œil ni le giratoire. L'octogone n'a pas été dessiné : il dit « stop », donc signalisation.
+
+### Changement de voie
+
+| | Idée | Rec. | Qual. | Ident. | Petite | Intég. | Total |
+|---|---|---|---|---|---|---|---|
+| D · Baïonnette | La flèche change de voie par deux angles droits, entre deux longs tirets. | 5 | 4 | 4 | 4 | 4 | 4,30 |
+| E · Deux files | Deux flèches parallèles : l'une continue, l'autre se décale. | 4 | 4 | 3 | 4 | 4 | 3,85 |
+| F · Ligne franchie | Une flèche traverse la ligne pointillée entre deux tirets. | 3 | 3 | 4 | 3 | 2 | 3,00 |
+
+- Défauts corrigés. D : maigre une fois réduite, tiret du haut collé à la pointe ; trait épaissi, tiret raccourci. E : la file qui se décale s'écartait de l'autre, lue « bifurcation » ; elle se range maintenant à côté. F : lu « + » ; tirets courts et décalés, flèche longue.
+- Défauts restants. D est plus raide que la courbe de A. E dit « se ranger à côté » plus que « changer de voie ». F fait le signe « ÷ », et sa flèche horizontale se rapproche de « Priorité à droite ».
+- **Avis : D passe devant A (4,30 contre 4,10).** C'est la même idée que A, mais ses angles droits et ses longs tirets suppriment le « % » de A à 16 px. C'est le seul thème où je conseille de changer l'icône livrée.
+
+### Appliquer un choix
+
+`selection.json` accepte par thème un champ `choix_porteur` (une lettre de A à F) qui prime sur toute note. La commande l'écrit puis exporte le catalogue Xcode et la copie web. Par exemple, pour « Clignotants D, Freinage A, Distance E, Voie F », dans `docs/implementation/assets/icones-signalements-20261012` :
+
+```
+python export_signalements.py --choix indicators=D following-distance=E braking=A lane-change=F
+python rendu.py famille
+```
+
+- Un thème non cité garde son état. Une lettre vide (`indicators=`) efface le choix et revient à la retenue.
+- `--essai` écrit dans `./essai/` sans toucher au catalogue, au web ni à `selection.json`. C'est ainsi que la commande a été vérifiée ; rien n'a été appliqué.
+- La finition n'existe que pour A, C, A, A. Une autre étude sort à son tour 2, dont les traits sont déjà réglés pour valoir environ 6 en place ; elle n'a pas été vue dans la planche de famille. Après un choix, il faut regarder `famille.png` et relancer `svg_audit.py`.
 
 ## Finition des retenues
 
@@ -170,8 +245,8 @@ Audit (`svg_audit.py`, note heuristique) sur les quatre SVG du catalogue : `indi
 Dans `docs/implementation/assets/icones-signalements-20261012` :
 
 1. `python atelier_signalements.py` : propositions, tours, `propositions.json` ;
-2. `python rendu.py tour 1`, `tour 2`, `propositions`, `voisins`, `finition` : planches PNG ;
-3. `python export_signalements.py` : contrôle des notes, catalogue Xcode, copie web, `retenues.json` ;
+2. `python rendu.py tour 1`, `tour 2`, `propositions`, `voisins`, `finition` : planches PNG du premier tour ; `etudes 1`, `etudes 2`, `voisins-etudes`, `choix` : planches des études D, E, F et planche de choix ;
+3. `python export_signalements.py` : contrôle des notes, catalogue Xcode, copie web, `retenues.json` (avec `--choix`, voir plus haut) ;
 4. `python rendu.py famille` : planche de famille, relue dans le catalogue.
 
 Il faut Python, shapely et Pillow. L'atelier du 12 octobre (`../icones-signaler-20261012`) est importé, ni modifié ni relancé.
@@ -185,4 +260,5 @@ Il faut Python, shapely et Pillow. L'atelier du 12 octobre (`../icones-signaler-
 - **Clignotants** : deux flèches opposées veulent dire « redimensionner » dans un logiciel. Dans une voiture, c'est le clignotant.
 - **Version sombre non amincie**, comme le reste de la famille.
 - **Pas de recherche d'antériorité.** Les témoins de tableau de bord sont repris volontairement, redessinés.
+- **Les études D, E, F n'ont été vues qu'en planche d'atelier** : pas dans la planche de famille, pas d'audit `svg_audit.py`, pas de finition.
 - **VoiceOver** : rien n'a été écouté ; les libellés ne sont pas touchés ici.

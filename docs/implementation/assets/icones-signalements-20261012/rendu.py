@@ -9,6 +9,9 @@ Usage :
   python rendu.py tour 1            → tour-1.png (propositions du tour, taille optique égalisée)
   python rendu.py propositions      → propositions.png (dernier tour de chaque proposition)
   python rendu.py voisins           → voisins.png (chaque proposition entre ses voisines les plus proches)
+  python rendu.py etudes 1          → etudes-tour-1.png (les études D, E, F, tour par tour)
+  python rendu.py voisins-etudes    → voisins-etudes.png (les études D, E, F entre leurs voisines)
+  python rendu.py choix             → choix.png et choix-<clé>.png (les six études par thème, pour choisir)
   python rendu.py finition          → finition.png (les quatre retenues, tour 2 puis finition)
   python rendu.py famille           → famille.png (les quinze thèmes du catalogue, 28 et 16 pt, clair et sombre)
 """
@@ -124,7 +127,7 @@ def sheet(rows, out, title):
     print(out)
 
 
-def proposals(tour=None):
+def proposals(tour=None, letters="ABC"):
     sys.path.insert(0, str(HERE))
     import atelier_signalements as atelier  # noqa: E402
     notes = {}
@@ -135,6 +138,8 @@ def proposals(tour=None):
     for key, spec in atelier.ICONS.items():
         cells = []
         for p in spec["directions"]:
+            if p["direction"] not in letters:
+                continue
             n = len(p["tours"]) if tour is None else min(tour, len(p["tours"]))
             rings, scale = normalized(key, p["tours"][n - 1]())
             total = notes.get(key, {}).get("notes", {}).get(p["direction"], {}).get("total")
@@ -154,9 +159,9 @@ NEIGHBOURS = {
 }
 
 
-def neighbours(out):
+def neighbours(out, letters="ABC"):
     """Chaque proposition à 28 et 16 px entre les icônes existantes avec lesquelles elle pourrait se confondre."""
-    rows = proposals()
+    rows = proposals(letters=letters)
     img = Image.new("RGB", (1180, 70 + len(rows) * 150), rgb("#EEF1F4"))
     d = ImageDraw.Draw(img)
     d.text((24, 16), "Voisinage — chaque proposition entre les icônes existantes les plus proches (28 et 16 px)",
@@ -242,11 +247,72 @@ def family(out):
     print(out)
 
 
+def choice(out_all):
+    """Planche de choix : par thème, les six études côte à côte. Chaque carte porte sa lettre, son nom
+    et sa note ; le dessin en grand, à 28 px et à 16 px au pixel près, en clair puis en sombre.
+    La carte de l'icône livrée aujourd'hui est cerclée."""
+    sys.path.insert(0, str(HERE))
+    import atelier_signalements as atelier  # noqa: E402
+    sel = json.loads((HERE / "selection.json").read_text(encoding="utf-8"))
+    cw, ch, gap = 296, 348, 10
+    width = 24 + 6 * (cw + gap) + 14
+
+    def row(img, y, key, spec):
+        d = ImageDraw.Draw(img)
+        d.text((24, y), spec["title"], font=font(24, True), fill=rgb(LIGHT["text"]))
+        live = sel[key].get("choix_porteur") or sel[key]["retenue"]
+        for j, q in enumerate(spec["directions"]):
+            letter = q["direction"]
+            build = spec["finition"] if (letter == sel[key]["retenue"] and spec.get("finition")) else q["tours"][-1]
+            rings, _ = normalized(key, build())
+            total = sel[key]["notes"].get(letter, {}).get("total")
+            x, yy = 24 + j * (cw + gap), y + 40
+            won = letter == live
+            d.rounded_rectangle((x, yy, x + cw, yy + ch), 16, fill=rgb(LIGHT["page"]),
+                                outline=rgb(LIGHT["accent"] if won else LIGHT["line"]), width=4 if won else 1)
+            d.text((x + 16, yy + 6), letter, font=font(40, True), fill=rgb(LIGHT["text"]))
+            d.text((x + 54, yy + 12), q["name"], font=font(17, True), fill=rgb(LIGHT["text"]))
+            if total is not None:
+                d.text((x + 54, yy + 34), f"{total:.2f}".replace(".", ","), font=font(17, True), fill=rgb(LIGHT["accent"]))
+            if won:
+                d.text((x + 106, yy + 36), "livrée aujourd'hui", font=font(14), fill=rgb(LIGHT["muted"]))
+            stamp(img, rings, (x + 20, yy + 68), 128, LIGHT["accent"])
+            stamp(img, rings, (x + 180, yy + 84), 28, LIGHT["accent"])
+            stamp(img, rings, (x + 236, yy + 90), 16, LIGHT["accent"])
+            stamp(img, rings, (x + 180, yy + 132), 16, LIGHT["accent"], zoom=4)
+            d.rounded_rectangle((x + 10, yy + 214, x + cw - 10, yy + ch - 10), 12, fill=rgb(DARK["page"]))
+            stamp(img, rings, (x + 30, yy + 232), 88, DARK["accent"])
+            stamp(img, rings, (x + 180, yy + 240), 28, DARK["accent"])
+            stamp(img, rings, (x + 236, yy + 246), 16, DARK["accent"])
+            stamp(img, rings, (x + 180, yy + 276), 16, DARK["accent"], zoom=3)
+
+    rh = ch + 62
+    whole = Image.new("RGB", (width, 70 + 4 * rh), rgb("#EEF1F4"))
+    ImageDraw.Draw(whole).text((24, 16), "Nouveaux thèmes de « Signaler » — six études par thème, à choisir par lettre",
+                               font=font(26, True), fill=rgb(LIGHT["text"]))
+    for i, (key, spec) in enumerate(atelier.ICONS.items()):
+        row(whole, 66 + i * rh, key, spec)
+        one = Image.new("RGB", (width, rh + 20), rgb("#EEF1F4"))
+        row(one, 12, key, spec)
+        one.save(HERE / f"choix-{key}.png")
+        print(HERE / f"choix-{key}.png")
+    whole.save(out_all)
+    print(out_all)
+
+
 if __name__ == "__main__":
     what = sys.argv[1] if len(sys.argv) > 1 else "propositions"
     if what == "tour":
         n = int(sys.argv[2])
         sheet(proposals(n), HERE / f"tour-{n}.png", f"Nouveaux thèmes de « Signaler » — tour {n} (64 → 28 → 16 px, clair et sombre)")
+    elif what == "etudes":
+        n = int(sys.argv[2])
+        sheet(proposals(n, "DEF"), HERE / f"etudes-tour-{n}.png",
+              f"Études D, E, F — tour {n} (64 → 28 → 16 px, clair et sombre)")
+    elif what == "voisins-etudes":
+        neighbours(HERE / "voisins-etudes.png", "DEF")
+    elif what == "choix":
+        choice(HERE / "choix.png")
     elif what == "voisins":
         neighbours(HERE / "voisins.png")
     elif what == "finition":

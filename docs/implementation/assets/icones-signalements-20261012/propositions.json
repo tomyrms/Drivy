@@ -49,6 +49,54 @@
     ],
     "w": 54.7,
     "h": 29.5
+   },
+   {
+    "direction": "D",
+    "famille": "Instrument",
+    "name": "Témoin dans son rond",
+    "idea": "Une seule flèche de témoin dans son voyant rond.",
+    "tours": 2,
+    "ink": 0.338,
+    "bbox": [
+     4.5,
+     4.5,
+     59.5,
+     59.5
+    ],
+    "w": 55.0,
+    "h": 55.0
+   },
+   {
+    "direction": "E",
+    "famille": "Plan",
+    "name": "La voiture clignote",
+    "idea": "La voiture vue du dessus, ses deux clignotants de droite allumés.",
+    "tours": 2,
+    "ink": 0.196,
+    "bbox": [
+     15.0,
+     4.6,
+     50.7,
+     59.4
+    ],
+    "w": 35.7,
+    "h": 54.8
+   },
+   {
+    "direction": "F",
+    "famille": "Instrument",
+    "name": "Commodo",
+    "idea": "Le levier de clignotant : on le lève ou on l'abaisse.",
+    "tours": 2,
+    "ink": 0.201,
+    "bbox": [
+     3.5,
+     10.7,
+     56.2,
+     50.5
+    ],
+    "w": 52.7,
+    "h": 39.8
    }
   ]
  },
@@ -102,6 +150,54 @@
     ],
     "w": 46.0,
     "h": 51.5
+   },
+   {
+    "direction": "D",
+    "famille": "Silhouette",
+    "name": "Deux arrières",
+    "idea": "Deux voitures vues de l'arrière, la plus lointaine plus petite.",
+    "tours": 2,
+    "ink": 0.22,
+    "bbox": [
+     14.0,
+     4.0,
+     50.0,
+     58.4
+    ],
+    "w": 36.0,
+    "h": 54.4
+   },
+   {
+    "direction": "E",
+    "famille": "Plan",
+    "name": "Deux chevrons",
+    "idea": "Le véhicule qui précède et deux chevrons au sol jusqu'à lui.",
+    "tours": 2,
+    "ink": 0.2,
+    "bbox": [
+     12.0,
+     3.0,
+     52.0,
+     61.8
+    ],
+    "w": 40.0,
+    "h": 58.8
+   },
+   {
+    "direction": "F",
+    "famille": "Panneau",
+    "name": "Entre deux pare-chocs",
+    "idea": "Une cote entre l'avant d'une voiture et l'arrière de l'autre.",
+    "tours": 2,
+    "ink": 0.183,
+    "bbox": [
+     5.0,
+     12.5,
+     59.0,
+     51.5
+    ],
+    "w": 54.0,
+    "h": 39.0
    }
   ]
  },
@@ -155,6 +251,54 @@
     ],
     "w": 51.3,
     "h": 49.1
+   },
+   {
+    "direction": "D",
+    "famille": "Instrument",
+    "name": "Pied sur la pédale",
+    "idea": "Un pied appuie sur la pédale de frein.",
+    "tours": 2,
+    "ink": 0.258,
+    "bbox": [
+     -5.6,
+     9.3,
+     49.8,
+     50.6
+    ],
+    "w": 55.3,
+    "h": 41.3
+   },
+   {
+    "direction": "E",
+    "famille": "Silhouette",
+    "name": "Feux stop",
+    "idea": "L'arrière d'une voiture dont les deux feux stop s'allument.",
+    "tours": 2,
+    "ink": 0.21,
+    "bbox": [
+     2.1,
+     15.0,
+     61.9,
+     41.4
+    ],
+    "w": 59.8,
+    "h": 26.4
+   },
+   {
+    "direction": "F",
+    "famille": "Silhouette",
+    "name": "Disque percé",
+    "idea": "Un disque de frein seul, plein, avec ses perçages.",
+    "tours": 2,
+    "ink": 0.365,
+    "bbox": [
+     6.0,
+     6.0,
+     58.0,
+     58.0
+    ],
+    "w": 52.0,
+    "h": 52.0
    }
   ]
  },
@@ -208,6 +352,54 @@
     ],
     "w": 35.3,
     "h": 53.2
+   },
+   {
+    "direction": "D",
+    "famille": "Manœuvre",
+    "name": "Baïonnette",
+    "idea": "La flèche change de voie par deux angles droits, entre deux longs tirets.",
+    "tours": 2,
+    "ink": 0.181,
+    "bbox": [
+     13.8,
+     2.9,
+     54.1,
+     61.1
+    ],
+    "w": 40.3,
+    "h": 58.3
+   },
+   {
+    "direction": "E",
+    "famille": "Manœuvre",
+    "name": "Deux files",
+    "idea": "Deux flèches parallèles : l'une continue, l'autre se décale.",
+    "tours": 2,
+    "ink": 0.178,
+    "bbox": [
+     9.2,
+     7.8,
+     51.0,
+     61.0
+    ],
+    "w": 41.8,
+    "h": 53.2
+   },
+   {
+    "direction": "F",
+    "famille": "Manœuvre",
+    "name": "Ligne franchie",
+    "idea": "Une flèche traverse la ligne pointillée entre deux tirets.",
+    "tours": 2,
+    "ink": 0.146,
+    "bbox": [
+     3.5,
+     2.5,
+     56.2,
+     61.5
+    ],
+    "w": 52.7,
+    "h": 58.9
    }
   ]
  }
