@@ -102,14 +102,23 @@ struct SchoolLearnerPermitDetail: View {
             items.append(.init(id: "time", value: SchoolTrainingOverview.duration(overview.lessonMinutes), label: "De conduite"))
         }
         if let last = overview.lastCompleted {
-            items.append(.init(id: "last", value: SchoolTrainingFormatting.day(last.plannedStart, zone: last.timeZone),
+            items.append(.init(id: "last", value: shortDay(last),
                 label: "Dernière leçon"))
         }
         if let next = nextLesson(lessons, now: now) {
-            items.append(.init(id: "next", value: SchoolTrainingFormatting.day(next.plannedStart, zone: next.timeZone),
+            items.append(.init(id: "next", value: shortDay(next),
                 label: "Prochaine leçon"))
         }
         return items
+    }
+
+    /// « 21 sept. » : la rangée de chiffres tient sur une ligne ; l’année n’est dite que si elle n’est pas celle d’aujourd’hui.
+    private static func shortDay(_ lesson: SchoolLesson) -> String {
+        guard let date = lesson.startsAt else { return "" }
+        let zone = TimeZone(identifier: lesson.timeZone) ?? .current
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: Date())
+        return SchoolDateCache.shared.string(from: date, zone: zone, template: sameYear ? "dMMM" : "dMMMy")
     }
 
     /// La prochaine leçon planifiée qui n’a pas encore commencé.
