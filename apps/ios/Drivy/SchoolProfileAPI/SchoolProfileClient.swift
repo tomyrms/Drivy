@@ -17,7 +17,8 @@ final class SchoolProfileClient: SchoolProfileAPI {
         catch SchoolAPIError.unauthorized { throw SchoolProfileFailure.unauthorized }
         catch SchoolAPIError.forbidden { throw SchoolProfileFailure.forbidden }
         catch SchoolAPIError.identityNotLinked { throw SchoolProfileFailure.forbidden }
-        catch { throw SchoolProfileFailure.unavailable }
+        // Une lecture interrompue (écran quitté) reste une interruption, jamais une panne de l’école.
+        catch { throw error.unlessCancelled(SchoolProfileFailure.unavailable) }
     }
     func policies(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolProfilePolicy> {
         var query = [URLQueryItem(name: "limit", value: "50")]

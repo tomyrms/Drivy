@@ -28,7 +28,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
                 .sorted { ($0.categoryCode, $0.offeringKey) < ($1.categoryCode, $1.offeringKey) }
         } catch SchoolCatalogFailure.unauthorized { throw SchoolInvitationFailure.unauthorized }
         catch SchoolCatalogFailure.forbidden { throw SchoolInvitationFailure.forbidden }
-        catch { throw SchoolInvitationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
     }
 
     func instructors(schoolID: UUID) async throws -> [SchoolInvitationInstructor] {
@@ -67,7 +67,7 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         catch SchoolAPIError.unauthorized { throw SchoolInvitationFailure.unauthorized }
         catch SchoolAPIError.forbidden { throw SchoolInvitationFailure.forbidden }
         catch SchoolAPIError.identityNotLinked { throw SchoolInvitationFailure.forbidden }
-        catch { throw SchoolInvitationFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
     }
 
     func invitations(schoolID: UUID, cursor: String?) async throws -> SchoolPage<SchoolInvitation> {

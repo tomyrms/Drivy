@@ -32,11 +32,11 @@ struct SchoolCodeJoinView: View {
             .navigationTitle("Rejoindre une école")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
+                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(holdsSheet) }
             }
         }
         .tint(DrivyTheme.accent)
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(holdsSheet)
         .task {
             guard loadsOnAppear else { return }
             await model.load()
@@ -44,6 +44,10 @@ struct SchoolCodeJoinView: View {
         }
         .accessibilityIdentifier("join-school-code")
     }
+
+    // La première lecture (vérification du compte) n’écrit rien : la feuille se ferme pendant elle. Seul un envoi
+    // (demande prête ou déjà enregistrée) la retient.
+    private var holdsSheet: Bool { model.isBusy && (model.isReady || model.record != nil) }
 
     private var codeBinding: Binding<String> {
         Binding(get: { model.code }, set: { model.code = SchoolInvitationCode.formatted($0) })

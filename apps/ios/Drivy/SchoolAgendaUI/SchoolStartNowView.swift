@@ -551,69 +551,35 @@ struct SchoolStartNowView: View {
     }
 }
 
-/// Le geste complet « lancer une leçon tout de suite », réutilisable depuis Aujourd’hui et depuis la fiche d’un élève.
-/// La feuille porte tout le parcours (`SchoolStartNowLaunch`) ; seul un conflit de planning ouvre une autre feuille,
-/// la planification, avec l’élève déjà connu. Le style du bouton est celui de l’appelant.
-struct SchoolStartNowButton<Content: View>: View {
-    @Bindable var workspace: SchoolWorkspace
-    let agendaClient: SchoolAgendaClient?
-    let captureController: SchoolCaptureSessionController?
-    var learnerID: UUID?
-    /// Appelé quand le geste est terminé (feuille fermée, ou trajet à l’écran) pour que l’écran d’origine se relise.
-    var onFinished: () -> Void = {}
-    /// Toute la chaîne garde son hôte : l’écran d’origine ne se relit pas pendant qu’elle est présentée.
-    var onPresentationChanged: (Bool) -> Void = { _ in }
-    @ViewBuilder let label: Content
+/// Présentation de « Démarrer une leçon » : la feuille du parcours, puis la planification après un conflit.
+/// Elle appartient à un écran stable. Un bouton rendu dans une branche de l’écran (la carte d’Aujourd’hui change
+/// avec l’heure) ne la porte pas lui-même : en quittant la hiérarchie, il fermerait la feuille ouverte.
+@MainActor @Observable final class SchoolStartNowPresentation {
+    var launch: SchoolStartNowLaunch?
+    var planning: SchoolPlanningWorkspace?
+    @ObservationIgnored private var lastLaunch: SchoolStartNowLaunch?
+    @ObservationIgnored private var onFinished: () -> Void = {}
+    @ObservationIgnored private var onPresentationChanged: (Bool) -> Void = { _ in }
 
-    @State private var launch: SchoolStartNowLaunch?
-    @State private var lastLaunch: SchoolStartNowLaunch?
-    @State private var planning: SchoolPlanningWorkspace?
-
-    private var scopeKey: String {
-        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
-    }
-    /// Comme partout : moniteur d’une école active ; les droits sont relus par le serveur.
-    private var instructs: Bool {
-        workspace.membership?.roles.contains("INSTRUCTOR") == true && workspace.school?.status == "ACTIVE"
-    }
-
-    var body: some View {
-        Button { open() } label: { label }
-            .disabled(agendaClient == nil || !instructs)
-            .onChange(of: scopeKey) { _, _ in
-                lastLaunch?.invalidate(); lastLaunch = nil; launch = nil
-                planning?.invalidate(); planning = nil
-                onPresentationChanged(false)
-            }
-            .sheet(item: $launch, onDismiss: { closed() }) { model in
-                SchoolStartNowView(launch: model)
-            }
-            .sheet(item: $planning, onDismiss: { finished() }) { model in
-                SchoolPlanningView(model: model)
-            }
-    }
-
-    private func open() {
+    func open(workspace: SchoolWorkspace, agendaClient: SchoolAgendaClient?, captureController: SchoolCaptureSessionController?,
+              learnerID: UUID?, onFinished: @escaping () -> Void, onPresentationChanged: @escaping (Bool) -> Void) {
         // Une seule chaîne à la fois : un second appui avant l’apparition de la feuille ne la remplace pas.
         guard launch == nil, lastLaunch == nil, planning == nil else { return }
-        guard let agendaClient, let person = workspace.person, let membership = workspace.membership, instructs else { return }
+        guard let agendaClient, let person = workspace.person, let membership = workspace.membership,
+              membership.roles.contains("INSTRUCTOR"), workspace.school?.status == "ACTIVE" else { return }
         let form = SchoolStartNowWorkspace(scope: agendaClient.scope(person: person, membership: membership),
             client: agendaClient.planningClient, learnerID: learnerID)
         let model = SchoolStartNowLaunch(form: form, agenda: agendaClient, workspace: workspace, controller: captureController)
-        let presentationChanged = onPresentationChanged, finishedAction = onFinished
-        model.onFinished = { presentationChanged(false); finishedAction() }
+        self.onFinished = onFinished
+        self.onPresentationChanged = onPresentationChanged
+        model.onFinished = { onPresentationChanged(false); onFinished() }
         onPresentationChanged(true)
         lastLaunch = model; launch = model
     }
 
-    private func finished() {
-        onPresentationChanged(false)
-        onFinished()
-    }
-
     /// Feuille fermée. Un conflit de planning ouvre la planification ; un trajet qui démarre termine la chaîne
     /// lui-même (la carte remplace l’écran d’origine) ; sinon l’écran d’origine se relit maintenant.
-    private func closed() {
+    func closed(workspace: SchoolWorkspace, agendaClient: SchoolAgendaClient?) {
         guard let model = lastLaunch else { return }
         lastLaunch = nil
         if model.form.planInstead, let agendaClient, let person = workspace.person, let membership = workspace.membership {
@@ -623,6 +589,82 @@ struct SchoolStartNowButton<Content: View>: View {
             planning = planned
         } else if !model.finishesItself {
             model.complete()
+        }
+    }
+
+    /// Planification refermée : fin de la chaîne.
+    func finished() {
+        onPresentationChanged(false)
+        onFinished()
+    }
+
+    /// Autre compte, autre école ou autres droits : rien de la chaîne en cours ne reste présenté.
+    func reset() {
+        lastLaunch?.invalidate(); lastLaunch = nil; launch = nil
+        planning?.invalidate(); planning = nil
+        onPresentationChanged(false)
+    }
+}
+
+/// Les deux feuilles de la chaîne, posées sur une vue qui reste en place pendant tout le parcours.
+struct SchoolStartNowSheets: ViewModifier {
+    @Bindable var presentation: SchoolStartNowPresentation
+    let workspace: SchoolWorkspace
+    let agendaClient: SchoolAgendaClient?
+
+    private var scopeKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: scopeKey) { _, _ in presentation.reset() }
+            .sheet(item: $presentation.launch, onDismiss: { presentation.closed(workspace: workspace, agendaClient: agendaClient) }) { model in
+                SchoolStartNowView(launch: model)
+            }
+            .sheet(item: $presentation.planning, onDismiss: { presentation.finished() }) { model in
+                SchoolPlanningView(model: model)
+            }
+    }
+}
+
+/// Le geste complet « lancer une leçon tout de suite », réutilisable depuis Aujourd’hui et depuis la fiche d’un élève.
+/// La feuille porte tout le parcours (`SchoolStartNowLaunch`) ; seul un conflit de planning ouvre une autre feuille,
+/// la planification, avec l’élève déjà connu. Le style du bouton est celui de l’appelant.
+/// Sans `presentation`, le bouton porte lui-même ses feuilles : il doit alors rester en place tant qu’elles sont
+/// ouvertes (barre d’action du dossier). Dans un contenu qui change, l’écran hôte fournit la présentation et pose
+/// `SchoolStartNowSheets` sur une vue stable.
+struct SchoolStartNowButton<Content: View>: View {
+    @Bindable var workspace: SchoolWorkspace
+    let agendaClient: SchoolAgendaClient?
+    let captureController: SchoolCaptureSessionController?
+    var learnerID: UUID?
+    /// Appelé quand le geste est terminé (feuille fermée, ou trajet à l’écran) pour que l’écran d’origine se relise.
+    var onFinished: () -> Void = {}
+    /// Toute la chaîne garde son hôte : l’écran d’origine ne se relit pas pendant qu’elle est présentée.
+    var onPresentationChanged: (Bool) -> Void = { _ in }
+    /// Présentation tenue par l’écran hôte ; `nil` : celle de ce bouton.
+    var presentation: SchoolStartNowPresentation? = nil
+    @ViewBuilder let label: Content
+
+    @State private var ownPresentation = SchoolStartNowPresentation()
+
+    /// Comme partout : moniteur d’une école active ; les droits sont relus par le serveur.
+    private var instructs: Bool {
+        workspace.membership?.roles.contains("INSTRUCTOR") == true && workspace.school?.status == "ACTIVE"
+    }
+
+    var body: some View {
+        let button = Button {
+            (presentation ?? ownPresentation).open(workspace: workspace, agendaClient: agendaClient,
+                captureController: captureController, learnerID: learnerID, onFinished: onFinished,
+                onPresentationChanged: onPresentationChanged)
+        } label: { label }
+            .disabled(agendaClient == nil || !instructs)
+        if presentation == nil {
+            button.modifier(SchoolStartNowSheets(presentation: ownPresentation, workspace: workspace, agendaClient: agendaClient))
+        } else {
+            button
         }
     }
 }

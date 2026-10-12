@@ -222,7 +222,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolPlanningFailure.unauthorized }
-        catch { throw SchoolPlanningFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolPlanningFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolPlanningFailure.unauthorized }
         if let command {
             let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
@@ -245,7 +245,8 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             if command.resourceVersion > 0 { request.setValue("\"\(command.ifMatchVersion)\"", forHTTPHeaderField: "If-Match") }
         }
         let response: SchoolHTTPResponse
-        do { response = try await transport.send(request) } catch { throw SchoolPlanningFailure.unavailable }
+        // Une requête interrompue reste une interruption : elle n’est ni un refus ni une panne de l’école.
+        do { response = try await transport.send(request) } catch { throw error.unlessCancelled(SchoolPlanningFailure.unavailable) }
         try Task.checkCancellation()
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolPlanningFailure.invalidResponse }
         let contentType = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()

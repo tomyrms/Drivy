@@ -206,6 +206,19 @@ struct IdentityTests {
         #expect(!session.isAuthenticated && authorizer.refreshCount == 0)
         #expect(session.errorMessage == IdentityFailure.invalidProvider.localizedDescription)
     }
+
+    @Test func protectionWindowShowsTheLockThenTheShieldOnlyOverAnOpenSession() {
+        // Verrouillée : le verrou, quel que soit l’état de la scène, y compris pendant l’invite Face ID.
+        #expect(AppCover.content(isLocked: true, sceneIsActive: true, hasSession: true) == .lock)
+        #expect(AppCover.content(isLocked: true, sceneIsActive: false, hasSession: true) == .lock)
+        #expect(AppCover.content(isLocked: true, sceneIsActive: false, hasSession: false) == .lock)
+        // Session ouverte et scène inactive (sélecteur d’apps, alerte du système) : le masque.
+        #expect(AppCover.content(isLocked: false, sceneIsActive: false, hasSession: true) == .shield)
+        #expect(AppCover.content(isLocked: false, sceneIsActive: true, hasSession: true) == .nothing)
+        // Sans session, rien à masquer : la page de connexion du fournisseur n’est jamais recouverte.
+        #expect(AppCover.content(isLocked: false, sceneIsActive: false, hasSession: false) == .nothing)
+        #expect(AppCover.content(isLocked: false, sceneIsActive: true, hasSession: false) == .nothing)
+    }
 }
 
 private let identityConfiguration = AppConfiguration(apiBaseURL: URL(string: "https://api.example.test")!,

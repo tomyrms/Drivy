@@ -101,8 +101,11 @@ struct SchoolRootView: View {
             if !authenticated {
                 captureController.setScope(nil)
                 closeAll(); selectedHomeTab = .session; workspace?.reset()
-            } else if pendingJoinLink != nil { openJoin() }
-            else if joinsByCodeAfterSignIn { joinsByCodeAfterSignIn = false; openCodeJoin() }
+            } else if pendingJoinLink != nil || joinsByCodeAfterSignIn {
+                let byCode = joinsByCodeAfterSignIn
+                joinsByCodeAfterSignIn = false
+                openJoinWhenIdle(byCode: byCode)
+            }
         }
         .onChange(of: workspace?.membership?.membershipId) { _, _ in
             if workspace?.isLoadingAccount != true { verifyPresentedScopes() }
@@ -148,7 +151,7 @@ struct SchoolRootView: View {
             SchoolAccountView(isAuthenticated: identity.isAuthenticated, workspace: workspace, manageURL: manageURL,
                 openProfile: followUp(.profile, when: ownProfileLearner != nil),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
-                openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
+                openJoinSchool: followUp(.join, when: canJoinSchool),
                 signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding))
         }
     }
@@ -183,7 +186,11 @@ struct SchoolRootView: View {
                 .disabled(isCheckingSchoolAccess)
                 .overlay { accessCheckOverlay }
                 .onChange(of: route.model.accessFailure) { _, failure in
-                    if failure != nil { closeProfile(); Task { await workspace?.loadAccount() } }
+                    // Seul un retrait d’accès ferme la feuille. Un dossier introuvable (archivé entre-temps, service
+                    // de l’école plus ancien que l’app) n’en est pas un : la feuille reste sur son message, avec « Fermer ».
+                    if failure == .unauthorized || failure == .forbidden {
+                        closeProfile(); Task { await workspace?.loadAccount() }
+                    }
                 }
         }
     }
@@ -248,10 +255,16 @@ struct SchoolRootView: View {
         SchoolAccountActions(manageURL: manageURL,
             openProfile: followUp(.profile, when: ownProfileLearner != nil),
             openInvitations: followUp(.invitations, when: canManageInvitations),
-            openJoinSchool: followUp(.join, when: configuration != nil && identity.isAuthenticated),
+            openJoinSchool: followUp(.join, when: canJoinSchool),
             signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding),
-            tripInProgress: captureController.captureID != nil && captureController.state != .saved)
+            tripInProgress: tripInProgress)
     }
+
+    /// Un trajet GPS tourne (ou attend encore la confirmation de l’école) : changer d’école fermerait sa portée.
+    private var tripInProgress: Bool { captureController.captureID != nil && captureController.state != .saved }
+
+    /// Rejoindre une école ouvre l’école rejointe : comme « Changer d’école », le geste se retire pendant un trajet.
+    private var canJoinSchool: Bool { configuration != nil && identity.isAuthenticated && !tripInProgress }
 
     private var canResumeStaffOnboarding: Bool {
         guard configuration != nil, identity.isAuthenticated, workspace?.school?.status == "ACTIVE",
@@ -289,7 +302,17 @@ struct SchoolRootView: View {
         pendingJoinLink = url.absoluteString
         if identity.isAuthenticated {
             guard !presentsSheet else { return }
-            if showsAccount { follow(.join) } else { openJoin() }
+            if showsAccount { follow(.join) } else { openJoinWhenIdle(byCode: false) }
+        }
+    }
+    /// Connexion ou lien reçu : une présentation déjà à l’écran (page du fournisseur d’identité qui se referme,
+    /// leçon, planification, choix d’école) ferait perdre cette feuille sans un mot. Elle attend sa fermeture ;
+    /// au-delà de l’attente, le lien reste retenu pour « Rejoindre une école ».
+    private func openJoinWhenIdle(byCode: Bool) {
+        Task {
+            guard await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
+                  identity.isAuthenticated, !presentsSheet else { return }
+            if pendingJoinLink != nil { openJoin() } else if byCode { openCodeJoin() }
         }
     }
     private func joinDismissed() {
@@ -307,7 +330,15 @@ struct SchoolRootView: View {
         configuration != nil && identity.isAuthenticated ? { openCodeJoin() } : nil
     }
     private func openCodeJoin() {
-        guard identity.isAuthenticated, let configuration, !presentsSheet else { return }
+        guard identity.isAuthenticated, let configuration else { return }
+        if presentsSheet {
+            // Une route restée posée sans feuille à l’écran (présentation écartée par une autre) ne condamne pas
+            // le bouton : la même demande est présentée de nouveau.
+            if codeJoinRoute != nil, !uikitIsPresenting, let model = codeJoinWorkspace {
+                codeJoinRoute = SchoolWorkspaceSheet(model: model)
+            }
+            return
+        }
         codeJoinWorkspace?.invalidate()
         let model = SchoolCodeJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity))
         codeJoinWorkspace = model; codeJoinRoute = SchoolWorkspaceSheet(model: model)
@@ -332,7 +363,11 @@ struct SchoolRootView: View {
                   let current = workspace.person?.memberships.first(where: {
                       $0.schoolId == membership.schoolId && $0.membershipId == membership.membershipId
                   }) else { return }
-            await workspace.selectSchool(current)
+            // Adhésion arrivée pendant un trajet (lien ouvert, demande restée en attente) : l’école du trajet reste
+            // ouverte, l’école rejointe se choisit ensuite par « Changer d’école ».
+            guard !tripInProgress else { return }
+            // Compte neuf : la lecture du compte a déjà ouvert son unique école, elle n’est pas lue une seconde fois.
+            if workspace.membership != current || workspace.school == nil { await workspace.selectSchool(current) }
             if workspace.membership?.membershipId == current.membershipId { selectedHomeTab = .session }
         }
     }
@@ -367,38 +402,51 @@ struct SchoolRootView: View {
     }
 
     private func invitationsDismissed() {
-        let invited = invitations?.successMessage != nil
+        // Un code créé ne laisse aucun message de succès : c’est l’écriture confirmée qui compte.
+        let invited = invitations?.didConfirmWrite == true
         invitations?.invalidate(); invitations = nil
-        // L’élève invité apparaît dans la liste après son acceptation ; on relit la liste.
+        // L’élève invité apparaît dans la liste après son acceptation ; la liste est relue sans rien effacer.
         if invited, identity.isAuthenticated, workspace?.school?.status == "ACTIVE" {
-            Task { await workspace?.searchLearners(workspace?.searchText ?? "") }
+            Task { await workspace?.refreshLearners(minimumInterval: 0) }
         }
     }
 
     // MARK: Profil et accueil
 
     private var onboardingOfferKey: String {
-        "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0):\(workspace?.membership?.roles.joined(separator: ",") ?? ""):\(workspace?.school?.status ?? ""):\(workspace?.learners.isEmpty == false)"
+        // La liste d’élèves ne compte que pour un compte élève (son dossier) : une recherche du moniteur qui la vide
+        // ne relance pas la lecture de son accueil.
+        let ownDossier = workspace?.membership?.roles.contains("LEARNER") == true ? "\(workspace?.learners.isEmpty == false)" : ""
+        return "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0):\(workspace?.membership?.roles.joined(separator: ",") ?? ""):\(workspace?.school?.status ?? ""):\(ownDossier)"
     }
 
     /// First access: open the guided welcome once when the school says it is not finished.
     /// Staff with the ADMIN role only are not forced into it.
     private func offerOnboardingIfNeeded() async {
-        staffOnboardingToResume = nil
+        // « Reprendre l’accueil » reste affiché pendant la relecture : il ne s’éteint que pour une autre adhésion,
+        // ou quand l’école ne le dit plus à terminer.
+        if staffOnboardingToResume != workspace?.membership?.membershipId { staffOnboardingToResume = nil }
         guard identity.isAuthenticated, let configuration, let person = workspace?.person,
               let membership = workspace?.membership,
-              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR") else { return }
+              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR") else {
+            staffOnboardingToResume = nil
+            return
+        }
         let isLearner = membership.roles.contains("LEARNER")
         if isLearner && workspace?.learners.isEmpty != false { return }
         let kind: SchoolOnboardingKind = isLearner ? .student : .staff
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-        guard await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind),
-              !Task.isCancelled, identity.isAuthenticated,
+        let pending = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind)
+        guard !Task.isCancelled, identity.isAuthenticated,
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
               workspace?.membership?.accessEpoch == membership.accessEpoch else { return }
+        guard pending else {
+            if !isLearner { staffOnboardingToResume = nil }
+            return
+        }
         if !isLearner { staffOnboardingToResume = membership.membershipId }
         guard !offeredOnboarding.contains(membership.membershipId),
               !SchoolOnboardingDeferral.isDeferred(membership.membershipId), !presentsSheet else { return }

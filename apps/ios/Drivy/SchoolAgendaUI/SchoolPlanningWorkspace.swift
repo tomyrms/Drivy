@@ -1,6 +1,15 @@
 import Foundation
 import Observation
 
+/// Lecture lancée à part pour partir en même temps que d’autres : l’annulation de celui qui l’attend l’annule aussi.
+extension Task where Failure == any Error {
+    var readValue: Success {
+        get async throws {
+            try await withTaskCancellationHandler { try await value } onCancel: { cancel() }
+        }
+    }
+}
+
 struct SchoolPlanningInstructor: Identifiable {
     let id: UUID
     let displayName: String
@@ -11,6 +20,8 @@ struct SchoolPlanningInstructor: Identifiable {
     let scope: SchoolCommandScope
     let client: SchoolPlanningClient
     private(set) var originalLesson: SchoolLesson?
+    /// Feuille « Annuler la leçon » : la lecture se limite à l’école et à la leçon. Fixé par la feuille avant sa lecture.
+    var readsForCancellation = false
     /// A durable command receipt closes the live capture even if the following read fails.
     private(set) var confirmedCancellationLessonID: UUID?
     private(set) var roles: [String] = []
@@ -262,29 +273,50 @@ struct SchoolPlanningInstructor: Identifiable {
             guard let membership = person.memberships.first(where: { $0.membershipId == scope.membershipID }),
                   person.personId == scope.personID, membership.schoolId == scope.schoolID, membership.accessEpoch == scope.accessEpoch,
                   membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") else { throw SchoolPlanningFailure.forbidden }
-            let school = try await client.reader.school(id: scope.schoolID)
-            let defaults = try await client.defaults(schoolID: scope.schoolID, membershipID: scope.membershipID)
-            let refreshedLesson: SchoolLesson?
-            if let originalLesson { refreshedLesson = try await client.lesson(schoolID: scope.schoolID, id: originalLesson.id) }
-            else { refreshedLesson = nil }
-            let offerings: [SchoolOffering] = try await client.records(scope.schoolID, path: ["offerings"])
-            let policies: [SchoolCatalogPolicy] = try await client.records(scope.schoolID, path: ["policy-versions"])
-            let products: [SchoolServiceProduct] = try await client.records(scope.schoolID, path: ["service-products"])
-            let terms: [SchoolCommercialTerms] = try await client.records(scope.schoolID, path: ["commercial-terms"])
+            // Les droits du compte sont relus d’abord ; les lectures suivantes sont indépendantes et partent ensemble.
+            // Rien n’est publié avant la fin de toutes : l’ordre des réponses ne change pas ce qui est affiché.
+            let isAdmin = membership.roles.contains("ADMIN")
+            let schoolRead = Task<SchoolDetails, any Error> { @MainActor in try await self.client.reader.school(id: self.scope.schoolID) }
+            let lessonRead = Task<SchoolLesson?, any Error> { @MainActor in try await self.readOriginalLesson() }
+            defer { schoolRead.cancel(); lessonRead.cancel() }
+            if readsForCancellation {
+                // Annuler une leçon ne demande que l’école et la leçon : ni catalogue, ni élèves.
+                let school = try await schoolRead.readValue
+                let refreshedLesson = try await lessonRead.readValue
+                guard request == generation, !Task.isCancelled else { return }
+                self.school = school; self.roles = membership.roles; self.grants = membership.grants
+                originalLesson = refreshedLesson; agreementConfirmed = false
+                needsReload = false; isLoading = false; errorMessage = storageError
+                return
+            }
+            let defaultsRead = Task<SchoolPlanningDefaults, any Error> { @MainActor in
+                try await self.client.defaults(schoolID: self.scope.schoolID, membershipID: self.scope.membershipID)
+            }
+            let offeringsRead = Task<[SchoolOffering], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["offerings"]) }
+            let policiesRead = Task<[SchoolCatalogPolicy], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["policy-versions"]) }
+            let productsRead = Task<[SchoolServiceProduct], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["service-products"]) }
+            let termsRead = Task<[SchoolCommercialTerms], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["commercial-terms"]) }
+            let membersRead = Task<[SchoolMember], any Error> { @MainActor in try await self.readMembers(isAdmin: isAdmin) }
+            let learnersRead = Task<[SchoolLearner], any Error> { @MainActor in try await self.readAllLearners() }
+            defer {
+                defaultsRead.cancel(); offeringsRead.cancel(); policiesRead.cancel(); productsRead.cancel()
+                termsRead.cancel(); membersRead.cancel(); learnersRead.cancel()
+            }
+            let school = try await schoolRead.readValue
+            let defaults = try await defaultsRead.readValue
+            let refreshedLesson = try await lessonRead.readValue
+            let offerings = try await offeringsRead.readValue
+            let policies = try await policiesRead.readValue
+            let products = try await productsRead.readValue
+            let terms = try await termsRead.readValue
             guard products.allSatisfy({ (0...9_007_199_254_740_991).contains($0.unitPriceCents)
                 && ($0.durationMinutes.map { (1...1440).contains($0) } ?? true) }) else { throw SchoolPlanningFailure.invalidResponse }
-            var instructors: [SchoolPlanningInstructor]
-            if membership.roles.contains("ADMIN") {
-                let members: [SchoolMember] = try await client.records(scope.schoolID, path: ["members"])
+            let instructors: [SchoolPlanningInstructor]
+            if isAdmin {
+                let members = try await membersRead.readValue
                 instructors = members.filter { $0.status == "ACTIVE" && $0.roles.contains("INSTRUCTOR") }.map { SchoolPlanningInstructor(id: $0.id, displayName: $0.displayName) }
             } else { instructors = [SchoolPlanningInstructor(id: membership.membershipId, displayName: person.displayName)] }
-            var learners: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
-            repeat {
-                let page = try await client.reader.learners(schoolID: scope.schoolID, query: "", cursor: cursor)
-                learners.append(contentsOf: page.items); cursor = page.nextCursor
-                guard learners.count <= 10_000 else { throw SchoolPlanningFailure.invalidResponse }
-                if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
-            } while cursor != nil
+            let learners = try await learnersRead.readValue
             guard request == generation, !Task.isCancelled else { return }
             self.school = school; self.defaults = defaults; self.roles = membership.roles; self.grants = membership.grants
             self.offerings = offerings; self.policies = policies; self.products = products; self.terms = terms
@@ -301,7 +333,30 @@ struct SchoolPlanningInstructor: Identifiable {
             if request == generation, instructorID != nil, instructorID == previousInstructorID {
                 await loadAvailability()
             }
-        } catch { if request == generation { fail(error) } }
+        } catch {
+            // Feuille refermée pendant la lecture : une interruption n’est ni un refus ni une panne à afficher.
+            guard request == generation, !(error is CancellationError) else { return }
+            fail(error)
+        }
+    }
+    private func readOriginalLesson() async throws -> SchoolLesson? {
+        guard let originalLesson else { return nil }
+        return try await client.lesson(schoolID: scope.schoolID, id: originalLesson.id)
+    }
+    /// L’équipe ne se lit que pour l’administration ; un moniteur ne planifie que pour lui-même.
+    private func readMembers(isAdmin: Bool) async throws -> [SchoolMember] {
+        guard isAdmin else { return [] }
+        return try await client.records(scope.schoolID, path: ["members"])
+    }
+    private func readAllLearners() async throws -> [SchoolLearner] {
+        var learners: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
+        repeat {
+            let page = try await client.reader.learners(schoolID: scope.schoolID, query: "", cursor: cursor)
+            learners.append(contentsOf: page.items); cursor = page.nextCursor
+            guard learners.count <= 10_000 else { throw SchoolPlanningFailure.invalidResponse }
+            if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
+        } while cursor != nil
+        return learners
     }
     func selectLearner(_ id: UUID) async {
         guard !invalidated, !isBusy else { return }

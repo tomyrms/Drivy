@@ -375,6 +375,22 @@ struct SchoolProfileWorkspaceTests {
         let unavailable = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: .staff)
         #expect(!unavailable && api.commands.isEmpty)
     }
+
+    @Test func anInterruptedReadIsNeitherAnOutageNorAReasonToBlockTheForm() async {
+        let api = ProfileAPIStub()
+        let model = ProfileFixture.workspace(api: api)
+        await model.load()
+        #expect(model.canMutate && model.errorMessage == nil)
+        // Écran quitté pendant la relecture : rien n’est annoncé, ce qui était lu reste utilisable.
+        api.interruptsReads = true
+        await model.load()
+        #expect(model.errorMessage == nil && !model.isLoading && model.accessFailure == nil)
+        #expect(model.profile != nil && model.canMutate)
+        // Une vraie panne, elle, se dit et retient toute écriture.
+        api.interruptsReads = false; api.readFailure = .unavailable
+        await model.load()
+        #expect(model.errorMessage == SchoolProfileFailure.unavailable.localizedDescription && !model.canMutate)
+    }
 }
 
 @MainActor
@@ -395,7 +411,10 @@ final class ProfileAPIStub: SchoolProfileAPI {
     var cursors: [String?] = []
     var noticeRequests: [UUID?] = []
     var operationRequests: [UUID] = []
+    /// Lecture interrompue par la fermeture de l’écran.
+    var interruptsReads = false
     func school(id: UUID) async throws -> SchoolDetails {
+        if interruptsReads { throw CancellationError() }
         if let readFailure { throw readFailure }
         if let schoolHandler { return await schoolHandler() }
         return ConfigurationFixture.school(version: 8, status: "ACTIVE")
