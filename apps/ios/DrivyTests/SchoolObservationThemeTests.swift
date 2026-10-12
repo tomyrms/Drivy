@@ -571,7 +571,8 @@ private actor ThemeServer: SchoolHTTPTransport {
         #expect(model.move(key: "right-priority", by: 1) == 3)
         try await settled(model)
         #expect(model.saveState == .saved && model.configuration.version == 2)
-        let sent = try #require(await server.writes.last).keys
+        let firstWrites = await server.writes
+        let sent = try #require(firstWrites.last).keys
         #expect(sent.count == themes.count && Array(sent[2...4]) == ["signage", "right-priority", "tunnel"])
         let kept = await server.current()
         #expect(kept.themes.first { $0.key == "tunnel" }?.visible == true)
@@ -579,7 +580,8 @@ private actor ThemeServer: SchoolHTTPTransport {
         // Tout rétablir ne perd pas davantage la clé inconnue.
         model.resetAll()
         try await settled(model)
-        let restored = try #require(await server.writes.last).keys
+        let laterWrites = await server.writes
+        let restored = try #require(laterWrites.last).keys
         #expect(model.saveState == .saved && restored.contains("tunnel") && restored.count == themes.count)
     }
 
@@ -753,7 +755,8 @@ private actor ThemeLessonTransport: SchoolHTTPTransport {
         #expect(model.themeConfiguration.isFromServer && model.themeConfiguration.unlisted.contains("moving-off"))
         let movingOff = SchoolLiveObservationTheme(competency: ThemeLessonTransport.competencies[0], title: "Démarrage", key: "moving-off")
         #expect(model.record(theme: movingOff, status: .attention, at: Date()))
-        let object = try #require(JSONSerialization.jsonObject(with: try #require(outbox.value).body) as? [String: Any])
+        let bytes = try #require(outbox.value).body
+        let object = try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
         #expect(object["themeKey"] == nil && object["text"] as? String == "Démarrage")
         model.stop()
     }
