@@ -173,6 +173,8 @@ struct SchoolHomeView: View {
                     SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                         .navigationTitle("Aujourd’hui")
                         .navigationBarTitleDisplayMode(.inline)
+                        // La carte va jusqu’en haut : aucun fond ni flou de barre ne la coupe en rectangle.
+                        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
                 }
             }
             .toolbar { staffToolbar }
