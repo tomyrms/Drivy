@@ -104,7 +104,7 @@ final class SchoolWorkspace {
         } catch {
             guard request == accountRequest else { return }
             isLoadingAccount = false
-            if !invalidateAccess(for: error) { accountError = message(for: error) }
+            if !invalidateAccess(for: error) { accountError = blockingMessage(for: error) }
         }
     }
 
@@ -185,7 +185,7 @@ final class SchoolWorkspace {
         } catch {
             guard scope == schoolScope else { return }
             isLoadingSchool = false
-            if !invalidateAccess(for: error) { schoolError = message(for: error) }
+            if !invalidateAccess(for: error) { schoolError = blockingMessage(for: error) }
         }
     }
 
@@ -468,9 +468,15 @@ final class SchoolWorkspace {
         }
     }
 
-    private func message(for error: any Error) -> String {
-        if error is CancellationError { return "Le chargement a été interrompu. Réessaie." }
+    /// Le message d’une panne. Une lecture annulée (écran fermé, relecture qui la remplace, geste d’actualisation
+    /// interrompu) n’en est pas une : `nil`, ce qui est affiché reste et la prochaine lecture reprend. Seuls le compte
+    /// et l’école, sans quoi rien ne s’affiche, disent l’interruption pour proposer de réessayer.
+    private func message(for error: any Error) -> String? {
+        if error.isRequestCancellation { return nil }
         return (error as? SchoolAPIError)?.localizedDescription ?? "La connexion a échoué. Tes données n’ont pas été modifiées."
+    }
+    private func blockingMessage(for error: any Error) -> String {
+        message(for: error) ?? "Le chargement a été interrompu. Réessaie."
     }
 
     private static func merge<T: Identifiable>(_ newItems: [T], into items: inout [T]) where T.ID: Hashable {

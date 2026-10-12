@@ -11,6 +11,9 @@ struct SchoolTodayView: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
+    /// Le bouton d’école de la barre, quand le compte en a plusieurs : il flotte avec le titre.
+    var schoolName: String? = nil
+    var chooseSchool: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
     @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
@@ -48,6 +51,8 @@ struct SchoolTodayView: View {
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
     }
+    /// La carte occupe tout l’écran : titre flottant, sans barre système.
+    private var floatsTitle: Bool { !typeSize.isAccessibilitySize }
     private var instructs: Bool {
         workspace.membership?.roles.contains("INSTRUCTOR") == true && workspace.school?.status == "ACTIVE"
     }
@@ -73,6 +78,8 @@ struct SchoolTodayView: View {
                             ScrollView {
                                 card(now: context.date, floating: false).padding(DrivySpacing.m)
                             }
+                            // Le panneau commence sous le titre flottant, comme il commençait sous la barre.
+                            .safeAreaPadding(.top, DrivyLayout.tapTarget)
                             .frame(width: DrivyMapLayout.sidebarWidth)
                             .background(DrivyTheme.canvas)
                         }
@@ -91,6 +98,15 @@ struct SchoolTodayView: View {
             }
             .onAppear { restoreRememberedDay() }
             .task(id: dayKey(context.date)) { restoreRememberedDay(); await load() }
+        }
+        // Sous iOS 26, une barre de navigation posée sur une carte MapKit floute la carte sur toute sa hauteur et
+        // s’arrête net sous le titre : un bandeau. Ni son fond, ni les effets de bord, ni la zone sûre ne le retirent
+        // (mesuré sur simulateur, une barre sur un contenu ordinaire reste nette). Au-dessus de la carte, l’écran n’a
+        // donc pas de barre système : le titre et le bouton d’école flottent à leur place, sans fond. En très grand
+        // texte, la page défile et garde sa barre.
+        .toolbar(floatsTitle ? .hidden : .automatic, for: .navigationBar)
+        .overlay(alignment: .top) {
+            if floatsTitle { DrivyFloatingTitleBar(title: "Aujourd’hui", schoolName: schoolName, chooseSchool: chooseSchool) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { location.refresh(); Task { await load() } }

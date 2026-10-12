@@ -7,7 +7,7 @@ import XCTest
     private let supportedScreens: Set<String> = [
         "dossier", "progression", "home-tabs", "home-to-finish", "school-choice", "no-school",
         "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "start-now", "planning-settings",
-        "agenda", "learners", "learner", "lesson", "lesson-planned",
+        "agenda", "agenda-month", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
         "replay", "design-system", "skeletons", "gps-choice", "signal", "signal-all", "live-signal",
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",

@@ -16,7 +16,7 @@ if [[ -n "${DRIVY_VISUAL_ORIENTATIONS:-}" || " ${screens[*]} " =~ [[:space:]](li
   use_xctest=1
 fi
 for screen in "${screens[@]}"; do
-  [[ "$screen" =~ ^(dossier|progression|home-tabs|home-to-finish|school-choice|no-school|profile-tab|learner-home|learner-progress|learner-profile|learner-profile-multi|start-now|planning-settings|agenda|learners|learner|lesson|lesson-planned|lesson-observations|lesson-evidence|lesson-permit|invitation-code|lessons-history|replay|design-system|skeletons|gps-choice|signal|signal-all|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|planning-details|planning-confirmation|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|app-privacy|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready|onboarding-staff|dossier-multi|lessons-multi|lessons-two|progression-multi|lesson-cancelled|lesson-competencies|lesson-route|learner-lesson|learner-lesson-planned|learner-permit)$ ]] || { printf 'Écran de capture inconnu : %s. Vérifiez que la sélection et le code proviennent de la même version.\n' "$screen" >&2; exit 1; }
+  [[ "$screen" =~ ^(dossier|progression|home-tabs|home-to-finish|school-choice|no-school|profile-tab|learner-home|learner-progress|learner-profile|learner-profile-multi|start-now|planning-settings|agenda|agenda-month|learners|learner|lesson|lesson-planned|lesson-observations|lesson-evidence|lesson-permit|invitation-code|lessons-history|replay|design-system|skeletons|gps-choice|signal|signal-all|live-signal|signal-status|observations|capture-preparation|live|live-waiting|planning|planning-details|planning-confirmation|invitations|invitation-create|invitation-detail|lesson-finish|lesson-modal|lesson-tariff|sign-in|sign-in-error|sign-in-loading|sign-in-unconfigured|account|app-lock|app-privacy|join-code|join-code-preview|join-code-error|join-code-pending|join-code-confirmed|join-link|join-link-preview|profile|profile-error|onboarding-welcome|onboarding-information|onboarding-formation|onboarding-gps|onboarding-review|onboarding-ready|onboarding-staff|dossier-multi|lessons-multi|lessons-two|progression-multi|lesson-cancelled|lesson-competencies|lesson-route|learner-lesson|learner-lesson-planned|learner-permit)$ ]] || { printf 'Écran de capture inconnu : %s. Vérifiez que la sélection et le code proviennent de la même version.\n' "$screen" >&2; exit 1; }
 done
 for kind in "${devices[@]}"; do
   [[ "$kind" == iPhone || "$kind" == iPad ]] || { echo 'Appareil de capture inconnu.' >&2; exit 1; }
@@ -181,6 +181,9 @@ path.write_text(json.dumps(proof, ensure_ascii=False, indent=2) + '\n', encoding
 PY
   xcrun simctl status_bar "$device_id" override --time '9:41' --batteryState charged --batteryLevel 100
   xcrun simctl install "$device_id" "$app"
+  # Aujourd’hui montre sa carte, comme sur un appareil : position accordée, fixée à Lausanne (coordonnées publiques).
+  xcrun simctl privacy "$device_id" grant location ch.drivy.qualification || true
+  xcrun simctl location "$device_id" set 46.5197,6.6323 || true
   if [[ "${DRIVY_VISUAL_HOT_SWITCH:-0}" == 1 ]]; then
     # Theme change while the app runs: launched in light without forcing the style, then the
     # system appearance flips. `hot-dark` must match the cold `dark` capture, `hot-light` the cold
