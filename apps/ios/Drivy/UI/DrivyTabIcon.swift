@@ -4,7 +4,7 @@ import UIKit
 /// Tab icon carrying the attention mark of a pending action: the Drivy accent disc enters the symbol's
 /// top-trailing corner and bites it with its halo, as the ring of the « d » bites the trace in the logo.
 /// The system tab bar gives no colour to a badge, so the icon is drawn here, once per state.
-enum DrivyTabIcon {
+@MainActor enum DrivyTabIcon {
     /// Proportions of the mark, from the 256 construction grid of the approved concept « Morsure » (C):
     /// centre at 85.6 % / 14.4 % of the symbol box, disc 13.5 %, halo 19 % of its width.
     private static let center = CGPoint(x: 0.856, y: 0.144)
@@ -13,7 +13,7 @@ enum DrivyTabIcon {
     private static var cache: [String: UIImage] = [:]
 
     /// Selected: symbol and mark in the accent. At rest: the symbol in the tab bar's ink, the mark in the accent.
-    @MainActor static func image(systemName: String, selected: Bool, scheme: ColorScheme) -> Image {
+    static func image(systemName: String, selected: Bool, scheme: ColorScheme) -> Image {
         let key = "\(systemName):\(selected):\(scheme == .dark)"
         if let cached = cache[key] { return Image(uiImage: cached).renderingMode(.original) }
         let traits = UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light)
