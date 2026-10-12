@@ -123,17 +123,18 @@ synthétique (la lecture des observations n’y est pas servie pour le rôle él
 
 ## 4. Icône de l’onglet Progression (élève)
 
-Demande : une icône personnalisée « dans le style d’Apple », trois propositions, garder la meilleure. Atelier avec
-le skill de conception de logo (rendus réels à chaque passe, audit SVG, essai à 64/32/16 px) :
+Demande : une icône personnalisée « dans le style d’Apple », trois propositions, garder la meilleure. Une première
+série (paliers, toile, route en perspective, en traits fins) a été refusée par le porteur. Seconde série en
+silhouettes pleines, au poids des symboles de barre d’onglets, rendue et relue à chaque passe :
 
-- **A · Paliers** — trois marqueurs du parcours de compétence en escalier, l’autonomie pleine au sommet. Lu comme
-  un circuit ou une molécule ; jonctions délicates à petite taille.
-- **B · Toile** — la toile de la Progression en hexagone. Lu comme un écrou ou une pierre taillée.
-- **C · Route parcourue** — **retenue**. Une route en perspective : le chemin fait est plein, le point est où l’élève
-  en est, la suite en pointillé. Seule à rester nette à 16 px, propre à la conduite, et reprend le point de la
-  marque. Première version écartée : le point au-dessus de la route se lisait comme une tête.
+- **A · Volant-anneau** — **retenue**. Le volant dont la jante se remplit comme un anneau de progression : plein
+  sur la partie parcourue, rail fin sur le reste. Propre à la conduite, nette à 16 px. Deux défauts corrigés en
+  route : la jante finissait sur la branche horizontale et le tout se lisait « e » ; le passage du plein au rail
+  est désormais en haut à droite, et chaque fin d’arc s’arrête de part et d’autre d’une branche.
+- **B · Jauge** — un compteur en trois paliers, l’aiguille sur le deuxième. Propre, mais proche du symbole
+  « gauge » du système.
+- **C · Rangs** — trois chevrons, deux pleins, le dernier en rail. Net, mais générique (grade, classement).
 
-Construction : grille 64, traits de 4,5 (≈ poids medium des symboles du système à 26 pt), extrémités rondes,
-tracés convertis en formes pleines (`icone-progression-build.py`), image vectorielle en gabarit
-(`Tab-progress.imageset`) teintée par la barre d’onglets. Planches : `icone-progression-passe1.png`,
-`icone-progression-passe3.png`. Pas vue sur appareil.
+Construction : grille 64, plein 6,5, rail 3,4, branches 5,4, moyeu 7 ; formes pleines, image vectorielle en
+gabarit (`Tab-progress.imageset`, 26 pt) teintée par la barre d’onglets. Planche : `icone-progression-propositions.png` ;
+script de construction : `icone-progression-build.py`. Pas vue sur appareil.

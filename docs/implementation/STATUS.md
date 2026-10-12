@@ -2,7 +2,7 @@
 
 ## 12 octobre 2026 — leçon terminée en onglets, « Mon souhait », Formation d’un permis, icône Progression
 
-La leçon terminée se lit en trois onglets sous la carte de l’élève (Bilan, Compétences, Trajet & notes), même vue pour le moniteur et l’élève. Côté élève, « Mon souhait » ferme enfin son clavier, et l’accord GPS sous le souhait ne reste plus en squelette (une lecture annulée par un `Group` n’était jamais relancée). Dans le profil, la Formation d’un permis passe au-dessus de Leçons et Progression, dense, avec des décomptes réels du référentiel. L’onglet Progression de l’élève a son icône dessinée (« route parcourue », retenue sur trois). [Décisions, causes et limites](lecon-onglets-20261012.md).
+La leçon terminée se lit en trois onglets sous la carte de l’élève (Bilan, Compétences, Trajet & notes), même vue pour le moniteur et l’élève. Côté élève, « Mon souhait » ferme enfin son clavier, et l’accord GPS sous le souhait ne reste plus en squelette (une lecture annulée par un `Group` n’était jamais relancée). Dans le profil, la Formation d’un permis passe au-dessus de Leçons et Progression, dense, avec des décomptes réels du référentiel. L’onglet Progression de l’élève a son icône dessinée (« volant-anneau », retenue sur trois après une première série refusée). [Décisions, causes et limites](lecon-onglets-20261012.md).
 
 **Exécuté** : IPA d’essai compilée ; 497 tests Swift réussis dont 7 nouveaux ; captures iPhone clair/sombre des nouveaux écrans relues. **Reste à qualifier** : clavier et transitions sur appareil, VoiceOver, grand texte, iPad, icône dans la barre d’onglets réelle. Pas de note sur 10 (l’école évalue en trois niveaux) ni d’exigences de formation (aucune donnée dans l’API).
 
