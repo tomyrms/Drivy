@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi"]
+    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -77,7 +77,9 @@ struct SchoolVisualReview: View {
                     SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique", lessonTimeZone: "Europe/Zurich")
                 case "home-tabs", "home-to-finish":
                     SchoolVisualShell(context: context, tab: .session)
-                case "agenda":
+                case "agenda", "agenda-month":
+                    // L’affichage retenu est posé avant l’onglet : « agenda » reste la semaine d’une capture à l’autre.
+                    let _ = SchoolAgendaDisplayMode.remember(screen == "agenda-month" ? .month : .week)
                     SchoolVisualShell(context: context, tab: .agenda)
                 case "learners":
                     SchoolVisualShell(context: context, tab: .learners)
