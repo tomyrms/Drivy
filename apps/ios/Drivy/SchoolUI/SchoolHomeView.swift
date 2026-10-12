@@ -170,7 +170,8 @@ struct SchoolHomeView: View {
                             captureLesson = CaptureLessonRoute(id: lessonID, learnerName: captureLearnerName, completing: completing)
                         }, observationClient: agendaClient?.observationClient, isTabRoot: true)
                 } else {
-                    SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
+                    SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
+                        schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
                         .navigationTitle("Aujourd’hui")
                         .navigationBarTitleDisplayMode(.inline)
                 }

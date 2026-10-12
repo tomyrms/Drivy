@@ -23,6 +23,36 @@ struct DrivySchoolToolbarItem: ToolbarContent {
     }
 }
 
+/// Le titre d’un écran-carte sans barre système (Aujourd’hui) : à la place et à la taille du titre de la barre,
+/// posé sur la carte sans fond ni flou. Un léger halo de la couleur de page le garde lisible sur les rues ;
+/// le bouton d’école reprend celui de la barre, dans sa capsule de verre.
+struct DrivyFloatingTitleBar: View {
+    let title: String
+    var schoolName: String? = nil
+    var chooseSchool: (() -> Void)? = nil
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(DrivyTheme.text)
+            .lineLimit(1)
+            .shadow(color: DrivyTheme.surface.opacity(0.9), radius: 4)
+            .shadow(color: DrivyTheme.surface.opacity(0.6), radius: 10)
+            .accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
+            .overlay(alignment: .leading) {
+                if let chooseSchool {
+                    Button(action: chooseSchool) { DrivySchoolButtonLabel(schoolName: schoolName) }
+                        .buttonStyle(.glass)
+                        .accessibilityLabel("Changer d’école")
+                        .accessibilityValue(schoolName ?? "Aucune école choisie")
+                        .accessibilityIdentifier("choose-school")
+                }
+            }
+            .padding(.horizontal, DrivySpacing.m)
+    }
+}
+
 /// Trailing item of every tab, always the last one on the trailing edge: the initials of the
 /// signed-in person (`drivyAccountName` in the environment), the generic symbol otherwise.
 struct DrivyAccountToolbarItem: ToolbarContent {

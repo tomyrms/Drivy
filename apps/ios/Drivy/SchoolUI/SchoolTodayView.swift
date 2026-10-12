@@ -11,6 +11,9 @@ struct SchoolTodayView: View {
     @Bindable var workspace: SchoolWorkspace
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
+    /// Le bouton d’école de la barre, quand le compte en a plusieurs : il flotte avec le titre.
+    var schoolName: String? = nil
+    var chooseSchool: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
     @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
@@ -46,6 +49,8 @@ struct SchoolTodayView: View {
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
     }
+    /// La carte occupe tout l’écran : titre flottant, sans barre système.
+    private var floatsTitle: Bool { !typeSize.isAccessibilitySize }
     private var instructs: Bool {
         workspace.membership?.roles.contains("INSTRUCTOR") == true && workspace.school?.status == "ACTIVE"
     }
@@ -66,17 +71,19 @@ struct SchoolTodayView: View {
                     accessibleDay(now: context.date, availableHeight: geometry.size.height)
                 } else if geometry.size.width >= TodayLayout.sidebarBreakpoint {
                     // Hors de la carte, le panneau latéral est posé sur le fond : filet, pas d’ombre.
-                    fullScreenMap
+                    map
                         .safeAreaInset(edge: .leading, spacing: 0) {
                             ScrollView {
                                 card(now: context.date, floating: false).padding(DrivySpacing.m)
                             }
+                            // Le panneau commence sous le titre flottant, comme il commençait sous la barre.
+                            .safeAreaPadding(.top, DrivyLayout.tapTarget)
                             .frame(width: DrivyMapLayout.sidebarWidth)
                             .background(DrivyTheme.canvas)
                         }
                 } else {
                     let maxHeight = geometry.size.height * TodayLayout.bottomPanelMaxRatio
-                    fullScreenMap.safeAreaInset(edge: .bottom, spacing: 0) {
+                    map.safeAreaInset(edge: .bottom, spacing: 0) {
                         ScrollView {
                             card(now: context.date, floating: true).padding(DrivySpacing.m)
                                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
@@ -90,10 +97,15 @@ struct SchoolTodayView: View {
             .onAppear { restoreRememberedDay() }
             .task(id: dayKey(context.date)) { restoreRememberedDay(); await load() }
         }
-        // La barre de navigation ne pose ni fond ni effet de bord (le flou d’iOS 26 sous le titre) : rien ne
-        // s’intercale entre la carte et la barre d’état ; titre et boutons gardent leur propre rendu.
-        .scrollEdgeEffectHidden(true, for: .top)
-        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        // Sous iOS 26, une barre de navigation posée sur une carte MapKit floute la carte sur toute sa hauteur et
+        // s’arrête net sous le titre : un bandeau. Ni son fond, ni les effets de bord, ni la zone sûre ne le retirent
+        // (mesuré sur simulateur, une barre sur un contenu ordinaire reste nette). Au-dessus de la carte, l’écran n’a
+        // donc pas de barre système : le titre et le bouton d’école flottent à leur place, sans fond. En très grand
+        // texte, la page défile et garde sa barre.
+        .toolbar(floatsTitle ? .hidden : .automatic, for: .navigationBar)
+        .overlay(alignment: .top) {
+            if floatsTitle { DrivyFloatingTitleBar(title: "Aujourd’hui", schoolName: schoolName, chooseSchool: chooseSchool) }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { location.refresh(); Task { await load() } }
         }
@@ -151,14 +163,6 @@ struct SchoolTodayView: View {
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaPadding(.bottom, DrivySpacing.l)
         .background(DrivyTheme.canvas)
-    }
-
-    /// La carte plein écran remonte derrière la barre d’état et le titre. Laissée dans la zone sûre, elle
-    /// s’arrêtait sous « Aujourd’hui » : un bandeau restait au-dessus, fermé par le bord net de la carte. Comme la
-    /// carte du trajet en direct, elle ignore donc le haut de la zone sûre ; ses commandes et ses mentions, posées
-    /// en bas, ne bougent pas. Sans position, le fond de page remonte déjà jusqu’en haut.
-    @ViewBuilder private var fullScreenMap: some View {
-        if location.permitted { map.ignoresSafeArea(.container, edges: .top) } else { map }
     }
 
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
