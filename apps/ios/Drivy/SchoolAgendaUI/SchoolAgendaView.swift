@@ -431,7 +431,11 @@ struct SchoolAgendaView: View {
         guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }
         let day = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: selectedDate) ?? selectedDate
         let proposed = max(day, Date().addingTimeInterval(3600))
-        return SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient, date: proposed)
+        // Le prochain créneau libre se cherche à partir du jour affiché (ou de maintenant, s’il est passé) ;
+        // l’horaire proposé ne sert que si l’école ne connaît pas encore cette recherche.
+        let from = max(calendar.startOfDay(for: selectedDate), Date())
+        return SchoolPlanningWorkspace(scope: client.scope(person: person, membership: membership), client: client.planningClient,
+            date: proposed, suggestingNextSlotFrom: from)
     }
     /// `keepingCurrent` : relecture sans effacer ce qui est affiché (retour d’une leçon, tirer pour actualiser).
     /// `navigating` : changement de jour, de période ou d’affichage. Une fenêtre lue il y a quelques secondes
