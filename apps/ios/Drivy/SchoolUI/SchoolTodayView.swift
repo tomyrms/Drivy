@@ -29,7 +29,6 @@ struct SchoolTodayView: View {
     @State private var presentsStartNow = false
     /// La feuille « Démarrer une leçon » appartient à l’écran : la carte qui porte son bouton change avec l’heure.
     @State private var startNow = SchoolStartNowPresentation()
-    @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
@@ -313,32 +312,16 @@ struct SchoolTodayView: View {
         .accessibilityHint("Ouvre la prochaine leçon")
     }
 
+    /// Le reste de la journée tient en un compte : « +2 ». Les leçons elles-mêmes se lisent dans l’agenda.
     @ViewBuilder private func dayList(now: Date, excluding: Set<UUID>) -> some View {
         let others = SchoolTodayPresentation.upcomingLessons(lessons, now: now, excluding: excluding)
         if !others.isEmpty {
-          VStack(spacing: 0) {
-            // La liste complète reste dans l’agenda ; ce groupe ne montre que la suite de la journée.
-            Divider().overlay(DrivyTheme.border)
-            DisclosureGroup(isExpanded: $showsDay) {
-                VStack(spacing: 0) {
-                    ForEach(Array(others.enumerated()), id: \.element.id) { index, lesson in
-                        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-                            DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now),
-                                // La frise relie des leçons : seule, son repère ressemblait à une case à cocher.
-                                railPosition: others.count > 1 ? .at(index, count: others.count) : nil)
-                        }
-                        .buttonStyle(DrivyRowButtonStyle())
-                        .accessibilityHint("Ouvre la leçon")
-                    }
-                }
-            } label: {
-                Text(others.count == 1 ? "Autre leçon" : "\(others.count) autres leçons")
-                    .font(.subheadline.weight(.semibold)).monospacedDigit()
-                    .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
-            }
-            .accessibilityIdentifier("today-day-list")
-          }
+            Text("+\(others.count)")
+                .font(.subheadline.weight(.semibold)).monospacedDigit()
+                .foregroundStyle(DrivyTheme.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(others.count == 1 ? "Une autre leçon aujourd’hui" : "\(others.count) autres leçons aujourd’hui")
+                .accessibilityIdentifier("today-day-list")
         }
     }
 
