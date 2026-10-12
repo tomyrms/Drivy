@@ -135,12 +135,11 @@ struct SchoolTrackDisplayTests {
     @Test func theReplayTimelineIsRebuiltAtMostOncePerIntervalWhileItLoads() {
         var pacer = SchoolReplayRebuildPacer(interval: .seconds(1))
         let start = ContinuousClock.now
-        #expect(pacer.admits(at: start))
-        #expect(!pacer.admits(at: start.advanced(by: .milliseconds(10))))
-        #expect(!pacer.admits(at: start.advanced(by: .milliseconds(999))))
-        #expect(pacer.admits(at: start.advanced(by: .seconds(1))))
-        #expect(!pacer.admits(at: start.advanced(by: .milliseconds(1_500))))
-        #expect(pacer.admits(at: start.advanced(by: .seconds(3))))
+        // `#expect` ne peut pas appeler une méthode mutante : les réponses sont relevées d’abord.
+        let offsets: [Duration] = [.zero, .milliseconds(10), .milliseconds(999), .seconds(1), .milliseconds(1_500), .seconds(3)]
+        var admitted: [Bool] = []
+        for offset in offsets { admitted.append(pacer.admits(at: start.advanced(by: offset))) }
+        #expect(admitted == [true, false, false, true, false, true])
     }
 
     // MARK: Live trace
