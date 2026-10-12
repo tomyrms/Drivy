@@ -73,11 +73,12 @@ if (parameters.get('stress') === '1') {
   for (let index = 0; index < 18; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(), displayName: `Dossier synthétique ${String(index + 1).padStart(2, '0')}` });
 }
 if (reviewState === 'empty') for (const key of Object.keys(db)) db[key] = [];
-// Signalements : le catalogue du contrat (douze affichés sur quinze à l'origine), versionné comme le serveur.
+// Signalements : le catalogue du contrat (douze affichés sur dix-huit à l'origine), versionné comme le serveur.
 const themeCatalogue: [string, string, boolean][] = [['vehicle', 'Maîtrise du véhicule', true], ['observation', 'Observation et contrôles', true], ['right-priority', 'Priorité à droite', true],
   ['signage', 'Signalisation', true], ['give-way', 'Céder le passage', true], ['intersections', 'Intersections et giratoires', true], ['speed', 'Vitesse', true],
   ['placement', 'Placement sur la chaussée', true], ['manoeuvres', 'Manœuvres', true], ['motorway', 'Autoroute', true], ['anticipation', 'Anticipation', true],
-  ['indicators', 'Clignotants', true], ['following-distance', 'Distance de sécurité', false], ['braking', 'Freinage', false], ['lane-change', 'Changement de voie', false]];
+  ['indicators', 'Clignotants', true], ['following-distance', 'Distance de sécurité', false], ['braking', 'Freinage', false], ['lane-change', 'Changement de voie', false],
+  ['moving-off', 'Démarrage', false], ['bends', 'Virages', false], ['eco-driving', 'Éco-conduite', false]];
 const themeState = { version: 1, themes: themeCatalogue.map(([key]) => ({ key, visible: themeCatalogue.find(item => item[0] === key)![2] })) };
 const themesProjection = () => ({ id: schoolId, schoolId, version: themeState.version, canManage: reviewState !== 'readonly',
   themes: themeState.themes.map(({ key, visible }) => { const index = themeCatalogue.findIndex(item => item[0] === key);

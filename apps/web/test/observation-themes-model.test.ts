@@ -7,7 +7,7 @@ import {
 import { createCommand, commandHeaders, commandSpecs, receiptMatches } from '../client/command-core.js';
 import { observationThemesSchema } from '../client/school-api.js';
 
-/** Catalogue du contrat (docs/implementation/signalements-configurables-20261012.md) : quinze clés, douze affichées à l'origine. */
+/** Catalogue du contrat (docs/implementation/signalements-configurables-20261012.md) : dix-huit clés, douze affichées à l'origine. */
 const catalogue: readonly { key: string; title: string; competencyKeys: string[]; visible: boolean }[] = [
   { key: 'vehicle', title: 'Maîtrise du véhicule', competencyKeys: ['vehicule'], visible: true },
   { key: 'observation', title: 'Observation et contrôles', competencyKeys: ['observation'], visible: true },
@@ -24,6 +24,9 @@ const catalogue: readonly { key: string; title: string; competencyKeys: string[]
   { key: 'following-distance', title: 'Distance de sécurité', competencyKeys: ['vitesse'], visible: false },
   { key: 'braking', title: 'Freinage', competencyKeys: ['vehicule'], visible: false },
   { key: 'lane-change', title: 'Changement de voie', competencyKeys: ['placement'], visible: false },
+  { key: 'moving-off', title: 'Démarrage', competencyKeys: ['vehicule'], visible: false },
+  { key: 'bends', title: 'Virages', competencyKeys: ['placement'], visible: false },
+  { key: 'eco-driving', title: 'Éco-conduite', competencyKeys: ['vehicule'], visible: false },
 ];
 const themes = catalogue.map((theme, index) => ({ ...theme, defaultVisible: theme.visible, defaultPosition: index }));
 const row = (theme: typeof themes[number]): ThemeRow => ({ key: theme.key, title: theme.title, visible: theme.visible, defaultVisible: theme.defaultVisible, defaultPosition: theme.defaultPosition });
@@ -32,22 +35,23 @@ const keys = (rows: readonly { key: string }[]) => rows.map(item => item.key);
 const only = (rows: readonly ThemeRow[], shown: string[]): ThemeRow[] => rows.map(item => ({ ...item, visible: shown.includes(item.key) }));
 
 describe('Compteur et garde « au moins un affiché »', () => {
-  test('douze affichés sur quinze à l’origine', () => {
+  test('douze affichés sur dix-huit à l’origine, le total vient du compte réel', () => {
     expect(visibleCount(origin)).toBe(12);
-    expect(counterLabel(origin)).toBe('12 affichés sur 15');
+    expect(counterLabel(origin.slice(0, 5))).toBe('5 affichés sur 5');
+    expect(counterLabel(origin)).toBe('12 affichés sur 18');
   });
 
   test('le singulier suit le nombre', () => {
-    expect(counterLabel(only(origin, ['speed']))).toBe('1 affiché sur 15');
-    expect(counterLabel(only(origin, ['speed', 'vehicle']))).toBe('2 affichés sur 15');
+    expect(counterLabel(only(origin, ['speed']))).toBe('1 affiché sur 18');
+    expect(counterLabel(only(origin, ['speed', 'vehicle']))).toBe('2 affichés sur 18');
   });
 
   test('masquer puis afficher met le compteur à jour sans toucher l’ordre', () => {
     const hidden = toggleTheme(origin, 'vehicle');
     expect(hidden.find(item => item.key === 'vehicle')?.visible).toBe(false);
-    expect(counterLabel(hidden)).toBe('11 affichés sur 15');
+    expect(counterLabel(hidden)).toBe('11 affichés sur 18');
     expect(keys(hidden)).toEqual(keys(origin));
-    expect(counterLabel(toggleTheme(hidden, 'braking'))).toBe('12 affichés sur 15');
+    expect(counterLabel(toggleTheme(hidden, 'braking'))).toBe('12 affichés sur 18');
   });
 
   test('le dernier thème affiché ne se masque pas', () => {
@@ -98,7 +102,7 @@ describe('Déplacement', () => {
     expect(keys(moveThemeBy(origin, 'speed', -1)).slice(4, 8)).toEqual(['give-way', 'speed', 'intersections', 'placement']);
     expect(keys(moveThemeBy(origin, 'speed', 1)).slice(5, 8)).toEqual(['intersections', 'placement', 'speed']);
     expect(keys(moveThemeBy(origin, 'vehicle', -1))).toEqual(keys(origin));
-    expect(keys(moveThemeBy(origin, 'lane-change', 1))).toEqual(keys(origin));
+    expect(keys(moveThemeBy(origin, 'eco-driving', 1))).toEqual(keys(origin));
     expect(keys(moveThemeBy(origin, 'inconnu', 1))).toEqual(keys(origin));
   });
 
@@ -107,10 +111,10 @@ describe('Déplacement', () => {
     expect(moveThemeBy(origin, 'speed', origin.length).at(-1)?.key).toBe('speed');
   });
 
-  test('un déplacement garde les quinze thèmes une fois chacun et leur affichage', () => {
+  test('un déplacement garde les dix-huit thèmes une fois chacun et leur affichage', () => {
     const next = moveThemeTo(toggleTheme(origin, 'vehicle'), 'braking', 0);
-    expect(next).toHaveLength(15);
-    expect(new Set(keys(next)).size).toBe(15);
+    expect(next).toHaveLength(18);
+    expect(new Set(keys(next)).size).toBe(18);
     expect(next[0]?.key).toBe('braking');
     expect(next.find(item => item.key === 'vehicle')?.visible).toBe(false);
   });
@@ -122,11 +126,11 @@ describe('Déplacement', () => {
 
   test('annonces vocales : position et état', () => {
     const next = moveThemeBy(origin, 'vehicle', 1);
-    expect(moveAnnouncement(next, 'vehicle')).toBe('Maîtrise du véhicule : position 2 sur 15.');
+    expect(moveAnnouncement(next, 'vehicle')).toBe('Maîtrise du véhicule : position 2 sur 18.');
     expect(moveAnnouncement(next, 'inconnu')).toBe('');
     const hidden = toggleTheme(origin, 'speed');
-    expect(toggleAnnouncement(hidden, 'speed')).toBe('Vitesse masqué. 11 affichés sur 15.');
-    expect(toggleAnnouncement(toggleTheme(hidden, 'speed'), 'speed')).toBe('Vitesse affiché. 12 affichés sur 15.');
+    expect(toggleAnnouncement(hidden, 'speed')).toBe('Vitesse masqué. 11 affichés sur 18.');
+    expect(toggleAnnouncement(toggleTheme(hidden, 'speed'), 'speed')).toBe('Vitesse affiché. 12 affichés sur 18.');
   });
 });
 
@@ -209,13 +213,13 @@ describe('Brouillon, aperçu et commande', () => {
     expect(keys(previewTiles(edited))).not.toContain('braking');
   });
 
-  test('le corps de la commande porte les quinze clés une fois, dans le nouvel ordre, avec leur affichage', () => {
+  test('le corps de la commande porte les dix-huit clés une fois, dans le nouvel ordre, avec leur affichage', () => {
     const edited = toggleTheme(moveThemeTo(origin, 'braking', 1), 'vehicle');
     const body = saveBody(edited);
     expect(Object.keys(body)).toEqual(['themes']);
-    expect(body.themes).toHaveLength(15);
+    expect(body.themes).toHaveLength(18);
     expect(body.themes.slice(0, 3)).toEqual([{ key: 'vehicle', visible: false }, { key: 'braking', visible: false }, { key: 'observation', visible: true }]);
-    expect(new Set(body.themes.map(theme => theme.key)).size).toBe(15);
+    expect(new Set(body.themes.map(theme => theme.key)).size).toBe(18);
     expect(body.themes.every(theme => Object.keys(theme).sort().join() === 'key,visible')).toBe(true);
     expect(JSON.stringify(body).length).toBeLessThan(2_000);
   });
@@ -239,11 +243,11 @@ describe('Projection du serveur', () => {
   const schoolId = randomUUID();
   const projection = { id: schoolId, schoolId, version: 1, canManage: true, themes };
 
-  test('les quinze thèmes du contrat sont lus tels quels', () => {
+  test('les dix-huit thèmes du contrat sont lus tels quels', () => {
     const parsed = observationThemesSchema.safeParse(projection);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.themes).toHaveLength(15);
+      expect(parsed.data.themes).toHaveLength(18);
       expect(parsed.data.themes.filter(theme => theme.visible)).toHaveLength(12);
     }
   });
