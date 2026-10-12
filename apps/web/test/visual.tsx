@@ -10,6 +10,7 @@ import { AvailabilitySection } from '../client/console/availability';
 import { ConfigurationSection } from '../client/console/configuration';
 import { ProfileFieldsSection } from '../client/console/profile-fields';
 import { OverviewSection } from '../client/console/overview';
+import { ObservationThemesSection } from '../client/console/observation-themes';
 import { ManagementConsole } from '../client/console/Console';
 import { FormationsSection } from '../client/console/formations';
 import { CurriculaSection, ProceduresSection, OfferingsSection } from '../client/console/catalog';
@@ -72,6 +73,16 @@ if (parameters.get('stress') === '1') {
   for (let index = 0; index < 18; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(), displayName: `Dossier synthétique ${String(index + 1).padStart(2, '0')}` });
 }
 if (reviewState === 'empty') for (const key of Object.keys(db)) db[key] = [];
+// Signalements : le catalogue du contrat (douze affichés sur dix-huit à l'origine), versionné comme le serveur.
+const themeCatalogue: [string, string, boolean][] = [['vehicle', 'Maîtrise du véhicule', true], ['observation', 'Observation et contrôles', true], ['right-priority', 'Priorité à droite', true],
+  ['signage', 'Signalisation', true], ['give-way', 'Céder le passage', true], ['intersections', 'Intersections et giratoires', true], ['speed', 'Vitesse', true],
+  ['placement', 'Placement sur la chaussée', true], ['manoeuvres', 'Manœuvres', true], ['motorway', 'Autoroute', true], ['anticipation', 'Anticipation', true],
+  ['indicators', 'Clignotants', true], ['following-distance', 'Distance de sécurité', false], ['braking', 'Freinage', false], ['lane-change', 'Changement de voie', false],
+  ['moving-off', 'Démarrage', false], ['bends', 'Virages', false], ['eco-driving', 'Éco-conduite', false]];
+const themeState = { version: 1, themes: themeCatalogue.map(([key]) => ({ key, visible: themeCatalogue.find(item => item[0] === key)![2] })) };
+const themesProjection = () => ({ id: schoolId, schoolId, version: themeState.version, canManage: reviewState !== 'readonly',
+  themes: themeState.themes.map(({ key, visible }) => { const index = themeCatalogue.findIndex(item => item[0] === key);
+    return { key, title: themeCatalogue[index]![1], competencyKeys: [key], visible, defaultVisible: themeCatalogue[index]![2], defaultPosition: index }; }) });
 const codes = ['K7Q4-MX2P', 'R2ZN-8HTC', 'B9WD-4LEA'];
 const envelope = (data: unknown) => ({ data, requestId: uuid(), serverTime: stamp });
 const log: string[] = [];
@@ -90,6 +101,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     if (path === '') return reply(200, envelope(value.school), url.href);
     if (reviewState === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
     const readiness = { schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) };
+    if (path === 'observation-themes') return reply(200, envelope(themesProjection()), url.href);
     if (path === 'readiness') return reply(200, envelope(readiness), url.href);
     if (path === 'setup') return reply(200, envelope({ schoolId, version: 1, status: 'COMPLETED', currentStep: 'REVIEW', completedSteps: ['IDENTITY', 'DATA'], lastSavedAt: stamp, readiness }), url.href);
     if (path === 'data-policy') return reply(200, envelope({ schoolId, version: 1, status: 'APPROVED', noticeVersionId: noticeId, noticeText: 'Les informations de votre profil servent au suivi de votre formation. Seuls les membres autorisés de l’école peuvent les consulter.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique et traite les demandes de suppression auprès du contact ci-dessous.', contactEmail: 'ecole@example.test', approvedAt: stamp }), url.href);
@@ -102,6 +114,14 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   }
   if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
+  if (method === 'PUT' && path === 'observation-themes') {
+    // ?state=conflict : quelqu'un d'autre enregistre avant nous (412) ; ?state=forbidden : le droit a été retiré (403).
+    if (reviewState === 'conflict') { themeState.version++; themeState.themes = [...themeState.themes].reverse(); return reply(412, { code: 'VERSION_CONFLICT' }, url.href); }
+    if (reviewState === 'forbidden') return reply(403, { code: 'OBSERVATION_THEMES_ACCESS_REQUIRED' }, url.href);
+    if ((init?.headers as Record<string, string>)?.['If-Match'] !== `"${themeState.version}"`) return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    themeState.version++; themeState.themes = body.themes;
+    return reply(200, envelope(themesProjection()), url.href);
+  }
   if (reviewState === 'mutation-error') return reply(409, { code: 'PLANNING_CONFLICT' }, url.href);
   if ((method === 'PATCH' && path.startsWith('members/')) || path.endsWith('/deactivate')) {
     if (!(window as any).__reauthed) return reply(401, { code: 'REAUTH_REQUIRED' }, url.href);
@@ -138,12 +158,12 @@ if (new URLSearchParams(location.search).get('scheme') === 'light') {
   theme.textContent = reviewStyles.match(/:root\s*\{[\s\S]*?\}/)?.[0] ?? '';
   document.head.append(theme);
 }
-const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: ProfileFieldsSection, overview: OverviewSection, formations: FormationsSection,
+const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
   curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = new URLSearchParams(location.search).get('shell') === '1';
 if (shell) {
-  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'champs-profil', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
+  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'champs-profil', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
   window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}`);
 }
 const entry = ['signin', 'account', 'invitation'].includes(page ?? '');

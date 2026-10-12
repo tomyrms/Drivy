@@ -42,28 +42,35 @@ struct DrivyObservationGlyphImage: View {
     }
 }
 
-/// Thème d’un signalement, retrouvé depuis le titre posé par « Signaler » ou, à défaut, la clé de la
-/// compétence. Les identifiants et la logique métier ne changent pas : seul le dessin en dépend.
+/// Thème d’un signalement : sa clé quand l’observation la porte, sinon la clé de la compétence et le titre
+/// posé par « Signaler ». La valeur brute est la clé du catalogue et le nom du dessin (`Observation-<clé>`).
+/// Les identifiants et la logique métier ne changent pas : seul le dessin en dépend, jamais l’affichage réglé
+/// par l’école — un thème masqué garde son dessin partout où il a servi.
 enum SchoolObservationPictogram: String, CaseIterable {
     case vehicle, observation, rightPriority = "right-priority", signage, giveWay = "give-way", intersections
     case speed, placement, manoeuvres, motorway, anticipation
+    case indicators, followingDistance = "following-distance", braking, laneChange = "lane-change"
+    case movingOff = "moving-off", bends, ecoDriving = "eco-driving"
 
     var glyph: DrivyObservationGlyph { .asset("Observation-\(rawValue)") }
 
-    /// `nil` quand ni la compétence ni le titre ne désignent un thème : une note libre n’emprunte pas un dessin.
-    /// La compétence prime, car un texte relu peut tout dire ; le titre ne fait que préciser le sous-thème
-    /// de « Priorités » (priorité à droite, signalisation, céder le passage).
-    init?(title: String?, competencyKey: String? = nil) {
-        let fromTitle = title.flatMap(Self.match)
-        if let competencyKey, let fromKey = Self.byKey[competencyKey] {
-            if fromKey == .rightPriority, let sub = fromTitle, sub == .signage || sub == .giveWay {
-                self = sub
-            } else {
-                self = fromKey
-            }
+    /// `nil` quand rien ne désigne un thème : une note libre n’emprunte pas un dessin.
+    /// La clé du thème prime : elle ne dépend ni du texte, que le moniteur peut réécrire, ni de l’ordre.
+    /// Sans clé (observation ancienne, école qui n’a pas répondu), la compétence prime sur le texte : celui-ci
+    /// ne peut que préciser un sous-thème de cette compétence (« Signalisation » pour « Priorités »,
+    /// « Clignotants » pour « Observation et contrôles », « Démarrage » pour « Maîtrise du véhicule »…),
+    /// jamais désigner le thème d’une autre.
+    init?(themeKey: String? = nil, title: String?, competencyKey: String? = nil) {
+        if let themeKey, let fromTheme = Self(rawValue: themeKey) {
+            self = fromTheme
             return
         }
-        guard let fromTitle else { return nil }
+        if let competencyKey, let fromKey = Self.byKey[competencyKey] {
+            let subthemes = Self.refinements[fromKey] ?? []
+            self = title.flatMap { Self.match($0, among: subthemes) } ?? fromKey
+            return
+        }
+        guard let fromTitle = title.flatMap({ Self.match($0) }) else { return nil }
         self = fromTitle
     }
 
@@ -73,20 +80,38 @@ enum SchoolObservationPictogram: String, CaseIterable {
         "autoroute": .motorway, "motorway": .motorway, "anticipation": .anticipation,
     ]
 
-    /// Ordre utile : les sous-thèmes de « Priorités » passent avant le mot « priorité » seul.
+    /// Sous-thèmes qu’un titre peut préciser à l’intérieur d’une compétence.
+    private static let refinements: [Self: Set<Self>] = [
+        .rightPriority: [.signage, .giveWay], .observation: [.indicators], .speed: [.followingDistance],
+        .vehicle: [.braking, .movingOff, .ecoDriving], .placement: [.laneChange, .bends],
+    ]
+
+    /// Ordre utile : les sous-thèmes passent avant le mot plus large de leur compétence (« priorité », « vitesse »,
+    /// « placement »…). Les mots ajoutés avec les derniers thèmes sont en fin de liste : sans compétence, ils ne
+    /// reprennent aucun texte qu’un mot plus ancien reconnaissait déjà. Une espace en tête demande un début de mot
+    /// (« calage », pas « décalage »).
     private static let byWords: [(String, Self)] = [
         ("priorite a droite", .rightPriority), ("priorite de droite", .rightPriority),
         ("ceder le passage", .giveWay), ("signalisation", .signage),
+        ("clignotant", .indicators), ("distance de securite", .followingDistance),
+        ("freinage", .braking), ("changement de voie", .laneChange),
         ("giratoire", .intersections), ("intersection", .intersections), ("carrefour", .intersections),
         ("autoroute", .motorway), ("vitesse", .speed), ("stationnement", .manoeuvres), ("manoeuvre", .manoeuvres),
         ("placement", .placement), ("chaussee", .placement), ("anticipation", .anticipation),
         ("observation", .observation), ("controle", .observation), ("vehicule", .vehicle), ("priorite", .rightPriority),
+        ("demarrage", .movingOff), (" calage", .movingOff), ("virage", .bends),
+        ("eco-conduite", .ecoDriving), ("eco conduite", .ecoDriving), ("ecoconduite", .ecoDriving),
+        ("eco-drive", .ecoDriving), ("eco drive", .ecoDriving),
     ]
 
-    private static func match(_ title: String) -> Self? {
+    /// Premier mot reconnu dans le texte ; `among` limite la recherche aux sous-thèmes d’une compétence.
+    private static func match(_ title: String, among allowed: Set<Self>? = nil) -> Self? {
         let folded = title.replacingOccurrences(of: "œ", with: "oe").replacingOccurrences(of: "Œ", with: "oe")
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "fr"))
-        return byWords.first { folded.contains($0.0) }?.1
+        let padded = " \(folded) "
+        return byWords.first { entry in
+            (allowed?.contains(entry.1) ?? true) && padded.contains(entry.0)
+        }?.1
     }
 }
 
@@ -124,7 +149,7 @@ extension SchoolObservation {
     func glyph(competencies: [SchoolCatalogCompetency] = []) -> DrivyObservationGlyph {
         if isMarker { return .moment }
         let key = competencyId.flatMap { id in competencies.first { $0.id == id }?.key }
-        if let theme = SchoolObservationPictogram(title: text, competencyKey: key) { return theme.glyph }
+        if let theme = SchoolObservationPictogram(themeKey: themeKey, title: text, competencyKey: key) { return theme.glyph }
         return SchoolLessonHubRules.status(of: self)?.glyph ?? .note
     }
 }

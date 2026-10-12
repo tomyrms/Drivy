@@ -15,6 +15,7 @@ export type CommandKind =
   | 'createCommercialTerms' | 'createServiceProduct'
   | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
+  | 'saveObservationThemes'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
@@ -53,6 +54,7 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   deactivateMember: { operationType: 'DEACTIVATE_MEMBER', resourceType: 'Member', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait de l’accès d’un membre' },
   updateModules: { operationType: 'UPDATE_SCHOOL_MODULES', resourceType: 'School', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Modification des modules de l’école' },
   recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
+  saveObservationThemes: { operationType: 'SAVE_OBSERVATION_THEMES', resourceType: 'ObservationThemeSettings', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Enregistrement des signalements' },
   createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
   updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
   removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
@@ -227,6 +229,7 @@ export function commandMessage(code: string): string {
     INSTRUCTOR_REQUIRED: 'Choisissez un moniteur actif de l’école.',
     ASSIGNMENT_CONFLICT: 'Ce moniteur suit déjà cette formation.',
     EXISTING_BOOKINGS: 'Des leçons prévues tombent dans cette période : déplacez-les d’abord.',
+    OBSERVATION_THEMES_ACCESS_REQUIRED: 'Vos accès ne permettent pas de modifier les signalements.',
     SETUP_ACCESS_REQUIRED: 'Vos accès ne permettent plus cette opération dans l’école.',
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',

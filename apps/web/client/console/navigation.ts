@@ -21,7 +21,7 @@ export const workspaces: readonly Workspace[] = [
     { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Tarifs' },
   ] },
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
-    { section: 'configuration', label: 'École' }, { section: 'champs-profil', label: 'Informations élèves' },
+    { section: 'configuration', label: 'École' }, { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
     { section: 'apercu', label: 'Préparation' },
   ] },
 ];
@@ -31,7 +31,7 @@ export const sectionTitles: Record<SectionKey, string> = {
   equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations proposées',
   referentiels: 'Compétences enseignées', procedures: 'Déroulement et annulation', prestations: 'Tarifs',
   conditions: 'Conditions commerciales', configuration: 'Réglages', 'champs-profil': 'Informations des élèves',
-  apercu: 'Préparation de l’école',
+  apercu: 'Préparation de l’école', signalements: 'Signalements',
 };
 
 export function workspaceFor(section: SectionKey, query: NavigationQuery = {}): Workspace {

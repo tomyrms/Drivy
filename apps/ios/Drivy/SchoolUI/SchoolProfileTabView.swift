@@ -83,6 +83,18 @@ struct SchoolProfileTabView: View {
                     .listRowInsets(rowInsets)
                     .accessibilityIdentifier("profile-planning-settings")
                 }
+                // Seulement quand l’école a dit que ce compte peut les gérer (administration, ou moniteur
+                // portant le droit) ; un moniteur sans ce droit utilise simplement « Signaler ».
+                if let themes = agendaClient.observationThemeStore(person: workspace.person, membership: workspace.membership),
+                   themes.canManage {
+                    NavigationLink {
+                        SchoolObservationThemeSettingsView(store: themes)
+                    } label: {
+                        Text("Signalements")
+                            .foregroundStyle(DrivyTheme.text)
+                    }
+                    .accessibilityIdentifier("profile-observation-themes")
+                }
             }
             .drivyFormRows()
         }

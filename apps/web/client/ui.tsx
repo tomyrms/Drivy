@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 export type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock'
   | 'home' | 'settings' | 'list' | 'layers' | 'book' | 'file' | 'tag' | 'receipt' | 'users' | 'plus' | 'edit' | 'send'
-  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron';
+  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron' | 'chevron-up' | 'grip';
 
 const symbolPaths: Record<SymbolKind, ReactNode> = {
   account: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>,
@@ -35,6 +35,8 @@ const symbolPaths: Record<SymbolKind, ReactNode> = {
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M7 14h3M14 14h3M7 17h3" /></>,
   route: <><circle cx="5" cy="18" r="2" /><circle cx="19" cy="6" r="2" /><path d="M5 16v-5a3 3 0 0 1 3-3h3a3 3 0 0 1 0 6h2a6 6 0 0 0 6-6" /></>,
   chevron: <path d="m7 10 5 5 5-5" />,
+  'chevron-up': <path d="m7 14 5-5 5 5" />,
+  grip: <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" strokeWidth="2.6" />,
 };
 
 /** Decorative outline symbol; every meaning it carries is also written in text. */

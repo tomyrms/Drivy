@@ -72,6 +72,9 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   // Contrôle du permis : l'historique se lit, la décision se consigne (If-Match = version de la formation).
   { method: 'GET', segments: ['trainings', ':id', 'permit-checks'], query: list },
   { method: 'POST', segments: ['trainings', ':id', 'permit-checks'], ifMatch: true, bodyLimit: 8_192 },
+  // Signalements configurables : un réglage d'école versionné (ordre et affichage des quinze thèmes).
+  { method: 'GET', segments: ['observation-themes'] },
+  { method: 'PUT', segments: ['observation-themes'], ifMatch: true, bodyLimit: 4_096 },
   // Lectures seules : agenda de l'école, progression et bilans publiés.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
   { method: 'GET', segments: ['captures'], query: list },

@@ -1,0 +1,121 @@
+{
+ "indicators": {
+  "direction": "A",
+  "name": "Paire de témoins",
+  "origine": "note",
+  "finition": true,
+  "scale": 1.027,
+  "epaisseur_en_place": null,
+  "ink": 0.192,
+  "bbox": [
+   4.0,
+   16.7,
+   60.0,
+   45.3
+  ],
+  "w": 56.0,
+  "h": 28.7
+ },
+ "following-distance": {
+  "direction": "C",
+  "name": "Barres d'écart",
+  "origine": "note",
+  "finition": true,
+  "scale": 0.928,
+  "epaisseur_en_place": 5.94,
+  "ink": 0.219,
+  "bbox": [
+   10.5,
+   6.4,
+   53.5,
+   55.6
+  ],
+  "w": 43.0,
+  "h": 49.2
+ },
+ "braking": {
+  "direction": "A",
+  "name": "Témoin de frein",
+  "origine": "note",
+  "finition": true,
+  "scale": 0.891,
+  "epaisseur_en_place": 5.79,
+  "ink": 0.227,
+  "bbox": [
+   6.2,
+   10.5,
+   57.8,
+   51.5
+  ],
+  "w": 51.7,
+  "h": 40.9
+ },
+ "lane-change": {
+  "direction": "A",
+  "name": "Par-dessus la ligne",
+  "origine": "note",
+  "finition": true,
+  "scale": 0.921,
+  "epaisseur_en_place": 6.26,
+  "ink": 0.138,
+  "bbox": [
+   13.9,
+   3.0,
+   50.1,
+   59.0
+  ],
+  "w": 36.2,
+  "h": 56.0
+ },
+ "moving-off": {
+  "direction": "B",
+  "name": "En côte",
+  "origine": "note",
+  "finition": false,
+  "scale": 1.026,
+  "epaisseur_en_place": null,
+  "ink": 0.252,
+  "bbox": [
+   6.1,
+   10.6,
+   57.9,
+   51.4
+  ],
+  "w": 51.9,
+  "h": 40.8
+ },
+ "bends": {
+  "direction": "C",
+  "name": "Flèche de virage",
+  "origine": "note",
+  "finition": true,
+  "scale": 0.969,
+  "epaisseur_en_place": 6.1,
+  "ink": 0.112,
+  "bbox": [
+   14.2,
+   3.0,
+   49.8,
+   59.0
+  ],
+  "w": 35.5,
+  "h": 56.0
+ },
+ "eco-driving": {
+  "direction": "A",
+  "name": "Feuille-route",
+  "origine": "note",
+  "finition": false,
+  "scale": 0.958,
+  "epaisseur_en_place": null,
+  "ink": 0.224,
+  "bbox": [
+   9.0,
+   8.0,
+   55.0,
+   54.0
+  ],
+  "w": 46.0,
+  "h": 46.0
+ }
+}

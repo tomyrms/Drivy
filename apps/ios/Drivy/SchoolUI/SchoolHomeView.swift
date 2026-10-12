@@ -158,6 +158,17 @@ struct SchoolHomeView: View {
         .onChange(of: workspace.learners.map { "\($0.id):\($0.profileReadiness ?? "")\($0.archivedAt == nil)" }, initial: true) { _, _ in refreshStaffActions() }
         .onChange(of: workspace.membership?.roles) { _, _ in refreshStaffActions() }
         .onChange(of: account?.resumeOnboarding != nil) { _, _ in refreshStaffActions() }
+        // Signalements de l’école : lus à l’ouverture de son espace, et relus quand les droits du compte changent.
+        // « Signaler » et le Profil partagent ce qui en revient.
+        .task(id: observationThemeScope) {
+            guard let themes = agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership) else { return }
+            await themes.refresh()
+        }
+    }
+
+    private var observationThemeScope: String {
+        guard let membership = workspace.membership else { return "" }
+        return "\(membership.membershipId.uuidString):\(membership.accessEpoch):\(membership.roles.joined(separator: ",")):\(membership.grants.joined(separator: ","))"
     }
 
     private var sessionTab: some View {

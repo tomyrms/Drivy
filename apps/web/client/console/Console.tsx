@@ -19,6 +19,7 @@ import { AvailabilitySection } from './availability';
 import { AgendaSection } from './agenda';
 import { TripsSection } from './trips';
 import { FormationsSection } from './formations';
+import { ObservationThemesSection } from './observation-themes';
 import { isLocalItemCurrent, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
 import { ConsoleAccessReader } from './access-reader';
@@ -295,6 +296,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'agenda': return <AgendaSection />;
     case 'trajets': return <TripsSection />;
     case 'disponibilites': return <AvailabilitySection />;
+    case 'signalements': return <ObservationThemesSection />;
   }
 }
 

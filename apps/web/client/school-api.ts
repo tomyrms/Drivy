@@ -113,6 +113,19 @@ export const reportSchema = z.object({
   observations: z.array(z.object({ competencyId: id, level: z.enum(observationLevels), context: z.string() })).max(200),
 });
 
+/**
+ * Signalements configurables : le catalogue de thèmes (clés stables) dans l'ordre réglé par l'école.
+ * Le catalogue appartient au serveur : le client ne fixe ni le nombre ni les clés, il exige seulement une liste cohérente.
+ */
+export const observationThemeSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/), title: z.string().min(1).max(120), competencyKeys: z.array(z.string()).max(10),
+  visible: z.boolean(), defaultVisible: z.boolean(), defaultPosition: z.number().int().min(0).max(99),
+});
+export const observationThemesSchema = z.object({
+  id, schoolId: id, version, canManage: z.boolean(), themes: z.array(observationThemeSchema).min(1).max(40),
+}).refine(value => new Set(value.themes.map(theme => theme.key)).size === value.themes.length, { message: 'Clés de thème en double.' })
+  .refine(value => new Set(value.themes.map(theme => theme.defaultPosition)).size === value.themes.length, { message: 'Positions d’origine en double.' });
+
 export type School = z.infer<typeof schoolSchema>;
 export type Permit = z.infer<typeof permitSchema>;
 export type Lesson = z.infer<typeof lessonSchema>;
@@ -134,6 +147,8 @@ export type CatalogPolicy = z.infer<typeof catalogPolicySchema>;
 export type CommercialTerms = z.infer<typeof termsSchema>;
 export type ServiceProduct = z.infer<typeof productSchema>;
 export type ProfilePolicy = z.infer<typeof profilePolicySchema>;
+export type ObservationTheme = z.infer<typeof observationThemeSchema>;
+export type ObservationThemes = z.infer<typeof observationThemesSchema>;
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
 export type RawResponse = { status: number; body: unknown; etag: string | null; code: string };
@@ -191,6 +206,13 @@ export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: st
     if (!cursor) return { items, truncated: false };
   }
   return { items, truncated: true };
+}
+
+/** Lecture des signalements de l'école ; une réponse qui n'est pas celle de cette école est refusée. */
+export async function readObservationThemes(schoolId: string): Promise<ObservationThemes> {
+  const result = await readSchool(schoolId, 'observation-themes', observationThemesSchema);
+  if (result.schoolId.toLowerCase() !== schoolId.toLowerCase()) throw new RequestFailure('INVALID_RESPONSE');
+  return result;
 }
 
 /** Parse the confirmed resource of a write; any mismatch keeps the request uncertain. */

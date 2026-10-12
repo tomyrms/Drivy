@@ -839,9 +839,7 @@ enum DrivyMapLayout {
     static let floatingPanelMaxWidth: CGFloat = 640
     /// Text column of DrivyMapPlaceholder.
     static let placeholderMaxWidth: CGFloat = 420
-    /// Fixed budget for eleven themes in four rows, the header and the appraisal bar.
-    /// Smaller containers and larger text keep the palette's native scrolling fallback.
-    static let reportPaletteHeight: CGFloat = 520
-    /// Popover of « Signaler » anchored on the button in regular width (iPad).
+    /// Popover of « Signaler » anchored on the button in regular width (iPad): its width, and the tallest it gets.
+    /// The palette's own height follows its tiles (`SchoolSignalGridLayout`).
     static let reportPopoverSize = CGSize(width: 480, height: 560)
 }
