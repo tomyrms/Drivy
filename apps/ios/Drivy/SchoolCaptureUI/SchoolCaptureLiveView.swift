@@ -451,7 +451,7 @@ struct SchoolCaptureLiveView: View {
     }
 
     /// Volet posé sur la carte : la hauteur que ses tuiles demandent, sans dépasser l’écran. Peu de tuiles, volet bas ;
-    /// beaucoup de tuiles, volet haut, jusqu’à la hauteur de l’écran. Au-delà, seule la grille défile.
+    /// au-delà de douze, la hauteur des douze premières, et la grille défile vers les suivantes.
     private func paletteHeight(for recorder: SchoolLiveObservationRecorder, in size: CGSize) -> CGFloat {
         let width = min(DrivyMapLayout.floatingPanelMaxWidth, max(0, size.width - 2 * DrivySpacing.m))
         let wanted = observationPaletteHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(

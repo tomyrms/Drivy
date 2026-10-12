@@ -271,16 +271,44 @@ struct SchoolSignalGridLayoutTests {
         #expect(layout(3, text: .accessibility3).columns == 1)
     }
 
-    @Test func thePanelGrowsWithItsRowsAndFifteenTilesFitASmallPhone() {
+    @Test func thePanelGrowsUpToTwelveTilesThenKeepsTheirHeight() {
         func height(_ count: Int) -> CGFloat {
             SchoolSignalGridLayout.estimatedPaletteHeight(tileCount: count, width: 361, textSize: .large)
         }
-        #expect(height(1) < height(4) && height(4) < height(9) && height(9) < height(12) && height(12) < height(15))
-        // Douze tuiles tiennent dans l’ancien budget du volet ; quinze dans la hauteur utile d’un iPhone de 667 pt.
-        #expect(height(12) <= 520 && height(15) <= 615)
-        #expect(height(11) == height(12) && height(13) == height(15))
-        // Seize à dix-huit tuiles : une sixième rangée. Le volet dépasse alors un iPhone de 667 pt, où la grille défile.
-        #expect(height(16) == height(18) && height(16) > height(15) && height(18) > 615)
+        #expect(height(1) < height(4) && height(4) < height(9) && height(9) < height(12))
+        // Douze tuiles tiennent dans l’ancien budget du volet.
+        #expect(height(11) == height(12) && height(12) <= 520)
+        // Au-delà, la fenêtre des douze premières plus l’amorce de la rangée suivante, quel que soit le nombre :
+        // le volet tient dans la hauteur utile d’un iPhone de 667 pt.
+        let overflow = height(12) + SchoolSignalGridLayout.spacing + SchoolSignalGridLayout.peek
+        for count in [13, 15, 18, 24, 40] { #expect(height(count) == overflow, "\(count) tuiles") }
+        #expect(overflow <= 615)
+    }
+
+    /// Les douze premières tuiles à l’ouverture, les suivantes en défilant, sur les largeurs d’iPhone (volet = écran
+    /// − 32 pt) et du popover de l’iPad. La fenêtre finit toujours sur une rangée pleine.
+    @Test func theFirstTwelveTilesAreTheWindowAndTheRestScrolls() {
+        for width: CGFloat in [320 - 32, 375 - 32, 393 - 32, 430 - 32, 480] {
+            for count in [8, 12, 15, 18, 24] {
+                let value = layout(count, width: width)
+                #expect(value.overflows == (count > 12), "\(count) à \(width)")
+                #expect(min(count, 12) <= value.visibleRows * value.columns, "\(count) à \(width)")
+                #expect(value.visibleRows * value.columns <= 12 || value.visibleRows == value.rows, "\(count) à \(width)")
+            }
+        }
+        // iPhone : quatre rangées de trois, puis une, deux ou quatre rangées en dessous.
+        #expect(layout(15, width: 343).visibleRows == 4 && layout(15, width: 343).rows == 5)
+        #expect(layout(18).rows == 6 && layout(24).rows == 8 && layout(24).visibleRows == 4)
+        #expect(layout(8).visibleRows == layout(8).rows && !layout(8).overflows)
+        // Popover de l’iPad : quatre colonnes, trois rangées visibles.
+        #expect(layout(24, width: 480).columns == 4 && layout(24, width: 480).visibleRows == 3)
+        // Fenêtre : rangées pleines, plus l’amorce seulement quand des tuiles suivent.
+        let spacing = SchoolSignalGridLayout.spacing
+        #expect(layout(12).windowHeight(tileHeight: 80) == 4 * 80 + 3 * spacing)
+        #expect(layout(15).windowHeight(tileHeight: 80) == 4 * 80 + 4 * spacing + SchoolSignalGridLayout.peek)
+        #expect(layout(8).windowHeight(tileHeight: 80) == 3 * 80 + 2 * spacing)
+        // Le fondu ne couvre que l’amorce et la marge, jamais la dernière rangée de la fenêtre.
+        #expect(SchoolSignalGridLayout.fadeHeight == spacing + SchoolSignalGridLayout.peek + SchoolSignalGridLayout.gutter)
     }
 }
 

@@ -24,6 +24,12 @@ Cinq audits en lecture seule (écrans iOS, API et base, UI/UX, architecture, fia
 
 **Exécuté** : API 322/322 tests sur PostgreSQL locale (base 311) ; web 149/149 ; IPA d’essai compilée ; tests Swift sur la CI (résultat dans la PR). **Non fait** : audit UI/UX sur captures (agent arrêté par la limite d’usage), aucune retouche visuelle. **Non déployé** : migrations 025 et 027, `WEB_TRUST_PROXY`. **Reste à qualifier** : tout sur iPhone (verrou au-dessus d’une feuille, adoption d’époque, purge, reprise hors réseau). **Au porteur** : un départ immédiat lancé par erreur ne s’annule plus, il se termine puis l’école corrige l’issue.
 
+## 12 octobre 2026 — « Signaler » : douze tuiles visibles, la suite défile
+
+Le volet montre d’emblée les douze premiers signalements affichés, dans l’ordre de l’école ; au-delà, la même grille continue en dessous et défile, avec l’amorce estompée de la rangée suivante. Le volet garde la hauteur de douze tuiles quel que soit leur nombre ; tuiles de hauteur égale. [Règle et contrôle](signalements-ios-20261012.md#mise-à-jour--douze-tuiles-visibles-la-suite-défile-12-octobre-troisième-lot).
+
+**Exécuté** : voir la PR (IPA et captures sur la CI). **Reste à qualifier** : défilement et fondu sur appareil, tailles d’iPhone autres que celle de la campagne, VoiceOver.
+
 ## 12 octobre 2026 — signalements configurables : 18 thèmes, réglés par école
 
 « Signaler » ne déplie plus le référentiel tel quel : un catalogue de dix-huit thèmes à clés stables (les onze d’avant, plus Clignotants, Distance de sécurité, Freinage, Changement de voie, Démarrage, Virages, Éco-conduite), dont douze affichés à l’origine. Chaque école règle l’ordre et l’affichage ; l’administrateur le peut toujours, un moniteur avec le nouveau droit « Gérer les signalements ». Masquer un thème ne retire aucune observation : chaque observation garde la clé de son thème. Réglage dans l’app (Profil → Signalements, glisser-déposer natif) et sur le web (section Signalements, droit dans Équipe). Sept pictogrammes dessinés avec les skills logo-design et brand-identity, trois études chacun. [Contrat et décisions](signalements-configurables-20261012.md) · [icônes](icones-signalements-20261012.md) · [iOS](signalements-ios-20261012.md) · [web](signalements-web-20261012.md).

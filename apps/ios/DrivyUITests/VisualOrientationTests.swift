@@ -9,7 +9,7 @@ import XCTest
         "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "start-now", "planning-settings",
         "agenda", "agenda-month", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
-        "replay", "design-system", "skeletons", "gps-choice", "signal", "live-signal",
+        "replay", "design-system", "skeletons", "gps-choice", "signal", "signal-all", "live-signal",
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",
         "planning", "planning-details", "planning-confirmation", "invitations", "invitation-create",
         "invitation-detail", "lesson-finish", "lesson-modal", "lesson-tariff", "sign-in",
@@ -87,7 +87,7 @@ import XCTest
                     case "home-to-finish": "today-continue-lesson"
                     case "live", "live-waiting": "capture-signal-observation"
                     case "replay": "replay-play"
-                    case "signal": "live-observation-theme-Priorité à droite"
+                    case "signal", "signal-all": "live-observation-theme-Priorité à droite"
                     case "sign-in": "school-sign-in"
                     default: nil
                     }
