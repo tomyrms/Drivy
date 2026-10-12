@@ -114,10 +114,17 @@ struct SchoolTodayView: View {
             if phase == .active { location.refresh(); Task { await load() } }
         }
         // Les leçons à terminer que cet écran lit déjà (le jour et le rappel des jours passés) sont l’action
-        // de l’onglet : aucune lecture de plus, et le point part dès que la liste se vide.
-        .onChange(of: (lessons + unfinished).map { "\($0.id):\($0.version)" }, initial: true) { _, _ in
-            requiredActions?.replace(.finishLesson, with: SchoolRequiredActionRules.lessonsToFinish(lessons + unfinished,
-                instructorMembershipID: instructorFilter, now: Date()))
+        // de l’onglet : aucune lecture de plus, et le point part dès que la liste se vide. Une leçon commencée
+        // devient « à terminer » à sa fin prévue : le point s’allume à cette heure-là, comme sa ligne.
+        .task(id: (lessons + unfinished).map { "\($0.id):\($0.version)" }) {
+            while !Task.isCancelled {
+                let all = lessons + unfinished, now = Date()
+                requiredActions?.replace(.finishLesson, with: SchoolRequiredActionRules.lessonsToFinish(all,
+                    instructorMembershipID: instructorFilter, now: now))
+                guard let next = SchoolRequiredActionRules.nextFinishDeadline(all, instructorMembershipID: instructorFilter, now: now)
+                else { return }
+                try? await Task.sleep(for: .seconds(max(1, next.timeIntervalSince(now))))
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
             if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }

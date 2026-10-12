@@ -10,7 +10,7 @@
         "contactEmail": "eleve@example.invalid",
         "contactPhone": null,
         "archivedAt": null,
-        "profileReadiness": "MINIMAL"
+        "profileReadiness": "READY"
       }
     ],
     "nextCursor": null

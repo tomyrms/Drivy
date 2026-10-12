@@ -2,6 +2,7 @@ import type { PoolClient, QueryResultRow } from 'pg';
 import type { Actor, Membership } from './database.js';
 import type { Position } from './cursor.js';
 import { notFound } from './errors.js';
+import { missingProfileFieldsLateral, readinessSql } from './profile-completeness.js';
 
 export interface LearnerFilters {
   q?: string | undefined; trainingStatus?: string | undefined; status: 'ACTIVE' | 'ARCHIVED' | 'ALL';
@@ -12,7 +13,10 @@ type PageRow = QueryResultRow & { id: string; _createdAt: string };
 const cursorTimestamp = (alias: string) => `to_char(${alias}.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 const learnerColumns = `l.id, l.school_id AS "schoolId", l.version, l.person_id AS "personId",
   l.display_name AS "displayName", l.contact_email AS "contactEmail", l.contact_phone AS "contactPhone",
-  l.archived_at AS "archivedAt", l.profile_readiness AS "profileReadiness"`;
+  l.archived_at AS "archivedAt", ${readinessSql} AS "profileReadiness"`;
+// L’état du dossier se calcule à la lecture, depuis la politique applicable : une politique publiée, un dossier saisi
+// ailleurs ou un champ devenu facultatif se lisent aussitôt, sans état stocké qui retarde (profile-completeness.ts).
+const learnerSource = `drivy.learner_profile l ${missingProfileFieldsLateral('l')}`;
 const trainingColumns = `t.id, t.school_id AS "schoolId", t.version, t.learner_id AS "learnerId",
   t.offering_id AS "offeringId", o.category_code AS "categoryCode", t.status,
   to_char(t.started_on,'YYYY-MM-DD') AS "startedOn", to_char(t.closed_on,'YYYY-MM-DD') AS "closedOn",
@@ -40,7 +44,7 @@ const visibleLearner = `('ADMIN'=ANY($4::text[]) OR ('LEARNER'=ANY($4::text[]) A
     WHERE visible_t.school_id=$1 AND visible_t.learner_id=l.id AND ${assigned('visible_t')})))`;
 const params = (schoolId: string, actor: Actor, membership: Membership) => [schoolId, actor.personId, membership.id, membership.roles];
 export async function getLearner(db: PoolClient, schoolId: string, actor: Actor, member: Membership, id: string) {
-  const result = await db.query(`SELECT ${learnerColumns} FROM drivy.learner_profile l WHERE l.school_id=$1 AND ${visibleLearner} AND l.id=$5`, [...params(schoolId, actor, member), id]);
+  const result = await db.query(`SELECT ${learnerColumns} FROM ${learnerSource} WHERE l.school_id=$1 AND ${visibleLearner} AND l.id=$5`, [...params(schoolId, actor, member), id]);
   if (!result.rows[0]) throw notFound();
   return result.rows[0];
 }
@@ -62,7 +66,7 @@ export async function listLearners(db: PoolClient, schoolId: string, actor: Acto
   const conditions = ['l.school_id=$1', visibleLearner];
   if (filters.status !== 'ALL') conditions.push(`l.archived_at IS ${filters.status === 'ACTIVE' ? '' : 'NOT '}NULL`);
   if (filters.q) conditions.push(`strpos(${foldedName('l.display_name')}, ${foldedName(bind(filters.q))}) > 0`);
-  if (filters.requiresAction !== undefined) conditions.push(`(l.profile_readiness='ACTION_REQUIRED')=${bind(filters.requiresAction)}`);
+  if (filters.requiresAction !== undefined) conditions.push(`(cardinality(mp.fields)>0)=${bind(filters.requiresAction)}`);
   const trainingConditions = ['ft.school_id=$1', 'ft.learner_id=l.id', visibleTraining('ft')];
   if (filters.trainingStatus) trainingConditions.push(`ft.status=${bind(filters.trainingStatus)}`);
   if (filters.categoryCode) trainingConditions.push(`fo.category_code=${bind(filters.categoryCode)}`);
@@ -73,7 +77,7 @@ export async function listLearners(db: PoolClient, schoolId: string, actor: Acto
     SELECT 1 FROM drivy.training ft JOIN drivy.offering_version fo ON fo.school_id=ft.school_id AND fo.id=ft.offering_id
     WHERE ${trainingConditions.join(' AND ')})`);
   if (position) conditions.push(`(l.created_at,l.id)>(${bind(position.createdAt)}::timestamptz,${bind(position.id)}::uuid)`);
-  return (await db.query<PageRow>(`SELECT ${learnerColumns},${cursorTimestamp('l')} AS "_createdAt" FROM drivy.learner_profile l
+  return (await db.query<PageRow>(`SELECT ${learnerColumns},${cursorTimestamp('l')} AS "_createdAt" FROM ${learnerSource}
     WHERE ${conditions.join(' AND ')} ORDER BY l.created_at,l.id LIMIT ${bind(limit + 1)}`, values)).rows;
 }
 export async function listTrainings(db: PoolClient, schoolId: string, actor: Actor, member: Membership,

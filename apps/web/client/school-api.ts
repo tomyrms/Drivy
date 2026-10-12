@@ -71,6 +71,15 @@ export const learnerSchema = z.object({
   id, schoolId: id, version, personId: id, displayName: z.string(), contactEmail: z.string().nullable(),
   contactPhone: z.string().nullable(), archivedAt: timestamp.nullable(), profileReadiness: z.string().nullable().optional(),
 });
+/** Ce que la readiness d’un élève rend pour une action ; seuls les champs nommés servent à l’affichage. */
+export const learnerReadinessSchema = z.object({
+  learnerId: id, action: z.string(), ready: z.boolean(),
+  blockers: z.array(z.object({ code: z.string(), message: z.string(), field: z.string().nullable() })).max(50),
+});
+/** Le profil administratif, lu pour sa version, sa politique et son identifiant ; les valeurs ne s’affichent pas ici. */
+export const administrativeProfileSchema = z.object({
+  id, schoolId: id, version, learnerId: id, policyVersionId: id,
+});
 export const trainingSchema = z.object({
   id, schoolId: id, version, learnerId: id, offeringId: id, categoryCode: z.string().nullable().optional(),
   status: z.enum(['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED']), startedOn: civil.nullable(), closedOn: civil.nullable(),

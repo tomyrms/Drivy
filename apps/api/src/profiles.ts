@@ -9,6 +9,7 @@ import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { getLearner,getTraining } from './queries.js';
 import { planningReadiness } from './lessons.js';
+import { missingRules,readinessOf,PLANNING_STAGES } from './profile-completeness.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(maximum:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=maximum);
@@ -94,10 +95,8 @@ function profileGuards<T>(learnerId:string,body:object):CommandGuards<T> {
     }return data;}
   };
 }
-function missingProfileFields(row:ProfileRow,policy:PolicyRow,stages:string[]) {
-  const values:Record<string,unknown>={firstName:row.first_name,lastName:row.last_name,birthDate:row.birthDate,postalAddress:row.postal_address,contactEmail:row.contact_email,contactPhone:row.contact_phone};
-  return policy.fields.filter(rule=>rule.requirement==='REQUIRED' && stages.includes(rule.stage) && (values[rule.field]===null || values[rule.field]===undefined || values[rule.field]===''))
-    .map(rule=>block('PROFILE_ACTION_REQUIRED','Complétez ce champ pour l’étape concernée.',rule.field,rule.explanation));
+function missingProfileFields(row:ProfileRow,policy:PolicyRow,stages:readonly string[]) {
+  return missingRules(row,policy.fields,stages).map(rule=>block('PROFILE_ACTION_REQUIRED','Complétez ce champ pour l’étape concernée.',rule.field,rule.explanation));
 }
 async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,learnerId:string,body:z.infer<typeof profileCommand>|z.infer<typeof learnerCommand>,expected:number,legacy:boolean) {
   activeSchool(school);const policy=await currentPolicy(db,school.id);if('policyVersionId' in body) policyMatches(policy,body.policyVersionId);
@@ -119,8 +118,8 @@ async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,lea
   if(displayName!==null) {values.push(displayName);assignments.push(`display_name=$${values.length}`);}
   await db.query(`UPDATE drivy.learner_profile SET ${assignments.join(',')},version=version+1,administrative_policy_id=$3,entered_by_membership_id=$4,entry_source=$5,profile_updated_at=now() WHERE id=$1 AND school_id=$2`,values);
   const updated=await profile(db,school.id,learnerId);
-  const ready=missingProfileFields(updated,policy,['JOIN']).length===0;
-  await db.query('UPDATE drivy.learner_profile SET profile_readiness=$2 WHERE id=$1',[learnerId,ready?'READY':'MINIMAL']);
+  // Copie indicative : les lectures recalculent l’état depuis la politique applicable (profile-completeness.ts).
+  await db.query('UPDATE drivy.learner_profile SET profile_readiness=$2 WHERE id=$1',[learnerId,readinessOf(missingRules(updated,policy.fields,PLANNING_STAGES).map(rule=>rule.field))]);
   if(legacy) {
     const value=await getLearner(db,school.id,{personId:actor.personId,displayName:'',locale:'',version:1},{id:actor.membershipId,roles:actor.roles,grants:[],accessEpoch:1},learnerId);
     return {data:value,action:'LearnerUpdated',resourceType:'Learner',resourceId:learnerId,changedFields:writableFields(body)};

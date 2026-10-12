@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi"]
+    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi", "dossier-incomplete"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -94,7 +94,7 @@ struct SchoolVisualReview: View {
                     SchoolVisualShell(context: context, tab: .agenda)
                 case "learners":
                     SchoolVisualShell(context: context, tab: .learners)
-                case "learner", "dossier", "dossier-multi":
+                case "learner", "dossier", "dossier-multi", "dossier-incomplete":
                     SchoolVisualShell(context: context, tab: .learners, learnerID: SchoolVisualData.learnerID)
                 default:
                     SchoolTrainingView(client: context.client, workspace: context.workspace,
@@ -223,10 +223,15 @@ struct SchoolVisualShell: View {
         UUID(uuidString: "10000000-0000-4000-8000-" + String(format: "%012d", value))!
     }
 
+    /// « dossier-incomplete » : la politique exige date de naissance, adresse et téléphone avant une leçon, et le
+    /// dossier de Camille n’en a aucun. Les trois informations manquantes se lisent dans la carte de l’élève.
+    private static var incompleteProfile: Bool { ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] == "dossier-incomplete" }
+    private static let incompleteFields: [SchoolProfileField] = [.birthDate, .postalAddress, .contactPhone]
+
     private static var learnerObject: [String: Any] {
         ["id": learnerID.uuidString, "schoolId": schoolID.uuidString, "personId": identifier(11).uuidString,
          "version": 1, "displayName": "Camille Perret", "contactEmail": "camille@example.invalid",
-         "contactPhone": NSNull(), "archivedAt": NSNull(), "profileReadiness": "READY"]
+         "contactPhone": NSNull(), "archivedAt": NSNull(), "profileReadiness": incompleteProfile ? "ACTION_REQUIRED" : "READY"]
     }
 
     /// Fictional learners shown in lists and in the agenda; only `learnerID` has a dossier.
@@ -469,8 +474,9 @@ struct SchoolVisualShell: View {
         // AP175 and its exact published policy: entirely synthetic, with the same read-only transport.
         let profilePolicyID = identifier(200), profileNoticeID = identifier(201)
         let profileFields: [[String: Any]] = SchoolProfileField.allCases.map { field in
-            ["field": field.rawValue, "requirement": field.isName ? "REQUIRED" : "OPTIONAL",
-             "stage": field.isName ? "JOIN" : "OPTIONAL", "purposeCode": field.purposes[0].rawValue,
+            let required = field.isName || (Self.incompleteProfile && Self.incompleteFields.contains(field))
+            return ["field": field.rawValue, "requirement": required ? "REQUIRED" : "OPTIONAL",
+             "stage": field.isName ? "JOIN" : (required ? "BEFORE_LESSON" : "OPTIONAL"), "purposeCode": field.purposes[0].rawValue,
              "explanation": "Champ fictif du contrôle de rendu."]
         }
         objects["\(root)/profile-field-policies"] = page([["id": profilePolicyID.uuidString,
@@ -479,15 +485,24 @@ struct SchoolVisualShell: View {
             "approvedByMembershipId": membershipID.uuidString]])
         objects["\(root)/learners/\(learnerID.uuidString)/administrative-profile"] = [
             "id": identifier(202).uuidString, "schoolId": schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString,
-            "firstName": "Camille", "lastName": "Perret", "birthDate": "2005-07-12",
-            "postalAddress": ["line1": "Rue des Parcs 12", "line2": null, "postalCode": "2053",
+            "firstName": "Camille", "lastName": "Perret", "birthDate": Self.incompleteProfile ? null as Any : "2005-07-12" as Any,
+            "postalAddress": Self.incompleteProfile ? null as Any : ["line1": "Rue des Parcs 12", "line2": null, "postalCode": "2053",
                 "locality": "Cernier", "countryCode": "CH"] as [String: Any],
-            "contactEmail": "camille@example.invalid", "contactPhone": "+41 00 000 00 00", "profilePhotoDocumentId": null,
+            "contactEmail": "camille@example.invalid", "contactPhone": Self.incompleteProfile ? null as Any : "+41 00 000 00 00" as Any,
+            "profilePhotoDocumentId": null,
             "updatedAt": time, "enteredByMembershipId": membershipID.uuidString, "entrySource": "STAFF_ASSISTED",
             "policyVersionId": profilePolicyID.uuidString]
         objects["\(root)/learners/\(learnerID.uuidString)/action-readiness"] = ["learnerId": learnerID.uuidString,
             "action": "ENTER", "resourceId": null, "ready": true, "blockers": [] as [Any],
             "policyVersionId": profilePolicyID.uuidString, "computedAt": time]
+        // Ce qui manque pour planifier, lu par le dossier : rien, sauf pour « dossier-incomplete ».
+        let planningBlockers: [[String: Any]] = (Self.incompleteProfile ? Self.incompleteFields : []).map { field in
+            ["code": "PROFILE_ACTION_REQUIRED", "message": "Complétez ce champ pour l’étape concernée.", "field": field.rawValue,
+             "purpose": "Champ fictif du contrôle de rendu.", "resourceId": null, "destinationKey": "PROFILE"]
+        }
+        objects["\(root)/learners/\(learnerID.uuidString)/action-readiness" + SchoolVisualTransport.actionSuffix("PLAN_LESSON")] = [
+            "learnerId": learnerID.uuidString, "action": "PLAN_LESSON", "resourceId": null, "ready": planningBlockers.isEmpty,
+            "blockers": planningBlockers, "policyVersionId": profilePolicyID.uuidString, "computedAt": time]
         objects["\(root)/data-policy"] = ["id": identifier(203).uuidString, "schoolId": schoolID.uuidString,
             "version": 1, "status": "APPROVED", "noticeVersionId": profileNoticeID.uuidString,
             "noticeText": "Notice fictive du contrôle de rendu du dossier.",
@@ -576,13 +591,18 @@ struct SchoolVisualShell: View {
 struct SchoolVisualTransport: SchoolHTTPTransport {
     /// Agenda reads (`from`/`to` window) get day-relative lessons; dossier reads keep the fixed history.
     static let agendaSuffix = "?agenda-window"
+    /// Une readiness par action (`ENTER` à l’entrée du profil, `PLAN_LESSON` pour le dossier) ; sans réponse propre,
+    /// celle du chemin seul.
+    static func actionSuffix(_ action: String) -> String { "?action=" + action }
     let responses: [String: Data]
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid", (request.httpMethod ?? "GET") == "GET"
         else { throw SchoolAPIError.invalidResponse }
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let window = url.lastPathComponent == "lessons" && query.contains { $0.name == "from" || $0.name == "to" }
-        guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil) ?? responses[url.path]
+        let action = url.lastPathComponent == "action-readiness" ? query.first(where: { $0.name == "action" })?.value : nil
+        guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil)
+                ?? action.flatMap({ responses[url.path + Self.actionSuffix($0)] }) ?? responses[url.path]
         else { throw SchoolAPIError.invalidResponse }
         if window { bytes = try filteredAgenda(bytes, query: query) }
         else if url.lastPathComponent == "lessons", let trainingID = query.first(where: { $0.name == "trainingId" })?.value {

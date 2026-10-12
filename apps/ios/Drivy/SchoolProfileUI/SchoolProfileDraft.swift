@@ -17,6 +17,21 @@ struct SchoolProfileDraft: Equatable {
         if let value = profile.postalAddress { hasAddress = true; address = value }
     }
 
+    /// Le champ n’a encore aucune valeur saisie : une adresse compte dès que ses quatre parties obligatoires le sont.
+    func isEmpty(_ field: SchoolProfileField) -> Bool {
+        func blank(_ value: String) -> Bool { value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        switch field {
+        case .firstName: return blank(firstName)
+        case .lastName: return blank(lastName)
+        case .birthDate: return blank(birthDate)
+        case .contactEmail: return blank(contactEmail)
+        case .contactPhone: return blank(contactPhone)
+        case .postalAddress:
+            return !hasAddress || [address.line1, address.postalCode, address.locality, address.countryCode].contains(where: blank)
+        case .profilePhotoDocumentId: return false
+        }
+    }
+
     func rebased(on profile: SchoolAdministrativeProfile, changedKeys: Set<String>) -> SchoolProfileDraft {
         var value = SchoolProfileDraft(profile)
         if changedKeys.contains("firstName") { value.firstName = firstName }

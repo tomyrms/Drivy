@@ -8,7 +8,7 @@
     "contactEmail": "eleve@example.invalid",
     "contactPhone": null,
     "archivedAt": null,
-    "profileReadiness": "MINIMAL"
+    "profileReadiness": "READY"
   },
   "requestId": "0ee6f884-cc65-4ed0-914c-93d7c33b4373",
   "serverTime": "2026-09-24T14:51:13.275Z"

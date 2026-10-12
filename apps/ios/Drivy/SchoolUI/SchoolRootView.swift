@@ -45,7 +45,7 @@ struct SchoolRootView: View {
     /// Across launches, SchoolOnboardingDeferral keeps the offer away for seven days.
     @State private var offeredOnboarding: Set<UUID> = []
     /// Confirmé par la lecture serveur, même si l’offre automatique a été reportée.
-    @State private var staffOnboardingToResume: UUID?
+    @State private var onboardingToResume: UUID?
 
     private var presentsSheet: Bool {
         joinRoute != nil || codeJoinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil
@@ -152,7 +152,7 @@ struct SchoolRootView: View {
                 openProfile: followUp(.profile, when: ownProfileLearner != nil),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
                 openJoinSchool: followUp(.join, when: canJoinSchool),
-                signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding))
+                signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding))
         }
     }
 
@@ -246,7 +246,7 @@ struct SchoolRootView: View {
             if pendingJoinLink != nil { openJoin() } else { openCodeJoin() }
         case .invitations: openInvitations(creation: false)
         case .profile: if let learner = ownProfileLearner { openProfile(learner) }
-        case .onboarding: if canResumeStaffOnboarding && !presentsSheet { openOnboarding() }
+        case .onboarding: if canResumeOnboarding && !presentsSheet { openOnboarding() }
         }
     }
 
@@ -256,7 +256,7 @@ struct SchoolRootView: View {
             openProfile: followUp(.profile, when: ownProfileLearner != nil),
             openInvitations: followUp(.invitations, when: canManageInvitations),
             openJoinSchool: followUp(.join, when: canJoinSchool),
-            signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeStaffOnboarding),
+            signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding),
             tripInProgress: tripInProgress)
     }
 
@@ -266,11 +266,12 @@ struct SchoolRootView: View {
     /// Rejoindre une école ouvre l’école rejointe : comme « Changer d’école », le geste se retire pendant un trajet.
     private var canJoinSchool: Bool { configuration != nil && identity.isAuthenticated && !tripInProgress }
 
-    private var canResumeStaffOnboarding: Bool {
+    private var canResumeOnboarding: Bool {
         guard configuration != nil, identity.isAuthenticated, workspace?.school?.status == "ACTIVE",
               let membership = workspace?.membership else { return false }
-        return membership.roles.contains("INSTRUCTOR") && !membership.roles.contains("LEARNER")
-            && staffOnboardingToResume == membership.membershipId
+        // L’élève comme le moniteur : un accueil laissé en route se reprend depuis Profil, sans attendre sept jours.
+        return (membership.roles.contains("INSTRUCTOR") || membership.roles.contains("LEARNER"))
+            && onboardingToResume == membership.membershipId
     }
 
     /// La gestion de l’école est réservée à l’administration, sur le portail web.
@@ -425,11 +426,11 @@ struct SchoolRootView: View {
     private func offerOnboardingIfNeeded() async {
         // « Reprendre l’accueil » reste affiché pendant la relecture : il ne s’éteint que pour une autre adhésion,
         // ou quand l’école ne le dit plus à terminer.
-        if staffOnboardingToResume != workspace?.membership?.membershipId { staffOnboardingToResume = nil }
+        if onboardingToResume != workspace?.membership?.membershipId { onboardingToResume = nil }
         guard identity.isAuthenticated, let configuration, let person = workspace?.person,
               let membership = workspace?.membership,
               membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR") else {
-            staffOnboardingToResume = nil
+            onboardingToResume = nil
             return
         }
         let isLearner = membership.roles.contains("LEARNER")
@@ -438,16 +439,18 @@ struct SchoolRootView: View {
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-        let pending = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind)
+        let state = await SchoolOnboardingPrompt.pendingState(api: api, scope: scope, kind: kind)
         guard !Task.isCancelled, identity.isAuthenticated,
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
               workspace?.membership?.accessEpoch == membership.accessEpoch else { return }
+        // Une panne ne dit rien : « Reprendre l’accueil » déjà affiché reste, rien ne s’ouvre.
+        guard let pending = state else { return }
         guard pending else {
-            if !isLearner { staffOnboardingToResume = nil }
+            onboardingToResume = nil
             return
         }
-        if !isLearner { staffOnboardingToResume = membership.membershipId }
+        onboardingToResume = membership.membershipId
         guard !offeredOnboarding.contains(membership.membershipId),
               !SchoolOnboardingDeferral.isDeferred(membership.membershipId), !presentsSheet else { return }
         offeredOnboarding.insert(membership.membershipId)
@@ -506,7 +509,7 @@ struct SchoolRootView: View {
     private func closeProfile() { profileWorkspace?.invalidate(); profileRoute = nil }
     private func profileDismissed() {
         if onboardingWorkspaceID != nil, profileWorkspace?.onboarding?.status == "COMPLETED" {
-            staffOnboardingToResume = nil
+            onboardingToResume = nil
         }
         // Le dossier ne se relit que si le profil a changé : la relecture vide un instant la liste des formations
         // et fait disparaître l’écran de formation ouvert derrière.
@@ -587,7 +590,7 @@ struct SchoolRootView: View {
     }
 
     private func closeAll() {
-        staffOnboardingToResume = nil
+        onboardingToResume = nil
         closeJoin(); closeCodeJoin(); closeInvitations(); closeProfile()
     }
 

@@ -10,6 +10,10 @@ final class SchoolWorkspace {
     private(set) var membership: SchoolMembership?
     private(set) var school: SchoolDetails?
     private(set) var learners: [SchoolLearner] = []
+    /// Les dossiers actifs de toute l’école auxquels manque une information requise, pour l’administration ;
+    /// `nil` tant que rien n’a été lu. Le point de l’onglet Élèves s’y lit, quelles que soient la recherche et les
+    /// pages affichées.
+    private(set) var learnersToComplete: Set<UUID>?
     private(set) var learner: SchoolLearner?
     private(set) var trainings: [SchoolTraining] = []
     private(set) var selectedLearnerID: UUID?
@@ -178,7 +182,10 @@ final class SchoolWorkspace {
             guard result.id == selected.schoolId else { throw SchoolAPIError.invalidResponse }
             school = result
             isLoadingSchool = false
-            if result.status == "ACTIVE" { await searchLearners("") }
+            if result.status == "ACTIVE" {
+                await searchLearners("")
+                await refreshLearnersToComplete()
+            }
             if resumesLearner, scope == schoolScope, selectedLearnerID != nil, !isLoadingLearner {
                 await loadSelectedLearner()
             }
@@ -239,6 +246,7 @@ final class SchoolWorkspace {
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             var fresh: [SchoolLearner] = []
             Self.merge(page.items, into: &fresh)
+            noteProfiles(page.items)
             if learnerCursors.isEmpty {
                 // Une seule page affichée : elle est remplacée par sa relecture.
                 learners = fresh
@@ -252,6 +260,32 @@ final class SchoolWorkspace {
             guard scope == schoolScope, request == searchRequest else { return }
             if !invalidateAccess(for: error) { learnersReadAt = previousReadAt }
         }
+    }
+
+    /// Relit les dossiers à compléter de toute l’école (administration seulement). Une panne garde ce qui a été lu :
+    /// elle n’allume ni n’éteint aucun point ; un refus d’accès ferme la portée comme ailleurs.
+    func refreshLearnersToComplete() async {
+        guard let schoolID = membership?.schoolId, membership?.roles.contains("ADMIN") == true, school?.status == "ACTIVE" else { return }
+        let scope = schoolScope
+        do {
+            guard let items = try await api.learnersToComplete(schoolID: schoolID), scope == schoolScope else { return }
+            guard items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
+            let read = Set(items.filter(SchoolRequiredActionRules.profileIsIncomplete).map(\.id))
+            if read != learnersToComplete { learnersToComplete = read }
+        } catch {
+            guard scope == schoolScope else { return }
+            invalidateAccess(for: error)
+        }
+    }
+
+    /// Un élève relu ici (dossier, liste) corrige aussitôt l’ensemble des dossiers à compléter : une correction
+    /// enregistrée éteint son point sans attendre la prochaine lecture de l’école.
+    private func noteProfiles(_ items: [SchoolLearner]) {
+        guard var pending = learnersToComplete else { return }
+        for item in items {
+            if SchoolRequiredActionRules.profileIsIncomplete(item) { pending.insert(item.id) } else { pending.remove(item.id) }
+        }
+        if pending != learnersToComplete { learnersToComplete = pending }
     }
 
     func loadMoreLearners() async {
@@ -270,6 +304,7 @@ final class SchoolWorkspace {
                   page.nextCursor.map({ !learnerCursors.contains($0) }) ?? true else { throw SchoolAPIError.invalidCursor }
             learnerCursors.insert(cursor)
             Self.merge(page.items, into: &learners)
+            noteProfiles(page.items)
             nextLearnersCursor = page.nextCursor
             isLoadingMoreLearners = false
         } catch {
@@ -312,6 +347,7 @@ final class SchoolWorkspace {
             // La liste Élèves porte le même élève : sa ligne suit le dossier relu (nom, coordonnées) sans attendre sa
             // propre relecture. Ni l’ordre ni la pagination ne changent, et un élève absent de la liste n’y est pas ajouté.
             if let row = learners.firstIndex(where: { $0.id == result.id }) { learners[row] = result }
+            noteProfiles([result])
             isLoadingLearner = false
             await loadTrainings()
         } catch {
@@ -417,6 +453,7 @@ final class SchoolWorkspace {
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             learners = []
             Self.merge(page.items, into: &learners)
+            noteProfiles(page.items)
             nextLearnersCursor = page.nextCursor
             isSearching = false
             learnersReadAt = Date()
@@ -434,6 +471,7 @@ final class SchoolWorkspace {
         schoolError = nil
         isLoadingSchool = false
         learnersReadAt = nil
+        learnersToComplete = nil
         beginSearch("")
     }
 

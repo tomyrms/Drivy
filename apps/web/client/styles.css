@@ -1042,3 +1042,10 @@ select, textarea { font: inherit; color: inherit; }
   .theme-switch input:checked { background: Highlight; }
   .theme-switch input:checked::before { background: HighlightText; }
 }
+
+/* Profil à compléter : le point d’action de l’app, un titre et le nombre d’informations, puis les seuls champs manquants. */
+.profile-completion { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--border, rgba(127,127,127,.25)); border-radius: 12px; background: var(--surface-raised, transparent); }
+.profile-completion-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.profile-completion-heading .row-title { display: inline-flex; align-items: center; gap: .5rem; margin: 0; }
+.profile-completion fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.action-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--accent); flex: none; }
