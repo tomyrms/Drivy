@@ -259,7 +259,7 @@ struct SchoolOnboardingView: View {
                                         training.startedOn.map { "Depuis le \(SchoolPresentation.civilDate($0))" }].compactMap { $0 }
                             DrivyEntityRow(title: names[training.id] ?? "Permis \(training.categoryCode)",
                                 meta: meta.isEmpty ? nil : meta.joined(separator: " · "),
-                                leading: .symbol("car"))
+                                leading: .license(training.categoryCode))
                         }
                     }
                     if let email = model.school?.contactEmail, !email.isEmpty {

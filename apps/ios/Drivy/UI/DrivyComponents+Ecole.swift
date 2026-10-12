@@ -84,6 +84,8 @@ private struct DrivySchoolButtonLabel: View {
 enum DrivyRowLeading {
     case avatar(String)
     case symbol(String)
+    /// Catégorie de permis (`categoryCode`) : son véhicule dans la même pastille qu’un symbole.
+    case license(String)
     case none
 }
 
@@ -145,6 +147,8 @@ struct DrivyEntityRow: View {
                 .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                 .background(isSelected ? DrivyTheme.surfaceRaised : DrivyTheme.surfaceMuted, in: Circle())
                 .accessibilityHidden(true)
+        case .license(let code):
+            DrivyLicenseTile(code: code, isSelected: isSelected)
         case .none:
             EmptyView()
         }

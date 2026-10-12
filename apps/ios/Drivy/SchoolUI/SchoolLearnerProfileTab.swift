@@ -205,7 +205,7 @@ struct SchoolLearnerProfileTab: View {
                 let model = models.first { $0.trainingID == training.id }
                 NavigationLink(value: SchoolLearnerProfileRoute.permit(training.id)) {
                     SchoolLearnerPermitRow(title: names[training.id] ?? "Permis \(training.categoryCode)",
-                        summary: Self.summary(training: training, model: model))
+                        code: training.categoryCode, summary: Self.summary(training: training, model: model))
                 }
                 .accessibilityIdentifier("profile-permit-\(training.id.uuidString)")
             }
@@ -367,24 +367,30 @@ struct SchoolLearnerPermitRow: View {
     enum Summary: Equatable { case loading, ready(String) }
 
     let title: String
+    var code: String? = nil
     let summary: Summary
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(DrivyTheme.text)
-            switch summary {
-            case .loading:
-                Text("0 leçon terminée · 0 h 00")
-                    .font(.subheadline)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .redacted(reason: .placeholder)
-            case .ready(let text):
-                Text(text)
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(DrivyTheme.muted)
-                    .transition(.opacity)
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
+            // Le véhicule du permis, comme la pastille d’une DrivyEntityRow ; en très grand texte, le nom suffit.
+            if let code, !typeSize.isAccessibilitySize { DrivyLicenseTile(code: code) }
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(DrivyTheme.text)
+                switch summary {
+                case .loading:
+                    Text("0 leçon terminée · 0 h 00")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .redacted(reason: .placeholder)
+                case .ready(let text):
+                    Text(text)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(DrivyTheme.muted)
+                        .transition(.opacity)
+                }
             }
         }
         .multilineTextAlignment(.leading)
