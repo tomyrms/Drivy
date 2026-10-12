@@ -83,7 +83,7 @@ import XCTest
                     case "learner-profile", "learner-profile-multi": "learner-profile-list"
                     case "lessons-history": "lessons-history"
                     case "onboarding-staff": "onboarding-start"
-                    case "home-tabs": "today-day-list"
+                    case "home-tabs": "today-focus-lesson"
                     case "home-to-finish": "today-continue-lesson"
                     case "live", "live-waiting": "capture-signal-observation"
                     case "replay": "replay-play"

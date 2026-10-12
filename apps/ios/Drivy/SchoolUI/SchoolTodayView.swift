@@ -259,10 +259,7 @@ struct SchoolTodayView: View {
                     .accessibilityIdentifier(lesson.hasStarted ? "today-continue-lesson" : "today-start")
                     if !lesson.hasStarted { startNowButton(prominent: false) }
                 }
-                if active != nil, let next {
-                    Divider().overlay(DrivyTheme.border)
-                    upcomingLesson(next, now: now)
-                }
+                following(now: now, featured: lesson, next: active == nil ? nil : next)
             } else if loadedKey != dayKey(now) && error == nil {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     DrivySkeletonBlock(width: 180, height: 32)
@@ -276,7 +273,6 @@ struct SchoolTodayView: View {
                 if instructs { startNowButton(prominent: true) }
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
-            dayList(now: now, excluding: Set([featured?.id, active == nil ? nil : next?.id].compactMap { $0 }))
             unfinishedList(now: now)
         }
     }
@@ -312,31 +308,58 @@ struct SchoolTodayView: View {
         .accessibilityHint("Ouvre la leçon")
     }
 
-    /// La prochaine leçon reste visible sous une leçon passée à terminer.
-    private func upcomingLesson(_ lesson: SchoolLesson, now: Date) -> some View {
-        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(SchoolTodayPresentation.moment(for: lesson, now: now))
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson), details: [lesson.meetingPoint])
-            }
+    /// Après la leçon en tête : la suivante en une ligne, le reste de la journée en une pastille « +2 ».
+    /// La liste complète se lit dans l’agenda ; le panneau laisse la carte respirer.
+    @ViewBuilder private func following(now: Date, featured: SchoolLesson, next: SchoolLesson?) -> some View {
+        let rest = SchoolTodayPresentation.upcomingLessons(lessons, now: now,
+            excluding: Set([featured.id, next?.id].compactMap { $0 }))
+        let upcoming = next ?? rest.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
+        if let upcoming {
+            Divider().overlay(DrivyTheme.border)
+            nextLine(upcoming, extra: rest.filter { $0.id != upcoming.id }.count, now: now)
         }
-        .buttonStyle(DrivyRowButtonStyle())
-        .accessibilityIdentifier("today-next-lesson")
-        .accessibilityHint("Ouvre la prochaine leçon")
     }
 
-    /// Le reste de la journée tient en un compte : « +2 ». Les leçons elles-mêmes se lisent dans l’agenda.
-    @ViewBuilder private func dayList(now: Date, excluding: Set<UUID>) -> some View {
-        let others = SchoolTodayPresentation.upcomingLessons(lessons, now: now, excluding: excluding)
-        if !others.isEmpty {
-            Text("+\(others.count)")
-                .font(.subheadline.weight(.semibold)).monospacedDigit()
-                .foregroundStyle(DrivyTheme.muted)
+    /// Même colonne d’heure que la leçon du dessus : les noms s’alignent. Sans heure de fin ni lieu, que la fiche donne.
+    private func nextLine(_ lesson: SchoolLesson, extra: Int, now: Date) -> some View {
+        let moment = SchoolTodayPresentation.moment(for: lesson, now: now)
+        return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+            HStack(alignment: .center, spacing: DrivySpacing.m) {
+                Text(startTime(lesson))
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(DrivyTheme.text)
+                    .frame(minWidth: 52, alignment: .leading)
+                    .fixedSize()
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text(name(lesson))
+                        .font(.headline)
+                        .foregroundStyle(DrivyTheme.text)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    Text(moment)
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel(others.count == 1 ? "Une autre leçon aujourd’hui" : "\(others.count) autres leçons aujourd’hui")
-                .accessibilityIdentifier("today-day-list")
+                if extra > 0 {
+                    Text("+\(extra)")
+                        .font(.footnote.weight(.semibold)).monospacedDigit()
+                        .foregroundStyle(DrivyTheme.muted)
+                        .padding(.horizontal, DrivySpacing.xs)
+                        .frame(minWidth: 32, minHeight: 24)
+                        .background(DrivyTheme.surfaceMuted, in: Capsule())
+                }
+                DrivyRowChevron()
+            }
+            .padding(.vertical, DrivySpacing.s)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Ensuite, \(startTime(lesson)), \(name(lesson)), \(moment)"
+                + (extra == 0 ? "" : extra == 1 ? ", et une autre leçon aujourd’hui" : ", et \(extra) autres leçons aujourd’hui"))
         }
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityHint("Ouvre la prochaine leçon")
+        .accessibilityIdentifier("today-next-lesson")
     }
 
     /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.
