@@ -26,6 +26,7 @@ import { registerLessonOutcomes } from './lesson-outcomes.js';
 import { registerSharing } from './sharing.js';
 import { registerAdministration } from './administration.js';
 import { registerObservationThemes } from './observation-themes.js';
+import { registerObservationRanking } from './observation-ranking.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -195,5 +196,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerSharing(app,options);
   registerAdministration(app,options);
   registerObservationThemes(app,options);
+  registerObservationRanking(app,options);
   return app;
 }

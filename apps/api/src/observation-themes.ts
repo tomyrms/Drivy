@@ -59,6 +59,11 @@ export function arrangeObservationThemes(row:Pick<SettingsRow,'theme_order'|'hid
  if(!stored.some(theme=>theme.visible))return projected;
  return stored;
 }
+/** Clés des thèmes que l'école affiche, dans son ordre : l'ordre manuel de « Signaler ». */
+export async function visibleObservationThemes(db:PoolClient,schoolId:string):Promise<ObservationThemeKey[]>{
+ const row=(await db.query<SettingsRow>('SELECT version,theme_order,hidden_themes FROM drivy.observation_theme_settings WHERE school_id=$1',[schoolId])).rows[0];
+ return arrangeObservationThemes(row).filter(theme=>theme.visible).map(theme=>theme.key);
+}
 async function canManage(db:PoolClient,schoolId:string):Promise<boolean>{
  return (await db.query<{ok:boolean}>('SELECT drivy.can_manage_observation_themes($1) AS ok',[schoolId])).rows[0]?.ok===true;
 }
