@@ -1,0 +1,58 @@
+{
+ "indicators": {
+  "retenue": "A",
+  "notes": {
+   "A": {"reconnaissance": 5, "qualite": 4, "identite": 3, "petite_taille": 4, "integration": 5, "total": 4.3},
+   "B": {"reconnaissance": 4, "qualite": 3, "identite": 3, "petite_taille": 3, "integration": 4, "total": 3.45},
+   "C": {"reconnaissance": 5, "qualite": 4, "identite": 3, "petite_taille": 4, "integration": 2, "total": 3.85}
+  },
+  "defauts": {
+   "A": ["à 16 px, deux losanges : fûts trop courts", "bande basse, plus petite à l'œil que ses voisines (corrigé en finition)"],
+   "B": ["éclats posés sur le fût, lus « clic » ou couronne", "la flèche qui percute ses éclats se lit encore « impact »"],
+   "C": ["lunette et deux feux évidés font un visage", "seconde voiture de la grille, à côté de « Maîtrise du véhicule »"]
+  },
+  "pourquoi": "A — les deux flèches dos à dos sont le témoin de clignotant que tout conducteur a sous les yeux ; aucune autre icône de la grille n'a cette silhouette. Le feu arrière (C) est aussi immédiat mais c'est une seconde voiture à côté de « Maîtrise du véhicule », et une troisième si la distance de sécurité garde la sienne. La flèche qui clignote (B) reste ambiguë : ses éclats se lisent « impact »."
+ },
+ "following-distance": {
+  "retenue": "C",
+  "notes": {
+   "A": {"reconnaissance": 3, "qualite": 3, "identite": 4, "petite_taille": 2, "integration": 3, "total": 2.95},
+   "B": {"reconnaissance": 4, "qualite": 3, "identite": 3, "petite_taille": 2, "integration": 3, "total": 3.1},
+   "C": {"reconnaissance": 4, "qualite": 4, "identite": 3, "petite_taille": 4, "integration": 4, "total": 3.85}
+  },
+  "defauts": {
+   "A": ["voitures coupées et cote dans l'axe : un sablier", "voitures courtes lues « boutons » ; trois pièces éparses à 16 px"],
+   "B": ["deux voitures et la cote dessous : deux yeux et une bouche", "bande de 16 de haut, illisible à 16 px"],
+   "C": ["voiture posée sur un socle", "les feux évidés gardent un air de visage, assumé : c'est ce qui dit « arrière »"]
+  },
+  "pourquoi": "C — l'arrière du véhicule qui précède et deux barres d'écart : la seule des trois qui garde une silhouette à 16 px, et le dessin du réglage de distance des régulateurs. Les deux profils (B) disent mieux « deux voitures » en grand mais s'effacent en petit ; le plan (A) s'éparpille en trois pièces et se rapproche de « Placement sur la chaussée »."
+ },
+ "braking": {
+  "retenue": "A",
+  "notes": {
+   "A": {"reconnaissance": 4, "qualite": 5, "identite": 4, "petite_taille": 5, "integration": 3, "total": 4.25},
+   "B": {"reconnaissance": 3, "qualite": 3, "identite": 3, "petite_taille": 3, "integration": 4, "total": 3.15},
+   "C": {"reconnaissance": 3, "qualite": 4, "identite": 3, "petite_taille": 3, "integration": 3, "total": 3.2}
+  },
+  "defauts": {
+   "A": ["tambour maigre entre deux ondes, lu « vibreur »", "anneau entre deux arcs : parent de l'œil et du giratoire"],
+   "B": ["une raclette", "avec l'accélérateur, un pédalier plus qu'un freinage ; lu « rouleau »"],
+   "C": ["part de camembert", "anneau, moyeu et bloc : une cible à 16 px"]
+  },
+  "pourquoi": "A — le témoin de frein du tableau de bord, sans son point d'exclamation qui appartient déjà à « Attention » : un tambour entre deux mâchoires, net jusqu'à 16 px. Il est parent de l'œil et du giratoire (un anneau entouré d'arcs), d'où sa note d'intégration ; ses mâchoires sont à gauche et à droite, sa forme est ronde, et il reste distinct des deux côte à côte. La pédale (B) et le disque (C) demandent d'être devinés."
+ },
+ "lane-change": {
+  "retenue": "A",
+  "notes": {
+   "A": {"reconnaissance": 5, "qualite": 4, "identite": 4, "petite_taille": 3, "integration": 4, "total": 4.1},
+   "B": {"reconnaissance": 4, "qualite": 4, "identite": 4, "petite_taille": 3, "integration": 2, "total": 3.5},
+   "C": {"reconnaissance": 4, "qualite": 4, "identite": 4, "petite_taille": 4, "integration": 4, "total": 4.0}
+  },
+  "defauts": {
+   "A": ["S mou et tirets en miettes", "les deux tirets restent de petites pièces à 16 px"],
+   "B": ["colonne étroite, trop proche de « Placement »", "une voiture sur une ligne pointillée : toujours la sœur de « Placement »"],
+   "C": ["la lettre « h »", "dit « se rabattre » plus que « changer de voie » ; le « h » revient à 16 px"]
+  },
+  "pourquoi": "A — la flèche quitte sa voie et passe entre deux tirets : c'est le changement de voie lui-même, là où le rabattement (C) n'en dit qu'un cas et garde un air de « h » en petit. L'écart est faible (4,10 contre 4,00) : C tient mieux à 16 px, A dit mieux le thème. La voiture à cheval (B) est la sœur de « Placement sur la chaussée »."
+ }
+}

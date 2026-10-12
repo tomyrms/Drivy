@@ -1,0 +1,214 @@
+{
+ "indicators": {
+  "title": "Clignotants",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Instrument",
+    "name": "Paire de témoins",
+    "idea": "Les deux flèches du témoin de clignotant, dos à dos, en aplat.",
+    "tours": 2,
+    "ink": 0.152,
+    "bbox": [
+     3.8,
+     20.3,
+     60.2,
+     43.7
+    ],
+    "w": 56.3,
+    "h": 23.3
+   },
+   {
+    "direction": "B",
+    "famille": "Instrument",
+    "name": "Témoin qui clignote",
+    "idea": "Une seule flèche de témoin et ses trois éclats : elle clignote.",
+    "tours": 2,
+    "ink": 0.157,
+    "bbox": [
+     6.0,
+     9.7,
+     58.5,
+     54.3
+    ],
+    "w": 52.5,
+    "h": 44.6
+   },
+   {
+    "direction": "C",
+    "famille": "Silhouette",
+    "name": "Feu arrière",
+    "idea": "L'arrière d'une voiture dont un feu clignote.",
+    "tours": 2,
+    "ink": 0.238,
+    "bbox": [
+     6.0,
+     15.0,
+     60.7,
+     44.5
+    ],
+    "w": 54.7,
+    "h": 29.5
+   }
+  ]
+ },
+ "following-distance": {
+  "title": "Distance de sécurité",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Plan",
+    "name": "L'écart dans l'axe",
+    "idea": "Le véhicule qui précède, le nôtre, et la cote de l'écart entre les deux.",
+    "tours": 2,
+    "ink": 0.161,
+    "bbox": [
+     11.5,
+     5.0,
+     51.6,
+     59.0
+    ],
+    "w": 40.1,
+    "h": 54.0
+   },
+   {
+    "direction": "B",
+    "famille": "Panneau",
+    "name": "Deux profils",
+    "idea": "Deux voitures de profil qui se suivent, l'écart coté dessous.",
+    "tours": 2,
+    "ink": 0.118,
+    "bbox": [
+     4.0,
+     24.9,
+     60.0,
+     40.9
+    ],
+    "w": 56.0,
+    "h": 16.0
+   },
+   {
+    "direction": "C",
+    "famille": "Instrument",
+    "name": "Barres d'écart",
+    "idea": "L'arrière du véhicule qui précède et les barres d'écart du régulateur.",
+    "tours": 2,
+    "ink": 0.215,
+    "bbox": [
+     9.0,
+     5.0,
+     55.0,
+     56.5
+    ],
+    "w": 46.0,
+    "h": 51.5
+   }
+  ]
+ },
+ "braking": {
+  "title": "Freinage",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Instrument",
+    "name": "Témoin de frein",
+    "idea": "Le témoin de frein du tableau de bord : un tambour entre ses deux mâchoires.",
+    "tours": 2,
+    "ink": 0.264,
+    "bbox": [
+     4.0,
+     9.8,
+     60.0,
+     54.2
+    ],
+    "w": 56.0,
+    "h": 44.3
+   },
+   {
+    "direction": "B",
+    "famille": "Instrument",
+    "name": "Pédale",
+    "idea": "La pédale de frein, large et striée, au bout de son bras.",
+    "tours": 2,
+    "ink": 0.26,
+    "bbox": [
+     6.0,
+     5.8,
+     58.0,
+     56.0
+    ],
+    "w": 52.0,
+    "h": 50.2
+   },
+   {
+    "direction": "C",
+    "famille": "Silhouette",
+    "name": "Disque et étrier",
+    "idea": "Un disque de frein pincé par son étrier.",
+    "tours": 2,
+    "ink": 0.267,
+    "bbox": [
+     7.0,
+     7.9,
+     58.3,
+     57.0
+    ],
+    "w": 51.3,
+    "h": 49.1
+   }
+  ]
+ },
+ "lane-change": {
+  "title": "Changement de voie",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Manœuvre",
+    "name": "Par-dessus la ligne",
+    "idea": "La flèche quitte une voie pour l'autre en passant entre deux tirets.",
+    "tours": 2,
+    "ink": 0.154,
+    "bbox": [
+     13.0,
+     3.0,
+     55.3,
+     61.0
+    ],
+    "w": 42.3,
+    "h": 58.0
+   },
+   {
+    "direction": "B",
+    "famille": "Plan",
+    "name": "À cheval",
+    "idea": "La voiture vue du dessus, en biais sur la ligne pointillée.",
+    "tours": 2,
+    "ink": 0.155,
+    "bbox": [
+     16.5,
+     5.0,
+     47.5,
+     59.0
+    ],
+    "w": 31.1,
+    "h": 54.0
+   },
+   {
+    "direction": "C",
+    "famille": "Manœuvre",
+    "name": "Rabattement",
+    "idea": "Une voie rejoint l'autre : se rabattre.",
+    "tours": 2,
+    "ink": 0.134,
+    "bbox": [
+     14.7,
+     7.8,
+     50.0,
+     61.0
+    ],
+    "w": 35.3,
+    "h": 53.2
+   }
+  ]
+ }
+}
