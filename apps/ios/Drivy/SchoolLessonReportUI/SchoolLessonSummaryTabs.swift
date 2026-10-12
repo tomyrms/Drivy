@@ -17,6 +17,11 @@ enum SchoolLessonSummaryTab: String, CaseIterable, Identifiable, Hashable {
     var spokenTitle: String { self == .route ? "Trajet et observations" : title }
 }
 
+extension EnvironmentValues {
+    /// Onglet ouvert d’emblée (rendus de contrôle) ; `nil` : Bilan.
+    @Entry var lessonSummaryInitialTab: SchoolLessonSummaryTab? = nil
+}
+
 /// Une observation se range selon son appréciation : ce qui va bien, ce qui demande de l’attention, le reste
 /// (repère posé en route, note sans appréciation).
 enum SchoolLessonObservationGroup: Int, CaseIterable, Identifiable, Comparable {
@@ -106,6 +111,8 @@ struct SchoolLessonSummaryTabs: View {
     @State private var headerHeight: CGFloat = 0
     @State private var barHeight: CGFloat = 0
     @State private var mapIsVisible = true
+    @State private var appliedInitialTab = false
+    @Environment(\.lessonSummaryInitialTab) private var initialTab
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -159,6 +166,11 @@ struct SchoolLessonSummaryTabs: View {
         }
         .background(DrivyTheme.surface)
         .accessibilityIdentifier("lesson-summary")
+        .onAppear {
+            guard !appliedInitialTab else { return }
+            appliedInitialTab = true
+            if let initialTab { tab = initialTab }
+        }
     }
 
     // MARK: Sélecteur
