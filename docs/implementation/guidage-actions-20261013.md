@@ -71,3 +71,7 @@ Chaque champ qui manquait garde le point d’action devant son libellé (ou l’
 ## Déploiement
 
 API avant l’app. Sans l’API, l’app nouvelle lit encore l’ancien état stocké : les faux « Profil à compléter » restent, mais le dossier ne les confirme pas. Aucune migration.
+
+## Captures
+
+Simulateur iPhone, données fictives (`dossier-incomplete`, [run 38322661217](https://github.com/tomyrms/Drivy/actions/runs/38322661217)) : [clair](assets/guidage-actions-20261013/dossier-incomplet-clair.jpg) · [sombre](assets/guidage-actions-20261013/dossier-incomplet-sombre.jpg).
