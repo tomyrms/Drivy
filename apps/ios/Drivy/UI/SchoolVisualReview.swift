@@ -488,14 +488,16 @@ struct SchoolVisualShell: View {
             "updatedAt": time, "enteredByMembershipId": membershipID.uuidString, "entrySource": "STAFF_ASSISTED",
             "policyVersionId": profilePolicyID.uuidString]
         objects["\(root)/learners/\(learnerID.uuidString)/action-readiness"] = ["learnerId": learnerID.uuidString,
-            // Une seule réponse pour les deux lectures du dossier : l’entrée reste permise, les champs requis avant
-            // une leçon sont nommés (ce que la readiness PLAN_LESSON en retient).
-            "action": "ENTER", "resourceId": null, "ready": true,
-            "blockers": (Self.incompleteProfile ? Self.incompleteFields : []).map { field -> [String: Any] in
-                ["code": "PROFILE_ACTION_REQUIRED", "message": "Complétez ce champ pour l’étape concernée.", "field": field.rawValue,
-                 "purpose": "Champ fictif du contrôle de rendu.", "resourceId": null, "destinationKey": "PROFILE"]
-            },
+            "action": "ENTER", "resourceId": null, "ready": true, "blockers": [] as [Any],
             "policyVersionId": profilePolicyID.uuidString, "computedAt": time]
+        // Ce qui manque pour planifier, lu par le dossier : rien, sauf pour « dossier-incomplete ».
+        let planningBlockers: [[String: Any]] = (Self.incompleteProfile ? Self.incompleteFields : []).map { field in
+            ["code": "PROFILE_ACTION_REQUIRED", "message": "Complétez ce champ pour l’étape concernée.", "field": field.rawValue,
+             "purpose": "Champ fictif du contrôle de rendu.", "resourceId": null, "destinationKey": "PROFILE"]
+        }
+        objects["\(root)/learners/\(learnerID.uuidString)/action-readiness" + SchoolVisualTransport.actionSuffix("PLAN_LESSON")] = [
+            "learnerId": learnerID.uuidString, "action": "PLAN_LESSON", "resourceId": null, "ready": planningBlockers.isEmpty,
+            "blockers": planningBlockers, "policyVersionId": profilePolicyID.uuidString, "computedAt": time]
         objects["\(root)/data-policy"] = ["id": identifier(203).uuidString, "schoolId": schoolID.uuidString,
             "version": 1, "status": "APPROVED", "noticeVersionId": profileNoticeID.uuidString,
             "noticeText": "Notice fictive du contrôle de rendu du dossier.",
@@ -575,13 +577,18 @@ struct SchoolVisualShell: View {
 struct SchoolVisualTransport: SchoolHTTPTransport {
     /// Agenda reads (`from`/`to` window) get day-relative lessons; dossier reads keep the fixed history.
     static let agendaSuffix = "?agenda-window"
+    /// Une readiness par action (`ENTER` à l’entrée du profil, `PLAN_LESSON` pour le dossier) ; sans réponse propre,
+    /// celle du chemin seul.
+    static func actionSuffix(_ action: String) -> String { "?action=" + action }
     let responses: [String: Data]
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid", (request.httpMethod ?? "GET") == "GET"
         else { throw SchoolAPIError.invalidResponse }
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let window = url.lastPathComponent == "lessons" && query.contains { $0.name == "from" || $0.name == "to" }
-        guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil) ?? responses[url.path]
+        let action = url.lastPathComponent == "action-readiness" ? query.first(where: { $0.name == "action" })?.value : nil
+        guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil)
+                ?? action.flatMap({ responses[url.path + Self.actionSuffix($0)] }) ?? responses[url.path]
         else { throw SchoolAPIError.invalidResponse }
         if window { bytes = try filteredAgenda(bytes, query: query) }
         else if url.lastPathComponent == "lessons", let trainingID = query.first(where: { $0.name == "trainingId" })?.value {
