@@ -435,6 +435,7 @@ private struct SchoolTrainingContent: View {
     private func permitName(_ model: SchoolTrainingWorkspace, in names: [UUID: String]) -> String {
         names[model.trainingID] ?? "Permis"
     }
+    private func permitCode(_ model: SchoolTrainingWorkspace) -> String { training(of: model)?.categoryCode ?? "" }
 
     /// Le permis montré seul. Avec « Tous », aucun n’est à nommer en tête.
     private var shownTraining: SchoolTraining? { selected.flatMap { training(of: $0) } }
@@ -496,13 +497,18 @@ private struct SchoolTrainingContent: View {
             Picker("Permis", selection: Binding(get: { chosen?.trainingID }, set: { permit = $0 })) {
                 if !forProgress { Text("Tous les permis").tag(UUID?.none) }
                 ForEach(models, id: \.trainingID) { model in
-                    Text(permitName(model, in: names)).tag(UUID?.some(model.trainingID))
+                    DrivingLicenseLabel(title: permitName(model, in: names), code: permitCode(model))
+                        .tag(UUID?.some(model.trainingID))
                 }
             }
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
             HStack(spacing: DrivySpacing.xs) {
+                // Le permis choisi montre son véhicule ; « Tous les permis » n’en désigne aucun.
+                if let chosen {
+                    DrivingLicenseIcon(code: permitCode(chosen), size: 22, relativeTo: .subheadline, emphasis: .selected)
+                }
                 Text(current).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.bold))
             }
@@ -865,7 +871,10 @@ private struct SchoolTrainingContent: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.s))
         return layout {
-            DrivySectionHeader(title: name)
+            HStack(alignment: .center, spacing: DrivySpacing.s) {
+                DrivingLicenseIcon(code: permitCode(model), size: 26, relativeTo: .title3)
+                DrivySectionHeader(title: name)
+            }
             if let training = training(of: model), training.status != "ACTIVE" {
                 Text(SchoolPresentation.trainingStatus(training.status))
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)

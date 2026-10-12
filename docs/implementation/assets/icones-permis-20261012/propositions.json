@@ -1,0 +1,786 @@
+{
+ "a": {
+  "code": "A",
+  "title": "Motocycles",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.199,
+    "bbox": [
+     4.0,
+     15.7,
+     60.0,
+     48.8
+    ],
+    "w": 56.0,
+    "h": 33.1
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.205,
+    "bbox": [
+     4.0,
+     15.7,
+     60.0,
+     48.8
+    ],
+    "w": 56.0,
+    "h": 33.1
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.226,
+    "bbox": [
+     4.0,
+     15.8,
+     60.0,
+     48.8
+    ],
+    "w": 56.0,
+    "h": 33.0
+   }
+  ]
+ },
+ "a1": {
+  "code": "A1",
+  "title": "Motocycles légers (≤ 125 cm³, 11 kW)",
+  "scale_ref": "a",
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.152,
+    "bbox": [
+     7.5,
+     16.1,
+     56.5,
+     45.6
+    ],
+    "w": 49.0,
+    "h": 29.5
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.153,
+    "bbox": [
+     7.5,
+     15.9,
+     56.5,
+     45.6
+    ],
+    "w": 49.0,
+    "h": 29.7
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.165,
+    "bbox": [
+     7.5,
+     16.2,
+     56.5,
+     45.6
+    ],
+    "w": 49.0,
+    "h": 29.4
+   }
+  ]
+ },
+ "b": {
+  "code": "B",
+  "title": "Voitures automobiles (≤ 3 500 kg, 8 places)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.186,
+    "bbox": [
+     4.0,
+     15.3,
+     60.0,
+     48.7
+    ],
+    "w": 56.0,
+    "h": 33.4
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.236,
+    "bbox": [
+     4.0,
+     15.3,
+     60.0,
+     48.7
+    ],
+    "w": 56.0,
+    "h": 33.4
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.241,
+    "bbox": [
+     4.0,
+     15.3,
+     60.0,
+     48.7
+    ],
+    "w": 56.0,
+    "h": 33.4
+   }
+  ]
+ },
+ "b1": {
+  "code": "B1",
+  "title": "Quadricycles et tricycles à moteur (≤ 550 kg à vide)",
+  "scale_ref": "b",
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.155,
+    "bbox": [
+     11.5,
+     14.2,
+     52.5,
+     49.8
+    ],
+    "w": 40.9,
+    "h": 35.5
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.194,
+    "bbox": [
+     11.5,
+     14.2,
+     52.5,
+     49.8
+    ],
+    "w": 40.9,
+    "h": 35.5
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.199,
+    "bbox": [
+     11.5,
+     14.2,
+     52.5,
+     49.8
+    ],
+    "w": 40.9,
+    "h": 35.5
+   }
+  ]
+ },
+ "be": {
+  "code": "BE",
+  "title": "Voiture et remorque",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.115,
+    "bbox": [
+     4.0,
+     21.1,
+     60.0,
+     42.9
+    ],
+    "w": 56.0,
+    "h": 21.7
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.126,
+    "bbox": [
+     4.0,
+     21.1,
+     60.0,
+     42.9
+    ],
+    "w": 56.0,
+    "h": 21.7
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.124,
+    "bbox": [
+     4.0,
+     21.1,
+     60.0,
+     42.9
+    ],
+    "w": 56.0,
+    "h": 21.7
+   }
+  ]
+ },
+ "c": {
+  "code": "C",
+  "title": "Camions (> 3 500 kg)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.251,
+    "bbox": [
+     4.0,
+     11.0,
+     60.0,
+     53.0
+    ],
+    "w": 56.0,
+    "h": 42.0
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.408,
+    "bbox": [
+     4.0,
+     11.0,
+     60.0,
+     53.0
+    ],
+    "w": 56.0,
+    "h": 42.0
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.411,
+    "bbox": [
+     4.0,
+     11.0,
+     60.0,
+     53.0
+    ],
+    "w": 56.0,
+    "h": 42.0
+   }
+  ]
+ },
+ "c1": {
+  "code": "C1",
+  "title": "Camions légers (3 500 à 7 500 kg)",
+  "scale_ref": "c",
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.187,
+    "bbox": [
+     7.8,
+     14.8,
+     56.2,
+     49.2
+    ],
+    "w": 48.5,
+    "h": 34.5
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.266,
+    "bbox": [
+     7.8,
+     14.8,
+     56.2,
+     49.2
+    ],
+    "w": 48.5,
+    "h": 34.5
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.265,
+    "bbox": [
+     7.8,
+     14.8,
+     56.2,
+     49.2
+    ],
+    "w": 48.5,
+    "h": 34.5
+   }
+  ]
+ },
+ "ce": {
+  "code": "CE",
+  "title": "Camion et remorque (> 750 kg)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.171,
+    "bbox": [
+     4.0,
+     19.4,
+     60.0,
+     44.6
+    ],
+    "w": 56.0,
+    "h": 25.1
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.215,
+    "bbox": [
+     4.0,
+     19.4,
+     60.0,
+     44.6
+    ],
+    "w": 56.0,
+    "h": 25.1
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.213,
+    "bbox": [
+     4.0,
+     19.4,
+     60.0,
+     44.6
+    ],
+    "w": 56.0,
+    "h": 25.1
+   }
+  ]
+ },
+ "c1e": {
+  "code": "C1E",
+  "title": "Camion léger et remorque (≤ 12 000 kg)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.164,
+    "bbox": [
+     4.0,
+     20.1,
+     60.0,
+     43.9
+    ],
+    "w": 56.0,
+    "h": 23.9
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.193,
+    "bbox": [
+     4.0,
+     20.1,
+     60.0,
+     43.9
+    ],
+    "w": 56.0,
+    "h": 23.9
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.184,
+    "bbox": [
+     4.0,
+     20.1,
+     60.0,
+     43.9
+    ],
+    "w": 56.0,
+    "h": 23.9
+   }
+  ]
+ },
+ "d": {
+  "code": "D",
+  "title": "Autocars (plus de 8 places)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.266,
+    "bbox": [
+     4.0,
+     12.1,
+     60.0,
+     51.9
+    ],
+    "w": 56.0,
+    "h": 39.8
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.353,
+    "bbox": [
+     4.0,
+     12.1,
+     60.0,
+     51.9
+    ],
+    "w": 56.0,
+    "h": 39.8
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.359,
+    "bbox": [
+     4.0,
+     12.1,
+     60.0,
+     51.9
+    ],
+    "w": 56.0,
+    "h": 39.8
+   }
+  ]
+ },
+ "d1": {
+  "code": "D1",
+  "title": "Minibus (9 à 16 places)",
+  "scale_ref": "d",
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.197,
+    "bbox": [
+     6.2,
+     13.7,
+     57.8,
+     50.3
+    ],
+    "w": 51.7,
+    "h": 36.6
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.284,
+    "bbox": [
+     6.2,
+     13.7,
+     57.8,
+     50.3
+    ],
+    "w": 51.7,
+    "h": 36.6
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.288,
+    "bbox": [
+     6.2,
+     13.7,
+     57.8,
+     50.3
+    ],
+    "w": 51.7,
+    "h": 36.6
+   }
+  ]
+ },
+ "de": {
+  "code": "DE",
+  "title": "Autocar et remorque (> 750 kg)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.156,
+    "bbox": [
+     4.0,
+     18.9,
+     60.0,
+     45.1
+    ],
+    "w": 56.0,
+    "h": 26.2
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.188,
+    "bbox": [
+     4.0,
+     18.9,
+     60.0,
+     45.1
+    ],
+    "w": 56.0,
+    "h": 26.2
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.187,
+    "bbox": [
+     4.0,
+     18.9,
+     60.0,
+     45.1
+    ],
+    "w": 56.0,
+    "h": 26.2
+   }
+  ]
+ },
+ "d1e": {
+  "code": "D1E",
+  "title": "Minibus et remorque (≤ 12 000 kg)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.137,
+    "bbox": [
+     4.0,
+     19.5,
+     60.0,
+     44.5
+    ],
+    "w": 56.0,
+    "h": 25.1
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.165,
+    "bbox": [
+     4.0,
+     19.5,
+     60.0,
+     44.5
+    ],
+    "w": 56.0,
+    "h": 25.1
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.163,
+    "bbox": [
+     4.0,
+     19.5,
+     60.0,
+     44.5
+    ],
+    "w": 56.0,
+    "h": 25.1
+   }
+  ]
+ },
+ "f": {
+  "code": "F",
+  "title": "Véhicules automobiles lents (≤ 45 km/h)",
+  "scale_ref": "b",
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.167,
+    "bbox": [
+     8.3,
+     14.2,
+     55.7,
+     49.8
+    ],
+    "w": 47.4,
+    "h": 35.5
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.186,
+    "bbox": [
+     8.3,
+     14.2,
+     55.7,
+     49.8
+    ],
+    "w": 47.4,
+    "h": 35.5
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.189,
+    "bbox": [
+     8.3,
+     14.2,
+     55.7,
+     49.8
+    ],
+    "w": 47.4,
+    "h": 35.5
+   }
+  ]
+ },
+ "g": {
+  "code": "G",
+  "title": "Véhicules agricoles et forestiers (≤ 30 km/h)",
+  "scale_ref": null,
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.235,
+    "bbox": [
+     8.8,
+     10.0,
+     55.2,
+     54.0
+    ],
+    "w": 46.4,
+    "h": 44.0
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.251,
+    "bbox": [
+     8.8,
+     10.0,
+     55.2,
+     54.0
+    ],
+    "w": 46.4,
+    "h": 44.0
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.264,
+    "bbox": [
+     8.8,
+     10.0,
+     55.2,
+     54.0
+    ],
+    "w": 46.4,
+    "h": 44.0
+   }
+  ]
+ },
+ "m": {
+  "code": "M",
+  "title": "Cyclomoteurs",
+  "scale_ref": "a",
+  "proposals": [
+   {
+    "direction": "A",
+    "name": "Natif",
+    "idea": "Contour constant et roues annelées, comme un SF Symbol de la même graisse.",
+    "ink": 0.159,
+    "bbox": [
+     6.0,
+     14.8,
+     58.0,
+     47.0
+    ],
+    "w": 52.0,
+    "h": 32.2
+   },
+   {
+    "direction": "B",
+    "name": "Signature",
+    "idea": "Silhouette pleine arrondie ; chaque roue est le repère annelé de la marque.",
+    "ink": 0.164,
+    "bbox": [
+     6.0,
+     14.5,
+     58.0,
+     47.0
+    ],
+    "w": 52.0,
+    "h": 32.5
+   },
+   {
+    "direction": "C",
+    "name": "Géométrique",
+    "idea": "Blocs chanfreinés à 45°, joint entre cabine et caisse, roues pleines.",
+    "ink": 0.173,
+    "bbox": [
+     6.0,
+     14.8,
+     58.0,
+     47.0
+    ],
+    "w": 52.0,
+    "h": 32.2
+   }
+  ]
+ }
+}

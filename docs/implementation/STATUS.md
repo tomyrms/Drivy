@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 12 octobre 2026 — icônes des catégories de permis
+
+Les 16 catégories de l’OAC (A, A1, M, B, B1, BE, C, C1, CE, C1E, D, D1, DE, D1E, F, G) ont leur icône. L’atelier a produit trois directions par catégorie ; la direction « Signature » (aplats, roues = repère de la marque) est retenue partout sur notes pondérées. Composant central `DrivingLicenseIcon`, assets vectoriels `License-*`, intégration dans les filtres Leçons/Progression, le Profil, l’accueil élève, la planification, « Commencer maintenant », les réglages d’agenda et l’invitation. [Démarche, notes et limites](icones-permis-20261012.md).
+
+**Exécuté** : rendus et `svg_audit.py`, planches clair/sombre. **Ajouté** : tests de correspondance code → catégorie et présence des assets. **Reste à qualifier** : appareil réel, VoiceOver, iPad ; lisibilité des ensembles avec remorque à 16 pt.
+
 ## 12 octobre 2026 — audit du thème sombre « Soft Charcoal »
 
 54 écrans iPhone capturés en clair et en sombre avant et après, couleurs mesurées sur les pixels, bascule clair → sombre → clair à chaud sur chaque écran (nouvelle option `visual_hot_switch`). Le thème est appliqué partout. Un défaut corrigé : les interrupteurs et les sélecteurs de date prenaient le bleu d’encre pastel sous un élément blanc ; ils prennent l’aplat `accentFill`, inchangé en clair. [Constats, méthode et limites](sombre-audit-20261012.md).

@@ -194,7 +194,7 @@ struct SchoolPlanningSettingsView: View {
                         preferenceField("Formation par défaut") {
                             Picker("Formation par défaut", selection: $model.trainingCategoryCode) {
                                 Text("Aucune").tag("")
-                                ForEach(model.categories, id: \.self) { Text("Permis \($0)").tag($0) }
+                                ForEach(model.categories, id: \.self) { DrivingLicenseLabel(title: "Permis \($0)", code: $0).tag($0) }
                                 if !model.trainingCategoryCode.isEmpty && !model.categories.contains(model.trainingCategoryCode) {
                                     Text("Formation indisponible").tag(model.trainingCategoryCode)
                                 }

@@ -445,7 +445,10 @@ struct SchoolStartNowView: View {
                 fieldRow("Formation") {
                     Picker("Formation", selection: trainingID) {
                         Text("Choisir une formation").tag(nil as UUID?)
-                        ForEach(form.trainings) { training in Text("Permis \(training.categoryCode)").tag(Optional(training.id)) }
+                        ForEach(form.trainings) { training in
+                            DrivingLicenseLabel(title: "Permis \(training.categoryCode)", code: training.categoryCode)
+                                .tag(Optional(training.id))
+                        }
                     }
                     .pickerStyle(.menu).labelsHidden()
                     .frame(minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
