@@ -183,7 +183,9 @@ extension DrivyMapHeader where Trailing == EmptyView {
 /// state sits right under it; the stop command stays top right, far from Signaler.
 struct DrivyLiveTopBar<Trailing: View>: View {
     private let context: String?
-    private let elapsed: String?
+    private let elapsed: (@MainActor () -> String)?
+    /// Origin of the one-second clock: only the elapsed text is re-evaluated each second, never the bar.
+    private let elapsedTick: Date?
     private let elapsedLabel: String
     private let status: DrivyMapStatus
     private let leading: DrivyMapHeaderAction?
@@ -195,7 +197,22 @@ struct DrivyLiveTopBar<Trailing: View>: View {
          status: DrivyMapStatus, leading: DrivyMapHeaderAction? = nil, floating: Bool = true,
          @ViewBuilder trailing: () -> Trailing) {
         self.context = context
+        if let elapsed { self.elapsed = { elapsed } } else { self.elapsed = nil }
+        self.elapsedTick = nil
+        self.elapsedLabel = elapsedLabel
+        self.status = status
+        self.leading = leading
+        self.floating = floating
+        self.trailing = trailing()
+    }
+
+    /// The elapsed text is read again each second from `tickingFrom`, inside its own `TimelineView`.
+    init(context: String? = nil, tickingFrom origin: Date, elapsed: @escaping @MainActor () -> String,
+         elapsedLabel: String = "Durée du trajet", status: DrivyMapStatus, leading: DrivyMapHeaderAction? = nil,
+         floating: Bool = true, @ViewBuilder trailing: () -> Trailing) {
+        self.context = context
         self.elapsed = elapsed
+        self.elapsedTick = origin
         self.elapsedLabel = elapsedLabel
         self.status = status
         self.leading = leading
@@ -239,16 +256,24 @@ struct DrivyLiveTopBar<Trailing: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
             if let elapsed {
-                Text(elapsed)
-                    .font(.title.weight(.bold).monospacedDigit())
-                    .foregroundStyle(DrivyTheme.text)
-                    .lineLimit(1)
-                    .accessibilityLabel(elapsedLabel)
-                    .accessibilityValue(elapsed)
+                if let elapsedTick {
+                    TimelineView(.periodic(from: elapsedTick, by: 1)) { _ in elapsedText(elapsed()) }
+                } else {
+                    elapsedText(elapsed())
+                }
             }
             DrivyMapStatusLabel(status: status, font: .subheadline.weight(.semibold))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func elapsedText(_ value: String) -> some View {
+        Text(value)
+            .font(.title.weight(.bold).monospacedDigit())
+            .foregroundStyle(DrivyTheme.text)
+            .lineLimit(1)
+            .accessibilityLabel(elapsedLabel)
+            .accessibilityValue(value)
     }
 }
 
@@ -839,9 +864,7 @@ enum DrivyMapLayout {
     static let floatingPanelMaxWidth: CGFloat = 640
     /// Text column of DrivyMapPlaceholder.
     static let placeholderMaxWidth: CGFloat = 420
-    /// Fixed budget for eleven themes in four rows, the header and the appraisal bar.
-    /// Smaller containers and larger text keep the palette's native scrolling fallback.
-    static let reportPaletteHeight: CGFloat = 520
-    /// Popover of « Signaler » anchored on the button in regular width (iPad).
+    /// Popover of « Signaler » anchored on the button in regular width (iPad): its width, and the tallest it gets.
+    /// The palette's own height follows its tiles (`SchoolSignalGridLayout`).
     static let reportPopoverSize = CGSize(width: 480, height: 560)
 }

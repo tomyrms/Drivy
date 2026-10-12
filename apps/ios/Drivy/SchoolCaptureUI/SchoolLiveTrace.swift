@@ -152,7 +152,7 @@ import Foundation
     private func bridge(from previous: SchoolCaptureMapSegment, to next: SchoolCaptureMapSegment) -> DrivyRouteMapLine? {
         let key = "\(previous.id.uuidString)>\(next.id.uuidString)"
         if let known = bridges[key] { return known }
-        guard let previousSource = previous.points.last, let nextSource = next.points.first,
+        guard let previousSource = previous.lastPoint, let nextSource = next.firstPoint,
               let previousDisplayed = previous.displaySamples.last?.point,
               let nextDisplayed = next.displaySamples.first?.point else { return nil }
         let gap = SchoolMapRouteGap.betweenSegments(id: "between:\(key)", previousSource: previousSource, nextSource: nextSource,

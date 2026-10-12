@@ -235,6 +235,95 @@ actor SQLCipherSchoolCaptureStore {
         return values.filter { $0.scope == scope }
     }
 
+    /// Trajets scellés de la même adhésion, conservés sous une époque d’accès antérieure.
+    func capturesAwaitingEpochAdoption(scope: SchoolCommandScope) throws -> Int {
+        try adoptableCaptures(scope).count
+    }
+
+    /// Adoption explicite d’une époque plus récente de la même adhésion (une affectation de plus avance l’époque
+    /// sans retirer de droit). L’appelant vient de relire `/me` : adhésion active, cette époque exacte, rôle
+    /// moniteur. Seuls les trajets scellés et leurs faits de collecte changent de portée, octets et identifiants
+    /// inchangés ; aucune saisie (diagnostic, accord, départ) n’est réaffectée. L’école reste juge à chaque envoi.
+    @discardableResult
+    func adoptEpoch(_ scope: SchoolCommandScope) throws -> Int {
+        var adopted = 0
+        try write {
+            let movedHash = try hash(of: scope)
+            for capture in try adoptableCaptures(scope) {
+                try save(SchoolCaptureStoredSession(id: capture.id, scope: scope, deviceID: capture.deviceID,
+                    authorization: capture.authorization, serverCapture: capture.serverCapture, state: capture.state,
+                    stoppedAt: capture.stoppedAt, stopOperationID: capture.stopOperationID, manifest: capture.manifest))
+                let commands = try database.records("SELECT data FROM mutation WHERE workspace=? AND device_id=? AND target_id=? AND kind IN('uploadChunk','stopCapture','finalizeCapture')",
+                    [.text(workspace(scope)), .text(deviceID.uuidString), .text(capture.id.uuidString)], as: SchoolCaptureQueuedMutation.self)
+                for queued in commands where queued.mutation.scope.sharesMembership(with: scope)
+                    && queued.mutation.scope.accessEpoch < scope.accessEpoch {
+                    let old = queued.mutation
+                    let mutation = SchoolCapturePendingMutation(id: old.id, scope: scope, kind: old.kind, targetID: old.targetID,
+                        segmentID: old.segmentID, chunkIndex: old.chunkIndex, expectedVersion: old.expectedVersion,
+                        createdAt: old.createdAt, body: old.body)
+                    guard mutation.isValid, mutation.kind.isCollectionFact else { throw SchoolCaptureStorageFailure.invalidContext }
+                    let moved = SchoolCaptureQueuedMutation(mutation: mutation, deviceID: queued.deviceID, state: queued.state,
+                        attemptCount: queued.attemptCount, resultBody: queued.resultBody)
+                    try database.execute("UPDATE mutation SET scope_hash=?,data=? WHERE id=?",
+                        [.text(movedHash), .blob(try encoded(moved)), .text(moved.id.uuidString)])
+                }
+                adopted += 1
+            }
+        }
+        return adopted
+    }
+
+    /// Positions déjà confirmées par l’école, ou d’un trajet retiré ou supprimé par elle : les points et les lots
+    /// quittent l’appareil, dans une transaction. La ligne du trajet, ses segments et l’accusé de finalisation
+    /// restent (historique, reprise). Un trajet dont un lot n’a pas de reçu n’est jamais purgé. Les trajets d’un
+    /// autre compte de cet appareil suivent les mêmes conditions.
+    @discardableResult
+    func purgeSettledCaptures(captureID: UUID? = nil) throws -> Int {
+        var purged = 0
+        try write {
+            let rows = try database.records("SELECT data FROM capture WHERE device_id=?", [.text(deviceID.uuidString)],
+                as: SchoolCaptureStoredSession.self)
+            for capture in rows where captureID == nil || capture.id == captureID {
+                guard capture.deviceID == deviceID, capture.manifest != nil, capture.stopOperationID != nil,
+                      leases[capture.id] == nil else { continue }
+                let id = capture.id.uuidString
+                let finalized = try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE device_id=? AND kind='finalizeCapture' AND target_id=? AND state='acknowledged'",
+                    [.text(deviceID.uuidString), .text(id)]) > 0
+                let withdrawn = capture.serverCapture.publicationState == .withdrawn || capture.serverCapture.publicationState == .deleted
+                guard finalized || withdrawn else { continue }
+                let chunks = try database.records("SELECT data FROM chunk WHERE capture_id=?", [.text(id)], as: SchoolCaptureStoredChunk.self)
+                guard chunks.allSatisfy({ $0.receipt != nil }),
+                      try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE device_id=? AND kind='uploadChunk' AND target_id=? AND state<>'acknowledged'",
+                        [.text(deviceID.uuidString), .text(id)]) == 0 else { continue }
+                let samples = try count("SELECT CAST(COUNT(*) AS TEXT) FROM sample s JOIN segment g ON g.id=s.segment_id WHERE g.capture_id=?", [.text(id)])
+                guard samples > 0 || !chunks.isEmpty else { continue }
+                try database.execute("DELETE FROM sample WHERE segment_id IN (SELECT id FROM segment WHERE capture_id=?)", [.text(id)])
+                try database.execute("DELETE FROM chunk WHERE capture_id=?", [.text(id)])
+                try database.execute("DELETE FROM mutation WHERE device_id=? AND kind='uploadChunk' AND target_id=? AND state='acknowledged'",
+                    [.text(deviceID.uuidString), .text(id)])
+                purged += 1
+            }
+        }
+        return purged
+    }
+
+    /// Lignes encore présentes pour un trajet : positions, lots et commandes de lot.
+    func retainedRows(captureID: UUID) throws -> SchoolCaptureRetainedRows {
+        let id = captureID.uuidString
+        return SchoolCaptureRetainedRows(
+            samples: try count("SELECT CAST(COUNT(*) AS TEXT) FROM sample s JOIN segment g ON g.id=s.segment_id WHERE g.capture_id=?", [.text(id)]),
+            chunks: try count("SELECT CAST(COUNT(*) AS TEXT) FROM chunk WHERE capture_id=?", [.text(id)]),
+            uploadCommands: try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE kind='uploadChunk' AND target_id=?", [.text(id)]))
+    }
+
+    private func adoptableCaptures(_ scope: SchoolCommandScope) throws -> [SchoolCaptureStoredSession] {
+        try database.records("SELECT data FROM capture WHERE workspace=? AND device_id=?",
+            [.text(workspace(scope)), .text(deviceID.uuidString)], as: SchoolCaptureStoredSession.self).filter {
+            $0.deviceID == deviceID && $0.manifest != nil && $0.stopOperationID != nil && leases[$0.id] == nil
+                && $0.scope.sharesMembership(with: scope) && $0.scope.accessEpoch < scope.accessEpoch
+        }
+    }
+
     /// PARTIAL peut aussi désigner une coupure serveur avant AP158. Seul son
     /// accusé conservé prouve qu'une finalisation a réellement été confirmée.
     func acknowledgedFinalizations(scope: SchoolCommandScope) throws -> [UUID: SchoolCaptureSession] {
@@ -325,7 +414,8 @@ actor SQLCipherSchoolCaptureStore {
                   let start = SchoolLesson.date(segment.startedAt), let expiry = SchoolLesson.date(capture.serverCapture.expiresAt) else {
                 throw SchoolCaptureStorageFailure.closed
             }
-            let total = try count("SELECT CAST(COUNT(*) AS TEXT) FROM sample s JOIN segment g ON g.id=s.segment_id WHERE g.capture_id=?", [.text(capture.id.uuidString)])
+            // Les compteurs des segments suivent chaque écriture : aucun parcours des positions déjà enregistrées.
+            let total = try segments(capture.id).reduce(0) { $0 + $1.pointCount }
             guard total + measurements.count <= 100_000 else { throw SchoolCaptureStorageFailure.capacity }
             for measured in measurements {
                 let point = SchoolCapturePoint(sequence: segment.pointCount, elapsedMs: measured.elapsedMs, capturedAt: measured.capturedAt,
@@ -527,9 +617,10 @@ actor SQLCipherSchoolCaptureStore {
             guard existing.mutation == value else { throw SchoolCaptureStorageFailure.uncertainCommand }
             return
         }
-        let scopeHash = SHA256.hash(data: try encoded(value.scope)).map { String(format: "%02x", $0) }.joined()
+        let scopeHash = try hash(of: value.scope)
         if !generated {
-            guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND state IN('queued','attempted') AND scope_hash<>?",
+            // Seule une saisie d’anciens accès bloque : les faits de collecte d’un trajet scellé suivent leur trajet.
+            guard try count("SELECT CAST(COUNT(*) AS TEXT) FROM mutation WHERE workspace=? AND state IN('queued','attempted') AND scope_hash<>? AND kind NOT IN('uploadChunk','stopCapture','finalizeCapture')",
                 [.text(workspace(value.scope)), .text(scopeHash)]) == 0 else { throw SchoolCaptureStorageFailure.changedScope }
         }
         // Un changement de droits ou une file pleine ne doit pas empêcher le fait
@@ -649,6 +740,9 @@ actor SQLCipherSchoolCaptureStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(value)
+    }
+    private func hash(of scope: SchoolCommandScope) throws -> String {
+        SHA256.hash(data: try encoded(scope)).map { String(format: "%02x", $0) }.joined()
     }
     private func workspace(_ scope: SchoolCommandScope) -> String {
         SHA256.hash(data: Data("\(scope.apiBaseURL)|\(scope.personID.uuidString)|\(scope.schoolID.uuidString)".utf8))

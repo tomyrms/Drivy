@@ -7,8 +7,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["operationId"],
-      "properties": {"operationId": {"type": "string", "format": "uuid"}},
-      "$comment": "POST /v1/schools/{schoolId}/lessons/{lessonId}/start ; If-Match et Idempotency-Key obligatoires. START_LESSON renvoie LessonEnvelope (200), version incrémentée, actualStart serveur, status PLANNED. Moniteur désigné affecté, école, formation et appartenance élève actives, dossier non archivé. Aucun déclenchement temporel ; jamais avant le jour civil du rendez-vous dans le fuseau de la leçon (LESSON_NOT_TODAY, 409), un départ tardif restant accepté. Un départ déjà enregistré reçoit LESSON_STARTED sauf rejeu de la même opération."
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "startedAt": {"type": "string", "format": "date-time", "description": "Extension facultative du 12 octobre 2026 (A2-03) : instant du geste « Commencer » sur l'appareil, avec décalage horaire. Retenu s'il n'est pas postérieur à la réception, s'il date de 12 heures au plus et s'il tombe le jour civil du rendez-vous dans le fuseau de la leçon ; sinon le serveur garde son instant de réception, sans refus. Absent : instant de réception, comme avant. Il fait partie de l'empreinte d'idempotence : un rejeu doit renvoyer le même corps."}
+      },
+      "$comment": "POST /v1/schools/{schoolId}/lessons/{lessonId}/start ; If-Match et Idempotency-Key obligatoires. START_LESSON renvoie LessonEnvelope (200), version incrémentée, actualStart (instant déclaré retenu ou instant serveur), status PLANNED. Moniteur désigné affecté, école, formation et appartenance élève actives, dossier non archivé. Aucun déclenchement temporel ; jamais avant le jour civil du rendez-vous dans le fuseau de la leçon (LESSON_NOT_TODAY, 409), un départ tardif restant accepté. Un départ déjà enregistré reçoit LESSON_STARTED sauf rejeu de la même opération."
     },
     "TrainingExtension": {
       "type": "object",

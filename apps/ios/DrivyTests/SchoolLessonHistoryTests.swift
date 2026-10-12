@@ -93,6 +93,12 @@ struct SchoolLessonHistoryTests {
         #expect(SchoolLessonHistoryWorkspace.needsFullHistory(filter: .all, search: "zoe"))
         #expect(!SchoolLessonHistoryWorkspace.needsFullHistory(filter: .all, search: "  "))
         #expect(SchoolLessonHistoryWorkspace.needsFullHistory(filter: .closed, search: ""))
+        // Une seule lettre ne filtre rien et ne lit pas tout l’historique ; deux caractères, si.
+        #expect(!SchoolLessonHistoryWorkspace.needsFullHistory(filter: .all, search: "z"))
+        #expect(!SchoolLessonHistoryWorkspace.needsFullHistory(filter: .all, search: " z "))
+        #expect(SchoolLessonHistoryWorkspace.needsFullHistory(filter: .all, search: "zo"))
+        #expect(SchoolLessonHistoryWorkspace.appliedSearch("z").isEmpty)
+        #expect(SchoolLessonHistoryWorkspace.appliedSearch("zo") == "zo")
         await model.setFullHistory(true)
         #expect(model.isComplete && model.lessons.count == 3 && !model.isLoadingAll && pages.calls.count == 3)
         #expect(pages.calls.map(\.cursor) == [nil, "page-2", "page-3"])
@@ -207,8 +213,13 @@ struct SchoolLessonHistoryTests {
         let running = Self.lesson(4, start: "2026-10-06T10:00:00Z", status: "PLANNED", actualStart: "2026-10-06T10:10:00Z")
         let toFinish = Self.lesson(5, start: "2026-10-05T10:00:00Z", status: "PLANNED", actualStart: "2026-10-05T10:10:00Z")
         let lessons = [planned, waiting, oldWaiting, running, toFinish]
-        #expect(lessons.filter { TrainingLessonFilter.upcoming.includes($0, now: now) } == [planned, running])
-        #expect(lessons.filter { TrainingLessonFilter.past.includes($0, now: now) } == [waiting, oldWaiting, toFinish])
+        // Le rendez-vous dont l’heure vient de passer peut encore commencer : il reste à venir, comme sur Aujourd’hui.
+        // Manqué (plus de 30 minutes après sa fin), il est passé.
+        #expect(lessons.filter { TrainingLessonFilter.upcoming.includes($0, now: now) } == [planned, waiting, running])
+        #expect(lessons.filter { TrainingLessonFilter.past.includes($0, now: now) } == [oldWaiting, toFinish])
+        let justMissed = try #require(SchoolLesson.date("2026-10-06T11:20:00Z"))
+        #expect(!TrainingLessonFilter.upcoming.includes(waiting, now: justMissed))
+        #expect(TrainingLessonFilter.past.includes(waiting, now: justMissed))
         #expect(lessons.filter { TrainingLessonFilter.toFinish.includes($0, now: now) } == [toFinish])
         #expect(waiting.drivyState(now: now) == .waiting && oldWaiting.drivyState(now: now) == .waiting)
     }

@@ -13,6 +13,9 @@ final class SchoolWorkspace {
     private(set) var learner: SchoolLearner?
     private(set) var trainings: [SchoolTraining] = []
     private(set) var selectedLearnerID: UUID?
+    /// Lectures réussies du dossier sélectionné. Une relecture silencieuse ne passe par aucun indicateur de
+    /// chargement : les écrans qui suivent le dossier observent ce compteur.
+    private(set) var learnerReadCount = 0
     private(set) var searchText = ""
     private(set) var nextLearnersCursor: String?
     private(set) var nextTrainingsCursor: String?
@@ -48,6 +51,7 @@ final class SchoolWorkspace {
     @ObservationIgnored private var learnerCursors: Set<String> = []
     @ObservationIgnored private var trainingCursors: Set<String> = []
     @ObservationIgnored private var accountReadAt: Date?
+    @ObservationIgnored private var learnersReadAt: Date?
 
     init(api: any SchoolAPI) { self.api = api }
 
@@ -214,6 +218,42 @@ final class SchoolWorkspace {
         await fetchLearners(schoolID: schoolID, query: normalizedQuery, scope: schoolScope, request: searchRequest)
     }
 
+    /// Retour dans l’app ou sur l’onglet Élèves : la première page de la recherche en cours est relue sans rien
+    /// effacer, au plus une fois par minute. Un élève qui vient de rejoindre l’école apparaît, une ligne modifiée
+    /// suit, la sélection, le dossier ouvert et les pages déjà chargées restent. Une panne ne dit rien : la liste
+    /// affichée reste lisible et la prochaine occasion réessaie.
+    func refreshLearners(minimumInterval: TimeInterval = 60, now: Date = Date()) async {
+        guard let schoolID = membership?.schoolId, school?.status == "ACTIVE", learnersError == nil,
+              !isLoadingSchool, !isSearching, !isLoadingMoreLearners else { return }
+        if let learnersReadAt, now.timeIntervalSince(learnersReadAt) < minimumInterval { return }
+        let scope = schoolScope
+        let request = searchRequest
+        let query = normalizedQuery
+        let previousReadAt = learnersReadAt
+        learnersReadAt = now
+        do {
+            let page: SchoolPage<SchoolLearner>
+            if isLearnerOnly && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
+            else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
+            guard scope == schoolScope, request == searchRequest else { return }
+            guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
+            var fresh: [SchoolLearner] = []
+            Self.merge(page.items, into: &fresh)
+            if learnerCursors.isEmpty {
+                // Une seule page affichée : elle est remplacée par sa relecture.
+                learners = fresh
+                nextLearnersCursor = page.nextCursor
+            } else {
+                // Des pages suivantes sont affichées : la première est relue, les lignes des autres restent à leur suite.
+                let read = Set(fresh.map(\.id))
+                learners = fresh + learners.filter { !read.contains($0.id) }
+            }
+        } catch {
+            guard scope == schoolScope, request == searchRequest else { return }
+            if !invalidateAccess(for: error) { learnersReadAt = previousReadAt }
+        }
+    }
+
     func loadMoreLearners() async {
         guard !isSearching, !isLoadingMoreLearners,
               let schoolID = membership?.schoolId, let cursor = nextLearnersCursor else { return }
@@ -268,6 +308,7 @@ final class SchoolWorkspace {
             guard scope == schoolScope, request == learnerRequest, selectedLearnerID == id else { return }
             guard result.id == id, result.schoolId == schoolID else { throw SchoolAPIError.invalidResponse }
             learner = result
+            learnerReadCount += 1
             // La liste Élèves porte le même élève : sa ligne suit le dossier relu (nom, coordonnées) sans attendre sa
             // propre relecture. Ni l’ordre ni la pagination ne changent, et un élève absent de la liste n’y est pas ajouté.
             if let row = learners.firstIndex(where: { $0.id == result.id }) { learners[row] = result }
@@ -378,6 +419,7 @@ final class SchoolWorkspace {
             Self.merge(page.items, into: &learners)
             nextLearnersCursor = page.nextCursor
             isSearching = false
+            learnersReadAt = Date()
         } catch {
             guard scope == schoolScope, request == searchRequest else { return }
             isSearching = false
@@ -391,6 +433,7 @@ final class SchoolWorkspace {
         school = nil
         schoolError = nil
         isLoadingSchool = false
+        learnersReadAt = nil
         beginSearch("")
     }
 

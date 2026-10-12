@@ -57,6 +57,17 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         }) else { throw SchoolCaptureFailure.forbidden }
     }
 
+    /// Préalable à l’adoption d’une nouvelle époque par les trajets scellés : `/me` relu à l’instant rend
+    /// l’adhésion active de ce compte, à cette époque exacte, avec le rôle moniteur.
+    func confirmInstructorScope(_ scope: SchoolCommandScope) async throws {
+        guard scope.apiBaseURL == baseURL.absoluteString else { throw SchoolCaptureFailure.forbidden }
+        let person: SchoolPerson = try await read(["v1", "me"])
+        guard person.personId == scope.personID, person.memberships.contains(where: {
+            $0.schoolId == scope.schoolID && $0.membershipId == scope.membershipID && $0.accessEpoch == scope.accessEpoch
+                && $0.roles.contains("INSTRUCTOR")
+        }) else { throw SchoolCaptureFailure.forbidden }
+    }
+
     func recordingNotice(schoolID: UUID) async throws -> SchoolRecordingNotice {
         let value: SchoolRecordingNotice = try await read(schoolPath(schoolID, ["recording-notice"]))
         guard !value.noticeText.isEmpty, value.noticeText.utf8.count <= 200_000,
@@ -69,7 +80,8 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         guard command.isValid, command.scope.apiBaseURL == baseURL.absoluteString else { throw SchoolCaptureFailure.invalidResponse }
         let value: SchoolOperationReceipt
         // Un reçu absent ne dit rien des droits : l’opération n’existe simplement pas pour l’école.
-        do { value = try await read(schoolPath(command.scope.schoolID, ["operations", command.id.uuidString]), verifying: command.scope) }
+        do { value = try await read(schoolPath(command.scope.schoolID, ["operations", command.id.uuidString]), verifying: command.scope,
+                                   admittingNewerEpoch: command.kind.isCollectionFact) }
         catch SchoolCaptureFailure.notFound { throw SchoolCaptureFailure.operationUnknown }
         guard command.matches(value) else { throw SchoolCaptureFailure.invalidResponse }
         return value
@@ -144,7 +156,8 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
 
     func capture(schoolID: UUID, captureID: UUID, scope: SchoolCommandScope? = nil) async throws -> SchoolCaptureSession {
         if let scope, scope.schoolID != schoolID || scope.apiBaseURL != baseURL.absoluteString { throw SchoolCaptureFailure.forbidden }
-        let value: SchoolCaptureSession = try await read(schoolPath(schoolID, ["captures", captureID.uuidString]), verifying: scope)
+        let value: SchoolCaptureSession = try await read(schoolPath(schoolID, ["captures", captureID.uuidString]), verifying: scope,
+                                                             admittingNewerEpoch: true)
         guard value.id == captureID, value.schoolId == schoolID, value.hasValidTimeline else { throw SchoolCaptureFailure.invalidResponse }
         return value
     }
@@ -290,18 +303,39 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
 
     private func read<Value: Decodable>(_ path: [String], query: [URLQueryItem] = [],
                                        mutation: SchoolCapturePendingMutation? = nil,
-                                       verifying scope: SchoolCommandScope? = nil) async throws -> Value {
+                                       verifying scope: SchoolCommandScope? = nil,
+                                       admittingNewerEpoch: Bool = false) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolCaptureFailure.invalidResponse }
         var url = baseURL
         for part in path { url.appendPathComponent(part) }
         guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw SchoolCaptureFailure.invalidResponse }
         if !query.isEmpty { parts.queryItems = query }
         guard let target = parts.url else { throw SchoolCaptureFailure.invalidResponse }
+        let token = try await accessToken()
+        do { return try await perform(target, mutation: mutation, verifying: scope, admittingNewerEpoch: admittingNewerEpoch, token: token) }
+        catch SchoolCaptureFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable (horloge en retard, session
+            // révoquée chez le fournisseur) : un seul renouvellement forcé et un seul nouvel essai, même opération
+            // et même clé d’idempotence, avant de conclure à une session expirée.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolCaptureFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolCaptureFailure.unauthorized }
+            return try await perform(target, mutation: mutation, verifying: scope, admittingNewerEpoch: admittingNewerEpoch, token: renewed)
+        }
+    }
+
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolCaptureFailure.unauthorized }
         catch { throw SchoolCaptureFailure.unavailable }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolCaptureFailure.unauthorized }
+        return token
+    }
+
+    private func perform<Value: Decodable>(_ target: URL, mutation: SchoolCapturePendingMutation?,
+                                       verifying scope: SchoolCommandScope?, admittingNewerEpoch: Bool,
+                                       token: String) async throws -> Value {
         if let expected = scope ?? mutation?.scope {
             let person: SchoolPerson
             do { person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me() }
@@ -310,8 +344,13 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
             catch SchoolAPIError.forbidden { throw SchoolCaptureFailure.forbidden }
             catch SchoolAPIError.identityNotLinked { throw SchoolCaptureFailure.forbidden }
             catch { throw SchoolCaptureFailure.unavailable }
+            // Un fait de collecte (lot, arrêt, finalisation), la relecture du trajet et le reçu d’un tel fait admettent une
+            // époque plus récente de la même adhésion active qui garde le rôle moniteur. Une saisie (diagnostic, accord,
+            // départ) et les listes paginées, dont les curseurs suivent l’époque, exigent l’époque exacte.
+            let admitsNewerEpoch = mutation.map { $0.kind.isCollectionFact } ?? admittingNewerEpoch
             guard person.personId == expected.personID, person.memberships.contains(where: {
-                $0.schoolId == expected.schoolID && $0.membershipId == expected.membershipID && $0.accessEpoch == expected.accessEpoch
+                admitsNewerEpoch ? expected.isConfirmed(by: $0)
+                    : $0.schoolId == expected.schoolID && $0.membershipId == expected.membershipID && $0.accessEpoch == expected.accessEpoch
             }) else { throw SchoolCaptureFailure.forbidden }
         }
         try Task.checkCancellation()

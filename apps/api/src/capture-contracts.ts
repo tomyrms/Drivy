@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { observationThemeKey } from './observation-themes.js';
 // PostgreSQL restitue les UUID en minuscules : l'AAD chiffrée emploie la même forme.
 export const uuid=z.uuid().transform(value=>value.toLowerCase());
 export const instant=z.iso.datetime({offset:true});
@@ -6,7 +7,9 @@ export const instant=z.iso.datetime({offset:true});
 export const geoObservationCommand=z.object({operationId:uuid,draftId:uuid.nullable(),captureId:uuid.nullable(),segmentId:uuid.nullable(),
  pointSequence:z.number().int().min(0).max(2_147_483_646).nullable(),competencyId:uuid.nullable(),
  text:z.string().refine(v=>v.trim().length>0&&[...v].length<=4000),origin:z.enum(['LIVE','REVIEW']).optional(),observedAt:instant.optional(),
- eventKind:z.enum(['MARKER','QUALIFIED']).optional(),eventStatus:z.enum(['ATTENTION','TO_REWORK','POSITIVE']).nullable().optional()
+ eventKind:z.enum(['MARKER','QUALIFIED']).optional(),eventStatus:z.enum(['ATTENTION','TO_REWORK','POSITIVE']).nullable().optional(),
+ // Thème de « Signaler » : facultatif, pour les clients antérieurs au catalogue.
+ themeKey:observationThemeKey.nullable().optional()
 }).strict().superRefine((v,ctx)=>{
  const invalid=(message:string)=>ctx.addIssue({code:'custom',message});
  if(!([v.captureId,v.segmentId,v.pointSequence].every(x=>x===null)||[v.captureId,v.segmentId,v.pointSequence].every(x=>x!==null)))invalid('L’ancre doit être complète ou absente.');
@@ -14,14 +17,15 @@ export const geoObservationCommand=z.object({operationId:uuid,draftId:uuid.nulla
  if(v.origin==='LIVE'&&(!v.observedAt||!v.eventKind||v.eventStatus===undefined))invalid('L’observation live exige instant, type et statut explicites.');
  if(v.eventKind==='MARKER'&&(v.origin!=='LIVE'||v.competencyId!==null||v.eventStatus!==null))invalid('Un repère reste LIVE, sans compétence ni statut.');
  if(v.origin==='LIVE'&&v.eventKind==='QUALIFIED'&&(v.competencyId===null||v.eventStatus===null))invalid('Choisissez une compétence et un statut.');
+ if(v.themeKey&&v.competencyId===null)invalid('Un thème précise une compétence.');
 });
 export type GeoObservationInput=z.infer<typeof geoObservationCommand>;
 export interface GeoObservationRow {id:string;school_id:string;version:number;lesson_id:string;training_id:string;author_membership_id:string;
  draft_id:string|null;capture_id:string|null;segment_id:string|null;point_sequence:number|null;competency_id:string|null;text:string|null;
- origin:'LIVE'|'REVIEW';observed_at:Date|null;event_kind:'MARKER'|'QUALIFIED'|null;event_status:'ATTENTION'|'TO_REWORK'|'POSITIVE'|null;created_at:Date;removed_at:Date|null}
+ origin:'LIVE'|'REVIEW';observed_at:Date|null;event_kind:'MARKER'|'QUALIFIED'|null;event_status:'ATTENTION'|'TO_REWORK'|'POSITIVE'|null;created_at:Date;removed_at:Date|null;theme_key:string|null}
 export const geoObservationProjection=(r:GeoObservationRow)=>({id:r.id,schoolId:r.school_id,version:r.version,lessonId:r.lesson_id,trainingId:r.training_id,
  draftId:r.draft_id,captureId:r.capture_id,segmentId:r.segment_id,pointSequence:r.point_sequence,competencyId:r.competency_id,text:r.text!,origin:r.origin,
- ...(r.observed_at?{observedAt:r.observed_at.toISOString()}:{}),...(r.event_kind?{eventKind:r.event_kind}:{}),eventStatus:r.event_status,authorMembershipId:r.author_membership_id});
+ ...(r.observed_at?{observedAt:r.observed_at.toISOString()}:{}),...(r.event_kind?{eventKind:r.event_kind}:{}),eventStatus:r.event_status,authorMembershipId:r.author_membership_id,themeKey:r.theme_key??null});
 const index=z.number().int().min(0).max(2_147_483_646);
 const unique=(items:unknown[])=>new Set(items).size===items.length;
 export const trackPoint=z.object({sequence:index,elapsedMs:z.number().int().min(0).max(10_800_000),capturedAt:instant,latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracyMeters:z.number().min(0)}).strict();

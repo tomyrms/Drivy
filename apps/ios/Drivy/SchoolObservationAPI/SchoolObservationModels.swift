@@ -65,8 +65,15 @@ struct SchoolObservationBody: Codable, Sendable, Equatable {
     let observedAt: String?
     let eventKind: String?
     let eventStatus: String?
+    /// Clé du thème de « Signaler », envoyée seulement quand la configuration utilisée vient de l’école.
+    /// Absente d’une demande écrite avant les signalements configurables : elle se relit et se renvoie telle quelle.
+    var themeKey: String? = nil
 
     var isValid: Bool {
+        if let themeKey {
+            // Un thème précise une compétence : jamais sur un repère ni sur une note sans compétence.
+            guard competencyId != nil, eventKind != "MARKER", !themeKey.isEmpty, themeKey.utf8.count <= 40 else { return false }
+        }
         guard ["LIVE", "REVIEW"].contains(origin),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.unicodeScalars.count <= 4000,
               (captureId == nil && segmentId == nil && pointSequence == nil)
@@ -85,6 +92,7 @@ struct SchoolObservationBody: Codable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case operationId, draftId, captureId, segmentId, pointSequence, competencyId, text, origin, observedAt, eventKind, eventStatus
+        case themeKey
     }
     func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -95,6 +103,8 @@ struct SchoolObservationBody: Codable, Sendable, Equatable {
         try c.encode(competencyId, forKey: .competencyId); try c.encode(text, forKey: .text)
         try c.encode(origin, forKey: .origin); try c.encodeIfPresent(observedAt, forKey: .observedAt)
         try c.encodeIfPresent(eventKind, forKey: .eventKind); try c.encode(eventStatus, forKey: .eventStatus)
+        // Jamais `null` : une école qui ne connaît pas encore ce champ refuserait la demande.
+        try c.encodeIfPresent(themeKey, forKey: .themeKey)
     }
 }
 

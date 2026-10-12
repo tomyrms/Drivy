@@ -23,6 +23,8 @@ import Observation
     private(set) var accessRevoked = false
     /// Dernière lecture complète de la formation et de ses leçons.
     private(set) var loadedAt: Date?
+    /// Début de la lecture qui a produit `loadedAt` : une relecture demandée avant ce début la trouve déjà faite.
+    @ObservationIgnored private var loadedReadStartedAt: Date?
     @ObservationIgnored private var generation = UUID()
     /// Lecture en cours ; `nil` sinon. Deux écrans qui montrent la même formation ne la relisent pas chacun.
     @ObservationIgnored private var loadingRequest: UUID?
@@ -60,6 +62,7 @@ import Observation
     /// Relecture silencieuse, sauf si une lecture est déjà en cours ou date de moins de `interval` secondes :
     /// les onglets Leçons, Progression et Profil de l’élève partagent ce modèle et ne le relisent pas chacun.
     func refresh(ifOlderThan interval: TimeInterval) async {
+        let asked = Date()
         // Une lecture en cours est attendue, pas ignorée : annulée avec l’onglet qui l’a lancée, elle ne laisse rien
         // de lu, et l’écran qui vient d’apparaître doit alors la reprendre.
         while loadingRequest != nil { await withCheckedContinuation { loadingWaiters.append($0) } }
@@ -68,6 +71,9 @@ import Observation
         // une erreur affichée aussi.
         let complete = !historyRequested || nextCursor == nil
         if complete, errorMessage == nil, let loadedAt, Date().timeIntervalSince(loadedAt) < interval { return }
+        // Une lecture partie après la demande (lancée par une autre demande pendant l’attente) y répond déjà : deux
+        // annonces simultanées ne relisent pas deux fois. Une lecture partie avant la demande ne compte pas.
+        if complete, errorMessage == nil, let started = loadedReadStartedAt, started >= asked { return }
         await load(keepingCurrent: true)
     }
     private func finishLoading(_ request: UUID) {
@@ -86,13 +92,14 @@ import Observation
     private func cancelHistory() { historyTask?.cancel(); historyTask = nil; isLoadingHistory = false }
     private func clear() {
         training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; lastEvaluated = nil
-        seenCursors = []; lessonsLoaded = false; loadedAt = nil
+        seenCursors = []; lessonsLoaded = false; loadedAt = nil; loadedReadStartedAt = nil
     }
 
     /// `keepingCurrent` : relecture au retour d’une leçon ; ce qui est affiché reste visible jusqu’à la réponse.
     func load(keepingCurrent: Bool = false) async {
         guard !invalidated else { return }
         generation = UUID(); progressRequest = UUID(); let request = generation
+        let startedAt = Date()
         loadingRequest = request
         defer { finishLoading(request) }
         cancelHistory()
@@ -134,7 +141,7 @@ import Observation
             }
             guard request == generation, !invalidated else { return }
             lessons = items; nextCursor = page.nextCursor; seenCursors = read; lessonsLoaded = true
-            loadedAt = Date()
+            loadedAt = Date(); loadedReadStartedAt = startedAt
         } catch {
             guard request == generation, !invalidated else { return }
             // Lecture annulée : rien d’autre n’est lu pour un écran qui n’est plus là.

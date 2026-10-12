@@ -48,7 +48,10 @@ def main():
                      'API_BASE_URL=https://drivy.shulker.ch/refonte\n'
                      'OIDC_ISSUER=https://drivy.shulker.ch/identity/realms/drivy\n'
                      'OIDC_WEB_CLIENT_ID=drivy-web\nOIDC_WEB_CLIENT_SECRET=' + credential + '\n'
-                     'WEB_HOST=192.168.1.153\nWEB_PORT=3002\nWEB_DEVELOPMENT=false\n' +
+                     'WEB_HOST=192.168.1.153\nWEB_PORT=3002\nWEB_DEVELOPMENT=false\n'
+                     # Derrière Caddy : l'adresse du visiteur est celle que Caddy écrit (caddy-refonte.caddy). Sans cela,
+                     # la limite de connexions par adresse est commune à tous les visiteurs.
+                     'WEB_TRUST_PROXY=true\n' +
                      ''.join(key + '=' + value + '\n' for key, value in retained.items()))
         stream.flush()
         os.fsync(stream.fileno())

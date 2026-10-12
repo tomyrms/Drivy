@@ -27,6 +27,8 @@ struct SchoolTodayView: View {
     @State private var error: String?
     @State private var opened: OpenedLesson?
     @State private var presentsStartNow = false
+    /// La feuille « Démarrer une leçon » appartient à l’écran : la carte qui porte son bouton change avec l’heure.
+    @State private var startNow = SchoolStartNowPresentation()
     @State private var showsDay = false
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
@@ -122,6 +124,7 @@ struct SchoolTodayView: View {
         .onChange(of: scopeKey) { _, _ in
             opened = nil; presentsStartNow = false
         }
+        .modifier(SchoolStartNowSheets(presentation: startNow, workspace: workspace, agendaClient: agendaClient))
         .sheet(item: $opened, onDismiss: {
             // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
             captureController?.liveObservations?.refreshPending()
@@ -351,7 +354,7 @@ struct SchoolTodayView: View {
             onFinished: { Task { await load() } }, onPresentationChanged: { presented in
                 presentsStartNow = presented
                 if presented { requestID = UUID(); isLoading = false }
-            }) {
+            }, presentation: startNow) {
             Label(prominent ? "Démarrer une leçon" : "Leçon sans rendez-vous", systemImage: "location.fill")
         }
         if prominent {
@@ -388,8 +391,9 @@ struct SchoolTodayView: View {
             agenda: agendaClient, controller: captureController)
         startingPlanned = false
         // Trajet parti : la carte remplace déjà cet écran. Sinon la fiche s’ouvre sous le rideau, puis il se lève.
-        if case .lesson(let issue) = outcome, scopeKey == startKey {
-            opened = OpenedLesson(lesson: lesson, completing: false, issue: issue)
+        if case .lesson(let issue) = outcome {
+            // Autre compte ou autre école entre-temps : la fiche ne s’ouvre pas, mais le rideau se lève toujours.
+            if scopeKey == startKey { opened = OpenedLesson(lesson: lesson, completing: false, issue: issue) }
             await DrivyLaunchCurtain.shared.hide(afterSequence: true)
         }
     }

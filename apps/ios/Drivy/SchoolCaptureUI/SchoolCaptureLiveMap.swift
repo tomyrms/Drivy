@@ -117,7 +117,7 @@ struct SchoolCaptureLiveMap: View {
                   let coordinate = trace.coordinate(segmentID: segmentID, sequence: sequence) else { continue }
             let status = observation.body.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:))
             let glyph: DrivyObservationGlyph = observation.body.eventKind == "MARKER" ? .moment
-                : SchoolObservationPictogram(title: observation.body.text)?.glyph ?? status?.glyph ?? .note
+                : SchoolObservationPictogram(themeKey: observation.body.themeKey, title: observation.body.text)?.glyph ?? status?.glyph ?? .note
             result.append(DrivyRouteMapPin(id: observation.id.uuidString, coordinate: coordinate,
                 signature: "\(glyph.key):\(status?.rawValue ?? "-"):\(observation.isPending)",
                 label: "\(observation.body.text), \(status?.label ?? "Repère")\(observation.isPending ? ", envoi en attente" : "")",

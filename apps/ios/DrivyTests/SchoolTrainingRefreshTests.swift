@@ -142,6 +142,23 @@ import Testing
         #expect(model.lessons.count == 2 && model.errorMessage == nil)
     }
 
+    @Test func twoSimultaneousRefreshRequestsShareOneNewRead() async {
+        let server = HistoryServer(), model = workspace(server)
+        model.requestWholeHistory()
+        await server.pauseNextPage()
+        let initial = Task { await model.load() }
+        await server.waitUntilPaused()
+        // Deux annonces arrivent pendant la lecture en cours : elles l’attendent toutes les deux.
+        let first = Task { await model.refresh(ifOlderThan: 0) }
+        let second = Task { await model.refresh(ifOlderThan: 0) }
+        for _ in 0..<5 { await Task.yield() }
+        await server.resumePage()
+        await initial.value; await first.value; await second.value
+        // La lecture partie avant les annonces ne leur répond pas ; la suivante répond aux deux.
+        #expect(await server.firstPageReads == 2)
+        #expect(model.lessons.count == 2 && model.nextCursor == nil && model.errorMessage == nil)
+    }
+
     @Test func lessonChangeIsBroadcastOnlyAfterDurableConfirmation() async throws {
         let server = LessonFinishServer(), notifications = NotificationCenter(), changes = RecordedLessonChanges()
         let observer = notifications.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) {
@@ -284,6 +301,8 @@ private actor HistoryServer: SchoolHTTPTransport {
     private var started = false
     private var revisionStatus: Int?
     private(set) var revisionReads = 0
+    /// Lectures de la première page de leçons : une par lecture complète de la formation.
+    private(set) var firstPageReads = 0
     private var shouldPause = false
     private var suspended: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
@@ -338,6 +357,7 @@ private actor HistoryServer: SchoolHTTPTransport {
                 shouldPause = false
                 await withCheckedContinuation { suspended = $0; pauseWaiter?.resume(); pauseWaiter = nil }
             }
+            if !older { firstPageReads += 1 }
             if older && pageUnavailable {
                 return SchoolHTTPResponse(data: Data("{}".utf8), status: 503, url: url, contentType: "application/problem+json")
             }

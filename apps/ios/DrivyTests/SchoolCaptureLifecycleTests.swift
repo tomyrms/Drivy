@@ -480,6 +480,28 @@ import Testing
         try #require(waiting, "\(diagnostic)")
     }
 
+    /// Une position de plus, attendue jusqu’à son écriture durable. Même lieu que les précédentes : à l’arrêt.
+    @discardableResult
+    func recordPoint(accuracyMeters: Double = 5) async throws -> Date {
+        let before = controller.pointCount
+        try await Task.sleep(for: .milliseconds(5))
+        let measured = try #require(source.emitPoint(accuracyMeters: accuracyMeters))
+        for _ in 0..<300 {
+            if controller.pointCount == before + 1 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(controller.pointCount == before + 1)
+        return measured
+    }
+
+    func assessment(scope: SchoolCommandScope) throws -> SchoolCapturePendingMutation {
+        let id = UUID(), device = try #require(capture.deviceId)
+        return try SchoolCapturePendingMutation.make(id: id, scope: scope, kind: .assessDevice, targetID: device,
+            body: SchoolDeviceAssessmentBody(operationId: id, platform: "IOS", deviceClass: "PHONE", modelCode: "test-phone",
+                osVersion: "26.0", appBuild: "1", permission: "WHEN_IN_USE", preciseLocation: true, sampleAgeSeconds: 0,
+                horizontalAccuracyMeters: 5, freeBytes: nil, networkAvailable: true))
+    }
+
     func waitUntilSettled() async {
         for _ in 0..<300 {
             if !controller.isTransferring { return }
@@ -555,9 +577,17 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     private var loseFinalization = false
     private var conflictFinalization = false
     private var finalized: [UUID: SchoolCaptureSession] = [:]
+    private var epoch: Int
+    private var roles = ["INSTRUCTOR"]
+    private var offline = false
     init(scope: SchoolCommandScope, capture: SchoolCaptureSession, authorization: SchoolCaptureAuthorization, keys: SchoolCapturePublicKeys) {
         self.scope = scope; self.capture = capture; self.authorization = authorization; self.keys = keys
+        epoch = scope.accessEpoch
     }
+    /// L’administration change l’adhésion : époque avancée, rôles éventuellement retirés.
+    func setMembership(epoch: Int, roles: [String] = ["INSTRUCTOR"]) { self.epoch = epoch; self.roles = roles }
+    func setOffline(_ value: Bool) { offline = value }
+    func isHoldingTransfers() -> Bool { !waiters.isEmpty }
     func requests() -> [URLRequest] { recorded }
     func holdScopeReads() { scopeHeld = true }
     func failScopeReadAfterNextAuthorization() { failsScopeAfterAuthorization = true }
@@ -572,6 +602,7 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     func conflictNextFinalization() { conflictFinalization = true }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         recorded.append(request)
+        if offline { throw URLError(.notConnectedToInternet) }
         let url = request.url!
         func json(_ value: Any) throws -> SchoolHTTPResponse {
             // Les créations de diagnostic et de capture répondent 201 ; le client refuse correctement un simple 200.
@@ -591,7 +622,7 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
             }
             return try ok(SchoolPerson(personId: scope.personID, version: 1, displayName: "Moniteur synthétique", locale: "fr",
                 memberships: [.init(membershipId: scope.membershipID, schoolId: scope.schoolID, schoolName: "École synthétique",
-                    roles: ["INSTRUCTOR"], grants: [], accessEpoch: scope.accessEpoch)]))
+                    roles: roles, grants: [], accessEpoch: epoch)]))
         }
         if held { await withCheckedContinuation { waiters.append($0) } }
         let leaf = url.lastPathComponent.lowercased()
@@ -631,6 +662,12 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
                 deviceId: capture.deviceId!, membershipId: scope.membershipID, platform: "IOS", deviceClass: "PHONE",
                 modelCode: "test-phone", osVersion: "26.0", appBuild: "1", qualificationProfileVersion: "test",
                 status: .qualified, assessedAt: capture.authorizedAt, expiresAt: capture.expiresAt, blockers: []))
+        }
+        if request.httpMethod == "PUT", url.pathComponents.dropLast().last == "chunks",
+           let index = Int(url.lastPathComponent), let segment = UUID(uuidString: url.pathComponents[url.pathComponents.count - 3]) {
+            let body = try JSONDecoder().decode(SchoolCaptureChunkBody.self, from: request.httpBody!)
+            return try ok(SchoolCaptureChunkReceipt(captureId: capture.id, segmentId: segment, chunkIndex: index,
+                contentHash: body.contentHash, acknowledgedAt: capture.authorizedAt, duplicate: false))
         }
         if leaf == "captures", request.httpMethod == "POST" {
             if failsScopeAfterAuthorization { failsScopeAfterAuthorization = false; failsNextScopeRead = true }

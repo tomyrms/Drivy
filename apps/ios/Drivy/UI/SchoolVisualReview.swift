@@ -58,6 +58,15 @@ struct SchoolVisualReview: View {
                     NavigationStack {
                         SchoolLessonHistoryView(workspace: context.workspace, agendaClient: context.agenda)
                     }
+                case "observation-themes":
+                    // L’écran de gestion des signalements, lu sur l’école fictive ; ses écritures échouent ici
+                    // (transport en lecture seule) et montrent donc le retour à l’état confirmé.
+                    NavigationStack {
+                        if let themes = context.agenda.observationThemeStore(person: context.workspace.person,
+                                                                           membership: context.workspace.membership) {
+                            SchoolObservationThemeSettingsView(store: themes)
+                        }
+                    }
                 case "profile-tab":
                     SchoolVisualShell(context: context, tab: .profile)
                 case "learner-home":
@@ -186,6 +195,8 @@ struct SchoolVisualShell: View {
     static func prepare(learnerRole: Bool = false, populatedObservations: Bool = false,
         permitCount: Int = 1) async throws -> SchoolVisualContext {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
+        // Aucun fichier sur le simulateur : la configuration des signalements reste en mémoire.
+        SchoolObservationThemeStores.makeCache = { SchoolVisualThemeCache() }
         let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations,
             permitCount: permitCount)
         let transport = SchoolVisualTransport(responses: fixtures)
@@ -523,6 +534,13 @@ struct SchoolVisualShell: View {
         }
         objects["\(root)/lessons/\(lessonID.uuidString)/captures"] = ["items": [syntheticCapture(captureID)]]
         objects["\(root)/lessons/\(plannedLessonID.uuidString)/reports"] = page([])
+        // Signalements de l’école fictive : la configuration d’origine du catalogue embarqué, réglable par ce compte.
+        // Un élève ne la lit pas : l’école la lui refuserait.
+        if !learnerRole {
+            let themes = SchoolObservationThemeSettings(id: schoolID, schoolId: schoolID, version: 1, canManage: true,
+                themes: SchoolObservationThemeCatalog.embedded)
+            objects["\(root)/observation-themes"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(themes))
+        }
         // Fiche d’une leçon annulée (clés nouvelles : aucun écran existant n’en dépend).
         objects.merge(cancelledLessonObjects()) { _, new in new }
         // Élève à deux ou trois permis : remplace la formation, l’offre, le référentiel et les leçons du dossier.
@@ -601,6 +619,12 @@ struct SchoolVisualTransport: SchoolHTTPTransport {
 
 @MainActor final class SchoolVisualToken: AccessTokenSource {
     func accessToken() async throws -> String { "visual-fixture-only" }
+}
+
+/// Copie locale des signalements pour les rendus de contrôle : rien n’est lu ni écrit sur le simulateur.
+@MainActor final class SchoolVisualThemeCache: SchoolObservationThemeCache {
+    func read(scope: SchoolCommandScope) -> SchoolObservationThemeConfiguration? { nil }
+    func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope) { }
 }
 
 @MainActor final class SchoolVisualOutbox: SchoolCommandOutbox {

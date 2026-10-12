@@ -10,6 +10,21 @@ struct SchoolCaptureReplayFragment: Identifiable {
     var qualityLabel: String
 }
 
+/// Espace les reconstructions de la chronologie pendant le chargement d’un long trajet : la première page,
+/// puis au plus une par intervalle. La fin du chargement et le tracé recalé en déclenchent une de plus.
+struct SchoolReplayRebuildPacer {
+    let interval: Duration
+    private var lastAdmitted: ContinuousClock.Instant?
+
+    init(interval: Duration = .seconds(1)) { self.interval = interval }
+
+    mutating func admits(at now: ContinuousClock.Instant = .now) -> Bool {
+        if let lastAdmitted, lastAdmitted.duration(to: now) < interval { return false }
+        lastAdmitted = now
+        return true
+    }
+}
+
 /// A private replay is reconstructed by the school. Neither local examples nor
 /// published-report geometry are substituted for unavailable private points.
 @MainActor @Observable final class SchoolCaptureReplayWorkspace: Identifiable {
@@ -65,6 +80,7 @@ struct SchoolCaptureReplayFragment: Identifiable {
             var knownObservations: [UUID: SchoolPrivateGeoObservation] = [:]
             var pages = 0
             var loadedQuality: String?
+            var pacer = SchoolReplayRebuildPacer()
             repeat {
                 try Task.checkCancellation()
                 let page = try await client.privateReplayPage(schoolID: scope.schoolID, captureID: captureID,
@@ -127,11 +143,13 @@ struct SchoolCaptureReplayFragment: Identifiable {
                     let rhs = $1.observedAt.flatMap(SchoolLesson.date) ?? .distantPast
                     return lhs == rhs ? $0.id.uuidString < $1.id.uuidString : lhs < rhs
                 }
-                contentRevision += 1
+                // Chaque page reconstruisait toute la chronologie et redessinait tout le tracé : travail quadratique.
+                if pacer.admits() { contentRevision += 1 }
                 cursor = page.nextCursor
                 if let cursor, !seenCursors.insert(cursor).inserted { throw SchoolCaptureFailure.invalidResponse }
             } while cursor != nil
             isComplete = true
+            contentRevision += 1
             // Premier affichage d’un trajet : l’école le recale à cet instant. Le trajet mesuré est déjà à l’écran ;
             // le tracé sur route le remplace s’il arrive dans les secondes qui suivent, sinon à la prochaine ouverture.
             isLoading = false

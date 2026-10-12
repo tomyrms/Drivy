@@ -54,7 +54,10 @@ struct SchoolPlanningView: View {
                     }
                 }
             }
-            .task { if model.school == nil { await model.load() } }
+            .task {
+                model.readsForCancellation = cancelling
+                if model.school == nil { await model.load() }
+            }
             .task(id: model.slotValidationRequest) {
                 if !cancelling, model.slotValidationRequest != nil { await model.validateSlot(debounced: true) }
             }

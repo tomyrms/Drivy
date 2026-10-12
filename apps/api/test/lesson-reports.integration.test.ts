@@ -18,7 +18,7 @@ describe('préparation et souhait (AP45–AP48)',()=>{
   const prep=await call('GET',route);await expectContract('PreparationEnvelope',prep.json());expect(prep.statusCode,prep.body).toBe(200);expect(prep.json().data).toMatchObject({lessonId:lesson.id,version:1,goals:[],administrativeCheckNote:null,plannedWaypoints:[]});
   for(const subject of ['demo-admin','demo-other-instructor'])expect((await call('GET',route,undefined,null,subject)).statusCode).toBe(404);
   expect((await call('GET',route,undefined,null,'demo-foreign')).statusCode).toBe(403);// non-membre de l'école
-  const body={operationId:randomUUID(),goals:[{label:'Insertion',competencyId:school.competency,context:'Autoroute'}],administrativeCheckNote:'Vérifier le permis',plannedWaypoints:[{id:randomUUID(),label:'Départ',latitude:46.99,longitude:6.93,note:null}]};
+  const body={operationId:randomUUID(),goals:[{label:'Insertion',competencyId:school.competency,context:'Autoroute'}],administrativeCheckNote:'Vérifier le permis',plannedWaypoints:[{id:randomUUID(),label:'Départ',latitude:46.99,longitude:6.93,note:'Note du moniteur sur ce repère'}]};
   expect((await call('PUT',route,body)).statusCode).toBe(428);
   expect((await call('PUT',route,body,2)).json().code).toBe('VERSION_CONFLICT');
   expect((await call('PUT',route,{...body,operationId:randomUUID(),goals:[{label:'X',competencyId:randomUUID()}]},1)).json().code).toBe('CURRICULUM_VERSION_MISMATCH');
@@ -29,6 +29,9 @@ describe('préparation et souhait (AP45–AP48)',()=>{
   // Objectifs partagés avec l'élève ; la note administrative reste au moniteur.
   const learnerPreparation=await call('GET',route,undefined,null,'demo-alice');expect(learnerPreparation.statusCode).toBe(200);await expectContract('PreparationEnvelope',learnerPreparation.json());
   expect(learnerPreparation.json().data).toMatchObject({goals:body.goals,administrativeCheckNote:null});
+  // A2-12 : les repères restent montrés à l'élève, sans la note du moniteur (clé conservée à null).
+  expect(learnerPreparation.json().data.plannedWaypoints).toEqual(body.plannedWaypoints.map(waypoint=>({...waypoint,note:null})));
+  expect((await call('GET',route)).json().data.plannedWaypoints).toEqual(body.plannedWaypoints);
   expect((await call('GET',route,undefined,null,'demo-bob')).statusCode).toBe(404);
   // Omettre les repères les conserve ; [] les vide.
   const kept=await call('PUT',route,{operationId:randomUUID(),goals:[]},2);expect(kept.json().data.plannedWaypoints).toHaveLength(1);
@@ -123,15 +126,27 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   expect(draft.basePublicationVersion).toBe(2);expect((await call('PUT',draftRoute,save,result.draft.version)).json().data).toEqual(draft);
   // Même contenu : aucune révision supplémentaire.
   const same=await call('PUT',draftRoute,{...save,operationId:randomUUID()},draft.version);expect(same.statusCode,same.body).toBe(200);expect(same.json().data.basePublicationVersion).toBe(2);
+  // A2-09 (décision du 12 octobre 2026) : l'élève ne lit que la révision courante ; le moniteur affecté garde l'historique.
+  // Remplace l'attente [1,2] de l'ancienne règle, où chaque enregistrement restait lisible par l'élève.
   const learnerItems=(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items;
-  expect(learnerItems.map((r:{sequence:number})=>r.sequence)).toEqual([1,2]);const revision=learnerItems[1];
+  expect(learnerItems.map((r:{sequence:number})=>r.sequence)).toEqual([2]);const revision=learnerItems[0];
+  const history=(await call('GET',`/lessons/${lesson.id}/reports`)).json().data.items;
+  expect(history.map((r:{sequence:number})=>r.sequence)).toEqual([1,2]);const previous=history[0];
   expect(revision).toMatchObject({workedOn:'Insertion',correctionReason:'Bilan mis à jour par le moniteur.',capturePublication:null,textObservations:[],attachmentIds:[]});
   // AP54 : les sélections d'observations ou de trajet restent refusées sur la publication explicite.
   expect((await call('POST',`${draftRoute}/publish`,{operationId:randomUUID(),expectedPublicationVersion:2,captureSelection:null,textObservationSelection:[{observationId:randomUUID(),version:1}],correctionReason:'x'},same.json().data.version)).json().code).toBe('OBSERVATION_PUBLICATION_NOT_READY');
-  // AP55/AP56 : lecture élève et moniteurs affectés ; ADMIN seul et autre élève exclus.
+  // AP55/AP56 : lecture élève et moniteurs affectés ; autre élève et moniteur non affecté exclus.
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).json().data.workedOn).toBe('Insertion');
-  for(const subject of ['demo-admin','demo-bob','demo-other-instructor'])expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,subject)).statusCode).toBe(404);
-  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-admin')).statusCode).toBe(404);
+  for(const subject of ['demo-bob','demo-other-instructor'])expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,subject)).statusCode).toBe(404);
+  // A2-02 (décision du 12 octobre 2026) : le bureau lit le bilan partagé comme l'élève, la seule révision courante.
+  // Remplace l'ancienne attente d'un 404 pour l'administrateur non affecté.
+  const adminReports=await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-admin');expect(adminReports.statusCode,adminReports.body).toBe(200);
+  await expectContract('ReportRevisionPageEnvelope',adminReports.json());expect(adminReports.json().data.items).toEqual(learnerItems);
+  expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-admin')).json().data.workedOn).toBe('Insertion');
+  // Les révisions remplacées restent au moniteur affecté.
+  for(const subject of ['demo-alice','demo-admin'])expect((await call('GET',`/report-revisions/${previous.id}`,undefined,null,subject)).statusCode,subject).toBe(404);
+  expect((await call('GET',`/report-revisions/${previous.id}`)).statusCode).toBe(200);
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-bob')).statusCode).toBe(404);
   await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES(gen_random_uuid(),$1,$2,$3,'2026-01-01T00:00:00Z')",[id.schoolA,id.aliceTraining,id.otherInstructorMember]);
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-other-instructor')).statusCode).toBe(200);
   expect((await call('GET',draftRoute,undefined,null,'demo-other-instructor')).statusCode).toBe(404);
@@ -139,7 +154,7 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   const progressResponse=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice');await expectContract('ProgressEnvelope',progressResponse.json());const progress=progressResponse.json().data;
   expect(progress.items).toEqual([expect.objectContaining({competencyId:school.competency,level:'GUIDED',sourceLessonId:lesson.id,sourceRevisionId:revision.id})]);
   expect(progress.unobservedCompetencyIds).toEqual([school.competency2]);
-  // L'administration de l'école relit la progression (lecture seule), sans ouvrir les bilans ni les brouillons.
+  // L'administration de l'école relit la progression (lecture seule), sans ouvrir les brouillons.
   const adminProgress=await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-admin');expect(adminProgress.statusCode,adminProgress.body).toBe(200);
   expect(adminProgress.json().data.items).toEqual(progress.items);expect(adminProgress.json().data.unobservedCompetencyIds).toEqual(progress.unobservedCompetencyIds);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-bob')).statusCode).toBe(404);
@@ -159,6 +174,9 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
   expect((await call('GET',`/report-revisions/${revision.id}`,undefined,null,'demo-alice')).statusCode).toBe(404);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items).toEqual([]);
+  // Un bilan gardé privé reste illisible par l'administration.
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-admin')).json().data.items).toEqual([]);
+  for(const target of [revision.id,previous.id])expect((await call('GET',`/report-revisions/${target}`,undefined,null,'demo-admin')).statusCode).toBe(404);
   // Enregistrer pendant que le bilan est privé ne le partage pas.
   const privateDraft=(await call('GET',draftRoute)).json().data;
   expect((await call('PUT',draftRoute,{...save,operationId:randomUUID(),observations:[{competencyId:school.competency,level:'INDEPENDENT',context:'Carrefour'}]},privateDraft.version)).statusCode).toBe(200);
@@ -166,6 +184,7 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   // Repartager : la version courante du brouillon devient une nouvelle révision ; les anciennes restent masquées pour l'élève.
   const shared=await call('PUT',sharingRoute,{...privateBody,operationId:randomUUID(),reportPrivate:false},2);expect(shared.statusCode,shared.body).toBe(200);expect(shared.json().data.reportPrivate).toBe(false);
   const again=(await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-alice')).json().data.items;expect(again.map((r:{sequence:number})=>r.sequence)).toEqual([3]);
+  expect((await call('GET',`/lessons/${lesson.id}/reports`,undefined,null,'demo-admin')).json().data.items).toEqual(again);
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`,undefined,null,'demo-alice')).json().data.items[0]).toMatchObject({level:'INDEPENDENT',sourceRevisionId:again[0].id});
   expect((await call('GET',`/lessons/${lesson.id}/reports`)).json().data.items).toHaveLength(3);
   // Affectation retirée : le moniteur ne reprend plus ni brouillon ni partage.
@@ -224,13 +243,16 @@ describe('constat, bilan, progression et compte (AP49, AP52–AP56, AP58, AP65)'
   await save(recent,'Travail',[]);
   expect(await levelOf()).toMatchObject({level:'GUIDED',sourceLessonId:older.lessonId});
   expect(await levelOf('demo-admin')).toMatchObject({level:'GUIDED',sourceLessonId:older.lessonId});
-  // Aucun effacement silencieux : la révision qui portait l'erreur reste lisible, la nouvelle est motivée.
-  const trace=await revisions(recent.lessonId);
+  // Aucun effacement silencieux : la révision qui portait l'erreur reste lisible par le moniteur, la nouvelle est motivée.
+  // L'élève ne lit plus que la révision courante (A2-09) : l'historique se vérifie du côté du moniteur affecté.
+  expect((await revisions(recent.lessonId)).map(r=>r.sequence)).toEqual([2]);
+  const trace=await revisions(recent.lessonId,'demo-instructor');
   expect(trace.map(r=>r.sequence)).toEqual([1,2]);expect(trace[0]!.observations).toHaveLength(1);expect(trace[1]!.observations).toEqual([]);
   // Bilan passé : le même geste corrige une leçon plus ancienne et plus aucun niveau ne subsiste.
   await save(older,'Travail',[]);
   expect(await levelOf()).toBeUndefined();
-  expect((await revisions(older.lessonId)).map(r=>r.sequence)).toEqual([1,2]);
+  expect((await revisions(older.lessonId,'demo-instructor')).map(r=>r.sequence)).toEqual([1,2]);
+  expect((await revisions(older.lessonId)).map(r=>r.sequence)).toEqual([2]);
   // Le niveau peut être ressaisi ensuite, sans doublon.
   await save(older,'Travail',[{competencyId:school.competency,level:'DISCOVERING',context:'Leçon 1'}]);
   expect(await levelOf()).toMatchObject({level:'DISCOVERING',sourceLessonId:older.lessonId});

@@ -141,6 +141,14 @@ extension SchoolTraining {
 @MainActor
 protocol AccessTokenSource: AnyObject {
     func accessToken() async throws -> String
+    /// L’API a répondu 401 à ce jeton : le prochain `accessToken()` doit le renouveler auprès du fournisseur,
+    /// même si l’appareil le croit encore valable. `true` seulement si un autre jeton peut être attendu ;
+    /// une source qui ne renouvelle rien répond `false` et le 401 reste une session expirée.
+    func invalidateAccessToken(_ token: String) async -> Bool
+}
+
+extension AccessTokenSource {
+    func invalidateAccessToken(_ token: String) async -> Bool { false }
 }
 
 @MainActor

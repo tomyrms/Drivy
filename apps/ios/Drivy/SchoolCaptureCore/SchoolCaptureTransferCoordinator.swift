@@ -17,7 +17,10 @@ final class SchoolCaptureTransferCoordinator {
     private let stopCollection: @MainActor (UUID?) -> Void
     private var generation = UUID()
     private var invalidated = false
-    private(set) var isTransmitting = false
+    /// Une opération à la fois. Les transferts et finalisations attendent leur tour ; seul le départ refuse.
+    private var busy = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    var isTransmitting: Bool { busy }
 
     /// stopCollection ferme synchroniquement la source ET l'admission des callbacks.
     /// nil ferme toute collecte du contexte ; le scellement durable est ensuite assuré
@@ -72,9 +75,9 @@ final class SchoolCaptureTransferCoordinator {
     /// Premier envoi ou renvoi demandé par l'utilisateur : même UUID, même corps.
     /// Le départ ne fait pas partie d'une vidange automatique de lots.
     func transmit(operationID: UUID) async throws -> Result {
-        guard !isTransmitting else { throw SchoolCaptureStorageFailure.uncertainCommand }
-        isTransmitting = true
-        defer { isTransmitting = false }
+        guard !busy else { throw SchoolCaptureStorageFailure.uncertainCommand }
+        busy = true
+        defer { releaseTurn() }
         let request = generation
         do { return try await sendPersisted(operationID: operationID, request: request) }
         catch { closeOnAccessFailure(error); throw error }
@@ -82,11 +85,11 @@ final class SchoolCaptureTransferCoordinator {
 
     /// Les arrêts sont transmis avant les lots : une grosse file de mesures ne doit
     /// pas retarder l'information d'arrêt. Aucun choix ou départ en attente n'est émis.
+    /// Un transfert déjà en cours (signalement ancré) est attendu, jamais refusé : la fin de leçon s’enchaîne.
     @discardableResult
     func transferAvailableData(captureID: UUID) async throws -> Int {
-        guard !isTransmitting else { throw SchoolCaptureStorageFailure.uncertainCommand }
-        isTransmitting = true
-        defer { isTransmitting = false }
+        await takeTurn()
+        defer { releaseTurn() }
         let request = generation
         do {
             try check(request)
@@ -118,20 +121,25 @@ final class SchoolCaptureTransferCoordinator {
     /// allowPartial doit venir d'une confirmation distincte de l'utilisateur.
     /// Une précédente finalisation incertaine conserve ses octets et sa version.
     func finalize(captureID: UUID, allowPartial: Bool) async throws -> SchoolCaptureSession {
-        guard !isTransmitting else { throw SchoolCaptureStorageFailure.uncertainCommand }
-        isTransmitting = true
-        defer { isTransmitting = false }
+        await takeTurn()
+        defer { releaseTurn() }
         let request = generation
         do {
             let current = try await reconcileCapture(captureID, request: request)
             let confirmed = try await store.acknowledgedFinalizations(scope: scope)
             try check(request)
-            if confirmed[captureID] != nil { return current.serverCapture }
+            if confirmed[captureID] != nil {
+                _ = try? await store.purgeSettledCaptures(captureID: captureID)
+                return current.serverCapture
+            }
             let mutation = try await store.stageFinalization(captureID: captureID, scope: scope,
                 expectedVersion: current.serverCapture.version, allowPartial: allowPartial)
             try check(request)
             let result = try await sendPersisted(operationID: mutation.id, request: request)
             guard case .confirmed(.capture(let projection)) = result else { throw SchoolCaptureFailure.invalidResponse }
+            // Finalisation acquittée : les positions confirmées quittent l’appareil. Un échec de purge ne change
+            // rien au résultat ; la purge suivante (ouverture du coffre) la reprend.
+            _ = try? await store.purgeSettledCaptures(captureID: captureID)
             return projection
         } catch { closeOnAccessFailure(error); throw error }
     }
@@ -210,6 +218,16 @@ final class SchoolCaptureTransferCoordinator {
         let current = try await store.reconcileProjection(projection, scope: scope)
         try check(request)
         return current
+    }
+
+    /// Tour d’opération, dans l’ordre d’arrivée. Le tour libéré passe directement au suivant.
+    private func takeTurn() async {
+        guard busy else { busy = true; return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    private func releaseTurn() {
+        if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() }
     }
 
     private func check(_ request: UUID) throws {

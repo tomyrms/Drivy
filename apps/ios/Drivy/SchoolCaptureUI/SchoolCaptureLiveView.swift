@@ -20,6 +20,8 @@ struct SchoolCaptureLiveView: View {
     /// Un trajet s’ouvre en suivi, nord en haut : la carte accompagne la voiture sans qu’on y touche.
     @State private var followMode: DrivyMapFollowMode = .position
     @State private var observationMoment: ObservationMoment?
+    /// Hauteur que « Signaler » a mesurée pour ses tuiles ; gardée d’une ouverture à l’autre, elle évite un réglage visible.
+    @State private var observationPaletteHeight: CGFloat?
     @State private var observationNotice: ObservationNotice?
     @State private var isFinishing = false
     @State private var confirmsFinish = false
@@ -103,9 +105,10 @@ struct SchoolCaptureLiveView: View {
                                 .onTapGesture { closeObservation() }
                                 .accessibilityHidden(true)
                             SchoolLiveObservationPalette(recorder: moment.recorder, observedAt: moment.instant,
-                                anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation)
+                                anchor: moment.anchor, onRecorded: { showObservationNotice(moment.recorder) }, onClose: closeObservation,
+                                onIdealHeight: { observationPaletteHeight = $0 })
                                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
-                                .frame(height: min(DrivyMapLayout.reportPaletteHeight, max(0, geometry.size.height - DrivySpacing.xl)))
+                                .frame(height: paletteHeight(for: moment.recorder, in: geometry.size))
                                 .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.mapPanel, style: .continuous))
                                 .drivyShadow(radius: 18, y: 8)
@@ -291,19 +294,19 @@ struct SchoolCaptureLiveView: View {
         }
     }
 
-    /// Identité et état GPS ; les actions secondaires de leçon sont dans le menu.
-    private func heading(floating: Bool = true) -> some View {
-        TimelineView(.periodic(from: clockOrigin, by: 1)) { _ in
-            DrivyLiveTopBar(
-                context: learnerName,
-                elapsed: showsElapsed ? elapsedLabel : nil,
-                elapsedLabel: "Temps écoulé depuis le départ GPS",
-                status: status,
-                leading: isTabRoot ? nil : .back(label: "Revenir à la leçon",
-                    hint: controller.presentsStopEnabled ? "Le GPS conserve son état actuel" : "Fermer le trajet",
-                    isDisabled: isFinishing) { close() },
-                floating: floating
-            ) { lessonMenu }
+    /// Identité et état GPS ; les actions secondaires de leçon sont dans le menu. Seule la durée est relue
+    /// chaque seconde : le retour, l’état et le menu ne sont pas reconstruits à la seconde.
+    @ViewBuilder private func heading(floating: Bool = true) -> some View {
+        let back: DrivyMapHeaderAction? = isTabRoot ? nil : .back(label: "Revenir à la leçon",
+            hint: controller.presentsStopEnabled ? "Le GPS conserve son état actuel" : "Fermer le trajet",
+            isDisabled: isFinishing) { close() }
+        if showsElapsed {
+            DrivyLiveTopBar(context: learnerName, tickingFrom: clockOrigin, elapsed: { elapsedLabel },
+                elapsedLabel: "Temps écoulé depuis le départ GPS", status: status, leading: back,
+                floating: floating) { lessonMenu }
+        } else {
+            DrivyLiveTopBar(context: learnerName, elapsed: nil, elapsedLabel: "Temps écoulé depuis le départ GPS",
+                status: status, leading: back, floating: floating) { lessonMenu }
         }
     }
 
@@ -436,11 +439,27 @@ struct SchoolCaptureLiveView: View {
         .accessibilityIdentifier("capture-signal-observation")
         .popover(item: observationPopover, attachmentAnchor: .rect(.bounds)) { moment in
             SchoolLiveObservationSheet(recorder: moment.recorder, observedAt: moment.instant, anchor: moment.anchor,
-                onRecorded: { showObservationNotice(moment.recorder) })
+                onRecorded: { showObservationNotice(moment.recorder) }, onIdealHeight: { observationPaletteHeight = $0 })
                 .frame(width: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.width : nil,
-                       height: horizontalSizeClass == .regular ? DrivyMapLayout.reportPopoverSize.height : nil)
+                       height: horizontalSizeClass == .regular ? popoverHeight(for: moment.recorder) : nil)
                 .presentationCompactAdaptation(.sheet)
         }
+    }
+
+    /// Volet posé sur la carte : la hauteur que ses tuiles demandent, sans dépasser l’écran. Peu de tuiles, volet bas ;
+    /// beaucoup de tuiles, volet haut, jusqu’à la hauteur de l’écran. Au-delà, seule la grille défile.
+    private func paletteHeight(for recorder: SchoolLiveObservationRecorder, in size: CGSize) -> CGFloat {
+        let width = min(DrivyMapLayout.floatingPanelMaxWidth, max(0, size.width - 2 * DrivySpacing.m))
+        let wanted = observationPaletteHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(
+            tileCount: recorder.expectedTileCount, width: width, textSize: dynamicTypeSize)
+        return min(wanted, max(0, size.height - DrivySpacing.xl))
+    }
+
+    /// Popover de l’iPad : jamais plus haut que sa taille de référence, plus bas quand il y a peu de tuiles.
+    private func popoverHeight(for recorder: SchoolLiveObservationRecorder) -> CGFloat {
+        let wanted = observationPaletteHeight ?? SchoolSignalGridLayout.estimatedPaletteHeight(
+            tileCount: recorder.expectedTileCount, width: DrivyMapLayout.reportPopoverSize.width, textSize: dynamicTypeSize)
+        return min(wanted, DrivyMapLayout.reportPopoverSize.height)
     }
 
     private func closeObservation() {
@@ -631,11 +650,7 @@ struct SchoolCaptureLiveView: View {
     private var lessonMenu: some View {
         Menu {
             Button("Voir la leçon", systemImage: "doc.text") { close() }
-            if observationClient != nil {
-                Button("Annuler la leçon", systemImage: "xmark.circle", role: .destructive) { openCancellation() }
-                    .disabled(!controller.presentsStopEnabled && controller.state != .saved)
-                    .accessibilityIdentifier("capture-cancel-lesson")
-            }
+            // Une leçon commencée ne s’annule plus (API : 409 LESSON_STARTED) : on la termine.
         } label: {
             // La lecture de la leçon à annuler se signale là où le geste a eu lieu : le panneau reste en place.
             Group {

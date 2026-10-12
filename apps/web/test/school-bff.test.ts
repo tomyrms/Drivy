@@ -76,6 +76,13 @@ describe('Liste blanche des routes de gestion', () => {
       expect(match?.path, `${method} ${path}`).toBe(`/v1${path}`);
       expect(match?.route.ifMatch === true, `${method} ${path}`).toBe(ifMatch === true);
     }
+    // Signalements configurables : une lecture et une écriture versionnée, rien d'autre sous ce chemin.
+    expect(matchSchoolRoute('GET', `/schools/${school}/observation-themes`, '')?.path).toBe(`/v1/schools/${school}/observation-themes`);
+    const themesWrite = matchSchoolRoute('PUT', `/schools/${school}/observation-themes`, '');
+    expect(themesWrite?.path).toBe(`/v1/schools/${school}/observation-themes`);
+    expect(themesWrite?.route.ifMatch).toBe(true);
+    expect(themesWrite?.route.bodyLimit).toBeGreaterThan(1_000);
+    expect(themesWrite?.route.bodyLimit).toBeLessThanOrEqual(8_192);
     expect(matchSchoolRoute('GET', `/schools/${school}/lessons`, `?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`)?.query)
       .toBe(`?from=2026-09-28T00%3A00%3A00Z&to=2026-10-05T00%3A00%3A00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`);
     for (const [method, path, search] of [
@@ -88,6 +95,9 @@ describe('Liste blanche des routes de gestion', () => {
       ['GET', `/schools/${school}/report-drafts`, ''],
       ['GET', `/schools/${school}/trainings`, '?q=1'],
       ['DELETE', `/schools/${school}`, ''],
+      ['POST', `/schools/${school}/observation-themes`, ''], ['PATCH', `/schools/${school}/observation-themes`, ''],
+      ['DELETE', `/schools/${school}/observation-themes`, ''], ['GET', `/schools/${school}/observation-themes/vehicle`, ''],
+      ['PUT', `/schools/${school}/observation-themes/vehicle`, ''], ['GET', `/schools/${school}/observation-themes`, '?limit=5'],
       ['PATCH', `/schools/${school}/offerings`, ''],
       ['POST', `/schools/${school}/lessons`, ''],
       ['GET', `/schools/not-a-uuid`, ''],
@@ -178,6 +188,27 @@ describe('Écritures de gestion', () => {
     expect(created.statusCode).toBe(201);
     expect(gateway.mock.calls[0]![0].ifMatch).toBeUndefined();
     expect(gateway.mock.calls[0]![0].idempotencyKey).toBe(operationId.toUpperCase());
+  });
+
+  test('les signalements se lisent et s’enregistrent avec If-Match, jamais sans version', async () => {
+    const themes = [{ key: 'vehicle', visible: true }, { key: 'observation', visible: false }];
+    const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({ id: school, schoolId: school, version: 2 }), etag: '"2"' }));
+    const h = await harness(gateway); await h.login();
+    const url = `/app/bff/schools/${school}/observation-themes`;
+    expect((await h.get(url)).statusCode).toBe(200);
+    expect(gateway).toHaveBeenLastCalledWith({ method: 'GET', path: `/v1/schools/${school}/observation-themes`, query: '' }, h.tokens.accessToken);
+    expect((await h.write('PUT', url, { operationId, themes }, { 'idempotency-key': operationId })).statusCode).toBe(428);
+    expect((await h.write('PUT', url, { operationId, themes }, { 'if-match': '"1"' })).statusCode).toBe(400);
+    expect(gateway).toHaveBeenCalledTimes(1);
+    const saved = await h.write('PUT', url, { operationId, themes }, { 'idempotency-key': operationId, 'if-match': '"1"' });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.headers.etag).toBe('"2"');
+    expect(gateway).toHaveBeenLastCalledWith({ method: 'PUT', path: `/v1/schools/${school}/observation-themes`, query: '',
+      body: { operationId, themes }, idempotencyKey: operationId, ifMatch: '"1"' } satisfies SchoolRequest, h.tokens.accessToken);
+    const tooLarge = await h.write('PUT', url, { operationId, themes: Array.from({ length: 400 }, (_, index) => ({ key: `theme-${index}`, visible: true })) },
+      { 'idempotency-key': operationId, 'if-match': '"1"' });
+    expect(tooLarge.statusCode).toBe(413);
+    expect(gateway).toHaveBeenCalledTimes(2);
   });
 
   test('If-Match est exigé et strict sur les commandes versionnées', async () => {

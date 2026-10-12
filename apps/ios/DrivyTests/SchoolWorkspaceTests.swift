@@ -488,6 +488,73 @@ struct SchoolWorkspaceTests {
         #expect(!SchoolOnboardingDeferral.isDeferred(membership, now: now.addingTimeInterval(7 * 86_400 + 1), defaults: defaults))
         #expect(!SchoolOnboardingDeferral.isDeferred(UUID(), now: now, defaults: defaults))
     }
+
+    @Test func rereadingTheOpenDossierAdvancesItsReadCountOnlyOnSuccess() async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.selectLearner(WorkspaceFixture.learnerID)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learnerReadCount == 1)
+        // Relecture silencieuse du même dossier : aucun indicateur de chargement, mais le compteur avance.
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learnerReadCount == 2)
+        #expect(!workspace.isLoadingLearner)
+        api.learnerHandler = { _, _ in throw SchoolAPIError.unavailable }
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learnerReadCount == 2)
+    }
+
+    @Test func silentLearnerRefreshKeepsSelectionAndLoadedPagesAndShowsANewLearner() async {
+        let api = WorkspaceAPIStub()
+        let first = WorkspaceFixture.learner(id: WorkspaceFixture.learnerID, name: "Première")
+        let second = WorkspaceFixture.learner(id: UUID(), name: "Deuxième")
+        let third = WorkspaceFixture.learner(id: UUID(), name: "Troisième")
+        api.learnersHandler = { _, _, cursor in
+            cursor == nil ? .init(items: [first, second], nextCursor: "page-2") : .init(items: [third], nextCursor: nil)
+        }
+        api.learnerHandler = { _, _ in first }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        await workspace.loadMoreLearners()
+        workspace.selectLearner(first.id)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learners == [first, second, third])
+        let newcomer = WorkspaceFixture.learner(id: UUID(), name: "Arrivée")
+        let renamed = WorkspaceFixture.learner(id: first.id, name: "Première corrigée", version: 2)
+        api.learnersHandler = { _, _, cursor in
+            #expect(cursor == nil)
+            return .init(items: [newcomer, renamed], nextCursor: "page-2")
+        }
+        await workspace.refreshLearners(minimumInterval: 0)
+        #expect(workspace.learners == [newcomer, renamed, second, third])
+        #expect(workspace.selectedLearnerID == first.id)
+        #expect(workspace.learner == first)
+        #expect(workspace.nextLearnersCursor == nil)
+        #expect(!workspace.isSearching && workspace.learnersError == nil)
+    }
+
+    @Test func silentLearnerRefreshIsBoundedAndSaysNothingOnFailure() async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let shown = workspace.learners
+        let read = api.learnerQueries.count
+        let now = Date()
+        // La liste vient d’être lue : pas de seconde lecture dans la minute.
+        await workspace.refreshLearners(now: now.addingTimeInterval(10))
+        #expect(api.learnerQueries.count == read)
+        await workspace.refreshLearners(now: now.addingTimeInterval(120))
+        #expect(api.learnerQueries.count == read + 1)
+        api.learnersHandler = { _, _, _ in throw SchoolAPIError.unavailable }
+        await workspace.refreshLearners(now: now.addingTimeInterval(300))
+        #expect(api.learnerQueries.count == read + 2)
+        #expect(workspace.learnersError == nil)
+        #expect(workspace.learners.map(\.id) == shown.map(\.id))
+        // Une panne ne compte pas comme une lecture : l’occasion suivante réessaie sans attendre une minute.
+        await workspace.refreshLearners(now: now.addingTimeInterval(310))
+        #expect(api.learnerQueries.count == read + 3)
+    }
 }
 
 @MainActor

@@ -2,6 +2,7 @@ import Foundation
 import LocalAuthentication
 import Observation
 import SwiftUI
+import UIKit
 
 /// Face ID, Touch ID ou le code de l'appareil rouvrent l'app après une longue absence.
 /// La session reste dans le Trousseau : le verrou masque seulement l'interface.
@@ -92,6 +93,89 @@ final class AppLock {
         }
         if granted { isLocked = false }
         else { errorMessage = "Le déverrouillage n’a pas abouti. Réessaie avec la reconnaissance biométrique ou le code de l’appareil." }
+    }
+}
+
+/// Ce que la fenêtre de protection montre au-dessus de toute l’app, feuilles comprises.
+enum AppCover: Equatable {
+    case nothing, lock, shield
+
+    /// Verrouillée, l’app ne montre que son verrou. Sinon, une session ouverte est masquée dès que la scène
+    /// n’est plus active (sélecteur d’apps, alerte du système). Sans session, il n’y a rien à masquer : la
+    /// page de connexion du fournisseur d’identité n’est jamais recouverte.
+    static func content(isLocked: Bool, sceneIsActive: Bool, hasSession: Bool) -> AppCover {
+        if isLocked { return .lock }
+        return hasSession && !sceneIsActive ? .shield : .nothing
+    }
+}
+
+/// Le verrou et le masque de confidentialité vivent dans leur propre fenêtre, au-dessus des feuilles et du
+/// rideau de départ : un calque posé sur la racine passait sous toute feuille ouverte. L’invite Face ID et les
+/// alertes du système restent au-dessus. Aucune animation : le masque est en place dès que la scène se désactive.
+@MainActor
+final class AppCoverPresenter {
+    private let lock: AppLock
+    private var window: UIWindow?
+    private var host: UIHostingController<AppCoverView>?
+    private var shown = AppCover.nothing
+    private var sceneIsActive = false
+    private var hasSession = false
+
+    init(lock: AppLock) { self.lock = lock }
+
+    /// `nil` garde la dernière valeur connue ; l’état du verrou est relu à chaque appel.
+    func update(sceneIsActive: Bool? = nil, hasSession: Bool? = nil) {
+        if let sceneIsActive { self.sceneIsActive = sceneIsActive }
+        if let hasSession { self.hasSession = hasSession }
+        show(AppCover.content(isLocked: lock.isLocked, sceneIsActive: self.sceneIsActive, hasSession: self.hasSession))
+    }
+
+    private func show(_ content: AppCover) {
+        guard content != shown else { return }
+        guard content != .nothing else {
+            shown = .nothing
+            window?.isHidden = true
+            host?.rootView = AppCoverView(content: .nothing, lock: lock)
+            return
+        }
+        if window == nil {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return }
+            let controller = UIHostingController(rootView: AppCoverView(content: content, lock: lock))
+            controller.view.accessibilityViewIsModal = true
+            let created = UIWindow(windowScene: scene)
+            // Au-dessus des feuilles et du rideau de départ (lui au niveau alerte − 1) ; l’invite Face ID du système reste au-dessus.
+            created.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue + 1)
+            created.rootViewController = controller
+            // Même thème que l’app (choix de Paramètres), comme le rideau de départ.
+            DrivyAppearance.apply(to: created)
+            host = controller
+            window = created
+        }
+        // Le clavier d’un champ encore actif resterait au-dessus du verrou.
+        if content == .lock {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        shown = content
+        host?.rootView = AppCoverView(content: content, lock: lock)
+        window?.isHidden = false
+    }
+}
+
+/// Contenu de la fenêtre de protection : le verrou, le masque, ou rien pendant qu’elle est retirée.
+struct AppCoverView: View {
+    let content: AppCover
+    let lock: AppLock
+
+    var body: some View {
+        Group {
+            switch content {
+            case .lock: AppLockView(lock: lock)
+            case .shield: AppPrivacyShield()
+            case .nothing: Color.clear
+            }
+        }
+        .tint(DrivyTheme.accent)
     }
 }
 

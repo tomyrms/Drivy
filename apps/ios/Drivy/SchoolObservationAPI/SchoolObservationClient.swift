@@ -7,6 +7,7 @@ import Foundation
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
     var reportClient: SchoolLessonReportClient { agenda.reportClient }
+    var themeClient: SchoolObservationThemeClient { SchoolObservationThemeClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
 
     init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
@@ -135,7 +136,7 @@ import Foundation
             return .removed(id)
         }
         let required: Set<String> = ["operationId", "draftId", "captureId", "segmentId", "pointSequence", "competencyId", "text", "origin", "eventStatus"]
-        let allowed = required.union(["observedAt", "eventKind"])
+        let allowed = required.union(["observedAt", "eventKind", "themeKey"])
         guard let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: command.body), body.isValid, body.operationId == command.id,
               required.isSubset(of: Set(payload.keys)), Set(payload.keys).isSubset(of: allowed) else { throw SchoolObservationFailure.invalidResponse }
         let path: [String], method: String
@@ -216,8 +217,10 @@ import Foundation
         catch SchoolAPIError.forbidden { throw SchoolObservationFailure.forbidden }
         catch SchoolAPIError.identityNotLinked { throw SchoolObservationFailure.forbidden }
         catch { throw SchoolObservationFailure.unavailable }
+        // Même adhésion active, rôle moniteur : une époque plus récente (une affectation de plus) n’arrête pas un
+        // signalement en route. L’école reste juge de l’écriture.
         guard person.personId == scope.personID, person.memberships.contains(where: {
-            $0.schoolId == scope.schoolID && $0.membershipId == scope.membershipID && $0.accessEpoch == scope.accessEpoch && $0.roles.contains("INSTRUCTOR")
+            scope.isConfirmed(by: $0) && $0.roles.contains("INSTRUCTOR")
         }) else { throw SchoolObservationFailure.forbidden }
     }
     private func request<Value: Decodable>(_ scope: SchoolCommandScope, _ path: [String], query: [URLQueryItem] = [],
@@ -267,6 +270,7 @@ import Foundation
             "ANCHOR_INVALID": "Cette position n’est plus admissible. Relis et confirme explicitement une observation sans position.",
             "LESSON_STATE_CONFLICT": "Cette leçon est annulée ou non réalisée. L’observation ne peut pas y être ajoutée.",
             "CURRICULUM_VERSION_MISMATCH": "Choisis un thème du référentiel actuel de cette formation.",
+            "OBSERVATION_THEME_MISMATCH": "Ce thème ne correspond plus à la compétence choisie. Ferme puis rouvre Signaler.",
             "OBSERVATION_LIMIT_REACHED": "Cette leçon contient déjà 100 observations privées. Relis-les avant un nouvel ajout.",
             "OBSERVATION_TIME_CHANGED": "La qualification conserve l’instant du signalement. Corrige l’heure explicitement en revue.",
             "OBSERVATION_TIME_INVALID": "Relis l’heure du signalement avant de confirmer.",

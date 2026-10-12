@@ -60,12 +60,21 @@ async function validateCompetencies(db:PoolClient,schoolId:string,trainingId:str
  if(rows.length!==new Set(ids).size)throw new ApiError(409,'CURRICULUM_VERSION_MISMATCH','Choisissez les compétences du référentiel de cette formation.');
  return rows.map(row=>({id:row.id,label:row.label,version:row.version,curriculumVersionId:row.curriculum_version_id}));
 }
-async function account(db:PoolClient,schoolId:string,lessonId:string){
+/** Le motif d'une contre-écriture vient de l'administration (correction d'issue) : il reste au bureau et au moniteur de la leçon.
+ * Un autre lecteur du compte (l'élève) reçoit un libellé neutre ; les écritures initiales portent déjà un texte du serveur. */
+const neutralChargeReason='Correction de la leçon par l’école.';
+async function account(db:PoolClient,schoolId:string,lessonId:string,staff?:boolean){
  const row=(await db.query<{id:string;version:number;planned_price_cents:string}>('SELECT * FROM drivy.lesson_account WHERE school_id=$1 AND lesson_id=$2',[schoolId,lessonId])).rows[0];if(!row)throw notFound();
  const charges=(await db.query<{id:string;version:number;kind:'INITIAL'|'ADJUSTMENT'|'REVERSAL';amount_signed_cents:string;reason:string|null}>('SELECT * FROM drivy.charge_entry WHERE school_id=$1 AND account_id=$2 ORDER BY created_at,id',[schoolId,row.id])).rows;
  const sum=charges.reduce((total,entry)=>total+BigInt(entry.amount_signed_cents),0n);
  if(sum<0n||sum>BigInt(Number.MAX_SAFE_INTEGER))throw new ApiError(409,'ACCOUNT_RECONCILIATION_REQUIRED','Le compte doit être rapproché.');
- return {id:row.id,ownerType:'LESSON' as const,ownerId:lessonId,lessonId,version:row.version,currency:'CHF' as const,plannedPriceCents:Number(row.planned_price_cents),chargeCents:Number(sum),netReceivedCents:0,balanceCents:Number(sum),charges:charges.map(entry=>({id:entry.id,schoolId,version:entry.version,accountId:row.id,lessonId,kind:entry.kind,amountSignedCents:Number(entry.amount_signed_cents),reason:entry.reason})),payments:[]};
+ const readerIsStaff=staff??await lessonStaff(db,schoolId,lessonId);
+ return {id:row.id,ownerType:'LESSON' as const,ownerId:lessonId,lessonId,version:row.version,currency:'CHF' as const,plannedPriceCents:Number(row.planned_price_cents),chargeCents:Number(sum),netReceivedCents:0,balanceCents:Number(sum),charges:charges.map(entry=>({id:entry.id,schoolId,version:entry.version,accountId:row.id,lessonId,kind:entry.kind,amountSignedCents:Number(entry.amount_signed_cents),
+  reason:entry.kind==='INITIAL'||readerIsStaff?entry.reason:neutralChargeReason})),payments:[]};
+}
+/** Administration de l'école, ou moniteur de la leçon encore affecté (mêmes droits que l'écriture sur la leçon). */
+async function lessonStaff(db:PoolClient,schoolId:string,lessonId:string){
+ return (await db.query<{ok:boolean}>('SELECT drivy.lesson_access(l.training_id,l.instructor_membership_id,true) AS ok FROM drivy.lesson l WHERE l.school_id=$1 AND l.id=$2',[schoolId,lessonId])).rows[0]?.ok===true;
 }
 async function event(db:PoolClient,row:LessonRow,operationId:string,eventType:string){await db.query('INSERT INTO drivy.lesson_event_outbox(school_id,lesson_id,lesson_version,event_type,operation_id) VALUES($1,$2,$3,$4,$5)',[row.school_id,row.id,row.version,eventType,operationId]);}
 
@@ -118,7 +127,9 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
  app.get(`${base}/lessons/:lessonId/preparation`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>{
   const lessonId=targetID(r,'lessonId'),row=preparationProjection(await preparation(db,schoolID(r),lessonId));
   const isAuthor=(await db.query<{ok:boolean}>('SELECT drivy.report_lesson_author($1) AS ok',[lessonId])).rows[0]?.ok;
-  return isAuthor?row:{...row,administrativeCheckNote:null};
+  // Un autre lecteur (l'élève) reçoit les objectifs et les repères, sans la note administrative ni les notes des repères (A2-12).
+  // La clé note reste présente à null : le contrat et l'app la décodent comme facultative.
+  return isAuthor?row:{...row,administrativeCheckNote:null,plannedWaypoints:row.plannedWaypoints.map(waypoint=>({...waypoint,note:null}))};
  });reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
  app.put(`${base}/lessons/:lessonId/preparation`,{bodyLimit:100_000},async(r,reply)=>{
   const body=preparationCommand.parse(r.body),lessonId=targetID(r,'lessonId'),expected=requireVersion(r.headers['if-match']),bound={...body,lessonId};
@@ -163,7 +174,7 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
    await db.query('UPDATE drivy.reservation SET active=false WHERE school_id=$1 AND lesson_id=$2 AND active',[school.id,lessonId]);await event(db,lesson,body.operationId,'LessonCompleted');
    await syncSharedReport(db,school.id,lessonId,body.operationId);
    const shared=await getLesson(db,school.id,lessonId),sharedDraft=await draft(db,school.id,created.id);
-   return {data:{lesson:lessonProjection(shared),draft:await draftProjection(db,sharedDraft),account:await account(db,school.id,lessonId)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:shared.version,changedFields:['status','actualStart','actualEnd','draft','account'],...(body.anomalyReason?.trim()?{reason:body.anomalyReason.slice(0,1000)}:{})};
+   return {data:{lesson:lessonProjection(shared),draft:await draftProjection(db,sharedDraft),account:await account(db,school.id,lessonId,true)},action:'LessonCompleted',resourceType:'Lesson',resourceId:lessonId,resourceVersion:shared.version,changedFields:['status','actualStart','actualEnd','draft','account'],...(body.anomalyReason?.trim()?{reason:body.anomalyReason.slice(0,1000)}:{})};
   });reply.header('ETag',`"${value.lesson.version}"`);return envelope(value,r);
  });
  app.get(`${base}/report-drafts/:draftId`,async(r,reply)=>{empty.parse(r.query);const value=await read(r,async db=>draftProjection(db,await draft(db,schoolID(r),targetID(r,'draftId'))));reply.header('ETag',`"${value.version}"`);return envelope(value,r);});
@@ -216,7 +227,10 @@ export function registerLessonReports(app:FastifyInstance,options:{pool:Pool;ver
   const query=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),cursor:z.string().max(6000).optional()}).strict().parse(r.query),schoolId=schoolID(r),lessonId=targetID(r,'lessonId');
   const identity=await options.verifyToken(r.headers.authorization);
   const data=await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{
-   const lesson=await getLesson(db,schoolId,lessonId);await trainingAccess(db,lesson.training_id);
+   // Moniteur affecté, élève, ou administration de l'école (migration 026) ; la politique revision_read choisit les révisions :
+   // tout l'historique pour le moniteur affecté, la seule révision courante pour l'élève et le bureau.
+   const lesson=await getLesson(db,schoolId,lessonId);
+   if(!(await db.query<{ok:boolean}>('SELECT drivy.progress_training_access($1) AS ok',[lesson.training_id])).rows[0]?.ok)throw notFound();
    const scope=JSON.stringify(['reports',schoolId,actor.personId,member!.accessEpoch,lessonId,query.limit]),position=cursors.decode(query.cursor,scope);
    const rows=(await db.query<RevisionRow>(`SELECT *,to_char(published_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.report_revision
     WHERE school_id=$1 AND lesson_id=$2 AND ($3::timestamptz IS NULL OR (published_at,id)>($3::timestamptz,$4::uuid)) ORDER BY published_at,id LIMIT $5`,[schoolId,lessonId,position?.createdAt??null,position?.id??null,query.limit+1])).rows;

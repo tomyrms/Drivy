@@ -179,6 +179,20 @@ final class DrivyAPIClient: SchoolAPI {
             components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         }
         guard let target = components.url else { throw SchoolAPIError.invalidConfiguration }
+        let token = try await accessToken()
+        do { return try await perform(target, token: token) }
+        catch SchoolAPIError.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable (horloge en retard, session
+            // révoquée chez le fournisseur) : un seul renouvellement forcé et un seul nouvel essai avant de
+            // conclure à une session expirée. Une source qui ne renouvelle rien garde le 401.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolAPIError.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolAPIError.unauthorized }
+            return try await perform(target, token: renewed)
+        }
+    }
+
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolAPIError.unauthorized }
@@ -187,6 +201,10 @@ final class DrivyAPIClient: SchoolAPI {
         catch { throw SchoolAPIError.unavailable }
         try Task.checkCancellation()
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAPIError.unauthorized }
+        return token
+    }
+
+    private func perform<Value: Decodable & Sendable>(_ target: URL, token: String) async throws -> Value {
         var request = URLRequest(url: target)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

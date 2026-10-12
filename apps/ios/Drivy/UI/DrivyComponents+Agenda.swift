@@ -34,10 +34,6 @@ enum DrivyLessonState {
         }
     }
 
-    /// What a lesson screen flags: a lesson left without outcome, cancelled, missed,
-    /// or whose state the app cannot read.
-    var isUnusual: Bool { self == .waiting || self == .toFinish || self == .cancelled || self == .noShow || self == .unknown }
-
     /// A lesson that will not be driven (cancelled, missed): its row steps back
     /// instead of competing with the lessons still to come.
     var isClosed: Bool { self == .cancelled || self == .noShow }
@@ -337,7 +333,8 @@ struct DrivyObservationSummary: View {
     /// Le thème du signalement, teinté par son appréciation ; repère ou note sinon.
     private var glyph: DrivyObservationGlyph {
         if observation.isMarker { return .moment }
-        let theme = SchoolObservationPictogram(title: observation.text) ?? SchoolObservationPictogram(title: competency)
+        let theme = SchoolObservationPictogram(themeKey: observation.themeKey, title: observation.text)
+            ?? SchoolObservationPictogram(title: competency)
         return theme?.glyph ?? status?.glyph ?? .note
     }
     var body: some View {

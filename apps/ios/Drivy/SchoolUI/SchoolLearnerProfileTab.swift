@@ -87,8 +87,8 @@ struct SchoolLearnerProfileTab: View {
             path = []; showsInformation = false; information?.invalidate(); information = nil
         }
         // Informations modifiées depuis leur feuille : le dossier est relu, le détail déplié le suit.
-        .onChange(of: workspace.isLoadingLearner) { _, loading in
-            if !loading, showsInformation, let learner { Task { await loadInformation(learner) } }
+        .onChange(of: workspace.learnerReadCount) { _, _ in
+            if showsInformation, let learner { Task { await loadInformation(learner) } }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh(olderThan: 30) } }

@@ -150,7 +150,7 @@ enum SchoolCaptureLocationInterruption: Sendable {
         case .expired: "L’autorisation GPS est arrivée à sa fin. Les positions enregistrées sont conservées."
         case .scopeChanged: "Le compte ou les droits de l’école ont changé. L’enregistrement GPS est arrêté."
         case .signalLost: "Le signal GPS revient. L’enregistrement reprend dans un nouveau segment."
-        case .clockChanged: "L’heure de l’appareil a changé. Le GPS est arrêté pour préserver l’heure des positions."
+        case .clockChanged: "L’heure de l’appareil a changé. L’enregistrement reprend dans un nouveau segment."
         case .systemPaused: "iOS a interrompu la localisation. Les positions enregistrées sont conservées."
         case .deviceFailure: "iOS n’a pas pu poursuivre la localisation. Les positions enregistrées sont conservées."
         case .storageLow: "L’espace disponible est insuffisant. Le GPS est arrêté ; libère de l’espace sur l’appareil."

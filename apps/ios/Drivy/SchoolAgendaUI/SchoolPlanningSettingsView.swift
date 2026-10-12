@@ -53,12 +53,27 @@ import Foundation
                 $0.membershipId == scope.membershipID && $0.schoolId == scope.schoolID && $0.accessEpoch == scope.accessEpoch
                     && $0.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) })
             }) else { throw SchoolPlanningFailure.forbidden }
-            let school = try await client.reader.school(id: scope.schoolID)
-            let current = try await client.defaults(schoolID: scope.schoolID, membershipID: scope.membershipID)
-            let offerings: [SchoolOffering] = try await client.records(scope.schoolID, path: ["offerings"])
-            let policies: [SchoolCatalogPolicy] = try await client.records(scope.schoolID, path: ["policy-versions"])
-            let products: [SchoolServiceProduct] = try await client.records(scope.schoolID, path: ["service-products"], query: [URLQueryItem(name: "current", value: "true")])
-            let terms: [SchoolCommercialTerms] = try await client.records(scope.schoolID, path: ["commercial-terms"])
+            // Droits relus d’abord ; les lectures suivantes sont indépendantes et partent ensemble.
+            let schoolRead = Task<SchoolDetails, any Error> { @MainActor in try await self.client.reader.school(id: self.scope.schoolID) }
+            let defaultsRead = Task<SchoolPlanningDefaults, any Error> { @MainActor in
+                try await self.client.defaults(schoolID: self.scope.schoolID, membershipID: self.scope.membershipID)
+            }
+            let offeringsRead = Task<[SchoolOffering], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["offerings"]) }
+            let policiesRead = Task<[SchoolCatalogPolicy], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["policy-versions"]) }
+            let productsRead = Task<[SchoolServiceProduct], any Error> { @MainActor in
+                try await self.client.records(self.scope.schoolID, path: ["service-products"], query: [URLQueryItem(name: "current", value: "true")])
+            }
+            let termsRead = Task<[SchoolCommercialTerms], any Error> { @MainActor in try await self.client.records(self.scope.schoolID, path: ["commercial-terms"]) }
+            defer {
+                schoolRead.cancel(); defaultsRead.cancel(); offeringsRead.cancel(); policiesRead.cancel()
+                productsRead.cancel(); termsRead.cancel()
+            }
+            let school = try await schoolRead.readValue
+            let current = try await defaultsRead.readValue
+            let offerings = try await offeringsRead.readValue
+            let policies = try await policiesRead.readValue
+            let products = try await productsRead.readValue
+            let terms = try await termsRead.readValue
             try Task.checkCancellation()
             let date = SchoolCatalogFormatting.civilDate(Date(), timeZone: school.timeZone)
             self.offerings = offerings.filter { offering in offering.enabled && policies.contains { $0.id == offering.policyVersionId && $0.approved } }

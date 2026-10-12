@@ -15,7 +15,7 @@ import {competencyLabel} from './competency-label.js';
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(max:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=max);
 const category=text(30);const roles=z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1).max(3).refine(v=>new Set(v).size===v.length);
-const grants=z.array(z.enum(['permit_review','cash_record','CONFIGURE_CATALOG','SELL_SERVICES','MANAGE_COURSES','TAKE_ATTENDANCE','VALIDATE_REQUIREMENT','REVIEW_REGULATORY_PROFILE','MANAGE_LEARNER_ARCHIVES','VIEW_SCHOOL_METRICS','VIEW_FINANCIAL_METRICS','EXPORT_MANAGEMENT'])).max(12).refine(v=>new Set(v).size===v.length);
+const grants=z.array(z.enum(['permit_review','cash_record','CONFIGURE_CATALOG','SELL_SERVICES','MANAGE_COURSES','TAKE_ATTENDANCE','VALIDATE_REQUIREMENT','REVIEW_REGULATORY_PROFILE','MANAGE_LEARNER_ARCHIVES','VIEW_SCHOOL_METRICS','VIEW_FINANCIAL_METRICS','EXPORT_MANAGEMENT','MANAGE_OBSERVATION_THEMES'])).max(13).refine(v=>new Set(v).size===v.length);
 const memberBody=z.object({...operation,roles,grants,reason:text(1000)}).strict();
 const curriculumBody=z.object({...operation,categoryCode:category,approved:z.boolean(),approvalReason:text(1000),competencies:z.array(z.object({key:text(80),label:text(200),description:text(4000),sortOrder:z.number().int().min(0).max(100000)}).strict()).min(1).max(200)}).strict().refine(v=>new Set(v.competencies.map(c=>c.key)).size===v.competencies.length);
 const webURL=z.url().max(2048).refine(value=>{const url=new URL(value);return ['https:','http:'].includes(url.protocol) && !url.username && !url.password;});

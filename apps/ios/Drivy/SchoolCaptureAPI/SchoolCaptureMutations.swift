@@ -19,6 +19,13 @@ enum SchoolCaptureMutationKind: String, Codable, Sendable {
         default: "CaptureSession"
         }
     }
+    /// Fait déjà mesuré (lot, arrêt, finalisation) : jamais réémis comme une nouvelle saisie, il appartient au trajet.
+    var isCollectionFact: Bool {
+        switch self {
+        case .uploadChunk, .stopCapture, .finalizeCapture: true
+        case .assessDevice, .recordChoice, .startCapture: false
+        }
+    }
 }
 
 /// Intention à écrire dans le journal spécialisé AVANT émission. Les octets ne sont

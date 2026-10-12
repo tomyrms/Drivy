@@ -1,0 +1,565 @@
+{
+ "indicators": {
+  "title": "Clignotants",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Instrument",
+    "name": "Paire de témoins",
+    "idea": "Les deux flèches du témoin de clignotant, dos à dos, en aplat.",
+    "tours": 2,
+    "ink": 0.152,
+    "bbox": [
+     3.8,
+     20.3,
+     60.2,
+     43.7
+    ],
+    "w": 56.3,
+    "h": 23.3
+   },
+   {
+    "direction": "B",
+    "famille": "Instrument",
+    "name": "Témoin qui clignote",
+    "idea": "Une seule flèche de témoin et ses trois éclats : elle clignote.",
+    "tours": 2,
+    "ink": 0.157,
+    "bbox": [
+     6.0,
+     9.7,
+     58.5,
+     54.3
+    ],
+    "w": 52.5,
+    "h": 44.6
+   },
+   {
+    "direction": "C",
+    "famille": "Silhouette",
+    "name": "Feu arrière",
+    "idea": "L'arrière d'une voiture dont un feu clignote.",
+    "tours": 2,
+    "ink": 0.238,
+    "bbox": [
+     6.0,
+     15.0,
+     60.7,
+     44.5
+    ],
+    "w": 54.7,
+    "h": 29.5
+   },
+   {
+    "direction": "D",
+    "famille": "Instrument",
+    "name": "Témoin dans son rond",
+    "idea": "Une seule flèche de témoin dans son voyant rond.",
+    "tours": 2,
+    "ink": 0.338,
+    "bbox": [
+     4.5,
+     4.5,
+     59.5,
+     59.5
+    ],
+    "w": 55.0,
+    "h": 55.0
+   },
+   {
+    "direction": "E",
+    "famille": "Plan",
+    "name": "La voiture clignote",
+    "idea": "La voiture vue du dessus, ses deux clignotants de droite allumés.",
+    "tours": 2,
+    "ink": 0.196,
+    "bbox": [
+     15.0,
+     4.6,
+     50.7,
+     59.4
+    ],
+    "w": 35.7,
+    "h": 54.8
+   },
+   {
+    "direction": "F",
+    "famille": "Instrument",
+    "name": "Commodo",
+    "idea": "Le levier de clignotant : on le lève ou on l'abaisse.",
+    "tours": 2,
+    "ink": 0.201,
+    "bbox": [
+     3.5,
+     10.7,
+     56.2,
+     50.5
+    ],
+    "w": 52.7,
+    "h": 39.8
+   }
+  ]
+ },
+ "following-distance": {
+  "title": "Distance de sécurité",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Plan",
+    "name": "L'écart dans l'axe",
+    "idea": "Le véhicule qui précède, le nôtre, et la cote de l'écart entre les deux.",
+    "tours": 2,
+    "ink": 0.161,
+    "bbox": [
+     11.5,
+     5.0,
+     51.6,
+     59.0
+    ],
+    "w": 40.1,
+    "h": 54.0
+   },
+   {
+    "direction": "B",
+    "famille": "Panneau",
+    "name": "Deux profils",
+    "idea": "Deux voitures de profil qui se suivent, l'écart coté dessous.",
+    "tours": 2,
+    "ink": 0.118,
+    "bbox": [
+     4.0,
+     24.9,
+     60.0,
+     40.9
+    ],
+    "w": 56.0,
+    "h": 16.0
+   },
+   {
+    "direction": "C",
+    "famille": "Instrument",
+    "name": "Barres d'écart",
+    "idea": "L'arrière du véhicule qui précède et les barres d'écart du régulateur.",
+    "tours": 2,
+    "ink": 0.215,
+    "bbox": [
+     9.0,
+     5.0,
+     55.0,
+     56.5
+    ],
+    "w": 46.0,
+    "h": 51.5
+   },
+   {
+    "direction": "D",
+    "famille": "Silhouette",
+    "name": "Deux arrières",
+    "idea": "Deux voitures vues de l'arrière, la plus lointaine plus petite.",
+    "tours": 2,
+    "ink": 0.22,
+    "bbox": [
+     14.0,
+     4.0,
+     50.0,
+     58.4
+    ],
+    "w": 36.0,
+    "h": 54.4
+   },
+   {
+    "direction": "E",
+    "famille": "Plan",
+    "name": "Deux chevrons",
+    "idea": "Le véhicule qui précède et deux chevrons au sol jusqu'à lui.",
+    "tours": 2,
+    "ink": 0.2,
+    "bbox": [
+     12.0,
+     3.0,
+     52.0,
+     61.8
+    ],
+    "w": 40.0,
+    "h": 58.8
+   },
+   {
+    "direction": "F",
+    "famille": "Panneau",
+    "name": "Entre deux pare-chocs",
+    "idea": "Une cote entre l'avant d'une voiture et l'arrière de l'autre.",
+    "tours": 2,
+    "ink": 0.183,
+    "bbox": [
+     5.0,
+     12.5,
+     59.0,
+     51.5
+    ],
+    "w": 54.0,
+    "h": 39.0
+   }
+  ]
+ },
+ "braking": {
+  "title": "Freinage",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Instrument",
+    "name": "Témoin de frein",
+    "idea": "Le témoin de frein du tableau de bord : un tambour entre ses deux mâchoires.",
+    "tours": 2,
+    "ink": 0.264,
+    "bbox": [
+     4.0,
+     9.8,
+     60.0,
+     54.2
+    ],
+    "w": 56.0,
+    "h": 44.3
+   },
+   {
+    "direction": "B",
+    "famille": "Instrument",
+    "name": "Pédale",
+    "idea": "La pédale de frein, large et striée, au bout de son bras.",
+    "tours": 2,
+    "ink": 0.26,
+    "bbox": [
+     6.0,
+     5.8,
+     58.0,
+     56.0
+    ],
+    "w": 52.0,
+    "h": 50.2
+   },
+   {
+    "direction": "C",
+    "famille": "Silhouette",
+    "name": "Disque et étrier",
+    "idea": "Un disque de frein pincé par son étrier.",
+    "tours": 2,
+    "ink": 0.267,
+    "bbox": [
+     7.0,
+     7.9,
+     58.3,
+     57.0
+    ],
+    "w": 51.3,
+    "h": 49.1
+   },
+   {
+    "direction": "D",
+    "famille": "Instrument",
+    "name": "Pied sur la pédale",
+    "idea": "Un pied appuie sur la pédale de frein.",
+    "tours": 2,
+    "ink": 0.258,
+    "bbox": [
+     -5.6,
+     9.3,
+     49.8,
+     50.6
+    ],
+    "w": 55.3,
+    "h": 41.3
+   },
+   {
+    "direction": "E",
+    "famille": "Silhouette",
+    "name": "Feux stop",
+    "idea": "L'arrière d'une voiture dont les deux feux stop s'allument.",
+    "tours": 2,
+    "ink": 0.21,
+    "bbox": [
+     2.1,
+     15.0,
+     61.9,
+     41.4
+    ],
+    "w": 59.8,
+    "h": 26.4
+   },
+   {
+    "direction": "F",
+    "famille": "Silhouette",
+    "name": "Disque percé",
+    "idea": "Un disque de frein seul, plein, avec ses perçages.",
+    "tours": 2,
+    "ink": 0.365,
+    "bbox": [
+     6.0,
+     6.0,
+     58.0,
+     58.0
+    ],
+    "w": 52.0,
+    "h": 52.0
+   }
+  ]
+ },
+ "lane-change": {
+  "title": "Changement de voie",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Manœuvre",
+    "name": "Par-dessus la ligne",
+    "idea": "La flèche quitte une voie pour l'autre en passant entre deux tirets.",
+    "tours": 2,
+    "ink": 0.154,
+    "bbox": [
+     13.0,
+     3.0,
+     55.3,
+     61.0
+    ],
+    "w": 42.3,
+    "h": 58.0
+   },
+   {
+    "direction": "B",
+    "famille": "Plan",
+    "name": "À cheval",
+    "idea": "La voiture vue du dessus, en biais sur la ligne pointillée.",
+    "tours": 2,
+    "ink": 0.155,
+    "bbox": [
+     16.5,
+     5.0,
+     47.5,
+     59.0
+    ],
+    "w": 31.1,
+    "h": 54.0
+   },
+   {
+    "direction": "C",
+    "famille": "Manœuvre",
+    "name": "Rabattement",
+    "idea": "Une voie rejoint l'autre : se rabattre.",
+    "tours": 2,
+    "ink": 0.134,
+    "bbox": [
+     14.7,
+     7.8,
+     50.0,
+     61.0
+    ],
+    "w": 35.3,
+    "h": 53.2
+   },
+   {
+    "direction": "D",
+    "famille": "Manœuvre",
+    "name": "Baïonnette",
+    "idea": "La flèche change de voie par deux angles droits, entre deux longs tirets.",
+    "tours": 2,
+    "ink": 0.181,
+    "bbox": [
+     13.8,
+     2.9,
+     54.1,
+     61.1
+    ],
+    "w": 40.3,
+    "h": 58.3
+   },
+   {
+    "direction": "E",
+    "famille": "Manœuvre",
+    "name": "Deux files",
+    "idea": "Deux flèches parallèles : l'une continue, l'autre se décale.",
+    "tours": 2,
+    "ink": 0.178,
+    "bbox": [
+     9.2,
+     7.8,
+     51.0,
+     61.0
+    ],
+    "w": 41.8,
+    "h": 53.2
+   },
+   {
+    "direction": "F",
+    "famille": "Manœuvre",
+    "name": "Ligne franchie",
+    "idea": "Une flèche traverse la ligne pointillée entre deux tirets.",
+    "tours": 2,
+    "ink": 0.146,
+    "bbox": [
+     3.5,
+     2.5,
+     56.2,
+     61.5
+    ],
+    "w": 52.7,
+    "h": 58.9
+   }
+  ]
+ },
+ "moving-off": {
+  "title": "Démarrage",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Trace",
+    "name": "Départ",
+    "idea": "Le repère du point de départ et la trace qui en part.",
+    "tours": 2,
+    "ink": 0.14,
+    "bbox": [
+     4.0,
+     21.5,
+     58.4,
+     42.5
+    ],
+    "w": 54.4,
+    "h": 20.9
+   },
+   {
+    "direction": "B",
+    "famille": "Panneau",
+    "name": "En côte",
+    "idea": "Une pente et la flèche qui la monte : démarrer en côte.",
+    "tours": 2,
+    "ink": 0.239,
+    "bbox": [
+     7.4,
+     17.2,
+     58.0,
+     57.0
+    ],
+    "w": 50.6,
+    "h": 39.8
+   },
+   {
+    "direction": "C",
+    "famille": "Instrument",
+    "name": "Clé de contact",
+    "idea": "La clé de contact, en aplat.",
+    "tours": 2,
+    "ink": 0.213,
+    "bbox": [
+     5.0,
+     17.0,
+     60.0,
+     44.0
+    ],
+    "w": 55.0,
+    "h": 27.0
+   }
+  ]
+ },
+ "bends": {
+  "title": "Virages",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Plan",
+    "name": "La route tourne",
+    "idea": "Les deux bordures d'une route qui tourne, vues du dessus.",
+    "tours": 3,
+    "ink": 0.278,
+    "bbox": [
+     14.0,
+     14.0,
+     59.0,
+     59.0
+    ],
+    "w": 45.0,
+    "h": 45.0
+   },
+   {
+    "direction": "B",
+    "famille": "Silhouette",
+    "name": "Lacets",
+    "idea": "Une route pleine qui serpente et s'éloigne, son axe en tirets.",
+    "tours": 2,
+    "ink": 0.233,
+    "bbox": [
+     9.6,
+     2.4,
+     53.4,
+     60.1
+    ],
+    "w": 43.8,
+    "h": 57.7
+   },
+   {
+    "direction": "C",
+    "famille": "Panneau",
+    "name": "Flèche de virage",
+    "idea": "La flèche courbe du panneau de virage.",
+    "tours": 2,
+    "ink": 0.107,
+    "bbox": [
+     11.0,
+     5.0,
+     41.5,
+     62.0
+    ],
+    "w": 30.5,
+    "h": 57.0
+   }
+  ]
+ },
+ "eco-driving": {
+  "title": "Éco-conduite",
+  "proposals": [
+   {
+    "direction": "A",
+    "famille": "Silhouette",
+    "name": "Feuille-route",
+    "idea": "Une feuille dont la nervure est l'axe en tirets d'une route.",
+    "tours": 2,
+    "ink": 0.245,
+    "bbox": [
+     4.5,
+     10.4,
+     52.6,
+     58.5
+    ],
+    "w": 48.0,
+    "h": 48.0
+   },
+   {
+    "direction": "B",
+    "famille": "Instrument",
+    "name": "Grille de vitesses",
+    "idea": "La grille du levier de vitesses, pommeau sur le rapport le plus haut.",
+    "tours": 2,
+    "ink": 0.267,
+    "bbox": [
+     11.0,
+     5.0,
+     59.5,
+     54.0
+    ],
+    "w": 48.5,
+    "h": 49.0
+   },
+   {
+    "direction": "C",
+    "famille": "Silhouette",
+    "name": "Pompe",
+    "idea": "Une pompe à essence : ce que l'on consomme.",
+    "tours": 2,
+    "ink": 0.301,
+    "bbox": [
+     11.0,
+     8.0,
+     51.2,
+     56.0
+    ],
+    "w": 40.2,
+    "h": 48.0
+   }
+  ]
+ }
+}

@@ -33,15 +33,19 @@ struct SchoolJoinView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }.disabled(model.isBusy)
+                    Button("Fermer") { dismiss() }.disabled(holdsSheet)
                 }
             }
         }
         .tint(DrivyTheme.accent)
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(holdsSheet)
         .task { if loadsOnAppear { await model.load() } }
         .accessibilityIdentifier("join-school")
     }
+
+    // La première lecture (vérification du compte) n’écrit rien : la feuille se ferme pendant elle. Seul un envoi
+    // (demande prête ou déjà enregistrée) la retient.
+    private var holdsSheet: Bool { model.isBusy && (model.isReady || model.record != nil) }
 
     /// Entry state: the field is on screen, so a refused link is said under it.
     private var isEntering: Bool {

@@ -40,13 +40,14 @@ struct SchoolReplayTimeline {
         let status: ObservationStatus?
         let isMarker: Bool
         let text: String
+        var themeKey: String? = nil
 
         var title: String { isMarker ? "Moment à revoir" : text }
         var statusLabel: String { status?.label ?? "Repère" }
-        /// Thème si le titre en désigne un, sinon l’appréciation, sinon repère ou note.
+        /// Thème si la clé ou le titre en désigne un, sinon l’appréciation, sinon repère ou note.
         var glyph: DrivyObservationGlyph {
             if isMarker { return .moment }
-            return SchoolObservationPictogram(title: text)?.glyph ?? status?.glyph ?? .note
+            return SchoolObservationPictogram(themeKey: themeKey, title: text)?.glyph ?? status?.glyph ?? .note
         }
         var tone: DrivyTone { status?.tone ?? .neutral }
     }
@@ -232,7 +233,7 @@ struct SchoolReplayTimeline {
             }
             return Item(id: observation.id, offset: observation.observedDate.map { $0.timeIntervalSince(origin) },
                         coordinate: coordinate, status: observation.eventStatus.flatMap { ObservationStatus(schoolValue: $0) },
-                        isMarker: observation.isMarker, text: observation.text)
+                        isMarker: observation.isMarker, text: observation.text, themeKey: observation.themeKey)
         }
         start = origin
         duration = total
