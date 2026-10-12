@@ -123,18 +123,13 @@ synthétique (la lecture des observations n’y est pas servie pour le rôle él
 
 ## 4. Icône de l’onglet Progression (élève)
 
-Demande : une icône personnalisée « dans le style d’Apple », trois propositions, garder la meilleure. Une première
-série (paliers, toile, route en perspective, en traits fins) a été refusée par le porteur. Seconde série en
-silhouettes pleines, au poids des symboles de barre d’onglets, rendue et relue à chaque passe :
+Demande : une icône personnalisée « dans le style d’Apple ». Deux séries de trois (paliers, toile, route ; puis
+volant-anneau, jauge, rangs) refusées par le porteur, puis dix pistes en silhouettes pleines
+(`icone-progression-10-propositions.png`) : barres, courbe, anneaux, plaque L, trophée, médaille, drapeau, marches,
+cible, route. **Le porteur a choisi la courbe (2)**, à améliorer.
 
-- **A · Volant-anneau** — **retenue**. Le volant dont la jante se remplit comme un anneau de progression : plein
-  sur la partie parcourue, rail fin sur le reste. Propre à la conduite, nette à 16 px. Deux défauts corrigés en
-  route : la jante finissait sur la branche horizontale et le tout se lisait « e » ; le passage du plein au rail
-  est désormais en haut à droite, et chaque fin d’arc s’arrête de part et d’autre d’une branche.
-- **B · Jauge** — un compteur en trois paliers, l’aiguille sur le deuxième. Propre, mais proche du symbole
-  « gauge » du système.
-- **C · Rangs** — trois chevrons, deux pleins, le dernier en rail. Net, mais générique (grade, classement).
-
-Construction : grille 64, plein 6,5, rail 3,4, branches 5,4, moyeu 7 ; formes pleines, image vectorielle en
-gabarit (`Tab-progress.imageset`, 26 pt) teintée par la barre d’onglets. Planche : `icone-progression-propositions.png` ;
-script de construction : `icone-progression-build.py`. Pas vue sur appareil.
+Version finale : une ligne brisée montante dont tous les segments sont à 45°, d’épaisseur 6,4 sur une grille de 64,
+jonctions et extrémités arrondies, pointe de flèche ouverte en équerre aux bouts ronds (à la manière des flèches
+du système) au lieu du triangle pointu, recentrée optiquement. Formes pleines, image vectorielle en gabarit
+(`Tab-progress.imageset`, 26 pt) teintée par la barre d’onglets. Avant/après : `icone-progression-finale.png`.
+Pas vue sur appareil.

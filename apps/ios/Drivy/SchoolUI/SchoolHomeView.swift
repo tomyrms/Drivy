@@ -223,8 +223,8 @@ struct SchoolHomeView: View {
             learnerTab(.lessons, title: "Leçons")
                 .tabItem { Label("Leçons", systemImage: "calendar") }
                 .tag(SchoolHomeTab.lessons)
-            // Ni score ni tendance : des compétences et leur niveau. L’icône dessinée pour Drivy (« volant-anneau ») :
-            // la jante du volant se remplit comme un anneau, pleine sur la partie parcourue.
+            // Ni score ni tendance : des compétences et leur niveau. L’icône dessinée pour Drivy : une courbe
+            // montante, segments à 45°, bouts ronds, pointe ouverte.
             learnerTab(.progress, title: "Progression")
                 .tabItem { Label("Progression", image: "Tab-progress") }
                 .tag(SchoolHomeTab.progress)

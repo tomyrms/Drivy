@@ -55,39 +55,15 @@ for (i,j) in holes:
 road="M8 56C18 56 18 42 28 40S38 36 40 35.5"
 open("v2/c-road.d","w").write(road)
 svg("v2/c-drapeau-flag.svg"," ".join(C),title="Drapeau d’arrivée")
-import math, sys
-sys.path.insert(0,"v2")
-from build import arc_band, circle, capsule, pt, f
-def svg(name,shapes,size=256,title=""):
-    body="".join(f'<path d="{d}"/>' for d in shapes)
-    open(name,"w",encoding="utf-8").write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 64 64"><title>{title}</title><g fill="#000">{body}</g></svg>\n')
-W, RAIL = 6.5, 2.8   # poids plein (atteint) et rail (à venir)
-
-# A — Volant-anneau
-cx,cy,r=32,32,24.5
-A=[arc_band(cx,cy,r,RAIL,0,360,caps=False) if False else "",
-   arc_band(cx,cy,r,RAIL,95,205), arc_band(cx,cy,r,W,205,455)]
-A=[a for a in A if a]
-A+= [capsule(cx-r+2,cy+2,cx+r-2,cy+2,5.6), capsule(cx,cy+2,cx,cy+r-2,5.6), circle(cx,cy+2,7.5)]
-svg("v2/a-volant.svg",A,title="Volant-anneau")
-
-# B — Jauge en trois paliers
-cx,cy,r=32,40,22
-B=[arc_band(cx,cy,r,W+1,-120,-52), arc_band(cx,cy,r,W+1,-34,34), arc_band(cx,cy,r,RAIL,52,120)]
-nx,ny=pt(cx,cy,15.5,22)
-B+= [capsule(cx,cy,nx,ny,4.2), circle(cx,cy,5.5)]
-svg("v2/b-jauge.svg",B,title="Jauge en trois paliers")
-
-# C — Chevrons : trois rangs, deux atteints, le dernier à venir
-def chevron(y,w,half=17,h=11):
-    return [capsule(32-half,y,32,y-h,w), capsule(32,y-h,32+half,y,w)]
-C= chevron(54,W)+chevron(39,W)+chevron(24,RAIL)
-svg("v2/c-chevrons.svg",C,title="Trois rangs")
 import sys; sys.path.insert(0,"v2")
-from build import arc_band, circle, capsule
-from build2 import svg, W, RAIL
-cx,cy,r=32,32,24.5
-A=[arc_band(cx,cy,r,3.4,58,165), arc_band(cx,cy,r,W,196,402),
-   capsule(cx-r+2,cy,cx+r-2,cy,5.4), capsule(cx,cy,cx,cy+r-2,5.4), circle(cx,cy,7)]
-svg("v2/a-volant-v2.svg",A,title="Volant-anneau")
-svg("v2/a-volant-26.svg",A,size=26,title="Progression — volant-anneau")
+from build import capsule, circle
+W=6.4; dx,dy=1,-1.5
+P=[(8,46),(21,33),(31,43),(54,20)]
+P=[(x+dx,y+dy) for x,y in P]
+tip=P[-1]; arm=12
+shapes=[capsule(*P[i],*P[i+1],W) for i in range(3)]
+shapes+=[capsule(*tip,tip[0]-arm,tip[1],W), capsule(*tip,tip[0],tip[1]+arm,W)]
+def write(name,size):
+    body="".join(f'<path d="{d}"/>' for d in shapes)
+    open(name,"w",encoding="utf-8").write(f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 64 64"><title>Progression</title><g fill="#000">{body}</g></svg>\n')
+write("v4/courbe.svg",256); write("v4/progress.svg",26)
