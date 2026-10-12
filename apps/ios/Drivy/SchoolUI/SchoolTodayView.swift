@@ -15,6 +15,7 @@ struct SchoolTodayView: View {
     var schoolName: String? = nil
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
     @State private var lessons: [SchoolLesson] = []
@@ -32,7 +33,6 @@ struct SchoolTodayView: View {
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
-    @Namespace private var mapScope
 
     /// « Commencer la leçon » direct en cours (accord lu, puis rideau) : un second appui ne lance rien.
     @State private var startingPlanned = false
@@ -173,26 +173,40 @@ struct SchoolTodayView: View {
     /// Sans position autorisée, un état honnête plutôt qu’une vue du pays entier.
     @ViewBuilder private var map: some View {
         if location.permitted {
-            Map(position: $camera, scope: mapScope) { UserAnnotation() }
+            // Ni rotation ni boussole : la carte du jour reste nord en haut, sans commande système hors de la DA.
+            Map(position: $camera, interactionModes: [.pan, .zoom]) { UserAnnotation() }
                 .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
                 .mapControls { }
                 // Le point de position garde le bleu du système : teinté du bleu pastel du thème sombre, il se lisait
                 // comme une position périmée.
                 .tint(.blue)
                 // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
-                .overlay(alignment: .bottomTrailing) {
-                    MapUserLocationButton(scope: mapScope)
-                        .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
-                        .padding(.trailing, DrivySpacing.m)
-                        .padding(.bottom, DrivySpacing.l)
-                }
-                // Sans portée commune, le bouton n’était relié à aucune carte et ne s’affichait pas.
-                .mapScope(mapScope)
+                .overlay(alignment: .bottomTrailing) { recenterButton }
         } else {
             locationPlaceholder
                 .frame(maxHeight: .infinity)
                 .background(DrivyTheme.canvas)
         }
+    }
+
+    /// Même bouton rond que sur la carte du trajet : verre lisible, glyphe de la DA, plein quand la carte suit.
+    private var recenterButton: some View {
+        let following = camera.followsUserLocation
+        return Button {
+            withAnimation(DrivyMotion.context(reduceMotion)) { camera = .userLocation(fallback: .automatic) }
+        } label: {
+            Image(systemName: following ? "location.fill" : "location")
+                .font(DrivyMapGlyph.primaryControl)
+                .foregroundStyle(following ? DrivyTheme.accent : DrivyTheme.text)
+                .frame(width: 48, height: 48)
+                .drivyLegibleMapControl(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, DrivySpacing.m)
+        .padding(.bottom, DrivySpacing.m)
+        .accessibilityLabel("Recentrer sur ma position")
+        .accessibilityAddTraits(following ? [.isSelected] : [])
+        .accessibilityIdentifier("today-recenter")
     }
 
     private var locationPlaceholder: some View {
