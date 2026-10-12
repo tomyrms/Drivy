@@ -751,7 +751,7 @@ import Observation
         // Une demande récupérée dans la file peut appartenir à une autre leçon. Sans cible prouvée,
         // les écrans relisent leurs données autorisées au lieu de publier l'identité de l'écran courant.
         let change = affectsThisLesson ? lesson.map {
-            SchoolLessonChange(schoolID: scope.schoolID, trainingID: $0.trainingId, lessonID: lessonID)
+            SchoolLessonChange(schoolID: scope.schoolID, trainingID: $0.trainingId, lessonID: lessonID, kind: command.kind)
         } : nil
         notifications.post(name: .drivyLessonsDidChange, object: change)
     }

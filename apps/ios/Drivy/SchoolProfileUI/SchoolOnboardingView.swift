@@ -630,9 +630,16 @@ struct SchoolOnboardingView: View {
 enum SchoolOnboardingPrompt {
     @MainActor
     static func isPending(api: any SchoolProfileAPI, scope: SchoolCommandScope, kind: SchoolOnboardingKind) async -> Bool {
+        await pendingState(api: api, scope: scope, kind: kind) ?? false
+    }
+
+    /// `nil` when the school could not be read or answered for another scope: a failure neither opens the welcome
+    /// nor withdraws « Reprendre l’accueil » already shown.
+    @MainActor
+    static func pendingState(api: any SchoolProfileAPI, scope: SchoolCommandScope, kind: SchoolOnboardingKind) async -> Bool? {
         guard let value = try? await api.onboarding(schoolID: scope.schoolID, kind: kind),
               value.schoolId == scope.schoolID, value.personId == scope.personID,
-              value.membershipId == scope.membershipID, value.kind == kind else { return false }
+              value.membershipId == scope.membershipID, value.kind == kind else { return nil }
         return value.status != "COMPLETED"
     }
 }

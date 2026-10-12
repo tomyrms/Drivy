@@ -28,6 +28,9 @@ struct SchoolLearnerProfileTab: View {
     var retryDossier: (() -> Void)? = nil
     /// Le profil administratif de l’élève, lu seulement quand il déplie « Mes informations ».
     var makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)? = nil
+    /// L’accord GPS général de l’élève, tenu par les onglets : le point de Profil s’allume avant que la page soit
+    /// ouverte, et la page relit le même modèle. Le Profil n’en dit que ce qui attend une réponse.
+    @Binding var consent: SchoolRecordingChoiceWorkspace?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
@@ -35,12 +38,8 @@ struct SchoolLearnerProfileTab: View {
     /// Affectations de chaque formation ; une lecture refusée ou en panne n’affiche simplement pas de moniteur.
     @State private var assignments: [UUID: [SchoolAssignment]] = [:]
     @State private var path: [SchoolLearnerProfileRoute] = []
-    /// L’accord GPS général de l’élève, lu ici et montré dans Paramètres : le Profil n’en dit que ce qui attend
-    /// une réponse. Une lecture en panne ne touche pas au reste de la page.
-    @State private var consent: SchoolRecordingChoiceWorkspace?
     @State private var showsInformation = false
     @State private var information: SchoolProfileWorkspace?
-    @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
 
     private var accountKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
@@ -77,12 +76,6 @@ struct SchoolLearnerProfileTab: View {
         }
         .id(accountKey)
         .task(id: scopeKey) { await prepare() }
-        // L’accord donné (ou relu) ici éteint aussitôt le point de l’onglet.
-        // Once this tab has read the consent, it is the reference: the dot of the tab says what its row says.
-        .onChange(of: "\(consent?.isLoading ?? true):\(consentAttention ?? "")", initial: true) { _, _ in
-            guard let consent, !consent.isLoading else { return }
-            requiredActions?.replace(.giveRecordingConsent, with: SchoolRequiredActionRules.recordingConsent(attention: consentAttention))
-        }
         .onChange(of: accountKey) { _, _ in
             path = []; showsInformation = false; information?.invalidate(); information = nil
         }
@@ -234,8 +227,7 @@ struct SchoolLearnerProfileTab: View {
     /// Ce que le Profil dit de l’accord GPS : rien tant qu’il est donné ou simplement pas encore lu.
     private var consentAttention: String? {
         guard recordsTrips, let consent else { return nil }
-        return SchoolRecordingChoiceAttention.label(notice: consent.notice != nil, revoked: consent.accessRevoked,
-            pending: !consent.relatedPending.isEmpty || consent.hasOldScope, answered: consent.validAnswer != nil)
+        return consent.learnerAttention
     }
 
     // MARK: Destinations
@@ -477,5 +469,13 @@ struct SchoolTrainingOverview: Equatable {
             if let name = latest?.providedInstructorName, !names.contains(name) { names.append(name) }
         }
         return names.sorted { $0.localizedCompare($1) == .orderedAscending }
+    }
+}
+
+extension SchoolRecordingChoiceWorkspace {
+    /// Ce qui attend la réponse de l’élève à la notice d’enregistrement de l’école ; `nil` quand rien n’attend.
+    var learnerAttention: String? {
+        SchoolRecordingChoiceAttention.label(notice: notice != nil, revoked: accessRevoked,
+            pending: !relatedPending.isEmpty || hasOldScope, answered: validAnswer != nil)
     }
 }

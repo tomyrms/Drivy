@@ -4,6 +4,39 @@ import Testing
 
 @MainActor
 struct SchoolWorkspaceTests {
+    @Test func theAdministrationReadsProfilesToCompleteSchoolWideAndEachRereadCorrectsThem() async {
+        let api = WorkspaceAPIStub(memberships: [WorkspaceFixture.adminMembership])
+        let first = WorkspaceFixture.learner(id: UUID(), name: "Incomplet A", readiness: "ACTION_REQUIRED")
+        let second = WorkspaceFixture.learner(id: UUID(), name: "Incomplet B", readiness: "MINIMAL")
+        api.learnersToCompleteHandler = { _ in [first, second] }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.learnersToComplete == [first.id, second.id])
+        // Le dossier complété puis relu éteint son point sans attendre une autre lecture de l’école.
+        api.learnerHandler = { school, id in WorkspaceFixture.learner(id: id, school: school, name: "Incomplet A", readiness: "READY") }
+        workspace.selectLearner(first.id)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learnersToComplete == [second.id])
+        // Une panne garde ce qui a été lu : elle n’allume ni n’éteint rien.
+        api.learnersToCompleteHandler = { _ in throw SchoolAPIError.unavailable }
+        await workspace.refreshLearnersToComplete()
+        #expect(workspace.learnersToComplete == [second.id])
+        #expect(workspace.accountError == nil)
+        // Complété ailleurs (web, autre appareil) : la relecture au retour dans l’app le retire.
+        api.learnersToCompleteHandler = { _ in [] }
+        await workspace.refreshLearnersToComplete()
+        #expect(workspace.learnersToComplete == [])
+    }
+
+    @Test func anInstructorNeverReadsTheSchoolWideProfilesToComplete() async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        await workspace.refreshLearnersToComplete()
+        #expect(api.learnersToCompleteCalls == 0)
+        #expect(workspace.learnersToComplete == nil)
+    }
+
     @Test func aDraftSchoolDoesNotRequestActiveSchoolDossiers() async {
         let api = WorkspaceAPIStub()
         api.schoolHandler = { WorkspaceFixture.school($0, status: "DRAFT") }
@@ -574,6 +607,8 @@ private final class WorkspaceAPIStub: SchoolAPI {
     var trainingsHandler: ((UUID, UUID, String?) async throws -> SchoolPage<SchoolTraining>)?
     var learnerHandler: ((UUID, UUID) async throws -> SchoolLearner)?
     var learnerQueries: [String] = []
+    var learnersToCompleteHandler: ((UUID) async throws -> [SchoolLearner])?
+    var learnersToCompleteCalls = 0
 
     init(memberships: [SchoolMembership] = [WorkspaceFixture.firstMembership]) {
         person = SchoolPerson(personId: UUID(), version: 1, displayName: "Compte de test", locale: "fr", memberships: memberships)
@@ -590,6 +625,11 @@ private final class WorkspaceAPIStub: SchoolAPI {
         learnerQueries.append(query)
         if let learnersHandler { return try await learnersHandler(schoolID, query, cursor) }
         return .init(items: [WorkspaceFixture.learner(school: schoolID)], nextCursor: nil)
+    }
+    func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? {
+        learnersToCompleteCalls += 1
+        guard let learnersToCompleteHandler else { return nil }
+        return try await learnersToCompleteHandler(schoolID)
     }
     func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner {
         if let learnerHandler { return try await learnerHandler(schoolID, id) }
@@ -631,15 +671,18 @@ private enum WorkspaceFixture {
         schoolName: "École test A", roles: ["INSTRUCTOR"], grants: [], accessEpoch: 1)
     static let secondMembership = SchoolMembership(membershipId: UUID(), schoolId: secondSchool,
         schoolName: "École test B", roles: ["INSTRUCTOR"], grants: [], accessEpoch: 1)
+    static let adminMembership = SchoolMembership(membershipId: UUID(), schoolId: firstSchool,
+        schoolName: "École test A", roles: ["ADMIN"], grants: [], accessEpoch: 1)
 
     static func school(_ id: UUID, status: String = "ACTIVE") -> SchoolDetails {
         SchoolDetails(id: id, schoolId: id, version: 1, name: "École de test", timeZone: "Europe/Zurich",
             status: status, contactEmail: "ecole@example.test", contactPhone: nil, logoAssetId: nil,
             modules: .init(gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false), configurationVersion: 1)
     }
-    static func learner(id: UUID = learnerID, school: UUID = firstSchool, name: String = "Élève de test", version: Int = 1) -> SchoolLearner {
+    static func learner(id: UUID = learnerID, school: UUID = firstSchool, name: String = "Élève de test", version: Int = 1,
+                        readiness: String? = nil) -> SchoolLearner {
         SchoolLearner(id: id, schoolId: school, personId: UUID(), version: version, displayName: name,
-            contactEmail: nil, contactPhone: nil, archivedAt: nil, profileReadiness: nil, profilePhotoDocumentId: nil)
+            contactEmail: nil, contactPhone: nil, archivedAt: nil, profileReadiness: readiness, profilePhotoDocumentId: nil)
     }
     static func training(id: UUID = UUID(), school: UUID = firstSchool, learner: UUID = learnerID) -> SchoolTraining {
         SchoolTraining(id: id, schoolId: school, learnerId: learner, offeringId: UUID(), version: 1,

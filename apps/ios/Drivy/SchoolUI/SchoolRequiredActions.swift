@@ -77,7 +77,17 @@ enum SchoolRequiredActionRules {
         }.map { SchoolRequiredAction(kind: .finishLesson, entityID: $0.id, recipient: .instructor, title: "Leçon à terminer") }
     }
 
-    /// The school's own state of a learner's profile: anything but « READY » lacks required information.
+    /// The next planned end of a lesson this instructor started that is still running: at that moment it becomes
+    /// a lesson to finish. `nil` when none is running.
+    static func nextFinishDeadline(_ lessons: [SchoolLesson], instructorMembershipID: UUID?, now: Date) -> Date? {
+        guard let instructorMembershipID else { return nil }
+        return lessons.filter { $0.instructorMembershipId == instructorMembershipID && $0.drivyState(now: now) == .inProgress }
+            .compactMap(\.endsAt).filter { $0 > now }.min()
+    }
+
+    /// The school's own state of a learner's profile: anything but « READY » lacks information required to plan
+    /// a lesson. The server computes it from the applicable policy at each read, with the same rule as the
+    /// dossier's readiness: an optional field never makes a profile incomplete.
     static func profileIsIncomplete(_ learner: SchoolLearner) -> Bool {
         learner.archivedAt == nil && learner.profileReadiness != nil && learner.profileReadiness != "READY"
     }
@@ -85,10 +95,12 @@ enum SchoolRequiredActionRules {
     /// Only the administration may edit every field of a learner's profile. An instructor may complete
     /// contacts only, and cannot know from the list which field is missing: for them the list states the
     /// fact on the learner's line, and the dossier says what they can do. No dot on their tab.
-    static func incompleteProfiles(_ learners: [SchoolLearner], roles: [String]) -> [SchoolRequiredAction] {
+    /// `schoolWide`: the school's own list of profiles to complete, when read; otherwise the learners on screen.
+    static func incompleteProfiles(_ learners: [SchoolLearner], schoolWide: Set<UUID>? = nil, roles: [String]) -> [SchoolRequiredAction] {
         guard roles.contains("ADMIN") else { return [] }
-        return learners.filter(profileIsIncomplete).map {
-            SchoolRequiredAction(kind: .completeLearnerProfile, entityID: $0.id, recipient: .administrator, title: "Profil à compléter")
+        let ids = schoolWide.map { $0.sorted { $0.uuidString < $1.uuidString } } ?? learners.filter(profileIsIncomplete).map(\.id)
+        return ids.map {
+            SchoolRequiredAction(kind: .completeLearnerProfile, entityID: $0, recipient: .administrator, title: "Profil à compléter")
         }
     }
 
@@ -104,21 +116,10 @@ enum SchoolRequiredActionRules {
                                           title: "Accueil à terminer")] : []
     }
 
-    /// The field a profile blocker names, as a person reads it.
-    static func fieldName(_ field: String) -> String {
-        switch field {
-        case "firstName": "Prénom"
-        case "lastName": "Nom"
-        case "birthDate": "Date de naissance"
-        case "postalAddress": "Adresse"
-        case "contactEmail": "E-mail"
-        case "contactPhone": "Téléphone"
-        default: "Information"
-        }
+    /// « 1 information manquante », « 3 informations manquantes ».
+    static func missingCount(_ count: Int) -> String {
+        count == 1 ? "1 information manquante" : "\(count) informations manquantes"
     }
-
-    /// Fields an instructor may complete themselves; the others belong to the learner or the administration.
-    static let instructorEditableFields: Set<String> = ["contactEmail", "contactPhone"]
 }
 
 /// The discreet mark of a pending action on a line: a small dot in the accent, aligned on the text.

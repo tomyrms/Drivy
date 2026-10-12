@@ -122,6 +122,24 @@ final class DrivyAPIClient: SchoolAPI {
         return page
     }
 
+    /// Au plus vingt pages de cent : au-delà, la lecture s’arrête plutôt que de boucler sur un curseur.
+    func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? {
+        var learners: [SchoolLearner] = []
+        var cursor: String?
+        var cursors = Set<String>()
+        repeat {
+            var items = [URLQueryItem(name: "limit", value: "100"), URLQueryItem(name: "status", value: "ACTIVE"),
+                         URLQueryItem(name: "requiresAction", value: "true")]
+            if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }
+            let page: SchoolPage<SchoolLearner> = try await read(["v1", "schools", schoolID.uuidString, "learners"], query: items)
+            guard page.items.allSatisfy({ valid($0, schoolID: schoolID) }) else { throw SchoolAPIError.invalidResponse }
+            learners += page.items
+            if let next = page.nextCursor, !cursors.insert(next).inserted { throw SchoolAPIError.invalidCursor }
+            cursor = page.nextCursor
+        } while cursor != nil && cursors.count < 20
+        return learners
+    }
+
     func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner {
         let learner: SchoolLearner = try await read(["v1", "schools", schoolID.uuidString, "learners", id.uuidString])
         guard learner.id == id, valid(learner, schoolID: schoolID) else { throw SchoolAPIError.invalidResponse }

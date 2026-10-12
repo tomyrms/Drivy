@@ -27,6 +27,9 @@ struct SchoolHomeView: View {
     @State private var captureLesson: CaptureLessonRoute?
     /// Ce que le compte doit faire dans cette école : les points des onglets et les lignes s’y lisent.
     @State private var requiredActions = SchoolRequiredActionStore()
+    /// L’accord GPS général de l’élève connecté, lu dès ses onglets : le point de Profil ne dépend pas d’une
+    /// première visite de la page, qui relit ce même modèle.
+    @State private var learnerConsent: SchoolRecordingChoiceWorkspace?
     /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
     @State private var captureLearner: (id: UUID, name: String)?
     @Environment(\.scenePhase) private var scenePhase
@@ -74,8 +77,14 @@ struct SchoolHomeView: View {
                 .environment(captureController)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
             SchoolTodayMemory.forget(); SchoolAgendaMemory.forget()
+            // Leçon terminée (ou absence) confirmée par l’école, depuis n’importe quel écran : le point d’Aujourd’hui
+            // part tout de suite, même si la relecture de la journée échoue ensuite.
+            if let change = notification.object as? SchoolLessonChange, change.schoolID == workspace.membership?.schoolId,
+               change.kind == .completeLesson || change.kind == .markNoShow {
+                requiredActions.resolve(.finishLesson, entityID: change.lessonID)
+            }
         }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
@@ -109,11 +118,12 @@ struct SchoolHomeView: View {
         }
     }
 
-    /// Ce que cette vue sait déjà sans rien lire de plus : les profils incomplets de la page d’élèves affichée
-    /// (administration seulement) et l’accueil laissé en route.
+    /// Ce que cette vue sait déjà sans rien lire de plus : les profils incomplets de toute l’école (administration
+    /// seulement ; la page d’élèves affichée tant que l’école ne les a pas rendus) et l’accueil laissé en route.
     private func refreshStaffActions() {
         let roles = workspace.membership?.roles ?? []
-        requiredActions.replace(.completeLearnerProfile, with: SchoolRequiredActionRules.incompleteProfiles(workspace.learners, roles: roles))
+        requiredActions.replace(.completeLearnerProfile, with: SchoolRequiredActionRules.incompleteProfiles(workspace.learners,
+            schoolWide: workspace.learnersToComplete, roles: roles))
         requiredActions.replace(.resumeOnboarding, with: SchoolRequiredActionRules.onboarding(canResume: account?.resumeOnboarding != nil, isLearner: false))
     }
 
@@ -157,7 +167,12 @@ struct SchoolHomeView: View {
         }
         // Ce que les onglets savent déjà : relu quand la page d’élèves, les droits ou l’accueil changent.
         .onChange(of: workspace.learners.map { "\($0.id):\($0.profileReadiness ?? "")\($0.archivedAt == nil)" }, initial: true) { _, _ in refreshStaffActions() }
+        .onChange(of: workspace.learnersToComplete) { _, _ in refreshStaffActions() }
         .onChange(of: workspace.membership?.roles) { _, _ in refreshStaffActions() }
+        // Un dossier complété sur le web ou sur un autre appareil se lit au retour dans l’app.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await workspace.refreshLearnersToComplete() } }
+        }
         .onChange(of: account?.resumeOnboarding != nil) { _, _ in refreshStaffActions() }
         // Signalements de l’école : lus à l’ouverture de son espace, et relus quand les droits du compte changent.
         // « Signaler » et le Profil partagent ce qui en revient.
@@ -244,7 +259,7 @@ struct SchoolHomeView: View {
             SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
                 agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
                 openTraining: { training, tab in chosenPermit = training; selectedTab = tab },
-                retryDossier: { retryLearner() }, makeLearnerProfile: makeLearnerProfile)
+                retryDossier: { retryLearner() }, makeLearnerProfile: makeLearnerProfile, consent: $learnerConsent)
                 .tabItem { tabLabel("Profil", systemImage: "person.crop.circle", tab: .profile) }
                 .tag(SchoolHomeTab.profile)
         }
@@ -255,11 +270,50 @@ struct SchoolHomeView: View {
             await workspace.loadRemainingTrainings()
         }
         .onChange(of: scenePhase) { _, phase in
+            // Un accord donné depuis un autre appareil ou une leçon se relit au retour dans l’app.
+            if phase == .active, let consent = learnerConsent, !consent.isLoading, !consent.isBusy { Task { await consent.load() } }
             // Une formation ouverte, mise en pause ou terminée par l’école apparaît au retour dans l’app ; les
             // formations déjà affichées restent à l’écran jusqu’à la réponse.
             guard phase == .active, let id = ownLearner?.id, workspace.learner?.id == id, !workspace.isLoadingTrainings else { return }
             Task { await workspace.loadTrainings(); await workspace.loadRemainingTrainings() }
         }
+        .task(id: learnerConsentKey) { await prepareLearnerConsent() }
+        // Ce que la ligne « Accord GPS » du Profil dit, le point de l’onglet le dit : réponse donnée, il part aussitôt.
+        // Tant que rien n’a été lu, rien n’est affirmé.
+        .onChange(of: "\(learnerConsent?.isLoading ?? true):\(learnerConsentAttention ?? "")", initial: true) { _, _ in
+            guard let learnerConsent, !learnerConsent.isLoading else { return }
+            requiredActions.replace(.giveRecordingConsent, with: SchoolRequiredActionRules.recordingConsent(attention: learnerConsentAttention))
+        }
+    }
+
+    /// Trajets et accord GPS n’ont de sens que dans une école qui enregistre des trajets.
+    private var learnerRecordsTrips: Bool { workspace.school?.status == "ACTIVE" && workspace.school?.modules.gpsEnabled == true }
+
+    private var learnerConsentAttention: String? { learnerRecordsTrips ? learnerConsent?.learnerAttention : nil }
+
+    private var learnerConsentKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(ownLearner?.id.uuidString ?? ""):\(learnerRecordsTrips)"
+    }
+
+    /// Le même modèle que la page Profil réutilise : relu s’il vaut pour ce compte et cet élève, sinon remplacé.
+    private func prepareLearnerConsent() async {
+        guard learnerRecordsTrips, let agendaClient, let trainingClient, let person = workspace.person,
+              let membership = workspace.membership, let learnerID = ownLearner?.id else {
+            learnerConsent?.invalidate(); learnerConsent = nil
+            requiredActions.replace(.giveRecordingConsent, with: [])
+            return
+        }
+        let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId, membershipID: membership.membershipId,
+            accessEpoch: membership.accessEpoch, apiBaseURL: trainingClient.baseURL.absoluteString)
+        if let current = learnerConsent, current.scope == scope, current.learnerID == learnerID, !current.accessRevoked {
+            if current.needsReload, !current.isLoading, !current.isBusy { await current.load() }
+            return
+        }
+        learnerConsent?.invalidate()
+        let model = SchoolOwnRecordingChoice.makeModel(scope: scope, lessonID: nil, learnerID: learnerID,
+            agenda: agendaClient, capture: captureController)
+        learnerConsent = model
+        await model.load()
     }
 
     private func learnerTab(_ section: SchoolTrainingSection, title: String) -> some View {

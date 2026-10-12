@@ -3,6 +3,12 @@ import SwiftUI
 struct SchoolProfileView: View {
     @Bindable var model: SchoolProfileWorkspace
     var loadsOnAppear = true
+    /// Le champ à ouvrir : la page défile jusqu’à lui et le met au clavier (venu d’une information manquante).
+    var focus: SchoolProfileField? = nil
+    /// Informations requises qui manquaient à l’ouverture ; chacune garde son point tant qu’elle reste vide.
+    var missingFields: Set<SchoolProfileField> = []
+    @FocusState private var focusedField: SchoolProfileField?
+    @State private var focusApplied = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showsGuidedWelcome = false
@@ -34,6 +40,29 @@ struct SchoolProfileView: View {
     }
 
     private var content: some View {
+        ScrollViewReader { proxy in
+            form
+                .task(id: model.profile != nil) { await openFocus(proxy) }
+        }
+    }
+
+    /// Une fois le dossier à l’écran : défilement jusqu’au champ demandé, puis le clavier, après la montée de la
+    /// feuille. Une adresse à renseigner s’ouvre d’elle-même. Une seule fois par ouverture.
+    private func openFocus(_ proxy: ScrollViewProxy) async {
+        guard let focus, !focusApplied, model.profile != nil, model.editableFields.contains(focus) else { return }
+        focusApplied = true
+        if focus == .postalAddress && !model.draft.hasAddress { model.draft.hasAddress = true }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(focus, anchor: .center) }
+        focusedField = focus
+    }
+
+    private func isMissing(_ field: SchoolProfileField) -> Bool {
+        missingFields.contains(field) && model.draft.isEmpty(field)
+    }
+
+    private var form: some View {
         Form {
             SchoolProfileStatusSections(model: model)
             if let profile = model.profile {
@@ -113,11 +142,13 @@ struct SchoolProfileView: View {
     private func identitySection(_ profile: SchoolAdministrativeProfile) -> some View {
         Section {
             if model.editableFields.contains(.firstName) {
-                profileField("Prénom", text: $model.draft.firstName, identifier: "profile-first-name").textContentType(.givenName)
+                profileField("Prénom", text: $model.draft.firstName, identifier: "profile-first-name", field: .firstName).textContentType(.givenName)
+                    .id(SchoolProfileField.firstName)
                 fieldExplanation(.firstName)
             } else { LabeledContent("Prénom", value: profile.firstName ?? "À compléter") }
             if model.editableFields.contains(.lastName) {
-                profileField("Nom", text: $model.draft.lastName, identifier: "profile-last-name").textContentType(.familyName)
+                profileField("Nom", text: $model.draft.lastName, identifier: "profile-last-name", field: .lastName).textContentType(.familyName)
+                    .id(SchoolProfileField.lastName)
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
         } header: { Text("Identité scolaire").drivyFormSectionHeader() }
@@ -129,14 +160,16 @@ struct SchoolProfileView: View {
         if model.editableFields.contains(.contactEmail) || model.editableFields.contains(.contactPhone) {
             Section {
                 if model.editableFields.contains(.contactEmail) {
-                    profileField("E-mail", text: $model.draft.contactEmail, prompt: "nom@exemple.ch", identifier: "profile-email")
+                    profileField("E-mail", text: $model.draft.contactEmail, prompt: "nom@exemple.ch", identifier: "profile-email", field: .contactEmail)
                         .textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .id(SchoolProfileField.contactEmail)
                     fieldExplanation(.contactEmail)
                 }
                 if model.editableFields.contains(.contactPhone) {
-                    profileField("Téléphone", text: $model.draft.contactPhone, identifier: "profile-phone")
+                    profileField("Téléphone", text: $model.draft.contactPhone, identifier: "profile-phone", field: .contactPhone)
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
+                        .id(SchoolProfileField.contactPhone)
                     fieldExplanation(.contactPhone)
                 }
             } header: { Text("Contacts").drivyFormSectionHeader() }
@@ -148,12 +181,15 @@ struct SchoolProfileView: View {
         Section {
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 TextField("JJ.MM.AAAA", text: $model.draft.birthDate).keyboardType(.numbersAndPunctuation)
+                    .focused($focusedField, equals: .birthDate)
                     .accessibilityLabel("Date de naissance, jour point mois point année")
+                    .accessibilityValue(isMissing(.birthDate) ? "À renseigner" : "")
                     .accessibilityIdentifier("profile-birth-date")
             }
             .padding(.vertical, DrivySpacing.xxs)
+            .id(SchoolProfileField.birthDate)
             fieldExplanation(.birthDate)
-        } header: { Text("Date de naissance").drivyFormSectionHeader() }
+        } header: { sectionHeader("Date de naissance", field: .birthDate) }
             .drivyFormRows()
         .disabled(!model.acceptsInput)
     }
@@ -161,8 +197,9 @@ struct SchoolProfileView: View {
         Section {
             Toggle("Renseigner une adresse", isOn: $model.draft.hasAddress)
                 .drivyControlTint()
+                .id(SchoolProfileField.postalAddress)
             if model.draft.hasAddress {
-                profileField("Rue et numéro", text: $model.draft.address.line1).textContentType(.streetAddressLine1)
+                profileField("Rue et numéro", text: $model.draft.address.line1, field: .postalAddress).textContentType(.streetAddressLine1)
                 profileField("Complément · facultatif", text: Binding(get: { model.draft.address.line2 ?? "" }, set: { model.draft.address.line2 = $0.isEmpty ? nil : $0 }))
                     .textContentType(.streetAddressLine2)
                 profileField("Code postal", text: $model.draft.address.postalCode).textContentType(.postalCode)
@@ -170,7 +207,7 @@ struct SchoolProfileView: View {
                 countryPicker
             }
             fieldExplanation(.postalAddress)
-        } header: { Text("Adresse postale").drivyFormSectionHeader() }
+        } header: { sectionHeader("Adresse postale", field: .postalAddress) }
             .drivyFormRows()
         .disabled(!model.acceptsInput)
     }
@@ -213,8 +250,23 @@ struct SchoolProfileView: View {
         case .profilePhotoDocumentId: "Vérifie la photo du profil."
         }
     }
-    private func profileField(_ title: String, text: Binding<String>, prompt: String? = nil, identifier: String? = nil) -> some View {
-        DrivyFormField(label: title, text: text, prompt: prompt, identifier: identifier)
+    /// `field` : l’information que la saisie renseigne, pour son point et pour l’ouverture au clavier.
+    private func profileField(_ title: String, text: Binding<String>, prompt: String? = nil, identifier: String? = nil,
+                              field: SchoolProfileField? = nil) -> some View {
+        DrivyFormField(label: title, text: text, prompt: prompt, identifier: identifier,
+                       isMissing: field.map { $0 != .postalAddress && isMissing($0) } ?? false,
+                       focus: field.map { _ in $focusedField }, focusValue: field)
+    }
+
+    /// En-tête d’une section d’une seule information : le point la précède tant qu’elle manque.
+    private func sectionHeader(_ title: String, field: SchoolProfileField) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+            if isMissing(field) { DrivyActionDot().transition(.opacity) }
+            Text(title).drivyFormSectionHeader()
+        }
+        .animation(.easeOut(duration: 0.2), value: isMissing(field))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isMissing(field) ? "À renseigner" : "")
     }
     @ViewBuilder private var readinessSection: some View {
         if let readiness = model.readiness, !readiness.ready {

@@ -289,16 +289,33 @@ struct DrivyFormField: View {
     @Binding var text: String
     var prompt: String? = nil
     var identifier: String? = nil
+    /// Information requise encore vide : le point d’action précède le libellé jusqu’à la saisie.
+    var isMissing = false
+    var focus: FocusState<SchoolProfileField?>.Binding? = nil
+    var focusValue: SchoolProfileField? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            Text(label).font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                .accessibilityHidden(true)
-            TextField(prompt ?? label, text: $text)
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                if isMissing { DrivyActionDot().transition(.opacity) }
+                Text(label).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            }
+            .accessibilityHidden(true)
+            field
                 .accessibilityLabel(label)
+                .accessibilityValue(isMissing ? "À renseigner" : "")
                 .accessibilityIdentifier(identifier ?? "")
         }
         .padding(.vertical, DrivySpacing.xxs)
+        .animation(.easeOut(duration: 0.2), value: isMissing)
+    }
+
+    @ViewBuilder private var field: some View {
+        if let focus, let focusValue {
+            TextField(prompt ?? label, text: $text).focused(focus, equals: focusValue)
+        } else {
+            TextField(prompt ?? label, text: $text)
+        }
     }
 }
 

@@ -233,6 +233,8 @@ struct SchoolLessonChange: Sendable {
     let schoolID: UUID
     let trainingID: UUID
     let lessonID: UUID
+    /// La commande confirmée : une leçon terminée ou marquée absente éteint aussitôt son action « à terminer ».
+    var kind: SchoolCommandKind? = nil
 }
 
 /// Filtre de statut des leçons du dossier. Une leçon dont l’horaire est passé

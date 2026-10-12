@@ -16,12 +16,15 @@ struct SchoolLearnerDossierView: View {
     @State private var section: SchoolTrainingSection = .lessons
     @State private var profileModel: SchoolProfileWorkspace?
     @State private var editingProfile: SchoolProfileWorkspace?
+    /// Le champ que le formulaire ouvre et met au clavier quand on vient d’une information manquante.
+    @State private var editingFocus: SchoolProfileField?
     @State private var profileScopeKey = ""
     @State private var profileCreationFailed = false
     @State private var showsInformation = false
     /// Informations requises qui manquent au profil, telles que l’école les nomme ; vide tant que rien n’est lu.
     @State private var missingFields: [String] = []
-    @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
+    /// Vrai une fois les champs manquants lus pour ce dossier : une panne ne se lit jamais « rien ne manque ».
+    @State private var missingFieldsRead = false
     /// The permit filtered in Lessons and Progression; `nil` shows them all. Held here so the choice
     /// is shared by the two sections of the same learner.
     @State private var permit: UUID?
@@ -49,8 +52,9 @@ struct SchoolLearnerDossierView: View {
                 .navigationBarTitleDisplayMode(.inline)
         }
         .task(id: scopeKey) { await reload() }
-        .sheet(item: $editingProfile, onDismiss: { Task { await reload() } }) { model in
-            SchoolProfileView(model: model, loadsOnAppear: false)
+        .sheet(item: $editingProfile, onDismiss: { editingFocus = nil; Task { await reload() } }) { model in
+            SchoolProfileView(model: model, loadsOnAppear: false, focus: editingFocus,
+                missingFields: Set(missingFields.compactMap(SchoolProfileField.init(rawValue:))))
         }
         .onChange(of: profileModel?.accessFailure) { _, failure in
             guard let failure else { return }
@@ -231,11 +235,20 @@ struct SchoolLearnerDossierView: View {
         return model?.profile != nil || model?.isLoading == true || (model == nil && !profileCreationFailed)
     }
 
+    /// Les champs lus manquent, ou le dossier se dit incomplet sans qu’aucun champ visible par ce compte ne manque
+    /// (un moniteur ne lit pas les champs protégés). Tant que la lecture n’a pas abouti, rien n’est affirmé.
+    private func showsMissingInformation(_ learner: SchoolLearner, model: SchoolProfileWorkspace) -> Bool {
+        guard missingFieldsRead else { return false }
+        return !missingFields.isEmpty || (!model.hasFullAccess && SchoolRequiredActionRules.profileIsIncomplete(learner))
+    }
+
     /// A request to check and an error are unusual: they stay visible, folded or not.
     @ViewBuilder private func attention(_ learner: SchoolLearner) -> some View {
         if makeLearnerProfile != nil {
             let model = currentProfile
-            if !missingFields.isEmpty, let model, model.pending == nil { missingInformation(model) }
+            if let model, model.pending == nil, showsMissingInformation(learner, model: model) {
+                missingInformation(model)
+            }
             if let model, model.pending != nil {
                 verifyButton(model).padding(.bottom, DrivySpacing.xs)
             }
@@ -250,37 +263,72 @@ struct SchoolLearnerDossierView: View {
         }
     }
 
-    /// Ce qui manque, pourquoi, et le geste pour le renseigner : une seule ligne dans la carte. Qui ne peut
-    /// pas modifier ces champs lit à qui il revient de le faire, sans bouton qui échouerait.
-    private func missingInformation(_ model: SchoolProfileWorkspace) -> some View {
-        let mine = model.hasFullAccess ? missingFields : missingFields.filter(SchoolRequiredActionRules.instructorEditableFields.contains)
-        let names = missingFields.map(SchoolRequiredActionRules.fieldName).joined(separator: ", ")
-        let stacked = typeSize.isAccessibilitySize
-        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xxs))
-                             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: DrivySpacing.xs))
-        return layout {
-            if !mine.isEmpty && !stacked { DrivyActionDot() }
-            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text("À renseigner pour planifier : \(names)")
-                    .font(.subheadline)
+    /// Ce qui manque, champ par champ, chaque ligne ouvrant le formulaire sur ce champ. Un champ que ce compte ne
+    /// peut pas modifier est nommé sans geste, avec qui le renseigne. Un moniteur à qui l’école ne montre pas les
+    /// champs protégés lit seulement qu’il revient à l’administration de compléter le dossier.
+    @ViewBuilder private func missingInformation(_ model: SchoolProfileWorkspace) -> some View {
+        let fields = missingFields.compactMap(SchoolProfileField.init(rawValue:))
+        let editable = model.editableFields
+        VStack(alignment: .leading, spacing: 0) {
+            Divider().overlay(DrivyTheme.border)
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                if fields.contains(where: { editable.contains($0) }) { DrivyActionDot() }
+                Text("Profil à compléter")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(DrivyTheme.text)
+                Spacer(minLength: DrivySpacing.xs)
+                Text(fields.isEmpty ? "Par l’administration" : SchoolRequiredActionRules.missingCount(fields.count))
+                    .font(.subheadline)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .multilineTextAlignment(.trailing)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, DrivySpacing.m)
+            .padding(.bottom, DrivySpacing.xs)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            ForEach(fields) { field in
+                if editable.contains(field) {
+                    Button { complete(field, model: model) } label: {
+                        HStack(spacing: DrivySpacing.s) {
+                            Text(field.label).foregroundStyle(DrivyTheme.text)
+                            Spacer(minLength: DrivySpacing.xs)
+                            Image(systemName: "chevron.forward")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.muted)
+                                .accessibilityHidden(true)
+                        }
+                        .font(.body)
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Ouvre le champ à renseigner")
+                    .accessibilityIdentifier("learner-missing-\(field.rawValue)")
+                } else {
+                    HStack(spacing: DrivySpacing.s) {
+                        Text(field.label).foregroundStyle(DrivyTheme.text)
+                        Spacer(minLength: DrivySpacing.xs)
+                        Text(field.isName && !model.hasFullAccess ? "Élève ou administration" : "Administration")
+                            .foregroundStyle(DrivyTheme.muted)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
-                if mine.isEmpty {
-                    Text("À compléter par l’élève ou l’administration.")
-                        .font(.footnote)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .accessibilityElement(children: .combine)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if !mine.isEmpty {
-                Button("Compléter") { editingProfile = model }
-                    .buttonStyle(.drivyText)
-                    .accessibilityIdentifier("learner-complete-profile")
-            }
         }
-        .padding(.bottom, DrivySpacing.s)
+        .padding(.bottom, DrivySpacing.xs)
+        .transition(.opacity)
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("learner-missing-information")
+    }
+
+    private func complete(_ field: SchoolProfileField, model: SchoolProfileWorkspace) {
+        editingFocus = field
+        editingProfile = model
     }
 
     @ViewBuilder private func details(_ learner: SchoolLearner) -> some View {
@@ -417,6 +465,7 @@ struct SchoolLearnerDossierView: View {
         }
         profileModel?.invalidate()
         missingFields = []
+        missingFieldsRead = false
         profileScopeKey = scopeKey
         profileModel = makeLearnerProfile?(learner)
         profileCreationFailed = profileModel == nil
@@ -426,12 +475,14 @@ struct SchoolLearnerDossierView: View {
         }
     }
 
-    /// Relu avec le profil, donc après chaque modification : la ligne et les indicateurs de la liste suivent
-    /// l’état réel. Rien ne manque : l’action de ce dossier est résolue, où qu’elle soit affichée.
+    /// Relu avec le profil, donc après chaque modification. La ligne de la liste et le point de l’onglet suivent le
+    /// dossier relu (`loadSelectedLearner` remplace sa ligne) : l’école calcule les deux avec la même règle.
     private func readMissingFields(_ model: SchoolProfileWorkspace, learner: SchoolLearner) async {
         let requested = scopeKey
         guard let fields = await model.missingRequiredFields(), requested == scopeKey, !Task.isCancelled else { return }
-        missingFields = fields
-        if fields.isEmpty { requiredActions?.resolve(.completeLearnerProfile, entityID: learner.id) }
+        withAnimation(DrivyMotion.unfold(reduceMotion)) {
+            missingFields = fields
+            missingFieldsRead = true
+        }
     }
 }

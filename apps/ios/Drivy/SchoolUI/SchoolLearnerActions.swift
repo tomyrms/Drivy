@@ -92,10 +92,8 @@ struct SchoolLearnerActions: View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.xs) {
                 Label("Profil", systemImage: "person.text.rectangle")
-                if learner.profileReadiness == "ACTION_REQUIRED" {
-                    Image(systemName: "exclamationmark.triangle")
-                        .foregroundStyle(DrivyTheme.muted).accessibilityHidden(true)
-                }
+                // Même signe et même mot que la liste et le dossier : une information requise manque.
+                if SchoolRequiredActionRules.profileIsIncomplete(learner) { DrivyActionDot() }
             }
             .font(.subheadline.weight(.semibold))
             .frame(minHeight: DrivyLayout.tapTarget)
@@ -103,7 +101,7 @@ struct SchoolLearnerActions: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(DrivyTheme.accent)
-        .accessibilityLabel(learner.profileReadiness == "ACTION_REQUIRED" ? "Profil à vérifier" : "Profil")
+        .accessibilityLabel(SchoolRequiredActionRules.profileIsIncomplete(learner) ? "Profil à compléter" : "Profil")
         .accessibilityIdentifier("open-learner-profile")
     }
 

@@ -438,11 +438,13 @@ struct SchoolRootView: View {
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
-        let pending = await SchoolOnboardingPrompt.isPending(api: api, scope: scope, kind: kind)
+        let state = await SchoolOnboardingPrompt.pendingState(api: api, scope: scope, kind: kind)
         guard !Task.isCancelled, identity.isAuthenticated,
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
               workspace?.membership?.accessEpoch == membership.accessEpoch else { return }
+        // Une panne ne dit rien : « Reprendre l’accueil » déjà affiché reste, rien ne s’ouvre.
+        guard let pending = state else { return }
         guard pending else {
             if !isLearner { staffOnboardingToResume = nil }
             return
