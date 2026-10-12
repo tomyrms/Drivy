@@ -32,63 +32,6 @@ struct DrivyStepProgress: View {
     }
 }
 
-/// Head of a guided screen: symbol, the question or subject as title, then the
-/// one sentence that says why this step exists. The symbol disappears at
-/// accessibility text sizes so the title keeps the width.
-struct DrivyGuidedStepHeader: View {
-    let symbol: String
-    let title: String
-    let reason: String
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            if !typeSize.isAccessibilitySize {
-                Image(systemName: symbol)
-                    .font(.title2)
-                    .foregroundStyle(DrivyTheme.accent)
-                    .frame(width: 56, height: 56)
-                    .background(DrivyTheme.accentSoft, in: Circle())
-                    .accessibilityHidden(true)
-            }
-            Text(title)
-                .font(.drivyTitle)
-                .foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Text(reason)
-                .font(.body)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// One explanatory point of a guided screen: a muted symbol and a sentence.
-struct DrivyGuidedFact: View {
-    let symbol: String
-    let text: String
-    /// The symbol column grows with the text, so a large glyph never runs into the sentence.
-    @ScaledMetric(relativeTo: .body) private var symbolWidth: CGFloat = 24
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-            Image(systemName: symbol)
-                .font(.body)
-                .foregroundStyle(DrivyTheme.muted)
-                .frame(width: symbolWidth)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.body)
-                .foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// Labelled text field on a reading page (outside a Form): permanent label,
 /// bordered field of at least 48 pt, then an optional note (why it is asked,
 /// or what to fix). The placeholder is never the label.

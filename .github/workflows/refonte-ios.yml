@@ -191,7 +191,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       # Dernière étape : les captures (fixtures fictives uniquement, voir
-      # SchoolVisualReview.swift et JourneyVisualReview.swift) sont réduites en
+      # SchoolVisualReview.swift et ses voisins) sont réduites en
       # JPEG et imprimées en base64 à la fin du journal, lisible par l'API des
       # journaux quand le téléchargement des artefacts est impossible.
       - name: Captures en base64 pour la revue

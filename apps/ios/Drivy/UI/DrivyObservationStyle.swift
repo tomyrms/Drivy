@@ -35,10 +35,3 @@ struct DrivyTileButtonStyle: ButtonStyle {
             .animation(DrivyMotion.press(reduceMotion), value: configuration.isPressed)
     }
 }
-
-/// A geographic overview is only a map camera, never a recorded location.
-enum JourneyMapRegion {
-    static let overview = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 46.8, longitude: 8.2),
-        span: MKCoordinateSpan(latitudeDelta: 2.7, longitudeDelta: 4.5))
-}
