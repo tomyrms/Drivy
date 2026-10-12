@@ -177,6 +177,9 @@ struct SchoolTodayView: View {
             Map(position: $camera, scope: mapScope) { UserAnnotation() }
                 .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
                 .mapControls { }
+                // Le point de position garde le bleu du système : teinté du bleu pastel du thème sombre, il se lisait
+                // comme une position périmée.
+                .tint(.blue)
                 // Avant les insets du panneau : le contrôle suit la carte visible sans déplacer ses mentions.
                 .overlay(alignment: .bottomTrailing) {
                     MapUserLocationButton(scope: mapScope)
@@ -184,6 +187,8 @@ struct SchoolTodayView: View {
                         .padding(.trailing, DrivySpacing.m)
                         .padding(.bottom, DrivySpacing.l)
                 }
+                // Sans portée commune, le bouton n’était relié à aucune carte et ne s’affichait pas.
+                .mapScope(mapScope)
         } else {
             locationPlaceholder
                 .frame(maxHeight: .infinity)
@@ -228,7 +233,9 @@ struct SchoolTodayView: View {
         let featured = active ?? next
         DrivyMapDock(floating: floating) {
             if let lesson = featured {
-                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
+                // Une leçon commencée se lit « En cours » sur sa ligne, pas seulement dans le libellé du bouton.
+                lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote
+                    ?? (lesson.hasStarted ? DrivyRowNote(text: "En cours", tone: .accent) : nil))
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId
                     && (lesson.hasStarted || SchoolLessonHubRules.mayBegin(lesson, now: now)) {
                     Button { Task { await commence(lesson) } } label: {
@@ -270,7 +277,7 @@ struct SchoolTodayView: View {
                 ForEach(unfinished) { lesson in
                     Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                         DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                            details: [day(lesson)], state: lesson.drivyState(now: now), showsChevron: false)
+                            details: [day(lesson)], state: lesson.drivyState(now: now))
                     }
                     .buttonStyle(DrivyRowButtonStyle())
                     .accessibilityHint("Ouvre la leçon à terminer")
@@ -298,7 +305,7 @@ struct SchoolTodayView: View {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(SchoolTodayPresentation.moment(for: lesson, now: now))
                     .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson), details: [])
+                DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson), details: [lesson.meetingPoint])
             }
         }
         .buttonStyle(DrivyRowButtonStyle())
@@ -317,8 +324,9 @@ struct SchoolTodayView: View {
                     ForEach(Array(others.enumerated()), id: \.element.id) { index, lesson in
                         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
                             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now), showsChevron: false,
-                                railPosition: .at(index, count: others.count))
+                                details: [lesson.meetingPoint], state: lesson.drivyState(now: now),
+                                // La frise relie des leçons : seule, son repère ressemblait à une case à cocher.
+                                railPosition: others.count > 1 ? .at(index, count: others.count) : nil)
                         }
                         .buttonStyle(DrivyRowButtonStyle())
                         .accessibilityHint("Ouvre la leçon")
