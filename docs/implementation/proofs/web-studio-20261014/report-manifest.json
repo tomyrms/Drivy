@@ -14,8 +14,8 @@
     {
       "file": "reports/ci-checks-result.json",
       "origin": "GitHub Actions 38481209557: gh run view metadata and filtered test-summary lines",
-      "bytes": 1419,
-      "sha256": "88d848413a05e310adc26b69a39f20806cec9775d2ac58560d6194f4024699a1"
+      "bytes": 1389,
+      "sha256": "e1a61dbad17eef08598efc643125efeb185d508cc4be8583c742f8d1130525c4"
     },
     {
       "file": "reports/coverage-summary.json",
