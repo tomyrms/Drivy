@@ -209,14 +209,13 @@ export function ProductsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Tarifs"
-        actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle prestation</button> : undefined} />
+        actions={canConfigureCatalog ? <><button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'prestations' })}><Symbol kind="plus" bare />Ajouter un tarif de leçon</button><button type="button" className="button secondary" disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}>Autre prestation</button></> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
-        list={<><div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>{rows.length === 0 ? <EmptyState symbol="tag" title="Aucune prestation" message={value.terms.some(item => item.approved)
-            ? 'Créez une prestation et rattachez-la aux conditions commerciales approuvées.' : 'Commencez par approuver des conditions commerciales.'}
-            action={value.terms.some(item => item.approved) ? undefined : <button type="button" className="button secondary" onClick={() => navigate('conditions', { from: 'prestations', category: routeQuery?.category })}>Ouvrir les conditions commerciales</button>} />
+        list={<><div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>{rows.length === 0 ? <EmptyState symbol="tag" title="Aucun tarif" message="Préparez une formation, son prix et ses conditions."
+            action={canConfigureCatalog ? <button type="button" className="button secondary" onClick={() => navigate('apercu', { from: 'prestations' })}>Préparer une formation</button> : undefined} />
           : <table className="data-table">
             <caption className="visually-hidden">Prestations et tarifs</caption>
             <thead><tr><th scope="col">Prestation</th><th scope="col" className="numeric">Prix</th></tr></thead>

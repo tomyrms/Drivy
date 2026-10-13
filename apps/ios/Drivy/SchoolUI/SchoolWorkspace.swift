@@ -26,6 +26,7 @@ final class SchoolWorkspace {
 
     private(set) var isLoadingAccount = false
     private(set) var isLoadingSchool = false
+    private(set) var isRefreshingEntry = false
     private(set) var isSearching = false
     private(set) var isLoadingMoreLearners = false
     private(set) var isLoadingLearner = false
@@ -56,8 +57,13 @@ final class SchoolWorkspace {
     @ObservationIgnored private var trainingCursors: Set<String> = []
     @ObservationIgnored private var accountReadAt: Date?
     @ObservationIgnored private var learnersReadAt: Date?
+    @ObservationIgnored private var awaitsManagementReturn = false
 
     init(api: any SchoolAPI) { self.api = api }
+
+    var entryDestination: SchoolEntryDestination {
+        .resolve(schoolStatus: school?.status, roles: membership?.roles)
+    }
 
     var isLearnerOnly: Bool {
         guard let roles = membership?.roles else { return false }
@@ -75,6 +81,7 @@ final class SchoolWorkspace {
         accessRevoked = false
         accountReadAt = nil
         isLoadingAccount = false
+        awaitsManagementReturn = false
         clearSchool()
     }
 
@@ -115,9 +122,10 @@ final class SchoolWorkspace {
     /// Return to the app: re-read the account without clearing anything on screen, at most
     /// every five minutes. Only a change of rights in the current school reloads it; a network
     /// failure changes nothing, a refusal from the school closes the account as any read does.
-    func refreshAccount(minimumInterval: TimeInterval = 300, now: Date = Date()) async {
-        guard let current = person, !isLoadingAccount else { return }
-        if let accountReadAt, now.timeIntervalSince(accountReadAt) < minimumInterval { return }
+    @discardableResult
+    func refreshAccount(minimumInterval: TimeInterval = 300, now: Date = Date()) async -> Bool {
+        guard let current = person, !isLoadingAccount else { return false }
+        if let accountReadAt, now.timeIntervalSince(accountReadAt) < minimumInterval { return true }
         let request = accountRequest
         let previousReadAt = accountReadAt
         accountRefresh = UUID()
@@ -127,18 +135,18 @@ final class SchoolWorkspace {
             let result = try await api.me()
             // Several screens can request a silent refresh at once. Only the latest
             // reading may replace the account and its rights, even within one session.
-            guard request == accountRequest, refresh == accountRefresh else { return }
-            guard result.personId == current.personId else { await loadAccountFromScratch(); return }
+            guard request == accountRequest, refresh == accountRefresh else { return false }
+            guard result.personId == current.personId else { await loadAccountFromScratch(); return person != nil && !accessRevoked }
             person = result
             guard let selected = membership else {
                 if result.memberships.count == 1, let only = result.memberships.first { await selectSchool(only) }
-                return
+                return true
             }
             guard let updated = result.memberships.first(where: { $0.schoolId == selected.schoolId }) else {
                 // No longer a member of this school.
                 clearSchool()
                 if result.memberships.count == 1, let only = result.memberships.first { await selectSchool(only) }
-                return
+                return true
             }
             if updated.membershipId != selected.membershipId || updated.accessEpoch != selected.accessEpoch
                 || Set(updated.roles) != Set(selected.roles) || Set(updated.grants) != Set(selected.grants) {
@@ -147,10 +155,42 @@ final class SchoolWorkspace {
                 // Same rights (a renamed school): the projection changes, nothing is reloaded.
                 membership = updated
             }
+            return true
         } catch {
-            guard request == accountRequest, refresh == accountRefresh else { return }
+            guard request == accountRequest, refresh == accountRefresh else { return false }
             // Une panne passagère ne compte pas comme une lecture : la prochaine occasion réessaie.
             if !invalidateAccess(for: error) { accountReadAt = previousReadAt }
+            return false
+        }
+    }
+
+    /// Le portail peut activer l'école sans changer les rôles : son retour relit aussi l'état scolaire.
+    func willOpenManagement() { awaitsManagementReturn = true }
+
+    func refreshOnForeground() async {
+        if awaitsManagementReturn || school?.status == "DRAFT" {
+            await refreshEntry()
+        } else {
+            await refreshAccount()
+            await refreshLearners()
+        }
+    }
+
+    /// Relecture explicite de l'entrée, sans effacer l'état confirmé en cas de panne.
+    func refreshEntry() async {
+        guard person != nil, !isLoadingAccount, !isLoadingSchool, !isRefreshingEntry else { return }
+        isRefreshingEntry = true
+        defer { isRefreshingEntry = false }
+        let request = accountRequest, previousScope = schoolScope
+        guard await refreshAccount(minimumInterval: 0) else {
+            if request == accountRequest, !accessRevoked { schoolError = "Les accès de l’école n’ont pas pu être vérifiés. Réessayez." }
+            return
+        }
+        guard request == accountRequest, !accessRevoked, let selected = membership else { return }
+        // Un changement de rôle ou d'école a déjà déclenché selectSchool pendant la relecture des droits.
+        if previousScope == schoolScope { await selectSchool(selected) }
+        if request == accountRequest, schoolError == nil, school?.id == membership?.schoolId {
+            awaitsManagementReturn = false
         }
     }
 

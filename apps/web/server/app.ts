@@ -7,7 +7,8 @@ import type { WebConfig } from './config.js';
 import { IdentityUnavailable, type IdentityProvider } from './oidc.js';
 import { RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session } from './session.js';
-import { createGateway, createSchoolGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { createGateway, createSchoolGateway, createOpeningGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
 class WebError extends Error {
@@ -19,7 +20,7 @@ const previewSchema = z.object({ data: z.object({ invitationId: z.uuid(), school
   notice: z.object({version: z.number().int(), noticeText:z.string(),retentionText:z.string(),contactEmail:z.string()}) }) });
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 /** Only a management page of this origin can be a post-login destination. */
-const returnPath = /^\/app\/gestion(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]{1,40})?)?$/;
+const returnPath = /^\/app\/(?:gestion(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]{1,40})?)?|ouvrir|operateur)$/;
 const loginBody = z.object({ returnTo: z.string().max(200).regex(returnPath).optional(), reauthenticate: z.boolean().optional() }).strict();
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
 /** Fastify parser refusals (size, media type, malformed JSON) stay client errors, without echoing details. */
@@ -32,7 +33,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const sessionMinutes = { idle: config.sessionIdleMinutes ?? 480, max: config.sessionMaxMinutes ?? 720 };
@@ -43,6 +44,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const anonymousCsrf = randomBytes(32).toString('base64url');
   const gateway = options.gateway ?? createGateway(config.apiBaseURL);
   const schoolGateway = options.schoolGateway ?? createSchoolGateway(config.apiBaseURL);
+  const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
   // After a sign-out the identity provider may still hold its own session: the next login must ask for the credentials.
   const reloginName = config.development ? 'drivy-dev-relogin' : '__Host-drivy-relogin';
@@ -146,6 +148,13 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     }
     return reply.status(result.status).send(result.body);
   };
+  const callOpening = async(session:Session,command:OpeningRequest):Promise<ApiResult>=>{
+    const result=await openingGateway(command,await accessToken(session));
+    if(!store.isCurrent(session))throw new WebError(401,'SESSION_LOST_RESULT_UNKNOWN');
+    if(result.status===401){store.destroy(session);throw new WebError(401,'SESSION_EXPIRED');}
+    return result;
+  };
+  registerOpeningRoutes(app,{origin:config.origin,current,protect,admit,open,call:callOpening,send:sendApi,error:(status,code)=>new WebError(status,code)});
   app.get('/app/bff/session',async request => {
     const session = store.get(request.cookies[cookieName]);
     // No session is created for a visitor who only looks: that would let anyone fill the table.
@@ -179,7 +188,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     try {
       const tokens = await identity.complete(url,transaction);
       const next = store.rotate(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
-      return reply.redirect(next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
+      return reply.redirect(transaction.returnTo==='/app/ouvrir' || transaction.returnTo==='/app/operateur' ? transaction.returnTo : next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
     } catch { return reply.redirect('/app?auth=failed'); }
   });
   app.post('/app/bff/logout',async (request,reply) => {
@@ -284,7 +293,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     } });
   if (options.staticRoot) {
     await app.register(staticFiles,{root:options.staticRoot,prefix:'/app/',index:false,wildcard:false,cacheControl:false});
-    for (const path of ['/app','/app/','/app/invitation','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
+    for (const path of ['/app','/app/','/app/invitation','/app/ouvrir','/app/operateur','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
   }
   app.setNotFoundHandler(async (_request,reply) => reply.status(404).send({code:'NOT_FOUND',title:'Page introuvable.'}));
   return app;

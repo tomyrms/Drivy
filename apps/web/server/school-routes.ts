@@ -4,7 +4,7 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action';
+type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action' | 'activate';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -21,6 +21,12 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: [] },
   { method: 'PATCH', segments: [], ifMatch: true, bodyLimit: 4_096 },
   { method: 'GET', segments: ['setup'] },
+  { method: 'GET', segments: ['setup-draft'] },
+  { method: 'PUT', segments: ['setup-draft'], ifMatch: true, bodyLimit: 1_000_000 },
+  { method: 'GET', segments: ['setup-draft', 'templates'] },
+  { method: 'GET', segments: ['setup-draft', 'next-actions'] },
+  { method: 'GET', segments: ['setup-draft', 'preview'], query: ['activate'] },
+  { method: 'POST', segments: ['setup-draft', 'complete'], ifMatch: true, bodyLimit: 4_096 },
   { method: 'PATCH', segments: ['setup'], ifMatch: true, bodyLimit: 2_048 },
   { method: 'GET', segments: ['readiness'] },
   { method: 'GET', segments: ['data-policy'], query: ['noticeVersionId'] },
@@ -88,6 +94,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
 
 const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const queryRules: Record<QueryKey, RegExp> = {
+  activate: /^(?:true|false)$/,
   limit: /^(?:[1-9]|[1-9][0-9]|100)$/,
   cursor: /^[A-Za-z0-9_-]{1,6000}$/,
   noticeVersionId: uuid,

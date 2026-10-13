@@ -400,6 +400,16 @@ select, textarea { font: inherit; color: inherit; }
 .console-nav a[aria-current] { background: var(--surface); color: var(--text); font-weight: 650; box-shadow: inset 3px 0 var(--accent), var(--shadow-surface); }
 .console-nav a[aria-current] .symbol.bare { color: var(--accent); }
 .console-nav a:active { background: var(--surface-muted); }
+.workspace-navigation-heading { display: flex; align-items: center; min-width: 0; }
+.workspace-navigation-heading > a { flex: 1; min-width: 0; }
+.workspace-navigation-heading > a .symbol { flex: none; }
+.workspace-navigation-heading > a[aria-current] { background: transparent; box-shadow: none; }
+.workspace-navigation-heading > a span { overflow-wrap: anywhere; }
+.console-nav .workspace-disclosure { display: none; }
+.console-nav .workspace-navigation { grid-template-columns: minmax(0, 1fr); }
+.console-nav .workspace-subnavigation { display: none; grid-template-columns: minmax(0, 1fr); margin-inline-start: calc(1.25rem + var(--space-xs)); padding-block-end: var(--space-s); }
+.workspace-navigation-item.is-current > .workspace-subnavigation { display: grid; }
+.workspace-subnavigation a { font-weight: 400; }
 @media (hover: hover) and (pointer: fine) { .console-nav a:hover:not([aria-current]) { background: var(--surface-muted); } }
 
 .console-main { min-width: 0; padding: var(--space-m) clamp(1.25rem, 2.25vw, 2.5rem) var(--space-xl); display: grid; gap: var(--space-m); align-content: start; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-content); box-shadow: var(--shadow-surface); container: workspace / inline-size; }
@@ -726,7 +736,9 @@ select, textarea { font: inherit; color: inherit; }
 }
 @media (max-width: 64rem) {
   .nav-inner { grid-template-columns: minmax(0,1fr); }
-  .console-nav ul { grid-template-columns: repeat(auto-fit,minmax(12rem,1fr)); }
+  .console-nav .workspace-disclosure { display: inline-flex; flex: none; min-inline-size: 2.75rem; padding-inline: var(--space-xs); }
+  .workspace-navigation-item.is-current > .workspace-subnavigation { display: none; }
+  .workspace-navigation-item.is-expanded > .workspace-subnavigation { display: grid; }
 }
 @media (max-width: 48rem) {
   .formation-content { grid-template-columns: minmax(0,1fr); gap: var(--space-l); }

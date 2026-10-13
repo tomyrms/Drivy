@@ -20,7 +20,7 @@ import { AgendaSection } from './agenda';
 import { TripsSection } from './trips';
 import { FormationsSection } from './formations';
 import { ObservationThemesSection } from './observation-themes';
-import { isLocalItemCurrent, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
+import { isLocalItemCurrent, localNavigationQuery, parentSection, sectionTitles, workspaceFor, workspaces, type WorkspaceKey } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
 import { ConsoleAccessReader } from './access-reader';
 
@@ -180,12 +180,13 @@ export function ManagementConsole() {
 
   const personName = state.status === 'ready' || state.status === 'choose' || state.status === 'denied' ? state.me.displayName : session?.user?.displayName;
   const adminSchools = state.status === 'ready' ? state.me.memberships.filter(member => member.roles.includes('ADMIN')) : [];
+  const setupMode = context?.school.status === 'DRAFT' && route.section === 'apercu';
 
   return (
-    <div className="console-shell">
+    <div className={`console-shell${setupMode ? ' setup-mode' : ''}`}>
       <a className="skip-link" href="#main">Aller au contenu</a>
       <header className="console-bar">
-        {context && <button ref={navigationButton} type="button" className="button quiet navigation-toggle" aria-controls="school-navigation" aria-expanded={navigationOpen}
+        {context && !setupMode && <button ref={navigationButton} type="button" className="button quiet navigation-toggle" aria-controls="school-navigation" aria-expanded={navigationOpen}
           onClick={() => setNavigationOpen(open => !open)}><Symbol kind="menu" bare /><span>Menu</span></button>}
         <a className="brand" href={context ? consolePath(context.schoolId, context.school.status === 'ACTIVE' ? 'agenda' : 'apercu') : '/app/'}
           aria-label="Drivy, accueil de l’école" onClick={event => {
@@ -209,7 +210,7 @@ export function ManagementConsole() {
       </header>
 
       <div className="console-body">
-        {context && <ConsoleNavigation schoolId={context.schoolId} section={route.section} query={route.query} open={navigationOpen} navigate={context.navigate}
+        {context && !setupMode && <ConsoleNavigation schoolId={context.schoolId} section={route.section} query={route.query} open={navigationOpen} navigate={context.navigate}
           onEscape={() => { setNavigationOpen(false); navigationButton.current?.focus(); }} />}
 
         <main id="main" className="console-main" aria-busy={state.status === 'loading'}>
@@ -223,7 +224,7 @@ export function ManagementConsole() {
           {state.status === 'choose' && <ChooseSchool schools={state.admin} onChoose={schoolId => { window.history.pushState(null, '', `/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); }} />}
           {state.status === 'denied' && <Denied membership={state.membership} />}
           {context && <ConsoleContext.Provider value={context}>
-            <SectionNavigation schoolId={context.schoolId} section={route.section} query={route.query} navigate={context.navigate} />
+            {!setupMode && <SectionNavigation schoolId={context.schoolId} section={route.section} query={route.query} navigate={context.navigate} />}
             <PendingPanel />
             <Section section={route.section} key={`${draftScope}-${route.section}-${route.section === 'invitations' ? route.query.audience ?? 'learners' : ''}`} />
           </ConsoleContext.Provider>}
@@ -238,18 +239,39 @@ export function ConsoleNavigation({ schoolId, section, query = {}, open, navigat
   schoolId: string; section: SectionKey; query?: NavigationQuery; open: boolean; navigate: (section: SectionKey, query?: NavigationQuery) => void; onEscape: () => void;
 }) {
   const current = workspaceFor(section, query);
+  const [expanded, setExpanded] = useState<WorkspaceKey | null>(current.key);
+  // Every reopening starts from the page on screen, including after history navigation.
+  useEffect(() => { setExpanded(current.key); }, [current.key, open]);
   return <nav id="school-navigation" className={`console-nav${open ? ' is-open' : ''}`} aria-label="Gestion de l’école"
     onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onEscape(); } }}><div className="nav-inner">
-      <ul>{workspaces.map(item => <li key={item.key}>
-        <a href={consolePath(schoolId, item.home)} aria-current={current.key === item.key ? 'true' : undefined}
-          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.home); }}>
-          <Symbol kind={item.symbol} bare /><span>{item.label}</span>
-        </a>
+      <ul className="workspace-navigation">{workspaces.map(workspace => <li key={workspace.key}
+        className={`workspace-navigation-item${current.key === workspace.key ? ' is-current' : ''}${expanded === workspace.key ? ' is-expanded' : ''}`}>
+        <div className="workspace-navigation-heading">
+          <a href={consolePath(schoolId, workspace.home)} aria-current={current.key === workspace.key ? 'true' : undefined}
+            onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(workspace.home); }}>
+            <Symbol kind={workspace.symbol} bare /><span>{workspace.label}</span>
+          </a>
+          <button type="button" className="button quiet workspace-disclosure" aria-controls={`navigation-${workspace.key}`}
+            aria-expanded={expanded === workspace.key} aria-label={`${expanded === workspace.key ? 'Replier' : 'Déplier'} les pages · ${workspace.label}`}
+            onClick={() => setExpanded(value => value === workspace.key ? null : workspace.key)}>
+            <Symbol kind={expanded === workspace.key ? 'chevron-up' : 'chevron'} bare />
+          </button>
+        </div>
+        <ul id={`navigation-${workspace.key}`} className="workspace-subnavigation" aria-label={`Pages · ${workspace.label}`}>
+          {workspace.items.map(item => {
+            const destinationQuery = localNavigationQuery(workspace, item, current.key === workspace.key ? query : {});
+            return <li key={item.section}>
+              <a href={consolePath(schoolId, item.section, destinationQuery)}
+                aria-current={current.key === workspace.key && isLocalItemCurrent(item, section) ? 'page' : undefined}
+                onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section, destinationQuery); }}>{item.label}</a>
+            </li>;
+          })}
+        </ul>
       </li>)}</ul>
   </div></nav>;
 }
 
-/** A small local navigation and a real hierarchy, shared by every screen in a workspace. */
+/** Deep editors keep their hierarchy and return context; destinations live only in the rail/menu. */
 export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
   schoolId: string; section: SectionKey; query?: NavigationQuery; navigate: (section: SectionKey, query?: NavigationQuery) => void;
 }) {
@@ -257,6 +279,7 @@ export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
   const categoryQuery = query.category ? { category: query.category } : {};
   const { category: _category, ...unfiltered } = query;
   const returnTo = query.from && query.from !== section && ['offres', 'prestations', 'formations'].includes(query.from) ? query.from : null;
+  if (parent === null && !returnTo && !(query.category && section !== 'formations')) return null;
   const link = (destination: SectionKey, label: string, destinationQuery: NavigationQuery = categoryQuery) => <a href={consolePath(schoolId, destination, destinationQuery)}
     onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(destination, destinationQuery); }}>{label}</a>;
   return <div className="section-navigation">
@@ -265,13 +288,6 @@ export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
       {parent && parent !== workspace.home && <li>{link(parent, sectionTitles[parent])}</li>}
       {section !== workspace.home && <li><span aria-current="page">{sectionTitles[section]}</span></li>}
     </ol></nav>}
-    <nav className="local-navigation" aria-label={`Rubriques · ${workspace.label}`}><ul>{workspace.items.map(item => {
-      const destinationQuery = { ...(workspace.key === 'formations' ? categoryQuery : {}), ...item.query };
-      return <li key={item.section}>
-        <a href={consolePath(schoolId, item.section, destinationQuery)} aria-current={isLocalItemCurrent(item, section) ? 'page' : undefined}
-          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section, destinationQuery); }}>{item.label}</a>
-      </li>;
-    })}</ul></nav>
     {(returnTo || (query.category && section !== 'formations')) && <div className="navigation-context">
       {returnTo && link(returnTo, returnTo === 'offres' ? 'Retour à la formation' : returnTo === 'prestations' ? 'Retour au tarif' : 'Retour aux formations')}
       {query.category && section !== 'formations' && <><span>Permis {query.category}</span>{link(section, 'Toutes les catégories', unfiltered)}</>}
@@ -283,6 +299,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
   switch (section) {
     case 'apercu': return <OverviewSection />;
     case 'configuration': return <ConfigurationSection />;
+    case 'confidentialite': return <ConfigurationSection section="privacy" />;
     case 'champs-profil': return <ProfileFieldsSection />;
     case 'offres': return <OfferingsSection />;
     case 'formations': return <FormationsSection />;
@@ -296,6 +313,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'agenda': return <AgendaSection />;
     case 'trajets': return <TripsSection />;
     case 'disponibilites': return <AvailabilitySection />;
+    case 'absences': return <AvailabilitySection section="absences" />;
     case 'signalements': return <ObservationThemesSection />;
   }
 }

@@ -91,12 +91,11 @@ struct DrivyApp: App {
                     if previous != .active, current == .active {
                         appLock.didBecomeActive(authenticated: identity.isAuthenticated)
                     }
-                    // Coming back never tears the screen down: the account is re-read silently,
-                    // at most every five minutes, and only a change of rights reloads the school.
+                    // Les retours ordinaires restent bornés. Après le portail, ou pour une école en préparation,
+                    // droits et état scolaire sont relus même si l'adhésion n'a pas changé.
                     if previous != .active, current == .active, identity.isAuthenticated,
                        let workspace, workspace.person != nil, !workspace.isLoadingAccount {
-                        // Puis la liste des élèves (ou le dossier de l’élève), au plus une fois par minute.
-                        Task { await workspace.refreshAccount(); await workspace.refreshLearners() }
+                        Task { await workspace.refreshOnForeground() }
                     }
                     // Après le verrouillage éventuel : au retour, le verrou remplace le masque sans montrer l’app.
                     cover.update(sceneIsActive: current == .active, hasSession: identity.isAuthenticated)

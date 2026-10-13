@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { consolePath, parseConsoleRoute, readNavigationQuery } from '../client/console/route.js';
-import { sectionTitles, workspaceFor, workspaces } from '../client/console/navigation.js';
+import { isLocalItemCurrent, localNavigationQuery, parentSection, sectionTitles, workspaceFor, workspaces } from '../client/console/navigation.js';
 import { sectionKeys } from '../client/console/sections.js';
 import { resumableDraft } from '../client/console/draft-model.js';
 
@@ -53,7 +53,7 @@ describe('Navigation entre les tâches de gestion', () => {
     expect(restore(`/app/gestion/${school}/signalements`)).toEqual({ schoolId: school, section: 'signalements', query: {} });
     expect(restore(`/app/gestion/${school}/signalements/`).section).toBe('signalements');
     expect(workspaceFor('signalements').home).toBe('configuration');
-    expect(workspaces.find(workspace => workspace.key === 'settings')?.items.map(item => item.section)).toEqual(['configuration', 'champs-profil', 'signalements', 'apercu']);
+    expect(workspaces.find(workspace => workspace.key === 'settings')?.items.map(item => item.section)).toEqual(['configuration', 'confidentialite', 'champs-profil', 'signalements', 'apercu']);
     expect(sectionTitles.signalements).toBe('Signalements');
     // Chaque rubrique du menu existe, et aucune n'est rangée deux fois dans le même espace.
     for (const workspace of workspaces) {
@@ -61,6 +61,37 @@ describe('Navigation entre les tâches de gestion', () => {
       expect(new Set(sections).size).toBe(sections.length);
       for (const item of workspace.items) expect(sectionKeys).toContain(item.section);
     }
+  });
+
+  test('les pages séparées gardent leurs URL et leurs catégories au retour navigateur', () => {
+    for (const section of ['disponibilites', 'absences', 'configuration', 'confidentialite'] as const) {
+      expect(restore(consolePath(school, section)).section).toBe(section);
+    }
+    expect(workspaceFor('absences').home).toBe('agenda');
+    expect(workspaceFor('confidentialite').home).toBe('configuration');
+    expect(workspaceFor('agenda').items.map(item => item.section)).toEqual(['agenda', 'disponibilites', 'absences']);
+    expect(workspaceFor('formations').items.map(item => item.section)).toEqual(['formations', 'prestations', 'conditions']);
+    expect(parentSection('conditions')).toBeNull();
+    expect(isLocalItemCurrent({ section: 'prestations', label: 'Tarifs' }, 'conditions')).toBe(false);
+    expect(isLocalItemCurrent({ section: 'conditions', label: 'Conditions' }, 'conditions')).toBe(true);
+    expect(isLocalItemCurrent({ section: 'formations', label: 'Formations' }, 'referentiels')).toBe(true);
+  });
+
+  test('passer des horaires aux absences conserve le moniteur et le retour à son accès', () => {
+    const planning = workspaceFor('disponibilites');
+    const query = { instructor, week: '2026-09-28', from: 'equipe' as const, selection: learner, category: 'B' };
+    const absences = localNavigationQuery(planning, planning.items.find(item => item.section === 'absences')!, query);
+    expect(restore(consolePath(school, 'absences', absences)).query).toEqual({ instructor, week: '2026-09-28', from: 'equipe' });
+    expect(localNavigationQuery(planning, planning.items[0]!, query)).toEqual({ instructor, week: '2026-09-28' });
+  });
+
+  test('les liens locaux gardent le permis ou le public, sans la sélection du dernier éditeur', () => {
+    const formations = workspaceFor('formations');
+    expect(localNavigationQuery(formations, formations.items[2]!, { category: 'B', selection: learner, from: 'offres' }))
+      .toEqual({ category: 'B' });
+    const team = workspaceFor('equipe');
+    expect(localNavigationQuery(team, team.items[1]!, { audience: 'learners', selection: learner }))
+      .toEqual({ audience: 'team' });
   });
 
   test('un lien vers un tarif précis ne rouvre pas le brouillon précédent', () => {

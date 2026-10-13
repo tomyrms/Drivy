@@ -8,7 +8,7 @@
  */
 
 export type CommandKind =
-  | 'updateSchool' | 'saveSetup' | 'activate' | 'saveDataPolicy'
+  | 'updateSchool' | 'saveSetup' | 'activate' | 'saveDataPolicy' | 'saveSetupDraft' | 'applySetupDraft'
   | 'createInvitation' | 'resendInvitation' | 'revokeInvitation'
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
@@ -32,6 +32,8 @@ interface CommandSpec {
 export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   updateSchool: { operationType: 'UPDATE_SCHOOL', resourceType: 'School', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Modification des coordonnées' },
   saveSetup: { operationType: 'SAVE_SCHOOL_SETUP', resourceType: 'SchoolSetup', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Enregistrement de l’avancement' },
+  saveSetupDraft: { operationType: 'SAVE_SCHOOL_SETUP_DRAFT', resourceType: 'SchoolSetupDraft', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Enregistrement de la préparation' },
+  applySetupDraft: { operationType: 'APPLY_SCHOOL_SETUP_DRAFT', resourceType: 'SchoolSetupDraft', target: 'school', method: 'POST', expectedStatus: 200, label: 'Confirmation de la préparation' },
   activate: { operationType: 'ACTIVATE_SCHOOL', resourceType: 'School', target: 'school', method: 'POST', expectedStatus: 200, label: 'Activation de l’école' },
   saveDataPolicy: { operationType: 'ADOPT_SCHOOL_DATA_POLICY', resourceType: 'SchoolDataPolicy', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Adoption des textes d’information' },
   createInvitation: { operationType: 'CREATE_INVITATION', resourceType: 'Invitation', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une invitation' },

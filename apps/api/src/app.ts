@@ -9,6 +9,9 @@ import { ApiError, forbidden, notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { getLearner, getTraining, listLearners, listTrainings } from './queries.js';
 import { registerSchoolSetup } from './school-setup.js';
+import { registerSchoolOnboarding } from './school-onboarding.js';
+import { registerSchoolOpening } from './school-opening.js';
+import type { SchoolOpeningConfig } from './school-opening-model.js';
 import { registerInvitations } from './invitations.js';
 import { registerProfiles } from './profiles.js';
 import { registerCatalogue } from './catalogue.js';
@@ -83,7 +86,7 @@ export function clientError(error: unknown): ApiError | undefined {
   return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher }) {
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
@@ -184,6 +187,8 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerPermits(app,options);
   registerLessonOutcomes(app,options);
   registerSchoolSetup(app,options);
+  registerSchoolOnboarding(app,options);
+  registerSchoolOpening(app,options);
   registerInvitations(app,options);
   registerProfiles(app,options);
   registerCatalogue(app,options);

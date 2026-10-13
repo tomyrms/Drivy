@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import type { OpeningState, OperatorOpeningState } from './opening-routes.js';
 
 export type Principal = { subject: string; displayName: string; email?: string; emailVerified: boolean };
 export type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number; principal: Principal };
@@ -10,6 +11,7 @@ export type InvitationState = {
 export type Session = {
   id: string; csrf: string; createdAt: number; lastSeen: number;
   tokens?: Tokens; login?: LoginTransaction; invitation?: InvitationState; refresh?: Promise<Tokens>;
+  opening?: OpeningState; operatorOpening?: OperatorOpeningState;
 };
 const random = () => randomBytes(32).toString('base64url');
 
@@ -52,11 +54,14 @@ export class SessionStore {
   rotate(session: Session, tokens: Tokens): Session {
     if (!this.isCurrent(session)) throw new Error('SESSION_EXPIRED');
     const invitation = session.invitation;
+    const opening = session.opening; const operatorOpening = session.operatorOpening;
     const createdAt = session.createdAt;
     this.destroy(session);
     const next = this.create();
     next.createdAt = createdAt; next.tokens = tokens;
     if (invitation) next.invitation = invitation;
+    if (opening) next.opening = opening;
+    if (operatorOpening) next.operatorOpening = operatorOpening;
     return next;
   }
   setInvitation(session: Session, token: string): void {
@@ -66,6 +71,7 @@ export class SessionStore {
   destroy(session: Session): void {
     this.sessions.delete(session.id);
     delete session.tokens; delete session.login; delete session.invitation; delete session.refresh;
+    delete session.opening; delete session.operatorOpening;
   }
   clear(): void { for (const session of this.sessions.values()) this.destroy(session); }
   sweep(): void { for (const session of this.sessions.values()) if (this.expired(session)) this.destroy(session); }

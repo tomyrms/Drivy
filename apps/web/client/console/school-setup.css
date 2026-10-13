@@ -1,0 +1,40 @@
+.school-setup { max-inline-size: 78rem; margin-inline: auto; }
+.setup-layout { display: grid; grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr); gap: var(--space-xxl); align-items: start; }
+.setup-progress { position: sticky; inset-block-start: var(--space-l); }
+.setup-progress ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
+.setup-progress button { inline-size: 100%; min-block-size: 44px; padding: var(--space-s); border: 0; border-radius: var(--radius-field); background: transparent; color: var(--muted); display: flex; align-items: center; gap: var(--space-s); text-align: start; font: inherit; cursor: pointer; }
+.setup-progress button span { font-variant-numeric: tabular-nums; min-inline-size: 1.5em; }
+.setup-progress button[aria-current] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+.setup-progress button:hover { background: var(--surface-muted); }
+.setup-workspace { min-inline-size: 0; }
+.setup-title { font: var(--type-title); margin-block: 0 var(--space-l); }
+.setup-title:focus { outline: none; }
+.setup-fields { min-inline-size: 0; padding: 0; border: 0; margin: 0; }
+.setup-fields > .section-stack { gap: var(--space-l); }
+.setup-actions { margin-block-start: var(--space-xl); padding-block: var(--space-m); border-block-start: 1px solid var(--border); }
+.setup-actions .button-row { flex-wrap: wrap; justify-content: flex-end; }
+.setup-saved { display: block; color: var(--muted); font-size: .875rem; margin-block-end: var(--space-s); }
+.setup-permits { display: flex; flex-wrap: wrap; gap: var(--space-s); }
+.setup-formation { display: grid; gap: var(--space-m); padding-block: var(--space-l); border-block-start: 1px solid var(--border); min-inline-size: 0; }
+.setup-formation h3 { margin: 0; }
+.setup-formation-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-s); flex-wrap: wrap; }
+.setup-formation .setup-fields { display: grid; gap: var(--space-m); }
+.setup-competency { padding-block: var(--space-s); display: grid; gap: var(--space-s); }
+.setup-profile-fields { display: grid; gap: var(--space-m); }
+.setup-profile-field { border-block-end: 1px solid var(--border); padding-block-end: var(--space-m); }
+.setup-profile-control { display: grid; grid-template-columns: 1fr minmax(10rem, 1fr); gap: var(--space-l); align-items: center; }
+.setup-profile-field .disclosure { margin-block-start: var(--space-s); }
+.setup-issues { padding-inline-start: 1.25rem; }
+.setup-issues .text-link { text-align: start; }
+.setup-progress-mobile { display: none; }
+.setup-next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); padding: var(--space-m); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-content); flex-wrap: wrap; }
+.setup-next h2 { font-size: 1rem; margin: 0; }
+@media (max-width: 760px) {
+  .setup-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-l); }
+  .setup-progress-mobile { display: block; }
+  .setup-progress { position: static; display: none; }
+  .setup-progress.is-open { display: block; }
+  .setup-progress ol { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+  .setup-profile-control { grid-template-columns: minmax(0, 1fr); gap: var(--space-xs); }
+  .setup-actions .button { flex: 1 1 auto; white-space: normal; }
+}

@@ -38,7 +38,10 @@ struct SchoolAccountActions {
                 .accessibilityIdentifier("open-school-invitations")
         }
         if let manageURL {
-            DrivyNavigationRow(title: "Gérer l’école", detail: "Sur le web", action: { openURL(manageURL) })
+            DrivyNavigationRow(title: workspace?.school?.status == "DRAFT" ? "Préparer l’école" : "Gérer l’école", detail: "Sur le web", action: {
+                workspace?.willOpenManagement()
+                openURL(manageURL)
+            })
                 .accessibilityIdentifier("open-school-management")
         }
         if let workspace, (workspace.person?.memberships.count ?? 0) > 1, !tripInProgress {

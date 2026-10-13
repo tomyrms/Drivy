@@ -8,7 +8,7 @@ export interface Workspace { key: WorkspaceKey; label: string; symbol: 'calendar
 /** Navigation follows the administrator's jobs; versioned records remain contextual destinations. */
 export const workspaces: readonly Workspace[] = [
   { key: 'planning', label: 'Planning', symbol: 'calendar', home: 'agenda', items: [
-    { section: 'agenda', label: 'Agenda' }, { section: 'disponibilites', label: 'Disponibilités et absences' },
+    { section: 'agenda', label: 'Agenda' }, { section: 'disponibilites', label: 'Disponibilités' }, { section: 'absences', label: 'Absences' },
   ] },
   { key: 'learners', label: 'Élèves', symbol: 'users', home: 'eleves', items: [
     { section: 'eleves', label: 'Dossiers' }, { section: 'invitations', label: 'Invitations', query: { audience: 'learners' } },
@@ -18,39 +18,48 @@ export const workspaces: readonly Workspace[] = [
     { section: 'equipe', label: 'Membres et accès' }, { section: 'invitations', label: 'Invitations', query: { audience: 'team' } },
   ] },
   { key: 'formations', label: 'Formations et tarifs', symbol: 'book', home: 'formations', items: [
-    { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Tarifs' },
+    { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Tarifs' }, { section: 'conditions', label: 'Conditions' },
   ] },
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
-    { section: 'configuration', label: 'École' }, { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
+    { section: 'configuration', label: 'École' }, { section: 'confidentialite', label: 'Confidentialité' },
+    { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
     { section: 'apercu', label: 'Préparation' },
   ] },
 ];
 
 export const sectionTitles: Record<SectionKey, string> = {
-  agenda: 'Agenda', disponibilites: 'Disponibilités et absences', eleves: 'Élèves', invitations: 'Invitations',
+  agenda: 'Agenda', disponibilites: 'Disponibilités', absences: 'Absences', eleves: 'Élèves', invitations: 'Invitations',
   equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations proposées',
   referentiels: 'Compétences enseignées', procedures: 'Déroulement et annulation', prestations: 'Tarifs',
-  conditions: 'Conditions commerciales', configuration: 'Réglages', 'champs-profil': 'Informations des élèves',
+  conditions: 'Conditions commerciales', configuration: 'École', confidentialite: 'Confidentialité', 'champs-profil': 'Informations des élèves',
   apercu: 'Préparation de l’école', signalements: 'Signalements',
 };
 
 export function workspaceFor(section: SectionKey, query: NavigationQuery = {}): Workspace {
-  const key: WorkspaceKey = section === 'agenda' || section === 'disponibilites' ? 'planning'
+  const key: WorkspaceKey = section === 'agenda' || section === 'disponibilites' || section === 'absences' ? 'planning'
     : section === 'equipe' || (section === 'invitations' && query.audience === 'team') ? 'team'
     : ['eleves', 'invitations', 'trajets'].includes(section) ? 'learners'
-    : ['formations', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions'].includes(section) ? 'formations'
+    : ['formations', 'offres', 'referentiels', 'procedures', 'prestations', 'conditions'].includes(section) || (section === 'apercu' && (query.from === 'formations' || query.from === 'prestations')) ? 'formations'
     : 'settings';
   return workspaces.find(workspace => workspace.key === key)!;
 }
 
 export function isLocalItemCurrent(item: NavigationItem, section: SectionKey): boolean {
   if (item.section === section) return true;
-  if (item.section === 'formations') return ['offres', 'referentiels', 'procedures'].includes(section);
-  return item.section === 'prestations' && section === 'conditions';
+  if (item.section === 'formations') return ['offres', 'referentiels', 'procedures', 'apercu'].includes(section);
+  return false;
 }
 
 export function parentSection(section: SectionKey): SectionKey | null {
   if (section === 'offres' || section === 'referentiels' || section === 'procedures') return 'formations';
-  if (section === 'conditions') return 'prestations';
   return null;
+}
+
+/** Carry only the filters shared by sibling pages, never a selected object from the previous page. */
+export function localNavigationQuery(workspace: Workspace, item: NavigationItem, query: NavigationQuery): NavigationQuery {
+  if (workspace.key === 'planning') return {
+    ...(query.instructor ? { instructor: query.instructor } : {}), ...(query.week ? { week: query.week } : {}),
+    ...(query.from === 'equipe' && item.section !== 'agenda' ? { from: 'equipe' as const } : {}), ...item.query,
+  };
+  return { ...(workspace.key === 'formations' && query.category ? { category: query.category } : {}), ...item.query };
 }

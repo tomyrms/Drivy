@@ -2,7 +2,7 @@ import SwiftUI
 
 enum SchoolHomeTab: Hashable { case session, agenda, learners, profile, lessons, progress }
 
-/// Onglets par rôle : le moniteur et l’administration conduisent (Aujourd’hui, Agenda, Élèves) et trouvent
+/// Onglets par rôle : le moniteur conduit (Aujourd’hui, Agenda, Élèves) et trouve
 /// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression) et trouve dans Profil son
 /// identité, son école, ses permis, puis ses informations et ses paramètres.
 /// La gestion de l’école vit sur le web.
@@ -37,14 +37,18 @@ struct SchoolHomeView: View {
 
     var body: some View {
         Group {
-            if workspace.membership == nil {
+            switch workspace.entryDestination {
+            case .chooseSchool:
                 NavigationStack {
                     schoolSelection.navigationTitle("Drivy").toolbar { DrivyAccountToolbarItem(openAccount: openAccount) }
                 }
-            } else if workspace.isLearnerOnly {
+            case .learner:
                 learnerTabs
-            } else {
+            case .instructor:
                 staffTabs
+            default:
+                SchoolEntryView(workspace: workspace, portalURL: account?.manageURL,
+                    openAccount: openAccount, chooseSchool: chooseSchoolAction)
             }
         }
         .tint(DrivyTheme.accent)
@@ -88,6 +92,9 @@ struct SchoolHomeView: View {
         }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }
         .onChange(of: workspace.membership?.accessEpoch) { _, _ in resetScope() }
+        .onChange(of: workspace.school?.status) { _, status in
+            if let status, status != "ACTIVE" { resetScope() }
+        }
         // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant
         // la pause et la reprise ; l’état « en collecte », lui, repasse à vrai à chaque reprise.
         .onChange(of: captureController?.captureID) { previous, current in

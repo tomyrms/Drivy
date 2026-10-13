@@ -109,8 +109,8 @@ export function ProfileFieldsSection() {
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des champs du profil…">{() => <>
-        {!noticeAdopted && <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir les réglages de l’école</button>}>
-              <p>Adoptez d’abord les textes d’information et de conservation dans les réglages de l’école.</p></Notice>}
+        {!noticeAdopted && <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('confidentialite')}>Préparer les textes</button>}>
+              <p>Adoptez d’abord les textes d’information et de conservation dans Confidentialité.</p></Notice>}
         <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
           list={items.length === 0 ? <EmptyState symbol="list" title="Aucune version enregistrée" message="Préparez une première version pour indiquer les informations demandées aux élèves." />
             : <table className="data-table">

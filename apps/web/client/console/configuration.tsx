@@ -12,8 +12,8 @@ type PolicyText = { noticeText: string; retentionText: string; contactEmail: str
 type Review = 'identity' | 'policy' | 'activation' | null;
 
 /** Same rules as apps/ios/Drivy/SchoolConfigurationUI: relire, confirmer, puis seulement l’école confirme. */
-export function ConfigurationSection() {
-  const { schoolId, school } = useConsole();
+export function ConfigurationSection({ section = 'school' }: { section?: 'school' | 'privacy' } = {}) {
+  const { schoolId, school, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setEditingPolicy(false); setEditingIdentity(false); });
   const loaded = useLoad(async () => {
@@ -84,14 +84,14 @@ export function ConfigurationSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Réglages" title={school.status === 'DRAFT' ? 'Préparer l’école' : 'École'}
-        actions={school.status !== 'ACTIVE' ? <StatusBadge tone={status.tone} symbol="clock">{status.label}</StatusBadge> : undefined} />
+      <SectionHeading context="Réglages" title={section === 'privacy' ? 'Confidentialité' : 'École'}
+        actions={section === 'school' && school.status !== 'ACTIVE' ? <StatusBadge tone={status.tone} symbol="clock">{status.label}</StatusBadge> : undefined} />
       {review === null && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
         actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={loaded.reload}>Recharger les informations</button> : undefined} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
 
       <LoadState loaded={loaded} label="Vérification de l’école…">{data => <div className="config-sections">
-        <section className="settings-section" aria-labelledby="identity-title">
+        {section === 'school' && <section className="settings-section" aria-labelledby="identity-title">
           <div className="settings-section-heading"><h2 id="identity-title" className="section-title">Coordonnées</h2>
             {!showIdentity && <button className="button secondary compact" type="button" disabled={!mayEdit} onClick={() => setEditingIdentity(true)}><Symbol kind="edit" bare />Modifier</button>}
           </div>
@@ -114,9 +114,9 @@ export function ConfigurationSection() {
             </div>
           </form>}
           </div>
-        </section>
+        </section>}
 
-        <section className="settings-section" aria-labelledby="policy-title">
+        {section === 'privacy' && <section className="settings-section" aria-labelledby="policy-title">
           <div className="settings-section-heading">
             <h2 id="policy-title" className="section-title">Information et conservation</h2>
             {data.policy.status === 'APPROVED' ? <span className="row-meta">Version {data.policy.version}</span>
@@ -147,9 +147,9 @@ export function ConfigurationSection() {
             </div>
           </form>}
           </div>
-        </section>
+        </section>}
 
-        <section className="settings-section" aria-labelledby="activation-title">
+        {section === 'school' && <section className="settings-section" aria-labelledby="activation-title">
           <div className="settings-section-heading">
             <h2 id="activation-title" className="section-title">{school.status === 'ACTIVE' ? 'Fonctionnement' : 'Activation'}</h2>
             <button type="button" className="button quiet" onClick={loaded.reload} disabled={loaded.status === 'loading'}><Symbol kind="refresh" bare />Actualiser</button>
@@ -158,6 +158,7 @@ export function ConfigurationSection() {
           {school.status === 'DRAFT' && (data.readiness.activationReady
             ? <Notice tone="success" title="Préparation vérifiée" live={false}><p>L’école peut être activée.</p></Notice>
             : <ul className="blocker-list">{data.readiness.activationBlockers.map(item => <li key={item.code}><Symbol kind="dot" bare />{item.message}</li>)}</ul>)}
+          {school.status === 'DRAFT' && data.policy.status !== 'APPROVED' && <button type="button" className="button secondary" onClick={() => navigate('confidentialite')}>Préparer les textes de confidentialité</button>}
           {(identity.edited || texts.edited) && <Notice tone="warning" title="Modifications non confirmées" live={false}><p>Des modifications attendent encore votre confirmation.</p></Notice>}
           <details className="disclosure" open={school.status === 'DRAFT' ? true : undefined}>
             <summary>Services de l’école</summary>
@@ -176,7 +177,7 @@ export function ConfigurationSection() {
             {runner.pending ? runner.blockedReason : identity.edited || texts.edited ? 'Confirmez ou abandonnez d’abord les modifications en cours.'
               : 'L’activation devient possible quand les éléments ci-dessus sont complétés.'}</p>}
           </div>
-        </section>
+        </section>}
       </div>}</LoadState>
 
       <ConfirmDialog open={review !== null} busy={runner.busy} onCancel={() => setReview(null)} onConfirm={() => void confirm()}

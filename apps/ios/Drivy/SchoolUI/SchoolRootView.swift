@@ -123,7 +123,11 @@ struct SchoolRootView: View {
             if loading == false && workspace?.isLoadingAccount != true { verifyPresentedScopes() }
         }
         .onChange(of: workspace?.school?.status) { _, status in
-            if status == "ARCHIVED" { captureController.setScope(nil) }
+            if let status, status != "ACTIVE" {
+                captureController.setScope(nil)
+                onboardingToResume = nil
+                closeProfile(); closeInvitations()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { updateCaptureScope() }
@@ -277,7 +281,8 @@ struct SchoolRootView: View {
     /// La gestion de l’école est réservée à l’administration, sur le portail web.
     private var manageURL: URL? {
         guard let configuration, let membership = workspace?.membership, membership.roles.contains("ADMIN") else { return nil }
-        return configuration.managementURL(schoolID: membership.schoolId)
+        guard workspace?.school?.status != "ARCHIVED" else { return nil }
+        return configuration.managementURL(schoolID: membership.schoolId, preparation: workspace?.school?.status == "DRAFT")
     }
 
     private var ownProfileLearner: SchoolLearner? {
@@ -429,7 +434,7 @@ struct SchoolRootView: View {
         if onboardingToResume != workspace?.membership?.membershipId { onboardingToResume = nil }
         guard identity.isAuthenticated, let configuration, let person = workspace?.person,
               let membership = workspace?.membership,
-              membership.roles.contains("LEARNER") || membership.roles.contains("INSTRUCTOR") else {
+              SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles) else {
             onboardingToResume = nil
             return
         }
@@ -441,6 +446,7 @@ struct SchoolRootView: View {
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
         let state = await SchoolOnboardingPrompt.pendingState(api: api, scope: scope, kind: kind)
         guard !Task.isCancelled, identity.isAuthenticated,
+              SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles),
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
               workspace?.membership?.accessEpoch == membership.accessEpoch else { return }
@@ -457,6 +463,7 @@ struct SchoolRootView: View {
         // Une feuille ouverte ailleurs (leçon, démarrage) ferait perdre celle-ci sans un mot : on attend qu’elle se ferme.
         guard await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
               !Task.isCancelled, identity.isAuthenticated,
+              SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles),
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
               workspace?.membership?.accessEpoch == membership.accessEpoch,
@@ -502,6 +509,8 @@ struct SchoolRootView: View {
         profileWorkspace = model; profileRoute = SchoolWorkspaceSheet(model: model)
     }
     private func openOnboarding() {
+        guard SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status,
+            roles: workspace?.membership?.roles ?? []) else { return }
         guard let model = makeProfileWorkspace(onboardingOnly: true) else { return }
         onboardingWorkspaceID = model.id
         profileWorkspace = model; profileRoute = SchoolWorkspaceSheet(model: model)
@@ -612,7 +621,7 @@ struct SchoolRootView: View {
     }
 
     private func updateCaptureScope() {
-        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", let configuration, let workspace else {
+        guard identity.isAuthenticated, workspace?.school?.status != "ARCHIVED", workspace?.school?.status != "DRAFT", let configuration, let workspace else {
             captureController.setScope(nil)
             return
         }

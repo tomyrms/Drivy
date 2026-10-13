@@ -1,4 +1,5 @@
 import { isUUID, matchSchoolRoute, type SchoolMethod } from './school-routes.js';
+import { allowedOpeningRequest, type OpeningGateway } from './opening-routes.js';
 
 export type ApiResult = { status: number; body: unknown };
 export type ApiGateway = (path: string, accessToken: string, body?: unknown) => Promise<ApiResult>;
@@ -11,6 +12,17 @@ export type SchoolResult = ApiResult & { etag?: string };
 export type SchoolGateway = (request: SchoolRequest, accessToken: string) => Promise<SchoolResult>;
 
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
+
+export function createOpeningGateway(baseURL:string):OpeningGateway {
+  return async (command,accessToken)=>{
+    if(!allowedOpeningRequest(command))throw new Error('Route API non autorisée.');
+    const response=await fetch(baseURL+command.path,{method:command.method,redirect:'error',signal:AbortSignal.timeout(20_000),
+      headers:{Authorization:`Bearer ${accessToken}`,Accept:'application/json, application/problem+json','Cache-Control':'no-store',
+        ...(command.method==='POST'?{'Content-Type':'application/json'}:{}),...(command.idempotencyKey?{'Idempotency-Key':command.idempotencyKey}:{})},
+      ...(command.method==='POST'?{body:JSON.stringify(command.body)}:{})});
+    return {status:response.status,body:await readJSON(response,256*1024)};
+  };
+}
 
 async function readJSON(response: Response, limit: number): Promise<unknown> {
   if (!response.body) throw new Error('Réponse API absente.');

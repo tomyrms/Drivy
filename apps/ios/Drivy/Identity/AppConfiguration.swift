@@ -37,10 +37,11 @@ struct AppConfiguration: Codable, Equatable, Sendable {
     }
 
     /// La gestion de l'école vit sur le portail web, servi par la même origine que l'API.
-    func managementURL(schoolID: UUID) -> URL? {
+    func managementURL(schoolID: UUID, preparation: Bool = false) -> URL? {
         var parts = URLComponents()
         parts.scheme = apiBaseURL.scheme; parts.host = apiBaseURL.host; parts.port = apiBaseURL.port
         parts.path = "/app/gestion/\(schoolID.uuidString.lowercased())"
+        if preparation { parts.path += "/apercu" }
         return parts.url
     }
 

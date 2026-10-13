@@ -21,7 +21,7 @@ const nonBlank = (maximum:number) => z.string().min(1).max(maximum).refine(value
 const schoolUpdate = z.object({ operationId:z.uuid(),name:nonBlank(150),timeZone:z.string().min(1).max(100),contactEmail:z.email().max(320),
   contactPhone:z.string().max(32).nullable().optional(),impactConfirmed:z.boolean(),logoAssetId:z.uuid().nullable().optional(),
   modules:z.object({gpsEnabled:z.boolean(),packsEnabled:z.boolean(),collectiveCoursesEnabled:z.boolean(),courseOffersVisibleByDefault:z.boolean()}).strict().optional() }).strict();
-const policyCommand = z.object({operationId:z.uuid(),noticeText:nonBlank(20000),retentionText:nonBlank(20000),contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true)}).strict();
+export const policyCommand = z.object({operationId:z.uuid(),noticeText:nonBlank(20000),retentionText:nonBlank(20000),contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true)}).strict();
 const empty = z.object({}).strict();
 interface SetupRow { school_id:string;version:number;current_step:string;completed_steps:string[];configured_by:string;last_saved_at:Date;completed_at:Date|null }
 interface PolicyRow { school_id:string;version:number;notice_version_id:string;notice_text:string;retention_text:string;contact_email:string|null;approved_by:string|null;approved_at:Date|null }
@@ -37,7 +37,7 @@ async function policy(db:PoolClient,schoolId:string):Promise<PolicyRow> {
   if (!result.rows[0]) throw new ApiError(409,'SETUP_NOT_INITIALIZED','Le provisionnement de cette école doit être complété.');
   return result.rows[0];
 }
-async function readiness(db:PoolClient,school:SchoolRow) {
+export async function readiness(db:PoolClient,school:SchoolRow) {
   const dataPolicy=await policy(db,school.id);
   const blockers:Blocker[]=[];
   if (!school.name.trim()) blockers.push(blocker('SCHOOL_IDENTITY_REQUIRED','Indiquez le nom de l’école.','name'));
