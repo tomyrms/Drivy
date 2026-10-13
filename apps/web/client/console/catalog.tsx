@@ -101,7 +101,7 @@ export function CurriculaSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Compétences enseignées"
-        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
+        actions={!draft && <button type="button" className={current ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
@@ -255,7 +255,7 @@ export function ProceduresSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Déroulement et annulation"
-        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
+        actions={!draft && <button type="button" className={current ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des procédures…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
@@ -414,7 +414,7 @@ export function OfferingsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Formations proposées"
-        actions={<button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'formations', category: routeQuery?.category })}><Symbol kind="plus" bare />Ajouter une formation</button>} />
+        actions={!draft && <button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'formations', category: routeQuery?.category })}><Symbol kind="plus" bare />Ajouter une formation</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}

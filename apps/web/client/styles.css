@@ -951,16 +951,12 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .list-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); font: var(--type-footnote); color: var(--muted); }
 /* Registers: comparable columns, one search row and explicit local pagination. */
 .directory-table-wrap { max-inline-size: 100%; overflow-x: auto; border-block-start: 1px solid var(--border); }
-:is(.directory-table,.record-table) { table-layout: auto; }
-:is(.directory-table,.record-table) thead th { border-block-start: 0; background: var(--surface-inset); padding-block: .625rem; }
-:is(.directory-table,.record-table) .row-meta { font-size: .8125rem; font-weight: 400; }
-:is(.directory-table,.record-table) th:first-child { min-inline-size: 12rem; }
-:is(.directory-table,.record-table) td { min-inline-size: 7rem; font-size: .875rem; }
-:is(.directory-table,.record-table) tbody :is(th,td) { padding-block: .5rem; }
-:is(.directory-table,.record-table) .row-button { font-weight: 600; color: var(--text); text-decoration: none; min-height: 2.5rem; }
-:is(.directory-table,.record-table) .row-button:focus-visible { outline-offset: 3px; }
-:is(.directory-table,.record-table) .contact-cell { color: var(--muted); max-inline-size: 20rem; }
-:is(.directory-table,.record-table) .record-status { display: inline-flex; gap: .375rem; align-items: center; }
+.record-table { table-layout: auto; }
+.record-table thead th { border-block-start: 0; background: var(--surface-inset); padding-block: .625rem; }
+.record-table .row-meta { font-size: .8125rem; font-weight: 400; }
+.record-table th:first-child { min-inline-size: 12rem; }
+.record-table td { min-inline-size: 7rem; font-size: .875rem; }
+.record-table tbody :is(th,td) { padding-block: .5rem; }
 .directory-toolbar .field { flex: 1 1 9rem; }
 .record-link { display: inline-flex; align-items: center; min-height: var(--control-height); color: var(--text); font-weight: 600; text-decoration: none; text-align: start; }
 .record-link:hover { color: var(--accent); text-decoration: underline; text-underline-offset: .2em; }
@@ -1005,9 +1001,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .editor-save-bar > .save-state { margin-inline-end: auto; }
 .editor-save-bar .button-row { flex: 0 1 auto; }
 @media (max-width: 40rem), (max-height: 40rem) { .editor-save-bar { position: static; } }
-@media (hover: hover) and (pointer: fine) { :is(.directory-table,.record-table) tbody tr:hover { background: var(--surface-inset); } :is(.directory-table,.record-table) tbody tr.is-selected:hover { background: var(--accent-soft); } :is(.directory-table,.record-table) .row-button:hover { color: var(--accent); text-decoration: underline; } .record-views > button:hover { color: var(--text); background: var(--surface-inset); } }
-@media (max-width: 40rem) { .record-toolbar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .record-toolbar > .record-search { grid-column: 1 / -1; max-inline-size: none; inline-size: 100%; } .record-toolbar > .button { justify-self: start; } :is(.directory-table,.record-table) th:first-child { min-inline-size: 9rem; } .record-footer { align-items: flex-start; } }
-.dossier-overview { display: grid; gap: var(--space-s); padding-block-end: var(--space-m); border-block-end: 1px solid var(--border); }
+@media (hover: hover) and (pointer: fine) { .record-table tbody tr:hover { background: var(--surface-inset); } .record-table tbody tr.is-selected:hover { background: var(--accent-soft); } .record-views > button:hover { color: var(--text); background: var(--surface-inset); } }
+@media (max-width: 40rem) { .record-toolbar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .record-toolbar > .record-search { grid-column: 1 / -1; max-inline-size: none; inline-size: 100%; } .record-toolbar > .record-views { grid-column: 1 / -1; } .record-toolbar > .button { justify-self: start; } .record-table th:first-child { min-inline-size: 9rem; } .record-footer { align-items: flex-start; } }
 .profile-completion-fields { display: grid; gap: var(--space-m); }
 @container workspace (max-width: 54rem) {
   .split-view { grid-template-columns: minmax(0, 1fr); }

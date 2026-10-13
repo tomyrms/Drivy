@@ -1,7 +1,9 @@
 import { createRoot } from 'react-dom/client';
+import { useRef, useState } from 'react';
 import '../client/styles.css';
 import '../client/theme';
-import { PreferencesPage } from '../client/preferences';
+import { PreferencesPage, ThemeControl } from '../client/preferences';
+import { CheckField, SelectField, TextField } from '../client/ui';
 import { SchoolOpeningPage } from '../client/school-opening';
 import '../client/school-opening.css';
 import { ConsoleContext, type ConsoleContextValue } from '../client/console/context';
@@ -137,6 +139,16 @@ if (parameters.get('stress') === '1') {
     db.trainings.push({ ...db.trainings[0], id: uuid(), learnerId, offeringId: motorcycle ? offerA : offerB, categoryCode: motorcycle ? 'A' : 'B', status: index % 7 === 0 ? 'PAUSED' : 'ACTIVE' });
   }
 }
+if (parameters.get('volume') === '1') {
+  const names = ['Alex Emery', 'Alice Monnier', 'Arthur Simon', 'Camille Rochat', 'Chloé Keller', 'Daniel Weber', 'Elena Rossi', 'Elias Petit', 'Eva Laurent', 'Félix Dubois', 'Julia Müller', 'Léon Robert', 'Lucas Humbert', 'Nina Perrin', 'Oscar Meyer', 'Sarah Rey'];
+  for (const [index, displayName] of names.entries()) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(), displayName,
+    contactEmail: `eleve-volume-${index + 1}@example.test`, contactPhone: null });
+  const homonyms = db.learners.filter((item: any) => item.displayName === 'Camille Rochat');
+  homonyms.forEach((item: any, index: number) => { item.contactEmail = `camille.${index + 1}@example.test`; });
+}
+const outsideLearner = { ...db.learners[1], id: uuid(), personId: uuid(), displayName: 'Diane Horizon', contactEmail: 'diane@example.test' };
+const missingLearnerId = uuid();
+const findLearner = (id: string) => db.learners.find((item: any) => item.id === id) ?? (id === outsideLearner.id ? outsideLearner : undefined);
 if (reviewState === 'empty') for (const key of Object.keys(db)) db[key] = [];
 if (parameters.get('policy') === 'unadopted') {
   policyState = { ...policyState, status: 'DRAFT', noticeText: '', retentionText: '', approvedAt: null, noticeVersionId: null };
@@ -180,6 +192,15 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
       return reply(200, envelope(value.school), url.href);
     }
     if (reviewState === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+    if (path === parameters.get('fail') || (reviewState === 'directory-error' && path === 'learners')) return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+    if (/^learners\/[^/]+$/.test(path)) {
+      const learner = findLearner(path.split('/')[1]!);
+      return learner ? reply(200, envelope(learner), url.href) : reply(404, { code: 'LEARNER_NOT_FOUND' }, url.href);
+    }
+    if (/^members\/[^/]+$/.test(path)) {
+      const member = db.members.find((item: any) => item.id === path.split('/')[1]);
+      return member ? reply(200, envelope(member), url.href) : reply(404, { code: 'MEMBERSHIP_NOT_FOUND' }, url.href);
+    }
     const readiness = { schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) };
     if (path === 'observation-themes') return reply(200, envelope(themesProjection()), url.href);
     if (path === 'readiness') return reply(200, envelope(readiness), url.href);
@@ -193,7 +214,10 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     if (path === 'setup') return reply(200, envelope({ schoolId, version: 1, status: 'COMPLETED', currentStep: 'REVIEW', completedSteps: ['IDENTITY', 'DATA'], lastSavedAt: stamp, readiness }), url.href);
     if (path === 'data-policy') return reply(200, envelope(policyState), url.href);
     if (path === 'text-proposals') return reply(200, envelope(textProposals), url.href);
-    if (/^learners\/[^/]+\/action-readiness$/.test(path)) return reply(200, envelope({ learnerId: learnerA, action: 'PLAN_LESSON', ready: db.learners[0]?.profileReadiness === 'READY', blockers: db.learners[0]?.profileReadiness === 'READY' ? [] : [{ code: 'PROFILE_ACTION_REQUIRED', field: 'birthDate', message: 'Date de naissance requise.' }] }), url.href);
+    if (/^learners\/[^/]+\/action-readiness$/.test(path)) {
+      const learner = findLearner(path.split('/')[1]!);
+      return reply(200, envelope({ learnerId: learner?.id ?? path.split('/')[1], action: 'PLAN_LESSON', ready: learner?.profileReadiness === 'READY', blockers: learner?.profileReadiness === 'READY' ? [] : [{ code: 'PROFILE_ACTION_REQUIRED', field: 'birthDate', message: 'Date de naissance requise.' }] }), url.href);
+    }
     if (/^learners\/[^/]+\/administrative-profile$/.test(path)) return reply(200, envelope(administrativeProfile), url.href);
     if (path === 'data-policy/impact') {
       if (parameters.get('impact') === 'slow') await new Promise(resolve => setTimeout(resolve, 1200));
@@ -204,7 +228,9 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     if (/^trainings\/[^/]+\/permit-checks$/.test(path)) return reply(200, envelope({ items: db.permits, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/progress$/.test(path)) return reply(200, envelope({ trainingId: trainingA, computedAt: stamp, unobservedCompetencyIds: [comp2], items: [{ competencyId: comp1, label: 'Démarrer et s’arrêter', level: 'GUIDED', context: 'Parking', observedAt: stamp, sourceLessonId: lessonDone, sourceRevisionId: uuid() }] }), url.href);
     if (/^lessons\/[^/]+\/reports$/.test(path)) return reply(200, envelope({ items: [{ id: uuid(), schoolId, version: 1, lessonId: lessonDone, sequence: 1, authorMembershipId: marieId, publishedAt: stamp, workedOn: 'Démarrage en côte', observationText: 'Bonne maîtrise du point de patinage.', nextStep: 'Ronds-points', correctionReason: null, observations: [{ competencyId: comp1, level: 'GUIDED', context: 'Parking' }] }], nextCursor: null }), url.href);
-    const list = path === 'lessons' ? db.lessons.filter((lesson: any) => (!url.searchParams.get('instructorMembershipId') || lesson.instructorMembershipId === url.searchParams.get('instructorMembershipId')) && (!url.searchParams.get('trainingId') || lesson.trainingId === url.searchParams.get('trainingId')) && (!url.searchParams.get('from') || lesson.plannedEnd > url.searchParams.get('from')!) && (!url.searchParams.get('to') || lesson.plannedStart < url.searchParams.get('to')!)) : db[path.replace('availability-rules', 'availability').replace('closures', 'closures')] ?? [];
+    const list = path === 'lessons' ? db.lessons.filter((lesson: any) => (!url.searchParams.get('instructorMembershipId') || lesson.instructorMembershipId === url.searchParams.get('instructorMembershipId')) && (!url.searchParams.get('trainingId') || lesson.trainingId === url.searchParams.get('trainingId')) && (!url.searchParams.get('from') || lesson.plannedEnd > url.searchParams.get('from')!) && (!url.searchParams.get('to') || lesson.plannedStart < url.searchParams.get('to')!))
+      : path === 'trainings' && url.searchParams.has('learnerId') ? db.trainings.filter((training: any) => training.learnerId === url.searchParams.get('learnerId'))
+      : db[path.replace('availability-rules', 'availability').replace('closures', 'closures')] ?? [];
     return reply(200, envelope({ items: list, nextCursor: null }), url.href);
   }
   if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
@@ -221,7 +247,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   }
   if (method === 'PATCH' && /^learners\/[^/]+\/administrative-profile$/.test(path)) {
     if (reviewState === 'mutation-error') return reply(409, { code: 'PROFILE_POLICY_CHANGED' }, url.href);
-    administrativeProfile.version++; db.learners[0].version++; db.learners[0].profileReadiness = 'READY';
+    Object.assign(administrativeProfile, body); administrativeProfile.version++; db.learners[0].version++; db.learners[0].profileReadiness = 'READY';
     return reply(200, envelope(administrativeProfile), url.href);
   }
   if (path === 'setup-draft' || path === 'setup-draft/complete') {
@@ -307,19 +333,22 @@ const saved = reviewWindow.__reviewBoot?.snapshot;
 if (saved) {
   Object.assign(db, saved.db); Object.assign(value.school, saved.school); Object.assign(value.membership, saved.membership);
   Object.assign(themeState, saved.themeState); Object.assign(administrativeProfile, saved.administrativeProfile);
+  if (saved.setupDraft) Object.assign(setupDraft, saved.setupDraft);
   policyState = saved.policyState;
   fixtureSequence = Math.max(fixtureSequence, saved.fixtureSequence ?? 0);
 }
-reviewWindow.__reviewSnapshot = () => structuredClone({ db, school: value.school, membership: value.membership, themeState, administrativeProfile, policyState, fixtureSequence });
+reviewWindow.__reviewSnapshot = () => structuredClone({ db, school: value.school, membership: value.membership, themeState, administrativeProfile, policyState, setupDraft, fixtureSequence });
 const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, absences: () => <AvailabilitySection section="absences" />, config: ConfigurationSection, privacy: PrivacySection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
   curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = parameters.get('shell') === '1';
-if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator'].includes(page ?? '')) {
+if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls'].includes(page ?? '')) {
   const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
   const routeParameters = new URLSearchParams();
   if (page === 'agenda') routeParameters.set('week', '2026-09-28');
   if (page === 'invitations' && parameters.get('audience') === 'team') routeParameters.set('audience', 'team');
+  if (page === 'learners' && parameters.get('selection') === 'outside') routeParameters.set('selection', outsideLearner.id);
+  if (page === 'learners' && parameters.get('selection') === 'missing') routeParameters.set('selection', missingLearnerId);
   window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}${routeParameters.size ? `?${routeParameters}` : ''}`);
 }
 const entry = ['signin', 'account', 'invitation'].includes(page ?? '');
@@ -327,4 +356,38 @@ if (entry) window.history.replaceState(null, '', page === 'invitation' ? '/app/i
 if (page === 'preferences') window.history.replaceState(null, '', '/app/preferences');
 if (page === 'opening' || page === 'operator') window.history.replaceState(null, '', page === 'opening' ? '/app/ouvrir' : '/app/operateur');
 createRoot(document.getElementById('root')!).render(
-  page === 'opening' || page === 'operator' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={page === 'operator'} /> : location.pathname === '/app/preferences' ? <PreferencesPage /> : entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
+  page === 'controls' ? <ControlsReview /> : page === 'opening' || page === 'operator' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={page === 'operator'} /> : location.pathname === '/app/preferences' ? <PreferencesPage /> : entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
+
+/** Local component review only: these controls change fixture state and never submit a school command. */
+function ControlsReview() {
+  const [unchecked, setUnchecked] = useState(false), [checked, setChecked] = useState(true);
+  const [days, setDays] = useState([true, false]), [confirmed, setConfirmed] = useState(false);
+  const [email, setEmail] = useState(''), [category, setCategory] = useState(''), [submitted, setSubmitted] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  const emailError = submitted && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? 'Indiquez une adresse e-mail valide.' : null;
+  const categoryError = submitted && !category ? 'Choisissez une catégorie.' : null;
+  return <div className="app-shell personal-preferences"><main className="main"><h1>Contrôles — revue locale</h1><div className="form-grid">
+    <section className="settings-section"><div className="settings-section-heading"><h2>Cases à cocher</h2></div><div className="settings-section-body form-grid">
+      <CheckField label="Case non cochée" checked={unchecked} onChange={setUnchecked} />
+      <CheckField label="Case cochée" checked={checked} onChange={setChecked} />
+      <fieldset className="fieldset"><legend>Jours choisis</legend>
+        <CheckField label="Sélectionner tous les jours" checked={days.every(Boolean)} indeterminate={days.some(Boolean) && !days.every(Boolean)} onChange={value => setDays([value, value])} />
+        {['Lundi', 'Mardi'].map((label, index) => <CheckField key={label} label={label} checked={days[index]!} onChange={value => setDays(current => current.map((day, i) => i === index ? value : day))} />)}
+        <p role="status">{days.filter(Boolean).length} jours sélectionnés</p>
+      </fieldset>
+      <CheckField label="Case désactivée non cochée" checked={false} disabled onChange={setUnchecked} />
+      <CheckField label="Case désactivée cochée" checked disabled onChange={setChecked} />
+      <CheckField label="Case désactivée mixte" checked={false} indeterminate disabled onChange={setUnchecked} />
+      <CheckField label="J’ai relu les choix de démonstration." description="Confirmation locale sans envoi." checked={confirmed} onChange={setConfirmed} variant="confirmation" />
+    </div></section>
+    <section className="settings-section"><div className="settings-section-heading"><h2>Saisie et clavier</h2></div><div className="settings-section-body form-grid">
+      <ThemeControl />
+      <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); setSubmitted(true); window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); }}>
+        <TextField label="E-mail de test" type="email" value={email} onChange={setEmail} error={emailError} />
+        <SelectField label="Catégorie de test" value={category} onChange={setCategory} placeholder="Choisir" options={[{ value: 'A', label: 'Permis A' }, { value: 'B', label: 'Permis B' }]} error={categoryError} />
+        <button type="submit" className="button primary">Vérifier la saisie</button>
+        {submitted && !emailError && !categoryError && <p role="status">Saisie de test valide.</p>}
+      </form>
+    </div></section>
+  </div></main></div>;
+}

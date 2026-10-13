@@ -93,7 +93,7 @@ export function TermsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Conditions commerciales"
-        actions={canConfigureCatalog ? <button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />
+        actions={canConfigureCatalog && !draft ? <button type="button" className={current ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -250,7 +250,7 @@ export function ProductsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Tarifs"
-        actions={canConfigureCatalog ? <><button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'prestations' })}><Symbol kind="plus" bare />Ajouter un tarif de leçon</button><button type="button" className="button secondary" disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}>Autre prestation</button></> : undefined} />
+        actions={canConfigureCatalog && !draft ? <><button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'prestations' })}><Symbol kind="plus" bare />Ajouter un tarif de leçon</button><button type="button" className="button secondary" disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}>Autre prestation</button></> : undefined} />
       {!canConfigureCatalog && <GrantNotice />}
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
