@@ -61,7 +61,8 @@
         "noticeText": {"type": "string", "minLength": 40, "maxLength": 20000, "pattern": "\\S"},
         "retentionText": {"type": "string", "minLength": 40, "maxLength": 20000, "pattern": "\\S"},
         "contactEmail": {"type": "string", "format": "email", "maxLength": 320},
-        "reviewAcknowledged": {"const": true}
+        "reviewAcknowledged": {"const": true},
+        "publishProposedFields": {"const": true}
       }
     }
   }

@@ -36,6 +36,11 @@ it('catalogue réel approuvé → formation → affectation, avec héritage et r
  expect((await call('GET',`${path}/offerings`)).json().data.items).toEqual([]);
  const c=await call('POST',`${path}/curricula`,{operationId:randomUUID(),categoryCode:'B',approved:true,approvalReason:'Référentiel synthétique relu.',competencies:[{key:'look',label:'Observation',description:'Observer avant de déplacer le véhicule.',sortOrder:0}]});expect(c.statusCode,c.body).toBe(201);
  const p=await call('POST',`${path}/policy-versions`,{operationId:randomUUID(),categoryCode:'B',approved:true,approvalReason:'Procédure synthétique relue.',procedureText:'Examiner le permis.',cancellationPolicyText:'Conditions synthétiques de recette.',sourceUrls:[]});expect(p.statusCode,p.body).toBe(201);
+ // Le motif d'approbation est devenu facultatif (décision du porteur du 13 octobre 2026) : l'auteur et l'heure suffisent.
+ const withoutReason=await call('POST',`${path}/policy-versions`,{operationId:randomUUID(),categoryCode:'A',approved:true,procedureText:'Déroulement synthétique.',cancellationPolicyText:'Annulation synthétique.',sourceUrls:[]});
+ expect(withoutReason.statusCode,withoutReason.body).toBe(201);expect(withoutReason.json().data.approved).toBe(true);
+ const curriculumWithoutReason=await call('POST',`${path}/curricula`,{operationId:randomUUID(),categoryCode:'A',approved:true,competencies:[{key:'look',label:'Observation',description:'Observer.',sortOrder:0}]});
+ expect(curriculumWithoutReason.statusCode,curriculumWithoutReason.body).toBe(201);
  const offerBody={operationId:randomUUID(),offeringKey:'test-b',categoryCode:'B',curriculumVersionId:c.json().data.id,policyVersionId:p.json().data.id,enabled:true,defaultDurationMinutes:50,defaultPriceCents:9000};
  const o=await call('POST',`${path}/offerings`,offerBody);expect(o.statusCode,o.body).toBe(201);
  expect((await call('GET',`${path}/offerings`,undefined,undefined,'demo-alice')).json().data.items[0].id).toBe(o.json().data.id);

@@ -25,6 +25,8 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['readiness'] },
   { method: 'GET', segments: ['data-policy'], query: ['noticeVersionId'] },
   { method: 'GET', segments: ['data-policy', 'impact'] },
+  { method: 'GET', segments: ['text-proposals'] },
+  { method: 'GET', segments: ['recording-choices'] },
   { method: 'PUT', segments: ['data-policy'], ifMatch: true, bodyLimit: 200_000 },
   { method: 'POST', segments: ['activate'], ifMatch: true, bodyLimit: 1_024 },
   { method: 'GET', segments: ['operations', ':id'] },

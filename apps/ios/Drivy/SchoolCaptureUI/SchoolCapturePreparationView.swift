@@ -311,14 +311,8 @@ struct SchoolCapturePreparationView: View {
                         DrivyInlineMessage(text: "Les textes de confidentialité ont changé. Relis-les avant de confirmer un nouvel accord.",
                             tone: .warning)
                     }
-                    DisclosureGroup("Confidentialité") {
-                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                            Text(notice.noticeText)
-                            Text("Conservation").font(.headline)
-                            Text(notice.retentionText)
-                            Label(notice.contactEmail, systemImage: "envelope").font(.subheadline)
-                        }.textSelection(.enabled).fixedSize(horizontal: false, vertical: true).padding(.top, DrivySpacing.s)
-                    }
+                    SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                        addressesLearner: false, identifier: "preparation-privacy-link")
                 }
                 if let error = model.noticeError { DrivyInlineMessage(text: error, tone: .warning) }
                 Button {
@@ -579,14 +573,8 @@ private struct SchoolCaptureStartReviewView: View {
                         }
                         .font(.subheadline.weight(.semibold))
                     }
-                    DisclosureGroup("Confidentialité") {
-                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                            Text(review.notice.noticeText)
-                            Text("Conservation").font(.headline)
-                            Text(review.notice.retentionText)
-                            Text(review.notice.contactEmail).font(.subheadline)
-                        }.padding(.top, DrivySpacing.s).textSelection(.enabled)
-                    }
+                    SchoolPrivacyLink(text: .init(notice: review.notice.noticeText, retention: review.notice.retentionText,
+                        contact: review.notice.contactEmail), addressesLearner: false, identifier: "preparation-review-privacy-link")
                     if review.pendingMutation != nil {
                         Text("Cette confirmation reprend exactement la demande de départ conservée. La leçon, l’accord et le diagnostic seront vérifiés à nouveau.")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)

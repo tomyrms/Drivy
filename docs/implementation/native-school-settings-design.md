@@ -11,7 +11,7 @@ Les vues `SchoolCatalogView` et `SchoolConfigurationView` évoluent sans changem
 - Le catalogue utilise des lignes séparées, une hiérarchie catégorie / conditions / état, et une commande de création en tête de section. Les détails versionnés se déplient ; préparer une nouvelle version reste visible. Les anciennes révisions restent consultables.
 - Le sélecteur des trois sections devient un menu avec les tailles de texte d’accessibilité. La colonne garde une largeur de lecture bornée sur iPad.
 - Les coordonnées gardent des libellés visibles pendant la saisie. Une école active est présentée comme telle, sans lui redemander son activation.
-- Les textes adoptés sont consultables ; leur modification s’ouvre explicitement. Aucun contenu ni consentement n’est proposé automatiquement.
+- Les textes adoptés sont consultables ; leur modification s’ouvre explicitement. Depuis le 13 octobre 2026, Drivy propose les textes d’une nouvelle école, que l’administration relit et adopte d’un geste ; aucun consentement n’est créé ([décisions](decisions-2026-10-13.md)).
 - Les quatre capacités et leurs raisons viennent de `SchoolReadiness`. Elles se consultent séparément de l’activation ; les modules facultatifs ne créent pas une alerte globale.
 
 ## Confirmation et erreurs

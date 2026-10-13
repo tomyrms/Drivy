@@ -12,7 +12,6 @@ struct SchoolRecordingChoiceInline: View {
     var isEnabled = true
     let choose: (SchoolRecordingChoice.Status) -> Void
     @State private var editing = false
-    @State private var document: RecordingDocument?
     @State private var reviewsPending = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -70,7 +69,6 @@ struct SchoolRecordingChoiceInline: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(DrivyMotion.reveal(reduceMotion), value: presentation)
-        .sheet(item: $document) { RecordingDocumentView(document: $0) }
         .sheet(isPresented: $reviewsPending, onDismiss: { Task { await model.load() } }) {
             SchoolRecordingChoiceView(model: model)
         }
@@ -87,6 +85,7 @@ struct SchoolRecordingChoiceInline: View {
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            SchoolGPSPromise(addressesLearner: asksLearner)
             // Deux cartes de même taille, même poids, même teinte : aucune réponse n’est mise en avant.
             let layout = typeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
@@ -101,15 +100,8 @@ struct SchoolRecordingChoiceInline: View {
             if let error = model.storageError { DrivyInlineMessage(text: error, tone: .warning) }
             else if let error = model.errorMessage { DrivyInlineMessage(text: error, tone: .warning) }
             if let notice = model.notice {
-                Button(asksLearner ? "Tes données" : "Confidentialité") {
-                    document = .init(id: "notice", title: asksLearner ? "Tes données" : "Confidentialité",
-                        text: notice.noticeText + "\n\n" + notice.retentionText, contact: notice.contactEmail)
-                }
-                .font(.subheadline)
-                .foregroundStyle(DrivyTheme.accent)
-                .frame(minHeight: DrivyLayout.tapTarget)
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("gps-answer-notice")
+                SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                    addressesLearner: asksLearner, identifier: "gps-answer-notice")
             }
         }
     }

@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 13 octobre 2026 — textes de l’école : lot 1
+
+[Décisions du porteur](decisions-2026-10-13.md) : textes proposés par défaut, un seul texte, informations demandées sans brouillon, plus de motif d’approbation.
+
+- **API.** `GET /text-proposals` (textes rédigés par Drivy, jamais adoptés par une lecture ; Mapbox cité seulement s’il est configuré ; aucune durée chiffrée). `PUT /data-policy` avec `publishProposedFields` publie aussi les informations demandées proposées : prénom et nom requis, téléphone et e-mail facultatifs, rien qui bloque la planification. `POST /profile-field-policies` avec `publishNow`. `approvalReason` facultatif. `GET /recording-choices` (migration 030) : accord GPS de chaque élève pour l’administration.
+- **Web.** Réglages : École, **Confidentialité et conditions**, Signalements. La page regroupe les textes (préremplis tant qu’ils ne sont pas adoptés), les informations demandées en tableau et un accès aux conditions. Le menu ne montre plus « Préparation » : l’Agenda affiche ce qui manque pour planifier, avec un lien par manque. Le dossier élève montre l’accord GPS (« À redonner » s’il date d’anciens textes). Plus de « Motif » ; une nouvelle procédure ou de nouvelles conditions partent des textes proposés.
+- **iOS.** Un seul composant pour les textes de l’école : trois lignes sur le GPS (« Enregistré pendant la leçon seulement », « Visible par toi et ton école », « Sans GPS, la leçon a lieu quand même »), puis « Tes données » (élève) ou « Confidentialité » (moniteur) ouvre le texte complet. Il remplace les six présentations différentes.
+
+**Exécuté** : API sur PostgreSQL en CI (nouveaux tests : textes proposés, adoption en un geste, accords GPS lus par l’administration, motif facultatif, publication immédiate) ; tests unitaires des textes proposés en local ; web 199 tests, typecheck et build en local. CI verte et IPA compilée sur `0775be9`. **Non exécuté** : tests Swift, captures, essai sur appareil. **Déployé le 13 octobre 2026** à la demande du porteur : release `0775be9` sur le homelab après sauvegarde vérifiée, 30 migrations aux empreintes conformes, services actifs (`.local/deploy-textes-lot1-release.py`).
+
 ## 13 octobre 2026 — textes de l’école : lot 0
 
 Suite de l’[analyse des textes de l’école](analyse-textes-ecole-20261013.md), lot 0 seulement (aucune décision juridique requise) :

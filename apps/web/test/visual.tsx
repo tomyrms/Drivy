@@ -8,7 +8,7 @@ import { AgendaSection } from '../client/console/agenda';
 import { TripsSection } from '../client/console/trips';
 import { AvailabilitySection } from '../client/console/availability';
 import { ConfigurationSection } from '../client/console/configuration';
-import { ProfileFieldsSection } from '../client/console/profile-fields';
+import { PrivacySection } from '../client/console/privacy';
 import { OverviewSection } from '../client/console/overview';
 import { ObservationThemesSection } from '../client/console/observation-themes';
 import { ManagementConsole } from '../client/console/Console';
@@ -158,12 +158,12 @@ if (new URLSearchParams(location.search).get('scheme') === 'light') {
   theme.textContent = reviewStyles.match(/:root\s*\{[\s\S]*?\}/)?.[0] ?? '';
   document.head.append(theme);
 }
-const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
+const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, config: ConfigurationSection, profile: PrivacySection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
   curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = new URLSearchParams(location.search).get('shell') === '1';
 if (shell) {
-  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'champs-profil', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
+  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', config: 'configuration', profile: 'confidentialite', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
   window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}`);
 }
 const entry = ['signin', 'account', 'invitation'].includes(page ?? '');

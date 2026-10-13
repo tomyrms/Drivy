@@ -10,7 +10,7 @@ import { BrandSymbol } from '../BrandSymbol';
 import { ConsoleContext, readError, sectionKeys, type ConsoleContextValue, type SectionKey } from './context';
 import { OverviewSection } from './overview';
 import { ConfigurationSection } from './configuration';
-import { ProfileFieldsSection } from './profile-fields';
+import { PrivacySection } from './privacy';
 import { CurriculaSection, OfferingsSection, ProceduresSection } from './catalog';
 import { ProductsSection, TermsSection } from './commerce';
 import { InvitationsSection, TeamSection } from './people';
@@ -283,7 +283,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
   switch (section) {
     case 'apercu': return <OverviewSection />;
     case 'configuration': return <ConfigurationSection />;
-    case 'champs-profil': return <ProfileFieldsSection />;
+    case 'champs-profil': case 'confidentialite': return <PrivacySection />;
     case 'offres': return <OfferingsSection />;
     case 'formations': return <FormationsSection />;
     case 'referentiels': return <CurriculaSection />;

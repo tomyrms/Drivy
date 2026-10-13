@@ -12,6 +12,8 @@ import type { TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
 import { ApiError, notFound } from './errors.js';
 import { checkIdempotency, checkVersion, requireVersion, schoolColumns, schoolCommand, schoolProjection, type SchoolRow } from './commands.js';
+import { publishProfilePolicyNow } from './profiles.js';
+import { proposedCommercialTerms, proposedDataPolicy, proposedProcedure, proposedProfileFields, type ProposalContext } from './text-proposals.js';
 
 const steps = ['IDENTITY','ORGANISATION','OFFERINGS','COLLECTIVE','DATA','REVIEW'] as const;
 const setupCommand = z.object({ operationId:z.uuid(),currentStep:z.enum(steps),completedSteps:z.array(z.enum(steps)).max(6)
@@ -24,7 +26,8 @@ const schoolUpdate = z.object({ operationId:z.uuid(),name:nonBlank(150),timeZone
 // Un texte de quelques lettres ne dit rien à l'élève (« ddd » adopté sur le homelab) : 40 caractères utiles au moins.
 export const POLICY_TEXT_MINIMUM = 40;
 const policyText = z.string().max(20000).refine(value=>[...value.trim()].length>=POLICY_TEXT_MINIMUM);
-const policyCommand = z.object({operationId:z.uuid(),noticeText:policyText,retentionText:policyText,contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true)}).strict();
+// publishProposedFields : le même geste publie les informations demandées proposées si l'école n'en a publié aucune.
+const policyCommand = z.object({operationId:z.uuid(),noticeText:policyText,retentionText:policyText,contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true),publishProposedFields:z.literal(true).optional()}).strict();
 const empty = z.object({}).strict();
 interface SetupRow { school_id:string;version:number;current_step:string;completed_steps:string[];configured_by:string;last_saved_at:Date;completed_at:Date|null }
 interface PolicyRow { school_id:string;version:number;notice_version_id:string;notice_text:string;retention_text:string;contact_email:string|null;approved_by:string|null;approved_at:Date|null }
@@ -81,7 +84,8 @@ export async function recordSettings(db:PoolClient,school:SchoolRow,memberId:str
       ...(profileFieldPolicyVersionId?{profileFieldPolicyVersionId}:{})}),memberId]);
 }
 
-export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier}) {
+export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;mapMatching?:{provider:'mapbox'|'osrm'}|undefined}) {
+  const proposalContext=(school:SchoolRow):ProposalContext=>({schoolName:school.name,contactEmail:school.contactEmail,mapMatchingProvider:options.mapMatching?.provider});
   const envelope=(data:unknown,request:FastifyRequest)=>({data,requestId:request.id,serverTime:new Date().toISOString()});
   const schoolID=(request:FastifyRequest)=>z.object({schoolId:z.uuid()}).parse(request.params).schoolId;
   const read=async(request:FastifyRequest,work:(db:PoolClient,school:SchoolRow)=>Promise<unknown>,withDevice=false)=>{
@@ -117,6 +121,17 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
     const row=(await db.query<{gps_agreements:number;active_captures:number}>('SELECT * FROM drivy.data_policy_change_impact($1)',[schoolID(request)])).rows[0];
     return {gpsAgreements:row?.gps_agreements ?? 0,activeCaptures:row?.active_captures ?? 0};
   }),request));
+  // Accord GPS de chaque élève, pour le dossier web de l'administration (migration 030).
+  app.get('/v1/schools/:schoolId/recording-choices',async request=>envelope(await read(request,async(db,school)=>({
+    items:(await db.query<{learner_id:string;status:string;source:string;recorded_at:Date;current_notice:boolean;lesson_scoped:boolean}>(
+      'SELECT * FROM drivy.admin_recording_choices($1) ORDER BY learner_id',[school.id])).rows.map(row=>({learnerId:row.learner_id,status:row.status,
+      source:row.source,recordedAt:row.recorded_at.toISOString(),currentNotice:row.current_notice,lessonScoped:row.lesson_scoped})),
+  })),request));
+  // Textes proposés par Drivy, à relire et adopter par l'administration : jamais adoptés par cette lecture.
+  app.get('/v1/schools/:schoolId/text-proposals',async request=>envelope(await read(request,async(_db,school)=>({
+    dataPolicy:proposedDataPolicy(proposalContext(school)),profileFields:proposedProfileFields,
+    procedure:proposedProcedure(),commercialTerms:proposedCommercialTerms(proposalContext(school)),
+  })),request));
   app.get('/v1/schools/:schoolId/operations/:operationId',async request=>{
     const identity=await options.verifyToken(request.headers.authorization);empty.parse(request.query);
     const {schoolId,operationId}=z.object({schoolId:z.uuid(),operationId:z.uuid()}).parse(request.params);
@@ -197,7 +212,11 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
         VALUES($1,$2,$3,$4,$5,$6,now()) RETURNING *`,[id,previous.version+1,body.noticeText,body.retentionText,body.contactEmail,actor.membershipId]);
       const current=await db.query<SchoolRow>(`UPDATE drivy.school SET version=version+1,configuration_version=configuration_version+1 WHERE id=$1 RETURNING ${schoolColumns}`,[school.id]);
       await recordSettings(db,current.rows[0]!,actor.membershipId);
-      return {data:policyProjection(result.rows[0]!),action:'SchoolDataPolicyAdopted',resourceType:'SchoolDataPolicy',resourceId:id,changedFields:['noticeText','retentionText','contactEmail']};
+      // Même geste, si demandé : une école qui n'a publié aucune règle reçoit les informations demandées proposées.
+      const fieldsPublished=!body.publishProposedFields || (await db.query("SELECT 1 FROM drivy.profile_field_policy WHERE school_id=$1 AND status='PUBLISHED'",[id])).rowCount;
+      if(!fieldsPublished) await publishProfilePolicyNow(db,id,actor.membershipId,[...proposedProfileFields],result.rows[0]!.notice_version_id);
+      return {data:policyProjection(result.rows[0]!),action:'SchoolDataPolicyAdopted',resourceType:'SchoolDataPolicy',resourceId:id,
+        changedFields:['noticeText','retentionText','contactEmail',...(fieldsPublished?[]:['profileFieldPolicy'])]};
     });
     // Les anciennes preuves G1B restent immuables ; leur projection reçoit l'UUID réel de la même révision.
     const projected=data.noticeVersionId?data:await withActor(options.pool,identity,id,async(db)=>{

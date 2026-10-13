@@ -55,7 +55,6 @@ struct SchoolRecordingChoiceEntryView: View {
 struct SchoolRecordingChoiceView: View {
     @Bindable var model: SchoolRecordingChoiceWorkspace
     @Environment(\.dismiss) private var dismiss
-    @State private var document: RecordingDocument?
     /// Demande dont l’abandon attend sa confirmation, comme sur les autres écrans de l’école.
     @State private var abandonCandidate: SchoolCaptureQueuedMutation?
     @State private var confirmsAbandon = false
@@ -98,7 +97,6 @@ struct SchoolRecordingChoiceView: View {
             }
             .task { await model.load() }
             .refreshable { await model.load() }
-            .sheet(item: $document) { RecordingDocumentView(document: $0) }
             .confirmationDialog("Abandonner cette demande ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
                 Button("Abandonner la demande", role: .destructive) {
                     if let queued = abandonCandidate { Task { await model.abandon(queued) } }
@@ -170,19 +168,11 @@ struct SchoolRecordingChoiceView: View {
     }
 
     private func documentLinks(_ notice: SchoolRecordingNotice) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button("Tes données") {
-                document = .init(id: "notice", title: "Tes données", text: notice.noticeText, contact: notice.contactEmail)
-            }
-            .accessibilityIdentifier("recording-notice-link")
-            .frame(minHeight: DrivyLayout.tapTarget)
-            Button("Conservation") {
-                document = .init(id: "retention", title: "Conservation", text: notice.retentionText, contact: notice.contactEmail)
-            }
-            .accessibilityIdentifier("recording-retention-link")
-            .frame(minHeight: DrivyLayout.tapTarget)
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            SchoolGPSPromise(addressesLearner: model.source == .own)
+            SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                addressesLearner: model.source == .own, identifier: "recording-notice-link")
         }
-        .font(.subheadline).foregroundStyle(DrivyTheme.accent)
     }
 
     private var pendingRequests: some View {
@@ -207,32 +197,5 @@ struct SchoolRecordingChoiceView: View {
                 }
             }
         }
-    }
-}
-
-struct RecordingDocument: Identifiable {
-    let id: String
-    let title: String
-    let text: String
-    let contact: String
-}
-
-struct RecordingDocumentView: View {
-    let document: RecordingDocument
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.l) {
-                    Text(document.text).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Label(document.contact, systemImage: "envelope").font(.footnote)
-                        .foregroundStyle(DrivyTheme.muted).textSelection(.enabled)
-                }.drivyPageContent()
-            }
-            .background(DrivyTheme.surface)
-            .navigationTitle(document.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
-        }.tint(DrivyTheme.accent)
     }
 }

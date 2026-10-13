@@ -18,7 +18,9 @@ const fields=['firstName','lastName','birthDate','postalAddress','contactEmail',
 const fieldRule=z.object({field:z.enum(fields),requirement:z.enum(['REQUIRED','CONDITIONAL','OPTIONAL']),stage:z.enum(['JOIN','BEFORE_LESSON','BEFORE_COURSE','OPTIONAL']),
   purposeCode:z.enum(['IDENTIFICATION','LESSON_CONTACT','COURSE_ELIGIBILITY','CERTIFICATE','POSTAL_CONTACT','PERSONALISATION']),explanation:text(1000)}).strict();
 type Rule=z.infer<typeof fieldRule>;
-const policyCommand=z.object({...operation,effectiveFrom:z.iso.datetime({offset:true}),fields:z.array(fieldRule).min(2).max(7),noticeVersionId:z.uuid(),impactAcknowledged:z.literal(true)}).strict();
+// publishNow : effet immédiat, sans brouillon ni date (décision du porteur du 13 octobre 2026) ; la version reste immuable.
+const policyCommand=z.object({...operation,effectiveFrom:z.iso.datetime({offset:true}).optional(),publishNow:z.literal(true).optional(),fields:z.array(fieldRule).min(2).max(7),noticeVersionId:z.uuid(),impactAcknowledged:z.literal(true)}).strict()
+  .refine(value=>(value.publishNow===true)!==(value.effectiveFrom!==undefined));
 const address=z.object({line1:text(200),line2:nullableText(200),postalCode:text(20),locality:text(150),countryCode:z.string().regex(/^[A-Z]{2}$/)}).strict();
 const profileCommand=z.object({...operation,policyVersionId:z.uuid(),firstName:text(150).optional(),lastName:text(150).optional(),birthDate:z.iso.date().nullable().optional(),
   postalAddress:address.nullable().optional(),contactEmail:z.email().nullable().optional(),contactPhone:nullableText(32).optional(),profilePhotoDocumentId:z.uuid().nullable().optional()}).strict().refine(value=>Object.keys(value).length>=3);
@@ -53,6 +55,16 @@ function validateRules(rules:Rule[]) {
     if(!purposes[rule.field]?.includes(rule.purposeCode)) fail();
     if(rule.requirement==='CONDITIONAL' && rule.stage!=='BEFORE_COURSE') fail();
   }
+}
+/** Crée et publie dans la même transaction une version prenant effet maintenant ; l'appelant tient déjà le verrou scolaire. */
+export async function publishProfilePolicyNow(db:PoolClient,schoolId:string,membershipId:string,rules:Rule[],noticeVersionId:string):Promise<PolicyRow> {
+  validateRules(rules);
+  const draft=(await db.query<PolicyRow>(`INSERT INTO drivy.profile_field_policy(school_id,effective_from,fields,notice_version_id,created_by_membership_id)
+    VALUES($1,statement_timestamp(),$2,$3,$4) RETURNING *`,[schoolId,JSON.stringify(rules),noticeVersionId,membershipId])).rows[0]!;
+  const published=(await db.query<PolicyRow>("UPDATE drivy.profile_field_policy SET status='PUBLISHED',version=version+1,approved_at=now(),approved_by_membership_id=$2 WHERE id=$1 RETURNING *",[draft.id,membershipId])).rows[0]!;
+  const school=(await db.query<SchoolRow>(`UPDATE drivy.school SET version=version+1,configuration_version=configuration_version+1 WHERE id=$1 RETURNING ${schoolColumns}`,[schoolId])).rows[0]!;
+  await recordSettings(db,school,membershipId,draft.id);
+  return published;
 }
 async function currentPolicy(db:PoolClient,schoolId:string):Promise<PolicyRow> {
   const row=(await db.query<PolicyRow>("SELECT * FROM drivy.profile_field_policy WHERE school_id=$1 AND status='PUBLISHED' AND effective_from<=statement_timestamp() ORDER BY effective_from DESC LIMIT 1",[schoolId])).rows[0];
@@ -167,6 +179,10 @@ export function registerProfiles(app:FastifyInstance,options:{pool:Pool;verifyTo
       checkVersion(school.version,expected);validateRules(body.fields);
       if(!(await db.query('SELECT notice_version_id FROM drivy.school_data_policy WHERE school_id=$1 AND notice_version_id=$2 AND approved_at IS NOT NULL',[schoolId,body.noticeVersionId])).rowCount)
         throw new ApiError(409,'POLICY_REVIEW_REQUIRED','Choisissez une notice effectivement adoptée dans cette école.');
+      if(body.publishNow) {
+        const published=await publishProfilePolicyNow(db,schoolId,actor.membershipId,body.fields,body.noticeVersionId);
+        return {data:policyDTO(published),action:'ProfileFieldPolicyPublished',resourceType:'ProfileFieldPolicy',resourceId:published.id,changedFields:['fields','status','approvedByMembershipId']};
+      }
       const row=(await db.query<PolicyRow>(`INSERT INTO drivy.profile_field_policy(school_id,effective_from,fields,notice_version_id,created_by_membership_id)
         VALUES($1,$2,$3,$4,$5) RETURNING *`,[schoolId,body.effectiveFrom,JSON.stringify(body.fields),body.noticeVersionId,actor.membershipId])).rows[0]!;
       await db.query('UPDATE drivy.school SET version=version+1 WHERE id=$1',[schoolId]);

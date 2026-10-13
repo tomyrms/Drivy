@@ -264,6 +264,8 @@ Modifier le texte GPS **prévient l'admin** (« 29 élèves devront redonner leu
 
 ---
 
+> **Lot 1 réalisé le 13 octobre 2026** sans texte GPS séparé, selon les [décisions du porteur](decisions-2026-10-13.md).
+>
 > **Lot 0 réalisé le 13 octobre 2026** sur la branche `claude/textes-ecole-lot0-20261013` (voir `STATUS.md`). La longueur minimale est vérifiée par l'API sans contrainte SQL ; « Services de l'école » est retiré du web plutôt que recalculé.
 
 ## 6. Ce qu'il faudrait toucher (estimation grossière)
