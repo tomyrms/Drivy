@@ -3,6 +3,8 @@
 > Plan validé par le porteur le 13 octobre 2026 : réalisation de tous les lots dans l’ordre proposé. Les résultats et limites sont consignés dans `realisation-onboarding-ecole-20261013.md` et `STATUS.md` ; aucune qualification produit ne découle du seul plan.
 > Sources examinées à `bb2449a8d180cc3ab6bf2ddf64df68d41a1eb015`. Analyse du dépôt et du retour utilisateur ; aucun écran exécuté, aucun test produit effectué pendant cette préparation.
 
+**Intégration du 13 octobre après validation.** Les [décisions sur les textes](decisions-2026-10-13.md), arrivées sur `master` pendant la réalisation, précisent les parties correspondantes de ce plan : textes proposés communs au guide et aux réglages, un seul texte de confidentialité, informations élèves appliquées immédiatement à la confirmation (aucune date future dans le guide), aucun motif d’approbation demandé ni durée chiffrée de conservation promise. La navigation et la présence de Préparation dans Réglages restent celles du présent plan. Le bilan de réalisation décrit le résultat intégré.
+
 ## 1. Résultat attendu
 
 Le porteur génère un lien, le transmet lui-même à une auto-école, et n'a pas à créer son compte ou saisir son nom. Le responsable ouvre le lien sur le web, crée son compte ou se connecte, renseigne son école et suit un parcours de préparation. Drivy lui propose des contenus qu'il adapte et confirme. Il peut interrompre le parcours et reprendre les informations effectivement enregistrées.
