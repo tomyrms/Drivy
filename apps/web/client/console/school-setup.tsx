@@ -26,7 +26,7 @@ const clone = <T,>(value: T): T => structuredClone(value);
 
 /** Same persisted editor for the first school setup and later formation preparation. */
 export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogueOnly?: boolean; onClose?: () => void }) {
-  const { schoolId, school, navigate, drafts, canConfigureCatalog } = useConsole();
+  const { schoolId, school, navigate, drafts, canConfigureCatalog, setNavigationGuard } = useConsole();
   const snapshot = useCommandSnapshot();
   const [document, setDocument] = useState<SetupDraft | null>(null);
   const [content, setContent] = useState<SetupContent | null>(null);
@@ -37,6 +37,9 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [acknowledged, setAcknowledged] = useState(false);
   const [readFailure, setReadFailure] = useState<string | null>(null);
   const [discard, setDiscard] = useState(false);
+  const [leave, setLeave] = useState<(() => void) | null>(null);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
   const [stepsOpen, setStepsOpen] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const needsAdoption = useRef(false);
@@ -79,6 +82,10 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     window.addEventListener('beforeunload', preventLoss);
     return () => window.removeEventListener('beforeunload', preventLoss);
   }, [dirty]);
+  useEffect(() => {
+    setNavigationGuard?.(proceed => { if (dirtyRef.current) setLeave(() => proceed); else proceed(); });
+    return () => setNavigationGuard?.(null);
+  }, [setNavigationGuard]);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); setStepsOpen(false); }, [step]);
   const update = (next: SetupContent) => { setContent(next); setDirty(true); setPreview(null); setAcknowledged(false); runner.clearOutcome(); };
 
@@ -90,19 +97,20 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
       setPreview(result);
     } catch (error) { setReadFailure(readError(error)); } finally { setReviewing(false); }
   }
-  async function save(nextStep: SetupStep, value = content, exit = false) {
+  async function save(nextStep: SetupStep, value = content, exit = false, afterSave?: () => void) {
     if (!value || !document || blocked) return;
     setReadFailure(null); setPreview(null); setAcknowledged(false);
     const result = await runner.run(createCommand({ schoolId, kind: 'saveSetupDraft', path: 'setup-draft',
       ifMatch: document.version, resourceVersion: document.version, body: { currentStep: nextStep, content: value } }), 'La préparation est enregistrée.');
     if (result.status !== 'confirmed') return;
-    setDirty(false); needsAdoption.current = false;
+    setDirty(false); dirtyRef.current = false; needsAdoption.current = false;
     try {
       const saved = await readSchool(schoolId, 'setup-draft', setupDraftSchema);
       if (saved.schoolId !== schoolId || saved.version <= document.version) throw new RequestFailure('INVALID_RESPONSE');
       setDocument(saved); setContent(clone(saved.content)); setStep(nextStep);
       drafts?.delete(key);
-      if (exit) { if (onClose) onClose(); else navigate('configuration'); }
+      if (afterSave) { setLeave(null); afterSave(); }
+      else if (exit) { if (onClose) onClose(); else navigate('configuration'); }
       else if (nextStep === 'REVIEW') await refreshReview(saved);
     } catch (error) { needsAdoption.current = true; setReadFailure(readError(error)); loaded.reload(); }
   }
@@ -111,7 +119,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     const result = await runner.run(createCommand({ schoolId, kind: 'applySetupDraft', path: 'setup-draft/complete', ifMatch: document.version,
       resourceVersion: document.version, body: { expectedSchoolVersion: preview.schoolVersion, expectedConfigurationVersion: preview.configurationVersion,
         reviewDigest: preview.reviewDigest, reviewAcknowledged: true, activate: preview.activate } }), preview.activate ? 'Votre école est activée.' : 'La préparation est appliquée.');
-    if (result.status === 'confirmed') { setDirty(false); drafts?.delete(key); navigate(catalogueOnly ? 'formations' : 'agenda'); }
+    if (result.status === 'confirmed') { setDirty(false); dirtyRef.current = false; drafts?.delete(key); navigate(catalogueOnly ? 'formations' : 'agenda'); }
   }
   function skip() {
     if (!content) return;
@@ -169,6 +177,11 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     <ConfirmDialog open={discard} busy={blocked} title="Relire la préparation enregistrée ?" confirmLabel="Abandonner ma saisie et relire" onCancel={() => setDiscard(false)} onConfirm={() => {
       setDiscard(false); setDirty(false); drafts?.delete(key); needsAdoption.current = true; loaded.reload();
     }}><p>Votre saisie non enregistrée sera remplacée par la version actuellement conservée par l’école.</p></ConfirmDialog>
+    <ConfirmDialog open={leave !== null} busy={blocked} title="Enregistrer avant de quitter ?" confirmLabel="Enregistrer et quitter" onCancel={() => setLeave(null)} onConfirm={() => { if (leave) void save(step, content, false, leave); }}>
+      <p>Les dernières modifications ne sont pas encore enregistrées.</p>
+      <OutcomeNotice outcome={runner.outcome} />
+      <button type="button" className="button quiet" disabled={blocked} onClick={() => { const proceed = leave; setLeave(null); dirtyRef.current = false; setDirty(false); drafts?.delete(key); proceed?.(); }}>Quitter sans enregistrer</button>
+    </ConfirmDialog>
   </div>;
 }
 
@@ -226,7 +239,7 @@ function FormationStep({ content, templates, offerings, today, onChange, canWrit
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 12} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
       <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>
-      <div className="form-grid"><TextField label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode })} />
+      <div className="form-grid"><TextField label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
         <TextField label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div>
       {!formation.existingOfferingId && <>
         <details className="disclosure"><summary>Programme · {formation.competencies.length} compétences</summary><div className="section-stack">{formation.competencies.map((competence, position) => <div className="setup-competency" key={competence.key}>

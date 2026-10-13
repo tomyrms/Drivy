@@ -9,17 +9,18 @@ const text=(max:number)=>z.string().max(max);
 const nullableText=(max:number)=>text(max).nullable();
 const sourceURL=z.url().max(2048).refine(value=>{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;});
 const competency=z.object({key:text(80),label:text(200),description:text(4000),sortOrder:z.number().int().min(0).max(100000)}).strict();
+const draftFieldRule=fieldRule.extend({explanation:text(1000)});
 export const setupFormationSchema=z.object({
   id:z.uuid(),apply:z.boolean(),categoryCode:text(30),label:text(200),templateId:nullableText(100),templateVersion:nullableText(40),
   competencies:z.array(competency).max(200),procedureText:text(4000),cancellationPolicyText:text(4000),sourceUrls:z.array(sourceURL).max(30),
-  durationMinutes:z.number().int().min(1).max(480).nullable(),priceCents:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable(),
+  durationMinutes:z.number().int().min(0).max(480).nullable(),priceCents:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable(),
   termsText:text(20000),validFrom:z.iso.date().nullable(),existingOfferingId:z.uuid().nullable()
 }).strict();
 export const setupContentSchema=z.object({
   selectedSections:z.array(z.enum(setupSections)).max(4).refine(items=>new Set(items).size===items.length),
   identity:z.object({name:text(150),timeZone:text(100),contactEmail:text(320),contactPhone:nullableText(32)}).strict(),
   privacy:z.object({noticeText:text(20000),retentionText:text(20000),contactEmail:text(320),templateId:nullableText(100),templateVersion:nullableText(40)}).strict(),
-  profile:z.object({fields:z.array(fieldRule).max(7),effectiveFrom:z.iso.datetime({offset:true}).nullable()}).strict(),
+  profile:z.object({fields:z.array(draftFieldRule).max(7),effectiveFrom:z.iso.datetime({offset:true}).nullable()}).strict(),
   formations:z.array(setupFormationSchema).max(12).refine(items=>new Set(items.map(item=>item.id)).size===items.length)
 }).strict();
 export type SetupContent=z.infer<typeof setupContentSchema>;
@@ -74,7 +75,7 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
     if(privacy.templateId!==null&&(privacy.templateId!==setupTemplates.privacy.id||privacy.templateVersion!==templateVersion))add('privacy.templateVersion','Relisez la version actuelle du modèle ou retirez sa référence pour utiliser votre texte.','SETUP_TEMPLATE_CHANGED');
   }
   if(content.selectedSections.includes('PROFILE')) {
-    try {validateRules(content.profile.fields);}catch {add('profile.fields','Vérifiez les informations, leur utilité et le moment où elles sont demandées.','PROFILE_POLICY_RULE_INVALID');}
+    try {validateRules(z.array(fieldRule).parse(content.profile.fields));}catch {add('profile.fields','Vérifiez les informations, leur utilité et le moment où elles sont demandées.','PROFILE_POLICY_RULE_INVALID');}
   }
   if(content.selectedSections.includes('CATALOGUE')) {
     for(const [index,formation] of content.formations.entries()) {
@@ -83,7 +84,7 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
       nonblank(formation.categoryCode,`${prefix}.categoryCode`,'Choisissez un permis.');
       nonblank(formation.label,`${prefix}.label`,'Indiquez le nom de la formation.');
       if(formation.priceCents===null)add(`${prefix}.priceCents`,'Saisissez le prix réel de la leçon.');
-      if(formation.durationMinutes===null)add(`${prefix}.durationMinutes`,'Confirmez la durée de la leçon.');
+      if(formation.durationMinutes===null||formation.durationMinutes<1)add(`${prefix}.durationMinutes`,'Confirmez une durée de leçon entre 1 et 480 minutes.');
       if(formation.validFrom===null)add(`${prefix}.validFrom`,'Choisissez la date d’entrée en vigueur du tarif.');
       nonblank(formation.termsText,`${prefix}.termsText`,'Complétez les conditions de cette prestation.');
       if(formation.existingOfferingId===null) {

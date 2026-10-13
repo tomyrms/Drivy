@@ -29,6 +29,9 @@
 .setup-progress-mobile { display: none; }
 .setup-next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); padding: var(--space-m); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-content); flex-wrap: wrap; }
 .setup-next h2 { font-size: 1rem; margin: 0; }
+.first-lesson-actions { padding: var(--space-m); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-content); }
+.first-lesson-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); }
+.first-lesson-heading h2 { font-size: 1rem; margin: 0; }
 @media (max-width: 760px) {
   .setup-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-l); }
   .setup-progress-mobile { display: block; }

@@ -22,6 +22,7 @@ export interface ConsoleContextValue {
   csrf: () => string;
   refreshCsrf: () => Promise<string>;
   navigate: (section: SectionKey, query?: NavigationQuery) => void;
+  setNavigationGuard?: (guard: ((proceed: () => void) => void) | null) => void;
   routeQuery?: NavigationQuery;
   setRouteQuery?: (query: NavigationQuery, replace?: boolean) => void;
   /** Unsent catalogue drafts, memory only, renewed with the authenticated school/access scope. */

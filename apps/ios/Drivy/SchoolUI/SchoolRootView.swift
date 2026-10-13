@@ -286,7 +286,8 @@ struct SchoolRootView: View {
     }
 
     private var ownProfileLearner: SchoolLearner? {
-        guard let person = workspace?.person, workspace?.membership?.roles.contains("LEARNER") == true else { return nil }
+        guard workspace?.school?.status == "ACTIVE", let person = workspace?.person,
+              workspace?.membership?.roles.contains("LEARNER") == true else { return nil }
         return workspace?.learners.first { $0.personId == person.personId }
     }
 

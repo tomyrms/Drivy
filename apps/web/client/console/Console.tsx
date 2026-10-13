@@ -42,6 +42,10 @@ export function ManagementConsole() {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationButton = useRef<HTMLButtonElement>(null);
   const csrf = useRef('');
+  const navigationGuard = useRef<((proceed: () => void) => void) | null>(null);
+  const routePath = useRef(`${window.location.pathname}${window.location.search}`);
+  routePath.current = `${window.location.pathname}${window.location.search}`;
+  const proceedNavigation = (proceed: () => void) => navigationGuard.current ? navigationGuard.current(proceed) : proceed();
   const generation = useRef(0);
   const accessReader = useRef(new ConsoleAccessReader(() => request('me', meSchema).then(result => result.data), schoolId => readSchool(schoolId, '', schoolSchema)));
   const snapshot = useCommandSnapshot();
@@ -83,7 +87,11 @@ export function ManagementConsole() {
 
   useEffect(() => { void load(route.schoolId); }, [route.schoolId]);
   useEffect(() => {
-    const onPopState = () => { setRoute(parseConsoleRoute(window.location.pathname, window.location.search)); setNavigationOpen(false); };
+    const onPopState = () => {
+      const target = `${window.location.pathname}${window.location.search}`;
+      const apply = () => { window.history.replaceState(null, '', target); setRoute(parseConsoleRoute(window.location.pathname, window.location.search)); setNavigationOpen(false); };
+      if (navigationGuard.current) { window.history.replaceState(null, '', routePath.current); navigationGuard.current(apply); } else apply();
+    };
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
       // Back from the identity provider: the page is restored as it was left, mid sign-in. Start again from the server's answer.
@@ -152,6 +160,7 @@ export function ManagementConsole() {
     schoolId: state.membership.schoolId, me: state.me, membership: state.membership, school: state.school,
     canConfigureCatalog: state.membership.grants.includes('CONFIGURE_CATALOG'),
     drafts,
+    setNavigationGuard: guard => { navigationGuard.current = guard; },
     reloadSchool: async () => {
       if (scope !== generation.current) return;
       const access = await accessReader.current.read(state.membership.schoolId);
@@ -170,9 +179,11 @@ export function ManagementConsole() {
       setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
     },
     navigate: (section: SectionKey, query: NavigationQuery = {}) => {
-      window.history.pushState(null, '', consolePath(state.membership.schoolId, section, query));
-      setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
-      setNavigationOpen(false);
+      proceedNavigation(() => {
+        window.history.pushState(null, '', consolePath(state.membership.schoolId, section, query));
+        setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
+        setNavigationOpen(false);
+      });
     },
     login: options => { void login(options); },
     };
@@ -198,14 +209,14 @@ export function ManagementConsole() {
         </a>
         {state.status === 'ready' && (adminSchools.length > 1
           ? <label className="school-switch"><span className="visually-hidden">École gérée</span>
-              <select value={state.membership.schoolId} onChange={event => { window.history.pushState(null, '', `/app/gestion/${event.target.value}`); setRoute({ schoolId: event.target.value, section: 'apercu', query: {} }); }}>
+              <select value={state.membership.schoolId} onChange={event => { const schoolId = event.target.value; proceedNavigation(() => { window.history.pushState(null, '', `/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); }); }}>
                 {adminSchools.map(member => <option key={member.schoolId} value={member.schoolId}>{member.schoolName}</option>)}
               </select>
             </label>
           : <span className="school-name">{state.school.name}</span>)}
         <div className="bar-end">
           {personName && <a className="person-name" href="/app/" aria-label={`Compte de ${personName}`}><Symbol kind="account" bare />{personName}</a>}
-          {session?.authenticated && <button type="button" className="button quiet" onClick={() => void logout()} disabled={busy}>Se déconnecter</button>}
+          {session?.authenticated && <button type="button" className="button quiet" onClick={() => proceedNavigation(() => void logout())} disabled={busy}>Se déconnecter</button>}
         </div>
       </header>
 
@@ -226,7 +237,7 @@ export function ManagementConsole() {
           {context && <ConsoleContext.Provider value={context}>
             {!setupMode && <SectionNavigation schoolId={context.schoolId} section={route.section} query={route.query} navigate={context.navigate} />}
             <PendingPanel />
-            <Section section={route.section} key={`${draftScope}-${route.section}-${route.section === 'invitations' ? route.query.audience ?? 'learners' : ''}`} />
+            <Section section={route.section} key={`${draftScope}-${route.section}-${route.section === 'invitations' ? route.query.audience ?? 'learners' : route.section === 'apercu' ? route.query.from ?? '' : ''}`} />
           </ConsoleContext.Provider>}
         </main>
       </div>

@@ -188,7 +188,8 @@
                         ]
                       },
                       "explanation": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 1000
                       }
                     },
                     "required": [
@@ -318,7 +319,7 @@
                     "anyOf": [
                       {
                         "type": "integer",
-                        "minimum": 1,
+                        "minimum": 0,
                         "maximum": 480
                       },
                       {
@@ -588,7 +589,8 @@
                     ]
                   },
                   "explanation": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 1000
                   }
                 },
                 "required": [
@@ -718,7 +720,7 @@
                 "anyOf": [
                   {
                     "type": "integer",
-                    "minimum": 1,
+                    "minimum": 0,
                     "maximum": 480
                   },
                   {
@@ -964,7 +966,8 @@
                         ]
                       },
                       "explanation": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 1000
                       }
                     },
                     "required": [
@@ -1094,7 +1097,7 @@
                     "anyOf": [
                       {
                         "type": "integer",
-                        "minimum": 1,
+                        "minimum": 0,
                         "maximum": 480
                       },
                       {

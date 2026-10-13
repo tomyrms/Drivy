@@ -75,8 +75,8 @@ export function FormationsSection() {
         {data.truncated && <Notice tone="warning" title="Catalogue partiel" live={false}><p>Certaines versions ne sont pas chargées. Ouvrez la formation ou le tarif concerné pour vérifier ses références.</p></Notice>}
         {routeQuery.category && <div className="filter-context"><span>Permis {routeQuery.category}</span>{link('formations', 'Toutes les formations')}</div>}
         {categories.length === 0 ? <EmptyState symbol="book" title={routeQuery.category ? 'Aucune formation dans cette catégorie' : 'Aucune formation préparée'}
-          message={routeQuery.category ? 'Consultez les autres formations de l’école.' : 'Commencez par les compétences enseignées.'}
-          action={routeQuery.category ? link('formations', 'Toutes les formations', {}, 'button secondary') : link('referentiels', 'Préparer les compétences', {}, 'button secondary')} />
+          message={routeQuery.category ? 'Consultez les autres formations de l’école.' : 'Choisissez un permis pour préparer la formation et son tarif.'}
+          action={routeQuery.category ? link('formations', 'Toutes les formations', {}, 'button secondary') : link('apercu', 'Préparer une formation', {}, 'button secondary')} />
           : <div className="formation-list">{categories.map(category => {
             const offerings = data.offerings.filter(item => item.categoryCode === category);
             const products = data.products.filter(item => item.categoryCode === category);

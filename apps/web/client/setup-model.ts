@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { profilePolicySchema } from './school-api';
+import { profilePolicySchema } from './school-api.js';
 
 export const setupSteps = ['IDENTITY', 'PRIVACY', 'PROFILE', 'FORMATIONS', 'PRICING', 'REVIEW'] as const;
 export type SetupStep = typeof setupSteps[number];

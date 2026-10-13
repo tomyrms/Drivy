@@ -66,6 +66,8 @@ it('lit sans créer de brouillon ; réserve contenus et modèles aux ADMIN du bo
 
 it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la saisie',async()=>{
   const current=await getDraft();current.content.identity.name='';current.content.privacy.noticeText='Texte de travail incomplet';
+  current.content.profile.fields[0]!.explanation='';
+  const incompleteFormation=formation();incompleteFormation.durationMinutes=0;current.content.formations=[incompleteFormation];current.content.selectedSections.push('CATALOGUE');
   const command={operationId:randomUUID(),currentStep:'PRIVACY',content:current.content};
   const first=await call('PUT',base,command,1);expect(first.statusCode,first.body).toBe(200);
   expect((await call('PUT',base,command,1)).json().data).toEqual(first.json().data);
@@ -74,7 +76,8 @@ it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la
   expect((await call('PUT',base,{...command,operationId:randomUUID()},undefined)).statusCode).toBe(428);
   await app.close();app=makeApp();
   expect((await getDraft()).content).toEqual(current.content);
-  expect((await reviewed()).ready).toBe(false);
+  const review=await reviewed();expect(review.ready).toBe(false);
+  expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['profile.fields','formations.0.durationMinutes']));
   expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
 });
 
