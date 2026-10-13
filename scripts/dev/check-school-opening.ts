@@ -126,15 +126,19 @@ async function main() {
     await page.getByRole('button',{name:'Créer mon compte ou me connecter',exact:true}).click();
     await page.waitForURL(url=>url.origin===keycloakOrigin);
     assert(new URL(page.url()).searchParams.get('code_challenge_method')==='S256' && !page.url().includes(new URL(openingLink).hash.slice(7)),'Connexion OIDC réelle avec PKCE sans secret d’ouverture');
+    stage='inscription OIDC du responsable avant mot de passe';
     await page.locator('#kc-registration a').click();
     await page.locator('input[name="username"]').fill('responsable-recette');await page.locator('input[name="email"]').fill('school@example.invalid');
     await page.locator('input[name="firstName"]').fill('Responsable');await page.locator('input[name="lastName"]').fill('Synthétique');
-    await page.locator('input[name="password"]').fill(consumerPassword);await page.locator('input[name="password-confirm"]').fill(consumerPassword);
     await page.locator('input[type="submit"],button[type="submit"]').first().click();
     stage='vérification réelle de l’adresse par SMTP';
     const verification=await ownMail('school@example.invalid');
     assert(new URL(page.url()).origin===keycloakOrigin,'Le compte reste chez le fournisseur avant la vérification de son adresse');
     await page.goto(mailLink(verification,keycloakOrigin,`/realms/${realmName}/login-actions/action-token`));
+    // Keycloak 26.7 requires the password after e-mail verification, never on the initial registration form.
+    stage='choix du mot de passe après vérification du responsable';
+    await page.locator('input[name="password-new"]').fill(consumerPassword);await page.locator('input[name="password-confirm"]').fill(consumerPassword);
+    await page.locator('input[type="submit"],button[type="submit"]').first().click();
     await page.waitForURL(`${origin}/app/ouvrir`);await page.getByLabel('Nom de l’auto-école',{exact:true}).waitFor();
     const verifiedSession=await consumerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await verifiedSession.json()).success,'Le lien SMTP vérifie réellement le nouveau compte avant création');
@@ -193,10 +197,11 @@ async function main() {
     }),'Le navigateur conserve seulement les métadonnées autorisées de reçu, sans jeton ni contenu personnel');
     const operatorDenied=await consumerContext.request.get(`${origin}/app/bff/operator/school-opening-links`);assert(operatorDenied.status()===403,'Un ADMIN scolaire ne devient pas opérateur Drivy');
     stage='invitation de l’équipe depuis le portail';await page.setViewportSize({width:1440,height:1100});
+    page.once('dialog',async dialog=>{if(dialog.type()==='beforeunload')await dialog.accept();else await dialog.dismiss();});
     await page.goto(`${origin}/app/gestion/${school.id}/invitations?audience=team`);
     await page.getByRole('button',{name:'Inviter par e-mail',exact:true}).click();
     await page.getByLabel('Adresse e-mail',{exact:true}).fill('instructor@example.invalid');
-    assert(await page.getByRole('checkbox',{name:'Moniteur',exact:true}).isChecked(),'Une invitation de l’équipe propose explicitement le rôle moniteur');
+    assert(await page.getByRole('checkbox',{name:/^Moniteur/}).isChecked(),'Une invitation de l’équipe propose explicitement le rôle moniteur');
     await page.getByRole('button',{name:'Relire l’invitation',exact:true}).click();
     const invitationDialog=page.getByRole('dialog');
     const invitationReview=invitationDialog.getByLabel('J’ai vérifié l’adresse et les rôles proposés.',{exact:true});
@@ -218,10 +223,12 @@ async function main() {
     await staffPage.locator('#kc-registration a').click();
     await staffPage.locator('input[name="username"]').fill('moniteur-recette');await staffPage.locator('input[name="email"]').fill('instructor@example.invalid');
     await staffPage.locator('input[name="firstName"]').fill('Moniteur');await staffPage.locator('input[name="lastName"]').fill('Synthétique');
-    const instructorPassword=syntheticSecret();await staffPage.locator('input[name="password"]').fill(instructorPassword);await staffPage.locator('input[name="password-confirm"]').fill(instructorPassword);
     await staffPage.locator('input[type="submit"],button[type="submit"]').first().click();
     stage='vérification réelle du compte moniteur';
     await staffPage.goto(mailLink(await ownMail('instructor@example.invalid'),keycloakOrigin,`/realms/${realmName}/login-actions/action-token`));
+    stage='choix du mot de passe après vérification du moniteur';const instructorPassword=syntheticSecret();
+    await staffPage.locator('input[name="password-new"]').fill(instructorPassword);await staffPage.locator('input[name="password-confirm"]').fill(instructorPassword);
+    await staffPage.locator('input[type="submit"],button[type="submit"]').first().click();
     await staffPage.waitForURL(`${origin}/app/invitation`);
     await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
     const staffSession=await staffContext.request.get(`${origin}/app/bff/session`);
