@@ -36,7 +36,7 @@ async function draft(db:PoolClient,school:SchoolRow) {
     content,updatedAt:row.draft_updated_at?.toISOString()??null,updatedByMembershipId:row.draft_updated_by??row.configured_by,appliedAt:row.draft_applied_at?.toISOString()??null};
 }
 type Draft=Awaited<ReturnType<typeof draft>>;
-interface NextAction {code:string;label:string;section:string;query?:{selection?:string;learner?:string;audience?:'learners'|'team'}}
+interface NextAction {code:string;label:string;section:string;query?:{selection?:string;learner?:string;instructor?:string;from?:'formations';audience?:'learners'|'team'}}
 const selected=(content:SetupContent,section:SetupContent['selectedSections'][number])=>content.selectedSections.includes(section);
 const activeFormations=(content:SetupContent)=>selected(content,'CATALOGUE')?content.formations.filter(item=>item.apply):[];
 
@@ -100,6 +100,23 @@ async function publishFormation(db:PoolClient,school:SchoolRow,actor:CommandActo
   return {offeringId,productId,termsId};
 }
 
+/** Cible réelle ayant franchi les étapes précédant ce blocage, avec les mêmes droits que planningReadiness. */
+async function learnerPreparationTarget(db:PoolClient,schoolId:string,learnerId:string,requireAvailability:boolean) {
+  return (await db.query<{offering_id:string;instructor_membership_id:string}>(`SELECT t.offering_id,a.instructor_membership_id
+    FROM drivy.training t JOIN drivy.school sc ON sc.id=t.school_id
+    JOIN drivy.offering_version o ON o.school_id=t.school_id AND o.id=t.offering_id
+    JOIN drivy.school_policy_version p ON p.school_id=o.school_id AND p.id=o.policy_version_id
+    JOIN drivy.instructor_assignment a ON a.school_id=t.school_id AND a.training_id=t.id
+    WHERE t.school_id=$1 AND t.learner_id=$2 AND t.status='ACTIVE' AND drivy.lesson_learner_active(t.id)
+      AND o.enabled AND p.approved AND drivy.catalogue_training_visible(t.id)
+      AND a.valid_from<=statement_timestamp() AND (a.valid_until IS NULL OR a.valid_until>statement_timestamp())
+      AND drivy.lesson_instructor_manage(t.school_id,a.instructor_membership_id)
+      AND (NOT $3::boolean OR EXISTS(SELECT 1 FROM drivy.availability_rule r WHERE r.school_id=a.school_id
+        AND r.instructor_membership_id=a.instructor_membership_id AND r.removed_at IS NULL
+        AND (r.valid_until IS NULL OR r.valid_until>=(now() AT TIME ZONE sc.time_zone)::date)))
+    ORDER BY t.created_at,t.id,a.valid_from DESC,a.id LIMIT 1`,[schoolId,learnerId,requireAvailability])).rows[0];
+}
+
 async function nextActions(db:PoolClient,school:SchoolRow) {
   const state=await readiness(db,school),planning=state.capabilities.find(item=>item.capability==='CAN_PLAN_LESSON')!;
   const mapping:Record<string,{label:string;section:string;order:number}>={
@@ -135,7 +152,11 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
     else {
       const blockers=await planningReadiness(db,school.id,learner.id,undefined,['ADMIN']);
       const blocker=blockers[0];
-      if(blocker)actions.push({code:blocker.code,label:blocker.code==='TRAINING_NOT_ACTIVE'?'Ouvrir la formation de l’élève':blocker.code==='INSTRUCTOR_NOT_ASSIGNED'?'Affecter un moniteur à la formation':'Préparer la formation de l’élève',section:'eleves',query:{selection:learner.id}});
+      if(blocker?.code==='AVAILABILITY_REQUIRED'||blocker?.code==='COMMERCIAL_SETUP_REQUIRED') {
+        const target=await learnerPreparationTarget(db,school.id,learner.id,blocker.code==='COMMERCIAL_SETUP_REQUIRED');
+        if(blocker.code==='AVAILABILITY_REQUIRED')actions.push({code:blocker.code,label:'Définir les disponibilités du moniteur affecté',section:'disponibilites',...(target?{query:{instructor:target.instructor_membership_id}}:{})});
+        else actions.push({code:blocker.code,label:'Ajouter un tarif pour la formation de l’élève',section:'apercu',query:{from:'formations',...(target?{selection:target.offering_id}:{})}});
+      } else if(blocker)actions.push({code:blocker.code,label:blocker.code==='TRAINING_NOT_ACTIVE'?'Ouvrir la formation de l’élève':blocker.code==='INSTRUCTOR_NOT_ASSIGNED'?'Affecter un moniteur à la formation':'Préparer la formation de l’élève',section:'eleves',query:{selection:learner.id}});
       else actions.push({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:learner.id}});
     }
   }

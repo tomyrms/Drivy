@@ -65,11 +65,6 @@ final class SchoolWorkspace {
         .resolve(schoolStatus: school?.status, roles: membership?.roles)
     }
 
-    var isLearnerOnly: Bool {
-        guard let roles = membership?.roles else { return false }
-        return roles.contains("LEARNER") && !roles.contains("ADMIN") && !roles.contains("INSTRUCTOR")
-    }
-
     func reset() {
         SchoolTrainingModelCache.reset()
         accountRequest = UUID()
@@ -280,7 +275,7 @@ final class SchoolWorkspace {
         learnersReadAt = now
         do {
             let page: SchoolPage<SchoolLearner>
-            if isLearnerOnly && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
+            if entryDestination == .learner && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
             else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
@@ -487,7 +482,7 @@ final class SchoolWorkspace {
         do {
             // L’élève cherche son seul dossier, archivé compris ; l’équipe garde la liste des dossiers actifs.
             let page: SchoolPage<SchoolLearner>
-            if isLearnerOnly && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
+            if entryDestination == .learner && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
             else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }

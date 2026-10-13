@@ -78,7 +78,8 @@ it('lit sans créer de brouillon ; réserve contenus et modèles aux ADMIN du bo
 
 it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la saisie',async()=>{
   const current=await getDraft();current.content.identity.name='';current.content.privacy.noticeText='Texte de travail incomplet';
-  current.content.profile.fields[0]!.explanation='';
+  const phoneIndex=current.content.profile.fields.findIndex(field=>field.field==='contactPhone');expect(phoneIndex).toBeGreaterThanOrEqual(0);
+  current.content.profile.fields[phoneIndex]!.explanation='';
   const incompleteFormation=formation();incompleteFormation.durationMinutes=0;current.content.formations=[incompleteFormation];current.content.selectedSections.push('CATALOGUE');
   const command={operationId:randomUUID(),currentStep:'PRIVACY',content:current.content};
   const first=await call('PUT',base,command,1);expect(first.statusCode,first.body).toBe(200);
@@ -89,7 +90,8 @@ it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la
   await app.close();app=makeApp();
   expect((await getDraft()).content).toEqual(current.content);
   const review=await reviewed();expect(review.ready).toBe(false);
-  expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['privacy.noticeText','profile.fields','formations.0.durationMinutes']));
+  expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['privacy.noticeText',`profile.fields.${phoneIndex}.explanation`,'formations.0.durationMinutes']));
+  expect(review.issues.filter((issue:{field:string})=>issue.field.startsWith('profile.'))).toEqual([{field:`profile.fields.${phoneIndex}.explanation`,code:'PROFILE_POLICY_RULE_INVALID',message:'Expliquez à l’élève pourquoi cette information est demandée.'}]);
   expect(review.issues).toEqual(expect.arrayContaining([expect.objectContaining({field:'privacy.noticeText',code:'POLICY_TEXT_TOO_SHORT'})]));
   expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
 });
@@ -206,4 +208,44 @@ it('les prochaines actions séparent configuration, dossier et première leçon 
   expect((await call('GET',`${base}/next-actions`)).json().data.actions).toEqual([]);
   await pool.query('DELETE FROM drivy.availability_rule WHERE school_id=$1',[id.schoolA]);
   const changed=(await call('GET',`${base}/next-actions`)).json().data;expect(changed.planningReady).toBe(false);expect(changed.actions.map((a:{code:string})=>a.code)).toEqual(['AVAILABILITY_REQUIRED']);
+});
+
+async function firstLearnerWithTraining(otherCategory=false) {
+  const saved=await prepared(true);
+  if(otherCategory) {
+    saved.content.formations.push({...formation(),categoryCode:'A',label:'Conduite A',templateId:null,templateVersion:null});
+    await save(saved.content,saved.version);
+  }
+  const command=await completion(),response=await call('POST',`${base}/complete`,command.body,command.version);expect(response.statusCode,response.body).toBe(200);
+  const applied=response.json().data.applied;
+  await pool.query("UPDATE drivy.learner_profile SET first_name='Alice',last_name='Exemple' WHERE id=$1",[id.aliceLearner]);
+  const training=await call('POST',`/v1/schools/${id.schoolA}/trainings`,{operationId:randomUUID(),learnerId:id.aliceLearner,offeringId:applied.offeringIds[0],assignCreator:false});
+  expect(training.statusCode,training.body).toBe(201);
+  const assigned=await call('POST',`/v1/schools/${id.schoolA}/trainings/${training.json().data.id}/assignments`,{operationId:randomUUID(),instructorMembershipId:id.instructorMember,validFrom:'2020-01-01T00:00:00Z',validUntil:null});
+  expect(assigned.statusCode,assigned.body).toBe(201);
+  return {applied,content:saved.content};
+}
+async function addAvailability(instructorMembershipId:string) {
+  const response=await call('POST',`/v1/schools/${id.schoolA}/availability-rules`,{operationId:randomUUID(),instructorMembershipId,weekdays:[1,2,3,4,5,6,7],localStart:'08:00',localEnd:'18:00',validFrom:'2020-01-01',validUntil:null});
+  expect(response.statusCode,response.body).toBe(201);
+}
+
+it('oriente vers les disponibilités du moniteur affecté même si un autre moniteur est déjà disponible',async()=>{
+  await firstLearnerWithTraining();await addAvailability(id.otherInstructorMember);
+  const before=(await call('GET',`${base}/next-actions`)).json().data;
+  expect(before.planningReady).toBe(true);
+  expect(before.actions).toEqual([{code:'AVAILABILITY_REQUIRED',label:'Définir les disponibilités du moniteur affecté',section:'disponibilites',query:{instructor:id.instructorMember}}]);
+  await addAvailability(id.instructorMember);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('PLAN_FIRST_LESSON');
+});
+
+it('oriente le tarif manquant vers la formation exacte de l’élève quand un autre permis est déjà tarifé',async()=>{
+  const {applied,content}=await firstLearnerWithTraining(true);await addAvailability(id.instructorMember);
+  const disabled=await call('POST',`/v1/schools/${id.schoolA}/service-products`,{operationId:randomUUID(),productKey:`setup-${content.formations[0]!.id}`,
+    label:'Ancien tarif B',type:'INDIVIDUAL_LESSON',categoryCode:'B',siteId:null,durationMinutes:50,unitLabel:'leçon',unitPriceCents:9300,
+    validFrom:'2026-01-01',validUntil:null,termsVersionId:applied.termsIds[0],enabled:false});
+  expect(disabled.statusCode,disabled.body).toBe(201);
+  const next=(await call('GET',`${base}/next-actions`)).json().data;
+  expect(next.planningReady).toBe(true);
+  expect(next.actions).toEqual([{code:'COMMERCIAL_SETUP_REQUIRED',label:'Ajouter un tarif pour la formation de l’élève',section:'apercu',query:{from:'formations',selection:applied.offeringIds[0]}}]);
 });

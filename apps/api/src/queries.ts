@@ -7,6 +7,7 @@ import { missingProfileFieldsLateral, readinessSql } from './profile-completenes
 export interface LearnerFilters {
   q?: string | undefined; trainingStatus?: string | undefined; status: 'ACTIVE' | 'ARCHIVED' | 'ALL';
   instructorMembershipId?: string | undefined; categoryCode?: string | undefined; requiresAction?: boolean | undefined;
+  own?: boolean | undefined;
 }
 type PageRow = QueryResultRow & { id: string; _createdAt: string };
 // Conserver les microsecondes PostgreSQL : Date JavaScript les tronquerait et répéterait la dernière ligne.
@@ -64,6 +65,8 @@ export async function listLearners(db: PoolClient, schoolId: string, actor: Acto
   const values: unknown[] = params(schoolId, actor, member);
   const bind = (value: unknown) => { values.push(value); return `$${values.length}`; };
   const conditions = ['l.school_id=$1', visibleLearner];
+  // Un cumul de rôles ne transforme jamais « mon dossier » en la première page de l'annuaire administratif.
+  if (filters.own) conditions.push('l.person_id=$2');
   if (filters.status !== 'ALL') conditions.push(`l.archived_at IS ${filters.status === 'ACTIVE' ? '' : 'NOT '}NULL`);
   if (filters.q) conditions.push(`strpos(${foldedName('l.display_name')}, ${foldedName(bind(filters.q))}) > 0`);
   if (filters.requiresAction !== undefined) conditions.push(`(cardinality(mp.fields)>0)=${bind(filters.requiresAction)}`);

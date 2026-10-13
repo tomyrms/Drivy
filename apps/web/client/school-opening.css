@@ -1,4 +1,7 @@
 /* Opening uses the existing account layout, controls and palette on every width. */
+.opening-shell .identity-row { flex-wrap:wrap; }
+.opening-shell .identity-row > .row-text { flex:1 1 16rem; }
+.opening-shell .identity-row > .button { margin-inline-start:0; }
 .opening-fields { display:grid; gap:var(--space-m); border:0; padding:0; margin:0; min-width:0; }
 .opening-fields details { padding-block:var(--space-s); }
 .opening-fields details[open] summary { margin-block-end:var(--space-m); }

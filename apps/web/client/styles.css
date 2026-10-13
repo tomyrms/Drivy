@@ -367,17 +367,17 @@ select, textarea { font: inherit; color: inherit; }
 .console-bar .brand-symbol { inline-size: 2rem; block-size: 2rem; }
 .brand-context { color: var(--muted); font-weight: 600; padding-left: var(--space-xs); border-left: 1px solid var(--border); }
 .school-name { font: var(--type-headline); min-width: 0; }
-.school-switch select, .console-shell select, .console-shell input:not([type="checkbox"]), .console-shell textarea {
+.school-switch select, :is(.console-shell, .opening-shell) select, :is(.console-shell, .opening-shell) input:not([type="checkbox"]), :is(.console-shell, .opening-shell) textarea {
   min-height: 2.75rem; padding: .5625rem var(--space-s); border: 1px solid var(--control-border); border-radius: var(--radius-field);
   background: var(--surface-inset); color: var(--text); font: var(--type-subheadline); inline-size: 100%;
   box-shadow: 0 1px 2px rgb(23 37 60 / .035) inset;
   transition: border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
 }
 .school-switch select { font: var(--type-subheadline); font-weight: 600; min-width: 14rem; background: var(--surface); }
-.console-shell textarea { resize: vertical; line-height: 1.5; min-height: 5rem; }
-.console-shell input::placeholder, .console-shell textarea::placeholder { color: var(--muted); opacity: 1; }
-.console-shell input:disabled, .console-shell select:disabled, .console-shell textarea:disabled { color: var(--disabled-text); background: var(--disabled-surface); border-color: var(--border); }
-.console-shell input:focus-visible, .console-shell select:focus-visible, .console-shell textarea:focus-visible { outline-offset: 2px; background: var(--surface); border-color: var(--accent); }
+:is(.console-shell, .opening-shell) textarea { resize: vertical; line-height: 1.5; min-height: 5rem; }
+:is(.console-shell, .opening-shell) input::placeholder, :is(.console-shell, .opening-shell) textarea::placeholder { color: var(--muted); opacity: 1; }
+:is(.console-shell, .opening-shell) input:disabled, :is(.console-shell, .opening-shell) select:disabled, :is(.console-shell, .opening-shell) textarea:disabled { color: var(--disabled-text); background: var(--disabled-surface); border-color: var(--border); }
+:is(.console-shell, .opening-shell) input:focus-visible, :is(.console-shell, .opening-shell) select:focus-visible, :is(.console-shell, .opening-shell) textarea:focus-visible { outline-offset: 2px; background: var(--surface); border-color: var(--accent); }
 .select-control { position: relative; min-width: 0; }
 .select-control select { appearance: none; padding-inline-end: 2.5rem; }
 .select-control > .symbol { pointer-events: none; position: absolute; inset-inline-end: .75rem; inset-block-start: 50%; transform: translateY(-50%); inline-size: 1.125rem; block-size: 1.125rem; color: var(--muted); }
@@ -614,7 +614,7 @@ select, textarea { font: inherit; color: inherit; }
   .confirm-dialog::backdrop { background: rgb(0 0 0 / .6); }
 }
 @media (prefers-contrast: more) {
-  .console-shell input, .console-shell select, .console-shell textarea, .check-field, .detail-panel, .fieldset { border-width: 2px; border-color: var(--control-border); }
+  :is(.console-shell, .opening-shell) input, :is(.console-shell, .opening-shell) select, :is(.console-shell, .opening-shell) textarea, .check-field, .detail-panel, .fieldset { border-width: 2px; border-color: var(--control-border); }
   .console-nav a[aria-current="page"] { outline: 2px solid var(--accent); outline-offset: -2px; }
   .data-table tr.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
 }
@@ -648,8 +648,8 @@ select, textarea { font: inherit; color: inherit; }
 .capability-list li { flex-wrap: nowrap; padding-block: var(--space-xs); }
 .capability-list .row-title { font: var(--type-subheadline); }
 .capability-list .row-meta { font: var(--type-footnote); }
-.console-shell input, .console-shell select { max-width: 100%; }
-.console-shell input[type="date"], .console-shell input[type="time"], .console-shell input[type="datetime-local"] { min-inline-size: 0; }
+:is(.console-shell, .opening-shell) input, :is(.console-shell, .opening-shell) select { max-width: 100%; }
+:is(.console-shell, .opening-shell) input[type="date"], :is(.console-shell, .opening-shell) input[type="time"], :is(.console-shell, .opening-shell) input[type="datetime-local"] { min-inline-size: 0; }
 .console-shell .button { flex-shrink: 0; }
 .console-shell .row-title { font-size: .9375rem; }
 .console-shell .row-meta { font-size: .875rem; }
@@ -672,7 +672,7 @@ select, textarea { font: inherit; color: inherit; }
   .workspace-links { grid-template-columns: minmax(0, 1fr); }
   .workspace-link { min-height: 3.75rem; padding-inline: 0; }
   .workspace-link + .workspace-link { border-inline-start: 0; border-block-start: 1px solid var(--border); }
-  .console-shell input:not([type="checkbox"]), .console-shell select, .console-shell textarea { font-size: 1rem; }
+  :is(.console-shell, .opening-shell) input:not([type="checkbox"]), :is(.console-shell, .opening-shell) select, :is(.console-shell, .opening-shell) textarea { font-size: 1rem; }
   .console-main { padding-top: var(--space-l); }
   .section-head-text { flex-basis: 100%; }
   .section-head-actions .week-nav { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem; inline-size: 100%; }
@@ -680,7 +680,7 @@ select, textarea { font: inherit; color: inherit; }
   .section-head-actions .week-nav .button.quiet { grid-column: 1 / -1; inline-size: auto; justify-self: start; }
 }
 @media (pointer: coarse) {
-  .console-shell input:not([type="checkbox"]), .console-shell select, .console-shell textarea { font-size: 1rem; }
+  :is(.console-shell, .opening-shell) input:not([type="checkbox"]), :is(.console-shell, .opening-shell) select, :is(.console-shell, .opening-shell) textarea { font-size: 1rem; }
 }
 
 /* Five workspaces, their local destinations, and task context. */
@@ -945,7 +945,7 @@ select, textarea { font: inherit; color: inherit; }
   .catalog-links a:hover .row-title { text-decoration: underline; text-underline-offset: .2em; }
   .agenda-lesson:hover { background: var(--surface-inset); }
   .data-table tbody tr:not(.selected):hover { background: var(--surface-inset); }
-  .console-shell input:not(:disabled):not(:focus-visible):hover, .console-shell select:not(:disabled):not(:focus-visible):hover, .console-shell textarea:not(:disabled):not(:focus-visible):hover { border-color: var(--text); }
+  :is(.console-shell, .opening-shell) input:not(:disabled):not(:focus-visible):hover, :is(.console-shell, .opening-shell) select:not(:disabled):not(:focus-visible):hover, :is(.console-shell, .opening-shell) textarea:not(:disabled):not(:focus-visible):hover { border-color: var(--text); }
   .formation-offering-heading > .text-link:hover, .formation-prices .text-link:hover { text-decoration: underline; }
   .button.secondary:hover:not(:disabled) { border-color: var(--control-border); background: var(--surface-inset); }
 }

@@ -83,7 +83,10 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
     if(privacy.templateId!==null&&(privacy.templateId!==setupTemplates.privacy.id||privacy.templateVersion!==templateVersion))add('privacy.templateVersion','Relisez la version actuelle du modèle ou retirez sa référence pour utiliser votre texte.','SETUP_TEMPLATE_CHANGED');
   }
   if(content.selectedSections.includes('PROFILE')) {
-    try {validateRules(z.array(fieldRule).parse(content.profile.fields));}catch {add('profile.fields','Vérifiez les informations, leur utilité et le moment où elles sont demandées.','PROFILE_POLICY_RULE_INVALID');}
+    const rules=z.array(fieldRule).safeParse(content.profile.fields);
+    if(!rules.success)for(const issue of rules.error.issues)add(`profile.fields${issue.path.length?`.${issue.path.join('.')}`:''}`,
+      issue.path.at(-1)==='explanation'?'Expliquez à l’élève pourquoi cette information est demandée.':'Vérifiez cette information et les choix associés.','PROFILE_POLICY_RULE_INVALID');
+    else try {validateRules(rules.data);}catch {add('profile.fields','Vérifiez les informations, leur utilité et le moment où elles sont demandées.','PROFILE_POLICY_RULE_INVALID');}
     if(content.profile.effectiveFrom!==null)add('profile.effectiveFrom','Les informations demandées prennent effet dès la confirmation. Retirez la date enregistrée pour continuer.','PROFILE_EFFECTIVE_NOW_REQUIRED');
   }
   if(content.selectedSections.includes('CATALOGUE')) {

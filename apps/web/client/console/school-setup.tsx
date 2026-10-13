@@ -119,18 +119,28 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     setNavigationGuard?.(proceed => { if (dirtyRef.current) setLeave(() => proceed); else proceed(); });
     return () => setNavigationGuard?.(null);
   }, [setNavigationGuard]);
-  useEffect(() => { heading.current?.focus({ preventScroll: true }); setStepsOpen(false); }, [step]);
+  useEffect(() => {
+    setStepsOpen(false);
+    const frame = window.requestAnimationFrame(() => {
+      heading.current?.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [step]);
   useEffect(() => {
     if (!focusField || issueStep(focusField) !== step) return;
-    const root = heading.current?.parentElement;
-    const path = focusField.replace(/^content\./, '');
-    const target = [...(root?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[name],textarea[name]') ?? [])]
-      .find(input => input.name === path || input.name.startsWith(`${path}.`));
-    if (target) {
-      for (let parent = target.parentElement; parent && parent !== root; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
-      target.focus(); target.scrollIntoView({ block: 'center' });
-    }
-    setFocusField(null);
+    const frame = window.requestAnimationFrame(() => {
+      const root = heading.current?.parentElement;
+      const path = focusField.replace(/^content\./, '');
+      const target = [...(root?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[name],textarea[name]') ?? [])]
+        .find(input => input.name === path || input.name.startsWith(`${path}.`));
+      if (target) {
+        for (let parent = target.parentElement; parent && parent !== root; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+        target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }
+      setFocusField(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [step, focusField]);
   const update = (next: SetupContent) => { setContent(content && loaded.data ? refreshSetupExamples(content, next, loaded.data.templates) : next); setDirty(true); setPreview(null); setAcknowledged(false); runner.clearOutcome(); };
 
@@ -279,7 +289,7 @@ function ProfileStep({ content, onChange }: StepProps) {
         <div className="setup-profile-control"><strong>{fieldLabels[base.field]}</strong>{fixed ? <span>À l’inscription</span> : <SelectField label={`Demander ${fieldLabels[base.field]!.toLocaleLowerCase('fr')}`} value={!current ? 'NONE' : current.requirement === 'OPTIONAL' ? 'OPTIONAL' : current.stage} options={[
           { value: 'NONE', label: 'Non demandé' }, { value: 'OPTIONAL', label: 'Facultatif' }, { value: 'BEFORE_LESSON', label: 'Avant une leçon' }, { value: 'BEFORE_COURSE', label: 'Avant un cours' },
         ]} onChange={value => { const rest = content.profile.fields.filter(item => item.field !== base.field); update(value === 'NONE' ? rest : [...rest, { ...(current ?? base), requirement: value === 'OPTIONAL' ? 'OPTIONAL' : 'REQUIRED', stage: value as 'OPTIONAL' | 'BEFORE_LESSON' | 'BEFORE_COURSE' }]); }} />}</div>
-        {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${base.field}.explanation`} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
+        {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${content.profile.fields.indexOf(current)}.explanation`} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
       </div>;
     })}</div>
     <details className="disclosure"><summary>Aperçu pour l’élève</summary><ProfileFieldsPreview fields={content.profile.fields} /></details>

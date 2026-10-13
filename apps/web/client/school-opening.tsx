@@ -4,14 +4,15 @@ import { BrandSymbol } from './BrandSymbol';
 import { request, sessionSchema, loginSchema, okSchema, type Session, RequestFailure } from './protocol';
 import { CheckField, Loading, Notice, TextField, formatDateTime } from './ui';
 import { openingState, openingPreview, openingReceipt, openingLinks, createdOpeningLink, openingLinkSchema,
-  openingFailure, schoolOpeningDestination, type OpeningLink, type OpeningFields, type OpeningReceipt } from './school-opening-model';
+  openingFailure, openingFieldErrors, schoolOpeningDestination, type OpeningFieldErrors, type OpeningLink, type OpeningFields, type OpeningReceipt } from './school-opening-model';
 
 export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operator?:boolean}) {
   const [session,setSession]=useState<Session|null>(null),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null);
   const [ready,setReady]=useState(false),[uncertain,setUncertain]=useState(false),[result,setResult]=useState<OpeningReceipt|null>(null);
   const [fields,setFields]=useState<OpeningFields>({schoolName:'',displayName:'',contactEmail:'',contactPhone:null,timeZone:'Europe/Zurich',instructs:false});
+  const [fieldErrors,setFieldErrors]=useState<OpeningFieldErrors>({}),[invalidField,setInvalidField]=useState<keyof OpeningFields|null>(null);
   const [items,setItems]=useState<z.infer<typeof openingLinkSchema>[]>([]),[generated,setGenerated]=useState<string|null>(null),[copied,setCopied]=useState(false);
-  const operatorOperation=useRef<string|null>(null),started=useRef(false),heading=useRef<HTMLHeadingElement>(null);
+  const operatorOperation=useRef<string|null>(null),started=useRef(false),heading=useRef<HTMLHeadingElement>(null),form=useRef<HTMLFormElement>(null);
   const returnTo=operator?'/app/operateur':'/app/ouvrir';
   async function list() {
     const response=await request('operator/school-opening-links',openingLinks);setItems(response.data.items);
@@ -35,13 +36,21 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
     }catch(reason){setError(openingFailure(reason));}finally{setLoaded(true);}
   }
   useEffect(()=>{if(started.current)return;started.current=true;document.title=operator?'Liens d’ouverture · Drivy':'Préparer votre école · Drivy';void boot();},[]);
+  useEffect(()=>{
+    if(!invalidField)return;
+    const input=form.current?.elements.namedItem(invalidField);
+    if(input instanceof HTMLInputElement){for(let parent=input.parentElement;parent&&parent!==form.current;parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;input.focus();}
+    setInvalidField(null);
+  },[invalidField]);
   async function login(changeAccount=false) {
     if(!session)return;setBusy(true);setError(null);
     try{const next=await request('login',loginSchema,{csrf:session.csrfToken,body:{returnTo,...(changeAccount?{reauthenticate:true}:{})}});window.location.assign(next.url);}
     catch(reason){setError(openingFailure(reason));setBusy(false);}
   }
   async function createSchool() {
-    if(!session)return;setBusy(true);setError(null);
+    if(!session)return;
+    if(!uncertain){const errors=openingFieldErrors(fields);setFieldErrors(errors);const first=(['displayName','schoolName','contactEmail','contactPhone','timeZone'] as const).find(field=>errors[field]);if(first){setInvalidField(first);setError(null);return;}}
+    setBusy(true);setError(null);
     try {const response=await request('opening/create',z.object({data:openingReceipt}),{csrf:session.csrfToken,body:fields});setResult(response.data);setUncertain(false);heading.current?.focus();}
     catch(reason){setError(openingFailure(reason));try{const state=await request('opening',openingState);setUncertain(state.uncertain);if(state.draft)setFields(state.draft);if(state.result){setResult(state.result);setError(null);}}catch{/* Keep the last known intention. */}}
     finally{setBusy(false);}
@@ -67,9 +76,9 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
   async function copy() {
     if(!generated)return;try{await navigator.clipboard.writeText(generated);setCopied(true);}catch{setError('La copie a échoué. Sélectionnez et copiez le lien affiché.');}
   }
-  const update=<K extends keyof OpeningFields>(key:K,value:OpeningFields[K])=>setFields(previous=>({...previous,[key]:value}));
+  const update=<K extends keyof OpeningFields>(key:K,value:OpeningFields[K])=>{setFields(previous=>({...previous,[key]:value}));setFieldErrors(previous=>({...previous,[key]:undefined}));};
   const statuses={AVAILABLE:'Disponible',USED:'Utilisé',EXPIRED:'Expiré',REVOKED:'Révoqué'};
-  return <div className="app-shell account-shell">
+  return <div className="app-shell account-shell opening-shell">
     <a className="skip-link" href="#main">Aller au contenu</a>
     <header className="site-header"><a className="brand" href="/app/" aria-label="Drivy, votre espace"><BrandSymbol/><span>Drivy</span></a>
       {session?.authenticated && <a className="button quiet" href="/app/">Mes écoles</a>}</header>
@@ -93,14 +102,14 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
               {items.length===0?<p>Aucun lien créé.</p>:<ul className="opening-links">{items.map(item=><li key={item.id}><div className="row-text"><strong>{statuses[item.status]}</strong><span className="row-meta">Créé le {formatDateTime(item.createdAt)} · Expire le {formatDateTime(item.expiresAt)}</span></div>
                 {item.status==='AVAILABLE' && <button type="button" className="button quiet" disabled={busy} onClick={()=>void revoke(item.id)} aria-label={`Révoquer le lien créé le ${formatDateTime(item.createdAt)}`}>Révoquer</button>}</li>)}</ul>}
             </section>
-          </> : !operator && ready && <form className="panel form-grid" onSubmit={event=>{event.preventDefault();void createSchool();}}>
-            <h2>Votre école</h2><fieldset disabled={busy || uncertain} className="opening-fields"><legend className="sr-only">Coordonnées de l’école et du responsable</legend>
-              <TextField label="Votre nom" value={fields.displayName} onChange={value=>update('displayName',value)} maxLength={200} autoComplete="name" required/>
-              <TextField label="Nom de l’auto-école" value={fields.schoolName} onChange={value=>update('schoolName',value)} maxLength={150} autoComplete="organization" required/>
-              <TextField label="E-mail professionnel" value={fields.contactEmail} onChange={value=>update('contactEmail',value)} maxLength={254} type="email" autoComplete="email" required/>
-              <TextField label="Téléphone (facultatif)" value={fields.contactPhone??''} onChange={value=>update('contactPhone',value||null)} maxLength={32} type="tel" autoComplete="tel"/>
+          </> : !operator && ready && <form ref={form} noValidate className="panel form-grid" onSubmit={event=>{event.preventDefault();void createSchool();}}>
+            <h2>Votre école</h2><fieldset disabled={busy || uncertain} className="opening-fields"><legend className="visually-hidden">Coordonnées de l’école et du responsable</legend>
+              <TextField name="displayName" label="Votre nom" value={fields.displayName} onChange={value=>update('displayName',value)} error={fieldErrors.displayName} maxLength={200} autoComplete="name" required/>
+              <TextField name="schoolName" label="Nom de l’auto-école" value={fields.schoolName} onChange={value=>update('schoolName',value)} error={fieldErrors.schoolName} maxLength={150} autoComplete="organization" required/>
+              <TextField name="contactEmail" label="E-mail professionnel" value={fields.contactEmail} onChange={value=>update('contactEmail',value)} error={fieldErrors.contactEmail} maxLength={254} type="email" autoComplete="email" required/>
+              <TextField name="contactPhone" label="Téléphone (facultatif)" value={fields.contactPhone??''} onChange={value=>update('contactPhone',value||null)} error={fieldErrors.contactPhone} maxLength={32} type="tel" autoComplete="tel"/>
               <CheckField label="Je donne aussi des leçons" checked={fields.instructs} onChange={value=>update('instructs',value)}/>
-              <details><summary>Fuseau horaire</summary><TextField label="Fuseau horaire" value={fields.timeZone} onChange={value=>update('timeZone',value)} maxLength={100} required/></details>
+              <details><summary>Fuseau horaire</summary><TextField name="timeZone" label="Fuseau horaire" value={fields.timeZone} onChange={value=>update('timeZone',value)} error={fieldErrors.timeZone} maxLength={100} required/></details>
             </fieldset>
             {uncertain && <Notice tone="warning" title="Création à vérifier" actions={<button type="button" className="button secondary" disabled={busy} onClick={()=>void verify()}>Vérifier le résultat</button>}/>}
             <button className="button primary" type="submit" disabled={busy}>{busy?'Création…':uncertain?'Renvoyer la même demande':'Créer mon école'}</button>

@@ -104,15 +104,16 @@ final class DrivyAPIClient: SchoolAPI {
         try await learners(schoolID: schoolID, query: query, cursor: cursor, instructorMembershipID: nil)
     }
 
-    /// Le serveur ne rend à un élève que son propre dossier ; `ALL` y ajoute un dossier archivé.
+    /// La personne connectée, même administratrice, retrouve son seul dossier ; `ALL` inclut un dossier archivé.
     func ownLearners(schoolID: UUID) async throws -> SchoolPage<SchoolLearner> {
-        try await learners(schoolID: schoolID, query: "", cursor: nil, instructorMembershipID: nil, status: "ALL")
+        try await learners(schoolID: schoolID, query: "", cursor: nil, instructorMembershipID: nil, status: "ALL", own: true)
     }
 
     func learners(schoolID: UUID, query: String, cursor: String?, instructorMembershipID: UUID?,
-                  status: String? = nil) async throws -> SchoolPage<SchoolLearner> {
+                  status: String? = nil, own: Bool = false) async throws -> SchoolPage<SchoolLearner> {
         var items = [URLQueryItem(name: "limit", value: "50")]
         if let status { items.append(URLQueryItem(name: "status", value: status)) }
+        if own { items.append(URLQueryItem(name: "own", value: "true")) }
         if let instructorMembershipID { items.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString)) }
         if !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
         if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }

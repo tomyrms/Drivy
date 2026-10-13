@@ -48,6 +48,25 @@ import XCTest
         capture(app, name: "school-entry-activated-instructor")
     }
 
+    func testAdminLearnerFindsOwnDossierBeyondTheFirstDirectoryPage() {
+        let app = launch("school-entry-learner-admin")
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["Aucune formation"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertFalse(app.staticTexts["Dossier pas encore ouvert"].exists)
+        XCTAssertTrue(app.buttons.matching(identifier: "Leçons").firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(identifier: "Progression").firstMatch.exists)
+        XCTAssertFalse(app.buttons["school-open-portal"].exists)
+        let profile = app.buttons.matching(identifier: "Profil").firstMatch
+        XCTAssertTrue(profile.isHittable)
+        profile.tap()
+        XCTAssertTrue(app.buttons["profile-open-my-information"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["profile-no-permit"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["profile-no-permit"].label, "Aucune formation pour l’instant.")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "account-heading").firstMatch.label.contains("Responsable exemple"))
+        XCTAssertFalse(app.staticTexts["Autre élève 1"].exists)
+        capture(app, name: "school-entry-admin-learner-personal-dossier")
+    }
+
     private func assertNoFieldActions(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
         for title in ["Aujourd’hui", "Agenda", "Élèves"] {
             XCTAssertFalse(app.buttons.matching(identifier: title).firstMatch.exists, file: file, line: line)

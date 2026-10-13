@@ -112,6 +112,50 @@ describe('G1A · droits réels et isolation', () => {
     expect((await get(`/v1/schools/${id.schoolB}`,'demo-admin')).statusCode).toBe(403);
     expect((await get(`${school}/learners/${id.foreignLearner}`,'demo-admin')).statusCode).toBe(404);
   });
+  it('ADMIN et LEARNER retrouve son dossier au-delà de cinquante élèves, même archivé, sans changer l’annuaire', async () => {
+    await pool.query("UPDATE drivy.membership SET roles=ARRAY['ADMIN','LEARNER'] WHERE id=$1",[id.adminMember]);
+    await pool.query(`WITH persons AS (
+      INSERT INTO drivy.person(id,display_name) SELECT gen_random_uuid(),'Dossier synthétique '||n FROM generate_series(1,51) n
+      RETURNING id,display_name)
+      INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
+      SELECT gen_random_uuid(),$1,id,display_name,'2026-01-01T00:00:00Z' FROM persons`,[id.schoolA]);
+    const ownId=randomUUID();
+    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
+      VALUES ($1,$2,$3,'Responsable élève','2026-02-01T00:00:00Z')`,[ownId,id.schoolA,id.admin]);
+    const first=await get(`${school}/learners?limit=50`,'demo-admin');
+    expect(first.statusCode).toBe(200);
+    expect(first.json().data.items).toHaveLength(50);
+    expect(first.json().data.items.some((row:{id:string})=>row.id===ownId)).toBe(false);
+    expect(first.json().data.nextCursor).toBeTypeOf('string');
+    const explicitDirectory=await get(`${school}/learners?limit=50&own=false`,'demo-admin');
+    expect(explicitDirectory.json().data.items).toEqual(first.json().data.items);
+    for(const archived of [false,true]) {
+      if(archived) await pool.query('UPDATE drivy.learner_profile SET archived_at=now() WHERE id=$1',[ownId]);
+      const own=await get(`${school}/learners?limit=50&status=ALL&own=true`,'demo-admin');
+      expect(own.statusCode,own.body).toBe(200);conforms('LearnerPageEnvelope',own.json());
+      expect(own.json().data.items.map((row:{id:string})=>row.id)).toEqual([ownId]);
+      expect(own.json().data.items[0].personId).toBe(id.admin);
+      expect(own.json().data.nextCursor).toBeNull();
+      expect(own.json().data.items[0].archivedAt!==null).toBe(archived);
+    }
+    expect((await get(`${school}/learners?own=true`,'demo-admin')).json().data.items).toEqual([]);
+  });
+  it('le filtre personnel ne remplace ni la personne authentifiée, ni l’école, ni les droits courants', async () => {
+    expect((await get(`${school}/learners?status=ALL&own=true`,'demo-alice')).json().data.items.map((row:{id:string})=>row.id)).toEqual([id.aliceLearner]);
+    const ownA=randomUUID(),ownB=randomUUID();
+    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name) VALUES
+      ($1,$2,$3,'Dossier personnel A'),($4,$5,$3,'Dossier personnel B')`,[ownA,id.schoolA,id.instructor,ownB,id.schoolB]);
+    // Être affecté à Alice ne la rend pas personnelle et le filtre ne donne pas accès à son propre dossier sans rôle utile.
+    expect((await get(`${school}/learners?status=ALL&own=true`)).json().data.items).toEqual([]);
+    await pool.query("UPDATE drivy.membership SET roles=ARRAY['INSTRUCTOR','LEARNER'],access_epoch=access_epoch+1 WHERE id=$1",[id.instructorMember]);
+    expect((await get(`${school}/learners?status=ALL&own=true`)).json().data.items.map((row:{id:string})=>row.id)).toEqual([ownA]);
+    expect((await get(`/v1/schools/${id.schoolB}/learners?status=ALL&own=true`)).json().data.items.map((row:{id:string})=>row.id)).toEqual([ownB]);
+    expect((await get(`/v1/schools/${id.schoolB}/learners?status=ALL&own=true`,'demo-alice')).statusCode).toBe(403);
+    expect((await get(`${school}/learners?own=true&personId=${id.bob}`,'demo-alice')).statusCode).toBe(400);
+    expect((await get(`${school}/learners?own=1`,'demo-alice')).statusCode).toBe(400);
+    await pool.query("UPDATE drivy.membership SET status='REVOKED',access_epoch=access_epoch+1 WHERE id=$1",[id.aliceMember]);
+    expect((await get(`${school}/learners?status=ALL&own=true`,'demo-alice')).statusCode).toBe(403);
+  });
   it('LEARNER lit seulement son dossier et ses formations', async () => {
     expect((await get(`${school}/learners`,'demo-alice')).json().data.items.map((row:{id:string})=>row.id)).toEqual([id.aliceLearner]);
     expect((await get(`${school}/trainings/${id.aliceTraining}`,'demo-alice')).statusCode).toBe(200);
@@ -182,6 +226,7 @@ describe('G1A · pagination et contraintes persistantes', () => {
     const second = await get(`${school}/learners?limit=1&cursor=${cursor}`,'demo-admin');
     expect(second.json().data.items[0].id).toBe(id.bobLearner); expect(second.json().data.nextCursor).toBeNull();
     expect((await get(`${school}/learners?limit=1&q=Alice&cursor=${cursor}`,'demo-admin')).statusCode).toBe(400);
+    expect((await get(`${school}/learners?limit=1&own=true&cursor=${cursor}`,'demo-admin')).statusCode).toBe(400);
     expect((await get(`${school}/learners?limit=1&cursor=${cursor}`,'demo-instructor')).statusCode).toBe(400);
     expect((await get(`${school}/learners?limit=1&cursor=invalid`,'demo-admin')).statusCode).toBe(400);
   });

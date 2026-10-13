@@ -14,6 +14,23 @@ export const openingReceipt=z.object({schoolId:z.uuid(),schoolName:z.string(),st
   roles:z.array(z.string()),grants:z.array(z.string()),accessEpoch:z.number().int().positive(),operationId:z.uuid(),committedAt:z.string()});
 export const openingFields=z.object({schoolName:z.string(),displayName:z.string(),contactEmail:z.string(),contactPhone:z.string().nullable(),timeZone:z.string(),instructs:z.boolean()});
 export type OpeningFields=z.infer<typeof openingFields>;
+export type OpeningFieldErrors=Partial<Record<keyof OpeningFields,string>>;
+const openingInput=openingFields.extend({
+  schoolName:z.string().trim().min(1).max(150),displayName:z.string().trim().min(1).max(200),
+  contactEmail:z.email().max(254),contactPhone:z.string().trim().min(1).max(32).nullable(),
+  timeZone:z.string().min(1).max(100).refine(value=>{try{new Intl.DateTimeFormat('fr',{timeZone:value});return !/^[+-]/.test(value);}catch{return false;}}),
+});
+/** Field feedback before sending; the API independently validates every value. */
+export function openingFieldErrors(value:OpeningFields):OpeningFieldErrors {
+  const parsed=openingInput.safeParse(value);
+  if(parsed.success)return {};
+  const messages:Partial<Record<keyof OpeningFields,string>>={
+    displayName:'Indiquez votre nom (200 caractères maximum).',schoolName:'Indiquez le nom de l’école (150 caractères maximum).',
+    contactEmail:'Indiquez une adresse e-mail valide.',contactPhone:'Indiquez un numéro ou laissez ce champ vide (32 caractères maximum).',
+    timeZone:'Indiquez un fuseau horaire reconnu, par exemple Europe/Zurich.',
+  };
+  return Object.fromEntries(parsed.error.issues.map(issue=>{const field=issue.path[0] as keyof OpeningFields;return [field,messages[field]];}));
+}
 export type OpeningReceipt=z.infer<typeof openingReceipt>;
 export const openingState=z.object({pending:z.boolean(),uncertain:z.boolean(),draft:openingFields.optional(),result:openingReceipt.optional()});
 export const openingPreview=z.object({data:z.discriminatedUnion('status',[
@@ -34,6 +51,7 @@ export function openingFailure(error:unknown):string {
     OPENING_IN_PROGRESS:'Une demande est en cours. Vérifiez son résultat avant de modifier les informations.',
     SESSION_EXPIRED:'Votre session a expiré. Reconnectez-vous, puis rouvrez le lien si nécessaire.',
     IDEMPOTENCY_MISMATCH:'Cette demande ne correspond plus aux informations envoyées. Retrouvez votre école depuis votre compte.',
+    INVALID_REQUEST:'Certaines informations ne sont pas valides. Vérifiez votre nom, les coordonnées de l’école et le fuseau horaire.',
   };
   return messages[code] ?? 'La réponse n’a pas pu être confirmée. Réessayez avec la même demande.';
 }

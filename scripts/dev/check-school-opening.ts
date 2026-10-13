@@ -145,7 +145,20 @@ async function main() {
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.person')).rows[0].n===0,'Le nouveau compte OIDC n’est pas créé dans la base métier avant confirmation');
     stage='création volontaire et perte de réponse navigateur';await page.getByLabel('Votre nom',{exact:true}).fill('Responsable de recette synthétique');
     await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');await page.getByLabel('E-mail professionnel',{exact:true}).fill('school@example.invalid');
+    assert(await page.getByLabel('Nom de l’auto-école',{exact:true}).evaluate(element=>element.getBoundingClientRect().height>=44),
+      'Les champs d’ouverture réutilisent les contrôles du portail avec une cible d’au moins 44 pixels');
+    stage='erreur de fuseau ciblée avant création';
+    const openingZone=page.getByLabel('Fuseau horaire',{exact:true});
+    const zoneDetails=page.locator('details').filter({has:openingZone});
+    await zoneDetails.locator('summary').click();await openingZone.fill('Zurich');await zoneDetails.locator('summary').click();
+    await page.getByRole('button',{name:'Créer mon école',exact:true}).click();
+    await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='timeZone');
+    assert(await openingZone.getAttribute('aria-invalid')==='true' && await zoneDetails.getAttribute('open')!==null,
+      'Un fuseau invalide rouvre le détail et cible le champ avec une explication');
+    assert((await administration.query('SELECT count(*)::int AS n FROM drivy.school')).rows[0].n===0,'Une saisie invalide ne consomme pas le lien et ne crée aucune école');
+    await openingZone.fill('Europe/Zurich');
     await page.getByLabel('Je donne aussi des leçons',{exact:true}).check();
+    stage='création volontaire et perte de réponse navigateur';
     await page.route('**/app/bff/opening/create',async route=>{await route.fetch();await route.abort('failed');},{times:1});
     await page.getByRole('button',{name:'Créer mon école',exact:true}).click();
     await page.getByRole('heading',{name:'Votre école est créée',exact:true}).waitFor();
@@ -203,7 +216,23 @@ async function main() {
     assert(draftWrites===1&&durableSave.n===1,'La reprise AP72 et la navigation du guide ne renvoient aucune sauvegarde ni commande en double');
     await page.unroute(draftEndpoint);
     await page.screenshot({path:resolve(artifactDirectory,'01-profil-desktop-synthetic.png'),fullPage:true});
-    stage='préparation des informations élèves et du permis B';await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
+    stage='erreur précise dans les informations demandées';
+    const phoneExplanation=page.getByLabel('Explication · Téléphone',{exact:true});
+    const originalPhoneExplanation=await phoneExplanation.inputValue();
+    await page.locator('details').filter({has:phoneExplanation}).locator('summary').click();await phoneExplanation.fill('');
+    await page.getByRole('button',{name:/Vérifier et démarrer/}).click();
+    await page.getByRole('button',{name:'Expliquez à l’élève pourquoi cette information est demandée.',exact:true}).click();
+    await page.waitForFunction(()=>{const active=document.activeElement;return active instanceof HTMLTextAreaElement&&active.name.startsWith('profile.fields.')&&active.value==='';});
+    assert(await phoneExplanation.evaluate(element=>element===document.activeElement)&&await phoneExplanation.isVisible(),
+      'L’erreur d’explication retourne au téléphone concerné et ouvre son détail, sans viser le prénom valide');
+    await phoneExplanation.fill(originalPhoneExplanation);
+    stage='transition du guide sur mobile depuis le bas de page';await page.setViewportSize({width:390,height:844});
+    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
+    await page.getByRole('heading',{name:'Vos formations',exact:true}).waitFor();
+    await page.waitForFunction(()=>{const title=document.querySelector('.setup-title');const bounds=title?.getBoundingClientRect();return title===document.activeElement&&bounds&&bounds.top>=0&&bounds.bottom<window.innerHeight;});
+    assert(true,'Continuer depuis le bas d’une étape mobile montre et focalise le titre de l’étape suivante');
+    await page.setViewportSize({width:1440,height:1100});
+    stage='préparation des informations élèves et du permis B';
     await page.getByRole('heading',{name:'Vos formations',exact:true}).waitFor();await page.getByRole('button',{name:'Permis B',exact:true}).click();
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vos tarifs',exact:true}).waitFor();
     await page.getByLabel('Prix (CHF)',{exact:true}).fill('95');await page.getByLabel('Durée (minutes)',{exact:true}).fill('50');

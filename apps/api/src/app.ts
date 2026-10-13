@@ -36,7 +36,8 @@ const schoolParams = z.object({ schoolId: z.uuid() });
 const learnerQuery = z.object({ ...pagination, q: z.string().max(200).optional(),
   trainingStatus: z.enum(['ACTIVE','PAUSED','COMPLETED','CANCELLED']).optional(),
   status: z.enum(['ACTIVE','ARCHIVED','ALL']).default('ACTIVE'), instructorMembershipId: z.uuid().optional(),
-  categoryCode: z.string().max(30).optional(), requiresAction: z.enum(['true','false']).transform(value => value === 'true').optional()
+  categoryCode: z.string().max(30).optional(), requiresAction: z.enum(['true','false']).transform(value => value === 'true').optional(),
+  own: z.enum(['true','false']).transform(value => value === 'true').optional()
 }).strict();
 const trainingQuery = z.object({ ...pagination, learnerId: z.uuid().optional() }).strict();
 const emptyQuery = z.object({}).strict();
