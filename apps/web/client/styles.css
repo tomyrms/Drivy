@@ -975,7 +975,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   .record-table, .record-table tbody { display: block; }
   .record-table thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
   .record-table tbody tr { display: grid; grid-template-columns: minmax(0,1fr); padding-block: var(--space-s); border-block-end: 1px solid var(--border); }
-  .record-table tbody :is(th,td) { display: block; padding: .1875rem .5rem; border: 0; inline-size: auto; min-inline-size: 0; }
+  .record-table tbody :is(th,td) { display: block; padding: .1875rem .5rem; border: 0; inline-size: auto; min-inline-size: 0; height: auto; }
   .record-table td[data-label] { display: grid; grid-template-columns: 5rem minmax(0,1fr); column-gap: var(--space-s); }
   .record-table td[data-label]::before { content: attr(data-label); font-weight: 400; color: var(--muted); }
   .record-table .record-contact .record-secondary { grid-column: 2; }
@@ -1051,6 +1051,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   .directory-toolbar .field:first-child { grid-column: 1 / -1; max-width: none; }
 }
 @media (max-width: 40rem) {
+  .catalog-studio .record-toolbar > .check-field { grid-column: 1 / -1; }
   .settings-result { flex-direction: column; gap: .125rem; }
   .result-path { text-align: start; }
   .account-trigger > span:not(.symbol) { max-inline-size: 7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
