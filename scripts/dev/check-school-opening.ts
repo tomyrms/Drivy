@@ -274,7 +274,10 @@ async function main() {
       (SELECT count(*)::int FROM drivy.operation WHERE school_id=$1 AND operation_id=$2 AND command_type='APPLY_SCHOOL_SETUP_DRAFT') AS operations`,[school.id,lostApplyOperation])).rows[0];
     assert(applyWrites===1&&catalogueAfter.products===catalogueBefore.products+1&&catalogueAfter.added===1&&catalogueAfter.offerings===catalogueBefore.offerings&&catalogueAfter.operations===1,
       'La reprise crée exactement un tarif supplémentaire, sans nouvelle formation ni seconde commande');
-    await page.unroute(completeEndpoint);await page.screenshot({path:resolve(artifactDirectory,'07-catalogue-reprise-synthetic.png'),fullPage:true});
+    await page.unroute(completeEndpoint);
+    await page.locator('.formation-prices').getByText(/105[.,]00\s*CHF/).waitFor();
+    assert(await page.locator('.formation-prices > li').count()===catalogueBefore.products+1,'Les formations affichent le nouveau tarif après la confirmation du reçu');
+    await page.screenshot({path:resolve(artifactDirectory,'07-catalogue-reprise-synthetic.png'),fullPage:true});
     const browserStorage=await page.evaluate(()=>({localKeys:localStorage.length,sessionEntries:Object.keys(sessionStorage).map(key=>[key,sessionStorage.getItem(key)!])}));
     assert(browserStorage.localKeys===0&&browserStorage.sessionEntries.every(([key,value])=>{
       if(key!=='drivy-gestion-demandes-v1')return false;const metadata:unknown=JSON.parse(value!);

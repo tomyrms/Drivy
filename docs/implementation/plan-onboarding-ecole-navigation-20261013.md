@@ -1,6 +1,6 @@
 # Ouvrir une école avec un guide, puis travailler dans un portail clair
 
-> Proposition du 13 octobre 2026, soumise à validation du porteur. Aucun développement ni déploiement autorisé par ce document seul.
+> Plan validé par le porteur le 13 octobre 2026 : réalisation de tous les lots dans l’ordre proposé. Les résultats et limites sont consignés dans `realisation-onboarding-ecole-20261013.md` et `STATUS.md` ; aucune qualification produit ne découle du seul plan.
 > Sources examinées à `bb2449a8d180cc3ab6bf2ddf64df68d41a1eb015`. Analyse du dépôt et du retour utilisateur ; aucun écran exécuté, aucun test produit effectué pendant cette préparation.
 
 ## 1. Résultat attendu
