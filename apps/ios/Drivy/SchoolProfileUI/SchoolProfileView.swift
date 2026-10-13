@@ -325,13 +325,8 @@ struct SchoolProfileView: View {
                 }
                 if let notice {
                     // Same wording and content as the notice sheet of the guided welcome.
-                    DisclosureGroup("Tes données") {
-                        Text(notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        Text(notice.retentionText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        if let email = notice.contactEmail {
-                            DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
-                        }
-                    }
+                    SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                        identifier: "profile-privacy-link")
                 }
             }
             .drivyFormRows()
