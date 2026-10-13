@@ -1,6 +1,6 @@
 import {expect,test} from 'vitest';
-import {randomBytes} from 'node:crypto';
-import {readSchoolOpeningConfig,openingToken} from '../src/school-opening-model.js';
+import {randomBytes,randomUUID} from 'node:crypto';
+import {readSchoolOpeningConfig,openingToken,schoolOpeningBody} from '../src/school-opening-model.js';
 test('opérateurs fermés par défaut et identité OIDC complète requise',()=>{
   expect(readSchoolOpeningConfig({})).toEqual({operators:[],validityDays:7});
   expect(()=>readSchoolOpeningConfig({SCHOOL_OPENING_OPERATORS_JSON:'[{"subject":"admin"}]'})).toThrow();
@@ -11,4 +11,11 @@ test('secret exactement 256 bits sous forme base64url canonique',()=>{
   expect(openingToken.safeParse(randomBytes(32).toString('base64url')).success).toBe(true);
   expect(openingToken.safeParse('a'.repeat(43)).success).toBe(false);
   expect(openingToken.safeParse('a'.repeat(42)+'A=').success).toBe(false);
+});
+test('les coordonnées créées respectent les limites des étapes de préparation',()=>{
+  const body={operationId:randomUUID(),token:randomBytes(32).toString('base64url'),schoolName:'Recette synthétique',displayName:'Responsable synthétique',
+    contactEmail:'school@example.invalid',contactPhone:'0'.repeat(32),timeZone:'Europe/Zurich',instructs:false};
+  expect(schoolOpeningBody.safeParse(body).success).toBe(true);
+  expect(schoolOpeningBody.safeParse({...body,contactPhone:'0'.repeat(33)}).success).toBe(false);
+  for(const timeZone of ['+01:00','-02:00','Invalid/Zone',''])expect(schoolOpeningBody.safeParse({...body,timeZone}).success).toBe(false);
 });

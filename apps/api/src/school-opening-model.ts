@@ -15,8 +15,8 @@ export const createOpeningLinkBody=z.object({operationId:z.uuid(),token:openingT
 export const openingPreviewBody=z.object({token:openingToken}).strict();
 export const schoolOpeningBody=z.object({operationId:z.uuid(),token:openingToken,
   schoolName:z.string().trim().min(1).max(150),displayName:z.string().trim().min(1).max(200),
-  contactEmail:z.email().max(254),contactPhone:z.string().trim().min(1).max(50).nullable(),
-  timeZone:z.string().max(100).refine(value=>{try{new Intl.DateTimeFormat('fr',{timeZone:value});return true;}catch{return false;}}),
+  contactEmail:z.email().max(254),contactPhone:z.string().trim().min(1).max(32).nullable(),
+  timeZone:z.string().min(1).max(100).refine(value=>{try{new Intl.DateTimeFormat('fr',{timeZone:value});return !/^[+-]/.test(value);}catch{return false;}}),
   instructs:z.boolean()}).strict();
 export type SchoolOpeningCommand=z.infer<typeof schoolOpeningBody>;
 export interface OpeningLinkRow {

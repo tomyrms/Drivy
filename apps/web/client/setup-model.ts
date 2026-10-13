@@ -31,6 +31,7 @@ export const setupDraftSchema = z.object({
 export const setupTemplatesSchema = z.object({
   version: z.string(),
   privacy: z.object({ id: z.string(), version: z.string(), noticeText: z.string(), retentionText: z.string() }),
+  commercial: z.object({ id: z.string(), version: z.string(), cancellationPolicyText: z.string(), termsText: z.string() }).optional(),
   profileFields: profilePolicySchema.shape.fields,
   formations: z.array(z.object({ id: z.string(), version: z.string(), categoryCode: z.string(), label: z.string(),
     competencies: z.array(competency), procedureText: z.string(), durationMinutes: z.number().int() })),

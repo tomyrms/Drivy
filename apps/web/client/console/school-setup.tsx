@@ -38,6 +38,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [readFailure, setReadFailure] = useState<string | null>(null);
   const [discard, setDiscard] = useState(false);
   const [leave, setLeave] = useState<(() => void) | null>(null);
+  const [focusField, setFocusField] = useState<string | null>(null);
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
   const [stepsOpen, setStepsOpen] = useState(false);
@@ -87,6 +88,18 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     return () => setNavigationGuard?.(null);
   }, [setNavigationGuard]);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); setStepsOpen(false); }, [step]);
+  useEffect(() => {
+    if (!focusField || issueStep(focusField) !== step) return;
+    const root = heading.current?.parentElement;
+    const path = focusField.replace(/^content\./, '');
+    const target = [...(root?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[name],textarea[name]') ?? [])]
+      .find(input => input.name === path || input.name.startsWith(`${path}.`));
+    if (target) {
+      for (let parent = target.parentElement; parent && parent !== root; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+      target.focus(); target.scrollIntoView({ block: 'center' });
+    }
+    setFocusField(null);
+  }, [step, focusField]);
   const update = (next: SetupContent) => { setContent(next); setDirty(true); setPreview(null); setAcknowledged(false); runner.clearOutcome(); };
 
   async function refreshReview(saved: SetupDraft) {
@@ -127,8 +140,9 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     if (step === 'FORMATIONS') void save('REVIEW', selectSetupSection({ ...content, formations: content.formations.map(item => ({ ...item, apply: false })) }, 'CATALOGUE', false));
     if (step === 'PRICING') void save('REVIEW', { ...content, formations: content.formations.map(item => ({ ...item, apply: false })) });
   }
-  function jump(target: SetupStep) {
+  function jump(target: SetupStep, field?: string) {
     if (blocked || !steps.includes(target)) return;
+    setFocusField(field ?? null);
     if (dirty) void save(target); else { setStep(target); if (target === 'REVIEW' && document) void refreshReview(document); }
   }
   const nextStep = steps[Math.min(steps.indexOf(step) + 1, steps.length - 1)]!;
@@ -152,7 +166,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
               {step === 'PRIVACY' && <PrivacyStep content={content} templates={data.templates} onChange={update} />}
               {step === 'PROFILE' && <ProfileStep content={content} onChange={update} />}
               {step === 'FORMATIONS' && <FormationStep content={content} templates={data.templates} offerings={data.offerings} today={civilDateIn(school.timeZone)} onChange={update} canWrite={canConfigureCatalog} />}
-              {step === 'PRICING' && <PricingStep content={content} onChange={update} canWrite={canConfigureCatalog} />}
+              {step === 'PRICING' && <PricingStep content={content} templates={data.templates} onChange={update} canWrite={canConfigureCatalog} />}
               {step === 'REVIEW' && <>
                 {!preview && <button type="button" className="button secondary" onClick={() => dirty ? void save('REVIEW') : void refreshReview(document)}>Vérifier la préparation</button>}
                 {preview && <SetupReview preview={preview} onEdit={jump} />}
@@ -194,19 +208,19 @@ type StepProps = { content: SetupContent; onChange: (value: SetupContent) => voi
 function IdentityStep({ content, onChange }: StepProps) {
   const update = (value: Partial<SetupContent['identity']>) => onChange(selectSetupSection({ ...content, identity: { ...content.identity, ...value } }, 'IDENTITY', true));
   return <div className="form-grid">
-    <TextField label="Nom de l’école" value={content.identity.name} maxLength={150} autoComplete="organization" onChange={name => update({ name })} />
-    <TextField label="E-mail de l’école" type="email" value={content.identity.contactEmail} autoComplete="email" onChange={contactEmail => update({ contactEmail })} />
-    <TextField label="Téléphone" type="tel" required={false} value={content.identity.contactPhone ?? ''} autoComplete="tel" onChange={contactPhone => update({ contactPhone: contactPhone || null })} />
-    <TextField label="Fuseau horaire" value={content.identity.timeZone} onChange={timeZone => update({ timeZone })} />
+    <TextField name="identity.name" label="Nom de l’école" value={content.identity.name} maxLength={150} autoComplete="organization" onChange={name => update({ name })} />
+    <TextField name="identity.contactEmail" label="E-mail de l’école" type="email" value={content.identity.contactEmail} autoComplete="email" onChange={contactEmail => update({ contactEmail })} />
+    <TextField name="identity.contactPhone" label="Téléphone" type="tel" required={false} value={content.identity.contactPhone ?? ''} autoComplete="tel" onChange={contactPhone => update({ contactPhone: contactPhone || null })} />
+    <TextField name="identity.timeZone" label="Fuseau horaire" value={content.identity.timeZone} onChange={timeZone => update({ timeZone })} />
   </div>;
 }
 function PrivacyStep({ content, templates, onChange }: StepProps & { templates: SetupTemplates }) {
   const update = (value: Partial<SetupContent['privacy']>) => onChange(selectSetupSection({ ...content, privacy: { ...content.privacy, ...value } }, 'PRIVACY', true));
   const [replace, setReplace] = useState(false);
   return <div className="section-stack">
-    <TextField label="Contact pour les données" type="email" value={content.privacy.contactEmail} onChange={contactEmail => update({ contactEmail })} />
-    <TextArea label="Information des personnes" value={content.privacy.noticeText} rows={10} maxLength={20_000} onChange={noticeText => update({ noticeText })} />
-    <TextArea label="Conservation des données" value={content.privacy.retentionText} rows={6} maxLength={20_000} onChange={retentionText => update({ retentionText })} />
+    <TextField name="privacy.contactEmail" label="Contact pour les données" type="email" value={content.privacy.contactEmail} onChange={contactEmail => update({ contactEmail })} />
+    <TextArea name="privacy.noticeText" label="Information des personnes" value={content.privacy.noticeText} rows={10} maxLength={20_000} onChange={noticeText => update({ noticeText })} />
+    <TextArea name="privacy.retentionText" label="Conservation des données" value={content.privacy.retentionText} rows={6} maxLength={20_000} onChange={retentionText => update({ retentionText })} />
     <button type="button" className="button secondary" onClick={() => setReplace(true)}>Repartir de l’exemple Drivy</button>
     <details className="disclosure"><summary>Aperçu des textes</summary><div className="policy-copy"><h3>Information des personnes</h3><p>{content.privacy.noticeText}</p><h3>Conservation</h3><p>{content.privacy.retentionText}</p><p>{content.privacy.contactEmail}</p></div></details>
     <ConfirmDialog open={replace} busy={false} title="Reprendre l’exemple ?" confirmLabel="Utiliser l’exemple" onCancel={() => setReplace(false)} onConfirm={() => { update(templatePrivacy(templates, content)); setReplace(false); }}><p>Les textes de ce brouillon seront remplacés. Les textes déjà adoptés restent inchangés.</p></ConfirmDialog>
@@ -252,37 +266,42 @@ function FormationStep({ content, templates, offerings, today, onChange, canWrit
     </section>)}
   </div>;
 }
-function PricingStep({ content, onChange, canWrite }: StepProps & { canWrite: boolean }) {
+function PricingStep({ content, templates, onChange, canWrite }: StepProps & { canWrite: boolean; templates: SetupTemplates }) {
   const update = (value: SetupFormation) => onChange(selectSetupSection({ ...content, formations: content.formations.map(item => item.id === value.id ? value : item) }, 'CATALOGUE', true));
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
+  const [exampleFor, setExampleFor] = useState<string | null>(null);
   if (!content.formations.length) return <p>Aucune formation à tarifer dans ce brouillon.</p>;
   return <div className="section-stack">{content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
     <h3>{formation.label || `Permis ${formation.categoryCode}`}</h3>
     <fieldset className="setup-fields" disabled={!canWrite}>
-      <div className="form-grid"><TextField label="Durée (minutes)" value={formation.durationMinutes === null ? '' : String(formation.durationMinutes)} inputMode="numeric" onChange={value => update({ ...formation, durationMinutes: /^\d+$/.test(value) ? Number(value) : null })} />
-        <PriceField formation={formation} onChange={update} />
-        <TextField label="Disponible dès le" type="date" value={formation.validFrom ?? ''} onChange={validFrom => update({ ...formation, validFrom: validFrom || null })} /></div>
-      <TextArea label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
-      <TextArea label="Conditions du tarif" value={formation.termsText} rows={4} maxLength={20000} onChange={termsText => update({ ...formation, termsText })} />
+      <div className="form-grid"><TextField name={`formations.${index}.durationMinutes`} label="Durée (minutes)" value={formation.durationMinutes === null ? '' : String(formation.durationMinutes)} inputMode="numeric" onChange={value => update({ ...formation, durationMinutes: /^\d+$/.test(value) ? Number(value) : null })} />
+        <PriceField name={`formations.${index}.priceCents`} formation={formation} onChange={update} />
+        <TextField name={`formations.${index}.validFrom`} label="Disponible dès le" type="date" value={formation.validFrom ?? ''} onChange={validFrom => update({ ...formation, validFrom: validFrom || null })} /></div>
+      <TextArea name={`formations.${index}.cancellationPolicyText`} label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
+      <TextArea name={`formations.${index}.termsText`} label="Conditions du tarif" value={formation.termsText} rows={4} maxLength={20000} onChange={termsText => update({ ...formation, termsText })} />
+      {templates.commercial && <button type="button" className="button secondary" onClick={() => setExampleFor(formation.id)}>Insérer un exemple de conditions</button>}
       {index === 0 && content.formations.length > 1 && <button type="button" className="button secondary" onClick={() => setCopyFrom(formation.id)}>Utiliser ces conditions pour les autres formations</button>}
       <CheckField label="Proposer cette formation et ce tarif après confirmation" checked={formation.apply} onChange={apply => update({ ...formation, apply })} />
     </fieldset>
   </section>)}
+    <ConfirmDialog open={exampleFor !== null} busy={false} title="Utiliser cet exemple ?" confirmLabel="Insérer dans le brouillon" onCancel={() => setExampleFor(null)} onConfirm={() => {
+      const formation = content.formations.find(item => item.id === exampleFor); if (formation && templates.commercial) update({ ...formation, termsText: templates.commercial.termsText, cancellationPolicyText: templates.commercial.cancellationPolicyText }); setExampleFor(null);
+    }}><p>Ces textes remplaceront les conditions de cette formation dans le brouillon. Complétez les passages entre crochets avant de confirmer.</p><h3>Annulation</h3><p className="policy-copy">{templates.commercial?.cancellationPolicyText}</p><h3>Tarif</h3><p className="policy-copy">{templates.commercial?.termsText}</p></ConfirmDialog>
     <ConfirmDialog open={copyFrom !== null} busy={false} title="Reprendre ces conditions ?" confirmLabel="Appliquer aux autres formations" onCancel={() => setCopyFrom(null)} onConfirm={() => {
       const source = content.formations.find(item => item.id === copyFrom); if (source) onChange({ ...content, formations: content.formations.map(item => ({ ...item, termsText: source.termsText, cancellationPolicyText: source.cancellationPolicyText })) }); setCopyFrom(null);
     }}><p>Les conditions des autres formations de ce brouillon seront remplacées.</p></ConfirmDialog>
   </div>;
 }
-function PriceField({ formation, onChange }: { formation: SetupFormation; onChange: (value: SetupFormation) => void }) {
+function PriceField({ formation, onChange, name }: { formation: SetupFormation; onChange: (value: SetupFormation) => void; name: string }) {
   const [raw, setRaw] = useState(formation.priceCents === null ? '' : String(formation.priceCents / 100));
-  return <TextField label="Prix (CHF)" value={raw} inputMode="decimal" error={raw && setupPrice(raw) === null ? 'Indiquez un montant avec deux décimales au maximum.' : null}
+  return <TextField name={name} label="Prix (CHF)" value={raw} inputMode="decimal" error={raw && setupPrice(raw) === null ? 'Indiquez un montant avec deux décimales au maximum.' : null}
     onChange={value => { setRaw(value); onChange({ ...formation, priceCents: setupPrice(value) }); }} />;
 }
-export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit: (step: SetupStep) => void }) {
+export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit: (step: SetupStep, field?: string) => void }) {
   const { content } = preview;
   return <div className="section-stack">
     {preview.effects.map(effect => <Notice key={effect} tone="warning" title="Conséquence de la modification"><p>{effect}</p></Notice>)}
-    {preview.issues.length > 0 && <Notice tone="warning" title="À compléter"><ul className="setup-issues">{preview.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><button type="button" className="text-link" onClick={() => onEdit(issueStep(issue.field))}>{issue.message}</button></li>)}</ul></Notice>}
+    {preview.issues.length > 0 && <Notice tone="warning" title="À compléter"><ul className="setup-issues">{preview.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><button type="button" className="text-link" onClick={() => onEdit(issueStep(issue.field), issue.field)}>{issue.message}</button></li>)}</ul></Notice>}
     {content.selectedSections.includes('IDENTITY') && <section><h3>École</h3><Facts items={[["Nom", content.identity.name], ['E-mail', content.identity.contactEmail], ['Téléphone', content.identity.contactPhone ?? 'Non renseigné'], ['Fuseau', content.identity.timeZone]]} /><button type="button" className="button quiet" onClick={() => onEdit('IDENTITY')}>Modifier</button></section>}
     {content.selectedSections.includes('PRIVACY') && <section><h3>Confidentialité</h3><div className="policy-copy"><h4>Information des personnes</h4><p>{content.privacy.noticeText}</p><h4>Conservation</h4><p>{content.privacy.retentionText}</p><p>{content.privacy.contactEmail}</p></div><button type="button" className="button quiet" onClick={() => onEdit('PRIVACY')}>Modifier</button></section>}
     {content.selectedSections.includes('PROFILE') && <section><h3>Informations des élèves</h3><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span>{field.requirement === 'OPTIONAL' ? 'Facultatif' : field.stage === 'JOIN' ? 'À l’inscription' : 'Avant une leçon'}</span></li>)}</ul><button type="button" className="button quiet" onClick={() => onEdit('PROFILE')}>Modifier</button></section>}

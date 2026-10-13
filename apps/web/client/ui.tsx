@@ -101,14 +101,14 @@ function FieldFrame({ id, label, hint, error, required, children, counter }: Fie
 const describedBy = (id: string, hint?: string, error?: string | null, counter?: boolean) =>
   [hint || counter ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
 
-export function TextField({ label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly }: FieldProps & {
+export function TextField({ label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly, name }: FieldProps & {
   value: string; onChange: (value: string) => void; type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'datetime-local' | 'url' | 'number';
-  maxLength?: number; autoComplete?: string; inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel'; placeholder?: string; readOnly?: boolean;
+  maxLength?: number; autoComplete?: string; inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel'; placeholder?: string; readOnly?: boolean; name?: string;
 }) {
   const id = useId();
   return (
     <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
-      <input id={id} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
+      <input id={id} name={name} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
         autoComplete={autoComplete ?? 'off'} inputMode={inputMode} maxLength={maxLength}
         aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error)}
         onChange={event => onChange(event.target.value)} />
@@ -116,8 +116,8 @@ export function TextField({ label, value, onChange, hint, error, disabled, requi
   );
 }
 
-export function TextArea({ label, value, onChange, hint, error, disabled, required, maxLength, rows = 5 }: FieldProps & {
-  value: string; onChange: (value: string) => void; maxLength?: number; rows?: number;
+export function TextArea({ label, value, onChange, hint, error, disabled, required, maxLength, rows = 5, name }: FieldProps & {
+  value: string; onChange: (value: string) => void; maxLength?: number; rows?: number; name?: string;
 }) {
   const id = useId();
   const length = [...value].length;
@@ -125,7 +125,7 @@ export function TextArea({ label, value, onChange, hint, error, disabled, requir
     ? <span className={length > maxLength ? 'counter over' : 'counter'}> {length.toLocaleString('fr-CH')} / {maxLength.toLocaleString('fr-CH')} caractères</span> : null;
   return (
     <FieldFrame id={id} label={label} hint={hint} error={error} required={required} counter={counter}>
-      <textarea id={id} value={value} disabled={disabled} required={required} rows={rows}
+      <textarea id={id} name={name} value={value} disabled={disabled} required={required} rows={rows}
         aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error, counter !== null)}
         onChange={event => onChange(event.target.value)} />
     </FieldFrame>

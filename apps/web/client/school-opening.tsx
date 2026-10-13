@@ -43,7 +43,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
   async function createSchool() {
     if(!session)return;setBusy(true);setError(null);
     try {const response=await request('opening/create',z.object({data:openingReceipt}),{csrf:session.csrfToken,body:fields});setResult(response.data);setUncertain(false);heading.current?.focus();}
-    catch(reason){setError(openingFailure(reason));try{const state=await request('opening',openingState);setUncertain(state.uncertain);if(state.draft)setFields(state.draft);if(state.result)setResult(state.result);}catch{/* Keep the last known intention. */}}
+    catch(reason){setError(openingFailure(reason));try{const state=await request('opening',openingState);setUncertain(state.uncertain);if(state.draft)setFields(state.draft);if(state.result){setResult(state.result);setError(null);}}catch{/* Keep the last known intention. */}}
     finally{setBusy(false);}
   }
   async function verify() {
@@ -98,7 +98,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
               <TextField label="Votre nom" value={fields.displayName} onChange={value=>update('displayName',value)} maxLength={200} autoComplete="name" required/>
               <TextField label="Nom de l’auto-école" value={fields.schoolName} onChange={value=>update('schoolName',value)} maxLength={150} autoComplete="organization" required/>
               <TextField label="E-mail professionnel" value={fields.contactEmail} onChange={value=>update('contactEmail',value)} maxLength={254} type="email" autoComplete="email" required/>
-              <TextField label="Téléphone (facultatif)" value={fields.contactPhone??''} onChange={value=>update('contactPhone',value||null)} maxLength={50} type="tel" autoComplete="tel"/>
+              <TextField label="Téléphone (facultatif)" value={fields.contactPhone??''} onChange={value=>update('contactPhone',value||null)} maxLength={32} type="tel" autoComplete="tel"/>
               <CheckField label="Je donne aussi des leçons" checked={fields.instructs} onChange={value=>update('instructs',value)}/>
               <details><summary>Fuseau horaire</summary><TextField label="Fuseau horaire" value={fields.timeZone} onChange={value=>update('timeZone',value)} maxLength={100} required/></details>
             </fieldset>

@@ -1,0 +1,60 @@
+name: Refonte · ouverture école navigateur
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, 'codex/**', 'claude/**']
+    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-opening.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
+  pull_request:
+    branches: [master]
+    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-opening.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
+permissions:
+  contents: read
+concurrency:
+  group: school-opening-e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    name: Chromium · OIDC · BFF · API · PostgreSQL
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: drivy_test
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: drivy_onboarding_e2e
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U drivy_test -d drivy_onboarding_e2e"
+          --health-interval 5s --health-timeout 3s --health-retries 15
+    env:
+      ONBOARDING_E2E_DATABASE_URL: postgres://drivy_test:test-only@127.0.0.1:5432/drivy_onboarding_e2e
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+            infra/dev/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix apps/web --ignore-scripts
+      - run: npm ci --prefix infra/dev --ignore-scripts
+      - run: node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium
+      - run: npm run build --prefix apps/web
+      - name: Parcours complet sur données synthétiques
+        run: npx tsx scripts/dev/check-school-opening.ts
+      # Seulement les captures d'écrans métier sans lien secret et le bilan de contrôles.
+      # Aucun journal réseau, cookie, trace Playwright, realm OIDC ou mot de passe n'est archivé.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: onboarding-web-synthetic
+          path: artifacts/onboarding-web-synthetic/
+          if-no-files-found: ignore
+          retention-days: 7
+
