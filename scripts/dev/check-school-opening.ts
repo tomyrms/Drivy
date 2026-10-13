@@ -269,7 +269,7 @@ async function main() {
     assert(exitWrites===1&&exitReceipts.n===1&&exitSaved.version===resumedDraft.version+1&&exitSaved.currentStep==='PROFILE'&&await exitPhone.inputValue()===exitExplanation,
       'La récupération du dialogue retrouve la saisie avec une seule commande et une seule version supplémentaire');
     await page.unroute(draftEndpoint);
-    await page.getByRole('link',{name:'École',exact:true}).click();await page.getByRole('heading',{name:'École',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Enregistrer et quitter',exact:true}).click();await page.getByRole('heading',{name:'École',exact:true}).waitFor();
     await page.getByRole('link',{name:'Préparation',exact:true}).click();await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
     assert(await exitPhone.inputValue()===exitExplanation,'Après récupération, quitter puis reprendre le guide reste possible sans perdre la saisie enregistrée');
     stage='erreur précise dans les informations demandées';
