@@ -78,19 +78,19 @@ import UIKit
         let schoolPath = "/v1/schools/\(schoolID.uuidString.lowercased())"
         switch path {
         case schoolPath:
-            return try response(school, url: url)
+            return try response(school, url: url, requiredNulls: ["contactPhone", "logoAssetId"])
         case schoolPath + "/learners":
-            return try response(SchoolPage<SchoolLearner>(items: [], nextCursor: nil), url: url)
+            return try response(SchoolPage<SchoolLearner>(items: [], nextCursor: nil), url: url, requiredNulls: ["nextCursor"])
         case schoolPath + "/lessons":
-            return try response(SchoolPage<SchoolLesson>(items: [], nextCursor: nil), url: url)
+            return try response(SchoolPage<SchoolLesson>(items: [], nextCursor: nil), url: url, requiredNulls: ["nextCursor"])
         case schoolPath + "/profile-field-policies":
-            return try response(SchoolPage(items: [policy], nextCursor: nil), url: url)
+            return try response(SchoolPage(items: [policy], nextCursor: nil), url: url, requiredNulls: ["nextCursor"])
         case schoolPath + "/my-onboarding":
             // An early AP172 read is a test failure even if a later guard would hide its result.
             precondition(activated && scenario == .staff, "Personal onboarding was requested before an eligible active entry.")
             let kind = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "kind" }?.value
             precondition(kind == "STAFF", "The root entry fixture expected staff onboarding.")
-            return try response(onboarding, url: url)
+            return try response(onboarding, url: url, requiredNulls: ["returnDestinationKey", "returnResourceId"])
         case schoolPath + "/data-policy":
             return try response(notice, url: url)
         default:
@@ -131,14 +131,26 @@ import UIKit
               kind: .staff, status: "IN_PROGRESS", currentStep: .identity, skippedOptionalSteps: [], policyVersionId: policyID,
               lastSavedAt: date, pendingActions: [], returnDestinationKey: nil, returnResourceId: nil)
     }
-    private struct Envelope<Value: Encodable>: Encodable {
+    private struct Envelope<Value: Codable>: Codable {
         let data: Value
         let requestId: UUID
         let serverTime: String
     }
-    private func response<Value: Encodable>(_ value: Value, url: URL) throws -> SchoolHTTPResponse {
-        .init(data: try JSONEncoder().encode(Envelope(data: value, requestId: UUID(), serverTime: date)),
-              status: 200, url: url, contentType: "application/json")
+    private func response<Value: Codable>(_ value: Value, url: URL, requiredNulls: [String] = []) throws -> SchoolHTTPResponse {
+        let encoded = try JSONEncoder().encode(Envelope(data: value, requestId: UUID(), serverTime: date))
+        guard var envelope = try JSONSerialization.jsonObject(with: encoded) as? [String: Any],
+              var payload = envelope["data"] as? [String: Any] else {
+            preconditionFailure("Invalid root entry fixture payload.")
+        }
+        // The read contract requires these keys even when null; synthesized Encodable omits nil properties.
+        for key in requiredNulls where payload[key] == nil { payload[key] = NSNull() }
+        envelope["data"] = payload
+        let data = try JSONSerialization.data(withJSONObject: envelope)
+        // Exercise the actual DTO decoder before handing the response to its client.
+        guard (try? JSONDecoder().decode(Envelope<Value>.self, from: data)) != nil else {
+            preconditionFailure("The root entry fixture does not satisfy its response contract.")
+        }
+        return .init(data: data, status: 200, url: url, contentType: "application/json")
     }
 }
 
