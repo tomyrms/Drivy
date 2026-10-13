@@ -32,6 +32,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [content, setContent] = useState<SetupContent | null>(null);
   const [step, setStep] = useState<SetupStep>(catalogueOnly ? 'FORMATIONS' : 'IDENTITY');
   const [dirty, setDirty] = useState(false);
+  const [editorRevision, setEditorRevision] = useState(0);
   const [preview, setPreview] = useState<SetupPreview | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,9 +47,9 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const heading = useRef<HTMLHeadingElement>(null);
   const needsAdoption = useRef(false);
   const localOperation = useRef<string | null>(null);
-  const followedSave = useRef<string | null>(null);
+  const followedSetup = useRef<{ operationId: string; kind: 'saveSetupDraft' | 'applySetupDraft' } | null>(null);
   const pending = snapshot.entries.get(schoolId);
-  if (pending?.meta.kind === 'saveSetupDraft') followedSave.current = pending.meta.operationId;
+  if (pending?.meta.kind === 'saveSetupDraft' || pending?.meta.kind === 'applySetupDraft') followedSetup.current = { operationId: pending.meta.operationId, kind: pending.meta.kind };
   const runner = useCommandRunner();
   const loaded = useLoad(async () => {
     const [draft, templates, offerings] = await Promise.all([
@@ -66,9 +67,15 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   // A receipt may settle a command restored after a page reload, with no local runner.
   useEffect(() => {
     const confirmed = snapshot.confirmed;
-    if (!confirmed || confirmed.operationId !== followedSave.current) return;
-    followedSave.current = null;
+    const followed = followedSetup.current;
+    if (!confirmed || confirmed.operationId !== followed?.operationId) return;
+    followedSetup.current = null;
     if (confirmed.operationId === localOperation.current) return;
+    if (followed.kind === 'applySetupDraft') {
+      setDirty(false); dirtyRef.current = false; drafts?.delete(key);
+      navigate(catalogueOnly ? 'formations' : 'agenda');
+      return;
+    }
     needsAdoption.current = true;
     drafts?.delete(key);
     setReadFailure(null);
@@ -94,6 +101,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     }
     needsAdoption.current = false;
     setDocument(saved); setContent(next); setStep(steps.includes(nextStep) ? nextStep : steps[0]!); setDirty(nextDirty);
+    setEditorRevision(revision => revision + 1);
     setPreview(null); setAcknowledged(false); setReadFailure(null);
   }, [loaded.data, loaded.status]);
   useEffect(() => {
@@ -157,10 +165,13 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   }
   async function finish() {
     if (!preview?.ready || !acknowledged || !document || blocked || dirty || preview.draftVersion !== document.version) return;
-    const result = await runner.run(createCommand({ schoolId, kind: 'applySetupDraft', path: 'setup-draft/complete', ifMatch: document.version,
+    const command = createCommand({ schoolId, kind: 'applySetupDraft', path: 'setup-draft/complete', ifMatch: document.version,
       resourceVersion: document.version, body: { expectedSchoolVersion: preview.schoolVersion, expectedConfigurationVersion: preview.configurationVersion,
-        reviewDigest: preview.reviewDigest, reviewAcknowledged: true, activate: preview.activate } }), preview.activate ? 'Votre école est activée.' : 'La préparation est appliquée.');
+        reviewDigest: preview.reviewDigest, reviewAcknowledged: true, activate: preview.activate } });
+    localOperation.current = command.operationId;
+    const result = await runner.run(command, preview.activate ? 'Votre école est activée.' : 'La préparation est appliquée.');
     if (result.status === 'confirmed') { setDirty(false); dirtyRef.current = false; drafts?.delete(key); navigate(catalogueOnly ? 'formations' : 'agenda'); }
+    else localOperation.current = null;
   }
   function skip() {
     if (!content) return;
@@ -194,7 +205,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
               {step === 'PRIVACY' && <PrivacyStep content={content} templates={data.templates} onChange={update} />}
               {step === 'PROFILE' && <ProfileStep content={content} onChange={update} />}
               {step === 'FORMATIONS' && <FormationStep content={content} templates={data.templates} offerings={data.offerings} initialOfferingId={routeQuery?.selection} today={civilDateIn(school.timeZone)} onChange={update} canWrite={canConfigureCatalog} />}
-              {step === 'PRICING' && <PricingStep content={content} templates={data.templates} onChange={update} canWrite={canConfigureCatalog} />}
+              {step === 'PRICING' && <PricingStep key={`${document.version}:${editorRevision}`} content={content} templates={data.templates} onChange={update} canWrite={canConfigureCatalog} />}
               {step === 'REVIEW' && <>
                 {!preview && <button type="button" className="button secondary" onClick={() => dirty ? void save('REVIEW') : void refreshReview(document)}>Vérifier la préparation</button>}
                 {preview && <SetupReview preview={preview} onEdit={jump} />}
