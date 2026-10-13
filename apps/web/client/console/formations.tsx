@@ -66,6 +66,7 @@ export function FormationsSection() {
             {!offering.enabled && <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>}
           </div>
           <div className="formation-related">
+            {link('apercu', 'Ajouter un tarif', { selection: offering.id, category: offering.categoryCode })}
             {link('referentiels', curriculum ? `${curriculum.competencies.length} compétence${curriculum.competencies.length === 1 ? '' : 's'}` : 'Compétences à vérifier', { category: offering.categoryCode, selection: offering.curriculumVersionId })}
             {link('procedures', procedure ? 'Déroulement et annulation' : 'Procédure à vérifier', { category: offering.categoryCode, selection: offering.policyVersionId })}
           </div>

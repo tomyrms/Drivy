@@ -48,6 +48,24 @@ async function harness(schoolGateway: SchoolGateway) {
 const school = randomUUID();
 
 describe('Liste blanche des routes de gestion', () => {
+  test('les possibilités d’invitation sont relues depuis l’API, sous session et sans paramètre libre', async () => {
+    const path = `/schools/${school}/invitation-options`;
+    expect(matchSchoolRoute('GET', path, '')?.path).toBe(`/v1${path}`);
+    expect(matchSchoolRoute('GET', path, '?emailInvitationsAvailable=true')).toBeUndefined();
+    expect(matchSchoolRoute('POST', path, '')).toBeUndefined();
+    const options = { emailInvitationsAvailable: false, codeInvitationsAvailable: true };
+    const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope(options) }));
+    const h = await harness(gateway);
+    expect((await h.get(`/app/bff${path}`)).statusCode).toBe(401);
+    expect(gateway).not.toHaveBeenCalled();
+    await h.login();
+    const response = await h.get(`/app/bff${path}`);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual(options);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(gateway).toHaveBeenCalledWith({ method: 'GET', path: `/v1${path}`, query: '' }, h.tokens.accessToken);
+  });
+
   test('ne relaie que les couples méthode + chemin déclarés', () => {
     expect(matchSchoolRoute('GET', `/schools/${school}`, '')?.path).toBe(`/v1/schools/${school}`);
     expect(matchSchoolRoute('PATCH', `/schools/${school}/members/${school}`, '')?.route.ifMatch).toBe(true);

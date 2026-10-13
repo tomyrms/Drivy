@@ -147,6 +147,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     const readiness = { schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) };
     if (path === 'observation-themes') return reply(200, envelope(themesProjection()), url.href);
     if (path === 'readiness') return reply(200, envelope(readiness), url.href);
+    if (path === 'invitation-options') return reply(200, envelope({ emailInvitationsAvailable: parameters.get('email') === '1', codeInvitationsAvailable: true }), url.href);
     if (path === 'setup-draft') return reply(200, envelope(structuredClone(setupDraft)), url.href);
     if (path === 'setup-draft/templates') return reply(200, envelope(setupTemplates), url.href);
     if (path === 'setup-draft/preview') return reply(200, envelope(setupPreview(url.searchParams.get('activate') === 'true')), url.href);
@@ -201,9 +202,11 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     return reply(200, envelope(target), url.href);
   }
   if (method === 'POST' && path === 'invitations') {
-    const item: Record<string, unknown> = { id: uuid(), schoolId, version: 1, delivery: 'CODE', maskedEmail: null, roles: ['LEARNER'], status: 'PENDING', expiresAt: '2026-10-06T08:00:00.000Z', trainings: body.trainings, training: body.trainings?.[0] ?? body.training };
+    const byCode = body.delivery === 'CODE';
+    if (!byCode && parameters.get('email') !== '1') return reply(409, { code: 'INVITATION_DELIVERY_UNAVAILABLE' }, url.href);
+    const item: Record<string, unknown> = { id: uuid(), schoolId, version: 1, delivery: byCode ? 'CODE' : 'EMAIL', maskedEmail: byCode ? null : 'm***@example.test', roles: body.roles, status: 'PENDING', expiresAt: '2026-10-20T08:00:00.000Z', trainings: body.trainings, training: body.trainings?.[0] ?? body.training };
     db.invitations.push(item);
-    return reply(201, envelope({ ...item, code: codes[0] }), url.href);
+    return reply(201, envelope(byCode ? { ...item, code: codes[0] } : item), url.href);
   }
   if (path.endsWith('/transition')) { const t = db.trainings[0]; t.version++; t.status = body.targetStatus; return reply(200, envelope(t), url.href); }
   if (path.endsWith('/end')) { db.assignments[0].version++; db.assignments[0].validUntil = stamp; return reply(200, envelope(db.assignments[0]), url.href); }

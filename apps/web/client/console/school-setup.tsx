@@ -26,7 +26,7 @@ const clone = <T,>(value: T): T => structuredClone(value);
 
 /** Same persisted editor for the first school setup and later formation preparation. */
 export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogueOnly?: boolean; onClose?: () => void }) {
-  const { schoolId, school, navigate, drafts, canConfigureCatalog, setNavigationGuard } = useConsole();
+  const { schoolId, school, navigate, drafts, canConfigureCatalog, setNavigationGuard, routeQuery } = useConsole();
   const snapshot = useCommandSnapshot();
   const [document, setDocument] = useState<SetupDraft | null>(null);
   const [content, setContent] = useState<SetupContent | null>(null);
@@ -165,7 +165,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
               {step === 'IDENTITY' && <IdentityStep content={content} onChange={update} />}
               {step === 'PRIVACY' && <PrivacyStep content={content} templates={data.templates} onChange={update} />}
               {step === 'PROFILE' && <ProfileStep content={content} onChange={update} />}
-              {step === 'FORMATIONS' && <FormationStep content={content} templates={data.templates} offerings={data.offerings} today={civilDateIn(school.timeZone)} onChange={update} canWrite={canConfigureCatalog} />}
+              {step === 'FORMATIONS' && <FormationStep content={content} templates={data.templates} offerings={data.offerings} initialOfferingId={routeQuery?.selection} today={civilDateIn(school.timeZone)} onChange={update} canWrite={canConfigureCatalog} />}
               {step === 'PRICING' && <PricingStep content={content} templates={data.templates} onChange={update} canWrite={canConfigureCatalog} />}
               {step === 'REVIEW' && <>
                 {!preview && <button type="button" className="button secondary" onClick={() => dirty ? void save('REVIEW') : void refreshReview(document)}>Vérifier la préparation</button>}
@@ -241,15 +241,15 @@ function ProfileStep({ content, onChange }: StepProps) {
     <details className="disclosure"><summary>Aperçu pour l’élève</summary><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span className="row-meta">{field.requirement === 'OPTIONAL' ? 'Facultatif' : field.stage === 'JOIN' ? 'À l’inscription' : 'Avant une leçon'}</span></li>)}</ul></details>
   </div>;
 }
-function FormationStep({ content, templates, offerings, today, onChange, canWrite }: StepProps & { templates: SetupTemplates; offerings: Offering[]; today: string; canWrite: boolean }) {
+function FormationStep({ content, templates, offerings, initialOfferingId, today, onChange, canWrite }: StepProps & { templates: SetupTemplates; offerings: Offering[]; initialOfferingId?: string | undefined; today: string; canWrite: boolean }) {
   const add = (value: SetupFormation) => onChange(selectSetupSection({ ...content, formations: [...content.formations, value] }, 'CATALOGUE', true));
   const update = (value: SetupFormation) => onChange({ ...content, formations: content.formations.map(item => item.id === value.id ? value : item) });
-  const [chosen, setChosen] = useState('');
+  const [chosen, setChosen] = useState(offerings.some(item => item.id === initialOfferingId) ? initialOfferingId! : '');
   if (!canWrite) return <Notice tone="warning" title="Accès aux tarifs requis"><p>Un administrateur doit vous donner l’autorisation de configurer le catalogue.</p></Notice>;
   return <div className="section-stack">
     <div className="setup-permits">{templates.formations.map(template => <button type="button" className="button secondary" key={template.id} disabled={content.formations.length >= 12} onClick={() => add(setupFormation(template, today))}><Symbol kind="plus" bare />{template.label}</button>)}
       <button type="button" className="button quiet" disabled={content.formations.length >= 12} onClick={() => add(setupFormation(null, today))}>Autre formation</button></div>
-    {offerings.length > 0 && <details className="disclosure"><summary>Ajouter un tarif à une formation existante</summary><SelectField label="Formation" value={chosen} onChange={setChosen} options={[{ value: '', label: 'Choisir une formation' }, ...offerings.map(offer => ({ value: offer.id, label: `Permis ${offer.categoryCode} · ${offer.defaultDurationMinutes} min` }))]} />
+    {offerings.length > 0 && <details className="disclosure" open={!!initialOfferingId}><summary>Ajouter un tarif à une formation existante</summary><SelectField label="Formation" value={chosen} onChange={setChosen} options={[{ value: '', label: 'Choisir une formation' }, ...offerings.map(offer => ({ value: offer.id, label: `Permis ${offer.categoryCode} · ${offer.defaultDurationMinutes} min` }))]} />
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 12} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
       <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>

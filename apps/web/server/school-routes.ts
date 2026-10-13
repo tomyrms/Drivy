@@ -36,6 +36,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['members'], query: list },
   { method: 'PATCH', segments: ['members', ':id'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'GET', segments: ['invitations'], query: list },
+  { method: 'GET', segments: ['invitation-options'] },
   { method: 'POST', segments: ['invitations'], bodyLimit: 8_192 },
   { method: 'POST', segments: ['invitations', ':id', 'resend'], ifMatch: true, bodyLimit: 1_024 },
   { method: 'POST', segments: ['invitations', ':id', 'revoke'], ifMatch: true, bodyLimit: 8_192 },

@@ -6,7 +6,7 @@ import {
   activeInstructors, defaultInstructorId, invitationCodeMessage, invitationLabel, invitationSchema, issuedCodeOf, offeringLabel, openOfferings, parseInvitationResponse,
   type Invitation,
 } from '../invitation-model';
-import { memberSchema, offeringSchema, readAll } from '../school-api';
+import { invitationOptionsSchema, memberSchema, offeringSchema, readAll, readSchool } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, type Tone } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
 import { DirectoryRow } from './directory';
@@ -81,7 +81,8 @@ export function TeamSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading title="Équipe et accès" />
+      <SectionHeading title="Équipe et accès" actions={school.status === 'ACTIVE' && membership.roles.includes('ADMIN')
+        ? <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'team' })}><Symbol kind="plus" bare />Inviter un membre</button> : undefined} />
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.outcome?.code === 'REAUTH_REQUIRED' && <p className="caption">Après la reconnexion, rouvrez ce membre et saisissez à nouveau le changement : la saisie n’est pas conservée.</p>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -162,11 +163,6 @@ function InvitationState({ status }: { status: Invitation['status'] }) {
     ? <StatusBadge tone={invitationStatus(status).tone} symbol={status === 'EXPIRED' ? 'clock' : 'ban'}>{invitationStatus(status).label}</StatusBadge>
     : <span className="row-meta">{invitationStatus(status).label}</span>;
 }
-/**
- * The school has no e-mail relay: invitations by e-mail are not offered (a 5xx from a mail that never left used to
- * block every other change). Existing ones stay listed; set to true to offer them again.
- */
-const emailInvitations = false;
 type Dialog = 'create' | 'resend' | 'revoke' | null;
 type CreateMode = 'code' | 'email';
 /** The single-use code lives in this component's memory only, for as long as it is on screen. */
@@ -208,9 +204,10 @@ export function InvitationsSection() {
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setCreating(null); setEmail(''); setInvitedRoles(['LEARNER']); setRevokeReason(''); });
   const loaded = useLoad(async () => {
-    const [invitations, offerings, members] = await Promise.all([
-      readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema)]);
-    return { invitations: invitations.items, offerings: offerings.items, members: members.items };
+    const [invitations, offerings, members, options] = await Promise.all([
+      readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema),
+      readSchool(schoolId, 'invitation-options', invitationOptionsSchema)]);
+    return { invitations: invitations.items, offerings: offerings.items, members: members.items, options };
   }, [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [creating, setCreating] = useState<CreateMode | null>(null);
@@ -234,9 +231,13 @@ export function InvitationsSection() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | Invitation['status']>('all');
   const active = school.status === 'ACTIVE';
-  const canWrite = active && !runner.pending && !runner.busy;
+  const isAdmin = membership.roles.includes('ADMIN');
+  const canWrite = active && loaded.status === 'ready' && (isAdmin || (!team && membership.roles.includes('INSTRUCTOR'))) && !runner.pending && !runner.busy;
+  const emailInvitations = data?.options.emailInvitationsAvailable === true;
+  const codeInvitations = data?.options.codeInvitationsAvailable === true;
+  const offeredRoles = roles.filter(role => team ? isAdmin && role.value !== 'LEARNER' : role.value === 'LEARNER');
   const emailProblem = isEmail(email.trim()) ? null : 'Indiquez l’adresse e-mail de la personne invitée.';
-  const rolesProblem = invitedRoles.length ? null : 'Choisissez au moins un rôle.';
+  const rolesProblem = invitedRoles.length && invitedRoles.every(role => offeredRoles.some(option => option.value === role)) ? null : 'Choisissez au moins un rôle.';
   const trainingProblem = offeringIds.length > 0 && offeringIds.length <= 16
     && offeringIds.every(id => offerings.some(item => item.id === id))
     && instructors.some(item => item.id === instructorId) ? null : commandMessage('INVITATION_TRAINING_INVALID');
@@ -247,13 +248,15 @@ export function InvitationsSection() {
   const expiryOf = (value: string) => formatDateTime(value, school.timeZone);
   const visible = items.filter(item => (statusFilter === 'all' || item.status === statusFilter) && matchesSearch([label(item)], search));
   function openCode() {
+    if (!canWrite || !codeInvitations || team) return;
     runner.clearOutcome(); setSelected(null); setShowErrors(false); setCodeMissing(false);
     setOfferingIds(offerings.length === 1 ? [offerings[0]!.id] : []);
     setInstructorId(defaultInstructorId(membership.membershipId, instructors) || (instructors.length === 1 ? instructors[0]!.id : ''));
     setCreating('code');
   }
   function openEmail() {
-    runner.clearOutcome(); setSelected(null); setShowErrors(false); setCodeMissing(false); setEmail(''); setInvitedRoles(['LEARNER']); setCreating('email');
+    if (!canWrite || !emailInvitations) return;
+    runner.clearOutcome(); setSelected(null); setShowErrors(false); setCodeMissing(false); setEmail(''); setInvitedRoles(team ? ['INSTRUCTOR'] : ['LEARNER']); setCreating('email');
   }
   /** Keep the code of a create or renew response on screen; nothing else ever holds it. */
   function showIssued(body: unknown, invitationId?: string) {
@@ -266,7 +269,7 @@ export function InvitationsSection() {
   async function confirm(action: Dialog = dialog) {
     if (!canWrite) return;
     let result: SubmitResult | undefined;
-    if (action === 'create' && creating === 'code' && !trainingProblem) {
+    if (action === 'create' && creating === 'code' && codeInvitations && !team && !trainingProblem) {
       const command = createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
         body: { delivery: 'CODE', roles: ['LEARNER'], trainings: offeringIds.map(offeringId => ({ offeringId, instructorMembershipId: instructorId })) } });
       result = await runner.run(command, 'Code créé.');
@@ -276,16 +279,16 @@ export function InvitationsSection() {
         else setCodeMissing(true);
         setCreating(null);
       }
-    } else if (action === 'create' && creating === 'email' && !emailProblem && !rolesProblem) {
+    } else if (action === 'create' && creating === 'email' && emailInvitations && !emailProblem && !rolesProblem) {
       const command = createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
-        body: { email: email.trim(), roles: [...invitedRoles].sort() } });
-      result = await runner.run(command, 'L’invitation est créée. Le message part vers l’adresse indiquée ; le lien est valable 7 jours.');
+        body: { delivery: 'EMAIL', email: email.trim(), roles: [...invitedRoles].sort() } });
+      result = await runner.run(command, 'L’invitation est enregistrée pour envoi par e-mail.');
       if (result.status === 'confirmed') { setCreating(null); setEmail(''); setInvitedRoles(['LEARNER']); }
-    } else if (action === 'resend' && current && actionable) {
+    } else if (action === 'resend' && current && actionable && (current.delivery === 'CODE' ? codeInvitations : emailInvitations)) {
       const code = current.delivery === 'CODE';
       result = await runner.run(createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${current.id}/resend`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: {} }),
-        code ? 'Un nouveau code est créé ; l’ancien n’est plus utilisable.' : 'Un nouveau lien est envoyé ; l’ancien n’est plus utilisable.');
+        code ? 'Un nouveau code est créé ; l’ancien n’est plus utilisable.' : 'Un nouveau lien est enregistré pour envoi par e-mail ; l’ancien n’est plus utilisable.');
       if (result.status === 'confirmed' && code) {
         if (result.via === 'response') showIssued(result.body, current.id); else { setIssuedCode(null); setCodeMissing(true); }
       }
@@ -301,10 +304,12 @@ export function InvitationsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context={team ? 'Équipe' : 'Élèves'} title={team ? 'Invitations de l’équipe' : 'Invitations élèves'}
-        actions={active && !team && !creating ? <>
-          <button type="button" className="button primary" disabled={!canWrite} onClick={openCode}><Symbol kind="plus" bare />Code élève</button>
-          {emailInvitations && <button type="button" className="button quiet" disabled={!canWrite} onClick={openEmail}><Symbol kind="mail" bare />Inviter par e-mail</button>}
+        actions={active && !creating ? <>
+          {!team && codeInvitations && <button type="button" className="button primary" disabled={!canWrite} onClick={openCode}><Symbol kind="plus" bare />Code élève</button>}
+          {emailInvitations && (!team || isAdmin) && <button type="button" className={team || !codeInvitations ? 'button primary' : 'button quiet'} disabled={!canWrite} onClick={openEmail}><Symbol kind="mail" bare />Inviter par e-mail</button>}
         </> : undefined} />
+      {active && team && loaded.status === 'ready' && !emailInvitations && <Notice tone="info" title="Envoi par e-mail indisponible" live={false}
+        actions={<button type="button" className="button secondary" onClick={loaded.reload}>Actualiser</button>}><p>Le service de messagerie doit être configuré pour inviter l’équipe.</p></Notice>}
       {!active && <Notice tone="info" title="Invitations disponibles après l’activation" live={false}
         actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir la configuration</button>}>
         <p>L’école doit être active, avec ses textes d’information adoptés, avant d’inviter des personnes.</p></Notice>}
@@ -351,14 +356,14 @@ export function InvitationsSection() {
           </DetailPanel>
           : creating === 'email' ? <DetailPanel focusKey="create-email" title="Inviter par e-mail"
             actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!emailProblem && !rolesProblem) { runner.clearOutcome(); setAcknowledged(false); setDialog('create'); } }}>Relire l’invitation</button>
+              <button type="button" className="button primary" disabled={!canWrite || !emailInvitations} onClick={() => { setShowErrors(true); if (!emailProblem && !rolesProblem) { runner.clearOutcome(); setAcknowledged(false); setDialog('create'); } }}>Relire l’invitation</button>
               <button type="button" className="button quiet" onClick={() => setCreating(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => { event.preventDefault(); setShowErrors(true); if (!emailProblem && !rolesProblem && canWrite) { runner.clearOutcome(); setAcknowledged(false); setDialog('create'); } }}>
               <TextField label="Adresse e-mail" type="email" value={email} onChange={setEmail} disabled={!canWrite} maxLength={254} error={showErrors ? emailProblem : null} />
               <fieldset className="fieldset">
                 <legend>Rôles proposés</legend>
-                {roles.map(role => <CheckField key={role.value} label={roleLabel(role.value)} description={role.explanation} checked={invitedRoles.includes(role.value)}
+                {offeredRoles.map(role => <CheckField key={role.value} label={roleLabel(role.value)} description={role.explanation} checked={invitedRoles.includes(role.value)}
                   disabled={!canWrite} onChange={on => setInvitedRoles(list => on ? [...list, role.value] : list.filter(item => item !== role.value))} />)}
                 {showErrors && rolesProblem && <p className="field-error"><Symbol kind="alert" bare />{rolesProblem}</p>}
               </fieldset>
@@ -367,8 +372,8 @@ export function InvitationsSection() {
           : current ? <DetailPanel focusKey={current.id} title={label(current)} meta={rolesText(current.roles)}
             badge={<InvitationState status={current.status} />}
             actions={actionable && active ? <>
-              <button type="button" className="button secondary" disabled={!canWrite} onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('resend'); }}>
-                <Symbol kind={current.delivery === 'CODE' ? 'refresh' : 'send'} bare />{current.delivery === 'CODE' ? 'Nouveau code' : 'Renvoyer l’invitation'}</button>
+              {(current.delivery === 'CODE' ? codeInvitations : emailInvitations) && <button type="button" className="button secondary" disabled={!canWrite} onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('resend'); }}>
+                <Symbol kind={current.delivery === 'CODE' ? 'refresh' : 'send'} bare />{current.delivery === 'CODE' ? 'Nouveau code' : 'Renvoyer l’invitation'}</button>}
               <button type="button" className="button quiet danger" disabled={!canWrite} onClick={() => { runner.clearOutcome(); setShowErrors(false); setDialog('revoke'); }}><Symbol kind="ban" bare />Révoquer…</button>
             </> : undefined}>
             {current.delivery === 'CODE' && issuedCode?.invitationId === current.id && <div className="code-panel">

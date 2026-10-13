@@ -225,7 +225,7 @@ export function commandMessage(code: string): string {
     INVITATION_USED: 'Cette invitation a déjà été utilisée.',
     INVITATION_REVOKED: 'Cette invitation a déjà été révoquée.',
     INVITATION_ROLE_FORBIDDEN: 'Vos accès ne permettent pas d’inviter avec ce rôle.',
-    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Aucune invitation n’a été créée : utilisez un code élève.',
+    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Cette demande n’a pas été appliquée.',
     INVITATION_TRAINING_INVALID: 'Choisissez une offre ouverte et un moniteur actif.',
     INVITATION_CODE_INVALID: 'Ce code n’est plus valable. Créez-en un nouveau.',
     PROFILE_POLICY_RULE_INVALID: 'Vérifiez les champs, leur utilité et le moment où ils sont demandés.',

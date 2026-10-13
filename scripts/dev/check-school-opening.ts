@@ -6,19 +6,44 @@ import { tmpdir } from 'node:os';
 import { resolve,sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
+import { z } from 'zod';
 import { chromium,type Browser } from '../../infra/dev/browser.js';
 import { migrate } from '../../apps/api/scripts/migrations.js';
 import { buildApp } from '../../apps/api/src/app.js';
 import { createTokenVerifier } from '../../apps/api/src/auth.js';
+import { deliverOneInvitation,type InvitationMailConfig } from '../../apps/api/src/invitation-mail.js';
 import { buildWebApp } from '../../apps/web/server/app.js';
 import { createIdentityProvider } from '../../apps/web/server/oidc.js';
+import { parseMetadata } from '../../apps/web/client/command-core.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
+const mailOrigin='http://127.0.0.1:8025';
 const keycloakImage='quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c';
 const artifactDirectory=fileURLToPath(new URL('../../artifacts/onboarding-web-synthetic/',import.meta.url));
 const containerName=`drivy-opening-e2e-${randomUUID()}`;
 const checks:string[]=[];let stage='initialisation de la recette';
+const inspectedMessages=new Set<string>();
+const messageSchema=z.object({ID:z.string().regex(/^[a-zA-Z0-9-]+$/),MessageID:z.string(),To:z.array(z.object({Address:z.string()}))});
+async function ownMail(email:string,matches:(message:z.infer<typeof messageSchema>)=>boolean=()=>true) {
+  for(let attempt=0;attempt<40;attempt++) {
+    const response=await fetch(`${mailOrigin}/api/v1/messages?limit=500`,{signal:AbortSignal.timeout(5000),redirect:'error'});
+    if(!response.ok)throw new Error('MAIL_UNAVAILABLE');
+    const messages=z.object({messages:z.array(messageSchema)}).parse(await response.json()).messages;
+    const message=messages.find(item=>!inspectedMessages.has(item.ID)&&item.To.some(to=>to.Address===email)&&matches(item));
+    if(message) {
+      const detail=await fetch(`${mailOrigin}/api/v1/message/${message.ID}`,{signal:AbortSignal.timeout(5000),redirect:'error'});
+      if(!detail.ok)throw new Error('MAIL_UNAVAILABLE');inspectedMessages.add(message.ID);
+      return z.object({Text:z.string()}).parse(await detail.json()).Text;
+    }
+    await new Promise(done=>setTimeout(done,500));
+  }
+  throw new Error('MAIL_MISSING');
+}
+function mailLink(text:string,expectedOrigin:string,path:string) {
+  const links=(text.match(/https?:\/\/[^\s<>]+/g)??[]).map(value=>new URL(value)).filter(url=>url.origin===expectedOrigin&&url.pathname===path);
+  if(links.length!==1||links[0]!.username||links[0]!.password)throw new Error('MAIL_LINK_INVALID');return links[0]!.href;
+}
 function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);}
 function docker(args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn('docker',args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('DOCKER_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('DOCKER_FAILED')));});}
 async function waitFor(url:string) {
@@ -30,7 +55,7 @@ async function main() {
   if(!databaseURL)throw new Error('ISOLATED_DATABASE_REQUIRED');const target=new URL(databaseURL);
   if(target.pathname!=='/drivy_onboarding_e2e'||!['localhost','127.0.0.1','[::1]'].includes(target.hostname))throw new Error('ISOLATED_DATABASE_REQUIRED');
   const administration=new Pool({connectionString:databaseURL,max:3});
-  let runtime:Pool|undefined,browser:Browser|undefined,api:ReturnType<typeof buildApp>|undefined,web:Awaited<ReturnType<typeof buildWebApp>>|undefined;
+  let runtime:Pool|undefined,mailer:Pool|undefined,browser:Browser|undefined,api:ReturnType<typeof buildApp>|undefined,web:Awaited<ReturnType<typeof buildWebApp>>|undefined;
   let temporary:string|undefined,containerStarted=false;
   const syntheticSecret=()=>randomBytes(36).toString('base64url');
   try {
@@ -43,6 +68,7 @@ async function main() {
     const migrator=new Pool({connectionString:databaseURL,options:'-c role=drivy_e2e_migrator'});
     try{await migrate(migrator);}finally{await migrator.end();}
     runtime=new Pool({connectionString:databaseURL,options:'-c role=drivy_app',max:8});
+    mailer=new Pool({connectionString:databaseURL,options:'-c role=drivy_invitation_mailer',max:2});
     const runtimeRole=(await runtime.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user')).rows[0];
     assert(!runtimeRole.rolsuper&&!runtimeRole.rolbypassrls,'Le service métier utilise drivy_app sans BYPASSRLS');
 
@@ -50,13 +76,14 @@ async function main() {
     const adminPassword=syntheticSecret(),operatorPassword=syntheticSecret(),consumerPassword=syntheticSecret(),clientSecret=syntheticSecret();
     const envPath=resolve(temporary,'keycloak.env');
     await writeFile(envPath,`KC_BOOTSTRAP_ADMIN_USERNAME=drivy-e2e-admin\nKC_BOOTSTRAP_ADMIN_PASSWORD=${adminPassword}\nKC_HOSTNAME=${keycloakOrigin}\nKC_HTTP_ENABLED=true\nKC_LOG_LEVEL=warn\n`,{mode:0o600});
-    await docker(['run','--detach','--rm','--name',containerName,'--env-file',envPath,'--publish','127.0.0.1:8081:8080',keycloakImage,'start-dev']);containerStarted=true;
+    await docker(['run','--detach','--rm','--name',containerName,'--env-file',envPath,'--publish','127.0.0.1:8081:8080','--add-host','host.docker.internal:host-gateway',keycloakImage,'start-dev']);containerStarted=true;
     await waitFor(`${keycloakOrigin}/realms/master/.well-known/openid-configuration`);
     const authentication=await fetch(`${keycloakOrigin}/realms/master/protocol/openid-connect/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({client_id:'admin-cli',grant_type:'password',username:'drivy-e2e-admin',password:adminPassword})});
     if(!authentication.ok)throw new Error('OIDC_ADMIN_UNAVAILABLE');const auth=await authentication.json() as {access_token?:string};if(!auth.access_token)throw new Error('OIDC_ADMIN_UNAVAILABLE');
     const realm=JSON.parse(await readFile(new URL('../../infra/dev/realm.json',import.meta.url),'utf8')) as Record<string,unknown>;
-    realm.realm=realmName;realm.displayName='Drivy · Recette synthétique';realm.registrationAllowed=true;realm.verifyEmail=false;
+    realm.realm=realmName;realm.displayName='Drivy · Recette synthétique';realm.registrationAllowed=true;realm.verifyEmail=true;realm.resetPasswordAllowed=true;
+    realm.smtpServer={host:'host.docker.internal',port:'1025',from:'identity@drivy.example.invalid',ssl:'false',starttls:'false',auth:'false'};
     realm.clients=[{clientId:'drivy-web-e2e',protocol:'openid-connect',enabled:true,publicClient:false,secret:clientSecret,standardFlowEnabled:true,
       directAccessGrantsEnabled:false,implicitFlowEnabled:false,serviceAccountsEnabled:false,fullScopeAllowed:false,
       redirectUris:[`${origin}/app/bff/callback`],webOrigins:[],attributes:{'pkce.code.challenge.method':'S256'},defaultClientScopes:['basic','profile','email'],optionalClientScopes:[],
@@ -70,8 +97,10 @@ async function main() {
     if(!users.ok)throw new Error('OIDC_OPERATOR_FAILED');const operatorList=await users.json() as {id:string}[];if(operatorList.length!==1)throw new Error('OIDC_OPERATOR_FAILED');
     delete auth.access_token;
     const config={origin,apiBaseURL:apiOrigin,issuer,clientId:'drivy-web-e2e',clientSecret,development:true,host:'127.0.0.1',port:3002};
+    const invitationMail:InvitationMailConfig={webURL:`${origin}/app/invitation`,encryptionKey:randomBytes(32).toString('hex'),host:'127.0.0.1',port:1025,
+      secure:false,requireTLS:false,from:'school@drivy.example.invalid'};
     api=buildApp({pool:runtime,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/protocol/openid-connect/certs`}),
-      cursorSecret:syntheticSecret(),schoolOpening:{operators:[{issuer,subject:operatorList[0]!.id}],validityDays:7}});
+      cursorSecret:syntheticSecret(),invitationMail,schoolOpening:{operators:[{issuer,subject:operatorList[0]!.id}],validityDays:7}});
     web=await buildWebApp({config,identity:await createIdentityProvider(config),staticRoot:fileURLToPath(new URL('../../apps/web/dist/client/',import.meta.url))});
     await api.listen({host:'127.0.0.1',port:3001});await web.listen({host:'127.0.0.1',port:3002});
     await mkdir(artifactDirectory,{recursive:true});
@@ -102,7 +131,13 @@ async function main() {
     await page.locator('input[name="firstName"]').fill('Responsable');await page.locator('input[name="lastName"]').fill('Synthétique');
     await page.locator('input[name="password"]').fill(consumerPassword);await page.locator('input[name="password-confirm"]').fill(consumerPassword);
     await page.locator('input[type="submit"],button[type="submit"]').first().click();
+    stage='vérification réelle de l’adresse par SMTP';
+    const verification=await ownMail('school@example.invalid');
+    assert(new URL(page.url()).origin===keycloakOrigin,'Le compte reste chez le fournisseur avant la vérification de son adresse');
+    await page.goto(mailLink(verification,keycloakOrigin,`/realms/${realmName}/login-actions/action-token`));
     await page.waitForURL(`${origin}/app/ouvrir`);await page.getByLabel('Nom de l’auto-école',{exact:true}).waitFor();
+    const verifiedSession=await consumerContext.request.get(`${origin}/app/bff/session`);
+    assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await verifiedSession.json()).success,'Le lien SMTP vérifie réellement le nouveau compte avant création');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.person')).rows[0].n===0,'Le nouveau compte OIDC n’est pas créé dans la base métier avant confirmation');
     stage='création volontaire et perte de réponse navigateur';await page.getByLabel('Votre nom',{exact:true}).fill('Responsable de recette synthétique');
     await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');await page.getByLabel('E-mail professionnel',{exact:true}).fill('school@example.invalid');
@@ -151,13 +186,83 @@ async function main() {
     await page.getByRole('heading',{name:'Préparer une formation',exact:true}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Le guide de formation mobile ne déborde pas horizontalement');
     await page.screenshot({path:resolve(artifactDirectory,'05-formation-mobile-synthetic.png'),fullPage:true});
-    assert(await page.evaluate(()=>localStorage.length===0&&sessionStorage.length===0),'Aucun brouillon personnel ou jeton persistant dans le navigateur');
+    const browserStorage=await page.evaluate(()=>({localKeys:localStorage.length,sessionEntries:Object.keys(sessionStorage).map(key=>[key,sessionStorage.getItem(key)!])}));
+    assert(browserStorage.localKeys===0&&browserStorage.sessionEntries.every(([key,value])=>{
+      if(key!=='drivy-gestion-demandes-v1')return false;const metadata:unknown=JSON.parse(value!);
+      return Array.isArray(metadata)&&metadata.length<=50&&metadata.every(item=>parseMetadata(item)!==null);
+    }),'Le navigateur conserve seulement les métadonnées autorisées de reçu, sans jeton ni contenu personnel');
     const operatorDenied=await consumerContext.request.get(`${origin}/app/bff/operator/school-opening-links`);assert(operatorDenied.status()===403,'Un ADMIN scolaire ne devient pas opérateur Drivy');
+    stage='invitation de l’équipe depuis le portail';await page.setViewportSize({width:1440,height:1100});
+    await page.goto(`${origin}/app/gestion/${school.id}/invitations?audience=team`);
+    await page.getByRole('button',{name:'Inviter par e-mail',exact:true}).click();
+    await page.getByLabel('Adresse e-mail',{exact:true}).fill('instructor@example.invalid');
+    assert(await page.getByRole('checkbox',{name:'Moniteur',exact:true}).isChecked(),'Une invitation de l’équipe propose explicitement le rôle moniteur');
+    await page.getByRole('button',{name:'Relire l’invitation',exact:true}).click();
+    const invitationDialog=page.getByRole('dialog');
+    const invitationReview=invitationDialog.getByLabel('J’ai vérifié l’adresse et les rôles proposés.',{exact:true});
+    assert(!(await invitationReview.isChecked()),'L’envoi à un membre de l’équipe exige une confirmation distincte');
+    await invitationReview.check();await invitationDialog.getByRole('button',{name:'Envoyer l’invitation',exact:true}).click();
+    await invitationDialog.waitFor({state:'hidden'});
+    const invitation=(await administration.query('SELECT id,status,roles FROM drivy.invitation WHERE school_id=$1 AND email=$2',[school.id,'instructor@example.invalid'])).rows[0];
+    assert(invitation?.status==='PENDING'&&JSON.stringify(invitation.roles)==='["INSTRUCTOR"]','L’invitation équipe est enregistrée avant livraison, sans rôle supplémentaire');
+    const queued=(await administration.query('SELECT id,status,payload FROM drivy.invitation_mail WHERE invitation_id=$1',[invitation.id])).rows[0];
+    assert(queued?.status==='QUEUED'&&Buffer.isBuffer(queued.payload),'Le courrier attendu est conservé chiffré dans l’outbox');
+    stage='livraison SMTP réelle de l’invitation équipe';await deliverOneInvitation(mailer,invitationMail);
+    const invitationURL=mailLink(await ownMail('instructor@example.invalid',message=>message.MessageID.includes(queued.id)),origin,'/app/invitation');
+    const sent=(await administration.query('SELECT status,payload FROM drivy.invitation_mail WHERE id=$1',[queued.id])).rows[0];
+    assert(sent?.status==='SENT'&&sent.payload===null,'Le SMTP accepte le courrier puis la charge chiffrée est effacée');
+    const staffContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});staffContext.setDefaultTimeout(20_000);
+    await staffContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
+    const staffPage=await staffContext.newPage();await staffPage.goto(invitationURL);
+    await staffPage.getByRole('button',{name:'Se connecter',exact:true}).click();
+    await staffPage.locator('#kc-registration a').click();
+    await staffPage.locator('input[name="username"]').fill('moniteur-recette');await staffPage.locator('input[name="email"]').fill('instructor@example.invalid');
+    await staffPage.locator('input[name="firstName"]').fill('Moniteur');await staffPage.locator('input[name="lastName"]').fill('Synthétique');
+    const instructorPassword=syntheticSecret();await staffPage.locator('input[name="password"]').fill(instructorPassword);await staffPage.locator('input[name="password-confirm"]').fill(instructorPassword);
+    await staffPage.locator('input[type="submit"],button[type="submit"]').first().click();
+    stage='vérification réelle du compte moniteur';
+    await staffPage.goto(mailLink(await ownMail('instructor@example.invalid'),keycloakOrigin,`/realms/${realmName}/login-actions/action-token`));
+    await staffPage.waitForURL(`${origin}/app/invitation`);
+    await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
+    const staffSession=await staffContext.request.get(`${origin}/app/bff/session`);
+    assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await staffSession.json()).success,'Le moniteur vérifie son adresse avant de rejoindre l’école');
+    const join=staffPage.getByRole('button',{name:'Rejoindre cette école',exact:true});
+    assert(await join.isDisabled()&&(await administration.query("SELECT count(*)::int AS n FROM drivy.membership WHERE school_id=$1",[school.id])).rows[0].n===1,'Lire l’invitation ne crée aucun rattachement sans consentement');
+    await staffPage.getByRole('checkbox').check();await join.click();
+    await staffPage.getByText('Vous avez rejoint Auto-école Recette · synthétique',{exact:true}).waitFor();
+    const staffMe=await staffContext.request.get(`${origin}/app/bff/me`);
+    const staffMember=z.object({data:z.object({memberships:z.array(z.object({schoolId:z.string(),roles:z.array(z.string())}))})}).parse(await staffMe.json());
+    assert(staffMe.ok()&&staffMember.data.memberships.length===1&&staffMember.data.memberships[0]!.schoolId===school.id&&JSON.stringify(staffMember.data.memberships[0]!.roles)==='["INSTRUCTOR"]','Le compte invité rejoint une seule école avec le seul rôle moniteur');
+    await staffPage.reload();await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
+    await staffPage.screenshot({path:resolve(artifactDirectory,'06-equipe-invitation-acceptee-synthetic.png'),fullPage:true});await staffContext.close();
+    stage='récupération du compte OIDC par courrier';
+    const recoveryContext=await browser.newContext({locale:'fr-CH'});recoveryContext.setDefaultTimeout(20_000);
+    await recoveryContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
+    const recoveryPage=await recoveryContext.newPage();await recoveryPage.goto(`${origin}/app`);
+    await recoveryPage.getByRole('button',{name:'Se connecter',exact:true}).click();
+    await recoveryPage.locator('a[href*="/login-actions/reset-credentials"]').click();
+    await recoveryPage.locator('input[name="username"]').fill('responsable-recette');
+    await recoveryPage.locator('input[type="submit"],button[type="submit"]').first().click();
+    const resetLink=mailLink(await ownMail('school@example.invalid'),keycloakOrigin,`/realms/${realmName}/login-actions/action-token`);
+    await recoveryPage.goto(resetLink);const recoveredPassword=syntheticSecret();
+    await recoveryPage.locator('input[name="password-new"]').fill(recoveredPassword);await recoveryPage.locator('input[name="password-confirm"]').fill(recoveredPassword);
+    await recoveryPage.locator('input[type="submit"],button[type="submit"]').first().click();
+    await recoveryPage.locator('input[name="password-new"]').waitFor({state:'hidden'});await recoveryContext.close();
+    const recoveredContext=await browser.newContext({locale:'fr-CH'});recoveredContext.setDefaultTimeout(20_000);
+    await recoveredContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
+    const recoveredPage=await recoveredContext.newPage();await recoveredPage.goto(`${origin}/app`);
+    await recoveredPage.getByRole('button',{name:'Se connecter',exact:true}).click();
+    await recoveredPage.locator('input[name="username"]').fill('responsable-recette');await recoveredPage.locator('input[name="password"]').fill(recoveredPassword);
+    await recoveredPage.locator('input[type="submit"],button[type="submit"]').first().click();await recoveredPage.waitForURL(url=>url.origin===origin);
+    const recoveredMe=await recoveredContext.request.get(`${origin}/app/bff/me`);
+    const recoveredData=z.object({data:z.object({memberships:z.array(z.object({schoolId:z.string(),roles:z.array(z.string())}))})}).parse(await recoveredMe.json());
+    assert(recoveredMe.ok()&&recoveredData.data.memberships.some(member=>member.schoolId===school.id&&member.roles.includes('ADMIN')),'Le mot de passe récupéré reconnecte la même identité et retrouve son école');
+    await recoveredContext.close();
     await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
-      scope:'Chromium desktop et viewport mobile, Keycloak réel, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
+      scope:'Chromium desktop et viewport mobile, Keycloak réel, vérification e-mail, invitation équipe et récupération du compte par SMTP, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);
   } finally {
-    await browser?.close();await web?.close();await api?.close();await runtime?.end();await administration.end();
+    await browser?.close();await web?.close();await api?.close();await runtime?.end();await mailer?.end();await administration.end();
     if(containerStarted)try{await docker(['rm','--force',containerName]);}catch{/* Runner teardown also removes the ephemeral container. */}
     if(temporary){const absolute=resolve(temporary),prefix=resolve(tmpdir())+sep+'drivy-opening-e2e-';if(absolute.startsWith(prefix))await rm(absolute,{recursive:true,force:true});}
   }

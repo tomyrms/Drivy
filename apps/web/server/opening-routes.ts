@@ -16,7 +16,7 @@ export function allowedOpeningRequest(request:OpeningRequest):boolean {
 const empty=z.object({}).strict();
 const tokenSchema=z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/);
 const fields=z.object({schoolName:z.string().trim().min(1).max(150),displayName:z.string().trim().min(1).max(200),
-  contactEmail:z.email().max(254),contactPhone:z.string().trim().min(1).max(50).nullable(),timeZone:z.string().min(1).max(100),instructs:z.boolean()}).strict();
+  contactEmail:z.email().max(254),contactPhone:z.string().trim().min(1).max(32).nullable(),timeZone:z.string().min(1).max(100),instructs:z.boolean()}).strict();
 export type OpeningFields=z.infer<typeof fields>;
 export const openingResult=z.object({data:z.object({schoolId:z.uuid(),schoolName:z.string(),status:z.enum(['DRAFT','ACTIVE','ARCHIVED']),
   membershipId:z.uuid(),roles:z.array(z.string()),grants:z.array(z.string()),accessEpoch:z.number().int().positive(),operationId:z.uuid(),committedAt:z.iso.datetime({offset:true})})});

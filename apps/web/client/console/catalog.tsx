@@ -325,18 +325,18 @@ export function OfferingsSection() {
     return { ...result, valid: Object.values(result).every(value => value === null) };
   })() : null;
 
-  function edit(from: Offering | null) {
+  function edit(from: Offering) {
     runner.clearOutcome(); setShowErrors(false);
     setDraft({ offeringKey: from?.offeringKey ?? '', categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', curriculumVersionId: from?.curriculumVersionId ?? '',
       policyVersionId: from?.policyVersionId ?? '', enabled: from?.enabled ?? false, duration: from ? String(from.defaultDurationMinutes) : '45', basedOn: from });
   }
   async function confirm() {
-    if (!draft || !problems?.valid) return;
+    if (!draft?.basedOn || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createOffering', path: 'offerings', resourceVersion: 0, body: {
       offeringKey: draft.offeringKey.trim(), categoryCode: draft.categoryCode.trim(), curriculumVersionId: draft.curriculumVersionId,
       policyVersionId: draft.policyVersionId, enabled: draft.enabled, defaultDurationMinutes: Number(draft.duration),
       // Les tarifs vivent dans les prestations : l'offre garde le prix par défaut de sa version d'origine.
-      defaultPriceCents: draft.basedOn?.defaultPriceCents ?? 0 } });
+      defaultPriceCents: draft.basedOn.defaultPriceCents } });
     const result = await runner.run(command, draft.enabled ? 'La version de l’offre est créée et activée.' : 'La version de l’offre est créée, désactivée.');
     // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
     if (result.status !== 'rejected') setReviewing(false);
@@ -347,13 +347,13 @@ export function OfferingsSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Formations proposées"
-        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle offre</button>} />
+        actions={<button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'formations', category: routeQuery?.category })}><Symbol kind="plus" bare />Ajouter une formation</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
         list={<>
           <div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>
-          {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune offre" message="Créez une offre à partir d’un référentiel et d’une procédure de la même catégorie." />
+          {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune formation" message="Choisissez un permis dans le guide pour préparer une formation et son tarif." />
           : <table className="data-table">
             <caption className="visually-hidden">Offres de l’école</caption>
             <thead><tr><th scope="col">Formation</th><th scope="col" className="numeric">Durée</th></tr></thead>
