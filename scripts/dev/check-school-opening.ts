@@ -148,8 +148,12 @@ async function main() {
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.person')).rows[0].n===0,'Le nouveau compte OIDC n’est pas créé dans la base métier avant confirmation');
     stage='création volontaire et perte de réponse navigateur';await page.getByLabel('Votre nom',{exact:true}).fill('Responsable de recette synthétique');
     await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');await page.getByLabel('E-mail professionnel',{exact:true}).fill('school@example.invalid');
+    assert(await page.getByLabel('Nom de l’auto-école',{exact:true}).evaluate(element=>element.getBoundingClientRect().height>=40),
+      'Les champs d’ouverture conservent une cible d’au moins 40 pixels sur ordinateur');
+    await page.setViewportSize({width:390,height:844});
     assert(await page.getByLabel('Nom de l’auto-école',{exact:true}).evaluate(element=>element.getBoundingClientRect().height>=44),
-      'Les champs d’ouverture réutilisent les contrôles du portail avec une cible d’au moins 44 pixels');
+      'Les champs d’ouverture conservent une cible d’au moins 44 pixels sur mobile');
+    await page.setViewportSize({width:1440,height:1100});
     stage='erreur de fuseau ciblée avant création';
     const openingZone=page.getByLabel('Fuseau horaire',{exact:true});
     const zoneDetails=page.locator('details').filter({has:openingZone});
@@ -251,13 +255,13 @@ async function main() {
       exitWrites++;exitOperation=route.request().headers()['idempotency-key']??'';
       const committed=await route.fetch();exitHTTPStatus=committed.status();await route.abort('failed');
     });
-    await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();
+    await page.locator('.account-trigger').click();await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();
     const exitDialog=page.getByRole('dialog',{name:'Enregistrer avant de quitter ?',exact:true});
     await exitDialog.getByRole('button',{name:'Enregistrer et quitter',exact:true}).click();
     await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();await exitDialog.waitFor({state:'hidden'});
     assert(exitWrites===1&&exitHTTPStatus===200&&z.uuid().safeParse(exitOperation).success,
       'Une réponse de sauvegarde perdue ferme le dialogue de sortie sans abandonner la commande durable');
-    await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();
+    await page.locator('.account-trigger').click();await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();
     assert(await exitDialog.count()===0&&await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).isEnabled(),
       'Une nouvelle tentative de sortie ne masque pas la récupération de la demande incertaine');
     await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).click();
@@ -331,7 +335,7 @@ async function main() {
     await page.getByRole('heading',{name:'Préparation de l’école',exact:true}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'La préparation mobile ne déborde pas horizontalement');
     const mobileMenu=page.getByRole('button',{name:'Menu',exact:true});await mobileMenu.focus();await page.keyboard.press('Enter');
-    await page.getByRole('link',{name:'École',exact:true}).waitFor();
+    await page.getByRole('navigation',{name:'Gestion de l’école',exact:true}).getByRole('link',{name:'Paramètres de l’école',exact:true}).waitFor();
     await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('.navigation-toggle')?.getAttribute('aria-expanded')==='false');
     assert(await mobileMenu.evaluate(element=>element===document.activeElement),'Échap ferme le menu ouvert au clavier et garde le focus sur Menu');
     await page.screenshot({path:resolve(artifactDirectory,'04-preparation-mobile-synthetic.png'),fullPage:true});
