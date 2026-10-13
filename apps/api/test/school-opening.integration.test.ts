@@ -77,6 +77,29 @@ test('lien utilisé par une autre identité : aucune fuite de l’école et aucu
   expect((await call('POST','/v1/school-openings',command(token),'other')).json().code).toBe('OPENING_LINK_USED');
   expect((await call('GET',`/v1/school-openings/operations/${first.json().data.operationId}`,undefined,'other')).statusCode).toBe(404);
 });
+
+test('revisiter un lien USED avec une nouvelle opération rend le reçu original sans réécrire les choix',async()=>{
+  const {token}=await issue(),body=command(token),first=await call('POST','/v1/school-openings',body,'revisiting');expect(first.statusCode,first.body).toBe(201);
+  const changed=command(token,{schoolName:'Nom ignoré lors de la reprise',instructs:true});
+  const recovery=await call('POST','/v1/school-openings',changed,'revisiting');expect(recovery.statusCode,recovery.body).toBe(201);
+  expect(recovery.json().data).toEqual(first.json().data);expect(recovery.json().data.operationId).toBe(body.operationId);
+  expect((await pool.query('SELECT name FROM drivy.school WHERE id=$1',[first.json().data.schoolId])).rows[0].name).toBe(body.schoolName);
+  expect((await pool.query('SELECT roles FROM drivy.membership WHERE id=$1',[first.json().data.membershipId])).rows[0].roles).toEqual(['ADMIN']);
+  expect((await call('GET',`/v1/school-openings/operations/${changed.operationId}`,undefined,'revisiting')).statusCode).toBe(404);
+});
+
+test('une opération de révocation est liée à un seul lien, y compris en concurrence',async()=>{
+  const first=await issue(),second=await issue(),operation={operationId:randomUUID()};
+  const revoked=await call('POST',`${base}/${first.link.id}/revoke`,operation);expect(revoked.statusCode,revoked.body).toBe(200);
+  const replay=await call('POST',`${base}/${first.link.id}/revoke`,operation);expect(replay.json().data).toEqual(revoked.json().data);
+  const mismatch=await call('POST',`${base}/${second.link.id}/revoke`,operation);expect(mismatch.statusCode).toBe(409);expect(mismatch.json().code).toBe('IDEMPOTENCY_MISMATCH');
+  expect((await pool.query('SELECT status FROM drivy.school_opening_link WHERE id=$1',[second.link.id])).rows[0].status).toBe('AVAILABLE');
+  expect((await call('POST',`${base}/${first.link.id}/revoke`,{operationId:randomUUID()})).json().code).toBe('OPENING_LINK_REVOKED');
+  const third=await issue(),fourth=await issue(),concurrentOperation={operationId:randomUUID()};
+  const results=await Promise.all([third,fourth].map(link=>call('POST',`${base}/${link.link.id}/revoke`,concurrentOperation)));
+  expect(results.map(result=>result.statusCode).sort()).toEqual([200,409]);
+  expect(results.find(result=>result.statusCode===409)!.json().code).toBe('IDEMPOTENCY_MISMATCH');
+});
 test('expiration et révocation refusent toute création ; révoquer un lien utilisé ne détruit rien',async()=>{
   const expired=await issue();await pool.query("UPDATE drivy.school_opening_link SET created_at=now()-interval '9 days',expires_at=now()-interval '2 days' WHERE id=$1",[expired.link.id]);
   expect((await call('POST','/v1/school-openings',command(expired.token),'expired')).json().code).toBe('OPENING_LINK_EXPIRED');

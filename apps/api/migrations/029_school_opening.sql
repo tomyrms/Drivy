@@ -22,6 +22,7 @@ CREATE TABLE drivy.school_opening_link (
   consume_operation_id uuid,
   consume_hash text CHECK(consume_hash ~ '^[a-f0-9]{64}$'),
   UNIQUE(created_by_issuer,created_by_subject,create_operation_id),
+  UNIQUE(revoked_by_issuer,revoked_by_subject,revoke_operation_id),
   UNIQUE(used_by_issuer,used_by_subject,consume_operation_id),
   CHECK(expires_at>created_at),
   CHECK((status='USED')=(used_at IS NOT NULL AND used_by_issuer IS NOT NULL AND used_by_subject IS NOT NULL

@@ -148,7 +148,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const nextStep = steps[Math.min(steps.indexOf(step) + 1, steps.length - 1)]!;
   return <div className="section-stack school-setup">
     <SectionHeading title={catalogueOnly ? 'Préparer une formation' : 'Préparer votre école'} />
-    <OutcomeNotice outcome={runner.outcome} actions={runner.outcome?.code === 'VERSION_CONFLICT'
+    <OutcomeNotice outcome={runner.outcome?.tone === 'success' ? null : runner.outcome} actions={runner.outcome?.code === 'VERSION_CONFLICT'
       ? <button type="button" className="button secondary" onClick={() => setDiscard(true)}>Relire la version enregistrée</button> : undefined} />
     {readFailure && <Notice tone="error" title="Vérification impossible" actions={<button className="button secondary" type="button" onClick={() => document && void refreshReview(document)}>Réessayer</button>}><p>{readFailure}</p></Notice>}
     {runner.blockedReason && <Notice tone="warning" title="Demande à vérifier"><p>{runner.blockedReason}</p></Notice>}
@@ -235,7 +235,7 @@ function ProfileStep({ content, onChange }: StepProps) {
         <div className="setup-profile-control"><strong>{fieldLabels[base.field]}</strong>{fixed ? <span>À l’inscription</span> : <SelectField label={`Demander ${fieldLabels[base.field]!.toLocaleLowerCase('fr')}`} value={!current ? 'NONE' : current.requirement === 'OPTIONAL' ? 'OPTIONAL' : current.stage} options={[
           { value: 'NONE', label: 'Non demandé' }, { value: 'OPTIONAL', label: 'Facultatif' }, { value: 'JOIN', label: 'À l’inscription' }, { value: 'BEFORE_LESSON', label: 'Avant une leçon' },
         ]} onChange={value => { const rest = content.profile.fields.filter(item => item.field !== base.field); update(value === 'NONE' ? rest : [...rest, { ...(current ?? base), requirement: value === 'OPTIONAL' ? 'OPTIONAL' : 'REQUIRED', stage: value as 'OPTIONAL' | 'JOIN' | 'BEFORE_LESSON' }]); }} />}</div>
-        {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
+        {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${base.field}.explanation`} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
       </div>;
     })}</div>
     <details className="disclosure"><summary>Aperçu pour l’élève</summary><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span className="row-meta">{field.requirement === 'OPTIONAL' ? 'Facultatif' : field.stage === 'JOIN' ? 'À l’inscription' : 'Avant une leçon'}</span></li>)}</ul></details>
@@ -253,15 +253,15 @@ function FormationStep({ content, templates, offerings, today, onChange, canWrit
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 12} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
       <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>
-      <div className="form-grid"><TextField label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
-        <TextField label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div>
+      <div className="form-grid"><TextField name={`formations.${index}.categoryCode`} label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
+        <TextField name={`formations.${index}.label`} label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div>
       {!formation.existingOfferingId && <>
         <details className="disclosure"><summary>Programme · {formation.competencies.length} compétences</summary><div className="section-stack">{formation.competencies.map((competence, position) => <div className="setup-competency" key={competence.key}>
-          <TextField label={`Compétence ${position + 1}`} value={competence.label} onChange={label => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, label } : item) })} />
-          <TextArea label="Description" value={competence.description} rows={2} onChange={description => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, description } : item) })} />
-          <button type="button" className="button quiet" onClick={() => update({ ...formation, competencies: formation.competencies.filter((_, i) => i !== position) })}>Retirer cette compétence</button>
+          <TextField name={`formations.${index}.competencies.${position}.label`} label={`Compétence ${position + 1}`} value={competence.label} onChange={label => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, label } : item) })} />
+          <TextArea name={`formations.${index}.competencies.${position}.description`} label="Description" value={competence.description} rows={2} onChange={description => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, description } : item) })} />
+          <button type="button" className="button quiet" onClick={() => update({ ...formation, competencies: formation.competencies.filter((_, i) => i !== position).map((item, sortOrder) => ({ ...item, sortOrder })) })}>Retirer cette compétence</button>
         </div>)}<button type="button" className="button secondary" disabled={formation.competencies.length >= 200} onClick={() => update({ ...formation, competencies: [...formation.competencies, { key: crypto.randomUUID(), label: '', description: '', sortOrder: formation.competencies.length }] })}>Ajouter une compétence</button></div></details>
-        <details className="disclosure"><summary>Déroulement de la formation</summary><TextArea label="Déroulement" value={formation.procedureText} rows={5} maxLength={4000} onChange={procedureText => update({ ...formation, procedureText })} /></details>
+        <details className="disclosure"><summary>Déroulement de la formation</summary><TextArea name={`formations.${index}.procedureText`} label="Déroulement" value={formation.procedureText} rows={5} maxLength={4000} onChange={procedureText => update({ ...formation, procedureText })} /></details>
       </>}
     </section>)}
   </div>;

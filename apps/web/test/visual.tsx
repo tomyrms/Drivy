@@ -16,6 +16,7 @@ import { FormationsSection } from '../client/console/formations';
 import { CurriculaSection, ProceduresSection, OfferingsSection } from '../client/console/catalog';
 import { ProductsSection, TermsSection } from '../client/console/commerce';
 import { App } from '../client/App';
+import { setupSteps, type SetupDraft, type SetupTemplates, type SetupPreview } from '../client/setup-model';
 
 const parameters = new URLSearchParams(location.search);
 const page = parameters.get('page');
@@ -26,6 +27,49 @@ const learnerA = uuid(), learnerB = uuid(), trainingA = uuid(), curriculumB = uu
 const curriculumA = uuid(), policyA = uuid(), policyB = uuid(), termsId = uuid();
 const noticeId = uuid();
 const stamp = '2026-09-29T08:00:00.000Z';
+const setupTemplates: SetupTemplates = {
+  version: 'visual-1',
+  privacy: { id: 'visual-information', version: 'visual-1',
+    noticeText: '[Nom de l’école] utilise Drivy pour gérer les dossiers, les rendez-vous et le suivi pédagogique. Les personnes habilitées de l’école accèdent aux données nécessaires à leur activité. L’élève retrouve les leçons réalisées, les observations partagées, les bilans et les objectifs ; les notes privées du moniteur ne lui sont pas montrées. Le suivi pédagogique peut être utilisé sans GPS. Pour une demande relative aux données : [contact données]. Complétez les destinataires et les pratiques propres à votre école : [à compléter].',
+    retentionText: 'Décrivez les durées appliquées à vos dossiers, aux leçons, aux documents et aux trajets, ainsi que le traitement des demandes et des sauvegardes : [à compléter]. N’annoncez une suppression automatique que si elle est effectivement mise en œuvre.' },
+  profileFields: ['firstName', 'lastName'].map(field => ({ field: field as 'firstName' | 'lastName', requirement: 'REQUIRED', stage: 'JOIN', purposeCode: 'IDENTIFICATION', explanation: 'Identifier votre dossier dans l’école.' })),
+  formations: ['A', 'A1', 'B', 'BE'].map(categoryCode => ({ id: `visual-${categoryCode}`, version: 'visual-1', categoryCode, label: `Permis ${categoryCode}`, durationMinutes: 45,
+    competencies: ['Préparer la conduite', 'Observer et anticiper', 'Placement et trajectoire', 'Adapter son allure', 'Franchir les intersections', 'Manœuvrer'].map((label, sortOrder) => ({ key: `competence-${sortOrder}`, label, sortOrder, description: 'Exemple pédagogique à adapter aux pratiques de l’école.' })),
+    procedureText: 'Avant la première leçon, l’école examine le dossier et les justificatifs utiles. Le moniteur définit avec l’élève les objectifs de travail, adapte les exercices et consigne le suivi pédagogique. Cette proposition doit être adaptée aux pratiques de l’école.' })),
+};
+const setupReady = parameters.get('setup') === 'ready';
+const requestedStep = parameters.get('step');
+const setupDraft: SetupDraft = { id: schoolId, schoolId, version: 1, status: 'DRAFT',
+  currentStep: setupSteps.find(step => step === requestedStep) ?? 'IDENTITY', updatedAt: stamp, updatedByMembershipId: marieId, appliedAt: null,
+  content: { selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE', ...(setupReady ? ['CATALOGUE' as const] : [])],
+    identity: { name: 'École Synthétique', timeZone: 'Europe/Zurich', contactEmail: 'ecole@example.test', contactPhone: null },
+    privacy: { noticeText: setupReady ? 'L’école utilise Drivy pour gérer les dossiers et le suivi pédagogique. Seuls les membres autorisés consultent les informations utiles à la formation.' : '',
+      retentionText: setupReady ? 'Durées de conservation synthétiques pour cette revue locale. Les demandes sont traitées par le contact de l’école.' : '', contactEmail: 'ecole@example.test', templateId: null, templateVersion: null },
+    profile: { fields: structuredClone(setupTemplates.profileFields), effectiveFrom: null },
+    formations: setupReady ? [{ id: uuid(), apply: true, categoryCode: 'B', label: 'Permis B', templateId: 'visual-B', templateVersion: 'visual-1',
+      competencies: structuredClone(setupTemplates.formations[2]!.competencies), procedureText: setupTemplates.formations[2]!.procedureText,
+      cancellationPolicyText: 'Conditions d’annulation synthétiques pour la revue.', sourceUrls: [], durationMinutes: 45, priceCents: 9500,
+      termsText: 'Conditions du tarif synthétiques pour la revue.', validFrom: '2026-10-13', existingOfferingId: null }] : [] },
+};
+function setupPreview(activate: boolean): SetupPreview {
+  const issues: SetupPreview['issues'] = [];
+  const add = (field: string, message: string) => issues.push({ field, message, code: 'SETUP_FIELD_REQUIRED' });
+  const content = setupDraft.content;
+  if (content.selectedSections.includes('IDENTITY') && !content.identity.name.trim()) add('identity.name', 'Indiquez le nom de l’école.');
+  if (content.selectedSections.includes('PRIVACY')) for (const field of ['noticeText', 'retentionText'] as const) {
+    if (!content.privacy[field].trim() || content.privacy[field].includes('[à compléter]')) add(`privacy.${field}`, 'Remplacez les éléments à compléter avant de confirmer.');
+  }
+  if (content.selectedSections.includes('CATALOGUE')) content.formations.forEach((formation, index) => {
+    if (!formation.apply) return;
+    if (formation.priceCents === null) add(`formations.${index}.priceCents`, 'Saisissez le prix réel de la leçon.');
+    if (!formation.termsText.trim()) add(`formations.${index}.termsText`, 'Complétez les conditions de cette prestation.');
+    if (!formation.cancellationPolicyText.trim()) add(`formations.${index}.cancellationPolicyText`, 'Complétez les conditions d’annulation.');
+  });
+  return { schoolId, draftVersion: setupDraft.version, schoolVersion: value.school.version, configurationVersion: value.school.configurationVersion,
+    activate, reviewDigest: `synthetic-${setupDraft.version}`, ready: issues.length === 0, issues, selectedSections: content.selectedSections,
+    content: structuredClone(content), effects: activate ? [] : content.selectedSections.includes('PRIVACY') ? ['Les autorisations GPS en cours prennent fin.'] : [] };
+}
+let policyState = { schoolId, version: 1, status: 'APPROVED', noticeVersionId: noticeId, noticeText: 'Les informations de votre profil servent au suivi de votre formation. Seuls les membres autorisés de l’école peuvent les consulter.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique et traite les demandes de suppression auprès du contact ci-dessous.', contactEmail: 'ecole@example.test', approvedAt: stamp };
 const member = (id: string, displayName: string, roles: string[], status = 'ACTIVE') => ({ id, schoolId, version: 1, personId: uuid(), displayName, status, roles, grants: id === marieId ? ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'] : [], accessEpoch: 1 });
 const offering = (id: string, offeringKey: string, version: number, enabled: boolean, categoryCode: string) => ({ id, schoolId, version, offeringKey, categoryCode, curriculumVersionId: categoryCode === 'A' ? curriculumA : curriculumB, policyVersionId: categoryCode === 'A' ? policyA : policyB, enabled, defaultDurationMinutes: 45, defaultPriceCents: 9500 });
 const db: Record<string, any> = {
@@ -103,8 +147,14 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     const readiness = { schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) };
     if (path === 'observation-themes') return reply(200, envelope(themesProjection()), url.href);
     if (path === 'readiness') return reply(200, envelope(readiness), url.href);
+    if (path === 'setup-draft') return reply(200, envelope(structuredClone(setupDraft)), url.href);
+    if (path === 'setup-draft/templates') return reply(200, envelope(setupTemplates), url.href);
+    if (path === 'setup-draft/preview') return reply(200, envelope(setupPreview(url.searchParams.get('activate') === 'true')), url.href);
+    if (path === 'setup-draft/next-actions') return reply(200, envelope({ schoolId, planningReady: true, actions: parameters.has('first-lesson') ? [
+      { code: 'FIRST_LEARNER_REQUIRED', label: 'Inviter votre premier élève', section: 'invitations', query: { audience: 'learners' } },
+    ] : [] }), url.href);
     if (path === 'setup') return reply(200, envelope({ schoolId, version: 1, status: 'COMPLETED', currentStep: 'REVIEW', completedSteps: ['IDENTITY', 'DATA'], lastSavedAt: stamp, readiness }), url.href);
-    if (path === 'data-policy') return reply(200, envelope({ schoolId, version: 1, status: 'APPROVED', noticeVersionId: noticeId, noticeText: 'Les informations de votre profil servent au suivi de votre formation. Seuls les membres autorisés de l’école peuvent les consulter.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique et traite les demandes de suppression auprès du contact ci-dessous.', contactEmail: 'ecole@example.test', approvedAt: stamp }), url.href);
+    if (path === 'data-policy') return reply(200, envelope(policyState), url.href);
     if (/^trainings\/[^/]+\/assignments$/.test(path)) return reply(200, envelope({ items: db.assignments, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/permit-checks$/.test(path)) return reply(200, envelope({ items: db.permits, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/progress$/.test(path)) return reply(200, envelope({ trainingId: trainingA, computedAt: stamp, unobservedCompetencyIds: [comp2], items: [{ competencyId: comp1, label: 'Démarrer et s’arrêter', level: 'GUIDED', context: 'Parking', observedAt: stamp, sourceLessonId: lessonDone, sourceRevisionId: uuid() }] }), url.href);
@@ -114,6 +164,28 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   }
   if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
+  if (path === 'setup-draft' || path === 'setup-draft/complete') {
+    if (reviewState === 'conflict') return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    if (reviewState === 'mutation-error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+    if ((init?.headers as Record<string, string>)?.['If-Match'] !== `"${setupDraft.version}"`) return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    if (method === 'PUT' && path === 'setup-draft') {
+      setupDraft.version++; setupDraft.content = structuredClone(body.content); setupDraft.currentStep = body.currentStep;
+      setupDraft.updatedAt = stamp; setupDraft.status = 'DRAFT'; setupDraft.appliedAt = null;
+      return reply(200, envelope(structuredClone(setupDraft)), url.href);
+    }
+    if (method === 'POST' && path === 'setup-draft/complete') {
+      if (!setupPreview(body.activate).ready) return reply(409, { code: 'SETUP_INCOMPLETE' }, url.href);
+      setupDraft.version++; setupDraft.status = 'APPLIED'; setupDraft.appliedAt = stamp;
+      value.school.version++; value.school.configurationVersion++;
+      if (body.activate) value.school.status = 'ACTIVE';
+      return reply(200, envelope({ id: schoolId, schoolId, version: setupDraft.version }), url.href);
+    }
+  }
+  if (method === 'PUT' && path === 'data-policy') {
+    policyState = { ...policyState, ...body, version: policyState.version + 1, status: 'APPROVED' };
+    value.school.version++;
+    return reply(200, envelope(policyState), url.href);
+  }
   if (method === 'PUT' && path === 'observation-themes') {
     // ?state=conflict : quelqu'un d'autre enregistre avant nous (412) ; ?state=forbidden : le droit a été retiré (403).
     if (reviewState === 'conflict') { themeState.version++; themeState.themes = [...themeState.themes].reverse(); return reply(412, { code: 'VERSION_CONFLICT' }, url.href); }

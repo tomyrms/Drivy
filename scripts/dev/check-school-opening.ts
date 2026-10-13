@@ -144,9 +144,13 @@ async function main() {
     await page.reload();await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();assert(true,'Une école active revient à l’agenda après rechargement');
     await page.screenshot({path:resolve(artifactDirectory,'03-agenda-desktop-synthetic.png'),fullPage:true});
     stage='préparation web sur écran mobile';await page.setViewportSize({width:390,height:844});await page.goto(`${origin}/app/gestion/${school.id}/apercu`);
-    await page.getByRole('heading',{name:'Préparer votre école',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Préparation de l’école',exact:true}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'La préparation mobile ne déborde pas horizontalement');
     await page.screenshot({path:resolve(artifactDirectory,'04-preparation-mobile-synthetic.png'),fullPage:true});
+    await page.goto(`${origin}/app/gestion/${school.id}/apercu?from=formations`);
+    await page.getByRole('heading',{name:'Préparer une formation',exact:true}).waitFor();
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Le guide de formation mobile ne déborde pas horizontalement');
+    await page.screenshot({path:resolve(artifactDirectory,'05-formation-mobile-synthetic.png'),fullPage:true});
     assert(await page.evaluate(()=>localStorage.length===0&&sessionStorage.length===0),'Aucun brouillon personnel ou jeton persistant dans le navigateur');
     const operatorDenied=await consumerContext.request.get(`${origin}/app/bff/operator/school-opening-links`);assert(operatorDenied.status()===403,'Un ADMIN scolaire ne devient pas opérateur Drivy');
     await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,

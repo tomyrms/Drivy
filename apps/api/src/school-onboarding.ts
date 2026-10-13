@@ -65,9 +65,10 @@ async function review(db:PoolClient,school:SchoolRow,current:Draft,activate:bool
         const row=(await db.query<{id:string;category_code:string;ready:boolean}>(`SELECT id,category_code,drivy.catalogue_offering_ready(id) AS ready FROM drivy.offering_version WHERE school_id=$1 AND id=$2`,[school.id,item.existingOfferingId])).rows[0];
         references.push(row??{missing:item.existingOfferingId});
         if(!row||!row.ready||row.category_code!==item.categoryCode)issue(`formations.${content.formations.indexOf(item)}.existingOfferingId`,'OFFERING_NOT_READY','Choisissez une formation active et approuvée de ce permis.');
-      } else if((await db.query('SELECT id FROM drivy.offering_version WHERE school_id=$1 AND offering_key=$2',[school.id,`setup-${item.id}`])).rowCount) {
-        issue(`formations.${content.formations.indexOf(item)}.id`,'SETUP_ITEM_ALREADY_APPLIED','Cette formation a déjà été créée. Ouvrez sa fiche pour ajouter un tarif.');
       }
+      const alreadyApplied=(await db.query<{used:boolean}>(`SELECT EXISTS(SELECT 1 FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2)
+        OR ($3::boolean AND EXISTS(SELECT 1 FROM drivy.offering_version WHERE school_id=$1 AND offering_key=$2)) AS used`,[school.id,`setup-${item.id}`,item.existingOfferingId===null])).rows[0]!.used;
+      if(alreadyApplied)issue(`formations.${content.formations.indexOf(item)}.id`,'SETUP_ITEM_ALREADY_APPLIED','Cette prestation a déjà été créée. Préparez un nouveau tarif pour continuer.');
     }
   }
   const effects=selected(content,'PRIVACY')&&school.status==='ACTIVE'?['Une nouvelle adoption des textes peut interrompre les captures autorisées et demander un nouveau choix GPS.']:[];
@@ -132,7 +133,7 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
       const blockers=await planningReadiness(db,school.id,learner.id,undefined,['ADMIN']);
       const blocker=blockers[0];
       if(blocker)actions.push({code:blocker.code,label:blocker.code==='TRAINING_NOT_ACTIVE'?'Ouvrir la formation de l’élève':blocker.code==='INSTRUCTOR_NOT_ASSIGNED'?'Affecter un moniteur à la formation':'Préparer la formation de l’élève',section:'eleves',query:{selection:learner.id}});
-      else actions.push({code:'PLAN_FIRST_LESSON',label:'Planifier la première leçon',section:'agenda',query:{learner:learner.id}});
+      else actions.push({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:learner.id}});
     }
   }
   return {schoolId:school.id,actions,planningReady:planning.ready};

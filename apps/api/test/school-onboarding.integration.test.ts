@@ -108,8 +108,10 @@ it('la publication complète est atomique, idempotente et tarifée à partir d�
 
 it('bloque prix absent, modèle obsolète, champ interdit et placeholders avant toute adoption',async()=>{
   const saved=await prepared(true);saved.content.formations[0]!.priceCents=null;saved.content.formations[0]!.templateVersion='ancienne';saved.content.privacy.retentionText='[à compléter]';
+  saved.content.formations[0]!.termsText=setupTemplates.commercial.termsText;saved.content.formations[0]!.cancellationPolicyText=setupTemplates.commercial.cancellationPolicyText;
   saved.content.profile.fields.push({field:'profilePhotoDocumentId',requirement:'REQUIRED',stage:'JOIN',purposeCode:'PERSONALISATION',explanation:'Une photo.'});await save(saved.content,saved.version);
   const preview=await reviewed();expect(preview.ready).toBe(false);expect(preview.issues.map((i:{code:string})=>i.code)).toEqual(expect.arrayContaining(['SETUP_FIELD_REQUIRED','SETUP_PLACEHOLDER','SETUP_TEMPLATE_CHANGED','PROFILE_POLICY_RULE_INVALID']));
+  expect(preview.issues.filter((issue:{code:string})=>issue.code==='SETUP_PLACEHOLDER').map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['formations.0.termsText','formations.0.cancellationPolicyText']));
   const before=await counts(),command=await completion();expect((await call('POST',`${base}/complete`,command.body,command.version)).statusCode).toBe(409);expect(await counts()).toEqual(before);
 });
 
@@ -140,6 +142,10 @@ it('ajoute un tarif à une école active sans réadopter les textes ni changer l
   const after=await counts();expect(after.policies).toBe(before.policies);expect(after.profile_policies).toBe(before.profile_policies);expect(after.curricula).toBe(before.curricula);expect(after.products).toBe(before.products+1);
   expect(response.json().data.applied.offeringIds).toEqual(opened.applied.offeringIds);expect(response.json().data.applied.policyVersionId).toBeNull();
   expect(Number((await pool.query('SELECT unit_price_cents FROM drivy.service_product_version WHERE id=$1',[opened.applied.productIds[0]])).rows[0].unit_price_cents)).toBe(9300);
+  const applied=await getDraft();await save(applied.content,applied.version);
+  const review=await reviewed(false);expect(review.ready).toBe(false);expect(review.issues.map((issue:{code:string})=>issue.code)).toContain('SETUP_ITEM_ALREADY_APPLIED');
+  const retry=await completion(false);expect((await call('POST',`${base}/complete`,retry.body,retry.version)).json().code).toBe('SETUP_ITEM_ALREADY_APPLIED');
+  expect((await counts()).products).toBe(after.products);
 });
 
 it('une politique future ne donne pas une préparation de planification actuelle',async()=>{
@@ -159,7 +165,7 @@ it('les prochaines actions séparent configuration, dossier et première leçon 
   const trainingId=randomUUID();await pool.query("INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE','2026-01-01')",[trainingId,id.schoolA,id.aliceLearner,result.applied.offeringIds[0],`setup-${(await getDraft()).content.formations[0]!.id}`]);
   expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('INSTRUCTOR_NOT_ASSIGNED');
   await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,'2020-01-01')",[randomUUID(),id.schoolA,trainingId,id.instructorMember]);
-  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0]).toMatchObject({code:'PLAN_FIRST_LESSON',section:'agenda',query:{learner:id.aliceLearner}});
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0]).toMatchObject({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:id.aliceLearner}});
   const policyId=(await pool.query('SELECT policy_version_id FROM drivy.offering_version WHERE id=$1',[result.applied.offeringIds[0]])).rows[0].policy_version_id;
   await pool.query(`INSERT INTO drivy.lesson(school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,status,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
     VALUES($1,$2,$3,$4,$5,'2026-01-01T09:00:00Z','2026-01-01T09:50:00Z','Europe/Zurich','Lieu synthétique','CANCELLED',9300,0,$6,'{}')`,[id.schoolA,trainingId,id.aliceLearner,id.alice,id.instructorMember,policyId]);

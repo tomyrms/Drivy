@@ -55,6 +55,8 @@ async function createSchool(pool:Pool,identity:Identity,body:SchoolOpeningComman
     if(previous){if(previous.consume_hash!==hash)throw mismatch();return currentResult(db,previous,identity);}
     const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE token_hash=$1 FOR UPDATE',[openingHash(body.token)])).rows[0];
     if(!row) throw invalid();
+    // A revisited link can recover its original receipt after the browser lost its operation UUID.
+    // This is read-only recovery: newly submitted fields never alter the already-created school.
     if(row.status==='USED') return currentResult(db,row,identity);
     assertAvailable(row);
     // An operation UUID already used for an ordinary school command remains unavailable here.
@@ -110,11 +112,15 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
     const identity=await operator(request);empty.parse(request.query);const {linkId}=z.object({linkId:z.uuid()}).parse(request.params);
     const body=operationBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);
     const data=await transaction(options.pool,identity,true,undefined,async db=>{
+      await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`opening-revoke:${identity.issuer}:${identity.subject}:${body.operationId}`]);
+      const known=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE revoked_by_issuer=$1 AND revoked_by_subject=$2 AND revoke_operation_id=$3',
+        [identity.issuer,identity.subject,body.operationId])).rows[0];
+      if(known){if(known.id!==linkId)throw mismatch();return openingLinkProjection(known);}
       const initial=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE id=$1',[linkId])).rows[0];
       if(!initial)throw notFound();if(initial.status==='USED')throw new ApiError(409,'OPENING_LINK_USED','Ce lien a déjà été utilisé.');
       const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE id=$1 FOR UPDATE',[linkId])).rows[0];
       if(!row)throw new ApiError(409,'OPENING_LINK_USED','Ce lien a déjà été utilisé.');
-      if(row.status==='REVOKED')return openingLinkProjection(row);
+      if(row.status==='REVOKED')throw new ApiError(409,'OPENING_LINK_REVOKED','Ce lien a déjà été révoqué.');
       return openingLinkProjection((await db.query<OpeningLinkRow>("UPDATE drivy.school_opening_link SET status='REVOKED',revoked_at=clock_timestamp(),revoke_operation_id=$2,revoked_by_issuer=$3,revoked_by_subject=$4 WHERE id=$1 RETURNING *",[linkId,body.operationId,identity.issuer,identity.subject])).rows[0]!);
     });return envelope(data,request);
   });
