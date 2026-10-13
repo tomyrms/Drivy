@@ -6,6 +6,8 @@ Déployé à la demande du porteur depuis la branche de la PR #31, non fusionné
 
 **Le web était figé depuis le 9 octobre** : le réglage systemd `90-brand-web-release.conf` (mise en ligne de la marque) pointait le service web vers `web-releases/b710303`, et les déploiements suivants, dont les textes de l’école (lots 0 et 1), n’avaient mis à jour que l’API. Réglage retiré (copie dans `/root/systemd-retired/` sur CT114) : le web tourne désormais dans `current/apps/web`, vérifié par le répertoire réel du processus. `/app`, `/app/ouvrir`, `/app/operateur`, `/app/gestion` répondent 200, en local et sur le domaine public.
 
+Puis, à la demande du porteur, « Luc auto école » est supprimée pour essayer l’ouverture d’une école de bout en bout (sauvegarde vérifiée de `drivy_refonte` et `drivy_identity` dans `/root/drivy-before-opening-20261013T194941Z/` sur CT113). Les personnes et comptes de connexion restent. Un lien d’ouverture valable sept jours est inséré directement en base, faute d’opérateur déclaré ; le jeton n’est enregistré nulle part dans le dépôt.
+
 IPA correspondante : run 38427200996 (`43d0a3b`, dernier commit iOS de la PR), empreinte vérifiée. **Non exécuté** : parcours connecté sur le homelab après déploiement.
 
 ## 13 octobre 2026 — homelab remis à zéro
