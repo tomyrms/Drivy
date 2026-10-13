@@ -9,6 +9,7 @@ import { ConfirmDialog, Facts, Loading, Notice, SelectField, StatusBadge, Symbol
 import { useCommandRunner, useConsole, useDraft, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, type Choice, type FieldDraft } from './privacy-model';
+import { ProfileFieldsPreview } from './profile-fields-preview';
 
 /* ------------------------------------------------------------ Textes de confidentialité */
 
@@ -165,6 +166,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
             })}
           </tbody>
         </table>
+        <details className="disclosure"><summary>Aperçu pour l’élève</summary><ProfileFieldsPreview fields={rules} /></details>
         {problem && <p className="field-error"><Symbol kind="alert" bare />{problem}</p>}
         <div className="button-row compact">
           <button type="submit" className="button primary" disabled={!mayEdit || !!problem || !changed}>{current ? 'Enregistrer' : 'Publier'}</button>
@@ -177,6 +179,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
       <OutcomeNotice outcome={runner.outcome} />
       <Facts items={rules.map(rule => [fieldLabels[rule.field], rule.stage === 'JOIN' ? 'Requis à l’entrée' : rule.stage === 'BEFORE_LESSON' ? 'Requis avant une leçon'
         : rule.stage === 'BEFORE_COURSE' ? 'Avant un cours' : 'Facultatif'] as [string, string])} />
+      <details className="disclosure"><summary>Relire le formulaire et les explications</summary><ProfileFieldsPreview fields={rules} /></details>
       {blocksPlanning && <Notice tone="warning" title="Planification" live={false}><p>Une leçon ne pourra plus être planifiée pour un élève à qui il manque une information requise.</p></Notice>}
     </ConfirmDialog>
   </section>;

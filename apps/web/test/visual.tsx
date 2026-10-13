@@ -217,6 +217,12 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     db['profile-field-policies'].push(item); value.school.version++;
     return reply(201, envelope(item), url.href);
   }
+  if (method === 'POST' && path === 'service-products') {
+    const version = Math.max(0, ...db['service-products'].filter((item: any) => item.productKey === body.productKey).map((item: any) => item.version)) + 1;
+    const item = { ...body, id: uuid(), schoolId, version };
+    db['service-products'].push(item);
+    return reply(201, envelope(item), url.href);
+  }
   if (method === 'PUT' && path === 'observation-themes') {
     // ?state=conflict : quelqu'un d'autre enregistre avant nous (412) ; ?state=forbidden : le droit a été retiré (403).
     if (reviewState === 'conflict') { themeState.version++; themeState.themes = [...themeState.themes].reverse(); return reply(412, { code: 'VERSION_CONFLICT' }, url.href); }

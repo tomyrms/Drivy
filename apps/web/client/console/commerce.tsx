@@ -189,7 +189,7 @@ export function ProductsSection() {
   })() : null;
   function edit(from: ServiceProduct | null) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ productKey: from?.productKey ?? '', label: from?.label ?? '', type: from?.type ?? 'INDIVIDUAL_LESSON', categoryCode: from?.categoryCode ?? routeQuery?.category ?? '',
+    setDraft({ productKey: from?.productKey ?? `product-${crypto.randomUUID()}`, label: from?.label ?? '', type: from?.type ?? 'INDIVIDUAL_LESSON', categoryCode: from?.categoryCode ?? routeQuery?.category ?? '',
       duration: from?.durationMinutes ? String(from.durationMinutes) : '', unitLabel: from?.unitLabel ?? 'leçon', price: from ? centsToInput(from.unitPriceCents) : '',
       validFrom: from?.validFrom ?? today(), validUntil: from?.validUntil ?? '', termsVersionId: from?.termsVersionId ?? '', enabled: false, basedOn: from });
   }
@@ -244,11 +244,7 @@ export function ProductsSection() {
                 <TextField label="Durée (minutes)" required={draft.type === 'INDIVIDUAL_LESSON' ? undefined : false} value={draft.duration} inputMode="numeric" disabled={!canWrite}
                   onChange={duration => update({ duration })} error={showErrors ? problems.duration : null} />
               </div>
-              <div className="form-row">
-                <SelectField label="Type" value={draft.type} disabled={!canWrite} options={productTypes.map(type => ({ value: type, label: typeLabels[type] }))} onChange={type => update({ type })} />
-                <TextField label="Référence" value={draft.productKey} maxLength={100} disabled={!canWrite || !!draft.basedOn} placeholder="Par exemple lecon-b-45"
-                  onChange={productKey => update({ productKey })} error={showErrors ? problems.key : null} />
-              </div>
+              <SelectField label="Type" value={draft.type} disabled={!canWrite} options={productTypes.map(type => ({ value: type, label: typeLabels[type] }))} onChange={type => update({ type })} />
               <div className="form-row">
                 <TextField label="Valable dès le" type="date" value={draft.validFrom} disabled={!canWrite} onChange={validFrom => update({ validFrom })} error={showErrors ? problems.period : null} />
                 <TextField label="Jusqu’au" type="date" required={false} value={draft.validUntil} disabled={!canWrite} onChange={validUntil => update({ validUntil })} />

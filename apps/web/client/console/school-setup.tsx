@@ -4,11 +4,13 @@ import { createCommand, formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { confirmedData, readSchool, offeringSchema, readAll, type Offering } from '../school-api';
 import { RequestFailure } from '../protocol';
+import { setupStepState } from '../setup-progress';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField } from '../ui';
 import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
-  setupStepLabels, setupSteps, setupTemplatesSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
+  setupStepLabels, setupSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
+import { ProfileFieldsPreview } from './profile-fields-preview';
 import './school-setup.css';
 
 type StoredDraft = { version: number; content: SetupContent; step: SetupStep; dirty: boolean };
@@ -34,6 +36,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [dirty, setDirty] = useState(false);
   const [editorRevision, setEditorRevision] = useState(0);
   const [preview, setPreview] = useState<SetupPreview | null>(null);
+  const [reviewIssues, setReviewIssues] = useState<SetupPreview['issues']>([]);
   const [reviewing, setReviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -102,7 +105,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     needsAdoption.current = false;
     setDocument(saved); setContent(next); setStep(steps.includes(nextStep) ? nextStep : steps[0]!); setDirty(nextDirty);
     setEditorRevision(revision => revision + 1);
-    setPreview(null); setAcknowledged(false); setReadFailure(null);
+    setPreview(null); setReviewIssues([]); setAcknowledged(false); setReadFailure(null);
   }, [loaded.data, loaded.status]);
   useEffect(() => {
     if (content && document) drafts?.set(key, { version: document.version, content, step, dirty } satisfies StoredDraft);
@@ -137,7 +140,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
       const result = await readSchool(schoolId, 'setup-draft/preview', setupPreviewSchema, { activate: String(school.status === 'DRAFT') });
       if (result.schoolId !== schoolId || result.draftVersion !== saved.version) throw new RequestFailure('VERSION_CONFLICT', 412);
       if (catalogueOnly && result.selectedSections.some(section => section !== 'CATALOGUE')) throw new RequestFailure('SETUP_REVIEW_CHANGED', 409);
-      setPreview(result);
+      setPreview(result); setReviewIssues(result.issues);
     } catch (error) { setReadFailure(readError(error)); } finally { setReviewing(false); }
   }
   async function save(nextStep: SetupStep, value = content, exit = false, afterSave?: () => void) {
@@ -194,9 +197,10 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     <LoadState loaded={loaded} label="Lecture de votre préparation…">{data => content && document && <>
       <div className="setup-progress-mobile"><button type="button" className="button quiet" aria-expanded={stepsOpen} aria-controls="setup-progress" onClick={() => setStepsOpen(!stepsOpen)}>Étape {steps.indexOf(step) + 1} sur {steps.length}<Symbol kind="chevron" bare /></button></div>
       <div className="setup-layout">
-        <nav id="setup-progress" className={`setup-progress${stepsOpen ? ' is-open' : ''}`} aria-label="Étapes de préparation"><ol>{steps.map((item, index) => <li key={item}>
-          <button type="button" aria-current={item === step ? 'step' : undefined} disabled={blocked} onClick={() => jump(item)}><span aria-hidden="true">{index + 1}</span>{setupStepLabels[item]}</button>
-        </li>)}</ol></nav>
+        <nav id="setup-progress" className={`setup-progress${stepsOpen ? ' is-open' : ''}`} aria-label="Étapes de préparation"><ol>{steps.map((item, index) => {
+          const state = setupStepState(item, content, document.currentStep, reviewIssues);
+          return <li key={item}><button type="button" aria-current={item === step ? 'step' : undefined} disabled={blocked} onClick={() => jump(item)}><span aria-hidden="true">{index + 1}</span><span className="setup-step-label">{setupStepLabels[item]}{state && <span className={`setup-step-state${state === 'À revoir' ? ' needs-review' : ''}`}>{state}</span>}</span></button></li>;
+        })}</ol></nav>
         <div className="setup-workspace">
           <h2 ref={heading} tabIndex={-1} className="setup-title">{catalogueOnly && step === 'REVIEW' ? 'Vérifier la formation' : setupStepLabels[step]}</h2>
           <form onSubmit={event => { event.preventDefault(); if (step === 'REVIEW') void finish(); else void save(nextStep); }}>
@@ -278,7 +282,7 @@ function ProfileStep({ content, onChange }: StepProps) {
         {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${base.field}.explanation`} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
       </div>;
     })}</div>
-    <details className="disclosure"><summary>Aperçu pour l’élève</summary><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span className="row-meta">{setupProfileRequirement(field)}</span></li>)}</ul></details>
+    <details className="disclosure"><summary>Aperçu pour l’élève</summary><ProfileFieldsPreview fields={content.profile.fields} /></details>
   </div>;
 }
 function FormationStep({ content, templates, offerings, initialOfferingId, today, onChange, canWrite }: StepProps & { templates: SetupTemplates; offerings: Offering[]; initialOfferingId?: string | undefined; today: string; canWrite: boolean }) {
@@ -346,7 +350,10 @@ export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit
     {preview.issues.length > 0 && <Notice tone="warning" title="À compléter"><ul className="setup-issues">{preview.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><button type="button" className="text-link" onClick={() => onEdit(issueStep(issue.field), issue.field)}>{issue.message}</button></li>)}</ul></Notice>}
     {content.selectedSections.includes('IDENTITY') && <section><h3>École</h3><Facts items={[["Nom", content.identity.name], ['E-mail', content.identity.contactEmail], ['Téléphone', content.identity.contactPhone ?? 'Non renseigné'], ['Fuseau', content.identity.timeZone]]} /><button type="button" className="button quiet" onClick={() => onEdit('IDENTITY')}>Modifier</button></section>}
     {content.selectedSections.includes('PRIVACY') && <section><h3>Confidentialité</h3><div className="policy-copy"><h4>Information des personnes</h4><p>{content.privacy.noticeText}</p><h4>Conservation</h4><p>{content.privacy.retentionText}</p><p>{content.privacy.contactEmail}</p></div><button type="button" className="button quiet" onClick={() => onEdit('PRIVACY')}>Modifier</button></section>}
-    {content.selectedSections.includes('PROFILE') && <section><h3>Informations des élèves</h3><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span>{setupProfileRequirement(field)}</span></li>)}</ul><button type="button" className="button quiet" onClick={() => onEdit('PROFILE')}>Modifier</button></section>}
+    {(preview.activate || content.selectedSections.includes('PROFILE')) && <section><h3>Informations des élèves</h3>{content.selectedSections.includes('PROFILE')
+      ? <details className="disclosure"><summary>Relire le formulaire et les explications</summary><ProfileFieldsPreview fields={content.profile.fields} /></details>
+      : <p>Préparation reportée à plus tard.</p>}<button type="button" className="button quiet" onClick={() => onEdit('PROFILE')}>Modifier</button></section>}
+    {preview.activate && !content.selectedSections.includes('CATALOGUE') && content.formations.length === 0 && <section><h3>Formations et tarifs</h3><p>Préparation reportée à plus tard.</p><button type="button" className="button quiet" onClick={() => onEdit('FORMATIONS')}>Modifier</button></section>}
     {content.formations.map(formation => <section key={formation.id}><h3>{formation.label || `Permis ${formation.categoryCode}`}</h3>
       {!formation.apply || !content.selectedSections.includes('CATALOGUE') ? <p>Conservée en brouillon · à terminer plus tard</p> : <>
         <Facts items={[["Permis", formation.categoryCode], ['Durée', `${formation.durationMinutes ?? '—'} min`], ['Prix', formation.priceCents === null ? 'À compléter' : formatCents(formation.priceCents)], ['Disponible dès le', formation.validFrom ?? 'À compléter']]} />
