@@ -17,9 +17,9 @@ const text=(max:number)=>z.string().trim().refine(value=>[...value].length>0 && 
 const category=text(30);const roles=z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1).max(3).refine(v=>new Set(v).size===v.length);
 const grants=z.array(z.enum(['permit_review','cash_record','CONFIGURE_CATALOG','SELL_SERVICES','MANAGE_COURSES','TAKE_ATTENDANCE','VALIDATE_REQUIREMENT','REVIEW_REGULATORY_PROFILE','MANAGE_LEARNER_ARCHIVES','VIEW_SCHOOL_METRICS','VIEW_FINANCIAL_METRICS','EXPORT_MANAGEMENT','MANAGE_OBSERVATION_THEMES'])).max(13).refine(v=>new Set(v).size===v.length);
 const memberBody=z.object({...operation,roles,grants,reason:text(1000)}).strict();
-const curriculumBody=z.object({...operation,categoryCode:category,approved:z.boolean(),approvalReason:text(1000),competencies:z.array(z.object({key:text(80),label:text(200),description:text(4000),sortOrder:z.number().int().min(0).max(100000)}).strict()).min(1).max(200)}).strict().refine(v=>new Set(v.competencies.map(c=>c.key)).size===v.competencies.length);
+const curriculumBody=z.object({...operation,categoryCode:category,approved:z.boolean(),approvalReason:text(1000).optional(),competencies:z.array(z.object({key:text(80),label:text(200),description:text(4000),sortOrder:z.number().int().min(0).max(100000)}).strict()).min(1).max(200)}).strict().refine(v=>new Set(v.competencies.map(c=>c.key)).size===v.competencies.length);
 const webURL=z.url().max(2048).refine(value=>{const url=new URL(value);return ['https:','http:'].includes(url.protocol) && !url.username && !url.password;});
-const policyBody=z.object({...operation,categoryCode:category,procedureText:text(4000),cancellationPolicyText:text(4000),sourceUrls:z.array(webURL).max(30),approved:z.boolean(),approvalReason:text(1000)}).strict();
+const policyBody=z.object({...operation,categoryCode:category,procedureText:text(4000),cancellationPolicyText:text(4000),sourceUrls:z.array(webURL).max(30),approved:z.boolean(),approvalReason:text(1000).optional()}).strict();
 const offeringBody=z.object({...operation,offeringKey:text(80),categoryCode:category,curriculumVersionId:z.uuid(),policyVersionId:z.uuid(),enabled:z.boolean(),defaultDurationMinutes:z.number().int().min(1).max(480),defaultPriceCents:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)}).strict();
 const trainingBody=z.object({...operation,learnerId:z.uuid(),offeringId:z.uuid(),startedOn:z.iso.date().nullable().optional(),assignCreator:z.boolean().optional()}).strict();
 const assignmentBody=z.object({...operation,instructorMembershipId:z.uuid(),validFrom:z.iso.datetime({offset:true}),validUntil:z.iso.datetime({offset:true}).nullable().optional()}).strict().refine(v=>!v.validUntil || Date.parse(v.validUntil)>Date.parse(v.validFrom));
@@ -70,7 +70,7 @@ export function registerCatalogue(app:FastifyInstance,options:{pool:Pool;verifyT
   empty.parse(request.query);const body=curriculumBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);const {schoolId}=params(request);
   const data=await schoolCommand(options.pool,await options.verifyToken(request.headers.authorization),schoolId,'CREATE_CURRICULUM_VERSION',body,null,async(db,actor)=>{
    const row=(await db.query<Row>(`INSERT INTO drivy.curriculum_version(school_id,category_code,revision,approved,approval_reason,created_by,approved_at)
-    SELECT $1,$2,coalesce(max(revision),0)+1,$3,$4,$5,CASE WHEN $3 THEN now() END FROM drivy.curriculum_version WHERE school_id=$1 AND category_code=$2 RETURNING ${curriculumColumns}`,[schoolId,body.categoryCode,body.approved,body.approvalReason,actor.membershipId])).rows[0]!;
+    SELECT $1,$2,coalesce(max(revision),0)+1,$3,$4,$5,CASE WHEN $3 THEN now() END FROM drivy.curriculum_version WHERE school_id=$1 AND category_code=$2 RETURNING ${curriculumColumns}`,[schoolId,body.categoryCode,body.approved,body.approvalReason??'',actor.membershipId])).rows[0]!;
    for(const c of body.competencies)await db.query('INSERT INTO drivy.competency_definition(school_id,curriculum_version_id,stable_key,label,description,sort_order) VALUES($1,$2,$3,$4,$5,$6)',[schoolId,row.id,c.key,c.label,c.description,c.sortOrder]);
    await configurationChanged(db,schoolId,actor.membershipId);return {data:await curriculum(db,row),resourceType:'Curriculum',resourceId:row.id,action:'CurriculumVersionCreated',changedFields:['competencies','approved']};
   });reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,request);
@@ -80,7 +80,7 @@ export function registerCatalogue(app:FastifyInstance,options:{pool:Pool;verifyT
   const data=await schoolCommand(options.pool,await options.verifyToken(request.headers.authorization),schoolId,'CREATE_SCHOOL_POLICY',body,null,async(db,actor)=>{
    const row=(await db.query<Row>(`INSERT INTO drivy.school_policy_version(school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at)
     SELECT $1,$2,coalesce(max(version),0)+1,$3,$4,$5,$6,$7,$8,CASE WHEN $6 THEN now() END FROM drivy.school_policy_version WHERE school_id=$1 AND category_code=$2 RETURNING ${policyColumns}`,
-    [schoolId,body.categoryCode,body.procedureText,body.cancellationPolicyText,body.sourceUrls,body.approved,body.approvalReason,actor.membershipId])).rows[0]!;
+    [schoolId,body.categoryCode,body.procedureText,body.cancellationPolicyText,body.sourceUrls,body.approved,body.approvalReason??'',actor.membershipId])).rows[0]!;
    await configurationChanged(db,schoolId,actor.membershipId);return {data:row,resourceType:'SchoolPolicy',resourceId:row.id,action:'SchoolPolicyCreated',changedFields:['procedureText','cancellationPolicyText','approved']};
   });reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,request);
  });
