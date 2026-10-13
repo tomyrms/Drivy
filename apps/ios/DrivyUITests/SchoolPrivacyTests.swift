@@ -11,6 +11,7 @@ import XCTest
         ] {
             let app = XCUIApplication()
             app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen
+            app.launchEnvironment["DRIVY_VISUAL_FORBID_PROFILE_WRITES"] = "1"
             app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
             app.launch()
             let link = app.buttons[identifier]
@@ -18,7 +19,13 @@ import XCTest
             for _ in 0..<6 where !link.waitForExistence(timeout: 3) || !link.isHittable { app.swipeUp() }
             XCTAssertTrue(link.exists && link.isHittable, app.debugDescription)
             XCTAssertEqual(link.label, title)
-            XCTAssertFalse(app.buttons["profile-save"].exists)
+            // L’accueil a toujours son bouton Continuer (profile-save) ; un dossier sans modification n’en a pas.
+            // La lecture doit retrouver la même action, sans appeler send dans l’API de fixture.
+            let action = app.buttons["profile-save"]
+            let actionWasPresent = action.exists
+            XCTAssertEqual(actionWasPresent, screen == "onboarding-information")
+            let previousLabel = actionWasPresent ? action.label : nil
+            let previouslyEnabled = actionWasPresent ? action.isEnabled : nil
             link.tap()
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), app.debugDescription)
             XCTAssertTrue(app.staticTexts["Notice fictive : l’école utilise ces informations pour préparer les leçons."].exists)
@@ -28,8 +35,13 @@ import XCTest
             attachment.lifetime = .keepAlways
             add(attachment)
             app.navigationBars[title].buttons["Fermer"].tap()
+            XCTAssertTrue(app.navigationBars[title].waitForNonExistence(timeout: 5))
             XCTAssertTrue(link.waitForExistence(timeout: 5))
-            XCTAssertFalse(app.buttons["profile-save"].exists)
+            XCTAssertEqual(action.exists, actionWasPresent)
+            if let previousLabel, let previouslyEnabled {
+                XCTAssertEqual(action.label, previousLabel)
+                XCTAssertEqual(action.isEnabled, previouslyEnabled)
+            }
             if screen == "onboarding-information" {
                 XCTAssertTrue(app.staticTexts["Tes informations"].exists)
             }

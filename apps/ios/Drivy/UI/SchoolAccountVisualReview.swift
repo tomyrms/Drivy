@@ -195,6 +195,11 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
             pendingActions: [], returnDestinationKey: nil, returnResourceId: nil)
     }
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt { throw SchoolProfileFailure.operationUnknown }
-    func send(_ command: PendingSchoolCommand) async throws -> SchoolProfileResult { throw SchoolProfileFailure.unavailable }
+    func send(_ command: PendingSchoolCommand) async throws -> SchoolProfileResult {
+        if ProcessInfo.processInfo.environment["DRIVY_VISUAL_FORBID_PROFILE_WRITES"] == "1" {
+            preconditionFailure("Une lecture de confidentialité a tenté une écriture dans la fixture.")
+        }
+        throw SchoolProfileFailure.unavailable
+    }
 }
 #endif
