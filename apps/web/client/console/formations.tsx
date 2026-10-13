@@ -39,7 +39,7 @@ export function FormationsSection() {
     }}>{text}</a>;
   };
   return <div className="section-stack">
-    <SectionHeading title="Formations et tarifs" actions={link('apercu', 'Ajouter une formation', {}, 'button primary')} />
+    <SectionHeading title="Formations et tarifs" symbol="book" actions={link('apercu', 'Ajouter une formation', {}, 'button primary')} />
     <LoadState loaded={loaded} label="Lecture des formations…">{data => {
       const allCategories = [...new Set([
         ...data.offerings.map(item => item.categoryCode), ...data.curricula.map(item => item.categoryCode),

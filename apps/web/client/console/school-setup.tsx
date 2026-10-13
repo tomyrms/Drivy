@@ -5,7 +5,7 @@ import { useCommandSnapshot } from '../command-store';
 import { confirmedData, readSchool, offeringSchema, readAll, type Offering } from '../school-api';
 import { RequestFailure } from '../protocol';
 import { setupStepState } from '../setup-progress';
-import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
+import { CheckField, ConfirmDialog, Facts, Notice, SegmentField, SelectField, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
 import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
   setupStepLabels, setupSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
@@ -309,7 +309,7 @@ function ProfileStep({ content, onChange, errorFor }: StepProps) {
     <div className="setup-profile-fields">{fieldDefaults.map(base => {
       const current = content.profile.fields.find(item => item.field === base.field), fixed = base.field === 'firstName' || base.field === 'lastName';
       return <div className="setup-profile-field" key={base.field}>
-        <div className="setup-profile-control"><strong>{fieldLabels[base.field]}</strong>{fixed ? <span>À l’inscription</span> : <SelectField label={`Demander ${fieldLabels[base.field]!.toLocaleLowerCase('fr')}`} value={!current ? 'NONE' : current.requirement === 'OPTIONAL' ? 'OPTIONAL' : current.stage} options={[
+        <div className="setup-profile-control"><strong>{fieldLabels[base.field]}</strong>{fixed ? <span>À l’inscription</span> : <SegmentField label={`Demander ${fieldLabels[base.field]!.toLocaleLowerCase('fr')}`} value={!current ? 'NONE' : current.requirement === 'OPTIONAL' ? 'OPTIONAL' : current.stage} options={[
           { value: 'NONE', label: 'Non demandé' }, { value: 'OPTIONAL', label: 'Facultatif' }, { value: 'BEFORE_LESSON', label: 'Avant une leçon' }, { value: 'BEFORE_COURSE', label: 'Avant un cours' },
         ]} onChange={value => { const rest = content.profile.fields.filter(item => item.field !== base.field); update(value === 'NONE' ? rest : [...rest, { ...(current ?? base), requirement: value === 'OPTIONAL' ? 'OPTIONAL' : 'REQUIRED', stage: value as 'OPTIONAL' | 'BEFORE_LESSON' | 'BEFORE_COURSE' }]); }} />}</div>
         {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${content.profile.fields.indexOf(current)}.explanation`} error={errorFor(`profile.fields.${content.profile.fields.indexOf(current)}.explanation`)} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
@@ -326,7 +326,7 @@ function FormationStep({ content, templates, offerings, initialOfferingId, today
   return <div className="section-stack">
     <div className="setup-permits">{templates.formations.map(template => <button type="button" className="button secondary" key={template.id} disabled={content.formations.length >= 12} onClick={() => add(setupFormation(template, today))}><Symbol kind="plus" bare />{template.label}</button>)}
       <button type="button" className="button quiet" disabled={content.formations.length >= 12} onClick={() => add(setupFormation(null, today))}>Autre formation</button></div>
-    {offerings.length > 0 && <details className="disclosure" open={!!initialOfferingId}><summary>Ajouter un tarif à une formation existante</summary><SelectField label="Formation" value={chosen} onChange={setChosen} options={[{ value: '', label: 'Choisir une formation' }, ...offerings.map(offer => ({ value: offer.id, label: `Permis ${offer.categoryCode} · ${offer.defaultDurationMinutes} min` }))]} />
+    {offerings.length > 0 && <details className="disclosure" open={!!initialOfferingId}><summary>Ajouter un tarif à une formation existante</summary><SelectField label="Formation" value={chosen} onChange={setChosen} search options={[{ value: '', label: 'Choisir une formation' }, ...offerings.map(offer => ({ value: offer.id, label: `Permis ${offer.categoryCode} · ${offer.defaultDurationMinutes} min` }))]} />
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 12} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
       <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>

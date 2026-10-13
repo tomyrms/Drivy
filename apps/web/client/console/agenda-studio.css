@@ -1,0 +1,47 @@
+.agenda-studio { container-type: inline-size; }
+.agenda-studio-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem 1.5rem; padding-block-end: 1rem; border-block-end: 1px solid var(--border); }
+.agenda-period { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; min-inline-size: 0; }
+.agenda-period-label { font: 600 1rem / 1.5 var(--font); color: var(--text); }
+.agenda-period-controls { display: flex; gap: .25rem; }
+.agenda-period-controls > .button { min-inline-size: 2.625rem; min-block-size: 2.625rem; padding: .5rem; }
+.agenda-studio-filters { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
+.agenda-studio-filters > .choice-field { inline-size: 12rem; }
+.agenda-studio-filters > .record-search { inline-size: 14rem; }
+.agenda-studio-filters .field { margin: 0; }
+.agenda-studio-filters .field > label { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.agenda-studio-filters input[type='search'] { min-block-size: 2.625rem; }
+.agenda-studio .list-summary { margin: 0; }
+.agenda-week-list { display: grid; gap: 1.75rem; }
+.agenda-studio .agenda-day { display: block; }
+.agenda-day-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-block-end: .5rem; }
+.agenda-studio .agenda-day-date { display: flex; flex-wrap: wrap; align-items: baseline; gap: .375rem; margin: 0; padding: 0; font: 500 .875rem / 1.5 var(--font); }
+.agenda-studio .agenda-day-name { font: inherit; color: var(--text); text-transform: capitalize; }
+.agenda-studio .agenda-day-number { font: inherit; color: var(--muted); }
+.agenda-day-count { color: var(--muted); font: var(--type-caption); white-space: nowrap; }
+.agenda-studio .agenda-day .row-list { border: 1px solid var(--border); border-radius: .5rem; overflow: hidden; }
+.agenda-studio .agenda-lesson { grid-template-columns: 5.5rem minmax(0, 1fr) 1rem; min-block-size: 4.5rem; padding: .875rem 1rem; gap: 1rem; }
+.agenda-studio .agenda-time { gap: .25rem; font: 500 .875rem / 1.4 var(--font); font-variant-numeric: tabular-nums; }
+.agenda-studio .agenda-time > time:last-child { font-size: .75rem; }
+.agenda-studio .agenda-identity { gap: .375rem; }
+.agenda-identity-top { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .75rem; min-inline-size: 0; }
+.agenda-studio .agenda-identity .row-title { font: 500 .875rem / 1.45 var(--font); overflow-wrap: anywhere; }
+.agenda-identity-top > .row-meta { font-size: .75rem; }
+.agenda-lesson-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; overflow-wrap: anywhere; }
+.agenda-open-indicator { color: var(--muted); opacity: .65; }
+.agenda-open-indicator .symbol { inline-size: 1rem; block-size: 1rem; }
+@container (max-width: 44rem) {
+  .agenda-studio-toolbar { align-items: stretch; }
+  .agenda-period { inline-size: 100%; }
+  .agenda-period-label { flex: 1; }
+  .agenda-studio-filters { flex: 1; }
+  .agenda-studio-filters > .choice-field, .agenda-studio-filters > .record-search { flex: 1 1 12rem; inline-size: auto; }
+}
+@container (max-width: 27rem) {
+  .agenda-period { gap: .5rem; }
+  .agenda-period-label { min-inline-size: 12rem; font-size: .9375rem; }
+  .agenda-period-controls { margin-inline-start: auto; }
+  .agenda-studio .agenda-lesson { grid-template-columns: 3.375rem minmax(0, 1fr); padding: .875rem .75rem; gap: .75rem; }
+  .agenda-identity-top { gap: .375rem .5rem; }
+  .agenda-open-indicator { display: none; }
+  .agenda-day-heading { gap: .5rem; }
+}

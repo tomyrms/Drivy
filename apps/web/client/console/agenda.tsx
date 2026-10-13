@@ -3,12 +3,13 @@ import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, gr
 import { useCommandSnapshot } from '../command-store';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
-import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
+import { EmptyState, Notice, SelectField, StatusBadge, Symbol, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
-import { LoadState, SectionHeading } from './layout';
+import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
 import { useListState } from './list-state';
+import './agenda-studio.css';
 
 const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' | 'clock' }>> = {
   cancelled: { label: 'Annulée', tone: 'neutral', symbol: 'ban' },
@@ -64,32 +65,39 @@ export function AgendaSection() {
   const weekLabel = useRef<HTMLSpanElement>(null);
 
   return (
-    <div className="section-stack">
+    <div className="section-stack agenda-studio">
       <SectionHeading context="Planning" title="Agenda" />
       <PlanningReadinessBanner />
       <FirstLessonActions />
-      <div className="agenda-toolbar">
-        <div className="week-nav" role="group" aria-label="Semaine affichée">
-          <button type="button" className="button secondary" aria-label="Semaine précédente" onClick={() => setMonday(addDays(monday, -7))}><Symbol kind="back" bare /></button>
-          <span className="week-label" aria-live="polite" ref={weekLabel} tabIndex={-1}>{formatWeek(monday)}</span>
-          <button type="button" className="button secondary" aria-label="Semaine suivante" onClick={() => setMonday(addDays(monday, 7))}><span className="flip"><Symbol kind="back" bare /></span></button>
+      <div className="agenda-studio-toolbar">
+        <div className="agenda-period" role="group" aria-label="Semaine affichée">
+          <span className="agenda-period-label" aria-live="polite" ref={weekLabel} tabIndex={-1}>{formatWeek(monday)}</span>
+          <div className="agenda-period-controls">
+            <button type="button" className="button secondary" aria-label="Semaine précédente" onClick={() => setMonday(addDays(monday, -7))}><Symbol kind="back" bare /></button>
+            <button type="button" className="button secondary" aria-label="Semaine suivante" onClick={() => setMonday(addDays(monday, 7))}><span className="flip"><Symbol kind="back" bare /></span></button>
+          </div>
           {monday !== thisWeek && <button type="button" className="button quiet" onClick={() => { setMonday(thisWeek); window.requestAnimationFrame(() => weekLabel.current?.focus()); }}>Aujourd’hui</button>}
         </div>
-        {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor}
-          options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName })),
-            ...(instructor && !instructors.some(item => item.id === instructor) ? [{ value: instructor, label: memberName(instructor) }] : [])]} />}
-        <TextField label="Élève" value={search} onChange={setSearch} placeholder="Nom" />
-        {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+        <div className="agenda-studio-filters">
+          {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor} search appearance="filter"
+            options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName })),
+              ...(instructor && !instructors.some(item => item.id === instructor) ? [{ value: instructor, label: memberName(instructor) }] : [])]} />}
+          <RecordSearch label="Élève" value={search} onChange={setSearch} placeholder="Rechercher un élève" />
+          {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+        </div>
       </div>
       <LoadState loaded={directory} label="Lecture des élèves et moniteurs…">{() => null}</LoadState>
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
         <p className="list-summary" role="status">{lessonCount} {lessonCount === 1 ? 'leçon' : 'leçons'}{search ? lessonCount === 1 ? ' trouvée' : ' trouvées' : ' cette semaine'}</p>
         {days.length === 0 ? <EmptyState symbol="clock" title={search && value.lessons.length ? 'Aucune leçon trouvée' : 'Aucune leçon cette semaine'} message="" />
-          : days.map(day => {
+          : <div className="agenda-week-list">{days.map(day => {
             const [weekday, ...date] = formatDayHeading(day.day).split(' ');
             return <section key={day.day} className="agenda-day" aria-labelledby={`day-${day.day}`}>
-            <h2 id={`day-${day.day}`} className="section-title agenda-day-date"><span className="agenda-day-name">{weekday}</span>{' '}<time className="agenda-day-number" dateTime={day.day}>{date.join(' ')}</time></h2>
+            <div className="agenda-day-heading">
+              <h2 id={`day-${day.day}`} className="section-title agenda-day-date"><span className="agenda-day-name">{weekday}</span>{' '}<time className="agenda-day-number" dateTime={day.day}>{date.join(' ')}</time></h2>
+              <span className="agenda-day-count">{day.items.length} {day.items.length === 1 ? 'leçon' : 'leçons'}</span>
+            </div>
             <ul className="row-list">{day.items.map(lesson => {
               const phase = lessonPhase(lesson, now);
               const state = lessonState[phase];
@@ -99,19 +107,20 @@ export function AgendaSection() {
                     selection: lesson.learnerId, from: 'agenda', week: monday, instructor: instructor || undefined,
                   })}>
                   <span className="agenda-time"><time dateTime={lesson.plannedStart}>{start}</time><span className="visually-hidden"> à </span><time dateTime={lesson.plannedEnd}>{end}</time></span>
-                  <span className="agenda-identity"><span className="row-title">{learnerName(lesson.learnerId)}</span>
-                    <span className="row-meta">{memberName(lesson.instructorMembershipId)}{lesson.meetingPoint ? ` · ${lesson.meetingPoint}` : ''}</span>
-                    {phase === 'completed' && <span className="row-meta">Terminée</span>}
+                  <span className="agenda-identity">
+                    <span className="agenda-identity-top"><span className="row-title">{learnerName(lesson.learnerId)}</span>
+                      {state && <StatusBadge tone={state.tone} symbol={state.symbol}>{state.label}</StatusBadge>}
+                      {lesson.status === 'PLANNED' && lesson.permitWarning === true && <StatusBadge tone="warning" symbol="alert">Permis à vérifier</StatusBadge>}
+                      {phase === 'completed' && <span className="row-meta">Terminée</span>}
+                    </span>
+                    <span className="row-meta agenda-lesson-meta"><span>{memberName(lesson.instructorMembershipId)}</span>{lesson.meetingPoint && <span>{lesson.meetingPoint}</span>}</span>
                   </span>
-                  {(state || (lesson.status === 'PLANNED' && lesson.permitWarning === true)) && <span className="agenda-status">
-                    {state && <StatusBadge tone={state.tone} symbol={state.symbol}>{state.label}</StatusBadge>}
-                    {lesson.status === 'PLANNED' && lesson.permitWarning === true && <StatusBadge tone="warning" symbol="alert">Permis à vérifier</StatusBadge>}
-                  </span>}
+                  <span className="agenda-open-indicator flip"><Symbol kind="back" bare /></span>
                   <span className="visually-hidden">Ouvrir le dossier</span>
                 </button>
               </li>;
             })}</ul>
-          </section>; })}
+          </section>; })}</div>}
       </>}</LoadState>
     </div>
   );

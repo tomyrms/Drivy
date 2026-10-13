@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import '../client/styles.css';
 import '../client/theme';
 import { PreferencesPage, ThemeControl } from '../client/preferences';
-import { CheckField, SelectField, TextField } from '../client/ui';
+import { CheckField, ConfirmDialog, SegmentField, SelectField, TextField } from '../client/ui';
 import { SchoolOpeningPage } from '../client/school-opening';
 import '../client/school-opening.css';
 import { ConsoleContext, type ConsoleContextValue } from '../client/console/context';
@@ -342,7 +342,7 @@ const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, ag
   curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = parameters.get('shell') === '1';
-if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls'].includes(page ?? '')) {
+if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls', 'choices'].includes(page ?? '')) {
   const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
   const routeParameters = new URLSearchParams();
   if (page === 'agenda') routeParameters.set('week', '2026-09-28');
@@ -356,7 +356,7 @@ if (entry) window.history.replaceState(null, '', page === 'invitation' ? '/app/i
 if (page === 'preferences') window.history.replaceState(null, '', '/app/preferences');
 if (page === 'opening' || page === 'operator') window.history.replaceState(null, '', page === 'opening' ? '/app/ouvrir' : '/app/operateur');
 createRoot(document.getElementById('root')!).render(
-  page === 'controls' ? <ControlsReview /> : page === 'opening' || page === 'operator' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={page === 'operator'} /> : location.pathname === '/app/preferences' ? <PreferencesPage /> : entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
+  page === 'choices' ? <ChoicesReview /> : page === 'controls' ? <ControlsReview /> : page === 'opening' || page === 'operator' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={page === 'operator'} /> : location.pathname === '/app/preferences' ? <PreferencesPage /> : entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
 
 /** Local component review only: these controls change fixture state and never submit a school command. */
 function ControlsReview() {
@@ -388,6 +388,53 @@ function ControlsReview() {
         <button type="submit" className="button primary">Vérifier la saisie</button>
         {submitted && !emailError && !categoryError && <p role="status">Saisie de test valide.</p>}
       </form>
+    </div></section>
+  </div></main></div>;
+}
+
+/** Local acceptance fixture for exposed choice controls; no school commands or hidden-input manipulation. */
+function ChoicesReview() {
+  const options = [{ value: 'A', label: 'Permis A' }, { value: 'B', label: 'Permis B', disabled: true }, { value: 'BE', label: 'Permis BE' }];
+  const people = ['Alice Perrin', 'Bruno Blanc', 'Camille Rochat', 'Daniel Weber', 'Éloïse Müller', 'Félix Dubois', 'Jade Petit', 'Léa Favre', 'Zoé Girard'].map((label, index) => ({ value: `person-${index}`, label }));
+  const [simple, setSimple] = useState('A'), [person, setPerson] = useState(''), [filter, setFilter] = useState('A'), [segment, setSegment] = useState('A');
+  const [changes, setChanges] = useState(0), [locked, setLocked] = useState(false), [arming, setArming] = useState(false);
+  const [requiredChoice, setRequiredChoice] = useState(''), [submitted, setSubmitted] = useState(false);
+  const [dialog, setDialog] = useState(false), [dialogSimple, setDialogSimple] = useState('A'), [dialogPerson, setDialogPerson] = useState('');
+  const [dynamic, setDynamic] = useState('BE'), [removed, setRemoved] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  const change = (set: (value: string) => void) => (value: string) => { set(value); setChanges(count => count + 1); };
+  return <div className="app-shell personal-preferences"><main className="main"><h1>Choix — recette locale</h1><div className="form-grid">
+    <output aria-label="Nombre de changements">{changes}</output>
+    <section className="settings-section"><div className="settings-section-heading"><h2>Sélection</h2></div><div className="settings-section-body form-grid">
+      <SelectField label="Permis de test" value={simple} onChange={change(setSimple)} options={options} />
+      <SelectField label="Personne de test" value={person} onChange={change(setPerson)} options={people} />
+      <SelectField label="Filtre de test" value={filter} onChange={change(setFilter)} options={[{ value: '', label: 'Tous les permis' }, ...options]} appearance="filter" />
+      <SelectField label="Liste sans choix" value="" onChange={() => setChanges(count => count + 1)} options={[]} />
+      <SelectField label="Choix indisponible" value="A" onChange={() => setChanges(count => count + 1)} options={options} disabled />
+      <SelectField label="Choix retiré" value={dynamic} onChange={change(setDynamic)} options={removed ? options.filter(option => option.value !== 'BE') : options} />
+      <button className="button secondary" type="button" onClick={() => setRemoved(value => !value)}>{removed ? 'Rétablir l’option' : 'Retirer l’option sélectionnée'}</button>
+      <SegmentField label="Permis segmenté" value={segment} onChange={change(setSegment)} options={options} />
+    </div></section>
+    <section className="settings-section"><div className="settings-section-heading"><h2>Désactivation reçue</h2></div><div className="settings-section-body form-grid">
+      <button type="button" className="button secondary" disabled={arming} onClick={() => { setArming(true); window.setTimeout(() => { setLocked(true); setArming(false); }, 2000); }}>Désactiver le groupe dans deux secondes</button>
+      <button type="button" className="button quiet" onClick={() => setLocked(false)}>Réactiver le groupe</button>
+      <p role="status">{locked ? 'Groupe désactivé' : arming ? 'Désactivation programmée' : 'Groupe disponible'}</p>
+      <fieldset className="fieldset" disabled={locked}><legend>Groupe de test</legend>
+        <SelectField label="Choix du groupe" value={simple} onChange={change(setSimple)} options={options} />
+        <SelectField label="Recherche du groupe" value={person} onChange={change(setPerson)} options={people} />
+      </fieldset>
+    </div></section>
+    <section className="settings-section"><div className="settings-section-heading"><h2>Validation et dialogue</h2></div><div className="settings-section-body form-grid">
+      <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); setSubmitted(true); requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); }}>
+        <SelectField id="choice-required" label="Choix obligatoire" required value={requiredChoice} onChange={change(setRequiredChoice)} options={options} error={submitted && !requiredChoice ? 'Choisissez un permis.' : null} hint="Choix de recette locale." />
+        <button className="button primary" type="submit">Vérifier le choix</button>
+        {submitted && requiredChoice && <p role="status">Choix local valide.</p>}
+      </form>
+      <button type="button" className="button secondary" onClick={() => setDialog(true)}>Ouvrir le dialogue de test</button>
+      <ConfirmDialog open={dialog} title="Dialogue de choix local" confirmLabel="Fermer la revue" busy={false} onCancel={() => setDialog(false)} onConfirm={() => setDialog(false)}>
+        <SelectField label="Permis du dialogue" value={dialogSimple} onChange={change(setDialogSimple)} options={options} />
+        <SelectField label="Personne du dialogue" value={dialogPerson} onChange={change(setDialogPerson)} options={people} />
+      </ConfirmDialog>
     </div></section>
   </div></main></div>;
 }

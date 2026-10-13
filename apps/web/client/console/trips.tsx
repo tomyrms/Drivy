@@ -1,10 +1,12 @@
 import { matchesSearch } from '../command-core';
 import { readAll, readPage } from '../school-api';
 import { tripDuration, tripSchema } from '../trip-model';
-import { EmptyState, Notice, TextField } from '../ui';
+import { EmptyState, Notice } from '../ui';
 import { useConsole, useLoad } from './context';
-import { LoadState, SectionHeading } from './layout';
+import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { useListState } from './list-state';
+import { PersonAvatar } from '../person-avatar';
+import './operations-studio.css';
 
 function TripTime({ value, timeZone }: { value: string; timeZone: string }) {
   const instant = new Date(value);
@@ -31,7 +33,7 @@ export function TripsSection() {
   const dossier = (id: string, returning = false) => navigate('eleves', { selection: id, week: routeQuery?.week, instructor: routeQuery?.instructor,
     from: returning && routeQuery?.from === 'eleves' ? routeQuery.week ? 'agenda' : undefined : 'trajets',
     ...(!returning && learner ? { learner } : {}) });
-  return <div className="section-stack">
+  return <div className="section-stack trips-studio">
     <SectionHeading title={learner ? 'Trajets de l’élève' : 'Trajets'} actions={learner ? <div className="button-row">
       <button type="button" className="button secondary" onClick={() => dossier(learner, true)}>Retour au dossier</button>
       <button type="button" className="button quiet" onClick={() => navigate('trajets')}>Tous les trajets</button>
@@ -39,26 +41,27 @@ export function TripsSection() {
     <LoadState loaded={loaded} label="Lecture des trajets…">{page => {
       const visible = page.items.filter(trip => matchesSearch([trip.learnerName, trip.instructorName], query));
       return <>
-      <div className="list-toolbar">
-        <TextField label={learner ? 'Rechercher un moniteur' : 'Rechercher dans cette page'} value={query} onChange={setQuery} placeholder={learner ? 'Moniteur' : 'Élève ou moniteur'} />
+      <div className="record-toolbar trips-toolbar">
+        <RecordSearch label={learner ? 'Rechercher un moniteur' : 'Rechercher dans cette page'} value={query} onChange={setQuery} placeholder={learner ? 'Rechercher un moniteur' : 'Rechercher dans cette page'} />
         {query && <button type="button" className="button quiet" onClick={() => setQuery('')}>Effacer la recherche</button>}
       </div>
       {page.truncated && <Notice tone="warning" title="Historique partiel" live={false}><p>Ce filtre porte sur les 1 000 derniers trajets de l’école. Ouvrez tous les trajets pour parcourir les plus anciens.</p></Notice>}
       <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'trajet' : 'trajets'}{query ? visible.length === 1 ? ' trouvé' : ' trouvés' : ''}{!learner ? ` · page ${cursors.length}` : ''}</p>
       {visible.length === 0 ? <EmptyState symbol="route" title={page.items.length ? 'Aucun trajet trouvé' : page.truncated ? 'Aucun trajet dans cette partie de l’historique' : 'Aucun trajet'} message="" />
-        : <table className="data-table trip-table"><caption className="visually-hidden">{learner ? 'Trajets de l’élève' : 'Trajets de l’école'}</caption>
+        : <table className="data-table record-table trip-table"><caption className="visually-hidden">{learner ? 'Trajets de l’élève' : 'Trajets de l’école'}</caption>
           <thead><tr><th scope="col">Élève et moniteur</th><th scope="col">Trajet</th></tr></thead>
           <tbody>{visible.map(trip => <tr key={trip.id}>
-            <th scope="row"><button type="button" className="row-button" onClick={() => dossier(trip.learnerId)}>{trip.learnerName}</button>
-              <span className="row-meta block">{trip.instructorName}</span></th>
-            <td><TripTime value={trip.authorizedAt} timeZone={trip.lessonTimeZone} />
+            <th scope="row"><div className="trip-person"><PersonAvatar name={trip.learnerName} />
+              <span className="trip-person-copy"><button type="button" className="row-button person-name" onClick={() => dossier(trip.learnerId)}>{trip.learnerName}</button><span className="row-meta">{trip.instructorName}</span></span>
+            </div></th>
+            <td data-label="Trajet"><TripTime value={trip.authorizedAt} timeZone={trip.lessonTimeZone} />
               <span className="trip-duration row-meta block">Durée : {tripDuration(trip)}</span></td>
           </tr>)}</tbody>
         </table>}
-      <nav className="button-row" aria-label="Pages des trajets">
+      {(cursors.length > 1 || page.nextCursor) && <nav className="record-footer" aria-label="Pages des trajets"><div className="button-row">
         {cursors.length > 1 && <button type="button" className="button secondary" disabled={loaded.status === 'loading'} onClick={() => { setQuery(''); setCursors(values => values.slice(0, -1)); }}>Précédents</button>}
         {page.nextCursor && <button type="button" className="button secondary" disabled={loaded.status === 'loading'} onClick={() => { setQuery(''); setCursors(values => [...values, page.nextCursor]); }}>Suivants</button>}
-      </nav>
+      </div></nav>}
     </>; }}</LoadState>
   </div>;
 }

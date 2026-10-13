@@ -5,7 +5,7 @@ import { commandStore, pendingActions, useCommandSnapshot } from '../command-sto
 import { endSession, loginSchema, meSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
-import { ConfirmDialog, Loading, Notice, Symbol, formatDateTime } from '../ui';
+import { ConfirmDialog, Loading, Notice, SelectField, Symbol, formatDateTime } from '../ui';
 import { BrandSymbol } from '../BrandSymbol';
 import { AccountMenu } from '../preferences';
 import { SettingsFocus, SettingsSearch } from './settings-search';
@@ -244,11 +244,9 @@ export function ManagementConsole() {
           <span>Drivy</span>
         </a>
         {state.status === 'ready' && (adminSchools.length > 1
-          ? <label className="school-switch"><span className="visually-hidden">École gérée</span>
-              <select value={state.membership.schoolId} onChange={event => { const schoolId = event.target.value; proceedNavigation(() => { pushPath(`/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); }); }}>
-                {adminSchools.map(member => <option key={member.schoolId} value={member.schoolId}>{member.schoolName}</option>)}
-              </select>
-            </label>
+          ? <div className="school-switch"><SelectField label="École gérée" value={state.membership.schoolId} search
+              options={adminSchools.map(member => ({ value: member.schoolId, label: member.schoolName }))}
+              onChange={schoolId => proceedNavigation(() => { pushPath(`/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); })} /></div>
           : <span className="school-name">{state.school.name}</span>)}
         <div className="bar-end">
           <AccountMenu name={personName ?? 'Mon compte'} authenticated={!!session?.authenticated} busy={busy}
@@ -292,15 +290,32 @@ export function ConsoleNavigation({ schoolId, section, query = {}, open, navigat
   onEscape: () => void; beforeNavigate?: (proceed: () => void) => void;
 }) {
   const current = workspaceFor(section, query);
+  const preferencesPath = `/app/preferences?returnTo=${encodeURIComponent(consolePath(schoolId, section, query))}`;
+  const itemLink = (workspace: typeof current, item: typeof current.items[number]) => {
+    const destinationQuery = localNavigationQuery(workspace, item, query);
+    return <a href={consolePath(schoolId, item.section, destinationQuery)} aria-current={isLocalItemCurrent(item, section) ? 'page' : undefined}
+      onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section, destinationQuery); }}>{item.label}</a>;
+  };
   return <nav id="school-navigation" className={`console-nav${open ? ' is-open' : ''}`} aria-label="Gestion de l’école"
     onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onEscape(); } }}><div className="nav-inner">
-      <ul className="primary-navigation">{workspaces.map(workspace => <li key={workspace.key} className={workspace.key === 'settings' ? 'nav-settings' : undefined}>
-        <a href={consolePath(schoolId, workspace.home)} aria-current={current.key === workspace.key ? 'true' : undefined}
-          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(workspace.home); }}>
+      <SettingsSearch schoolId={schoolId} navigate={navigate} beforeNavigate={beforeNavigate} />
+      {current.key === 'settings' ? <div className="settings-navigation">
+        <a className="nav-back" href={consolePath(schoolId, 'agenda')} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate('agenda'); }}><Symbol kind="back" bare />Retour à la gestion</a>
+        <p className="nav-group-label">École</p>
+        <ul>{current.items.map(item => <li key={item.section}>{itemLink(current, item)}</li>)}</ul>
+        <p className="nav-group-label">Compte personnel</p>
+        <a href={preferencesPath} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); beforeNavigate(() => window.location.assign(preferencesPath)); }}><Symbol kind="account" bare />Mes préférences</a>
+      </div> : <ul className="primary-navigation">{workspaces.map(workspace => {
+        const homeQuery = current.key === workspace.key ? localNavigationQuery(workspace, { section: workspace.home, label: workspace.label }, query) : {};
+        return <li key={workspace.key} className={workspace.key === 'settings' ? 'nav-settings' : undefined}>
+        <a href={consolePath(schoolId, workspace.home, homeQuery)} aria-current={current.key === workspace.key ? (section === workspace.home ? 'page' : 'true') : undefined}
+          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(workspace.home, homeQuery); }}>
           <Symbol kind={workspace.symbol} bare /><span>{workspace.key === 'settings' ? 'Paramètres de l’école' : workspace.label}</span>
         </a>
-      </li>)}</ul>
-      <SettingsSearch schoolId={schoolId} navigate={navigate} beforeNavigate={beforeNavigate} />
+        {current.key === workspace.key && workspace.items.length > 1 && <ul className="workspace-navigation" aria-label={`Pages · ${workspace.label}`}>
+          {workspace.items.filter(item => item.section !== workspace.home).map(item => <li key={item.section}>{itemLink(workspace, item)}</li>)}
+        </ul>}
+      </li>; })}</ul>}
   </div></nav>;
 }
 
@@ -315,14 +330,6 @@ export function SectionNavigation({ schoolId, section, query = {}, navigate }: {
   const link = (destination: SectionKey, label: string, destinationQuery: NavigationQuery = categoryQuery) => <a href={consolePath(schoolId, destination, destinationQuery)}
     onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(destination, destinationQuery); }}>{label}</a>;
   return <div className="section-navigation">
-    <nav className={`section-tabs${workspace.key === 'settings' ? ' settings-tabs' : ''}`} aria-label={`Pages · ${workspace.key === 'settings' ? 'Paramètres de l’école' : workspace.label}`}>
-      {workspace.items.map(item => {
-        const destinationQuery = localNavigationQuery(workspace, item, query);
-        return <a key={item.section} href={consolePath(schoolId, item.section, destinationQuery)}
-          aria-current={isLocalItemCurrent(item, section) ? 'page' : undefined}
-          onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section, destinationQuery); }}>{item.label}</a>;
-      })}
-    </nav>
     {parent !== null && <nav className="breadcrumbs" aria-label="Fil d’Ariane"><ol>
       <li>{section === workspace.home ? <span aria-current="page">{workspace.label}</span> : link(workspace.home, workspace.label)}</li>
       {parent && parent !== workspace.home && <li>{link(parent, sectionTitles[parent])}</li>}

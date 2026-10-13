@@ -10,7 +10,8 @@ import {
   assignmentSchema, curriculumSchema, learnerSchema, memberSchema, offeringSchema, permitSchema, readAll, readSchool, trainingSchema,
   type Assignment, type Learner, type Permit, type Training,
 } from '../school-api';
-import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
+import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SegmentField, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
+import { PersonAvatar } from '../person-avatar';
 import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection, useUnsavedChanges } from './context';
 import { useListState } from './list-state';
 import { RequestFailure } from '../protocol';
@@ -173,29 +174,34 @@ export function LearnersSection() {
       <SplitView mode="page" mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les élèves"
         list={<LoadState loaded={loaded} label="Lecture des élèves…">{value => <>
           {value.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>La recherche et les comptes portent sur les élèves chargés.</p></Notice>}
-          <div className="record-toolbar">
-            <RecordSearch label="Rechercher un élève" value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder="Nom, e-mail ou téléphone" />
-            <FilterTabs label="Dossiers" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
-              { value: 'active', label: 'Actifs', count: learners.filter(learner => !learner.archivedAt).length },
-              { value: 'archived', label: 'Archivés', count: learners.filter(learner => !!learner.archivedAt).length },
-              { value: 'all', label: 'Tous', count: learners.length },
-            ]} />
-            <SelectField label="Profil" value={readinessFilter} onChange={value => { setReadinessFilter(value); setPage(1); }}
-              options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
-            <SelectField label="Trier par" value={sort} onChange={value => { setSort(value); setPage(1); }}
-              options={[{ value: 'name-asc', label: 'Nom : A à Z' }, { value: 'name-desc', label: 'Nom : Z à A' }]} />
-            {(search || readinessFilter !== 'all' || statusFilter !== 'active') && <button type="button" className="button quiet" onClick={() => { setSearch(''); setReadinessFilter('all'); setStatusFilter('active'); setPage(1); }}>Réinitialiser les filtres</button>}
+          <div className="people-list-toolbar">
+            <div className="people-list-primary">
+              <FilterTabs label="Dossiers" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                { value: 'active', label: 'Actifs', count: learners.filter(learner => !learner.archivedAt).length },
+                { value: 'archived', label: 'Archivés', count: learners.filter(learner => !!learner.archivedAt).length },
+                { value: 'all', label: 'Tous', count: learners.length },
+              ]} />
+              <div className="people-list-search"><RecordSearch label="Rechercher un élève" value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder="Rechercher un élève" /></div>
+            </div>
+            <div className="people-list-filters">
+              <SelectField label="Profil" value={readinessFilter} appearance="filter" onChange={value => { setReadinessFilter(value); setPage(1); }}
+                options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
+              {(search || readinessFilter !== 'all' || statusFilter !== 'active') && <button type="button" className="button quiet" onClick={() => { setSearch(''); setReadinessFilter('all'); setStatusFilter('active'); setPage(1); }}>Réinitialiser les filtres</button>}
+            </div>
           </div>
           {listTrainings.status === 'error' && <Notice tone="error" title="Formations indisponibles" live={false} actions={<ReadRetry loaded={listTrainings} />}><p>{listTrainings.error}</p></Notice>}
           {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? '' : 'Créez un code pour inviter un élève.'} />
-            : <div className="directory-table-wrap"><table className="data-table record-table"><caption className="visually-hidden">Dossiers élèves</caption>
-              <thead><tr><th scope="col">Élève</th><th scope="col">Contact</th><th scope="col">Formation</th><th scope="col">Dossier</th><th scope="col">Profil</th></tr></thead><tbody>{pageRows.map(learner => {
+            : <div className="directory-table-wrap"><table className="data-table record-table people-table"><caption className="visually-hidden">Dossiers élèves</caption>
+              <thead><tr><th scope="col" aria-sort={sort === 'name-asc' ? 'ascending' : 'descending'}><button type="button" className="table-sort"
+                aria-label={`Élève, trier par nom ${sort === 'name-asc' ? 'décroissant' : 'croissant'}`} onClick={() => { setSort(sort === 'name-asc' ? 'name-desc' : 'name-asc'); setPage(1); }}>
+                Élève<Symbol kind={sort === 'name-asc' ? 'chevron-up' : 'chevron'} bare /></button></th><th scope="col">Contact</th><th scope="col">Formation</th><th scope="col">Dossier</th><th scope="col">Profil</th></tr></thead><tbody>{pageRows.map(learner => {
               const activeTrainings = (listTrainings.data?.items ?? []).filter(training => training.learnerId === learner.id && training.status === 'ACTIVE');
               const categories = activeTrainings.map(category).filter(Boolean);
               return <tr key={learner.id} className={learner.id === selected ? 'is-selected' : undefined}>
-                <th scope="row" className="record-identity"><a className="record-link" aria-current={learner.id === selected ? 'true' : undefined}
+                <th scope="row" className="record-identity"><a className="record-link person-cell" aria-current={learner.id === selected ? 'true' : undefined}
                   href={consolePath(schoolId, 'eleves', { ...routeQuery, selection: learner.id })}
-                  onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); runner.clearOutcome(); setSelected(learner.id); } }}>{learner.displayName}</a></th>
+                  onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); runner.clearOutcome(); setSelected(learner.id); } }}>
+                  <PersonAvatar name={learner.displayName} /><span className="person-name">{learner.displayName}</span></a></th>
                 <td data-label="Contact" className="record-contact"><span>{learner.contactEmail ?? learner.contactPhone ?? <span className="row-meta">Non renseigné</span>}</span>
                   {learner.contactEmail && learner.contactPhone && <span className="record-secondary">{learner.contactPhone}</span>}</td>
                 <td data-label="Formation">{listTrainings.status !== 'ready' ? <span className="row-meta">{listTrainings.status === 'error' ? 'Indisponible' : 'Chargement…'}</span>
@@ -208,7 +214,11 @@ export function LearnersSection() {
             })}</tbody></table></div>}
           <ListPagination page={currentPage} pageSize={pageSize} total={visible.length} onPageChange={setPage} label="Pagination des élèves" />
         </>}</LoadState>}
-        detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} meta={current.contactEmail ?? undefined}
+        detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} leading={<PersonAvatar name={current.displayName} size="large" />}
+          meta={current.contactEmail || current.contactPhone ? <span className="person-meta">
+            {current.contactEmail && <span><span className="visually-hidden">E-mail : </span>{current.contactEmail}</span>}
+            {current.contactPhone && <span><span className="visually-hidden">Téléphone : </span>{current.contactPhone}</span>}
+          </span> : undefined}
           badge={current.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge> : undefined}
           actions={current.archivedAt ? membership.roles.includes('ADMIN') && <button type="button" className="button secondary" disabled={!canWrite}
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
@@ -252,7 +262,7 @@ export function LearnersSection() {
                     onClick={() => ask({ kind: 'end', training, assignment: item })}>Retirer</button>
                 </li>)}</ul>}
                 {training.status === 'ACTIVE' && !current.archivedAt && <div className="form-row">
-                  <SelectField label="Moniteur" value={instructorFor[training.id] ?? ''} disabled={!canEdit || !detailReady} placeholder="Choisir"
+                  <SelectField label="Moniteur" value={instructorFor[training.id] ?? ''} disabled={!canEdit || !detailReady} placeholder="Choisir" search
                     onChange={value => setInstructorFor(map => ({ ...map, [training.id]: value }))}
                     options={instructors.filter(member => !assigned.some(item => item.instructorMembershipId === member.id)).map(member => ({ value: member.id, label: member.displayName }))} />
                   <button type="button" className="button secondary" disabled={!canEdit || !detailReady || !instructorFor[training.id]} onClick={() => void assign(training)}>Affecter</button>
@@ -268,7 +278,7 @@ export function LearnersSection() {
           })}</ul>
           {!current.archivedAt && availableOfferings.length > 0 && <details className="disclosure"><summary>{trainingsOf(current.id).length ? 'Ouvrir une autre formation' : 'Ouvrir une formation'}</summary><form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>
             <div className="form-row">
-              <SelectField label="Nouvelle formation" value={offeringId} disabled={!canWrite} placeholder="Choisir une offre" onChange={setOfferingId}
+              <SelectField label="Nouvelle formation" value={offeringId} disabled={!canWrite} placeholder="Choisir une offre" onChange={setOfferingId} search
                 options={availableOfferings.map(item => ({ value: item.id, label: offeringLabel(item, offerings) }))} />
               <TextField label="Début" type="date" value={startedOn} disabled={!canWrite} onChange={setStartedOn} />
             </div>
@@ -289,7 +299,7 @@ export function LearnersSection() {
         {dialog?.kind === 'end' && <p className="dialog-lead">{name(dialog.assignment.instructorMembershipId)} · {title(dialog.training)}</p>}
         {dialog?.kind === 'permit' && <>
           <p className="dialog-lead">{title(dialog.training)} · catégorie {category(dialog.training)}</p>
-          <SelectField label="Décision" value={permit.decision} disabled={runner.busy} onChange={decision => setPermit({ ...permit, decision })}
+          <SegmentField label="Décision" value={permit.decision} disabled={runner.busy} onChange={decision => setPermit({ ...permit, decision })}
             options={[{ value: 'APPROVED', label: 'Permis valable' }, { value: 'REJECTED', label: 'Permis refusé' }]} />
           {permit.decision === 'APPROVED' && <>
             <CheckField label="J’ai vu l’original du permis" checked={permit.physicalSeen} disabled={runner.busy} onChange={physicalSeen => setPermit({ ...permit, physicalSeen })} />

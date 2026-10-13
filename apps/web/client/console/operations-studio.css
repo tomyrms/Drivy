@@ -1,0 +1,31 @@
+/* Administrative planning and trip records share the workspace rhythm. */
+.availability-studio .availability-toolbar { align-items: center; justify-content: space-between; gap: .75rem 1.5rem; padding-block-end: 1rem; border-block-end: 1px solid var(--border); }
+.availability-studio .availability-toolbar > .field { flex: 0 1 18rem; min-inline-size: 0; }
+.availability-studio .availability-toolbar .field > label,
+.trips-studio .trips-toolbar .field > label { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.availability-studio .schedule-section { inline-size: 100%; max-inline-size: 52rem; padding: 0; border: 0; gap: 1.5rem; }
+.availability-studio .schedule-section > .section-title { font: 500 1.1875rem / 1.5 var(--font); }
+.availability-studio .schedule-list > li { padding-block: 1rem; gap: 1rem; }
+.availability-studio .schedule-list .row-title { font: 500 .9375rem / 1.5 var(--font); }
+.availability-studio .schedule-list .row-meta { font: var(--type-subheadline); margin-block-start: .375rem; }
+.availability-studio .schedule-add { margin: 0; }
+.availability-studio .schedule-add > summary { min-block-size: 2.75rem; align-content: center; font-weight: 500; }
+.availability-studio .schedule-add > .form-grid { max-inline-size: 44rem; gap: 1.5rem; padding-block: 1rem; }
+.availability-studio .schedule-add .fieldset { gap: .75rem; }
+.trips-studio .trips-toolbar { padding-block-start: 0; align-items: center; }
+.trips-studio .trips-toolbar input[type='search'] { min-block-size: 2.625rem; }
+.trips-studio .trip-table :is(th, td) { padding-block: .75rem; }
+.trips-studio .trip-table th:first-child { inline-size: 55%; }
+.trips-studio .trip-person { display: inline-flex; align-items: center; gap: .75rem; color: var(--text); }
+.trips-studio .trip-person-copy { display: grid; gap: .125rem; text-align: start; }
+.trips-studio .trip-time { display: flex; flex-wrap: wrap; gap: .25rem .75rem; }
+.trips-studio .trip-duration { margin-block-start: .25rem; }
+@container workspace (max-width: 40rem) {
+  .availability-studio .availability-toolbar > .field { flex: 1 1 14rem; }
+  .availability-studio .schedule-list > li { align-items: flex-start; flex-wrap: wrap; }
+  .availability-studio .schedule-list > li > .row-text { flex: 1 1 15rem; }
+  .trips-studio .trip-table th:first-child { inline-size: auto; }
+  .trips-studio .trip-table :is(th, td) { padding-block: .375rem; }
+  .trips-studio .trip-duration { grid-column: 2; }
+  .trips-studio .trip-time, .trips-studio .trip-duration { white-space: normal; }
+}

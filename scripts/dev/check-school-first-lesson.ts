@@ -49,7 +49,11 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   async function agenda() {await page.goto(`${schoolPath}/agenda`);await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();}
   async function addAvailability(instructorId:string) {
     await page.getByRole('heading',{name:'Disponibilités',exact:true}).waitFor();
-    await page.getByLabel('Moniteur',{exact:true}).selectOption(instructorId);
+    const instructor=members.find(member=>member.id===instructorId);
+    if(!instructor)throw new Error('FIRST_LESSON_INSTRUCTOR_MISSING');
+    await page.getByLabel('Moniteur',{exact:true}).click();
+    await page.getByRole('combobox',{name:'Rechercher : Moniteur',exact:true}).fill(instructor.displayName);
+    await page.getByRole('option',{name:instructor.displayName,exact:true}).click();
     await page.getByText('Ajouter un horaire',{exact:true}).click();
     const form=page.locator('details.schedule-add');
     for(const day of ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'])await form.getByLabel(day,{exact:true}).check();
@@ -127,7 +131,8 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
     'Le dossier complété conduit à l’ouverture de sa formation, sans annoncer une leçon prête');
   await agenda();await page.getByRole('link',{name:'Ouvrir la formation de l’élève',exact:true}).click();
   await page.getByText('Ouvrir une formation',{exact:true}).click();
-  await page.getByLabel('Nouvelle formation',{exact:true}).selectOption({label:'Permis B'});
+  await page.getByLabel('Nouvelle formation',{exact:true}).click();
+  await page.getByRole('option',{name:'Permis B',exact:true}).click();
   const trainingResponse=page.waitForResponse(response=>response.request().method()==='POST'&&response.url()===`${bff}/trainings`);
   await page.getByRole('button',{name:'Ouvrir la formation',exact:true}).click();
   if(!(await trainingResponse).ok())throw new Error('FIRST_LESSON_TRAINING_FAILED');

@@ -133,23 +133,7 @@ export function TextArea({ id: suppliedId, label, value, onChange, hint, error, 
   );
 }
 
-export function SelectField<T extends string>({ label, value, onChange, options, hint, error, disabled, required, placeholder }: FieldProps & {
-  value: T | ''; onChange: (value: T) => void; options: readonly { value: T; label: string; disabled?: boolean }[]; placeholder?: string;
-}) {
-  const id = useId();
-  return (
-    <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
-      <div className="select-control">
-        <select id={id} value={value} disabled={disabled} required={required} aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy(id, hint, error)} onChange={event => onChange(event.target.value as T)}>
-          {placeholder !== undefined && <option value="" disabled>{placeholder}</option>}
-          {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-        </select>
-        <Symbol kind="chevron" bare />
-      </div>
-    </FieldFrame>
-  );
-}
+export { SelectField, SegmentField } from './choice-field';
 
 /** Native checkbox with one drawing across settings, permissions and confirmations. */
 export function CheckField({ label, description, checked, onChange, disabled, indeterminate = false, variant = 'plain' }: {

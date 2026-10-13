@@ -48,9 +48,9 @@ const auditAccessibility = page => page.evaluate(async () => {
   }) }));
   return { violations: summarize(result.violations), incomplete: summarize(result.incomplete) };
 });
-async function scenario(label, parameters, run) {
+async function scenario(label, parameters, run, options = {}) {
   if (checkFilter && !checkFilter.test(label)) return;
-  stage = label; const h = await harness(parameters);
+  stage = label; const h = await harness(parameters, options);
   try { await h.open(); await run(h); assert.equal(h.errors.length, 0); checks.push(label); }
   catch (error) { failures.push({ scenario: label, error: String(error.message).slice(0, 2400) }); }
   finally { await h.context.close(); }
@@ -81,6 +81,7 @@ try {
       assert(await trigger.evaluate(button => button === document.activeElement));
       await trigger.click(); await input.fill('téléphone'); await h.page.getByRole('dialog').getByRole('link').first().click(); await settle(h.page);
       assert(new URL(h.page.url()).pathname.endsWith('/configuration'));
+      await h.page.waitForFunction(() => document.activeElement?.id === 'school-phone');
       await trigger.click(); await input.fill('conservation'); await h.page.getByRole('dialog').getByRole('link').first().click();
       await h.page.waitForFunction(() => document.activeElement?.id === 'privacy-retention');
       await trigger.click(); await input.fill('conservation'); await h.page.getByRole('dialog').getByRole('link').first().click();
@@ -114,18 +115,31 @@ try {
       assert.equal(await h.page.getByText('Profil à compléter', { exact: true }).count(), 0); await h.reload(); assert.equal(await h.page.getByText('Profil à compléter', { exact: true }).count(), 0);
     });
     await scenario('Coordonnées : modification puis rechargement de l’URL et du résultat confirmé', 'page=config&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
       await h.page.getByLabel(/Téléphone/).fill('+41 21 555 01 02');
       await h.page.getByRole('button', { name: 'Enregistrer', exact: true }).click(); await settle(h.page);
       await h.page.getByText('Les coordonnées de l’école sont enregistrées.', { exact: true }).waitFor();
-      await h.reload(); assert.equal(await h.page.getByLabel(/Téléphone/).inputValue(), '+41 21 555 01 02');
+      await h.reload(); await h.page.getByText('+41 21 555 01 02', { exact: true }).waitFor();
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
+      assert.equal(await h.page.getByLabel(/Téléphone/).inputValue(), '+41 21 555 01 02');
+    });
+    await scenario('Coordonnées : lecture initiale, modification explicite et fermeture sans écriture', 'page=config&shell=1', async h => {
+      assert.equal(await h.page.locator('#school-phone').count(), 0);
+      const edit = h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }); await edit.click();
+      await h.page.locator('#school-phone').waitFor();
+      await h.page.getByRole('button', { name: 'Terminer', exact: true }).click();
+      await edit.waitFor(); assert.equal(await h.page.getByRole('dialog').count(), 0);
+      assert.equal(await h.page.evaluate(() => window.__log.length), 0);
     });
     await scenario('Refus enregistrement : erreur, saisie conservée, aucun faux succès', 'page=config&shell=1&state=mutation-error', async h => {
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
       await h.page.getByLabel(/Téléphone/).fill('+41 21 555 01 03');
       await h.page.getByRole('button', { name: 'Enregistrer', exact: true }).click(); await settle(h.page);
       assert.equal(await h.page.getByLabel(/Téléphone/).inputValue(), '+41 21 555 01 03'); assert(await h.page.getByRole('alert').count() > 0);
       assert.equal(await h.page.getByText('Les coordonnées de l’école sont enregistrées.', { exact: true }).count(), 0);
     });
     await scenario('Validation formulaire : erreur près du champ, focus et absence d’envoi invalide', 'page=config&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
       const email = h.page.getByLabel('E-mail de l’école', { exact: true });
       await email.fill('adresse-invalide'); await h.page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
       await h.page.waitForFunction(() => document.activeElement?.id === 'school-email');
@@ -133,6 +147,7 @@ try {
       assert.equal(await h.page.evaluate(() => window.__log.length), 0);
     });
     await scenario('Conflit coordonnées : relecture version serveur, saisie conservée et nouvel envoi confirmé', 'page=config&shell=1&state=conflict-once', async h => {
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
       const phone = h.page.getByLabel(/Téléphone/);
       await phone.fill('+41 21 555 01 04'); await h.page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
       await h.page.getByRole('button', { name: 'Recharger les informations', exact: true }).click(); await settle(h.page);
@@ -143,6 +158,7 @@ try {
       assert.equal(await h.page.getByText('Modifications non enregistrées', { exact: true }).count(), 0);
     });
     await scenario('Valeur confirmée avant relecture : ancienne valeur modifiée et Annuler rétablit la valeur durable', 'page=config&shell=1&state=slow-school-after-save', async h => {
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
       const phone = h.page.getByLabel(/Téléphone/), save = h.page.getByRole('button', { name: 'Enregistrer', exact: true });
       const oldValue = await phone.inputValue(), savedValue = '+41 21 555 01 05';
       await phone.fill(savedValue); await save.click();
@@ -160,8 +176,9 @@ try {
     await scenario('Saisie non enregistrée : navigation annulée puis acceptée, historique arrière et avant intact', 'page=learners&shell=1', async h => {
       await h.page.getByRole('link', { name: 'Paramètres de l’école', exact: true }).click(); await settle(h.page);
       const configUrl = h.page.url();
+      await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click();
       await h.page.getByLabel(/Téléphone/).fill('+41 21 555 09 09');
-      await h.page.getByRole('link', { name: 'Planning', exact: true }).click();
+      await h.page.getByRole('link', { name: 'Retour à la gestion', exact: true }).click();
       const dialog = h.page.getByRole('dialog', { name: 'Quitter sans enregistrer ?' });
       await dialog.waitFor(); await dialog.getByRole('button', { name: 'Retour', exact: true }).click();
       assert.equal(h.page.url(), configUrl);
@@ -177,17 +194,17 @@ try {
     await scenario('Signalements : retour à la valeur initiale et sauvegarde libèrent la sortie ; vraie saisie reste protégée', 'page=themes&shell=1', async h => {
       const toggle = h.page.getByRole('switch', { name: 'Maîtrise du véhicule', exact: true });
       await toggle.uncheck(); await toggle.check();
-      await h.page.getByRole('link', { name: 'Planning', exact: true }).click();
+      await h.page.getByRole('link', { name: 'Retour à la gestion', exact: true }).click();
       await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor();
       assert.equal(await h.page.getByRole('dialog').count(), 0);
       await h.page.goBack(); await toggle.waitFor(); await toggle.uncheck();
-      await h.page.getByRole('link', { name: 'Planning', exact: true }).click();
+      await h.page.getByRole('link', { name: 'Retour à la gestion', exact: true }).click();
       const dialog = h.page.getByRole('dialog', { name: 'Quitter sans enregistrer ?' }); await dialog.waitFor();
       await dialog.getByRole('button', { name: 'Retour', exact: true }).click();
       assert(new URL(h.page.url()).pathname.endsWith('/signalements')); assert.equal(await toggle.isChecked(), false);
       await h.page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
       await h.page.getByText('Enregistré', { exact: true }).waitFor();
-      await h.page.getByRole('link', { name: 'Planning', exact: true }).click();
+      await h.page.getByRole('link', { name: 'Retour à la gestion', exact: true }).click();
       await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor();
       assert.equal(await h.page.getByRole('dialog').count(), 0);
     });
@@ -218,9 +235,9 @@ try {
       await h.page.waitForFunction(() => document.activeElement?.getAttribute('type') === 'email' && document.activeElement?.getAttribute('aria-invalid') === 'true');
       assert(await email.evaluate(input => input === document.activeElement && input.getAttribute('aria-invalid') === 'true' && !!document.getElementById(input.getAttribute('aria-describedby'))?.textContent));
       await email.fill('controle@example.test'); await email.press('Enter');
-      await h.page.waitForFunction(() => document.activeElement?.tagName === 'SELECT');
+      await h.page.waitForFunction(() => document.activeElement?.getAttribute('aria-haspopup') === 'listbox');
       const category = h.page.getByLabel('Catégorie de test', { exact: true }); assert(await category.evaluate(input => input === document.activeElement && input.getAttribute('aria-invalid') === 'true'));
-      await category.selectOption('B'); await h.page.getByRole('button', { name: 'Vérifier la saisie', exact: true }).click();
+      await category.click(); await h.page.getByRole('option', { name: 'Permis B', exact: true }).click(); await h.page.getByRole('button', { name: 'Vérifier la saisie', exact: true }).click();
       await h.page.getByText('Saisie de test valide.', { exact: true }).waitFor();
       assert.equal(await h.page.evaluate(() => window.__log.length), 0);
     });
@@ -241,7 +258,7 @@ try {
       await zoe.click(); await h.page.getByRole('heading', { name: 'Zoé Girard', exact: true }).waitFor();
       assert.equal(await h.page.locator('.record-table').isVisible(), false);
       await h.page.getByRole('button', { name: 'Tous les élèves', exact: true }).click();
-      await h.page.waitForFunction(() => document.activeElement?.textContent === 'Zoé Girard');
+      await h.page.waitForFunction(() => document.activeElement?.querySelector('.person-name')?.textContent === 'Zoé Girard');
       assert.equal(await rows.count(), 11); assert(await zoe.evaluate(link => link === document.activeElement));
       await zoe.click(); await h.page.goBack(); await settle(h.page); assert.equal(await rows.count(), 11);
       const search = h.page.getByLabel('Rechercher un élève', { exact: true }); await search.fill('Camille Rochat');
@@ -254,6 +271,50 @@ try {
       assert.match(await h.page.locator('.detail-panel').innerText(), /diane@example\.test/);
       const selected = new URL(h.page.url()).searchParams.get('selection');
       assert(await h.page.evaluate(id => window.__reads.includes(`learners/${id}`), selected));
+    });
+    await scenario('Tri et filtre élèves : en-tête au clavier, page réinitialisée et profil choisi dans le menu', 'page=learners&shell=1&stress=1&volume=1', async h => {
+      const pagination = h.page.getByRole('navigation', { name: 'Pagination des élèves', exact: true });
+      await pagination.getByRole('button', { name: 'Suivant', exact: true }).click();
+      const sort = h.page.getByRole('button', { name: 'Élève, trier par nom décroissant', exact: true }); await sort.focus(); await sort.press('Enter');
+      assert.equal(await h.page.locator('.record-table th[aria-sort]').getAttribute('aria-sort'), 'descending');
+      assert.equal(await h.page.locator('.record-table tbody tr').count(), 25); assert(await pagination.getByRole('button', { name: 'Précédent', exact: true }).isDisabled());
+      assert.equal(await h.page.locator('.record-link .person-name').first().innerText(), 'Zoé Girard');
+      await h.page.getByLabel('Profil', { exact: true }).click(); await h.page.getByRole('option', { name: 'À compléter', exact: true }).click();
+      assert.equal(await h.page.locator('.record-table tbody tr').count(), 1); assert.match(await h.page.locator('.record-link').innerText(), /Éloïse/);
+      await h.page.getByLabel('Profil', { exact: true }).click(); await h.page.getByRole('option', { name: 'Tous les profils', exact: true }).click();
+      assert.equal(await h.page.locator('.record-table tbody tr').count(), 25);
+    });
+    await scenario('Équipe : tri, filtre inactif et contexte conservé après ouverture du membre', 'page=team&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Membre, trier par nom décroissant', exact: true }).click();
+      assert.equal(await h.page.locator('.record-table th[aria-sort]').getAttribute('aria-sort'), 'descending');
+      await h.page.getByRole('group', { name: 'Accès', exact: true }).getByRole('button', { name: /Inactifs/ }).click();
+      const member = h.page.getByRole('link', { name: 'Paul Suspendu', exact: true }); assert.equal(await h.page.locator('.record-table tbody tr').count(), 1);
+      await member.click(); await h.page.getByRole('heading', { name: 'Paul Suspendu', exact: true }).waitFor();
+      await h.page.getByRole('button', { name: 'Tous les membres', exact: true }).click();
+      await h.page.waitForFunction(() => document.activeElement?.querySelector('.person-name')?.textContent === 'Paul Suspendu');
+      assert.equal(await h.page.locator('.record-table tbody tr').count(), 1); assert.equal(await h.page.locator('.record-table th[aria-sort]').getAttribute('aria-sort'), 'descending');
+    });
+    await scenario('Agenda : semaine, moniteur et recherche conservés au retour du dossier', 'page=agenda&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Semaine suivante', exact: true }).click();
+      await h.page.getByRole('heading', { name: 'Aucune leçon cette semaine', exact: true }).waitFor();
+      await h.page.getByRole('button', { name: 'Semaine précédente', exact: true }).click();
+      await h.page.getByLabel('Moniteur', { exact: true }).click(); await h.page.getByRole('combobox', { name: 'Rechercher : Moniteur', exact: true }).fill('Marie');
+      await h.page.getByRole('option', { name: 'Marie Dupont', exact: true }).click();
+      await h.page.getByLabel('Élève', { exact: true }).fill('eloise');
+      const previous = h.page.url(); assert.equal(new URL(previous).searchParams.get('week'), '2026-09-28'); assert(new URL(previous).searchParams.has('instructor')); assert(!previous.includes('eloise'));
+      await h.page.locator('.agenda-lesson').first().click(); await h.page.getByRole('heading', { name: 'Éloïse Müller', exact: true }).waitFor();
+      await h.page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
+      await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor(); assert.equal(h.page.url(), previous);
+      assert.equal(await h.page.getByLabel('Élève', { exact: true }).inputValue(), 'eloise');
+      await h.page.getByLabel('Moniteur', { exact: true }).filter({ hasText: 'Marie Dupont' }).waitFor();
+      await h.page.locator('.agenda-lesson').first().waitFor();
+      assert.equal(await h.page.locator('.agenda-lesson').count(), 2);
+      await h.page.getByRole('link', { name: 'Disponibilités', exact: true }).click();
+      await h.page.getByRole('heading', { name: 'Disponibilités', exact: true }).waitFor();
+      const home = h.page.getByRole('link', { name: 'Planning', exact: true });
+      assert.equal(new URL(await home.getAttribute('href'), origin).href, previous);
+      await home.click(); await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor();
+      assert.equal(h.page.url(), previous); assert.equal(await h.page.getByLabel('Élève', { exact: true }).inputValue(), 'eloise');
     });
     await scenario('Dossier direct inexistant : réponse 404 distincte d’une panne', 'page=learners&shell=1&selection=missing', async h => {
       await h.page.getByText('Cette information n’est pas disponible avec vos accès actuels.', { exact: true }).waitFor();
@@ -272,7 +333,8 @@ try {
       const search = h.page.getByLabel('Rechercher un référentiel', { exact: true });
       await search.fill('equilibre'); assert.equal(await h.page.locator('.data-table tbody tr').count(), 1);
       await h.page.getByRole('button', { name: 'Catégorie A', exact: true }).click();
-      await h.page.getByRole('heading', { name: 'Catégorie A · révision 1', exact: true }).waitFor();
+      await h.page.getByRole('heading', { name: 'Catégorie A', exact: true, level: 1 }).waitFor();
+      await h.page.getByText('Révision 1', { exact: true }).waitFor();
       await h.page.goBack(); await settle(h.page); assert.equal(await search.inputValue(), 'equilibre');
       await h.page.getByRole('button', { name: 'Effacer la recherche', exact: true }).click(); assert.equal(await h.page.locator('.data-table tbody tr').count(), 2);
       await h.page.getByRole('button', { name: 'Nouveau référentiel', exact: true }).click();
@@ -304,14 +366,91 @@ try {
         }
       }
     });
+    await scenario('Choix simple : clavier, option désactivée, Échap, Tab et restitution du focus', 'page=choices', async h => {
+      const trigger = h.page.getByLabel('Permis de test', { exact: true }), count = h.page.getByLabel('Nombre de changements', { exact: true });
+      assert(await trigger.evaluate(element => element.tagName === 'BUTTON'));
+      await trigger.focus(); await trigger.press('Enter'); await h.page.getByRole('option', { name: 'Permis A', exact: true }).waitFor();
+      assert.equal(await h.page.getByRole('option', { name: 'Permis B', exact: true }).getAttribute('aria-disabled'), 'true');
+      await h.page.keyboard.press('End'); await h.page.keyboard.press('Enter');
+      await h.page.getByRole('listbox').waitFor({ state: 'hidden' }); assert.equal(await count.innerText(), '1'); assert.match(await trigger.innerText(), /Permis BE/);
+      await trigger.press('Space'); await h.page.getByRole('listbox').waitFor(); await h.page.keyboard.press('Home'); await h.page.keyboard.press('Escape');
+      await h.page.getByRole('listbox').waitFor({ state: 'hidden' }); assert(await trigger.evaluate(element => element === document.activeElement)); assert.equal(await count.innerText(), '1');
+      await trigger.press('ArrowDown'); await h.page.getByRole('listbox').waitFor(); await h.page.keyboard.press('Tab');
+      await h.page.getByRole('listbox').waitFor({ state: 'hidden' }); assert.equal(await count.innerText(), '1');
+    });
+    await scenario('Choix recherché : filtrer sans modifier, aucun résultat et sélection explicite', 'page=choices', async h => {
+      const trigger = h.page.getByLabel('Personne de test', { exact: true }), count = h.page.getByLabel('Nombre de changements', { exact: true });
+      await trigger.click(); const search = h.page.getByRole('combobox', { name: 'Rechercher : Personne de test', exact: true });
+      await search.fill('introuvable'); await h.page.getByText('Aucun résultat', { exact: true }).waitFor(); assert.equal(await count.innerText(), '0');
+      await search.fill('eloise'); await h.page.getByRole('option', { name: 'Éloïse Müller', exact: true }).waitFor(); assert.equal(await count.innerText(), '0');
+      await search.press('ArrowDown'); await search.press('Enter'); await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+      assert.equal(await count.innerText(), '1'); assert.match(await trigger.innerText(), /Éloïse Müller/); assert(await trigger.evaluate(element => element === document.activeElement));
+      await trigger.click(); await search.fill('Bruno'); await search.press('Escape'); await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+      assert.equal(await count.innerText(), '1'); assert.match(await trigger.innerText(), /Éloïse Müller/);
+    });
+    await scenario('Choix tactiles : cibles de 44 px et sélection par toucher dans le vrai menu', 'page=choices', async h => {
+      assert(await h.page.evaluate(() => matchMedia('(pointer: coarse)').matches));
+      assert(await h.page.locator('.choice-trigger,.segment-option > span').evaluateAll(elements => elements.every(element => element.getBoundingClientRect().height >= 44)));
+      await h.page.getByLabel('Permis de test', { exact: true }).tap();
+      await h.page.getByRole('option', { name: 'Permis BE', exact: true }).tap();
+      await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+      assert.equal(await h.page.getByLabel('Nombre de changements', { exact: true }).innerText(), '1');
+      assert.match(await h.page.getByLabel('Permis de test', { exact: true }).innerText(), /Permis BE/);
+    }, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    await scenario('Choix vides : valeur métier vide, aucune option, choix retiré et désactivation', 'page=choices', async h => {
+      const filter = h.page.getByLabel('Filtre de test', { exact: true }), count = h.page.getByLabel('Nombre de changements', { exact: true });
+      await filter.click(); await h.page.getByRole('option', { name: 'Tous les permis', exact: true }).click();
+      await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+      assert.equal(await count.innerText(), '1'); assert.match(await filter.innerText(), /Tous les permis/);
+      await h.page.getByLabel('Liste sans choix', { exact: true }).click(); await h.page.getByText('Aucun choix disponible', { exact: true }).waitFor();
+      assert.equal(await h.page.getByRole('option').count(), 0); await h.page.keyboard.press('Escape'); assert.equal(await count.innerText(), '1');
+      assert.equal(await h.page.getByLabel('Choix indisponible', { exact: true }).isEnabled(), false);
+      await h.page.getByRole('button', { name: 'Retirer l’option sélectionnée', exact: true }).click();
+      assert.match(await h.page.getByLabel('Choix retiré', { exact: true }).innerText(), /Choisir/); assert.equal(await count.innerText(), '1');
+    });
+    for (const label of ['Choix du groupe', 'Recherche du groupe']) await scenario(`Choix et fieldset : ${label} se ferme si le groupe est désactivé pendant l’ouverture`, 'page=choices', async h => {
+      await h.page.getByRole('button', { name: 'Désactiver le groupe dans deux secondes', exact: true }).click();
+      const trigger = h.page.getByLabel(label, { exact: true }); await trigger.click(); await h.page.getByRole('listbox').waitFor();
+      await h.page.getByText('Groupe désactivé', { exact: true }).waitFor(); await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+      assert.equal(await trigger.isEnabled(), false); assert.equal(await h.page.getByLabel('Nombre de changements', { exact: true }).innerText(), '0');
+      await h.page.getByRole('button', { name: 'Réactiver le groupe', exact: true }).click(); await trigger.click();
+      await h.page.getByRole('option', { name: label === 'Choix du groupe' ? 'Permis BE' : 'Bruno Blanc', exact: true }).click();
+      assert.equal(await h.page.getByLabel('Nombre de changements', { exact: true }).innerText(), '1');
+    });
+    for (const width of [1440, 390]) for (const label of ['Permis du dialogue', 'Personne du dialogue']) await scenario(`Choix et dialogue ${width}px : ${label} reste dans le plan modal et Échap ferme une couche à la fois`, 'page=choices', async h => {
+      await h.page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+      const opener = h.page.getByRole('button', { name: 'Ouvrir le dialogue de test', exact: true }); await opener.click();
+      const dialog = h.page.getByRole('dialog', { name: 'Dialogue de choix local', exact: true }), trigger = dialog.getByLabel(label, { exact: true });
+      await trigger.click(); await dialog.getByRole('listbox').waitFor(); await settle(h.page);
+      const option = dialog.getByRole('option', { name: label === 'Permis du dialogue' ? 'Permis BE' : 'Bruno Blanc', exact: true });
+      assert(await option.evaluate(element => { const rect = element.getBoundingClientRect(); const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); return element === hit || element.contains(hit); }), 'L’option du menu doit recevoir le clic au-dessus du dialogue');
+      await h.page.keyboard.press('Escape'); await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+      assert(await dialog.isVisible()); assert(await trigger.evaluate(element => element === document.activeElement));
+      await h.page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' }); assert(await opener.evaluate(element => element === document.activeElement));
+    });
+    await scenario('Choix invalide : vrai déclencheur focalisé et erreur associée, segment au clavier', 'page=choices', async h => {
+      await h.page.getByRole('button', { name: 'Vérifier le choix', exact: true }).click();
+      await h.page.waitForFunction(() => document.activeElement?.id === 'choice-required');
+      const required = h.page.getByLabel('Choix obligatoire', { exact: true });
+      assert(await required.evaluate(element => element.tagName === 'BUTTON' && element.getAttribute('aria-invalid') === 'true' && element.getAttribute('aria-describedby').split(' ').some(id => document.getElementById(id)?.textContent === 'Choisissez un permis.')));
+      await required.press('Enter'); await h.page.getByRole('option', { name: 'Permis A', exact: true }).click();
+      await h.page.getByRole('button', { name: 'Vérifier le choix', exact: true }).click(); await h.page.getByText('Choix local valide.', { exact: true }).waitFor();
+      const segments = h.page.getByRole('group', { name: 'Permis segmenté', exact: true });
+      await segments.getByRole('radio', { name: 'Permis A', exact: true }).focus(); await h.page.keyboard.press('ArrowRight');
+      assert(await segments.getByRole('radio', { name: 'Permis BE', exact: true }).isChecked());
+      assert(await segments.getByRole('radio', { name: 'Permis B', exact: true }).isDisabled());
+      assert.equal(await h.page.evaluate(() => window.__log.length), 0);
+    });
   }
   if (!process.argv.includes('--checks-only')) {
-    const pages = process.env.DRIVY_CAPTURE_TARGETS?.split(',') ?? ['learners', 'learner-detail', 'config', 'agenda', 'trips', 'privacy', 'preferences', 'team', 'team-detail', 'availability', 'absences', 'themes', 'formations', 'curricula', 'curriculum-form', 'procedures', 'offerings', 'products', 'terms', 'overview', 'profile', 'invitations', 'invitations-team', 'signin', 'account', 'invitation', 'opening', 'operator', 'setup-identity', 'setup-privacy', 'setup-profile', 'setup-formations', 'setup-pricing', 'setup-review', 'controls'];
+    const pages = process.env.DRIVY_CAPTURE_TARGETS?.split(',') ?? ['learners', 'learner-detail', 'config', 'config-form', 'agenda', 'trips', 'privacy', 'preferences', 'team', 'team-detail', 'availability', 'absences', 'themes', 'formations', 'curricula', 'curriculum-form', 'procedures', 'offerings', 'products', 'terms', 'overview', 'profile', 'invitations', 'invitations-team', 'signin', 'account', 'invitation', 'opening', 'operator', 'setup-identity', 'setup-privacy', 'setup-profile', 'setup-formations', 'setup-pricing', 'setup-review', 'controls', 'choices', 'choice-menu', 'choice-search', 'choice-dialog'];
     for (const theme of ['light', 'dark']) for (const target of pages) {
       stage = `capture ${target} ${theme}`;
       const widths = [1440, 1024, 390];
       const parameters = target.startsWith('setup-') ? `page=overview&status=draft&step=${target.slice(6).toUpperCase()}&setup=ready`
         : target === 'curriculum-form' ? 'page=curricula'
+        : target === 'config-form' ? 'page=config'
+        : target.startsWith('choice-') ? 'page=choices'
         : target === 'learner-detail' ? 'page=learners'
         : target === 'team-detail' ? 'page=team'
         : target === 'invitations-team' ? 'page=invitations&audience=team' : `page=${target}`;
@@ -320,11 +459,18 @@ try {
         await h.open();
         if (target === 'setup-review') { await h.page.getByRole('button', { name: 'Vérifier la préparation', exact: true }).click(); await settle(h.page); }
         if (target === 'curriculum-form') { await h.page.getByRole('button', { name: 'Nouveau référentiel', exact: true }).click(); await settle(h.page); }
+        if (target === 'config-form') { await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click(); await settle(h.page); }
         if (target === 'learner-detail') { await h.page.getByRole('link', { name: /Éloïse/ }).first().click(); await settle(h.page); }
         if (target === 'team-detail') { await h.page.getByRole('link', { name: /Marie-Christine/ }).first().click(); await settle(h.page); }
         if (target === 'learner-detail' || target === 'team-detail') assert.equal(await h.page.getByRole('heading', { level: 1 }).count(), 1);
         for (const width of widths) {
           await h.page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await settle(h.page);
+          if (target.startsWith('choice-')) {
+            if (target === 'choice-dialog') await h.page.getByRole('button', { name: 'Ouvrir le dialogue de test', exact: true }).click();
+            await h.page.getByLabel(target === 'choice-menu' ? 'Permis de test' : target === 'choice-search' ? 'Personne de test' : 'Permis du dialogue', { exact: true }).click();
+            await h.page.getByRole('listbox').waitFor(); await settle(h.page);
+            assert(await h.page.locator('.choice-popup').evaluate(element => { const r = element.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }), 'Le menu ouvert reste dans la largeur du viewport');
+          }
           const file = `${target}-${width}-${theme}-synthetic.png`; await h.page.screenshot({ path: resolve(directory, file), fullPage: true });
           const overflow = !(await noOverflow(h.page)); captures.push({ target, theme, width, file, horizontalOverflow: overflow, pageErrors: h.errors });
           if (overflow || h.errors.length) failures.push({ scenario: `${target} ${width}px ${theme}`, error: overflow ? 'Horizontal document overflow' : 'JavaScript error' });
@@ -345,10 +491,10 @@ try {
               if (focusedAudit.violations.length) failures.push({ scenario: `axe après défilement ${target} ${width}px ${theme}`, error: focusedAudit.violations.map(item => item.id).join(', ') });
             }
           }
-        }
-        if (target === 'config') {
-          await h.page.setViewportSize({ width: 1440, height: 1000 }); await settle(h.page);
-          await h.page.screenshot({ path: resolve(directory, `config-form-1440-${theme}-synthetic.png`), fullPage: true });
+          if (target.startsWith('choice-')) {
+            await h.page.keyboard.press('Escape'); await h.page.getByRole('listbox').waitFor({ state: 'hidden' });
+            if (target === 'choice-dialog') { await h.page.keyboard.press('Escape'); await h.page.getByRole('dialog').waitFor({ state: 'hidden' }); }
+          }
         }
       } finally { await h.context.close(); }
     }

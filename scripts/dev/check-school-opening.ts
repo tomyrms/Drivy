@@ -348,7 +348,9 @@ async function main() {
       (SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1) AS products,
       (SELECT count(*)::int FROM drivy.offering_version WHERE school_id=$1) AS offerings`,[school.id])).rows[0];
     await page.getByText('Ajouter un tarif à une formation existante',{exact:true}).click();
-    await page.getByLabel('Formation',{exact:true}).selectOption({label:'Permis B · 50 min'});
+    await page.getByLabel('Formation',{exact:true}).click();
+    await page.getByRole('combobox',{name:'Rechercher : Formation',exact:true}).fill('Permis B');
+    await page.getByRole('option',{name:'Permis B · 50 min',exact:true}).click();
     await page.getByRole('button',{name:'Préparer ce tarif',exact:true}).click();
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vos tarifs',exact:true}).waitFor();
     await page.getByLabel('Prix (CHF)',{exact:true}).fill('105');

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { BrandSymbol } from './BrandSymbol';
 import { Symbol } from './ui';
 import { type ThemePreference, useTheme } from './theme';
+import './console/settings-studio.css';
 
 const themes: { value: ThemePreference; label: string }[] = [
   { value: 'light', label: 'Clair' }, { value: 'dark', label: 'Sombre' }, { value: 'system', label: 'Système' },
@@ -15,7 +16,10 @@ export function ThemeControl({ compact = false }: { compact?: boolean }) {
     <div className="theme-options">{themes.map(theme => <label className="theme-option" key={theme.value}>
       <input type="radio" name={name} value={theme.value} checked={preference === theme.value}
         onChange={() => { setTheme(theme.value); setChanged(true); }} />
-      {!compact && <span className={`theme-preview preview-${theme.value}`} aria-hidden="true"><i /><i /><i /></span>}
+      {!compact && <span className={`theme-preview preview-${theme.value}`} aria-hidden="true">
+        <span className="theme-preview-rail"><i /><i /><i /></span>
+        <span className="theme-preview-content"><i /><i /><i /><i /></span>
+      </span>}
       <span>{theme.label}</span>
     </label>)}</div>
     <p className={storageError ? 'field-error' : 'visually-hidden'} role="status">{storageError
@@ -57,12 +61,12 @@ export function PreferencesPage() {
   // Only an internal console URL may be offered as a return destination.
   const back = /^\/app\/gestion\/[\da-f-]{36}\/[a-z-]+(?:\?[^#]*)?$/i.test(requested) ? requested : '/app/';
   useEffect(() => { document.title = 'Préférences personnelles · Drivy'; }, []);
-  return <div className="app-shell personal-preferences">
+  return <div className="app-shell personal-preferences settings-studio">
     <a className="skip-link" href="#main">Aller au contenu</a>
     <header className="site-header"><a className="brand" href="/app/"><BrandSymbol /><span>Drivy</span></a><AccountMenu /></header>
     <main id="main" className="main">
       <a className="button quiet preference-back" href={back}><Symbol kind="back" bare />{back === '/app/' ? 'Retour à mon compte' : 'Retour à l’école'}</a>
-      <h1>Préférences personnelles</h1>
+      <div className="preferences-heading"><Symbol kind="settings" bare /><h1>Préférences personnelles</h1></div>
       <section className="settings-section"><div className="settings-section-heading"><h2>Affichage</h2></div>
         <div className="settings-section-body"><ThemeControl /></div>
       </section>

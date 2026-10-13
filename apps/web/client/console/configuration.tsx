@@ -1,23 +1,27 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createCommand, filled, isEmail, characters } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { readSchool, readinessSchema } from '../school-api';
-import { Facts, StatusBadge, Symbol, TextField } from '../ui';
+import { StatusBadge, Symbol, TextField } from '../ui';
 import { useCommandRunner, useConsole, useDraft, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { schoolStatus } from './overview';
+import './settings-studio.css';
 
 type Identity = { name: string; contactEmail: string; contactPhone: string };
 
 /** Everyday coordinates save directly; adoption, access and destructive commands retain their review. */
 export function ConfigurationSection() {
-  const { schoolId, school, navigate, reloadSchool } = useConsole();
+  const { schoolId, school, navigate, reloadSchool, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner();
   const loaded = useLoad(async () => ({ readiness: await readSchool(schoolId, 'readiness', readinessSchema) }), [schoolId, revision, school.version]);
   const identity = useDraft<Identity>({ name: school.name, contactEmail: school.contactEmail, contactPhone: school.contactPhone ?? '' });
   const [attempted, setAttempted] = useState(false);
+  const [editing, setEditing] = useState(() => !!routeQuery?.focus?.startsWith('school-'));
+  const editButton = useRef<HTMLButtonElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  useEffect(() => { if (routeQuery?.focus?.startsWith('school-')) setEditing(true); }, [routeQuery?.focus]);
   const mayEdit = loaded.data !== undefined && !runner.pending && !runner.busy;
   const value = identity.draft;
   const errors = value ? {
@@ -36,17 +40,26 @@ export function ConfigurationSection() {
       body: { ...normalized, contactPhone: normalized.contactPhone || null, timeZone: school.timeZone, impactConfirmed: true } }), 'Les coordonnées de l’école sont enregistrées.');
     if (result.status === 'confirmed') { identity.markSaved(normalized); setAttempted(false); }
   }
-  return <div className="section-stack">
-    <SectionHeading title="École"
+  return <div className="section-stack settings-studio settings-school">
+    <SectionHeading title="École" symbol="school"
       actions={school.status !== 'ACTIVE' ? <StatusBadge tone={status.tone} symbol="clock">{status.label}</StatusBadge> : undefined} />
     <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome}
       actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={() => { loaded.reload(); void reloadSchool(); }}>Recharger les informations</button> : undefined} />
     {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
     <LoadState loaded={loaded} label="Vérification de l’école…">{() => <div className="config-sections">
       <section className="settings-section" aria-labelledby="identity-title">
-        <div className="settings-section-heading"><h2 id="identity-title" className="section-title">Coordonnées</h2></div>
+        <div className="settings-section-heading"><h2 id="identity-title" className="section-title">Coordonnées</h2>
+          {!editing && <button type="button" className="button secondary" ref={editButton} disabled={!mayEdit}
+            onClick={() => { setEditing(true); requestAnimationFrame(() => form.current?.querySelector<HTMLInputElement>('input')?.focus()); }}>
+            <Symbol kind="edit" bare />Modifier les coordonnées</button>}
+        </div>
         <div className="settings-section-body">
-          {value && errors && <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
+          {!editing && <dl className="settings-values">
+            <div><dt>Nom de l’école</dt><dd>{value?.name ?? school.name}</dd></div>
+            <div><dt>E-mail de l’école</dt><dd>{value?.contactEmail ?? school.contactEmail}</dd></div>
+            <div><dt>Téléphone</dt><dd>{(value?.contactPhone ?? school.contactPhone) || <span className="secondary-text">Non renseigné</span>}</dd></div>
+          </dl>}
+          {editing && value && errors && <form ref={form} className="form-grid settings-editor" noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
             <TextField id="school-name" label="Nom de l’école" value={value.name} onChange={name => identity.setDraft({ ...value, name })}
               disabled={!mayEdit} autoComplete="organization" maxLength={150} error={attempted ? errors.name : null} />
             <TextField id="school-email" label="E-mail de l’école" type="email" value={value.contactEmail} onChange={contactEmail => identity.setDraft({ ...value, contactEmail })}
@@ -58,13 +71,16 @@ export function ConfigurationSection() {
               <div className="button-row compact"><button type="submit" className="button primary" disabled={!mayEdit || !identity.edited} aria-busy={runner.busy}>
                 {runner.busy ? 'Enregistrement…' : 'Enregistrer'}</button>
                 {identity.edited && <button type="button" className="button quiet" disabled={runner.busy} onClick={() => { identity.reset(); setAttempted(false); }}>Annuler</button>}
+                {!identity.edited && <button type="button" className="button quiet" disabled={runner.busy} onClick={() => {
+                  setEditing(false); setAttempted(false); requestAnimationFrame(() => editButton.current?.focus());
+                }}>Terminer</button>}
               </div>
             </div>
           </form>}
         </div>
       </section>
       <section className="settings-section" aria-labelledby="timezone-title"><div className="settings-section-heading"><h2 id="timezone-title" className="section-title">Horaires de référence</h2></div>
-        <div className="settings-section-body"><Facts items={[["Fuseau horaire", school.timeZone]]} /></div>
+        <div className="settings-section-body"><dl className="settings-values"><div><dt>Fuseau horaire</dt><dd>{school.timeZone}</dd></div></dl></div>
       </section>
       {school.status === 'DRAFT' && <section className="settings-section" aria-labelledby="activation-title">
         <div className="settings-section-heading"><h2 id="activation-title" className="section-title">Préparation</h2></div>

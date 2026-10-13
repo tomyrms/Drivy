@@ -5,7 +5,7 @@ import { useCommandSnapshot } from '../command-store';
 import { productSchema, productTypes, readAll, readSchool, termsSchema, textProposalsSchema, type CommercialTerms, type ServiceProduct } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate, formatDateTime, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
-import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
+import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RecordSearch, RowButton, SectionHeading, SplitView } from './layout';
 import { approvalBadge } from './catalog';
 import { consolePath } from './route';
 import { useListState } from './list-state';
@@ -91,32 +91,33 @@ export function TermsSection() {
   }
 
   return (
-    <div className="section-stack">
-      <SectionHeading context="Formations et tarifs" title="Conditions commerciales"
-        actions={canConfigureCatalog && !draft ? <button type="button" className={current ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />
+    <div className="section-stack catalog-studio">
+      {!draft && !current && <SectionHeading title="Conditions commerciales" symbol="receipt"
+        actions={canConfigureCatalog ? <button type="button" className="button primary" disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelles conditions</button> : undefined} />}
       {!canConfigureCatalog && <GrantNotice />}
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
+      <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{data => <SplitView mode="page" backLabel="Retour aux conditions" mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
         list={<>
-          <div className="list-toolbar directory-toolbar">
-            <TextField label="Rechercher des conditions" value={search} onChange={setSearch} placeholder="Libellé ou texte" />
+          <div className="record-toolbar">
+            <RecordSearch label="Rechercher des conditions" value={search} onChange={setSearch} placeholder="Libellé ou texte" />
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
           <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'version de conditions' : 'versions de conditions'}{visible.length !== items.length ? ` sur ${items.length}` : ''}{data.truncated ? ' dans la liste chargée' : ''}</p>
           {items.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition commerciale" message="Rédigez et approuvez des conditions avant d’activer une prestation." />
           : visible.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition trouvée" />
-          : <table className="data-table">
+          : <table className="data-table record-table">
             <caption className="visually-hidden">Conditions commerciales</caption>
-            <thead><tr><th scope="col">Conditions</th><th scope="col">Validité</th></tr></thead>
+            <thead><tr><th scope="col">Conditions</th><th scope="col">Version</th><th scope="col">Validité</th></tr></thead>
             <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>{item.label}</RowButton>
-                <span className="row-meta block">Version {item.version}</span>{!item.approved && approvalBadge(false, true)}</th>
-              <td>{period(item.validFrom, item.validUntil)}</td>
+                {!item.approved && approvalBadge(false, true)}</th>
+              <td data-label="Version">{item.version}</td>
+              <td data-label="Validité">{period(item.validFrom, item.validUntil)}</td>
             </tr>)}</tbody>
           </table>}
         </>}
-        detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelles conditions commerciales'}
+        detail={draft && problems ? <DetailPanel headingLevel={1} focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelles conditions commerciales'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
             >
             <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
@@ -140,7 +141,7 @@ export function TermsSection() {
               </div>
             </form>
           </DetailPanel>
-          : current ? <DetailPanel focusKey={current.id} title={current.label} meta={`Version ${current.version} · ${period(current.validFrom, current.validUntil)}`} badge={approvalBadge(current.approved, true)}
+          : current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.label} meta={`Version ${current.version} · ${period(current.validFrom, current.validUntil)}`} badge={approvalBadge(current.approved, true)}
             actions={canConfigureCatalog ? <>
               {!current.approved && <button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current, true)}>Approuver…</button>}
               <button type="button" className={current.approved ? 'button primary' : 'button secondary'} disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button>
@@ -248,16 +249,16 @@ export function ProductsSection() {
   const state = (item: ServiceProduct) => item.enabled ? <span className="status-text">Active</span> : <StatusBadge tone="neutral" symbol="dot">Désactivée</StatusBadge>;
 
   return (
-    <div className="section-stack">
-      <SectionHeading context="Formations et tarifs" title="Tarifs"
-        actions={canConfigureCatalog && !draft ? <><button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'prestations' })}><Symbol kind="plus" bare />Ajouter un tarif de leçon</button><button type="button" className="button secondary" disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}>Autre prestation</button></> : undefined} />
+    <div className="section-stack catalog-studio">
+      {!draft && !current && <SectionHeading title="Tarifs" symbol="tag"
+        actions={canConfigureCatalog ? <><button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'prestations' })}><Symbol kind="plus" bare />Ajouter un tarif de leçon</button><button type="button" className="button secondary" disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}>Autre prestation</button></> : undefined} />}
       {!canConfigureCatalog && <GrantNotice />}
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
+      <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mode="page" backLabel="Retour aux tarifs" mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
         list={<>
-          <div className="list-toolbar directory-toolbar">
-            <TextField label="Rechercher un tarif" value={search} onChange={setSearch} placeholder="Libellé, permis ou type" />
+          <div className="record-toolbar">
+            <RecordSearch label="Rechercher un tarif" value={search} onChange={setSearch} placeholder="Libellé, permis ou type" />
             <CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} />
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
@@ -265,17 +266,18 @@ export function ProductsSection() {
           {rows.length === 0 ? <EmptyState symbol="tag" title="Aucun tarif" message="Préparez une formation, son prix et ses conditions."
             action={canConfigureCatalog ? <button type="button" className="button secondary" onClick={() => navigate('apercu', { from: 'prestations' })}>Préparer une formation</button> : undefined} />
           : visible.length === 0 ? <EmptyState symbol="tag" title="Aucun tarif trouvé" />
-          : <table className="data-table">
+          : <table className="data-table record-table">
             <caption className="visually-hidden">Prestations et tarifs</caption>
-            <thead><tr><th scope="col">Prestation</th><th scope="col" className="numeric">Prix</th></tr></thead>
+            <thead><tr><th scope="col">Prestation</th><th scope="col">Type</th><th scope="col">Validité</th><th scope="col" className="numeric">Prix</th></tr></thead>
             <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>{item.label}</RowButton>
-                <span className="row-meta block">{typeLabels[item.type]} · v{item.version}</span>
-                <span className="row-meta block">{period(item.validFrom, item.validUntil)}</span>{!item.enabled && state(item)}</th>
-              <td className="numeric"><strong>{formatCents(item.unitPriceCents)}</strong><span className="row-meta block">par {item.unitLabel}</span></td>
+                <span className="row-meta block">Version {item.version}</span>{!item.enabled && state(item)}</th>
+              <td data-label="Type">{typeLabels[item.type]}</td>
+              <td data-label="Validité">{period(item.validFrom, item.validUntil)}</td>
+              <td className="numeric" data-label="Prix"><span><strong>{formatCents(item.unitPriceCents)}</strong><span className="row-meta block">par {item.unitLabel}</span></span></td>
             </tr>)}</tbody>
           </table>}</>}
-        detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelle prestation'}
+        detail={draft && problems ? <DetailPanel headingLevel={1} focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelle prestation'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
             >
             <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
@@ -295,7 +297,7 @@ export function ProductsSection() {
                 <TextField label="Valable dès le" type="date" value={draft.validFrom} disabled={!canWrite} onChange={validFrom => update({ validFrom })} error={showErrors ? problems.period : null} />
                 <TextField label="Jusqu’au" type="date" required={false} value={draft.validUntil} disabled={!canWrite} onChange={validUntil => update({ validUntil })} />
               </div>
-              <SelectField label="Conditions commerciales" value={draft.termsVersionId} placeholder="Choisir des conditions" disabled={!canWrite}
+              <SelectField label="Conditions commerciales" value={draft.termsVersionId} placeholder="Choisir des conditions" disabled={!canWrite} search
                 options={[...value.terms].sort((a, b) => b.version - a.version).map(item => ({ value: item.id, label: `${item.label} · v${item.version} · ${item.approved ? 'approuvées' : 'brouillon'}` }))}
                 onChange={termsVersionId => update({ termsVersionId })} error={showErrors ? problems.terms ?? problems.enabled : null} />
               <CheckField label="Activer cette prestation" checked={draft.enabled} onChange={enabled => update({ enabled })} disabled={!canWrite}
@@ -310,7 +312,7 @@ export function ProductsSection() {
               </div>
             </form>
           </DetailPanel>
-          : current ? <DetailPanel focusKey={current.id} title={current.label} meta={`${typeLabels[current.type]} · version ${current.version}`} badge={state(current)}
+          : current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.label} meta={`${typeLabels[current.type]} · version ${current.version}`} badge={state(current)}
             actions={canConfigureCatalog ? <button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button> : undefined}>
             <div className="price-summary"><p className="price-amount">{formatCents(current.unitPriceCents)}<span> / {current.unitLabel}</span></p><p className="row-meta">{formatDuration(current.durationMinutes)}{current.categoryCode ? ` · Catégorie ${current.categoryCode}` : ''}</p></div>
             <Facts items={[

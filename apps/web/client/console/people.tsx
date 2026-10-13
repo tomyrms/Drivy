@@ -13,6 +13,7 @@ import { DirectoryRow } from './directory';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
 import { useListState } from './list-state';
 import { consolePath } from './route';
+import { PersonAvatar } from '../person-avatar';
 
 const roles: readonly { value: Role; explanation: string }[] = [
   { value: 'ADMIN', explanation: 'Gérer l’école, ses membres et les dossiers administratifs.' },
@@ -100,33 +101,39 @@ export function TeamSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView mode="page" mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les membres"
         list={<>
-          <div className="record-toolbar">
-            <RecordSearch label="Rechercher un membre" value={filter} onChange={value => { setFilter(value); setPage(1); }} placeholder="Nom" />
-            <FilterTabs label="Accès" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
-              { value: 'all', label: 'Tous', count: audience.length },
-              { value: 'active', label: 'Actifs', count: audience.filter(item => item.status === 'ACTIVE').length },
-              { value: 'inactive', label: 'Inactifs', count: audience.filter(item => item.status !== 'ACTIVE').length },
-            ]} />
-            <CheckField label="Afficher les élèves" checked={showLearners} onChange={value => { setShowLearners(value); setPage(1); }} />
-            <SelectField label="Trier par" value={sort} onChange={value => { setSort(value); setPage(1); }}
-              options={[{ value: 'name-asc', label: 'Nom : A à Z' }, { value: 'name-desc', label: 'Nom : Z à A' }]} />
-            {(filter || statusFilter !== 'all' || showLearners) && <button type="button" className="button quiet" onClick={() => { setFilter(''); setStatusFilter('all'); setShowLearners(false); setPage(1); }}>Réinitialiser les filtres</button>}
+          <div className="people-list-toolbar">
+            <div className="people-list-primary">
+              <FilterTabs label="Accès" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+                { value: 'all', label: 'Tous', count: audience.length },
+                { value: 'active', label: 'Actifs', count: audience.filter(item => item.status === 'ACTIVE').length },
+                { value: 'inactive', label: 'Inactifs', count: audience.filter(item => item.status !== 'ACTIVE').length },
+              ]} />
+              <div className="people-list-search"><RecordSearch label="Rechercher un membre" value={filter} onChange={value => { setFilter(value); setPage(1); }} placeholder="Rechercher un membre" /></div>
+            </div>
+            <div className="people-list-filters">
+              <CheckField label="Afficher les élèves" checked={showLearners} onChange={value => { setShowLearners(value); setPage(1); }} />
+              {(filter || statusFilter !== 'all' || showLearners) && <button type="button" className="button quiet" onClick={() => { setFilter(''); setStatusFilter('all'); setShowLearners(false); setPage(1); }}>Réinitialiser les filtres</button>}
+            </div>
           </div>
           {data.truncated && <p className="caption">La recherche porte sur les membres chargés.</p>}
           {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message="" />
-          : <div className="directory-table-wrap"><table className="data-table record-table"><caption className="visually-hidden">Membres de l’école</caption>
-            <thead><tr><th scope="col">Membre</th><th scope="col">Rôles</th><th scope="col">Accès</th></tr></thead><tbody>
+          : <div className="directory-table-wrap"><table className="data-table record-table people-table"><caption className="visually-hidden">Membres de l’école</caption>
+            <thead><tr><th scope="col" aria-sort={sort === 'name-asc' ? 'ascending' : 'descending'}><button type="button" className="table-sort"
+              aria-label={`Membre, trier par nom ${sort === 'name-asc' ? 'décroissant' : 'croissant'}`} onClick={() => { setSort(sort === 'name-asc' ? 'name-desc' : 'name-asc'); setPage(1); }}>
+              Membre<Symbol kind={sort === 'name-asc' ? 'chevron-up' : 'chevron'} bare /></button></th><th scope="col">Rôles</th><th scope="col">Accès</th></tr></thead><tbody>
             {pageRows.map(item => <tr key={item.id} className={item.id === selected ? 'is-selected' : undefined}>
-              <th scope="row" className="record-identity"><a className="record-link" aria-current={item.id === selected ? 'true' : undefined}
+              <th scope="row" className="record-identity"><a className="record-link person-cell" aria-current={item.id === selected ? 'true' : undefined}
                 href={consolePath(schoolId, 'equipe', { ...routeQuery, selection: item.id })}
-                onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); setSelected(item.id); } }}>{item.displayName}</a>
+                onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); setSelected(item.id); } }}>
+                <PersonAvatar name={item.displayName} /><span className="person-name">{item.displayName}</span></a>
                 {item.id === membership.membershipId && <span className="record-secondary">Vous</span>}</th>
               <td data-label="Rôles">{rolesText(item.roles)}</td>
               <td data-label="Accès">{item.status === 'ACTIVE' ? 'Actif' : <span className="record-attention"><Symbol kind="ban" bare />Inactif</span>}</td>
             </tr>)}</tbody></table></div>}
           <ListPagination page={currentPage} pageSize={pageSize} total={visible.length} onPageChange={setPage} label="Pagination des membres" />
         </>}
-        detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} meta={self ? 'Votre propre accès' : rolesText(current.roles)}
+        detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} leading={<PersonAvatar name={current.displayName} size="large" />}
+            meta={<span className="person-meta">{self && <span>Votre propre accès</span>}<span>{rolesText(current.roles)}</span></span>}
             badge={current.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined}>
             {current.roles.includes('INSTRUCTOR') && <div className="detail-links">
               <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor: current.id })}><Symbol kind="calendar" bare />Voir le planning</button>
@@ -361,7 +368,7 @@ export function InvitationsSection() {
           : <>
           <div className="list-toolbar directory-toolbar">
             <TextField label="Rechercher une invitation" value={search} onChange={setSearch} placeholder={team ? 'Adresse' : 'Permis ou moniteur'} />
-            <SelectField label="État" value={statusFilter} onChange={setStatusFilter}
+            <SelectField label="État" value={statusFilter} onChange={setStatusFilter} appearance="filter"
               options={[{ value: 'all', label: 'Toutes' }, ...(['PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED'] as const).map(status => ({ value: status, label: invitationStatus(status).label }))]} />
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
@@ -380,7 +387,7 @@ export function InvitationsSection() {
                 {offerings.map(item => <CheckField key={item.id} label={offeringLabel(item, offerings)} checked={offeringIds.includes(item.id)}
                   disabled={!canWrite} onChange={on => setOfferingIds(ids => on ? [...ids, item.id] : ids.filter(id => id !== item.id))} />)}
               </fieldset>
-              <SelectField label="Moniteur" value={instructorId} placeholder="Choisir un moniteur" disabled={!canWrite} onChange={setInstructorId}
+              <SelectField label="Moniteur" value={instructorId} placeholder="Choisir un moniteur" disabled={!canWrite} onChange={setInstructorId} search
                 options={instructors.map(item => ({ value: item.id, label: item.displayName }))} />
               {showErrors && trainingProblem && <p className="field-error"><Symbol kind="alert" bare />{trainingProblem}</p>}
               {offerings.length === 0 && <Notice tone="info" title="Aucune offre ouverte" live={false}

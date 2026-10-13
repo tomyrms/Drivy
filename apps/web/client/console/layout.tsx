@@ -1,18 +1,18 @@
 import { useContext, useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Loading, Notice, Symbol } from '../ui';
+import { Loading, Notice, Symbol, type SymbolKind } from '../ui';
 import { ConsoleContext, useConsole, type Loaded, type Outcome } from './context';
 import { workspaces } from './navigation';
 
 /** Section title. Receives focus when the section opens, so screen readers announce the new page. */
-export function SectionHeading({ title, context, actions }: { title: string; context?: string; actions?: ReactNode }) {
+export function SectionHeading({ title, context, actions, symbol }: { title: string; context?: string; actions?: ReactNode; symbol?: SymbolKind }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, []);
   return (
     <div className="section-head">
       <div className="section-head-text">
         {context && !workspaces.some(workspace => workspace.label === context) && <p className="context">{context}</p>}
-        <h1 ref={heading} tabIndex={-1}>{title}</h1>
+        <h1 ref={heading} tabIndex={-1}>{symbol && <Symbol kind={symbol} bare />}{title}</h1>
       </div>
       {actions && <div className="section-head-actions">{actions}</div>}
     </div>
@@ -108,8 +108,8 @@ export function ListPagination({ page, pageSize, total, onPageChange, label = 'P
 }
 
 /** Detail panel with a focusable title, so a selection from the list lands here for keyboard users. */
-export function DetailPanel({ title, meta, badge, children, actions, focusKey, headingLevel = 2 }: {
-  title: string; meta?: ReactNode; badge?: ReactNode; children: ReactNode; actions?: ReactNode; focusKey?: string; headingLevel?: 1 | 2;
+export function DetailPanel({ title, meta, badge, children, actions, focusKey, headingLevel = 2, leading }: {
+  title: string; meta?: ReactNode; badge?: ReactNode; children: ReactNode; actions?: ReactNode; focusKey?: string; headingLevel?: 1 | 2; leading?: ReactNode;
 }) {
   const Heading = headingLevel === 1 ? 'h1' : 'h2';
   const heading = useRef<HTMLHeadingElement>(null);
@@ -122,6 +122,7 @@ export function DetailPanel({ title, meta, badge, children, actions, focusKey, h
   return (
     <section className="detail-panel" aria-labelledby={titleId}>
       <div className="detail-head">
+        {leading}
         <div className="row-text">
           <Heading id={titleId} ref={heading} tabIndex={-1}>{title}</Heading>
           {meta && <p className="row-meta">{meta}</p>}

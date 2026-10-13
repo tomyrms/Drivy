@@ -6,6 +6,7 @@ import { availabilitySchema, closureSchema, memberSchema, readAll, type Availabi
 import { CheckField, EmptyState, SelectField, Symbol, TextField, formatCivilDate, formatDateTime } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
+import './operations-studio.css';
 
 const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 const removal = 'Retirée depuis la gestion web.';
@@ -100,19 +101,19 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
   }
 
   return (
-    <div className="section-stack">
+    <div className="section-stack availability-studio">
       <SectionHeading context="Planning" title={section === 'absences' ? 'Absences' : 'Disponibilités'} actions={routeQuery?.from === 'equipe' ? <button type="button" className="button quiet" onClick={() => navigate('equipe', { selection: routeQuery.instructor })}>Retour au membre</button> : undefined} />
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
       <LoadState loaded={loaded} label={section === 'absences' ? 'Lecture des absences…' : 'Lecture des disponibilités…'}>{() => instructors.length === 0
         ? <EmptyState symbol="users" title="Aucun moniteur" message="Donnez le rôle Moniteur à un membre dans Équipe et accès." />
         : <>
           <div className="availability-toolbar">
-            {instructors.length > 1 ? <SelectField label="Moniteur" value={instructor} onChange={setChosen}
+            {instructors.length > 1 ? <SelectField label="Moniteur" value={instructor} onChange={setChosen} search appearance="filter"
               options={instructors.map(member => ({ value: member.id, label: member.displayName }))} />
               : <p className="row-title">{instructors.find(member => member.id === instructor)?.displayName ?? 'Moniteur indisponible'}</p>}
             <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor })}><Symbol kind="calendar" bare />Voir le planning</button>
           </div>
-          {section === 'availability' && <section className="panel schedule-section" aria-labelledby="weekly-title">
+          {section === 'availability' && <section className="schedule-section" aria-labelledby="weekly-title">
             <h2 id="weekly-title" className="section-title">Horaires hebdomadaires</h2>
             {rules.length === 0 ? <p className="caption">Aucune disponibilité : aucune leçon ne peut être planifiée.</p>
               : <ul className="row-list schedule-list">{rules.map(rule => <li key={rule.id}>
@@ -139,7 +140,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
             </form>
             </details>
           </section>}
-          {section === 'absences' && <section className="panel schedule-section" aria-labelledby="absence-title">
+          {section === 'absences' && <section className="schedule-section" aria-labelledby="absence-title">
             <h2 id="absence-title" className="section-title">Absences prévues</h2>
             {absences.length === 0 ? <p className="caption">Aucune absence prévue.</p>
               : <ul className="row-list schedule-list">{absences.map(item => <li key={item.id}>
