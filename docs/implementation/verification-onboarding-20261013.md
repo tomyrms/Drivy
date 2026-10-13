@@ -14,6 +14,7 @@ La demande est de vérifier les parcours, l’interface et leur fluidité, puis 
 | Écran d’ouverture | Les champs hors `.console-shell` ne reçoivent pas les styles des contrôles partagés ; une classe de masquage inexistante affiche la légende technique. | Étendre les règles des contrôles à `.opening-shell`, réutiliser `visually-hidden`, disposer l’identité du compte sur toute la largeur utile sur mobile. |
 | Première leçon | Une école globalement prête peut encore manquer des disponibilités du moniteur affecté ou d’un tarif pour le permis de cet élève ; le lien renvoyait au dossier au lieu du réglage concerné. | Cibler les disponibilités du moniteur exact ou le guide d’ajout de tarif pour l’offre exacte, selon les contrôles serveur. |
 | Entrée native avec plusieurs rôles | ADMIN + LEARNER ouvre l’espace élève mais cherchait son dossier dans les cinquante premiers dossiers administratifs. | Lecture personnelle filtrée au serveur, indépendante de la pagination administrative et incluant les dossiers archivés. [Contrat et limites](native-personal-learner-20261013.md). |
+| Enregistrer avant de quitter | Si le PUT réussit mais que sa réponse est perdue, le dialogue de sortie reste ouvert et désactivé ; il rend le suivi de la commande inaccessible. | Fermer ce dialogue sur résultat incertain et focaliser le suivi. Une autre tentative de sortie revient au suivi ; après récupération, quitter reste une action explicite. |
 
 ## Vérification exécutée localement
 
@@ -23,6 +24,7 @@ La demande est de vérifier les parcours, l’interface et leur fluidité, puis 
 - Les six étapes ont été examinées sans débordement à 320/390/640 px. Agrandissement CSS 200 % contrôlé ; le zoom natif du navigateur n’est pas qualifié par ce substitut.
 - Ouverture : six rendus à 320/390/1440 px, clair/sombre ; champs de 44 px minimum, taille de texte 16 px sur mobile, pas de débordement. La saisie d’un fuseau invalide n’envoie aucune création et focalise le champ identifié comme invalide. Trois captures représentatives examinées, six rendus mesurés. Réponses BFF synthétiques : ces contrôles ne prouvent pas la persistance.
 - Erreurs associées : huit rendus à 390/1440 px pour le téléphone, la deuxième compétence, la troisième description et l’annulation. Focus, détail ouvert, message visible et lié, disparition après édition vérifiés. Quatre contrôles supplémentaires conservent les erreurs des autres champs et empêchent leur transfert à un autre élément après retrait d’une compétence ou d’un champ demandé.
+- Sortie incertaine : clic à 1440 px et clavier à 390 px vérifiés avec réponses synthétiques. Dialogue fermé, suivi focalisé, nouvelle tentative de sortie sans masque, récupération de la saisie, une seule commande et sortie explicite ultérieure réussie (`setup-uncertain-exit-fixed.json`). La recette intégrée est étendue à ce cas ; son nouveau résultat reste à obtenir.
 
 Les captures et résultats locaux figurent sous `artifacts/onboarding-review/` : `audit-transition-after-*`, `audit-profile-error-after-*`, `opening-final-*` et `opening-validation-audit.*`.
 

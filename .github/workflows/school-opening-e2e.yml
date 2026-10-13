@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   push:
     branches: [master, 'codex/**', 'claude/**']
-    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-opening.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
+    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
   pull_request:
     branches: [master]
-    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-opening.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
+    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
 permissions:
   contents: read
 concurrency:

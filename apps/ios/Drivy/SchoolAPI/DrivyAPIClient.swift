@@ -49,6 +49,11 @@ actor SchoolURLSessionTransport: SchoolHTTPTransport {
     }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        #if DEBUG && targetEnvironment(simulator)
+        if let fixture = await SchoolRootEntryFixture.current {
+            return try await fixture.send(request)
+        }
+        #endif
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse, let url = http.url else {
             throw SchoolAPIError.invalidResponse

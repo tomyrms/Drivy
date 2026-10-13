@@ -25,6 +25,7 @@ const fieldDefaults: SetupContent['profile']['fields'] = [
   { field: 'postalAddress', requirement: 'OPTIONAL', stage: 'OPTIONAL', purposeCode: 'POSTAL_CONTACT', explanation: 'Vous adresser les courriers nécessaires à votre dossier.' },
 ];
 const clone = <T,>(value: T): T => structuredClone(value);
+const focusPendingRequest = () => window.requestAnimationFrame(() => window.document.getElementById('pending-title')?.focus());
 const atPath = (value: unknown, path: string): unknown => path.split('.').reduce<unknown>((current, key) =>
   current !== null && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, value);
 function matchesReviewedField(current: unknown, reviewed: SetupContent, path: string): boolean {
@@ -63,6 +64,8 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const localOperation = useRef<string | null>(null);
   const followedSetup = useRef<{ operationId: string; kind: 'saveSetupDraft' | 'applySetupDraft' } | null>(null);
   const pending = snapshot.entries.get(schoolId);
+  const hasPendingRequest = useRef(false);
+  hasPendingRequest.current = !!pending;
   if (pending?.meta.kind === 'saveSetupDraft' || pending?.meta.kind === 'applySetupDraft') followedSetup.current = { operationId: pending.meta.operationId, kind: pending.meta.kind };
   const runner = useCommandRunner();
   const loaded = useLoad(async () => {
@@ -127,7 +130,10 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     return () => window.removeEventListener('beforeunload', preventLoss);
   }, [dirty]);
   useEffect(() => {
-    setNavigationGuard?.(proceed => { if (dirtyRef.current) setLeave(() => proceed); else proceed(); });
+    setNavigationGuard?.(proceed => {
+      if (hasPendingRequest.current) { focusPendingRequest(); return; }
+      if (dirtyRef.current) setLeave(() => proceed); else proceed();
+    });
     return () => setNavigationGuard?.(null);
   }, [setNavigationGuard]);
   useEffect(() => {
@@ -175,7 +181,11 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
         ifMatch: document.version, resourceVersion: document.version, body: { currentStep: nextStep, content: value } });
       localOperation.current = command.operationId;
       const result = await runner.run(command, 'La préparation est enregistrée.');
-      if (result.status !== 'confirmed') { localOperation.current = null; return; }
+      if (result.status !== 'confirmed') {
+        localOperation.current = null;
+        if (result.status === 'pending') { setLeave(null); focusPendingRequest(); }
+        return;
+      }
       // Use the exact committed response: a later GET could contain another administrator’s edit.
       const parsed = setupDraftSchema.safeParse(confirmedData(result.body));
       if (!parsed.success || parsed.data.schoolId !== schoolId || parsed.data.id !== schoolId || parsed.data.version !== document.version + 1) throw new RequestFailure('INVALID_RESPONSE');

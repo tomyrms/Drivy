@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 13 octobre 2026 — sortie du guide et recette jusqu’à la première leçon
+
+Un défaut supplémentaire est reproduit et corrigé : « Enregistrer et quitter » restait bloqué si la sauvegarde réussissait mais que sa réponse était perdue. Le dialogue se ferme désormais pour laisser vérifier la demande ; la sortie reste explicite après récupération. Contrôles locaux clic/clavier, 228 tests web, types et build réussis. La recette intégrée ajoute la reconnexion dans un navigateur indépendant, ce cas de sortie et la préparation jusqu’à une première leçon réservée par l’API de l’app, sans écriture SQL de préparation.
+
+Deux scénarios UI supplémentaires utilisent la vraie racine native et le retour système au premier plan : école DRAFT puis ACTIVE avec accueil moniteur, et relecture des rôles vers ADMIN seul. Seules l’identité et les réponses serveur sont simulées, exclusivement en DEBUG simulateur. **À qualifier en CI** : recette intégrée étendue et ces deux scénarios sur iPhone/iPad. Aucune qualification Safari/OIDC réel, humaine ou physique n’est déduite de ces fixtures.
+
 ## 13 octobre 2026 — vérification complémentaire de l’onboarding
 
 Défauts reproduits et corrigés : étape suivante hors écran sur mobile, mauvais champ ciblé pour une explication ou une compétence, erreurs absentes auprès des champs du guide, erreur de fuseau trop vague, styles de saisie absents à l’ouverture, prochaine action visant le mauvais réglage, dossier personnel introuvable pour ADMIN + LEARNER au-delà de la première page. [Vérification, preuves et limites](verification-onboarding-20261013.md).

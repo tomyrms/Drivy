@@ -14,7 +14,9 @@ import { createTokenVerifier } from '../../apps/api/src/auth.js';
 import { deliverOneInvitation,type InvitationMailConfig } from '../../apps/api/src/invitation-mail.js';
 import { buildWebApp } from '../../apps/web/server/app.js';
 import { createIdentityProvider } from '../../apps/web/server/oidc.js';
+import { SessionStore } from '../../apps/web/server/session.js';
 import { parseMetadata } from '../../apps/web/client/command-core.js';
+import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -101,12 +103,13 @@ async function main() {
       secure:false,requireTLS:false,from:'school@drivy.example.invalid'};
     api=buildApp({pool:runtime,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/protocol/openid-connect/certs`}),
       cursorSecret:syntheticSecret(),invitationMail,schoolOpening:{operators:[{issuer,subject:operatorList[0]!.id}],validityDays:7}});
-    web=await buildWebApp({config,identity:await createIdentityProvider(config),staticRoot:fileURLToPath(new URL('../../apps/web/dist/client/',import.meta.url))});
+    const sessionStore=new SessionStore();
+    web=await buildWebApp({config,identity:await createIdentityProvider(config),store:sessionStore,staticRoot:fileURLToPath(new URL('../../apps/web/dist/client/',import.meta.url))});
     await api.listen({host:'127.0.0.1',port:3001});await web.listen({host:'127.0.0.1',port:3002});
     await mkdir(artifactDirectory,{recursive:true});
     stage='navigateur Chromium';browser=await chromium.launch({headless:true});
     const operatorContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
-    const consumerContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
+    let consumerContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
     for(const context of [operatorContext,consumerContext])await context.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const operatorPage=await operatorContext.newPage();operatorPage.setDefaultTimeout(20_000);
     stage='connexion opérateur OIDC';await operatorPage.goto(`${origin}/app/operateur`);
@@ -119,7 +122,7 @@ async function main() {
     assert(new URL(openingLink).pathname==='/app/ouvrir' && !new URL(openingLink).search,'Le lien de création porte son secret dans le fragment uniquement');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.school')).rows[0].n===0,'Créer ou consulter un lien ne crée pas d’école');
 
-    const page=await consumerContext.newPage();page.setDefaultTimeout(20_000);
+    let page=await consumerContext.newPage();page.setDefaultTimeout(20_000);
     stage='visite du lien et nouveau compte OIDC';await page.goto(openingLink);
     await page.getByRole('button',{name:'Créer mon compte ou me connecter',exact:true}).waitFor();
     assert(new URL(page.url()).hash==='','Le secret du lien est retiré avant la connexion');
@@ -216,6 +219,59 @@ async function main() {
     assert(draftWrites===1&&durableSave.n===1,'La reprise AP72 et la navigation du guide ne renvoient aucune sauvegarde ni commande en double');
     await page.unroute(draftEndpoint);
     await page.screenshot({path:resolve(artifactDirectory,'01-profil-desktop-synthetic.png'),fullPage:true});
+    stage='fermeture du navigateur avec une saisie non enregistrée après le dernier brouillon confirmé';
+    const savedPhoneExplanation=await page.getByLabel('Explication · Téléphone',{exact:true}).inputValue();
+    await page.locator('details').filter({has:page.getByLabel('Explication · Téléphone',{exact:true})}).locator('summary').click();
+    await page.getByLabel('Explication · Téléphone',{exact:true}).fill('Saisie synthétique non enregistrée avant fermeture.');
+    await consumerContext.close();
+    stage='reprise depuis un contexte navigateur indépendant, sans cookie ni stockage transmis';
+    consumerContext=await browser.newContext({viewport:{width:1024,height:960},locale:'fr-CH'});consumerContext.setDefaultTimeout(20_000);
+    await consumerContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
+    page=await consumerContext.newPage();await page.goto(`${origin}/app`);
+    await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+    await page.locator('input[name="username"]').fill('responsable-recette');await page.locator('input[name="password"]').fill(consumerPassword);
+    await page.locator('input[type="submit"],button[type="submit"]').first().click();
+    await page.getByRole('link',{name:'Ouvrir l’école Auto-école Recette · synthétique',exact:true}).click();
+    await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    assert(await page.getByLabel('Explication · Téléphone',{exact:true}).inputValue()===savedPhoneExplanation,
+      'Un navigateur indépendant reprend l’étape confirmée et le contenu serveur, sans annoncer la frappe non enregistrée comme sauvegardée');
+    const resumedDraft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await (await consumerContext.request.get(draftEndpoint)).json()).data;
+    assert(resumedDraft.version===savedReceipt.resourceVersion&&resumedDraft.currentStep==='PROFILE'&&resumedDraft.content.privacy.noticeText===notice&&resumedDraft.content.privacy.retentionText===retention,
+      'La reconnexion sans lien d’ouverture retrouve le même brouillon et n’ajoute aucune version');
+    assert(await page.evaluate(()=>sessionStorage.length===0&&localStorage.length===0),
+      'La reprise indépendante ne dépend d’aucun contenu ni reçu conservé dans le stockage du premier navigateur');
+    await page.setViewportSize({width:1440,height:1100});
+    stage='sauvegarde depuis le dialogue de sortie avec réponse perdue';
+    const exitExplanation=`${savedPhoneExplanation} Complément synthétique enregistré avant la sortie.`;
+    const exitPhone=page.getByLabel('Explication · Téléphone',{exact:true});
+    await page.locator('details').filter({has:exitPhone}).locator('summary').click();await exitPhone.fill(exitExplanation);
+    let exitWrites=0,exitOperation='',exitHTTPStatus=0;
+    await page.route(draftEndpoint,async route=>{
+      if(route.request().method()!=='PUT'){await route.continue();return;}
+      exitWrites++;exitOperation=route.request().headers()['idempotency-key']??'';
+      const committed=await route.fetch();exitHTTPStatus=committed.status();await route.abort('failed');
+    });
+    await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();
+    const exitDialog=page.getByRole('dialog',{name:'Enregistrer avant de quitter ?',exact:true});
+    await exitDialog.getByRole('button',{name:'Enregistrer et quitter',exact:true}).click();
+    await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();await exitDialog.waitFor({state:'hidden'});
+    assert(exitWrites===1&&exitHTTPStatus===200&&z.uuid().safeParse(exitOperation).success,
+      'Une réponse de sauvegarde perdue ferme le dialogue de sortie sans abandonner la commande durable');
+    await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();
+    assert(await exitDialog.count()===0&&await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).isEnabled(),
+      'Une nouvelle tentative de sortie ne masque pas la récupération de la demande incertaine');
+    await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).click();
+    await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor({state:'hidden'});
+    await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    await page.waitForFunction(value=>document.querySelector<HTMLTextAreaElement>('[name^="profile.fields."][name$=".explanation"]')!==null&&[...document.querySelectorAll<HTMLTextAreaElement>('textarea')].some(input=>input.value===value),exitExplanation);
+    const exitSaved=z.object({data:z.object({version:z.number().int(),currentStep:z.string()})}).parse(await (await consumerContext.request.get(draftEndpoint)).json()).data;
+    const exitReceipts=(await administration.query('SELECT count(*)::int AS n FROM drivy.operation WHERE school_id=$1 AND operation_id=$2',[school.id,exitOperation])).rows[0];
+    assert(exitWrites===1&&exitReceipts.n===1&&exitSaved.version===resumedDraft.version+1&&exitSaved.currentStep==='PROFILE'&&await exitPhone.inputValue()===exitExplanation,
+      'La récupération du dialogue retrouve la saisie avec une seule commande et une seule version supplémentaire');
+    await page.unroute(draftEndpoint);
+    await page.getByRole('link',{name:'École',exact:true}).click();await page.getByRole('heading',{name:'École',exact:true}).waitFor();
+    await page.getByRole('link',{name:'Préparation',exact:true}).click();await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    assert(await exitPhone.inputValue()===exitExplanation,'Après récupération, quitter puis reprendre le guide reste possible sans perdre la saisie enregistrée');
     stage='erreur précise dans les informations demandées';
     const phoneExplanation=page.getByLabel('Explication · Téléphone',{exact:true});
     const originalPhoneExplanation=await phoneExplanation.inputValue();
@@ -383,6 +439,15 @@ async function main() {
     assert(staffMe.ok()&&staffMember.data.memberships.length===1&&staffMember.data.memberships[0]!.schoolId===school.id&&JSON.stringify(staffMember.data.memberships[0]!.roles)==='["INSTRUCTOR"]','Le compte invité rejoint une seule école avec le seul rôle moniteur');
     await staffPage.reload();await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
     await staffPage.screenshot({path:resolve(artifactDirectory,'06-equipe-invitation-acceptee-synthetic.png'),fullPage:true});await staffContext.close();
+    await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,realmName,administration,
+      ownMail,mailLink,deliverInvitation:()=>deliverOneInvitation(mailer!,invitationMail),
+      getAccessToken:async()=>{
+        const identityResponse=await consumerContext.request.get(`${origin}/app/bff/me`);
+        if(!identityResponse.ok())throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');
+        const cookie=(await consumerContext.cookies(origin)).find(item=>item.name==='drivy-dev-session');
+        const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
+        if(!token)throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');return token;
+      },assert,setStage:value=>{stage=value;},artifactDirectory});
     stage='récupération du compte OIDC par courrier';
     const recoveryContext=await browser.newContext({locale:'fr-CH'});recoveryContext.setDefaultTimeout(20_000);
     await recoveryContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
