@@ -83,7 +83,7 @@ struct SchoolRecordingChoiceInline: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             if noticeChanged {
-                Text("L’information de l’école a changé.")
+                Text("Les textes de confidentialité ont changé.")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -101,8 +101,8 @@ struct SchoolRecordingChoiceInline: View {
             if let error = model.storageError { DrivyInlineMessage(text: error, tone: .warning) }
             else if let error = model.errorMessage { DrivyInlineMessage(text: error, tone: .warning) }
             if let notice = model.notice {
-                Button("Information et conservation") {
-                    document = .init(id: "notice", title: "Information et conservation",
+                Button(asksLearner ? "Tes données" : "Confidentialité") {
+                    document = .init(id: "notice", title: asksLearner ? "Tes données" : "Confidentialité",
                         text: notice.noticeText + "\n\n" + notice.retentionText, contact: notice.contactEmail)
                 }
                 .font(.subheadline)

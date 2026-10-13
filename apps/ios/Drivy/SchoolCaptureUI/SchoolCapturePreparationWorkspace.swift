@@ -484,7 +484,7 @@ struct SchoolCaptureStartReview: Identifiable {
         guard pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else {
             return quickFailure("Une demande précédente est à vérifier avant un nouveau départ.")
         }
-        guard let notice else { return quickFailure(noticeError ?? "L’information GPS de l’école n’a pas pu être lue.") }
+        guard let notice else { return quickFailure(noticeError ?? "Les textes de confidentialité de l’école n’ont pas pu être lus.") }
         guard let choice, choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else {
             quickBlock = .choice; return false
         }

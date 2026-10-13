@@ -104,13 +104,13 @@ export function ProfileFieldsSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading context="Réglages" title="Informations demandées aux élèves"
+      <SectionHeading context="Réglages" title="Informations demandées"
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite || !noticeAdopted} onClick={() => edit(applicable)}><Symbol kind="plus" bare />Préparer une nouvelle version</button>} />
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des champs du profil…">{() => <>
-        {!noticeAdopted && <Notice tone="info" title="Notice de données à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir les réglages de l’école</button>}>
-              <p>Adoptez d’abord les textes d’information et de conservation dans les réglages de l’école.</p></Notice>}
+        {!noticeAdopted && <Notice tone="info" title="Confidentialité à adopter" live={false} actions={<button type="button" className="button secondary" onClick={() => navigate('configuration')}>Ouvrir les réglages de l’école</button>}>
+              <p>Adoptez d’abord les textes de confidentialité de l’école.</p></Notice>}
         <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
           list={items.length === 0 ? <EmptyState symbol="list" title="Aucune version enregistrée" message="Préparez une première version pour indiquer les informations demandées aux élèves." />
             : <table className="data-table">
@@ -177,25 +177,25 @@ export function ProfileFieldsSection() {
 
       <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}
         title={dialog === 'create' ? 'Créer un brouillon' : 'Publier ces règles'} confirmLabel={dialog === 'create' ? 'Confirmer la création' : 'Publier ces règles'}
-        acknowledgement={dialog === 'create' ? 'J’ai relu l’utilité des champs et leur effet sur les profils.' : 'J’ai relu ces règles et la notice liée.'}
+        acknowledgement={dialog === 'create' ? 'J’ai relu l’utilité des champs et leur effet sur les profils.' : 'J’ai relu ces règles et les textes de confidentialité.'}
         acknowledged={acknowledged} onAcknowledge={setAcknowledged}
-        disabledReason={dialog === 'publish' && linkedNotice.status !== 'ready' ? 'La notice liée doit être relue avant la publication.' : null}>
+        disabledReason={dialog === 'publish' && linkedNotice.status !== 'ready' ? 'Les textes de confidentialité doivent être lus avant la publication.' : null}>
         <OutcomeNotice outcome={runner.outcome} />
         {dialog === 'create' && draft && <>
-          <Facts items={[['Prise d’effet', instant ? formatDateTime(instant, school.timeZone) : '—'], ['Notice liée', notice ? `Version ${notice.version}` : '—']]} />
+          <Facts items={[['Prise d’effet', instant ? formatDateTime(instant, school.timeZone) : '—'], ['Confidentialité', notice?.approvedAt ? `Adoptée le ${formatDateTime(notice.approvedAt, school.timeZone)}` : '—']]} />
           <RulesTable rules={selectedRules} />
-          <p className="caption">La politique sera liée à la notice de données adoptée affichée ci-dessus. Le brouillon ne s’applique qu’après publication.</p>
+          <p className="caption">Le brouillon ne s’applique qu’après publication.</p>
         </>}
         {dialog === 'publish' && current && <>
           <p className="dialog-lead">{school.name} · version {current.version}</p>
           <p>Ces règles s’appliqueront aux profils concernés à la date prévue. Les informations existantes ne seront pas complétées automatiquement.</p>
           <Facts items={[['Prise d’effet', formatDateTime(current.effectiveFrom, school.timeZone)]]} />
           <RulesTable rules={current.fields} />
-          {linkedNotice.status === 'loading' && <Loading label="Lecture de la notice liée à ce brouillon…" />}
-          {linkedNotice.status === 'error' && <Notice tone="error" title="Notice liée indisponible" actions={<button type="button" className="button retry" onClick={linkedNotice.reload}>Relire la notice liée</button>}>
+          {linkedNotice.status === 'loading' && <Loading label="Lecture des textes de confidentialité…" />}
+          {linkedNotice.status === 'error' && <Notice tone="error" title="Textes de confidentialité indisponibles" actions={<button type="button" className="button retry" onClick={linkedNotice.reload}>Réessayer</button>}>
             <p>{linkedNotice.error ?? readError(null)}</p></Notice>}
           {linkedNotice.data && <details className="disclosure" open>
-            <summary>Notice liée à cette politique · version {linkedNotice.data.version}</summary>
+            <summary>Textes de confidentialité</summary>
             <p className="policy-copy review-copy">{linkedNotice.data.noticeText}</p>
             <p className="policy-copy review-copy">{linkedNotice.data.retentionText}</p>
           </details>}

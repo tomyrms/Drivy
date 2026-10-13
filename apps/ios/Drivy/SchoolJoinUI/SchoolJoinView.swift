@@ -85,7 +85,7 @@ struct SchoolJoinView: View {
             schoolSummary(preview)
             Divider().overlay(DrivyTheme.border)
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                Text("Tes données dans l’école")
+                Text("Tes données")
                     .font(.drivySection)
                     .foregroundStyle(DrivyTheme.text)
                     .accessibilityAddTraits(.isHeader)
@@ -94,7 +94,7 @@ struct SchoolJoinView: View {
                     .foregroundStyle(DrivyTheme.text)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                DisclosureGroup("Conservation des données", isExpanded: $expandsRetention) {
+                DisclosureGroup("Conservation", isExpanded: $expandsRetention) {
                     Text(preview.notice.retentionText).textSelection(.enabled).padding(.top, DrivySpacing.s)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,7 +103,7 @@ struct SchoolJoinView: View {
             }
             Divider().overlay(DrivyTheme.border)
             Toggle(isOn: $model.acknowledgesNotice) {
-                Text("J’ai pris connaissance de cette notice et je souhaite rejoindre l’école avec les rôles affichés.")
+                Text("J’ai lu ces informations et je souhaite rejoindre l’école avec les rôles affichés.")
                     .font(.subheadline).fixedSize(horizontal: false, vertical: true)
             }
             .disabled(model.isBusy)

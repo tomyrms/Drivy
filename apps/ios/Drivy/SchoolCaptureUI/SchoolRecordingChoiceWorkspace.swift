@@ -311,11 +311,18 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         }
         if revoked { invalidate(); accessRevoked = true }
         if reading, !revoked {
-            errorMessage = Self.readingFailure(unreachable: error as? SchoolCaptureFailure == .unavailable
+            errorMessage = Self.readingMessage(error, unreachable: error as? SchoolCaptureFailure == .unavailable
                 || error as? SchoolAPIError == .unavailable || Self.agendaUnreachable(error))
         } else {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "L’accord GPS n’a pas pu être enregistré. Réessaie."
         }
+    }
+
+    /// Une lecture refusée pour une raison connue (l’école n’a pas encore publié ses textes) garde la phrase de l’école :
+    /// ce n’est pas une panne, et « n’a pas pu être lu » laisserait croire qu’il suffit de réessayer.
+    static func readingMessage(_ error: any Error, unreachable: Bool) -> String {
+        if let failure = error as? SchoolCaptureFailure, case .rejected(let message) = failure { return message }
+        return readingFailure(unreachable: unreachable)
     }
 
     /// Ce que dit une lecture de l’accord GPS qui n’aboutit pas : l’objet d’abord, la cause quand elle est connue.

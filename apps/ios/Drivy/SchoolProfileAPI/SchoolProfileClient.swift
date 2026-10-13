@@ -160,7 +160,7 @@ final class SchoolProfileClient: SchoolProfileAPI {
                 case "ONBOARDING_NOT_READY": throw SchoolProfileFailure.rejected("Complète le profil utile et relis l’accueil avant de terminer.")
                 case "PROFILE_POLICY_ALREADY_PUBLISHED": throw SchoolProfileFailure.rejected("Cette politique est déjà publiée. Relis les versions de l’école.")
                 case "PROFILE_POLICY_DATE_CONFLICT": throw SchoolProfileFailure.rejected("Une politique publiée utilise déjà cette date d’effet.")
-                case "POLICY_REVIEW_REQUIRED": throw SchoolProfileFailure.rejected("La notice de données doit être adoptée dans cette école.")
+                case "POLICY_REVIEW_REQUIRED": throw SchoolProfileFailure.rejected("L’école n’a pas encore publié ses textes de confidentialité.")
                 case "SCHOOL_NOT_ACTIVE", "SCHOOL_ARCHIVED": throw SchoolProfileFailure.rejected("Cette école ne permet pas cette modification dans son état actuel.")
                 case "LEARNER_ARCHIVED": throw SchoolProfileFailure.rejected("Le dossier est archivé. L’administration doit le traiter avant une modification.")
                 case "DOCUMENT_NOT_READY": throw SchoolProfileFailure.rejected("Cette photo ne peut pas être utilisée. Elle reste facultative.")

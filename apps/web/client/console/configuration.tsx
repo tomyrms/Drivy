@@ -1,25 +1,40 @@
 import { useState } from 'react';
 import { createCommand, filled, isEmail, characters } from '../command-core';
 import { useCommandSnapshot, type SubmitResult } from '../command-store';
-import { dataPolicySchema, readSchool, readinessSchema, setupSchema } from '../school-api';
-import { ConfirmDialog, Facts, Notice, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
+import { POLICY_TEXT_MINIMUM, dataPolicySchema, policyImpactSchema, readSchool, readinessSchema, type PolicyImpact } from '../school-api';
+import { ConfirmDialog, Facts, Loading, Notice, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
 import { useCommandRunner, useConsole, useDraft, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
-import { capabilityTitle, schoolStatus } from './overview';
+import { schoolStatus } from './overview';
 
 type Identity = { name: string; contactEmail: string; contactPhone: string };
 type PolicyText = { noticeText: string; retentionText: string; contactEmail: string };
 type Review = 'identity' | 'policy' | 'activation' | null;
 
-/** Same rules as apps/ios/Drivy/SchoolConfigurationUI: relire, confirmer, puis seulement l’école confirme. */
+const policyTextProblem = (value: string) => characters(value.trim()) < POLICY_TEXT_MINIMUM
+  ? `Écrivez au moins ${POLICY_TEXT_MINIMUM} caractères.` : filled(value, 20_000) ? null : '20 000 caractères au plus.';
+
+/** Ce qu'une nouvelle version arrête : les accords GPS donnés sur les textes actuels et les trajets en cours. */
+function impactSentences(impact: PolicyImpact | null): string[] {
+  if (!impact) return ['Les élèves devront redonner leur accord GPS et les trajets en cours s’arrêteront.'];
+  const sentences: string[] = [];
+  if (impact.gpsAgreements > 0) sentences.push(impact.gpsAgreements === 1
+    ? '1 élève avait accepté le GPS avec les textes actuels : la question lui sera reposée.'
+    : `${impact.gpsAgreements} élèves avaient accepté le GPS avec les textes actuels : la question leur sera reposée.`);
+  if (impact.activeCaptures > 0) sentences.push(impact.activeCaptures === 1
+    ? '1 trajet en cours s’arrêtera.' : `${impact.activeCaptures} trajets en cours s’arrêteront.`);
+  return sentences;
+}
+
+/** Same rules as the native office screens: relire, confirmer, puis seulement l’école confirme. */
 export function ConfigurationSection() {
   const { schoolId, school } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setEditingPolicy(false); setEditingIdentity(false); });
   const loaded = useLoad(async () => {
-    const [setup, policy, readiness] = await Promise.all([
-      readSchool(schoolId, 'setup', setupSchema), readSchool(schoolId, 'data-policy', dataPolicySchema), readSchool(schoolId, 'readiness', readinessSchema)]);
-    return { setup, policy, readiness };
+    const [policy, readiness] = await Promise.all([
+      readSchool(schoolId, 'data-policy', dataPolicySchema), readSchool(schoolId, 'readiness', readinessSchema)]);
+    return { policy, readiness };
   }, [schoolId, revision, school.version]);
   const policy = loaded.data?.policy ?? null;
   const identity = useDraft<Identity>({ name: school.name, contactEmail: school.contactEmail, contactPhone: school.contactPhone ?? '' });
@@ -28,6 +43,10 @@ export function ConfigurationSection() {
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [review, setReview] = useState<Review>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  // Read when the review opens, so the numbers are those of the moment the administrator confirms.
+  const replacesTexts = review === 'policy' && policy?.status === 'APPROVED';
+  const impact = useLoad(async () => replacesTexts ? readSchool(schoolId, 'data-policy/impact', policyImpactSchema) : null,
+    [replacesTexts, schoolId], `${schoolId}/${replacesTexts ? 'impact' : ''}`);
 
   const mayEdit = loaded.data !== undefined && !runner.pending && !runner.busy;
   const idValue = identity.draft;
@@ -39,8 +58,8 @@ export function ConfigurationSection() {
   const identityValid = !!identityErrors && Object.values(identityErrors).every(value => value === null);
   const textValue = texts.draft;
   const textErrors = textValue ? {
-    noticeText: filled(textValue.noticeText, 20_000) ? null : 'Rédigez l’information des personnes (20 000 caractères au plus).',
-    retentionText: filled(textValue.retentionText, 20_000) ? null : 'Rédigez la politique de conservation (20 000 caractères au plus).',
+    noticeText: policyTextProblem(textValue.noticeText),
+    retentionText: policyTextProblem(textValue.retentionText),
     contactEmail: isEmail(textValue.contactEmail.trim()) ? null : 'Indiquez l’adresse de contact pour les données.',
   } : null;
   const textsValid = !!textErrors && Object.values(textErrors).every(value => value === null);
@@ -49,6 +68,7 @@ export function ConfigurationSection() {
   const readiness = loaded.data?.readiness;
   const canActivate = mayEdit && school.status === 'DRAFT' && readiness?.activationReady === true && policy?.status === 'APPROVED' && !identity.edited && !texts.edited;
   const status = schoolStatus(school.status);
+  const consequences = replacesTexts && impact.status !== 'loading' ? impactSentences(impact.data ?? null) : [];
 
   function open(kind: Review) { runner.clearOutcome(); setAcknowledged(false); setReview(kind); }
   async function confirm() {
@@ -61,7 +81,7 @@ export function ConfigurationSection() {
     } else if (review === 'policy' && textValue && textsValid && policy) {
       const command = createCommand({ schoolId, kind: 'saveDataPolicy', path: 'data-policy', ifMatch: policy.version, resourceVersion: policy.version,
         body: { noticeText: textValue.noticeText, retentionText: textValue.retentionText, contactEmail: textValue.contactEmail.trim(), reviewAcknowledged: true } });
-      result = await runner.run(command, 'Les textes sont adoptés. La version précédente reste conservée.');
+      result = await runner.run(command, 'Les textes sont adoptés.');
       if (result.status === 'confirmed') setEditingPolicy(false);
     } else if (review === 'activation' && canActivate && readiness) {
       const command = createCommand({ schoolId, kind: 'activate', path: 'activate', ifMatch: school.version, resourceVersion: school.version,
@@ -70,16 +90,6 @@ export function ConfigurationSection() {
     }
     // A refusal stays in the dialog, next to the action it concerns, with the typed texts.
     if (result?.status !== 'rejected') setReview(null);
-  }
-  async function saveProgress() {
-    const setup = loaded.data?.setup;
-    if (!setup || !mayEdit) return;
-    const completed = [...setup.completedSteps];
-    if (identityValid && !completed.includes('IDENTITY')) completed.push('IDENTITY');
-    if (policy?.status === 'APPROVED' && !completed.includes('DATA')) completed.push('DATA');
-    runner.clearOutcome();
-    await runner.run(createCommand({ schoolId, kind: 'saveSetup', path: 'setup', ifMatch: setup.version, resourceVersion: setup.version,
-      body: { currentStep: 'REVIEW', completedSteps: completed } }), 'L’avancement de la préparation est enregistré.');
   }
 
   return (
@@ -118,71 +128,60 @@ export function ConfigurationSection() {
 
         <section className="settings-section" aria-labelledby="policy-title">
           <div className="settings-section-heading">
-            <h2 id="policy-title" className="section-title">Information et conservation</h2>
-            {data.policy.status === 'APPROVED' ? <span className="row-meta">Version {data.policy.version}</span>
-              : <StatusBadge tone="warning" symbol="file">Textes à préparer</StatusBadge>}
-            {data.policy.approvedAt && <span className="row-meta">Adoptée le {formatDateTime(data.policy.approvedAt, school.timeZone)}</span>}
+            <h2 id="policy-title" className="section-title">Confidentialité</h2>
+            {data.policy.approvedAt ? <span className="row-meta">Adoptés le {formatDateTime(data.policy.approvedAt, school.timeZone)}</span>
+              : <StatusBadge tone="warning" symbol="file">Textes à écrire</StatusBadge>}
           </div>
           <div className="settings-section-body">
           {!showTexts && <>
             <details className="disclosure">
-              <summary>Consulter les textes adoptés</summary>
-              <h3>Information des personnes</h3><p className="policy-copy">{data.policy.noticeText}</p>
-              <h3>Conservation des données</h3><p className="policy-copy">{data.policy.retentionText}</p>
+              <summary>Lire les textes</summary>
+              <h3>Information</h3><p className="policy-copy">{data.policy.noticeText}</p>
+              <h3>Conservation</h3><p className="policy-copy">{data.policy.retentionText}</p>
               {data.policy.contactEmail && <p className="caption">Contact : {data.policy.contactEmail}</p>}
             </details>
-            <button type="button" className="button secondary" disabled={!mayEdit} onClick={() => setEditingPolicy(true)}><Symbol kind="edit" bare />Préparer une nouvelle version</button>
+            <button type="button" className="button secondary" disabled={!mayEdit} onClick={() => setEditingPolicy(true)}><Symbol kind="edit" bare />Modifier les textes</button>
           </>}
           {showTexts && textValue && textErrors && <form className="form-grid" onSubmit={event => { event.preventDefault(); if (textsValid && mayEdit) open('policy'); }}>
-            <TextArea label="Information des personnes" rows={5} maxLength={20_000} value={textValue.noticeText} disabled={!mayEdit}
+            <TextArea label="Information" rows={5} maxLength={20_000} value={textValue.noticeText} disabled={!mayEdit}
               onChange={noticeText => texts.setDraft({ ...textValue, noticeText })} error={texts.edited ? textErrors.noticeText : null} />
-            <TextArea label="Conservation des données" rows={5} maxLength={20_000} value={textValue.retentionText} disabled={!mayEdit}
+            <TextArea label="Conservation" rows={5} maxLength={20_000} value={textValue.retentionText} disabled={!mayEdit}
               onChange={retentionText => texts.setDraft({ ...textValue, retentionText })} error={texts.edited ? textErrors.retentionText : null} />
             <TextField label="Contact pour les données" type="email" value={textValue.contactEmail} disabled={!mayEdit}
               onChange={contactEmail => texts.setDraft({ ...textValue, contactEmail })} error={texts.edited ? textErrors.contactEmail : null} />
             <div className="button-row compact">
               <button type="submit" className={!identity.edited && (texts.edited || data.policy.status !== 'APPROVED') ? 'button primary' : 'button secondary'} disabled={!mayEdit || !textsValid || (data.policy.status === 'APPROVED' && !texts.edited)}>Relire et adopter les textes</button>
               {(editingPolicy || texts.edited) && data.policy.status === 'APPROVED' &&
-                <button type="button" className="button quiet" onClick={() => { texts.reset(); setEditingPolicy(false); }}>Abandonner cette version</button>}
+                <button type="button" className="button quiet" onClick={() => { texts.reset(); setEditingPolicy(false); }}>Annuler</button>}
             </div>
           </form>}
           </div>
         </section>
 
-        <section className="settings-section" aria-labelledby="activation-title">
+        {school.status === 'DRAFT' && <section className="settings-section" aria-labelledby="activation-title">
           <div className="settings-section-heading">
-            <h2 id="activation-title" className="section-title">{school.status === 'ACTIVE' ? 'Fonctionnement' : 'Activation'}</h2>
+            <h2 id="activation-title" className="section-title">Activation</h2>
             <button type="button" className="button quiet" onClick={loaded.reload} disabled={loaded.status === 'loading'}><Symbol kind="refresh" bare />Actualiser</button>
           </div>
           <div className="settings-section-body">
-          {school.status === 'DRAFT' && (data.readiness.activationReady
+          {data.readiness.activationReady
             ? <Notice tone="success" title="Préparation vérifiée" live={false}><p>L’école peut être activée.</p></Notice>
-            : <ul className="blocker-list">{data.readiness.activationBlockers.map(item => <li key={item.code}><Symbol kind="dot" bare />{item.message}</li>)}</ul>)}
+            : <ul className="blocker-list">{data.readiness.activationBlockers.map(item => <li key={item.code}><Symbol kind="dot" bare />{item.message}</li>)}</ul>}
           {(identity.edited || texts.edited) && <Notice tone="warning" title="Modifications non confirmées" live={false}><p>Des modifications attendent encore votre confirmation.</p></Notice>}
-          <details className="disclosure" open={school.status === 'DRAFT' ? true : undefined}>
-            <summary>Services de l’école</summary>
-            <ul className="plain-list">{data.readiness.capabilities.map(capability => <li key={capability.capability}>
-              <Symbol kind={capability.ready ? 'check' : 'alert'} bare />
-              <span className="row-title">{capabilityTitle(capability.capability)}</span>
-              <span className="row-meta">{capability.ready ? 'Disponible' : 'À configurer'}</span>
-            </li>)}</ul>
-          </details>
-          {(school.status === 'DRAFT' || data.setup.status !== 'COMPLETED') && <div className="button-row compact">
-            {school.status === 'DRAFT' && <button type="button" className={canActivate ? 'button primary' : 'button secondary'} disabled={!canActivate} onClick={() => open('activation')}>Relire et activer l’école</button>}
-            {data.setup.status !== 'COMPLETED' && <button type="button" className="button secondary" onClick={() => void saveProgress()}
-              disabled={!mayEdit || identity.edited || texts.edited}>Enregistrer l’avancement</button>}
-          </div>}
-          {school.status === 'DRAFT' && !canActivate && <p className="caption">
-            {runner.pending ? runner.blockedReason : identity.edited || texts.edited ? 'Confirmez ou abandonnez d’abord les modifications en cours.'
-              : 'L’activation devient possible quand les éléments ci-dessus sont complétés.'}</p>}
+          <div className="button-row compact">
+            <button type="button" className={canActivate ? 'button primary' : 'button secondary'} disabled={!canActivate} onClick={() => open('activation')}>Relire et activer l’école</button>
           </div>
-        </section>
+          {!canActivate && runner.pending && <p className="caption">{runner.blockedReason}</p>}
+          {!canActivate && !runner.pending && (identity.edited || texts.edited) && <p className="caption">Confirmez ou abandonnez d’abord les modifications en cours.</p>}
+          </div>
+        </section>}
       </div>}</LoadState>
 
       <ConfirmDialog open={review !== null} busy={runner.busy} onCancel={() => setReview(null)} onConfirm={() => void confirm()}
         title={review === 'identity' ? 'Vos coordonnées' : review === 'policy' ? 'Relire les textes' : 'Activer l’école'}
         confirmLabel={review === 'identity' ? 'Confirmer les coordonnées' : review === 'policy' ? 'J’adopte ces textes' : 'Activer mon école'}
-        {...(review === 'policy' ? { acknowledgement: 'J’ai relu les deux textes et je les adopte exactement pour mon école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
+        {...(review === 'policy' ? { acknowledgement: 'J’ai relu les deux textes et je les adopte pour mon école.', acknowledged, onAcknowledge: setAcknowledged,
+          disabledReason: replacesTexts && impact.status === 'loading' ? 'Vérification des trajets GPS concernés…' : null } : {})}>
         <OutcomeNotice outcome={runner.outcome}
           actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={() => { setReview(null); loaded.reload(); }}>Recharger les informations</button> : undefined} />
         {review === 'identity' && idValue && <>
@@ -191,14 +190,16 @@ export function ConfigurationSection() {
           <p className="caption">Ces coordonnées remplaceront celles affichées par votre école.</p>
         </>}
         {review === 'policy' && textValue && <>
-          <h3>Information des personnes</h3><p className="policy-copy review-copy">{textValue.noticeText}</p>
-          <h3>Conservation des données</h3><p className="policy-copy review-copy">{textValue.retentionText}</p>
+          {replacesTexts && impact.status === 'loading' && <Loading label="Vérification des trajets GPS concernés…" />}
+          {consequences.length > 0 && <Notice tone="warning" title="Effet sur le GPS" live={false}>
+            {consequences.map(sentence => <p key={sentence}>{sentence}</p>)}</Notice>}
+          <h3>Information</h3><p className="policy-copy review-copy">{textValue.noticeText}</p>
+          <h3>Conservation</h3><p className="policy-copy review-copy">{textValue.retentionText}</p>
           <Facts items={[['Contact pour les données', textValue.contactEmail.trim()]]} />
-          <p className="caption">En confirmant, vous adoptez exactement ces textes. Leur version sera conservée.</p>
         </>}
         {review === 'activation' && <>
           <p className="dialog-lead">{school.name}</p>
-          <p>Les coordonnées et les textes d’information ont été vérifiés. L’activation ouvre l’espace de l’école à ses membres.</p>
+          <p>Les coordonnées et les textes de confidentialité ont été vérifiés. L’activation ouvre l’espace de l’école à ses membres.</p>
           <p className="caption">Les formations, réservations et cours se créent séparément.</p>
         </>}
       </ConfirmDialog>

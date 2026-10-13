@@ -308,10 +308,10 @@ struct SchoolCapturePreparationView: View {
                     .accessibilityIdentifier("preparation-choice-state")
                 if let notice = model.notice {
                     if let choice = model.choice, choice.noticeVersionId != notice.noticeVersionId {
-                        DrivyInlineMessage(text: "L’information de l’école a changé. Relis-la avant de confirmer un nouvel accord.",
+                        DrivyInlineMessage(text: "Les textes de confidentialité ont changé. Relis-les avant de confirmer un nouvel accord.",
                             tone: .warning)
                     }
-                    DisclosureGroup("Information et conservation des données") {
+                    DisclosureGroup("Confidentialité") {
                         VStack(alignment: .leading, spacing: DrivySpacing.m) {
                             Text(notice.noticeText)
                             Text("Conservation").font(.headline)
@@ -324,7 +324,7 @@ struct SchoolCapturePreparationView: View {
                 Button {
                     model.closeDiagnostic()
                     choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
-                } label: { Label("Lire la notice et choisir", systemImage: "doc.text") }
+                } label: { Label("Lire et choisir", systemImage: "doc.text") }
                     .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayOpenChoice)
                     .accessibilityIdentifier("preparation-open-choice")
             }
@@ -579,10 +579,10 @@ private struct SchoolCaptureStartReviewView: View {
                         }
                         .font(.subheadline.weight(.semibold))
                     }
-                    DisclosureGroup("Relire l’information GPS de l’école") {
+                    DisclosureGroup("Confidentialité") {
                         VStack(alignment: .leading, spacing: DrivySpacing.m) {
                             Text(review.notice.noticeText)
-                            Text("Conservation des données").font(.headline)
+                            Text("Conservation").font(.headline)
                             Text(review.notice.retentionText)
                             Text(review.notice.contactEmail).font(.subheadline)
                         }.padding(.top, DrivySpacing.s).textSelection(.enabled)

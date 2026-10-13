@@ -33,7 +33,7 @@ async function call(method:'GET'|'PUT'|'POST'|'PATCH',path:string,body?:Record<s
 function conforms(name:string,value:unknown) {const validate=validators.get(name)!;expect(validate(value),JSON.stringify(validate.errors)).toBe(true);}
 const names=()=>['firstName','lastName'].map(field=>({field,requirement:'REQUIRED',stage:'JOIN',purposeCode:'IDENTIFICATION',explanation:'Identifier le dossier scolaire.'}));
 const optional=(field:string,purposeCode='LESSON_CONTACT')=>({field,requirement:'OPTIONAL',stage:'OPTIONAL',purposeCode,explanation:'Information facultative expliquée.'});
-const noticeBody=()=>({operationId:randomUUID(),noticeText:'Notice de test du profil.',retentionText:'Conservation limitée aux tests.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true});
+const noticeBody=()=>({operationId:randomUUID(),noticeText:'Notice de test du profil : finalités et contact.',retentionText:'Conservation limitée aux tests, sans donnée réelle.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true});
 async function notice() {const response=await call('PUT',`${school}/data-policy`,noticeBody(),1);expect(response.statusCode,response.body).toBe(200);return response.json().data.noticeVersionId as string;}
 async function draft(rules=names(),effectiveFrom='2026-01-01T00:00:00Z',noticeId?:string) {
   const noticeVersionId=noticeId ?? await notice();const version=(await call('GET',school)).json().data.version;

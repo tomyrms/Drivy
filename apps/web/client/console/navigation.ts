@@ -21,7 +21,7 @@ export const workspaces: readonly Workspace[] = [
     { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Tarifs' },
   ] },
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
-    { section: 'configuration', label: 'École' }, { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
+    { section: 'configuration', label: 'École' }, { section: 'champs-profil', label: 'Informations demandées' }, { section: 'signalements', label: 'Signalements' },
     { section: 'apercu', label: 'Préparation' },
   ] },
 ];
@@ -30,7 +30,7 @@ export const sectionTitles: Record<SectionKey, string> = {
   agenda: 'Agenda', disponibilites: 'Disponibilités et absences', eleves: 'Élèves', invitations: 'Invitations',
   equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations proposées',
   referentiels: 'Compétences enseignées', procedures: 'Déroulement et annulation', prestations: 'Tarifs',
-  conditions: 'Conditions commerciales', configuration: 'Réglages', 'champs-profil': 'Informations des élèves',
+  conditions: 'Conditions commerciales', configuration: 'Réglages', 'champs-profil': 'Informations demandées',
   apercu: 'Préparation de l’école', signalements: 'Signalements',
 };
 

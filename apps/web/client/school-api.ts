@@ -26,6 +26,10 @@ export const dataPolicySchema = z.object({
   schoolId: id, version, status: z.enum(['DRAFT', 'APPROVED']), noticeText: z.string().max(20_000), retentionText: z.string().max(20_000),
   contactEmail: z.string().nullable(), approvedAt: timestamp.nullable(), noticeVersionId: id.nullable().optional(),
 });
+/** Minimum de caractères utiles d'un texte de confidentialité (même règle que l'API). */
+export const POLICY_TEXT_MINIMUM = 40;
+export const policyImpactSchema = z.object({ gpsAgreements: z.number().int().min(0), activeCaptures: z.number().int().min(0) });
+export type PolicyImpact = z.infer<typeof policyImpactSchema>;
 export const receiptSchema = z.object({
   operationId: id, commandType: z.string(), resourceType: z.string(), resourceId: id, committedAt: timestamp, resourceVersion: version,
 });

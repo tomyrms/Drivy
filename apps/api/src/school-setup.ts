@@ -21,7 +21,10 @@ const nonBlank = (maximum:number) => z.string().min(1).max(maximum).refine(value
 const schoolUpdate = z.object({ operationId:z.uuid(),name:nonBlank(150),timeZone:z.string().min(1).max(100),contactEmail:z.email().max(320),
   contactPhone:z.string().max(32).nullable().optional(),impactConfirmed:z.boolean(),logoAssetId:z.uuid().nullable().optional(),
   modules:z.object({gpsEnabled:z.boolean(),packsEnabled:z.boolean(),collectiveCoursesEnabled:z.boolean(),courseOffersVisibleByDefault:z.boolean()}).strict().optional() }).strict();
-const policyCommand = z.object({operationId:z.uuid(),noticeText:nonBlank(20000),retentionText:nonBlank(20000),contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true)}).strict();
+// Un texte de quelques lettres ne dit rien à l'élève (« ddd » adopté sur le homelab) : 40 caractères utiles au moins.
+export const POLICY_TEXT_MINIMUM = 40;
+const policyText = z.string().max(20000).refine(value=>[...value.trim()].length>=POLICY_TEXT_MINIMUM);
+const policyCommand = z.object({operationId:z.uuid(),noticeText:policyText,retentionText:policyText,contactEmail:z.email().max(320),reviewAcknowledged:z.literal(true)}).strict();
 const empty = z.object({}).strict();
 interface SetupRow { school_id:string;version:number;current_step:string;completed_steps:string[];configured_by:string;last_saved_at:Date;completed_at:Date|null }
 interface PolicyRow { school_id:string;version:number;notice_version_id:string;notice_text:string;retention_text:string;contact_email:string|null;approved_by:string|null;approved_at:Date|null }
@@ -109,6 +112,11 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
     });
     reply.header('ETag',`"${data.version}"`); return envelope(data,request);
   });
+  // Ce qu'une nouvelle version arrêterait : deux nombres pour l'administration, jamais une ligne ni un nom d'élève.
+  app.get('/v1/schools/:schoolId/data-policy/impact',async request=>envelope(await read(request,async db=>{
+    const row=(await db.query<{gps_agreements:number;active_captures:number}>('SELECT * FROM drivy.data_policy_change_impact($1)',[schoolID(request)])).rows[0];
+    return {gpsAgreements:row?.gps_agreements ?? 0,activeCaptures:row?.active_captures ?? 0};
+  }),request));
   app.get('/v1/schools/:schoolId/operations/:operationId',async request=>{
     const identity=await options.verifyToken(request.headers.authorization);empty.parse(request.query);
     const {schoolId,operationId}=z.object({schoolId:z.uuid(),operationId:z.uuid()}).parse(request.params);
