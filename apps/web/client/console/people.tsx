@@ -10,8 +10,9 @@ import { invitationOptionsSchema, memberSchema, offeringSchema, readAll, readSch
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, type Tone } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useUnsavedChanges } from './context';
 import { DirectoryRow } from './directory';
-import { DetailPanel, LoadState, OutcomeNotice, Placeholder, SectionHeading, SplitView } from './layout';
+import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
 import { useListState } from './list-state';
+import { consolePath } from './route';
 
 const roles: readonly { value: Role; explanation: string }[] = [
   { value: 'ADMIN', explanation: 'Gérer l’école, ses membres et les dossiers administratifs.' },
@@ -36,12 +37,15 @@ const isStaff = (member: { roles: readonly Role[] }) => member.roles.includes('A
 /* ---------------------------------------------------------------- Équipe et accès */
 
 export function TeamSection() {
-  const { schoolId, school, membership, navigate } = useConsole();
+  const { schoolId, school, membership, navigate, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner();
   const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
   const [filter, setFilter] = useListState('team/search', '');
   const [showLearners, setShowLearners] = useListState('team/learners', false);
+  const [statusFilter, setStatusFilter] = useListState<'all' | 'active' | 'inactive'>('team/status', 'all');
+  const [sort, setSort] = useListState<'name-asc' | 'name-desc'>('team/sort', 'name-asc');
+  const [page, setPage] = useListState('team/page', 1);
   const [selected, setSelected] = useRouteSelection();
   const [draftRoles, setDraftRoles] = useState<Role[]>([]);
   const [draftGrants, setDraftGrants] = useState<string[]>([]);
@@ -50,8 +54,14 @@ export function TeamSection() {
   const [dialog, setDialog] = useState<'access' | 'deactivate' | null>(null);
   const [deactivateReason, setDeactivateReason] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
-  const members = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [loaded.data]);
-  const visible = members.filter(item => (showLearners || isStaff(item)) && matchesSearch([item.displayName], filter));
+  const members = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)), [loaded.data]);
+  const audience = members.filter(item => showLearners || isStaff(item));
+  const visible = audience.filter(item => (statusFilter === 'all' || (statusFilter === 'active') === (item.status === 'ACTIVE')) && matchesSearch([item.displayName], filter))
+    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * (a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)));
+  const pageSize = 25;
+  const currentPage = Math.max(1, Math.min(page, Math.ceil(visible.length / pageSize) || 1));
+  const pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => { if (loaded.status === 'ready' && page !== currentPage) setPage(currentPage); }, [loaded.status, page, currentPage, setPage]);
   const current = members.find(item => item.id === selected) ?? null;
   useEffect(() => {
     if (!current) return;
@@ -83,31 +93,40 @@ export function TeamSection() {
 
   return (
     <div className="section-stack">
-      <SectionHeading title="Équipe et accès" actions={school.status === 'ACTIVE' && membership.roles.includes('ADMIN')
-        ? <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'team' })}><Symbol kind="plus" bare />Inviter un membre</button> : undefined} />
+      {!current && <SectionHeading title="Équipe et accès" actions={!selected && school.status === 'ACTIVE' && membership.roles.includes('ADMIN')
+        ? <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'team' })}><Symbol kind="plus" bare />Inviter un membre</button> : undefined} />}
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.outcome?.code === 'REAUTH_REQUIRED' && <p className="caption">Après la reconnexion, rouvrez ce membre et saisissez à nouveau le changement : la saisie n’est pas conservée.</p>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les membres"
+      <LoadState loaded={loaded} label="Lecture de l’équipe…">{data => <SplitView mode="page" mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les membres"
         list={<>
-          <div className="list-toolbar directory-toolbar">
-            <TextField label="Rechercher un membre" value={filter} onChange={setFilter} placeholder="Nom" />
-            <CheckField label="Afficher les élèves" checked={showLearners} onChange={setShowLearners} />
-            {filter && <button type="button" className="button quiet" onClick={() => setFilter('')}>Effacer la recherche</button>}
+          <div className="record-toolbar">
+            <RecordSearch label="Rechercher un membre" value={filter} onChange={value => { setFilter(value); setPage(1); }} placeholder="Nom" />
+            <FilterTabs label="Accès" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+              { value: 'all', label: 'Tous', count: audience.length },
+              { value: 'active', label: 'Actifs', count: audience.filter(item => item.status === 'ACTIVE').length },
+              { value: 'inactive', label: 'Inactifs', count: audience.filter(item => item.status !== 'ACTIVE').length },
+            ]} />
+            <CheckField label="Afficher les élèves" checked={showLearners} onChange={value => { setShowLearners(value); setPage(1); }} />
+            <SelectField label="Trier par" value={sort} onChange={value => { setSort(value); setPage(1); }}
+              options={[{ value: 'name-asc', label: 'Nom : A à Z' }, { value: 'name-desc', label: 'Nom : Z à A' }]} />
+            {(filter || statusFilter !== 'all' || showLearners) && <button type="button" className="button quiet" onClick={() => { setFilter(''); setStatusFilter('all'); setShowLearners(false); setPage(1); }}>Réinitialiser les filtres</button>}
           </div>
-          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'membre' : 'membres'}{data.truncated ? ' dans la liste chargée' : ''}</p>
           {data.truncated && <p className="caption">La recherche porte sur les membres chargés.</p>}
           {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message="" />
-          : <div className="directory-table-wrap"><table className="data-table directory-table"><caption className="visually-hidden">Membres de l’école</caption>
-            <thead><tr><th scope="col">Membre</th><th scope="col">Rôles</th></tr></thead><tbody>
-            {visible.map(item => <tr key={item.id} className={item.id === selected ? 'is-selected' : undefined}>
-              <th scope="row"><button type="button" className="row-button" aria-current={item.id === selected ? 'true' : undefined} onClick={() => setSelected(item.id)}>{item.displayName}</button>
-                {item.id === membership.membershipId && <span className="row-meta block">Vous</span>}
-                {item.status !== 'ACTIVE' && <span className="row-meta block">Accès inactif</span>}</th>
+          : <div className="directory-table-wrap"><table className="data-table record-table"><caption className="visually-hidden">Membres de l’école</caption>
+            <thead><tr><th scope="col">Membre</th><th scope="col">Rôles</th><th scope="col">Accès</th></tr></thead><tbody>
+            {pageRows.map(item => <tr key={item.id} className={item.id === selected ? 'is-selected' : undefined}>
+              <th scope="row" className="record-identity"><a className="record-link" aria-current={item.id === selected ? 'true' : undefined}
+                href={consolePath(schoolId, 'equipe', { ...routeQuery, selection: item.id })}
+                onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); setSelected(item.id); } }}>{item.displayName}</a>
+                {item.id === membership.membershipId && <span className="record-secondary">Vous</span>}</th>
               <td data-label="Rôles">{rolesText(item.roles)}</td>
+              <td data-label="Accès">{item.status === 'ACTIVE' ? 'Actif' : <span className="record-attention"><Symbol kind="ban" bare />Inactif</span>}</td>
             </tr>)}</tbody></table></div>}
+          <ListPagination page={currentPage} pageSize={pageSize} total={visible.length} onPageChange={setPage} label="Pagination des membres" />
         </>}
-        detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={self ? 'Votre propre accès' : rolesText(current.roles)}
+        detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} meta={self ? 'Votre propre accès' : rolesText(current.roles)}
             badge={current.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined}>
             {current.roles.includes('INSTRUCTOR') && <div className="detail-links">
               <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor: current.id })}><Symbol kind="calendar" bare />Voir le planning</button>
@@ -137,7 +156,8 @@ export function TeamSection() {
             {current.status === 'ACTIVE' && !self && <div className="form-actions"><button type="button" className="button quiet danger" disabled={!canWrite}
               onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('deactivate'); }}>Retirer l’accès…</button></div>}
           </DetailPanel>
-          : <Placeholder>Choisissez un membre pour consulter ou modifier ses accès.</Placeholder>} />}
+          : selected ? <Notice tone="error" title="Membre non disponible" actions={<ReadRetry loaded={loaded} />}><p>Ce membre n’est pas présent dans la liste chargée avec vos accès actuels.</p></Notice>
+            : <Placeholder>Choisissez un membre pour consulter ou modifier ses accès.</Placeholder>} />}
       </LoadState>
       {current && <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => { setDialog(null); setDeactivateReason(''); }} onConfirm={() => void confirm()}
         title={dialog === 'deactivate' ? 'Retirer l’accès' : 'Modifier les accès'}

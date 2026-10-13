@@ -151,17 +151,24 @@ export function SelectField<T extends string>({ label, value, onChange, options,
   );
 }
 
-/** The single selection pattern (DrivySelectionCardStyle): native checkbox, soft accent when checked. */
-export function CheckField({ label, description, checked, onChange, disabled }: {
-  label: string; description?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean;
+/** Native checkbox with one drawing across settings, permissions and confirmations. */
+export function CheckField({ label, description, checked, onChange, disabled, indeterminate = false, variant = 'plain' }: {
+  label: ReactNode; description?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean;
+  indeterminate?: boolean; variant?: 'plain' | 'confirmation';
 }) {
   const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (input.current) input.current.indeterminate = indeterminate; }, [indeterminate]);
   return (
-    <label className="check-field" htmlFor={id}>
-      <input id={id} type="checkbox" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)}
-        aria-describedby={description ? `${id}-description` : undefined} />
+    <label className={`check-field${variant === 'confirmation' ? ' check-confirmation' : ''}`} htmlFor={id}>
+      <span className="check-control"><input ref={input} id={id} type="checkbox" checked={checked} disabled={disabled}
+        onChange={event => { event.target.indeterminate = indeterminate; onChange(event.target.checked); }}
+        aria-labelledby={`${id}-label`} aria-describedby={description ? `${id}-description` : undefined} />
+        <svg className="check-mark" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m4 9 3.2 3.2L14 5.8" /></svg>
+        <svg className="check-mixed" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M4 9h10" /></svg>
+      </span>
       <span className="check-text">
-        <span className="check-label">{label}</span>
+        <span className="check-label" id={`${id}-label`}>{label}</span>
         {description && <span className="caption" id={`${id}-description`}>{description}</span>}
       </span>
     </label>
@@ -231,7 +238,7 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
       <div className="dialog-body">
         {children}
         {acknowledgement !== undefined && onAcknowledge &&
-          <CheckField label={acknowledgement} checked={!!acknowledged} onChange={onAcknowledge} disabled={busy} />}
+          <CheckField variant="confirmation" label={acknowledgement} checked={!!acknowledged} onChange={onAcknowledge} disabled={busy} />}
         {disabledReason && <p className="caption">{disabledReason}</p>}
       </div>
       <div className="dialog-actions">

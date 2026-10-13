@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 13 octobre 2026 — seconde passe du portail : Registre Drivy
+
+Sur `codex/portail-registre-20261013`, depuis `afe2140` : listes élèves/équipe structurées, contacts pour les homonymes, pagination de 25 lignes et liens natifs, fiches sur une page dédiée avec retour au contexte, annuaire indépendant des enrichissements, accès individuel aux élèves hors liste. Cinq recherches du catalogue, validation par Entrée et focus d’erreur, actions d’enregistrement regroupées ; cases à cocher partagées avec états intermédiaire/désactivé et confirmations. Proportions et largeurs de formulaires ajustées sur les tokens existants. Navigation, recherche des paramètres et thèmes personnels de la première passe conservés. Aucun changement natif/API ni déploiement de cette passe.
+
+**Exécuté localement à ce stade** : typage, 233 tests web, build ; huit captures de référence `afe2140` conservées ; pilotes de liste/fiche/paramètres inspectés. Deux défauts visuels/accessibles corrigés pendant la recette : aide de checkbox répétée dans son nom accessible et barre d’enregistrement masquant des champs sur mobile. **En cours** : campagne navigateur complète, captures finales, audits axe et recette intégrée PostgreSQL/OIDC. Les résultats de la passe précédente ne qualifient pas cette nouvelle version. [Direction, inventaire des changements et références](web-registre-20261013.md).
+
 ## 13 octobre 2026 — refonte web déployée
 
 Déploiement demandé et effectué à **23:12 Europe/Zurich** : portail et BFF `bad540b` en service sur [Drivy](https://drivy.shulker.ch/app/). **Sauvegarde de la base vérifiée avant bascule**, 32 migrations existantes contrôlées, aucune migration exécutée. API, identité et lien partagé restent sur leur version précédente ; seul le web redémarre. Les sessions navigateur peuvent demander une reconnexion.

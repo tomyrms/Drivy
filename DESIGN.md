@@ -100,22 +100,23 @@ La direction web Bureau du 30 septembre est conservée. À la demande du porteur
 
 Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. La première passe est consignée dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), puis remplacée par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md) et [la passe esthétique encre et papier](docs/implementation/web-craft-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
 
-## Web · Bureau de précision
+## Web · Registre Drivy
 
-La refonte du 13 octobre 2026 conserve la marque « La trace », Source Sans 3 et le cobalt Drivy. Cette section fait autorité pour le portail ; les tokens et règles Apple restent distincts. [Direction, benchmark et composants](docs/implementation/web-redesign-design-20261013.md) · [Inventaire des parcours](docs/implementation/web-redesign-inventory-20261013.md).
+La direction Registre Drivy du 13 octobre 2026 prolonge la base `afe2140` (« Bureau de précision ») : colonnes utiles, contrôles précis et fiches autonomes. La marque « La trace », Source Sans 3, le cobalt et Soft Charcoal sont conservés. Cette section fait autorité pour le portail ; les tokens et règles Apple restent distincts. [Direction, benchmark et composants actuels](docs/implementation/web-registre-20261013.md) · [Première passe](docs/implementation/web-redesign-design-20261013.md) · [Inventaire des parcours](docs/implementation/web-redesign-inventory-20261013.md).
 
 ### Composition et navigation
 
-- Rail plat de 232 px : Planning, Élèves, Équipe, Formations et tarifs ; Paramètres de l’école séparés. Les pages de l’espace courant apparaissent dans une navigation secondaire horizontale. Pas d’accordéon de navigation ni de menu imbriqué. Petit écran : Menu déplie le rail dans le flux, Échap le ferme.
+- Rail plat de 216 px et en-tête de 56 px : Planning, Élèves, Équipe, Formations et tarifs ; Paramètres de l’école séparés. Les pages de l’espace courant apparaissent dans une navigation secondaire horizontale. Pas d’accordéon de navigation ni de menu imbriqué. Petit écran : Menu déplie le rail dans le flux, Échap le ferme.
 - École courante explicite ; sélecteur seulement pour les comptes qui administrent plusieurs écoles. Accès ADMIN relu au serveur, droits commerciaux conservés.
-- Listes denses avec recherche, filtres, compteur réel et colonnes utiles. Détail associé quand la largeur le permet ; sur petit écran, la fiche remplace la liste, avec retour et restitution de focus.
+- Registres élèves et équipe : recherche, vues de statut et filtres réunis dans une barre compacte ; colonnes comparables, compteur réel et pagination locale de 25 lignes. Les contacts distinguent les homonymes. Les états ordinaires restent du texte, les alertes signalent les exceptions. Aucun export ou choix multiple sans commande métier existante.
+- Le nom d’un élève ou d’un membre est un lien vers sa fiche : clic normal en navigation locale, ouverture native possible dans un nouvel onglet. La fiche remplace la liste à toutes les largeurs, avec le nom comme titre principal. La liste reste montée pour préserver recherche, filtres, tri, page et restitution de focus au retour. Les autres parcours peuvent conserver la composition liste/détail associée.
 - Les identifiants, semaine et catégorie autorisés restent dans l’URL. Les recherches nominatives, filtres privés et pages d’historique restent uniquement dans la mémoire du contexte personne/école/droits. Ne jamais les persister dans le navigateur.
 - Les paramètres de l’école sont séparés des préférences personnelles, accessibles depuis le compte. Une recherche indexe les intentions, champs et synonymes, puis ouvre la destination et focalise le champ lorsque possible. N’indexer que des fonctions implémentées.
 - L’agenda reste l’entrée quotidienne. L’accueil de préparation se fonde sur les actions serveur réelles ; aucun indicateur décoratif inventé.
 
 ### Tokens et composants
 
-Source d’exécution unique : `apps/web/client/styles.css`. Source Sans 3 auto-hébergée, titre 24–28 px/650, détail 22 px/650, section 17 px/600, corps 15–16 px, métadonnées 13–15 px. Chiffres tabulaires pour dates, heures et montants. Espacements 4/8/12/16/24/32/48 px. Rayons 6 px champs, 10 px détails, 12 px panneaux. Contrôles 40 px sur desktop et 44 px sur petit écran/pointeur tactile.
+Source d’exécution unique : `apps/web/client/styles.css`. Source Sans 3 auto-hébergée, titre 24 px/650, détail 22 px/650 hors mode page, section 17 px/600, corps 15–16 px, métadonnées 13 px et cellules de table 14 px. Chiffres tabulaires pour dates, heures et montants. Espacements 4/8/12/16/24/32/48 px. Rayons 5 px champs, 8 px contenus, 10 px panneaux. Contrôles 40 px sur desktop et 44 px sur petit écran/pointeur tactile.
 
 | Rôle | Clair | Sombre Soft Charcoal |
 |---|---|---|
@@ -135,7 +136,9 @@ Source d’exécution unique : `apps/web/client/styles.css`. Source Sans 3 auto-
 
 Surfaces opaques, sans ombre de carte ou de contrôle. Ombre réservée au menu du compte ; bordure et fond séparent les données. Les couleurs sémantiques ne prennent jamais la couleur d’une école. Les badges sont réservés aux exceptions.
 
-Réutiliser `SectionHeading`, `SplitView`, `DetailPanel`, `TextField`, `TextArea`, `SelectField`, `LoadState`, `OutcomeNotice`, `ConfirmDialog`. Les formulaires de paramètres utilisent `settings-section` et une colonne de saisie bornée. Les tableaux utilisent `data-table` ; `directory-table` organise élèves et équipe. Les noms de classes et règles d’usage figurent dans la documentation de direction.
+Réutiliser `SectionHeading`, `SplitView`, `DetailPanel`, `TextField`, `TextArea`, `SelectField`, `LoadState`, `OutcomeNotice`, `ConfirmDialog`. `RecordSearch`, `FilterTabs` et `ListPagination` composent les outils du registre ; `FilterTabs` est un groupe de boutons pressés qui filtre la liste, pas une navigation entre panneaux. Les tableaux utilisent `data-table` ; `record-table` organise élèves et équipe. `SplitView mode="page"` et `DetailPanel headingLevel={1}` portent leurs fiches. Les formulaires de paramètres utilisent `settings-section` et une colonne de saisie bornée à 36 rem.
+
+`CheckField` conserve un input et un label natifs, avec un carré visible de 18 px, un contour de 1 px, un rayon de 3 px et une coche de 2 px. La zone interactive suit la hauteur des contrôles. Le libellé accessible est relié par `aria-labelledby` ; l’aide éventuelle reste distincte via `aria-describedby`. La variante `plain` sert aux choix usuels ; `confirmation` aux consentements et confirmations explicites. L’état intermédiaire est pris en charge par le composant, sans introduire de sélection multiple dans les registres. En couleurs forcées, les checkbox et radios retrouvent leur dessin natif.
 
 ### Thème personnel et enregistrement
 
@@ -143,11 +146,13 @@ Réutiliser `SectionHeading`, `SplitView`, `DetailPanel`, `TextField`, `TextArea
 
 Coordonnées : enregistrement explicite direct, erreurs de champ, état non enregistré/en cours/à jour et succès seulement après réponse durable. Confidentialité, consentements, accès et commandes destructives conservent leurs confirmations métier. `useUnsavedChanges` protège les saisies ; les commandes incertaines restent dans le suivi AP72 existant. Le guide garde son mécanisme spécifique de sauvegarde/reprise.
 
+La barre d’enregistrement des éditeurs (`editor-save-bar`) reste visible en bas lorsque la largeur et la hauteur du viewport dépassent 40 rem. Elle revient dans le flux sur écran étroit ou bas pour ne pas recouvrir les champs.
+
 ### Accessibilité et vérification
 
-Liens de navigation, labels permanents, focus visible 3 px, lien d’évitement, dialogues HTML natifs avec restitution de focus. Mouvement réduit, contraste accru et couleurs forcées restent pris en charge. Pas d’action au seul survol. Anciennes routes conservées ; ajout de `/app/preferences` et cibles `focus` limitées à l’index de recherche.
+Liens de navigation, labels permanents, focus visible de 3 px pour les contrôles généraux et de 2 px autour du label de checkbox, lien d’évitement, dialogues HTML natifs avec restitution de focus. Mouvement réduit, contraste accru et couleurs forcées restent pris en charge. Pas d’action au seul survol. Anciennes routes conservées ; `/app/preferences` et cibles `focus` limitées à l’index de recherche restent en place.
 
-[60 couples de contraste mesurés](docs/implementation/proofs/web-redesign-contrast-20261013.json) passent les seuils applicables. La recette navigateur et ses limites sont consignées dans [le rapport de refonte](docs/implementation/web-redesign-20261013.md). Ces calculs et tests automatiques ne constituent pas une certification WCAG ni une validation au lecteur d’écran.
+La première passe dispose de [60 couples de contraste mesurés](docs/implementation/proofs/web-redesign-contrast-20261013.json) et d’un [rapport de recette](docs/implementation/web-redesign-20261013.md). La palette reste identique ; ces preuves ne qualifient pas les nouveaux composants. La recette finale de Registre Drivy est à consolider dans [sa documentation](docs/implementation/web-registre-20261013.md). Le reflow à 720 px CSS/DPR 2 ne qualifie pas un zoom navigateur à 200 %. Calculs et tests automatiques ne constituent ni une certification WCAG ni une validation au lecteur d’écran.
 
 ## Apple · Cartographie native conservée
 

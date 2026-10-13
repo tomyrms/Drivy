@@ -30,9 +30,9 @@ export function permitSummary(permit: Permit | undefined): { state: PermitState;
 function ReportBody({ report, competencies }: { report: Report; competencies: ReadonlyMap<string, string> }) {
   return (
     <div className="report-body">
-      {report.workedOn && <div className="report-copy"><h5>Travaillé</h5><p>{report.workedOn}</p></div>}
-      {report.observationText && <div className="report-copy"><h5>Observations</h5><p>{report.observationText}</p></div>}
-      {report.nextStep && <div className="report-copy"><h5>Prochaine étape</h5><p>{report.nextStep}</p></div>}
+      {report.workedOn && <div className="report-copy"><h4>Travaillé</h4><p>{report.workedOn}</p></div>}
+      {report.observationText && <div className="report-copy"><h4>Observations</h4><p>{report.observationText}</p></div>}
+      {report.nextStep && <div className="report-copy"><h4>Prochaine étape</h4><p>{report.nextStep}</p></div>}
       {report.observations.length > 0 && <ul className="competency-progress">{report.observations.map(item => <li key={item.competencyId} className="competency-row">
         <span className="row-text"><span className="row-title">{competencies.get(item.competencyId) ?? 'Compétence'}</span>
           {item.context && <span className="row-meta">{item.context}</span>}</span>
@@ -87,14 +87,14 @@ export function TrainingFollowUp({ schoolId, training, competencies, timeZone }:
       {open && loaded.status === 'loading' && !data && <Loading label="Lecture de la progression…" />}
       {open && loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" live={false} actions={<ReadRetry loaded={loaded} />}><p>{loaded.error ?? readError(null)}</p></Notice>}
       {data && <div className="follow-up">
-        <h4 className="section-title">Compétences</h4>
+        <h3 className="section-title">Compétences</h3>
         {progression.length > 0 ? <ul className="competency-progress">{progression.map(item => <li key={item.id} className="competency-row">
           <span className="row-text"><span className="row-title">{item.label}</span>
             {item.observedAt && <span className="row-meta">{formatDateTime(item.observedAt, item.timeZone)}{item.context ? ` · ${item.context}` : ''}</span>}</span>
           <CompetencyLevel level={item.level} />
         </li>)}</ul>
           : <p className="caption">Aucune compétence dans cette formation.</p>}
-        <h4 className="section-title">Bilans</h4>
+        <h3 className="section-title">Bilans</h3>
         {data.truncated && <Notice tone="warning" title="Historique partiel" live={false}><p>Seule une partie des leçons a pu être chargée. Les filtres de période sont indisponibles.</p></Notice>}
         {canFilter && reported.length > 0 && <div className="report-filters">
           <SelectField label="Année" value={year} onChange={setYear} options={[{ value: '', label: 'Toutes les années' }, ...years.map(value => ({ value, label: value }))]} />

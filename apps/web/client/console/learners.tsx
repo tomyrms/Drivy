@@ -7,16 +7,18 @@ import {
 import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import { activeInstructors, offeringLabel, openOfferings } from '../invitation-model';
 import {
-  assignmentSchema, curriculumSchema, learnerSchema, memberSchema, offeringSchema, permitSchema, readAll, trainingSchema,
+  assignmentSchema, curriculumSchema, learnerSchema, memberSchema, offeringSchema, permitSchema, readAll, readSchool, trainingSchema,
   type Assignment, type Learner, type Permit, type Training,
 } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
 import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection, useUnsavedChanges } from './context';
 import { useListState } from './list-state';
+import { RequestFailure } from '../protocol';
+import { consolePath } from './route';
 import { permitSummary, TrainingFollowUp } from './dossier';
 import { ProfileCompletion } from './profile-completion';
 import { GpsConsentLine } from './gps-consent';
-import { DetailPanel, LoadState, OutcomeNotice, Placeholder, ReadRetry, SectionHeading, SplitView } from './layout';
+import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
 const emptyPermit = (): PermitDraft => ({ physicalSeen: false, validUntil: '', decision: 'APPROVED', reason: '' });
@@ -39,6 +41,7 @@ export function LearnersSection() {
   const [statusFilter, setStatusFilter] = useListState<'active' | 'archived' | 'all'>('learners/status', 'active');
   const [readinessFilter, setReadinessFilter] = useListState<'all' | 'incomplete'>('learners/readiness', 'all');
   const [sort, setSort] = useListState<'name-asc' | 'name-desc'>('learners/sort', 'name-asc');
+  const [page, setPage] = useListState('learners/page', 1);
   const [offeringId, setOfferingId] = useState('');
   const schoolToday = () => civilDateIn(school.timeZone);
   const [startedOn, setStartedOn] = useState(schoolToday);
@@ -52,15 +55,29 @@ export function LearnersSection() {
   const releaseChanges = useUnsavedChanges(!runner.busy && !runner.pending && !!(offeringId || Object.values(instructorFor).some(Boolean) || reason
     || permit.physicalSeen || permit.validUntil || permit.reason || permit.decision !== 'APPROVED'));
   useEffect(() => { setDialog(null); setReason(''); setPermit(emptyPermit()); setOfferingId(''); setInstructorFor({}); }, [selected]);
-  const loaded = useLoad(async () => {
-    const [learners, trainings, offerings, members, curricula] = await Promise.all([
-      readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), readAll(schoolId, 'trainings', trainingSchema),
+  // Un enrichissement indisponible ne rend pas l’annuaire des élèves indisponible.
+  const loaded = useLoad(() => readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), [schoolId, revision]);
+  const listTrainings = useLoad(() => readAll(schoolId, 'trainings', trainingSchema), [schoolId, revision]);
+  const resources = useLoad(async () => {
+    const [offerings, members, curricula] = await Promise.all([
       readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema), readAll(schoolId, 'curricula', curriculumSchema)]);
-    return { learners: learners.items, trainings: trainings.items, offerings: offerings.items, members: members.items, curricula: curricula.items,
-      truncated: learners.truncated || trainings.truncated };
+    return { offerings: offerings.items, members: members.items, curricula: curricula.items };
   }, [schoolId, revision]);
+  const listedCurrent = loaded.data?.items.find(learner => learner.id === selected) ?? null;
+  const selectedLearner = useLoad(async (): Promise<Learner | null> => {
+    if (!selected || listedCurrent) return null;
+    const learner = await readSchool(schoolId, `learners/${selected}`, learnerSchema);
+    if (learner.id !== selected || learner.schoolId !== schoolId) throw new RequestFailure('INVALID_RESPONSE');
+    return learner;
+  }, [schoolId, selected, listedCurrent, revision], `${schoolId}/${selected ?? ''}`);
+  const selectedTrainings = useLoad(async () => {
+    if (!selected) return { items: [] as Training[], truncated: false };
+    const result = await readAll(schoolId, 'trainings', trainingSchema, { learnerId: selected });
+    if (result.items.some(training => training.learnerId !== selected)) throw new RequestFailure('INVALID_RESPONSE');
+    return result;
+  }, [schoolId, selected, revision], `${schoolId}/${selected ?? ''}`);
   const dossier = useLoad(async (): Promise<Record<string, Dossier>> => {
-    const trainings = (loaded.data?.trainings ?? []).filter(training => training.learnerId === selected);
+    const trainings = selectedTrainings.data?.items ?? [];
     const entries = await Promise.all(trainings.map(async training => {
       const [assignments, permitResult] = await Promise.all([readAll(schoolId, `trainings/${training.id}/assignments`, assignmentSchema),
         readAll(schoolId, `trainings/${training.id}/permit-checks`, permitSchema)
@@ -68,27 +85,34 @@ export function LearnersSection() {
       return [training.id, { assignments: assignments.items, permits: permitResult.items, permitError: permitResult.error }] as const;
     }));
     return Object.fromEntries(entries);
-  }, [schoolId, selected, loaded.data], `${schoolId}/${selected ?? ''}`);
+  }, [schoolId, selected, selectedTrainings.data], `${schoolId}/${selected ?? ''}`);
 
-  const data = loaded.data;
-  const learners = useMemo(() => [...(data?.learners ?? [])]
-    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [data]);
+  const data = resources.data;
+  const learners = useMemo(() => [...(loaded.data?.items ?? [])]
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)), [loaded.data]);
   const notReady = (learner: Learner) => learner.profileReadiness === 'MINIMAL' || learner.profileReadiness === 'ACTION_REQUIRED';
   const visible = learners.filter(learner => (statusFilter === 'all' || (statusFilter === 'archived') === !!learner.archivedAt)
     && (readinessFilter === 'all' || (!learner.archivedAt && notReady(learner)))
-    && matchesSearch([learner.displayName, learner.contactEmail], search))
-    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.displayName.localeCompare(b.displayName, 'fr'));
+    && matchesSearch([learner.displayName, learner.contactEmail, learner.contactPhone], search))
+    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * (a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)));
+  const pageSize = 25;
+  const currentPage = Math.max(1, Math.min(page, Math.ceil(visible.length / pageSize) || 1));
+  const pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => { if (loaded.status === 'ready' && page !== currentPage) setPage(currentPage); }, [loaded.status, page, currentPage, setPage]);
   // Seule la dernière version active de chaque offre ouvre une formation (règle partagée avec les invitations par code).
   const offerings = useMemo(() => openOfferings(data?.offerings ?? []), [data]);
   const instructors = useMemo(() => activeInstructors(data?.members ?? []), [data]);
   const competencies = useMemo(() => new Map((data?.curricula ?? []).flatMap(curriculum => curriculum.competencies.map(item => [item.id, item.label] as const))), [data]);
   const name = (membershipId: string) => data?.members.find(member => member.id === membershipId)?.displayName ?? 'Moniteur';
-  const trainingsOf = (learnerId: string) => (data?.trainings ?? []).filter(training => training.learnerId === learnerId);
+  const trainingsOf = (learnerId: string) => learnerId === selected
+    ? selectedTrainings.data?.items ?? [] : (listTrainings.data?.items ?? []).filter(training => training.learnerId === learnerId);
   const offeringOf = (training: Training) => data?.offerings.find(item => item.id === training.offeringId);
   const category = (training: Training) => training.categoryCode ?? offeringOf(training)?.categoryCode ?? '';
   const title = (training: Training) => { const offer = offeringOf(training); return offer ? offeringLabel(offer, data?.offerings ?? []) : `Permis ${category(training)}`; };
-  const current = learners.find(learner => learner.id === selected) ?? null;
-  const canWrite = school.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy;
+  const current = listedCurrent ?? selectedLearner.data ?? null;
+  const currentReady = listedCurrent ? loaded.status === 'ready' : selectedLearner.status === 'ready';
+  const canWrite = school.status === 'ACTIVE' && currentReady && resources.status === 'ready'
+    && selectedTrainings.status === 'ready' && !selectedTrainings.data?.truncated && !runner.pending && !runner.busy;
   const canEdit = canWrite && !current?.archivedAt;
   const availableOfferings = availableTrainingOfferings(offerings, data?.offerings ?? [], current ? trainingsOf(current.id) : []);
   const canReviewPermit = membership.roles.includes('ADMIN') || membership.roles.includes('INSTRUCTOR');
@@ -143,36 +167,48 @@ export function LearnersSection() {
     <div className="section-stack">
       {routeQuery?.from === 'agenda' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
       {routeQuery?.from === 'trajets' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: routeQuery.learner, week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour aux trajets</button></div>}
-      <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />
+      {!current && <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />}
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des élèves…">{value => <SplitView mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les élèves"
-        list={<>
-          {value.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>L’école compte plus d’élèves que cette page n’en charge : la recherche ne porte que sur ceux affichés.</p></Notice>}
-          <div className="list-toolbar directory-toolbar">
-            <TextField label="Rechercher un élève" value={search} onChange={setSearch} placeholder="Nom ou e-mail" />
-            <SelectField label="Dossiers" value={statusFilter} onChange={setStatusFilter}
-              options={[{ value: 'active', label: 'Actifs' }, { value: 'archived', label: 'Archivés' }, { value: 'all', label: 'Tous' }]} />
-            <SelectField label="Profil" value={readinessFilter} onChange={setReadinessFilter}
+      <SplitView mode="page" mobileDetail={!!selected} onBack={() => setSelected(null)} backLabel="Tous les élèves"
+        list={<LoadState loaded={loaded} label="Lecture des élèves…">{value => <>
+          {value.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>La recherche et les comptes portent sur les élèves chargés.</p></Notice>}
+          <div className="record-toolbar">
+            <RecordSearch label="Rechercher un élève" value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder="Nom, e-mail ou téléphone" />
+            <FilterTabs label="Dossiers" value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[
+              { value: 'active', label: 'Actifs', count: learners.filter(learner => !learner.archivedAt).length },
+              { value: 'archived', label: 'Archivés', count: learners.filter(learner => !!learner.archivedAt).length },
+              { value: 'all', label: 'Tous', count: learners.length },
+            ]} />
+            <SelectField label="Profil" value={readinessFilter} onChange={value => { setReadinessFilter(value); setPage(1); }}
               options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
-            <SelectField label="Trier par" value={sort} onChange={setSort}
+            <SelectField label="Trier par" value={sort} onChange={value => { setSort(value); setPage(1); }}
               options={[{ value: 'name-asc', label: 'Nom : A à Z' }, { value: 'name-desc', label: 'Nom : Z à A' }]} />
-            {(search || readinessFilter !== 'all' || statusFilter !== 'active') && <button type="button" className="button quiet" onClick={() => { setSearch(''); setReadinessFilter('all'); setStatusFilter('active'); }}>Réinitialiser les filtres</button>}
+            {(search || readinessFilter !== 'all' || statusFilter !== 'active') && <button type="button" className="button quiet" onClick={() => { setSearch(''); setReadinessFilter('all'); setStatusFilter('active'); setPage(1); }}>Réinitialiser les filtres</button>}
           </div>
-          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'élève' : 'élèves'}{visible.length !== learners.length ? ` sur ${learners.length}` : ''}{value.truncated ? ' dans la liste chargée' : ''}</p>
+          {listTrainings.status === 'error' && <Notice tone="error" title="Formations indisponibles" live={false} actions={<ReadRetry loaded={listTrainings} />}><p>{listTrainings.error}</p></Notice>}
           {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? '' : 'Créez un code pour inviter un élève.'} />
-            : <div className="directory-table-wrap"><table className="data-table directory-table"><caption className="visually-hidden">Dossiers élèves</caption>
-              <thead><tr><th scope="col">Élève</th><th scope="col">Formation</th></tr></thead><tbody>{visible.map(learner => {
-              const categories = trainingsOf(learner.id).filter(training => training.status === 'ACTIVE').map(category).filter(Boolean);
+            : <div className="directory-table-wrap"><table className="data-table record-table"><caption className="visually-hidden">Dossiers élèves</caption>
+              <thead><tr><th scope="col">Élève</th><th scope="col">Contact</th><th scope="col">Formation</th><th scope="col">Dossier</th><th scope="col">Profil</th></tr></thead><tbody>{pageRows.map(learner => {
+              const activeTrainings = (listTrainings.data?.items ?? []).filter(training => training.learnerId === learner.id && training.status === 'ACTIVE');
+              const categories = activeTrainings.map(category).filter(Boolean);
               return <tr key={learner.id} className={learner.id === selected ? 'is-selected' : undefined}>
-                <th scope="row"><button type="button" className="row-button" aria-current={learner.id === selected ? 'true' : undefined}
-                  onClick={() => { runner.clearOutcome(); setSelected(learner.id); }}>{learner.displayName}</button>
-                  {!learner.archivedAt && notReady(learner) && <span className="row-meta block with-symbol"><Symbol kind="alert" bare />Profil à compléter</span>}</th>
-                <td data-label="Formation">{learner.archivedAt ? 'Archivé' : categories.length ? `Permis ${[...new Set(categories)].join(', ')}` : <span className="row-meta">Aucune en cours</span>}</td>
+                <th scope="row" className="record-identity"><a className="record-link" aria-current={learner.id === selected ? 'true' : undefined}
+                  href={consolePath(schoolId, 'eleves', { ...routeQuery, selection: learner.id })}
+                  onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); runner.clearOutcome(); setSelected(learner.id); } }}>{learner.displayName}</a></th>
+                <td data-label="Contact" className="record-contact"><span>{learner.contactEmail ?? learner.contactPhone ?? <span className="row-meta">Non renseigné</span>}</span>
+                  {learner.contactEmail && learner.contactPhone && <span className="record-secondary">{learner.contactPhone}</span>}</td>
+                <td data-label="Formation">{listTrainings.status !== 'ready' ? <span className="row-meta">{listTrainings.status === 'error' ? 'Indisponible' : 'Chargement…'}</span>
+                  : categories.length ? `Permis ${[...new Set(categories)].join(', ')}` : activeTrainings.length ? `${activeTrainings.length} formation${activeTrainings.length > 1 ? 's' : ''} en cours`
+                    : <span className="row-meta">{listTrainings.data?.truncated ? 'À vérifier' : 'Aucune en cours'}</span>}</td>
+                <td data-label="Dossier">{learner.archivedAt ? 'Archivé' : 'Actif'}</td>
+                <td data-label="Profil">{!learner.archivedAt && notReady(learner) ? <span className="record-attention"><Symbol kind="alert" bare />À compléter</span>
+                  : <span className="row-meta">{learner.archivedAt ? '—' : learner.profileReadiness === 'READY' ? 'Complet' : 'Non évalué'}</span>}</td>
               </tr>;
             })}</tbody></table></div>}
-        </>}
-        detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={current.contactEmail ?? undefined}
+          <ListPagination page={currentPage} pageSize={pageSize} total={visible.length} onPageChange={setPage} label="Pagination des élèves" />
+        </>}</LoadState>}
+        detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} meta={current.contactEmail ?? undefined}
           badge={current.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge> : undefined}
           actions={current.archivedAt ? membership.roles.includes('ADMIN') && <button type="button" className="button secondary" disabled={!canWrite}
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
@@ -180,9 +216,16 @@ export function LearnersSection() {
           {!current.archivedAt && notReady(current) && <ProfileCompletion schoolId={schoolId} learner={current} canEdit={canEdit && membership.roles.includes('ADMIN')} />}
           <div className="detail-links"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Voir les trajets</button></div>
           {!current.archivedAt && <GpsConsentLine learnerId={current.id} />}
+          {listedCurrent && loaded.status === 'error' && <Notice tone="error" title="Dossier à actualiser" live={false} actions={<ReadRetry loaded={loaded} />}><p>{loaded.error}</p></Notice>}
+          {!listedCurrent && selectedLearner.status === 'error' && <Notice tone="error" title="Dossier à actualiser" live={false} actions={<ReadRetry loaded={selectedLearner} />}><p>{selectedLearner.error}</p></Notice>}
+          {resources.status === 'loading' && <Loading label="Lecture du catalogue et de l’équipe…" />}
+          {resources.status === 'error' && <Notice tone="error" title="Catalogue et équipe indisponibles" live={false} actions={<ReadRetry loaded={resources} />}><p>{resources.error}</p></Notice>}
+          {selectedTrainings.status === 'loading' && <Loading label="Lecture des formations de l’élève…" />}
+          {selectedTrainings.status === 'error' && <Notice tone="error" title="Formations indisponibles" live={false} actions={<ReadRetry loaded={selectedTrainings} />}><p>{selectedTrainings.error}</p></Notice>}
+          {selectedTrainings.data?.truncated && <Notice tone="warning" title="Formations partiellement chargées" live={false}><p>Les modifications restent indisponibles tant que toutes les formations ne sont pas connues.</p></Notice>}
           {dossier.status === 'error' && <Notice tone="error" title="Dossier incomplet" live={false}
             actions={<ReadRetry loaded={dossier} />}><p>{dossier.error ?? readError(null)}</p></Notice>}
-          {trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}
+          {selectedTrainings.status === 'ready' && !selectedTrainings.data?.truncated && trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}
           {dossier.status === 'loading' && trainingsOf(current.id).length > 0 && <Loading label="Chargement des moniteurs et permis…" />}
           <ul className="row-list training-list">{trainingsOf(current.id).map(training => {
             const detail = dossier.data?.[training.id];
@@ -192,7 +235,7 @@ export function LearnersSection() {
             const permitInfo = permitSummary(detail?.permits ? latestPermit(detail.permits, category(training)) : undefined);
             return <li key={training.id}>
               <div className="row-text">
-                <div className="training-summary"><h3 className="row-title">{title(training)}</h3>
+                <div className="training-summary"><h2 className="row-title">{title(training)}</h2>
                   {training.status !== 'ACTIVE' && <StatusBadge tone="neutral" symbol="dot">{statusLabels[training.status]}</StatusBadge>}
                 </div>
                 <p className="row-meta">{detailReady ? assigned.length ? assigned.map(item => name(item.instructorMembershipId)).join(', ') : 'Aucun moniteur' : 'Moniteurs à vérifier'}
@@ -231,8 +274,7 @@ export function LearnersSection() {
             </div>
             <button type="submit" className="button primary" disabled={!canWrite || !availableOfferings.some(offering => offering.id === offeringId) || !isCivilDate(startedOn)}>Ouvrir la formation</button>
           </form></details>}
-        </DetailPanel> : <Placeholder>Choisissez un élève.</Placeholder>} />}
-      </LoadState>
+        </DetailPanel> : selected ? <LoadState loaded={selectedLearner} label="Lecture du dossier…">{() => null}</LoadState> : <Placeholder>Choisissez un élève.</Placeholder>} />
       <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => ask(null)} onConfirm={() => void confirm()}
         title={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer le moniteur' : dialog?.kind === 'permit' ? 'Consigner le permis' : dialog?.kind === 'restore' ? 'Restaurer le dossier' : 'Archiver le dossier'}
         confirmLabel={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer' : dialog?.kind === 'permit' ? 'Consigner' : dialog?.kind === 'restore' ? 'Restaurer' : 'Archiver'}

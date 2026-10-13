@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { createCommand, filled, isHttpURL } from '../command-core';
+import { useMemo, useRef, useState } from 'react';
+import { createCommand, filled, isHttpURL, matchesSearch } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { catalogPolicySchema, curriculumSchema, offeringSchema, readAll, readSchool, textProposalsSchema, type CatalogPolicy, type Curriculum, type Offering } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, formatDuration } from '../ui';
@@ -55,10 +55,13 @@ export function CurriculaSection() {
   const loaded = useLoad(() => readAll(schoolId, 'curricula', curriculumSchema), [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [draft, setDraft] = useSectionDraft<CurriculumDraft>('curriculum');
+  const form = useRef<HTMLFormElement>(null);
+  const [search, setSearch] = useListState('curricula/search', '');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const items = useMemo(() => [...(loaded.data?.items ?? [])].filter(item => !routeQuery?.category || item.categoryCode === routeQuery.category).sort(byCategory(item => item.revision)), [loaded.data, routeQuery?.category]);
+  const visible = items.filter(item => matchesSearch([`Permis ${item.categoryCode}`, ...item.competencies.map(competency => competency.label)], search));
   const current = items.find(item => item.id === selected) ?? null;
   const problems = draft ? curriculumProblems(draft) : null;
   const canWrite = !runner.pending && !runner.busy;
@@ -73,6 +76,16 @@ export function CurriculaSection() {
   const updateCompetency = (key: string, change: Partial<CompetencyDraft>) =>
     setDraft(value => value ? { ...value, competencies: value.competencies.map(item => item.uid === key ? { ...item, ...change } : item) } : value);
   const nextRevision = draft ? Math.max(0, ...(loaded.data?.items ?? []).filter(item => item.categoryCode === draft.categoryCode.trim()).map(item => item.revision)) + 1 : 1;
+
+  function review() {
+    if (!draft || !problems || !canWrite) return;
+    setShowErrors(true);
+    if (!problems.valid) {
+      window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
+    runner.clearOutcome(); setAcknowledged(false); setReviewing(true);
+  }
 
   async function confirm() {
     if (!draft || !problems?.valid) return;
@@ -92,28 +105,32 @@ export function CurriculaSection() {
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
-        list={items.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel" message="Préparez un premier référentiel pour une catégorie, puis approuvez-le pour ouvrir une offre." />
+        list={<>
+          <div className="list-toolbar directory-toolbar">
+            <TextField label="Rechercher un référentiel" value={search} onChange={setSearch} placeholder="Permis ou compétence" />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          </div>
+          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'référentiel' : 'référentiels'}{visible.length !== items.length ? ` sur ${items.length}` : ''}{data.truncated ? ' dans la liste chargée' : ''}</p>
+          {items.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel" message="Préparez un premier référentiel pour une catégorie, puis approuvez-le pour ouvrir une offre." />
+          : visible.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel trouvé" />
           : <table className="data-table">
             <caption className="visually-hidden">Référentiels de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
             <thead><tr><th scope="col">Référentiel</th><th scope="col" className="numeric">Compétences</th></tr></thead>
-            <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
+            <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>Catégorie {item.categoryCode}</RowButton>
                 <span className="row-meta block">Révision {item.revision}</span>{!item.approved && approvalBadge(false)}</th>
               <td className="numeric">{item.competencies.length}</td>
             </tr>)}</tbody>
           </table>}
+        </>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle révision · catégorie ${draft.basedOn.categoryCode}` : 'Nouveau référentiel'}
             meta={draft.basedOn ? `À partir de la révision ${draft.basedOn.revision}` : undefined}
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
-              <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
-            </>}>
-            <form className="form-grid" onSubmit={event => event.preventDefault()}>
-              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+            >
+            <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
               <TextField label="Catégorie" value={draft.categoryCode} maxLength={30} placeholder="Par exemple B" disabled={!canWrite || !!draft.basedOn}
                 onChange={categoryCode => update({ categoryCode })} error={showErrors ? problems.category : null}
                 hint={draft.basedOn ? 'Une nouvelle révision garde la catégorie.' : undefined} />
-              <fieldset className="fieldset">
+              <fieldset className="fieldset" aria-invalid={showErrors && problems.count ? true : undefined} tabIndex={showErrors && problems.count ? -1 : undefined}>
                 <legend>Compétences</legend>
                 {problems.count && showErrors && <p className="field-error"><Symbol kind="alert" bare />{problems.count}</p>}
                 {draft.competencies.map((item, index) => <div className="repeat-row" key={item.uid}>
@@ -133,6 +150,13 @@ export function CurriculaSection() {
               </fieldset>
               <ApprovalFields approved={draft.approved} onApproved={approved => update({ approved })}
                 disabled={!canWrite} subject="ce référentiel" />
+              <div className="editor-save-bar">
+                <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+                <div className="button-row compact">
+                  <button type="submit" className="button primary" disabled={!canWrite}>Relire avant d’enregistrer</button>
+                  <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
+                </div>
+              </div>
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={`Catégorie ${current.categoryCode} · révision ${current.revision}`} badge={approvalBadge(current.approved)}
@@ -187,10 +211,13 @@ export function ProceduresSection() {
   const loaded = useLoad(() => readAll(schoolId, 'policy-versions', catalogPolicySchema), [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [draft, setDraft] = useSectionDraft<ProcedureDraft>('procedure');
+  const form = useRef<HTMLFormElement>(null);
+  const [search, setSearch] = useListState('procedures/search', '');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const items = useMemo(() => [...(loaded.data?.items ?? [])].filter(item => !routeQuery?.category || item.categoryCode === routeQuery.category).sort(byCategory(item => item.version)), [loaded.data, routeQuery?.category]);
+  const visible = items.filter(item => matchesSearch([`Permis ${item.categoryCode}`, item.procedureText, item.cancellationPolicyText], search));
   const current = items.find(item => item.id === selected) ?? null;
   const problems = draft ? procedureProblems(draft) : null;
   const canWrite = !runner.pending && !runner.busy;
@@ -204,6 +231,16 @@ export function ProceduresSection() {
       cancellationPolicyText: from?.cancellationPolicyText ?? proposed?.cancellationPolicyText ?? '',
       sources: from?.sourceUrls.join('\n') ?? '', approved: approve, approvalReason: '', basedOn: from });
   }
+  function review() {
+    if (!draft || !problems || !canWrite) return;
+    setShowErrors(true);
+    if (!problems.valid) {
+      window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
+    runner.clearOutcome(); setAcknowledged(false); setReviewing(true);
+  }
+
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createCatalogPolicy', path: 'policy-versions', resourceVersion: 0, body: {
@@ -221,25 +258,29 @@ export function ProceduresSection() {
         actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des procédures…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
-        list={items.length === 0 ? <EmptyState symbol="file" title="Aucune procédure" message="Rédigez la procédure d’une catégorie, puis approuvez-la pour ouvrir une offre." />
+      <LoadState loaded={loaded} label="Lecture des procédures…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
+        list={<>
+          <div className="list-toolbar directory-toolbar">
+            <TextField label="Rechercher une procédure" value={search} onChange={setSearch} placeholder="Permis ou texte" />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          </div>
+          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'procédure' : 'procédures'}{visible.length !== items.length ? ` sur ${items.length}` : ''}{data.truncated ? ' dans la liste chargée' : ''}</p>
+          {items.length === 0 ? <EmptyState symbol="file" title="Aucune procédure" message="Rédigez la procédure d’une catégorie, puis approuvez-la pour ouvrir une offre." />
+          : visible.length === 0 ? <EmptyState symbol="file" title="Aucune procédure trouvée" />
           : <table className="data-table">
             <caption className="visually-hidden">Procédures de l’école</caption>
             <thead><tr><th scope="col">Procédure</th><th scope="col">Approuvée le</th></tr></thead>
-            <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
+            <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>Catégorie {item.categoryCode}</RowButton>
                 <span className="row-meta block">Version {item.version}</span>{!item.approved && approvalBadge(false, true)}</th>
               <td>{item.approvedAt ? formatDateTime(item.approvedAt, school.timeZone) : '—'}</td>
             </tr>)}</tbody>
           </table>}
+        </>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · catégorie ${draft.basedOn.categoryCode}` : 'Nouvelle procédure'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
-              <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
-            </>}>
-            <form className="form-grid" onSubmit={event => event.preventDefault()}>
-              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+            >
+            <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
               <TextField label="Catégorie" value={draft.categoryCode} maxLength={30} placeholder="Par exemple B" disabled={!canWrite || !!draft.basedOn}
                 onChange={categoryCode => update({ categoryCode })} error={showErrors ? problems.category : null} />
               <TextArea label="Déroulement de la formation" rows={4} maxLength={4000} value={draft.procedureText} disabled={!canWrite}
@@ -250,6 +291,13 @@ export function ProceduresSection() {
                 onChange={sources => update({ sources })} error={problems.sources} />
               <ApprovalFields approved={draft.approved} onApproved={approved => update({ approved })}
                 disabled={!canWrite} subject="ces textes" />
+              <div className="editor-save-bar">
+                <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+                <div className="button-row compact">
+                  <button type="submit" className="button primary" disabled={!canWrite}>Relire avant d’enregistrer</button>
+                  <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
+                </div>
+              </div>
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={`Catégorie ${current.categoryCode} · version ${current.version}`} badge={approvalBadge(current.approved, true)}
@@ -291,11 +339,13 @@ export function OfferingsSection() {
   const loaded = useLoad(async () => {
     const [offerings, curricula, policies] = await Promise.all([readAll(schoolId, 'offerings', offeringSchema),
       readAll(schoolId, 'curricula', curriculumSchema), readAll(schoolId, 'policy-versions', catalogPolicySchema)]);
-    return { offerings: offerings.items, curricula: curricula.items, policies: policies.items };
+    return { offerings: offerings.items, curricula: curricula.items, policies: policies.items, truncated: offerings.truncated };
   }, [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [history, setHistory] = useListState('offerings/history', false);
   const [draft, setDraft] = useSectionDraft<OfferingDraft>('offering');
+  const form = useRef<HTMLFormElement>(null);
+  const [search, setSearch] = useListState('offerings/search', '');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -309,6 +359,7 @@ export function OfferingsSection() {
     && (history || latest.get(item.offeringKey)?.id === item.id))
     .sort((a, b) => a.offeringKey.localeCompare(b.offeringKey, 'fr') || b.version - a.version), [data, history, latest, routeQuery?.category]);
   const current = data?.offerings.find(item => item.id === selected) ?? null;
+  const visible = rows.filter(item => matchesSearch([`Permis ${item.categoryCode}`, item.offeringKey, formatDuration(item.defaultDurationMinutes)], search));
   const canWrite = !runner.pending && !runner.busy;
   const curriculum = (id: string) => data?.curricula.find(item => item.id === id);
   const policy = (id: string) => data?.policies.find(item => item.id === id);
@@ -336,6 +387,16 @@ export function OfferingsSection() {
     setDraft({ offeringKey: from?.offeringKey ?? '', categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', curriculumVersionId: from?.curriculumVersionId ?? '',
       policyVersionId: from?.policyVersionId ?? '', enabled: from?.enabled ?? false, duration: from ? String(from.defaultDurationMinutes) : '45', basedOn: from });
   }
+  function review() {
+    if (!draft || !problems || !canWrite) return;
+    setShowErrors(true);
+    if (!problems.valid) {
+      window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
+    runner.clearOutcome(); setAcknowledged(false); setReviewing(true);
+  }
+
   async function confirm() {
     if (!draft?.basedOn || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createOffering', path: 'offerings', resourceVersion: 0, body: {
@@ -358,12 +419,18 @@ export function OfferingsSection() {
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
         list={<>
-          <div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>
+          <div className="list-toolbar directory-toolbar">
+            <TextField label="Rechercher une formation" value={search} onChange={setSearch} placeholder="Permis, durée ou référence" />
+            <CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          </div>
+          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'formation' : 'formations'}{visible.length !== rows.length ? ` sur ${rows.length}` : ''}{value.truncated ? ' dans la liste chargée' : ''}</p>
           {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune formation" message="Choisissez un permis dans le guide pour préparer une formation et son tarif." />
+          : visible.length === 0 ? <EmptyState symbol="layers" title="Aucune formation trouvée" />
           : <table className="data-table">
             <caption className="visually-hidden">Offres de l’école</caption>
             <thead><tr><th scope="col">Formation</th><th scope="col" className="numeric">Durée</th></tr></thead>
-            <tbody>{rows.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
+            <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>Permis {item.categoryCode}</RowButton>
                 <span className="row-meta block">Catégorie {item.categoryCode} · v{item.version}{latest.get(item.offeringKey)?.id !== item.id ? ' · ancienne version' : ''}</span>
                 {!item.enabled && offerState(item)}</th>
@@ -373,12 +440,8 @@ export function OfferingsSection() {
         </>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · permis ${draft.basedOn.categoryCode}` : 'Nouvelle offre'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
-              <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
-            </>}>
-            <form className="form-grid" onSubmit={event => event.preventDefault()}>
-              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+            >
+            <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
               <div className="form-row">
                 <TextField label="Référence de l’offre" value={draft.offeringKey} maxLength={80} disabled={!canWrite || !!draft.basedOn} placeholder="Par exemple b-standard"
                   onChange={offeringKey => update({ offeringKey })} error={showErrors ? problems.key : null} />
@@ -391,14 +454,23 @@ export function OfferingsSection() {
                 <p>Créez d’abord le référentiel et la procédure de la catégorie {category}.</p></Notice>}
               <SelectField label="Référentiel" value={draft.curriculumVersionId} placeholder="Choisir un référentiel" disabled={!canWrite || !category}
                 options={curriculumOptions.map(item => ({ value: item.id, label: `Révision ${item.revision} · ${item.approved ? 'approuvée' : 'brouillon'}` }))}
-                onChange={curriculumVersionId => update({ curriculumVersionId })} error={showErrors ? problems.curriculum : null} />
+                onChange={curriculumVersionId => update({ curriculumVersionId })}
+                error={showErrors ? problems.curriculum ?? (draft.enabled && curriculum(draft.curriculumVersionId)?.approved !== true ? problems.enabled : null) : null} />
               <SelectField label="Procédure" value={draft.policyVersionId} placeholder="Choisir une procédure" disabled={!canWrite || !category}
                 options={policyOptions.map(item => ({ value: item.id, label: `Version ${item.version} · ${item.approved ? 'approuvée' : 'brouillon'}` }))}
-                onChange={policyVersionId => update({ policyVersionId })} error={showErrors ? problems.policy : null} />
+                onChange={policyVersionId => update({ policyVersionId })}
+                error={showErrors ? problems.policy ?? (draft.enabled && policy(draft.policyVersionId)?.approved !== true ? problems.enabled : null) : null} />
               <TextField label="Durée par défaut (minutes)" value={draft.duration} inputMode="numeric" disabled={!canWrite} onChange={duration => update({ duration })} error={showErrors ? problems.duration : null} />
               <CheckField label="Activer cette version de l’offre" checked={draft.enabled} onChange={enabled => update({ enabled })} disabled={!canWrite}
                 description="Une offre activée permet d’ouvrir de nouvelles formations. Elle exige un référentiel et une procédure approuvés." />
               {problems.enabled && <p className="field-error"><Symbol kind="alert" bare />{problems.enabled}</p>}
+              <div className="editor-save-bar">
+                <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+                <div className="button-row compact">
+                  <button type="submit" className="button primary" disabled={!canWrite}>Relire avant d’enregistrer</button>
+                  <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
+                </div>
+              </div>
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={`Permis ${current.categoryCode}`} meta={`Version ${current.version}`} badge={offerState(current)}

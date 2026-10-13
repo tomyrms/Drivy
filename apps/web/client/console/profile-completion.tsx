@@ -64,7 +64,7 @@ export function ProfileCompletion({ schoolId, learner, canEdit }: { schoolId: st
   return (
     <section className="profile-completion" aria-labelledby="profile-completion-title">
       <div className="profile-completion-heading">
-        <h3 id="profile-completion-title" className="row-title"><span className="action-dot" aria-hidden="true" />Profil à compléter</h3>
+        <h2 id="profile-completion-title" className="row-title"><span className="action-dot" aria-hidden="true" />Profil à compléter</h2>
         <span className="row-meta">{missingCount(data.fields.length)}</span>
       </div>
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />

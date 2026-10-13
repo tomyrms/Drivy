@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
-import { centsToInput, createCommand, filled, formatCents, isCivilDate, parseCents } from '../command-core';
+import { centsToInput, createCommand, filled, formatCents, isCivilDate, matchesSearch, parseCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { productSchema, productTypes, readAll, readSchool, termsSchema, textProposalsSchema, type CommercialTerms, type ServiceProduct } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate, formatDateTime, formatDuration } from '../ui';
@@ -43,10 +43,13 @@ export function TermsSection() {
   const loaded = useLoad(() => readAll(schoolId, 'commercial-terms', termsSchema), [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [draft, setDraft] = useSectionDraft<TermsDraft>('terms');
+  const form = useRef<HTMLFormElement>(null);
+  const [search, setSearch] = useListState('terms/search', '');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const items = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => b.version - a.version), [loaded.data]);
+  const visible = items.filter(item => matchesSearch([item.label, item.termsText], search));
   const current = items.find(item => item.id === selected) ?? null;
   const canWrite = canConfigureCatalog && !runner.pending && !runner.busy;
   const update = (change: Partial<TermsDraft>) => setDraft(value => value ? { ...value, ...change } : value);
@@ -66,6 +69,16 @@ export function TermsSection() {
     setDraft({ label: from?.label ?? proposed?.label ?? '', termsText: from?.termsText ?? proposed?.termsText ?? '', validFrom: from?.validFrom ?? today(), validUntil: from?.validUntil ?? '',
       approved: approve, approvalReason: '', basedOn: from });
   }
+  function review() {
+    if (!draft || !problems || !canWrite) return;
+    setShowErrors(true);
+    if (!problems.valid) {
+      window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
+    runner.clearOutcome(); setAcknowledged(false); setReviewing(true);
+  }
+
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createCommercialTerms', path: 'commercial-terms', resourceVersion: 0, body: {
@@ -84,25 +97,29 @@ export function TermsSection() {
       {!canConfigureCatalog && <GrantNotice />}
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
-        list={items.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition commerciale" message="Rédigez et approuvez des conditions avant d’activer une prestation." />
+      <LoadState loaded={loaded} label="Lecture des conditions commerciales…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
+        list={<>
+          <div className="list-toolbar directory-toolbar">
+            <TextField label="Rechercher des conditions" value={search} onChange={setSearch} placeholder="Libellé ou texte" />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          </div>
+          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'version de conditions' : 'versions de conditions'}{visible.length !== items.length ? ` sur ${items.length}` : ''}{data.truncated ? ' dans la liste chargée' : ''}</p>
+          {items.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition commerciale" message="Rédigez et approuvez des conditions avant d’activer une prestation." />
+          : visible.length === 0 ? <EmptyState symbol="receipt" title="Aucune condition trouvée" />
           : <table className="data-table">
             <caption className="visually-hidden">Conditions commerciales</caption>
             <thead><tr><th scope="col">Conditions</th><th scope="col">Validité</th></tr></thead>
-            <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
+            <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>{item.label}</RowButton>
                 <span className="row-meta block">Version {item.version}</span>{!item.approved && approvalBadge(false, true)}</th>
               <td>{period(item.validFrom, item.validUntil)}</td>
             </tr>)}</tbody>
           </table>}
+        </>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelles conditions commerciales'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
-              <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
-            </>}>
-            <form className="form-grid" onSubmit={event => event.preventDefault()}>
-              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+            >
+            <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
               <TextField label="Libellé" value={draft.label} maxLength={200} disabled={!canWrite} onChange={label => update({ label })} error={showErrors ? problems.label : null} />
               <TextArea label="Texte des conditions" rows={6} maxLength={20_000} value={draft.termsText} disabled={!canWrite} onChange={termsText => update({ termsText })} error={showErrors ? problems.text : null} />
               <div className="form-row">
@@ -114,6 +131,13 @@ export function TermsSection() {
                 <CheckField label="Approuver ces conditions" checked={draft.approved} onChange={approved => update({ approved })} disabled={!canWrite}
                   description="L’approbation permet d’activer une prestation liée à ces conditions." />
               </fieldset>
+              <div className="editor-save-bar">
+                <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+                <div className="button-row compact">
+                  <button type="submit" className="button primary" disabled={!canWrite}>Relire avant d’enregistrer</button>
+                  <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
+                </div>
+              </div>
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={current.label} meta={`Version ${current.version} · ${period(current.validFrom, current.validUntil)}`} badge={approvalBadge(current.approved, true)}
@@ -154,10 +178,12 @@ export function ProductsSection() {
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(async () => {
     const [products, terms] = await Promise.all([readAll(schoolId, 'service-products', productSchema), readAll(schoolId, 'commercial-terms', termsSchema)]);
-    return { products: products.items, terms: terms.items };
+    return { products: products.items, terms: terms.items, truncated: products.truncated };
   }, [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [draft, setDraft] = useSectionDraft<ProductDraft>('product');
+  const form = useRef<HTMLFormElement>(null);
+  const [search, setSearch] = useListState('products/search', '');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -172,6 +198,7 @@ export function ProductsSection() {
       .sort((a, b) => a.label.localeCompare(b.label, 'fr') || b.version - a.version);
   }, [data, history, routeQuery?.category]);
   const current = data?.products.find(item => item.id === selected) ?? null;
+  const visible = rows.filter(item => matchesSearch([item.label, item.categoryCode, typeLabels[item.type]], search));
   const terms = (id: string) => data?.terms.find(item => item.id === id);
   const canWrite = canConfigureCatalog && !runner.pending && !runner.busy;
   const update = (change: Partial<ProductDraft>) => setDraft(value => value ? { ...value, ...change } : value);
@@ -197,6 +224,16 @@ export function ProductsSection() {
       duration: from?.durationMinutes ? String(from.durationMinutes) : '', unitLabel: from?.unitLabel ?? 'leçon', price: from ? centsToInput(from.unitPriceCents) : '',
       validFrom: from?.validFrom ?? today(), validUntil: from?.validUntil ?? '', termsVersionId: from?.termsVersionId ?? '', enabled: false, basedOn: from });
   }
+  function review() {
+    if (!draft || !problems || !canWrite) return;
+    setShowErrors(true);
+    if (!problems.valid) {
+      window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
+    runner.clearOutcome(); setAcknowledged(false); setReviewing(true);
+  }
+
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createServiceProduct', path: 'service-products', resourceVersion: 0, body: {
@@ -218,12 +255,20 @@ export function ProductsSection() {
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
       <LoadState loaded={loaded} label="Lecture des prestations…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
-        list={<><div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>{rows.length === 0 ? <EmptyState symbol="tag" title="Aucun tarif" message="Préparez une formation, son prix et ses conditions."
+        list={<>
+          <div className="list-toolbar directory-toolbar">
+            <TextField label="Rechercher un tarif" value={search} onChange={setSearch} placeholder="Libellé, permis ou type" />
+            <CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} />
+            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+          </div>
+          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'tarif' : 'tarifs'}{visible.length !== rows.length ? ` sur ${rows.length}` : ''}{value.truncated ? ' dans la liste chargée' : ''}</p>
+          {rows.length === 0 ? <EmptyState symbol="tag" title="Aucun tarif" message="Préparez une formation, son prix et ses conditions."
             action={canConfigureCatalog ? <button type="button" className="button secondary" onClick={() => navigate('apercu', { from: 'prestations' })}>Préparer une formation</button> : undefined} />
+          : visible.length === 0 ? <EmptyState symbol="tag" title="Aucun tarif trouvé" />
           : <table className="data-table">
             <caption className="visually-hidden">Prestations et tarifs</caption>
             <thead><tr><th scope="col">Prestation</th><th scope="col" className="numeric">Prix</th></tr></thead>
-            <tbody>{rows.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
+            <tbody>{visible.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
               <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>{item.label}</RowButton>
                 <span className="row-meta block">{typeLabels[item.type]} · v{item.version}</span>
                 <span className="row-meta block">{period(item.validFrom, item.validUntil)}</span>{!item.enabled && state(item)}</th>
@@ -232,12 +277,8 @@ export function ProductsSection() {
           </table>}</>}
         detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.label}` : 'Nouvelle prestation'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
-            actions={<>
-              <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
-              <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
-            </>}>
-            <form className="form-grid" onSubmit={event => event.preventDefault()}>
-              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+            >
+            <form ref={form} className="form-grid" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
               <TextField label="Libellé" value={draft.label} maxLength={200} disabled={!canWrite} onChange={label => update({ label })} error={showErrors ? problems.label : null} />
               <div className="form-row">
                 <TextField label="Prix unitaire (CHF)" value={draft.price} inputMode="decimal" disabled={!canWrite} onChange={price => update({ price })} error={showErrors ? problems.price : null} />
@@ -256,10 +297,17 @@ export function ProductsSection() {
               </div>
               <SelectField label="Conditions commerciales" value={draft.termsVersionId} placeholder="Choisir des conditions" disabled={!canWrite}
                 options={[...value.terms].sort((a, b) => b.version - a.version).map(item => ({ value: item.id, label: `${item.label} · v${item.version} · ${item.approved ? 'approuvées' : 'brouillon'}` }))}
-                onChange={termsVersionId => update({ termsVersionId })} error={showErrors ? problems.terms : null} />
+                onChange={termsVersionId => update({ termsVersionId })} error={showErrors ? problems.terms ?? problems.enabled : null} />
               <CheckField label="Activer cette prestation" checked={draft.enabled} onChange={enabled => update({ enabled })} disabled={!canWrite}
                 description="Une prestation active peut être proposée. Elle exige des conditions commerciales approuvées ; ce choix ne les approuve pas." />
               {problems.enabled && <p className="field-error"><Symbol kind="alert" bare />{problems.enabled}</p>}
+              <div className="editor-save-bar">
+                <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
+                <div className="button-row compact">
+                  <button type="submit" className="button primary" disabled={!canWrite}>Relire avant d’enregistrer</button>
+                  <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
+                </div>
+              </div>
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={current.label} meta={`${typeLabels[current.type]} · version ${current.version}`} badge={state(current)}
