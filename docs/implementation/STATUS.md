@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 13 octobre 2026 — homelab remis à zéro
+
+À la demande du porteur, pour essayer le parcours d’une école neuve. **Sauvegarde vérifiée avant tout effacement** (`pg_dump` puis `pg_restore --list`) de `drivy_refonte` et `drivy_identity` : `/root/drivy-reset-20261013T112412Z/` sur CT113 et sur l’hôte Proxmox, copie dans `.local/backups/` (empreintes identiques). Toutes les données de Drivy sont effacées : écoles, élèves, leçons, trajets, bilans, textes. Les comptes de connexion (`luc`, `moniteur`, `eleve`) sont gardés. Une seule école est recréée : « Luc auto école », en préparation, vide, luc administrateur et moniteur, GPS actif (repris de l’ancienne école : une école neuve l’a désactivé et aucun écran ne permet de l’activer).
+
 ## 13 octobre 2026 — textes de l’école : lot 1
 
 [Décisions du porteur](decisions-2026-10-13.md) : textes proposés par défaut, un seul texte, informations demandées sans brouillon, plus de motif d’approbation.
