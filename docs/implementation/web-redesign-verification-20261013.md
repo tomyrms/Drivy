@@ -69,9 +69,13 @@ node scripts/dev/check-web-redesign.mjs --captures-only --axe
 
 `DRIVY_CAPTURE_TARGETS=learners,config` limite la campagne aux vues représentatives. `DRIVY_REVIEW_ORIGIN` accepte une origine loopback ; `DRIVY_BROWSER_CHANNEL` permet de sélectionner le navigateur installé. Aucun jeton OIDC, mot de passe, export de session ou trace réseau n’est enregistré.
 
+## Complément intégré avant déploiement
+
+La [recette GitHub Actions à `93c85d1`](https://github.com/tomyrms/Drivy/actions/runs/38468486729) réussit **80 contrôles** avec OIDC/Keycloak, SMTP, BFF/API et PostgreSQL réels sur données synthétiques, jusqu’à la première leçon réservée et la récupération du compte. [Rapport brut](proofs/web-redesign-20261013/reports/integrated-browser.json). Les [439 tests API et 233 tests web](https://github.com/tomyrms/Drivy/actions/runs/38468486548), types et builds sont également verts. Les sources produit sont identiques à `bad540b`, release [déployée et vérifiée](web-redesign-deployment-20261013.md) ensuite.
+
 ## Limites explicites
 
-- **La recette OIDC/BFF/API/PostgreSQL réelle n’a pas été réexécutée.** Le démarrage de Docker Desktop échoue avant le moteur, sur son socket local `sailor-ingest.sock`. Aucun volume ni état de compte n’a été réinitialisé. Les ports PostgreSQL et Keycloak locaux étaient inactifs.
+- **La recette intégrée locale reste indisponible.** Le démarrage de Docker Desktop échoue avant le moteur, sur son socket local `sailor-ingest.sock`. La campagne CI ci-dessus fournit désormais la preuve intégrée. Aucun volume ni état de compte local n’a été réinitialisé.
 - Les refus de rôles du harnais vérifient l’interface ; les tests BFF/métier existants restent les preuves des permissions serveur et du cloisonnement scolaire.
 - Le reflow 720 CSS px à échelle 2 est l’équivalent géométrique d’un écran desktop de 1440 px à 200 %. Il ne prouve pas une manipulation du contrôle de zoom natif du navigateur.
 - Axe et les parcours clavier automatisés ne qualifient pas une conformité WCAG complète ni un lecteur d’écran physique. Les décisions sémantiques et les parcours longs demandent également une recette humaine.

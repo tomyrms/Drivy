@@ -1,0 +1,274 @@
+{
+  "deployment": {
+    "commit": "bad540b2e6ed9a9b4967229edf3997ea3b087424",
+    "base": "c5bfb73060405de9aa0b57b8197e79954ac85588",
+    "archiveSHA256": "3ee9a412d730536276b8be052993ff4a459ffdeb15858bef978afc48a020c8b8",
+    "release": "/opt/drivy-refonte/web-releases/bad540b2e6ed9a9b4967229edf3997ea3b087424",
+    "node": "v24.21.0",
+    "before": {
+      "api": {
+        "MainPID": "26154",
+        "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+        "ActiveState": "active",
+        "DropInPaths": "",
+        "actualCwd": "/opt/drivy-refonte/releases/c5bfb73060405de9aa0b57b8197e79954ac85588/apps/api"
+      },
+      "web": {
+        "MainPID": "26256",
+        "WorkingDirectory": "/opt/drivy-refonte/current/apps/web",
+        "ActiveState": "active",
+        "DropInPaths": "",
+        "actualCwd": "/opt/drivy-refonte/releases/c5bfb73060405de9aa0b57b8197e79954ac85588/apps/web"
+      },
+      "identity": {
+        "MainPID": "149",
+        "WorkingDirectory": "/opt/drivy-refonte/runtime/keycloak",
+        "ActiveState": "active",
+        "DropInPaths": "",
+        "actualCwd": "/opt/drivy-refonte/runtime/keycloak"
+      },
+      "ingress": {
+        "MainPID": "0",
+        "WorkingDirectory": "",
+        "ActiveState": "active",
+        "DropInPaths": ""
+      }
+    },
+    "files": {
+      "apple-touch-icon.png": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+      "assets/SourceSans3VF-Upright-BsWL4Kly.woff2": "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8",
+      "assets/index-C4qzHkmj.js": "2ed49ba49e89f9aef4e0b131c2ff3bbcfc5992fb282c1d83f6961fc3d921a02e",
+      "assets/index-DmbbuOeD.css": "64d73657c0ab4f73bc4e65671d70ce3de0f0a838b71311ff80fab8495e210980",
+      "favicon-32.png": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+      "favicon.ico": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+      "favicon.svg": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+      "icon-192.png": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+      "icon-512.png": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+      "index.html": "cd998f07eaffaeee320540958aab8d85cb84f286e75cf5fad44b7f8d6eb6c51f",
+      "site.webmanifest": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+      "theme-init.js": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354"
+    },
+    "after": {
+      "api": {
+        "MainPID": "26154",
+        "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+        "ActiveState": "active",
+        "DropInPaths": "",
+        "actualCwd": "/opt/drivy-refonte/releases/c5bfb73060405de9aa0b57b8197e79954ac85588/apps/api"
+      },
+      "web": {
+        "MainPID": "26611",
+        "WorkingDirectory": "/opt/drivy-refonte/web-releases/bad540b2e6ed9a9b4967229edf3997ea3b087424/apps/web",
+        "ActiveState": "active",
+        "DropInPaths": "/etc/systemd/system/drivy-refonte-web.service.d/90-web-release.conf",
+        "actualCwd": "/opt/drivy-refonte/web-releases/bad540b2e6ed9a9b4967229edf3997ea3b087424/apps/web"
+      },
+      "identity": {
+        "MainPID": "149",
+        "WorkingDirectory": "/opt/drivy-refonte/runtime/keycloak",
+        "ActiveState": "active",
+        "DropInPaths": "",
+        "actualCwd": "/opt/drivy-refonte/runtime/keycloak"
+      },
+      "ingress": {
+        "MainPID": "0",
+        "WorkingDirectory": "",
+        "ActiveState": "active",
+        "DropInPaths": ""
+      }
+    },
+    "override": "/etc/systemd/system/drivy-refonte-web.service.d/90-web-release.conf",
+    "apiAndIdentityUnchanged": true,
+    "privateEnvironmentsUnchanged": true,
+    "migrationsExecuted": false,
+    "deployedAt": "2026-10-13T21:12:27.063223+00:00",
+    "backupPath": "/root/drivy_refonte-before-web-bad540b2e6ed9a9b4967229edf3997ea3b087424-20261013T211224Z-28cfcabd8e72.dump",
+    "backupBytes": 1022571,
+    "backupVerified": true,
+    "migrationVerification": {
+      "count": 32,
+      "namesAndHashesMatchBase": true,
+      "names": [
+        "001_g1a.sql",
+        "002_g1b_school_setup.sql",
+        "003_g1c_invitations.sql",
+        "004_g1d_profiles.sql",
+        "005_g1d_catalogue.sql",
+        "006_lessons.sql",
+        "007_lesson_reports.sql",
+        "008_capture.sql",
+        "009_capture_observations.sql",
+        "010_permit_checks.sql",
+        "011_lesson_outcomes.sql",
+        "012_learner_sharing.sql",
+        "013_invitation_training.sql",
+        "014_admin_trip_access.sql",
+        "015_invitation_code.sql",
+        "016_access_lifecycle.sql",
+        "017_planning_corrections.sql",
+        "018_invitation_trainings.sql",
+        "019_optional_report_content.sql",
+        "020_admin_progress_read.sql",
+        "021_planning_defaults.sql",
+        "022_lesson_availability.sql",
+        "023_explicit_lesson_start.sql",
+        "024_matched_route.sql",
+        "025_capture_rights_and_indexes.sql",
+        "026_observation_themes.sql",
+        "027_report_reading.sql",
+        "028_observation_ranking.sql",
+        "029_data_policy_change_impact.sql",
+        "030_admin_recording_choices.sql",
+        "031_school_opening.sql",
+        "032_school_setup_draft.sql"
+      ]
+    }
+  },
+  "publicVerification": {
+    "checkedAt": "2026-10-13T21:12:35.5794028Z",
+    "commit": "bad540b2e6ed9a9b4967229edf3997ea3b087424",
+    "origin": "https://drivy.shulker.ch",
+    "checks": [
+      {
+        "path": "/app/apple-touch-icon.png",
+        "status": 200,
+        "sha256": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/assets/SourceSans3VF-Upright-BsWL4Kly.woff2",
+        "status": 200,
+        "sha256": "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8",
+        "matchesRelease": true,
+        "cacheControl": "public, max-age=31536000, immutable"
+      },
+      {
+        "path": "/app/assets/index-C4qzHkmj.js",
+        "status": 200,
+        "sha256": "2ed49ba49e89f9aef4e0b131c2ff3bbcfc5992fb282c1d83f6961fc3d921a02e",
+        "matchesRelease": true,
+        "cacheControl": "public, max-age=31536000, immutable"
+      },
+      {
+        "path": "/app/assets/index-DmbbuOeD.css",
+        "status": 200,
+        "sha256": "64d73657c0ab4f73bc4e65671d70ce3de0f0a838b71311ff80fab8495e210980",
+        "matchesRelease": true,
+        "cacheControl": "public, max-age=31536000, immutable"
+      },
+      {
+        "path": "/app/favicon-32.png",
+        "status": 200,
+        "sha256": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/favicon.ico",
+        "status": 200,
+        "sha256": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/favicon.svg",
+        "status": 200,
+        "sha256": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/icon-192.png",
+        "status": 200,
+        "sha256": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/icon-512.png",
+        "status": 200,
+        "sha256": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/",
+        "status": 200,
+        "sha256": "cd998f07eaffaeee320540958aab8d85cb84f286e75cf5fad44b7f8d6eb6c51f",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/site.webmanifest",
+        "status": 200,
+        "sha256": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/theme-init.js",
+        "status": 200,
+        "sha256": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354",
+        "matchesRelease": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app",
+        "status": 200,
+        "newThemeScript": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/preferences",
+        "status": 200,
+        "newThemeScript": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/preferences/",
+        "status": 200,
+        "newThemeScript": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/gestion",
+        "status": 200,
+        "newThemeScript": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/invitation",
+        "status": 200,
+        "newThemeScript": true,
+        "cacheControl": "no-store"
+      },
+      {
+        "path": "/app/bff/session",
+        "status": 200,
+        "authenticated": false
+      },
+      {
+        "path": "/refonte/v1/me",
+        "status": 401
+      }
+    ]
+  },
+  "qualification": {
+    "checksRun": "https://github.com/tomyrms/Drivy/actions/runs/38468486548",
+    "checksCommit": "93c85d172bfd97adb9e63adbaebbd0cbc89ec093",
+    "e2eRun": "https://github.com/tomyrms/Drivy/actions/runs/38468486729",
+    "e2eCommit": "93c85d172bfd97adb9e63adbaebbd0cbc89ec093",
+    "apiTests": 439,
+    "webTests": 233,
+    "browserChecks": 80,
+    "productTreesIdenticalToDeployedCommit": true
+  },
+  "browserPublicationReview": {
+    "page": "https://drivy.shulker.ch/app/",
+    "state": "anonymous sign-in",
+    "theme": "dark",
+    "consoleErrorsAndWarnings": 0,
+    "connectedProductionJourneyTested": false
+  }
+}

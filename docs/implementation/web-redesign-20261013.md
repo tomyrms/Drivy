@@ -1,6 +1,6 @@
 # Refonte du portail web — 13 octobre 2026
 
-La refonte est implémentée sur `codex/refonte-portail-web`. Elle couvre le portail de gestion, ses pages d’entrée et les préférences personnelles. Les modifications préexistantes sont conservées. Aucun déploiement ni changement du client Apple n’est effectué.
+La refonte est implémentée sur `codex/refonte-portail-web`. Elle couvre le portail de gestion, ses pages d’entrée et les préférences personnelles. Les modifications préexistantes sont conservées. Le [déploiement demandé ensuite](web-redesign-deployment-20261013.md) est effectué le 13 octobre à 23:12 Europe/Zurich, après sauvegarde vérifiée. Aucun changement du client Apple.
 
 ## Direction et décisions
 
@@ -54,4 +54,6 @@ Les [vérifications exécutées](web-redesign-verification-20261013.md) distingu
 
 La visée [WCAG 2.2 AA](https://www.w3.org/WAI/WCAG22/quickref/) est contrôlée par contrastes, axe, clavier, focus, absence de débordement et rendu responsive. Les 60 couples de couleurs mesurés passent leurs seuils texte/contrôle. Ces résultats ne constituent pas une certification d’accessibilité.
 
-**À qualifier** : OIDC/BFF/API/PostgreSQL réels, bloqués ici par le démarrage du moteur Docker sur son socket local ; zoom natif 200 % (reflow équivalent exécuté), lecteur d’écran et recette humaine des commandes métier longues. Le harnais rend les composants livrés avec des réponses BFF synthétiques et vérifie leur comportement, y compris rechargement ; il ne prouve pas une transaction PostgreSQL. Aucune qualification physique ni aucune mesure de performance ne sont déduites de ces essais.
+**Recette intégrée complémentaire** : [80 contrôles OIDC/BFF/API/PostgreSQL réels réussis sur GitHub Actions](https://github.com/tomyrms/Drivy/actions/runs/38468486729), après adaptation des sélecteurs du pilote à la refonte, sans changement des sources produit. Le démarrage Docker local reste indisponible. Le harnais visuel conserve ses réponses synthétiques et ne prouve pas à lui seul une transaction PostgreSQL.
+
+**À qualifier** : zoom natif 200 % (reflow équivalent exécuté), lecteur d’écran et recette humaine des commandes métier longues. Aucune qualification physique ni aucune mesure de performance ne sont déduites de ces essais.

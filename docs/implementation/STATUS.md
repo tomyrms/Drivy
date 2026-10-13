@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 13 octobre 2026 — refonte web déployée
+
+Déploiement demandé et effectué à **23:12 Europe/Zurich** : portail et BFF `bad540b` en service sur [Drivy](https://drivy.shulker.ch/app/). **Sauvegarde de la base vérifiée avant bascule**, 32 migrations existantes contrôlées, aucune migration exécutée. API, identité et lien partagé restent sur leur version précédente ; seul le web redémarre. Les sessions navigateur peuvent demander une reconnexion.
+
+**Exécuté** : [439 tests API/PostgreSQL et 233 tests web, types et builds](https://github.com/tomyrms/Drivy/actions/runs/38468486548) ; [80 contrôles navigateur OIDC/BFF/API/PostgreSQL réels](https://github.com/tomyrms/Drivy/actions/runs/38468486729), sources produit identiques à la release. Après publication, **19 contrôles HTTPS réussis**, dont les 12 empreintes de fichiers, préférences, session anonyme et refus API sans jeton ; page publique inspectée sans erreur console. La limitation Docker locale est contournée par cette recette CI, sans réinitialisation locale.
+
+[Preuve, version, retour arrière et override à traiter au prochain déploiement global](web-redesign-deployment-20261013.md). Restent la recette avec une école, le lecteur d’écran, le zoom natif et les essais physiques ; les données métier de production ne servent pas à la recette.
+
 ## 13 octobre 2026 — refonte complète du portail web
 
 La direction **Bureau de précision** est implémentée sur `codex/refonte-portail-web` : navigation stable et sous-pages visibles, séparation école/compte, recherche des paramètres jusqu’au champ, listes élèves/équipe, contexte conservé au retour, résolution des profils incomplets, formulaires et protection des saisies, thèmes Clair/Sombre/Système persistants. Les pages d’entrée, invitations, catalogue, guide et opérateur réutilisent les mêmes fondations. Liens existants et contrats préservés ; aucun changement Apple ni déploiement.
