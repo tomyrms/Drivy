@@ -1,52 +1,24 @@
 import { useState } from 'react';
 import { createCommand, filled, isEmail, characters } from '../command-core';
 import { useCommandSnapshot, type SubmitResult } from '../command-store';
-import { POLICY_TEXT_MINIMUM, dataPolicySchema, policyImpactSchema, readSchool, readinessSchema, type PolicyImpact } from '../school-api';
-import { ConfirmDialog, Facts, Loading, Notice, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
+import { readSchool, readinessSchema } from '../school-api';
+import { ConfirmDialog, Facts, Notice, StatusBadge, Symbol, TextField } from '../ui';
 import { useCommandRunner, useConsole, useDraft, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { schoolStatus } from './overview';
 
 type Identity = { name: string; contactEmail: string; contactPhone: string };
-type PolicyText = { noticeText: string; retentionText: string; contactEmail: string };
-type Review = 'identity' | 'policy' | 'activation' | null;
+type Review = 'identity' | 'activation' | null;
 
-const policyTextProblem = (value: string) => characters(value.trim()) < POLICY_TEXT_MINIMUM
-  ? `Écrivez au moins ${POLICY_TEXT_MINIMUM} caractères.` : filled(value, 20_000) ? null : '20 000 caractères au plus.';
-
-/** Ce qu'une nouvelle version arrête : les accords GPS donnés sur les textes actuels et les trajets en cours. */
-function impactSentences(impact: PolicyImpact | null): string[] {
-  if (!impact) return ['Les élèves devront redonner leur accord GPS et les trajets en cours s’arrêteront.'];
-  const sentences: string[] = [];
-  if (impact.gpsAgreements > 0) sentences.push(impact.gpsAgreements === 1
-    ? '1 élève avait accepté le GPS avec les textes actuels : la question lui sera reposée.'
-    : `${impact.gpsAgreements} élèves avaient accepté le GPS avec les textes actuels : la question leur sera reposée.`);
-  if (impact.activeCaptures > 0) sentences.push(impact.activeCaptures === 1
-    ? '1 trajet en cours s’arrêtera.' : `${impact.activeCaptures} trajets en cours s’arrêteront.`);
-  return sentences;
-}
-
-/** Same rules as the native office screens: relire, confirmer, puis seulement l’école confirme. */
+/** Coordonnées et activation. Les textes de l'école vivent dans « Confidentialité et conditions ». */
 export function ConfigurationSection() {
-  const { schoolId, school } = useConsole();
+  const { schoolId, school, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
-  const runner = useCommandRunner(() => { setEditingPolicy(false); setEditingIdentity(false); });
-  const loaded = useLoad(async () => {
-    const [policy, readiness] = await Promise.all([
-      readSchool(schoolId, 'data-policy', dataPolicySchema), readSchool(schoolId, 'readiness', readinessSchema)]);
-    return { policy, readiness };
-  }, [schoolId, revision, school.version]);
-  const policy = loaded.data?.policy ?? null;
+  const runner = useCommandRunner(() => setEditingIdentity(false));
+  const loaded = useLoad(async () => ({ readiness: await readSchool(schoolId, 'readiness', readinessSchema) }), [schoolId, revision, school.version]);
   const identity = useDraft<Identity>({ name: school.name, contactEmail: school.contactEmail, contactPhone: school.contactPhone ?? '' });
-  const texts = useDraft<PolicyText>(policy ? { noticeText: policy.noticeText, retentionText: policy.retentionText, contactEmail: policy.contactEmail ?? school.contactEmail } : null);
-  const [editingPolicy, setEditingPolicy] = useState(false);
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [review, setReview] = useState<Review>(null);
-  const [acknowledged, setAcknowledged] = useState(false);
-  // Read when the review opens, so the numbers are those of the moment the administrator confirms.
-  const replacesTexts = review === 'policy' && policy?.status === 'APPROVED';
-  const impact = useLoad(async () => replacesTexts ? readSchool(schoolId, 'data-policy/impact', policyImpactSchema) : null,
-    [replacesTexts, schoolId], `${schoolId}/${replacesTexts ? 'impact' : ''}`);
 
   const mayEdit = loaded.data !== undefined && !runner.pending && !runner.busy;
   const idValue = identity.draft;
@@ -56,21 +28,12 @@ export function ConfigurationSection() {
     contactPhone: characters(idValue.contactPhone) <= 32 ? null : '32 caractères au plus.',
   } : null;
   const identityValid = !!identityErrors && Object.values(identityErrors).every(value => value === null);
-  const textValue = texts.draft;
-  const textErrors = textValue ? {
-    noticeText: policyTextProblem(textValue.noticeText),
-    retentionText: policyTextProblem(textValue.retentionText),
-    contactEmail: isEmail(textValue.contactEmail.trim()) ? null : 'Indiquez l’adresse de contact pour les données.',
-  } : null;
-  const textsValid = !!textErrors && Object.values(textErrors).every(value => value === null);
   const showIdentity = editingIdentity || identity.edited || school.status === 'DRAFT';
-  const showTexts = policy?.status !== 'APPROVED' || editingPolicy || texts.edited;
   const readiness = loaded.data?.readiness;
-  const canActivate = mayEdit && school.status === 'DRAFT' && readiness?.activationReady === true && policy?.status === 'APPROVED' && !identity.edited && !texts.edited;
+  const canActivate = mayEdit && school.status === 'DRAFT' && readiness?.activationReady === true && !identity.edited;
   const status = schoolStatus(school.status);
-  const consequences = replacesTexts && impact.status !== 'loading' ? impactSentences(impact.data ?? null) : [];
 
-  function open(kind: Review) { runner.clearOutcome(); setAcknowledged(false); setReview(kind); }
+  function open(kind: Review) { runner.clearOutcome(); setReview(kind); }
   async function confirm() {
     let result: SubmitResult | undefined;
     if (review === 'identity' && idValue && identityValid) {
@@ -78,17 +41,12 @@ export function ConfigurationSection() {
         body: { name: idValue.name, timeZone: school.timeZone, contactEmail: idValue.contactEmail.trim(), contactPhone: idValue.contactPhone.trim() ? idValue.contactPhone.trim() : null, impactConfirmed: true } });
       result = await runner.run(command, 'Les coordonnées de l’école sont enregistrées.');
       if (result.status === 'confirmed') setEditingIdentity(false);
-    } else if (review === 'policy' && textValue && textsValid && policy) {
-      const command = createCommand({ schoolId, kind: 'saveDataPolicy', path: 'data-policy', ifMatch: policy.version, resourceVersion: policy.version,
-        body: { noticeText: textValue.noticeText, retentionText: textValue.retentionText, contactEmail: textValue.contactEmail.trim(), reviewAcknowledged: true } });
-      result = await runner.run(command, 'Les textes sont adoptés.');
-      if (result.status === 'confirmed') setEditingPolicy(false);
     } else if (review === 'activation' && canActivate && readiness) {
       const command = createCommand({ schoolId, kind: 'activate', path: 'activate', ifMatch: school.version, resourceVersion: school.version,
         body: { expectedConfigurationVersion: readiness.configurationVersion, reviewAcknowledged: true } });
       result = await runner.run(command, 'Votre école est activée.');
     }
-    // A refusal stays in the dialog, next to the action it concerns, with the typed texts.
+    // A refusal stays in the dialog, next to the action it concerns, with the typed values.
     if (result?.status !== 'rejected') setReview(null);
   }
 
@@ -126,38 +84,6 @@ export function ConfigurationSection() {
           </div>
         </section>
 
-        <section className="settings-section" aria-labelledby="policy-title">
-          <div className="settings-section-heading">
-            <h2 id="policy-title" className="section-title">Confidentialité</h2>
-            {data.policy.approvedAt ? <span className="row-meta">Adoptés le {formatDateTime(data.policy.approvedAt, school.timeZone)}</span>
-              : <StatusBadge tone="warning" symbol="file">Textes à écrire</StatusBadge>}
-          </div>
-          <div className="settings-section-body">
-          {!showTexts && <>
-            <details className="disclosure">
-              <summary>Lire les textes</summary>
-              <h3>Information</h3><p className="policy-copy">{data.policy.noticeText}</p>
-              <h3>Conservation</h3><p className="policy-copy">{data.policy.retentionText}</p>
-              {data.policy.contactEmail && <p className="caption">Contact : {data.policy.contactEmail}</p>}
-            </details>
-            <button type="button" className="button secondary" disabled={!mayEdit} onClick={() => setEditingPolicy(true)}><Symbol kind="edit" bare />Modifier les textes</button>
-          </>}
-          {showTexts && textValue && textErrors && <form className="form-grid" onSubmit={event => { event.preventDefault(); if (textsValid && mayEdit) open('policy'); }}>
-            <TextArea label="Information" rows={5} maxLength={20_000} value={textValue.noticeText} disabled={!mayEdit}
-              onChange={noticeText => texts.setDraft({ ...textValue, noticeText })} error={texts.edited ? textErrors.noticeText : null} />
-            <TextArea label="Conservation" rows={5} maxLength={20_000} value={textValue.retentionText} disabled={!mayEdit}
-              onChange={retentionText => texts.setDraft({ ...textValue, retentionText })} error={texts.edited ? textErrors.retentionText : null} />
-            <TextField label="Contact pour les données" type="email" value={textValue.contactEmail} disabled={!mayEdit}
-              onChange={contactEmail => texts.setDraft({ ...textValue, contactEmail })} error={texts.edited ? textErrors.contactEmail : null} />
-            <div className="button-row compact">
-              <button type="submit" className={!identity.edited && (texts.edited || data.policy.status !== 'APPROVED') ? 'button primary' : 'button secondary'} disabled={!mayEdit || !textsValid || (data.policy.status === 'APPROVED' && !texts.edited)}>Relire et adopter les textes</button>
-              {(editingPolicy || texts.edited) && data.policy.status === 'APPROVED' &&
-                <button type="button" className="button quiet" onClick={() => { texts.reset(); setEditingPolicy(false); }}>Annuler</button>}
-            </div>
-          </form>}
-          </div>
-        </section>
-
         {school.status === 'DRAFT' && <section className="settings-section" aria-labelledby="activation-title">
           <div className="settings-section-heading">
             <h2 id="activation-title" className="section-title">Activation</h2>
@@ -166,36 +92,26 @@ export function ConfigurationSection() {
           <div className="settings-section-body">
           {data.readiness.activationReady
             ? <Notice tone="success" title="Préparation vérifiée" live={false}><p>L’école peut être activée.</p></Notice>
-            : <ul className="blocker-list">{data.readiness.activationBlockers.map(item => <li key={item.code}><Symbol kind="dot" bare />{item.message}</li>)}</ul>}
-          {(identity.edited || texts.edited) && <Notice tone="warning" title="Modifications non confirmées" live={false}><p>Des modifications attendent encore votre confirmation.</p></Notice>}
+            : <ul className="blocker-list">{data.readiness.activationBlockers.map(item => <li key={item.code}><Symbol kind="dot" bare />
+              {item.code === 'POLICY_REVIEW_REQUIRED' ? <>Adoptez les textes de confidentialité. <button type="button" className="button quiet compact" onClick={() => navigate('confidentialite')}>Ouvrir</button></> : item.message}
+            </li>)}</ul>}
+          {identity.edited && <Notice tone="warning" title="Modifications non confirmées" live={false}><p>Des modifications attendent encore votre confirmation.</p></Notice>}
           <div className="button-row compact">
             <button type="button" className={canActivate ? 'button primary' : 'button secondary'} disabled={!canActivate} onClick={() => open('activation')}>Relire et activer l’école</button>
           </div>
           {!canActivate && runner.pending && <p className="caption">{runner.blockedReason}</p>}
-          {!canActivate && !runner.pending && (identity.edited || texts.edited) && <p className="caption">Confirmez ou abandonnez d’abord les modifications en cours.</p>}
           </div>
         </section>}
       </div>}</LoadState>
 
       <ConfirmDialog open={review !== null} busy={runner.busy} onCancel={() => setReview(null)} onConfirm={() => void confirm()}
-        title={review === 'identity' ? 'Vos coordonnées' : review === 'policy' ? 'Relire les textes' : 'Activer l’école'}
-        confirmLabel={review === 'identity' ? 'Confirmer les coordonnées' : review === 'policy' ? 'J’adopte ces textes' : 'Activer mon école'}
-        {...(review === 'policy' ? { acknowledgement: 'J’ai relu les deux textes et je les adopte pour mon école.', acknowledged, onAcknowledge: setAcknowledged,
-          disabledReason: replacesTexts && impact.status === 'loading' ? 'Vérification des trajets GPS concernés…' : null } : {})}>
+        title={review === 'identity' ? 'Vos coordonnées' : 'Activer l’école'} confirmLabel={review === 'identity' ? 'Confirmer les coordonnées' : 'Activer mon école'}>
         <OutcomeNotice outcome={runner.outcome}
           actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={() => { setReview(null); loaded.reload(); }}>Recharger les informations</button> : undefined} />
         {review === 'identity' && idValue && <>
           <p className="dialog-lead">{idValue.name}</p>
           <Facts items={[['E-mail', idValue.contactEmail.trim()], ['Téléphone', idValue.contactPhone.trim() || 'Non renseigné']]} />
           <p className="caption">Ces coordonnées remplaceront celles affichées par votre école.</p>
-        </>}
-        {review === 'policy' && textValue && <>
-          {replacesTexts && impact.status === 'loading' && <Loading label="Vérification des trajets GPS concernés…" />}
-          {consequences.length > 0 && <Notice tone="warning" title="Effet sur le GPS" live={false}>
-            {consequences.map(sentence => <p key={sentence}>{sentence}</p>)}</Notice>}
-          <h3>Information</h3><p className="policy-copy review-copy">{textValue.noticeText}</p>
-          <h3>Conservation</h3><p className="policy-copy review-copy">{textValue.retentionText}</p>
-          <Facts items={[['Contact pour les données', textValue.contactEmail.trim()]]} />
         </>}
         {review === 'activation' && <>
           <p className="dialog-lead">{school.name}</p>

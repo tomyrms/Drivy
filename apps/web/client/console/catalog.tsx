@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createCommand, filled, isHttpURL } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
-import { catalogPolicySchema, curriculumSchema, offeringSchema, readAll, type CatalogPolicy, type Curriculum, type Offering } from '../school-api';
+import { catalogPolicySchema, curriculumSchema, offeringSchema, readAll, readSchool, textProposalsSchema, type CatalogPolicy, type Curriculum, type Offering } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
@@ -14,17 +14,15 @@ const uid = () => globalThis.crypto.randomUUID();
 const byCategory = <T extends { categoryCode: string }>(order: (item: T) => number) => (a: T, b: T) =>
   a.categoryCode.localeCompare(b.categoryCode, 'fr') || order(b) - order(a);
 
-/** Approval block shared by versioned catalog records: explicit checkbox, mandatory reason. */
-function ApprovalFields({ approved, reason, onApproved, onReason, disabled, subject, showErrors }: {
-  approved: boolean; reason: string; onApproved: (value: boolean) => void; onReason: (value: string) => void; disabled: boolean; subject: string; showErrors: boolean;
+/** Approval block shared by versioned catalog records: one explicit checkbox; the author and time are the proof. */
+function ApprovalFields({ approved, onApproved, disabled, subject }: {
+  approved: boolean; onApproved: (value: boolean) => void; disabled: boolean; subject: string;
 }) {
   return (
     <fieldset className="fieldset">
       <legend>Validation</legend>
       <CheckField label={`Approuver ${subject}`} checked={approved} onChange={onApproved} disabled={disabled}
         description="Sans approbation, cette version reste un brouillon." />
-      <TextArea label="Motif de cette version" rows={2} maxLength={1000} value={reason} onChange={onReason} disabled={disabled}
-        error={showErrors && !filled(reason, 1000) ? 'Indiquez le motif de cette version (1 000 caractères au plus).' : null} />
     </fieldset>
   );
 }
@@ -44,9 +42,8 @@ function curriculumProblems(draft: CurriculumDraft) {
   }));
   const category = filled(draft.categoryCode, 30) ? null : 'Indiquez la catégorie (par exemple B).';
   const count = draft.competencies.length < 1 ? 'Ajoutez au moins une compétence.' : draft.competencies.length > 200 ? '200 compétences au plus.' : null;
-  const reason = filled(draft.approvalReason, 1000) ? null : 'Motif requis.';
-  const valid = !category && !count && !reason && competency.every(item => Object.values(item).every(value => value === null));
-  return { category, count, reason, competency, valid };
+  const valid = !category && !count && competency.every(item => Object.values(item).every(value => value === null));
+  return { category, count, competency, valid };
 }
 
 export function CurriculaSection() {
@@ -64,7 +61,7 @@ export function CurriculaSection() {
   const problems = draft ? curriculumProblems(draft) : null;
   const canWrite = !runner.pending && !runner.busy;
 
-  function edit(from: Curriculum | null, approve = false) {
+  function edit(from: Curriculum | null, approve = true) {
     runner.clearOutcome(); setShowErrors(false);
     setDraft({ categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', approved: approve, approvalReason: '', basedOn: from,
       competencies: from ? from.competencies.map(item => ({ uid: uid(), key: item.key, label: item.label, description: item.description, sortOrder: String(item.sortOrder) }))
@@ -78,7 +75,7 @@ export function CurriculaSection() {
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createCurriculum', path: 'curricula', resourceVersion: 0, body: {
-      categoryCode: draft.categoryCode.trim(), approved: draft.approved, approvalReason: draft.approvalReason.trim(),
+      categoryCode: draft.categoryCode.trim(), approved: draft.approved,
       competencies: draft.competencies.map(item => ({ key: item.key.trim(), label: item.label.trim(), description: item.description.trim(), sortOrder: Number(item.sortOrder) })) } });
     const result = await runner.run(command, draft.approved ? 'Le référentiel approuvé est créé.' : 'Le brouillon de référentiel est enregistré.');
     // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
@@ -131,8 +128,8 @@ export function CurriculaSection() {
                   onClick={() => update({ competencies: [...draft.competencies, { uid: uid(), key: '', label: '', description: '', sortOrder: String((draft.competencies.length + 1) * 10) }] })}>
                   <Symbol kind="plus" bare />Ajouter une compétence</button>
               </fieldset>
-              <ApprovalFields approved={draft.approved} reason={draft.approvalReason} onApproved={approved => update({ approved })} onReason={approvalReason => update({ approvalReason })}
-                disabled={!canWrite} subject="ce référentiel" showErrors={showErrors} />
+              <ApprovalFields approved={draft.approved} onApproved={approved => update({ approved })}
+                disabled={!canWrite} subject="ce référentiel" />
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={`Catégorie ${current.categoryCode} · révision ${current.revision}`} badge={approvalBadge(current.approved)}
@@ -157,7 +154,7 @@ export function CurriculaSection() {
         <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">Catégorie {draft.categoryCode.trim()} · révision {nextRevision} prévue</p>
         <ol className="competency-list compact">{draft.competencies.map(item => <li key={item.uid}><strong>{item.label.trim()}</strong> <span className="row-meta">({item.key.trim()})</span></li>)}</ol>
-        <Facts items={[['Motif', draft.approvalReason.trim()], ['École', school.name]]} />
+        <Facts items={[['École', school.name]]} />
         <p className="caption">{draft.approved ? 'Le référentiel sera approuvé pour cette catégorie.' : 'Le référentiel restera un brouillon : aucune offre activée ne pourra l’utiliser.'}</p>
       </ConfirmDialog>}
     </div>
@@ -175,7 +172,6 @@ function procedureProblems(draft: ProcedureDraft) {
     procedure: filled(draft.procedureText, 4000) ? null : 'Décrivez le déroulement (4 000 caractères au plus).',
     cancellation: filled(draft.cancellationPolicyText, 4000) ? null : 'Décrivez les conditions d’annulation (4 000 caractères au plus).',
     sources: sources.length > 30 ? '30 adresses au plus.' : sources.some(value => !isHttpURL(value)) ? 'Chaque ligne doit être une adresse web complète (https://…).' : null,
-    reason: filled(draft.approvalReason, 1000) ? null : 'Motif requis.',
   };
   return { ...result, valid: Object.values(result).every(value => value === null) };
 }
@@ -195,16 +191,20 @@ export function ProceduresSection() {
   const problems = draft ? procedureProblems(draft) : null;
   const canWrite = !runner.pending && !runner.busy;
   const update = (change: Partial<ProcedureDraft>) => setDraft(value => value ? { ...value, ...change } : value);
-  function edit(from: CatalogPolicy | null, approve = false) {
+  // A new procedure starts from the texts Drivy proposes; the administrator reads and adapts them before approval.
+  const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsSchema), [schoolId]);
+  function edit(from: CatalogPolicy | null, approve = true) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', procedureText: from?.procedureText ?? '', cancellationPolicyText: from?.cancellationPolicyText ?? '',
+    const proposed = from ? null : proposals.data?.procedure ?? null;
+    setDraft({ categoryCode: from?.categoryCode ?? routeQuery?.category ?? '', procedureText: from?.procedureText ?? proposed?.procedureText ?? '',
+      cancellationPolicyText: from?.cancellationPolicyText ?? proposed?.cancellationPolicyText ?? '',
       sources: from?.sourceUrls.join('\n') ?? '', approved: approve, approvalReason: '', basedOn: from });
   }
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createCatalogPolicy', path: 'policy-versions', resourceVersion: 0, body: {
       categoryCode: draft.categoryCode.trim(), procedureText: draft.procedureText.trim(), cancellationPolicyText: draft.cancellationPolicyText.trim(),
-      sourceUrls: sourceList(draft.sources), approved: draft.approved, approvalReason: draft.approvalReason.trim() } });
+      sourceUrls: sourceList(draft.sources), approved: draft.approved } });
     const result = await runner.run(command, draft.approved ? 'La procédure approuvée est créée.' : 'Le brouillon de procédure est enregistré.');
     // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
     if (result.status !== 'rejected') setReviewing(false);
@@ -243,8 +243,8 @@ export function ProceduresSection() {
                 onChange={cancellationPolicyText => update({ cancellationPolicyText })} error={showErrors ? problems.cancellation : null} />
               <TextArea label="Sources" required={false} rows={2} value={draft.sources} disabled={!canWrite} hint="Une adresse web par ligne, 30 au plus."
                 onChange={sources => update({ sources })} error={problems.sources} />
-              <ApprovalFields approved={draft.approved} reason={draft.approvalReason} onApproved={approved => update({ approved })} onReason={approvalReason => update({ approvalReason })}
-                disabled={!canWrite} subject="ces textes" showErrors={showErrors} />
+              <ApprovalFields approved={draft.approved} onApproved={approved => update({ approved })}
+                disabled={!canWrite} subject="ces textes" />
             </form>
           </DetailPanel>
           : current ? <DetailPanel focusKey={current.id} title={`Catégorie ${current.categoryCode} · version ${current.version}`} badge={approvalBadge(current.approved, true)}
@@ -267,7 +267,7 @@ export function ProceduresSection() {
         <p className="dialog-lead">Catégorie {draft.categoryCode.trim()}</p>
         <h3>Déroulement de la formation</h3><p className="policy-copy review-copy">{draft.procedureText.trim()}</p>
         <h3>Conditions d’annulation</h3><p className="policy-copy review-copy">{draft.cancellationPolicyText.trim()}</p>
-        <Facts items={[['Sources', sourceList(draft.sources).length ? `${sourceList(draft.sources).length} adresse(s)` : 'Aucune'], ['Motif', draft.approvalReason.trim()]]} />
+        <Facts items={[['Sources', sourceList(draft.sources).length ? `${sourceList(draft.sources).length} adresse(s)` : 'Aucune']]} />
         <p className="caption">{draft.approved ? 'Ces textes seront approuvés pour cette catégorie.' : 'Ces textes resteront un brouillon.'}</p>
       </ConfirmDialog>}
     </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
 import { centsToInput, createCommand, filled, formatCents, isCivilDate, parseCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
-import { productSchema, productTypes, readAll, termsSchema, type CommercialTerms, type ServiceProduct } from '../school-api';
+import { productSchema, productTypes, readAll, readSchool, termsSchema, textProposalsSchema, type CommercialTerms, type ServiceProduct } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate, formatDateTime, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
@@ -53,20 +53,22 @@ export function TermsSection() {
       label: filled(draft.label, 200) ? null : 'Indiquez un libellé (200 caractères au plus).',
       text: filled(draft.termsText, 20_000) ? null : 'Rédigez les conditions (20 000 caractères au plus).',
       period: periodProblem(draft.validFrom, draft.validUntil),
-      reason: filled(draft.approvalReason, 1000) ? null : 'Motif requis.',
     };
     return { ...result, valid: Object.values(result).every(value => value === null) };
   })() : null;
-  function edit(from: CommercialTerms | null, approve = false) {
+  // New terms start from the text Drivy proposes; the administrator reads and adapts it before approval.
+  const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsSchema), [schoolId]);
+  function edit(from: CommercialTerms | null, approve = true) {
     runner.clearOutcome(); setShowErrors(false);
-    setDraft({ label: from?.label ?? '', termsText: from?.termsText ?? '', validFrom: from?.validFrom ?? today(), validUntil: from?.validUntil ?? '',
+    const proposed = from ? null : proposals.data?.commercialTerms ?? null;
+    setDraft({ label: from?.label ?? proposed?.label ?? '', termsText: from?.termsText ?? proposed?.termsText ?? '', validFrom: from?.validFrom ?? today(), validUntil: from?.validUntil ?? '',
       approved: approve, approvalReason: '', basedOn: from });
   }
   async function confirm() {
     if (!draft || !problems?.valid) return;
     const command = createCommand({ schoolId, kind: 'createCommercialTerms', path: 'commercial-terms', resourceVersion: 0, body: {
       label: draft.label.trim(), termsText: draft.termsText.trim(), validFrom: draft.validFrom, validUntil: draft.validUntil || null,
-      approved: draft.approved, approvalReason: draft.approvalReason.trim() } });
+      approved: draft.approved } });
     const result = await runner.run(command, draft.approved ? 'Les conditions commerciales approuvées sont créées.' : 'Le brouillon de conditions commerciales est enregistré.');
     // A refusal stays in the dialog, next to the action it concerns; the draft is kept either way.
     if (result.status !== 'rejected') setReviewing(false);
@@ -108,8 +110,6 @@ export function TermsSection() {
                 <legend>Validation</legend>
                 <CheckField label="Approuver ces conditions" checked={draft.approved} onChange={approved => update({ approved })} disabled={!canWrite}
                   description="L’approbation permet d’activer une prestation liée à ces conditions." />
-                <TextArea label="Motif de cette version" rows={2} maxLength={1000} value={draft.approvalReason} disabled={!canWrite}
-                  onChange={approvalReason => update({ approvalReason })} error={showErrors ? problems.reason : null} />
               </fieldset>
             </form>
           </DetailPanel>
@@ -130,7 +130,7 @@ export function TermsSection() {
         <OutcomeNotice outcome={runner.outcome} />
         <p className="dialog-lead">{draft.label.trim()}</p>
         <p className="policy-copy review-copy">{draft.termsText.trim()}</p>
-        <Facts items={[['Validité', period(draft.validFrom, draft.validUntil || null)], ['Motif', draft.approvalReason.trim()]]} />
+        <Facts items={[['Validité', period(draft.validFrom, draft.validUntil || null)]]} />
       </ConfirmDialog>}
     </div>
   );

@@ -28,8 +28,9 @@ export function OverviewSection() {
   const identityCodes = ['SCHOOL_IDENTITY_REQUIRED', 'INVALID_TIME_ZONE', 'SCHOOL_CONTACT_REQUIRED'];
   const identityReady = data?.readiness.ok && !data.readiness.value.activationBlockers.some(item => identityCodes.includes(item.code));
   const rows: { title: string; section: SectionKey; done: boolean | undefined }[] = [
-    { title: 'Coordonnées et confidentialité', section: 'configuration', done: data?.policy.ok && identityReady && data.policy.value.status === 'APPROVED' },
-    { title: 'Informations demandées', section: 'champs-profil', done: data?.profile.ok && data.profile.value.items.some(item => item.status === 'PUBLISHED') },
+    { title: 'Coordonnées', section: 'configuration', done: identityReady },
+    { title: 'Confidentialité et conditions', section: 'confidentialite', done: data?.policy.ok && data.policy.value.status === 'APPROVED'
+      && data.profile.ok && data.profile.value.items.some(item => item.status === 'PUBLISHED') },
     { title: 'Formations et tarifs', section: 'formations', done: data?.readiness.ok && data.readiness.value.capabilities.some(item => item.capability === 'CAN_PLAN_LESSON' && item.ready) },
   ];
   const failures = data ? Object.values(data).filter(result => !result.ok).length : 0;

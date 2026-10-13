@@ -6,6 +6,7 @@ import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-ap
 import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
+import { PlanningReadinessBanner } from './planning-readiness';
 
 const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' | 'clock' }>> = {
   cancelled: { label: 'Annulée', tone: 'neutral', symbol: 'ban' },
@@ -62,6 +63,7 @@ export function AgendaSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Planning" title="Agenda" />
+      <PlanningReadinessBanner />
       <div className="agenda-toolbar">
         <div className="week-nav" role="group" aria-label="Semaine affichée">
           <button type="button" className="button secondary" aria-label="Semaine précédente" onClick={() => setMonday(addDays(monday, -7))}><Symbol kind="back" bare /></button>
