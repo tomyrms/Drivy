@@ -198,6 +198,7 @@ export function ManagementConsole() {
       <a className="skip-link" href="#main">Aller au contenu</a>
       <header className="console-bar">
         {context && !setupMode && <button ref={navigationButton} type="button" className="button quiet navigation-toggle" aria-controls="school-navigation" aria-expanded={navigationOpen}
+          onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setNavigationOpen(false); } }}
           onClick={() => setNavigationOpen(open => !open)}><Symbol kind="menu" bare /><span>Menu</span></button>}
         <a className="brand" href={context ? consolePath(context.schoolId, context.school.status === 'ACTIVE' ? 'agenda' : 'apercu') : '/app/'}
           aria-label="Drivy, accueil de l’école" onClick={event => {

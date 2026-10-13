@@ -228,7 +228,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
       </div>
     </>}</LoadState>
     <ConfirmDialog open={discard} busy={blocked} title="Relire la préparation enregistrée ?" confirmLabel="Abandonner ma saisie et relire" onCancel={() => setDiscard(false)} onConfirm={() => {
-      setDiscard(false); setDirty(false); drafts?.delete(key); needsAdoption.current = true; loaded.reload();
+      setDiscard(false); setDirty(false); runner.clearOutcome(); drafts?.delete(key); needsAdoption.current = true; loaded.reload();
     }}><p>Votre saisie non enregistrée sera remplacée par la version actuellement conservée par l’école.</p></ConfirmDialog>
     <ConfirmDialog open={leave !== null} busy={blocked} title="Enregistrer avant de quitter ?" confirmLabel="Enregistrer et quitter" onCancel={() => setLeave(null)} onConfirm={() => { if (leave) void save(step, content, false, leave); }}>
       <p>Les dernières modifications ne sont pas encore enregistrées.</p>
