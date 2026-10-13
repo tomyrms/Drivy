@@ -285,6 +285,8 @@ try {
       assert.equal(await h.page.locator('.record-table tbody tr').count(), 25);
     });
     await scenario('Équipe : tri, filtre inactif et contexte conservé après ouverture du membre', 'page=team&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Luc Martin', exact: true }).waitFor();
+      await h.page.locator('.record-table tbody tr').filter({ has: h.page.getByRole('link', { name: 'Luc Martin', exact: true }) }).getByText('Vous', { exact: true }).waitFor();
       await h.page.getByRole('button', { name: 'Membre, trier par nom décroissant', exact: true }).click();
       assert.equal(await h.page.locator('.record-table th[aria-sort]').getAttribute('aria-sort'), 'descending');
       await h.page.getByRole('group', { name: 'Accès', exact: true }).getByRole('button', { name: /Inactifs/ }).click();
@@ -390,7 +392,7 @@ try {
     });
     await scenario('Choix tactiles : cibles de 44 px et sélection par toucher dans le vrai menu', 'page=choices', async h => {
       assert(await h.page.evaluate(() => matchMedia('(pointer: coarse)').matches));
-      assert(await h.page.locator('.choice-trigger,.segment-option > span').evaluateAll(elements => elements.every(element => element.getBoundingClientRect().height >= 44)));
+      assert(await h.page.locator('.choice-trigger,.segment-option > span').evaluateAll(elements => elements.filter(element => element.getClientRects().length > 0).every(element => element.getBoundingClientRect().height >= 44)));
       await h.page.getByLabel('Permis de test', { exact: true }).tap();
       await h.page.getByRole('option', { name: 'Permis BE', exact: true }).tap();
       await h.page.getByRole('listbox').waitFor({ state: 'hidden' });

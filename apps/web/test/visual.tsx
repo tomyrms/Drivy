@@ -318,7 +318,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
 
 const value: ConsoleContextValue = {
   schoolId, me: { personId: meId, displayName: 'Luc Martin', version: 1, memberships: [] },
-  membership: { membershipId: marieId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: reviewState === 'readonly' ? [] : ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'], accessEpoch: 1 },
+  membership: { membershipId: lucId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: reviewState === 'readonly' ? [] : ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'], accessEpoch: 1 },
   school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: parameters.get('status') === 'draft' ? 'DRAFT' : 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
     modules: { gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
   canConfigureCatalog: reviewState !== 'readonly', reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),

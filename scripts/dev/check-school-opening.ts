@@ -334,8 +334,11 @@ async function main() {
     stage='préparation web sur écran mobile';await page.setViewportSize({width:390,height:844});await page.goto(`${origin}/app/gestion/${school.id}/apercu`);
     await page.getByRole('heading',{name:'Préparation de l’école',exact:true}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'La préparation mobile ne déborde pas horizontalement');
+    stage='menu mobile des paramètres et restitution du focus';
     const mobileMenu=page.getByRole('button',{name:'Menu',exact:true});await mobileMenu.focus();await page.keyboard.press('Enter');
-    await page.getByRole('navigation',{name:'Gestion de l’école',exact:true}).getByRole('link',{name:'Paramètres de l’école',exact:true}).waitFor();
+    const settingsNavigation=page.getByRole('navigation',{name:'Gestion de l’école',exact:true});
+    await settingsNavigation.getByRole('link',{name:'Retour à la gestion',exact:true}).waitFor();
+    await settingsNavigation.getByRole('link',{name:'École',exact:true}).waitFor();
     await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('.navigation-toggle')?.getAttribute('aria-expanded')==='false');
     assert(await mobileMenu.evaluate(element=>element===document.activeElement),'Échap ferme le menu ouvert au clavier et garde le focus sur Menu');
     await page.screenshot({path:resolve(artifactDirectory,'04-preparation-mobile-synthetic.png'),fullPage:true});
