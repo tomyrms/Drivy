@@ -56,6 +56,18 @@ async function counts(){return (await pool.query(`SELECT (SELECT count(*)::int F
 it('lit sans créer de brouillon ; réserve contenus et modèles aux ADMIN du bon périmètre',async()=>{
   const before=await counts();expect((await getDraft()).version).toBe(1);expect(await counts()).toEqual(before);
   expect((await pool.query('SELECT draft_content FROM drivy.school_setup WHERE school_id=$1',[id.schoolA])).rows[0].draft_content).toBeNull();
+  const templates=(await call('GET',`${base}/templates`)).json().data;
+  const proposals=(await call('GET',`/v1/schools/${id.schoolA}/text-proposals`)).json().data;
+  const identity=(await getDraft()).content.identity;
+  const personalize=(text:string)=>text.replaceAll('[Nom de l’école]',identity.name).replaceAll('[contact données]',identity.contactEmail);
+  expect(personalize(templates.privacy.noticeText)).toBe(proposals.dataPolicy.noticeText);expect(templates.privacy.retentionText).toBe(proposals.dataPolicy.retentionText);
+  expect(templates.profileFields).toEqual(proposals.profileFields);expect(personalize(templates.commercial.termsText)).toBe(proposals.commercialTerms.termsText);
+  expect(templates.commercial.cancellationPolicyText).toBe(proposals.procedure.cancellationPolicyText);
+  expect(templates.formations.every((item:{procedureText:string})=>item.procedureText===proposals.procedure.procedureText)).toBe(true);
+  expect(templates.privacy.noticeText).not.toContain('Mapbox');expect(await counts()).toEqual(before);
+  const mapboxApp=buildApp({...options,mapMatching:{provider:'mapbox',minimumConfidence:0.8}});
+  try {const response=await mapboxApp.inject({method:'GET',url:`${base}/templates`,headers:{authorization:'Bearer demo-admin'}});expect(response.statusCode,response.body).toBe(200);expect(response.json().data.privacy.noticeText).toContain('Mapbox');}
+  finally {await mapboxApp.close();}
   for(const route of [base,`${base}/templates`,`${base}/next-actions`,`${base}/preview?activate=true`]) {
     expect((await call('GET',route,undefined,undefined,'demo-instructor')).statusCode).toBe(403);
     expect((await call('GET',route,undefined,undefined,'demo-foreign')).statusCode).toBe(403);
@@ -77,7 +89,8 @@ it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la
   await app.close();app=makeApp();
   expect((await getDraft()).content).toEqual(current.content);
   const review=await reviewed();expect(review.ready).toBe(false);
-  expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['profile.fields','formations.0.durationMinutes']));
+  expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['privacy.noticeText','profile.fields','formations.0.durationMinutes']));
+  expect(review.issues).toEqual(expect.arrayContaining([expect.objectContaining({field:'privacy.noticeText',code:'POLICY_TEXT_TOO_SHORT'})]));
   expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
 });
 
@@ -108,7 +121,7 @@ it('la publication complète est atomique, idempotente et tarifée à partir d�
 
 it('bloque prix absent, modèle obsolète, champ interdit et placeholders avant toute adoption',async()=>{
   const saved=await prepared(true);saved.content.formations[0]!.priceCents=null;saved.content.formations[0]!.templateVersion='ancienne';saved.content.privacy.retentionText='[à compléter]';
-  saved.content.formations[0]!.termsText=setupTemplates.commercial.termsText;saved.content.formations[0]!.cancellationPolicyText=setupTemplates.commercial.cancellationPolicyText;
+  saved.content.formations[0]!.termsText='Conditions à relire : [à compléter : paiement].';saved.content.formations[0]!.cancellationPolicyText='Annulation : [à compléter : délai].';
   saved.content.profile.fields.push({field:'profilePhotoDocumentId',requirement:'REQUIRED',stage:'JOIN',purposeCode:'PERSONALISATION',explanation:'Une photo.'});await save(saved.content,saved.version);
   const preview=await reviewed();expect(preview.ready).toBe(false);expect(preview.issues.map((i:{code:string})=>i.code)).toEqual(expect.arrayContaining(['SETUP_FIELD_REQUIRED','SETUP_PLACEHOLDER','SETUP_TEMPLATE_CHANGED','PROFILE_POLICY_RULE_INVALID']));
   expect(preview.issues.filter((issue:{code:string})=>issue.code==='SETUP_PLACEHOLDER').map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['formations.0.termsText','formations.0.cancellationPolicyText']));
@@ -151,11 +164,29 @@ it('ajoute un tarif à une école active sans réadopter les textes ni changer l
   expect((await counts()).products).toBe(after.products);
 });
 
-it('une politique future ne donne pas une préparation de planification actuelle',async()=>{
-  const saved=await prepared(true);saved.content.profile.effectiveFrom='2099-01-01T00:00:00Z';await save(saved.content,saved.version);
-  const command=await completion(),result=await call('POST',`${base}/complete`,command.body,command.version);expect(result.statusCode,result.body).toBe(200);
-  const ready=(await call('GET',`/v1/schools/${id.schoolA}/readiness`)).json().data;
-  expect(ready.capabilities.find((c:{capability:string})=>c.capability==='CAN_PLAN_LESSON').blockers.map((b:{code:string})=>b.code)).toContain('PROFILE_POLICY_NOT_READY');
+it('conserve une ancienne date dans le brouillon mais exige un effet immédiat explicitement revu',async()=>{
+  const saved=await prepared(true);saved.content.profile.effectiveFrom='2099-01-01T00:00:00Z';const future=await save(saved.content,saved.version);
+  expect((await getDraft()).content.profile.effectiveFrom).toBe('2099-01-01T00:00:00Z');
+  const before=await counts(),command=await completion(),blocked=await call('POST',`${base}/complete`,command.body,command.version);
+  expect(blocked.statusCode,blocked.body).toBe(409);expect(blocked.json().code).toBe('PROFILE_EFFECTIVE_NOW_REQUIRED');expect(await counts()).toEqual(before);
+  future.content.profile.effectiveFrom=null;await save(future.content,future.version);
+  const immediate=await completion(),result=await call('POST',`${base}/complete`,immediate.body,immediate.version);expect(result.statusCode,result.body).toBe(200);
+  const profile=(await pool.query("SELECT status,effective_from<=statement_timestamp() AS current FROM drivy.profile_field_policy WHERE id=$1",[result.json().data.applied.profilePolicyId])).rows[0];
+  expect(profile).toEqual({status:'PUBLISHED',current:true});
+});
+
+it('annonce les accords GPS rendus caducs et réexige la revue quand cet impact change',async()=>{
+  await prepared();const initial=await completion();const first=await call('POST',`${base}/complete`,initial.body,initial.version);expect(first.statusCode,first.body).toBe(200);
+  const current=await getDraft();current.content.selectedSections=['PRIVACY'];current.content.privacy.noticeText+=' Nouvelle version synthétique explicitement relue.';
+  await save(current.content,current.version);
+  const oldReview=await completion(false);
+  await pool.query(`INSERT INTO drivy.recording_choice(school_id,version,learner_id,status,notice_version_id,recorded_by,source)
+    VALUES($1,1,$2,'ALLOWED',$3,$4,'RECORDED_VERBAL')`,[id.schoolA,id.aliceLearner,first.json().data.applied.policyVersionId,id.instructorMember]);
+  const changed=await call('POST',`${base}/complete`,oldReview.body,oldReview.version);expect(changed.statusCode,changed.body).toBe(409);expect(changed.json().code).toBe('SETUP_REVIEW_CHANGED');
+  const review=await reviewed(false);expect(review.effects).toHaveLength(1);expect(review.effects[0]).toContain('1 accord(s) GPS');expect(review.effects[0]).toContain('0 trajet(s) en cours');
+  const fresh=await completion(false),result=await call('POST',`${base}/complete`,fresh.body,fresh.version);expect(result.statusCode,result.body).toBe(200);
+  const choices=await call('GET',`/v1/schools/${id.schoolA}/recording-choices`);expect(choices.json().data.items[0]).toMatchObject({learnerId:id.aliceLearner,status:'ALLOWED',currentNotice:false});
+  expect((await pool.query('SELECT count(*)::int n FROM drivy.recording_choice WHERE school_id=$1',[id.schoolA])).rows[0].n).toBe(1);
 });
 
 it('les prochaines actions séparent configuration, dossier et première leçon puis disparaissent après usage',async()=>{

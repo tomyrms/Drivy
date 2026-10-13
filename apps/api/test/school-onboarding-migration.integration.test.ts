@@ -10,7 +10,7 @@ import {harness,id,issuer,prepareSchool,prepareCommercial} from './support/harne
 const url=process.env.TEST_DATABASE_URL;
 if(!url||new URL(url).pathname!=='/drivy_test')throw new Error('Base synthétique isolée drivy_test obligatoire.');
 
-it('029/030 préservent une copie synthétique peuplée à028 et ne relancent pas une école ACTIVE',async()=>{
+it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pas une école ACTIVE',async()=>{
   const pool=new Pool({connectionString:url}),owner='drivy_onboarding_migration_owner';
   const migration=new Pool({connectionString:url,options:`-c role=${owner}`});
   let app:Awaited<ReturnType<typeof harness>>['app']|undefined;
@@ -23,8 +23,8 @@ it('029/030 préservent une copie synthétique peuplée à028 et ne relancent pa
     expect((await migration.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user')).rows[0]).toEqual({rolsuper:false,rolbypassrls:false});
     await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
     const directory=new URL('../migrations/',import.meta.url);
-    const oldNames=(await readdir(directory)).filter(name=>/^\d{3}_.*\.sql$/.test(name)&&Number(name.slice(0,3))<=28).sort();
-    expect(oldNames.at(-1)).toMatch(/^028_/);
+    const oldNames=(await readdir(directory)).filter(name=>/^\d{3}_.*\.sql$/.test(name)&&Number(name.slice(0,3))<=30).sort();
+    expect(oldNames.at(-1)).toBe('030_admin_recording_choices.sql');
     // Copie synthétique de l'état antérieur : aucune base d'exploitation n'est lue.
     for(const name of oldNames) {
       const sql=await readFile(new URL(name,directory),'utf8'),db=await migration.connect();
@@ -44,6 +44,13 @@ it('029/030 préservent une copie synthétique peuplée à028 et ne relancent pa
     const env=await harness(pool);app=env.app;
     const commercial=await prepareCommercial(env.call);
     expect(commercial.product.unitPriceCents).toBe(9000);
+    await pool.query(`INSERT INTO drivy.recording_choice(school_id,version,learner_id,status,notice_version_id,recorded_by,source)
+      SELECT $1,1,$2,'ALLOWED',notice_version_id,$3,'RECORDED_VERBAL' FROM drivy.school_data_policy WHERE school_id=$1 ORDER BY version DESC LIMIT 1`,[id.schoolA,id.aliceLearner,id.instructorMember]);
+    const privacyViews=async()=>Promise.all(['data-policy/impact','recording-choices'].map(async route=>{
+      const response=await env.call('GET',`/v1/schools/${id.schoolA}/${route}`,undefined,undefined,'demo-admin');expect(response.statusCode,response.body).toBe(200);return response.json().data;
+    }));
+    const beforePrivacy=await privacyViews();expect(beforePrivacy[0]).toEqual({gpsAgreements:1,activeCaptures:0});
+    expect(beforePrivacy[1].items[0]).toMatchObject({learnerId:id.aliceLearner,currentNotice:true,status:'ALLOWED'});
     const beforeEntry=(await env.call('GET','/v1/me',undefined,undefined,'demo-admin')).json().data;
     const history=(await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations ORDER BY name')).rows;
     const tables=(await pool.query<{name:string}>("SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND c.relkind='r' ORDER BY c.relname")).rows.map(row=>row.name);
@@ -61,9 +68,10 @@ it('029/030 préservent une copie synthétique peuplée à028 et ne relancent pa
     await migrate(migration);
     expect(await snapshot()).toEqual(before);
     expect((await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations WHERE name=ANY($1::text[]) ORDER BY name',[oldNames])).rows).toEqual(history);
-    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['029_school_opening.sql','030_school_setup_draft.sql']);
+    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql']);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_opening_link')).rows[0].n).toBe(0);
     expect((await env.call('GET','/v1/me',undefined,undefined,'demo-admin')).json().data).toEqual(beforeEntry);
+    expect(await privacyViews()).toEqual(beforePrivacy);
     for(const [schoolId,subject,status] of [[id.schoolA,'demo-admin','ACTIVE'],[id.schoolB,'demo-instructor','DRAFT']] as const) {
       const response=await env.call('GET',`/v1/schools/${schoolId}/setup-draft`,undefined,undefined,subject);expect(response.statusCode,response.body).toBe(200);
       const draft=setupDraftSchema.parse(response.json().data);

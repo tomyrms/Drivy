@@ -34,16 +34,35 @@
         "serverTime": {"type": "string", "format": "date-time"}
       }
     },
+    "DataPolicyChangeImpactEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["gpsAgreements", "activeCaptures"],
+          "properties": {
+            "gpsAgreements": {"type": "integer", "minimum": 0},
+            "activeCaptures": {"type": "integer", "minimum": 0}
+          }
+        },
+        "requestId": {"type": "string", "maxLength": 150},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    },
     "AdoptSchoolDataPolicyCommand": {
       "type": "object",
       "additionalProperties": false,
       "required": ["operationId", "noticeText", "retentionText", "contactEmail", "reviewAcknowledged"],
       "properties": {
         "operationId": {"type": "string", "format": "uuid"},
-        "noticeText": {"type": "string", "minLength": 1, "maxLength": 20000, "pattern": "\\S"},
-        "retentionText": {"type": "string", "minLength": 1, "maxLength": 20000, "pattern": "\\S"},
+        "noticeText": {"type": "string", "minLength": 40, "maxLength": 20000, "pattern": "\\S"},
+        "retentionText": {"type": "string", "minLength": 40, "maxLength": 20000, "pattern": "\\S"},
         "contactEmail": {"type": "string", "format": "email", "maxLength": 320},
-        "reviewAcknowledged": {"const": true}
+        "reviewAcknowledged": {"const": true},
+        "publishProposedFields": {"const": true}
       }
     }
   }

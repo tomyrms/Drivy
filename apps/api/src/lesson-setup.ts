@@ -10,7 +10,7 @@ import {Cursors} from './cursor.js';
 import {registerPlanningDefaults} from './planning-defaults.js';
 const id=z.uuid(),text=(max:number)=>z.string().trim().min(1).max(max),op={operationId:id};
 const amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const termsCommand=z.object({...op,label:text(200),termsText:text(20000),validFrom:z.iso.date(),validUntil:z.iso.date().nullable(),approved:z.boolean(),approvalReason:text(1000)}).strict();
+const termsCommand=z.object({...op,label:text(200),termsText:text(20000),validFrom:z.iso.date(),validUntil:z.iso.date().nullable(),approved:z.boolean(),approvalReason:text(1000).optional()}).strict();
 const productCommand=z.object({...op,productKey:text(100),label:text(200),type:z.enum(['INDIVIDUAL_LESSON','COLLECTIVE_COURSE','EXAM_SUPPORT','EXTERNAL_SERVICE']),
  categoryCode:text(30).nullable(),siteId:id.nullable(),durationMinutes:z.number().int().min(1).max(1440).nullable(),unitLabel:text(100),unitPriceCents:amount,
  validFrom:z.iso.date(),validUntil:z.iso.date().nullable(),termsVersionId:id,enabled:z.boolean()}).strict();
@@ -90,7 +90,7 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
   const data=await created(r,body,'CREATE_COMMERCIAL_TERMS',async(db,actor,school)=>{
    const row=(await db.query<Row>(`INSERT INTO drivy.commercial_terms_version(id,school_id,version,label,terms_text,valid_from,valid_until,approved,approval_reason,approved_by,approved_at,created_by)
     VALUES($1,$2,(SELECT coalesce(max(version),0)+1 FROM drivy.commercial_terms_version WHERE school_id=$2),$3,$4,$5,$6,$7,$8,$9,CASE WHEN $7 THEN now() ELSE NULL END,$10) RETURNING ${columns['commercial-terms']}`,
-    [randomUUID(),school.id,body.label,body.termsText,body.validFrom,body.validUntil,body.approved,body.approvalReason,body.approved?actor.membershipId:null,actor.membershipId])).rows[0]!;
+    [randomUUID(),school.id,body.label,body.termsText,body.validFrom,body.validUntil,body.approved,body.approvalReason??'',body.approved?actor.membershipId:null,actor.membershipId])).rows[0]!;
    return {data:row,action:'CommercialTermsCreated',resourceType:'CommercialTermsVersion',changedFields:['termsText','validFrom','validUntil','approved']};
   },cataloguePermission);reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
  });

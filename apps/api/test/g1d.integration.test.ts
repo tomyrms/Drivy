@@ -35,7 +35,7 @@ async function call(method:'GET'|'PUT'|'POST'|'PATCH',path:string,body?:Record<s
 function conforms(name:string,value:unknown) {const validate=validators.get(name)!;expect(validate(value),JSON.stringify(validate.errors)).toBe(true);}
 const names=()=>['firstName','lastName'].map(field=>({field,requirement:'REQUIRED',stage:'JOIN',purposeCode:'IDENTIFICATION',explanation:'Identifier le dossier scolaire.'}));
 const optional=(field:string,purposeCode='LESSON_CONTACT')=>({field,requirement:'OPTIONAL',stage:'OPTIONAL',purposeCode,explanation:'Information facultative expliquée.'});
-const noticeBody=()=>({operationId:randomUUID(),noticeText:'Notice de test du profil.',retentionText:'Conservation limitée aux tests.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true});
+const noticeBody=()=>({operationId:randomUUID(),noticeText:'Notice de test du profil : finalités et contact.',retentionText:'Conservation limitée aux tests, sans donnée réelle.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true});
 async function notice() {const response=await call('PUT',`${school}/data-policy`,noticeBody(),1);expect(response.statusCode,response.body).toBe(200);return response.json().data.noticeVersionId as string;}
 async function draft(rules=names(),effectiveFrom='2026-01-01T00:00:00Z',noticeId?:string) {
   const noticeVersionId=noticeId ?? await notice();const version=(await call('GET',school)).json().data.version;
@@ -60,6 +60,15 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     expect((await call('GET',`${school}/my-onboarding?kind=STUDENT`,undefined,undefined,'demo-alice')).json().code).toBe('PROFILE_POLICY_NOT_READY');
     const page=await call('GET',`${school}/profile-field-policies`);conforms('ProfileFieldPolicyPageV3EnvelopeV3',page.json());expect(page.json().data.items).toEqual([]);
     expect(await counts()).toEqual(before);expect((await pool.query('SELECT first_name,last_name FROM drivy.learner_profile WHERE id=$1',[id.aliceLearner])).rows[0]).toEqual({first_name:null,last_name:null});
+  });
+  it('publication immédiate : sans brouillon ni date d’effet, la version s’applique aussitôt',async()=>{
+    const noticeVersionId=await notice();const version=(await call('GET',school)).json().data.version;
+    const both=await call('POST',`${school}/profile-field-policies`,{operationId:randomUUID(),fields:names(),publishNow:true,effectiveFrom:'2026-01-01T00:00:00Z',noticeVersionId,impactAcknowledged:true},version);
+    expect(both.statusCode).toBe(400);
+    const response=await call('POST',`${school}/profile-field-policies`,{operationId:randomUUID(),fields:names(),publishNow:true,noticeVersionId,impactAcknowledged:true},version);
+    expect(response.statusCode,response.body).toBe(201);conforms('ProfileFieldPolicyEnvelopeV3',response.json());
+    expect(response.json().data.status).toBe('PUBLISHED');
+    expect((await call('GET',profilePath)).statusCode).toBe(200);
   });
   it('UUID de notice persistant par révision, sans adoption automatique, et lecture de l’ancienne notice',async()=>{
     const initial=(await call('GET',`${school}/data-policy`)).json().data;expect(initial.status).toBe('DRAFT');expect(initial.noticeVersionId).toMatch(/^[a-f0-9-]{36}$/);

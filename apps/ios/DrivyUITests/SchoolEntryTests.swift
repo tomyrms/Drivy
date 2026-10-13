@@ -10,7 +10,7 @@ import XCTest
             XCTAssertTrue(portal.waitForExistence(timeout: 20), app.debugDescription)
             XCTAssertEqual(portal.label, action)
             XCTAssertTrue(portal.isHittable)
-            XCTAssertFalse(app.tabBars.firstMatch.exists)
+            assertNoFieldActions(app)
             XCTAssertFalse(app.buttons["onboarding-start"].exists)
             XCTAssertTrue(app.buttons["school-account"].exists)
             capture(app, name: screen)
@@ -23,7 +23,7 @@ import XCTest
             let app = launch(screen)
             XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 20), app.debugDescription)
             XCTAssertFalse(app.buttons["school-open-portal"].exists)
-            XCTAssertFalse(app.tabBars.firstMatch.exists)
+            assertNoFieldActions(app)
             XCTAssertFalse(app.buttons["onboarding-start"].exists)
             XCTAssertTrue(app.buttons["school-entry-refresh"].isHittable)
             capture(app, name: screen)
@@ -36,10 +36,22 @@ import XCTest
         defer { app.terminate() }
         XCTAssertTrue(app.buttons["school-open-portal"].waitForExistence(timeout: 20), app.debugDescription)
         app.buttons["school-entry-refresh"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 20), app.debugDescription)
+        // Sur iPad, le TabView adaptatif expose ses onglets comme des boutons sans élément XCUI TabBar.
+        let learners = app.buttons.matching(identifier: "Élèves").firstMatch
+        XCTAssertTrue(learners.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(learners.isHittable)
+        XCTAssertTrue(app.buttons.matching(identifier: "Aujourd’hui").firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(identifier: "Profil").firstMatch.exists)
         XCTAssertFalse(app.buttons["school-open-portal"].exists)
-        XCTAssertTrue(app.tabBars.buttons["Élèves"].exists)
+        learners.tap()
+        XCTAssertTrue(app.staticTexts["Aucun élève"].waitForExistence(timeout: 10), app.debugDescription)
         capture(app, name: "school-entry-activated-instructor")
+    }
+
+    private func assertNoFieldActions(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        for title in ["Aujourd’hui", "Agenda", "Élèves"] {
+            XCTAssertFalse(app.buttons.matching(identifier: title).firstMatch.exists, file: file, line: line)
+        }
     }
 
     private func launch(_ screen: String) -> XCUIApplication {

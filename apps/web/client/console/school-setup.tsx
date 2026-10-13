@@ -6,7 +6,7 @@ import { confirmedData, readSchool, offeringSchema, readAll, type Offering } fro
 import { RequestFailure } from '../protocol';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField } from '../ui';
 import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
-  setupStepLabels, setupSteps, setupTemplatesSchema, setupProfileRequirement, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
+  setupStepLabels, setupSteps, setupTemplatesSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import './school-setup.css';
@@ -129,7 +129,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     }
     setFocusField(null);
   }, [step, focusField]);
-  const update = (next: SetupContent) => { setContent(next); setDirty(true); setPreview(null); setAcknowledged(false); runner.clearOutcome(); };
+  const update = (next: SetupContent) => { setContent(content && loaded.data ? refreshSetupExamples(content, next, loaded.data.templates) : next); setDirty(true); setPreview(null); setAcknowledged(false); runner.clearOutcome(); };
 
   async function refreshReview(saved: SetupDraft) {
     setReviewing(true); setReadFailure(null); setAcknowledged(false);
@@ -239,8 +239,8 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
 }
 
 function templatePrivacy(templates: SetupTemplates, content: SetupContent): SetupContent['privacy'] {
-  return { noticeText: templates.privacy.noticeText.replaceAll('[Nom de l’école]', content.identity.name).replaceAll('[contact données]', content.privacy.contactEmail || content.identity.contactEmail),
-    retentionText: templates.privacy.retentionText, contactEmail: content.privacy.contactEmail || content.identity.contactEmail,
+  return { noticeText: setupExampleText(templates.privacy.noticeText, content),
+    retentionText: setupExampleText(templates.privacy.retentionText, content), contactEmail: content.privacy.contactEmail || content.identity.contactEmail,
     templateId: templates.privacy.id, templateVersion: templates.privacy.version };
 }
 type StepProps = { content: SetupContent; onChange: (value: SetupContent) => void };
@@ -266,8 +266,9 @@ function PrivacyStep({ content, templates, onChange }: StepProps & { templates: 
   </div>;
 }
 function ProfileStep({ content, onChange }: StepProps) {
-  const update = (fields: SetupContent['profile']['fields']) => onChange(selectSetupSection({ ...content, profile: { ...content.profile, fields } }, 'PROFILE', true));
+  const update = (fields: SetupContent['profile']['fields']) => onChange(selectSetupSection({ ...content, profile: { ...content.profile, fields, effectiveFrom: null } }, 'PROFILE', true));
   return <div className="section-stack">
+    {content.profile.effectiveFrom !== null && <Notice tone="warning" title="Date d’effet à actualiser" actions={<button type="button" className="button secondary" onClick={() => update(content.profile.fields)}>Appliquer dès la confirmation</button>}><p>Les informations demandées prennent désormais effet dès leur confirmation. Ce brouillon conserve encore une ancienne date.</p></Notice>}
     <div className="setup-profile-fields">{fieldDefaults.map(base => {
       const current = content.profile.fields.find(item => item.field === base.field), fixed = base.field === 'firstName' || base.field === 'lastName';
       return <div className="setup-profile-field" key={base.field}>
@@ -307,6 +308,7 @@ function FormationStep({ content, templates, offerings, initialOfferingId, today
 }
 function PricingStep({ content, templates, onChange, canWrite }: StepProps & { canWrite: boolean; templates: SetupTemplates }) {
   const update = (value: SetupFormation) => onChange(selectSetupSection({ ...content, formations: content.formations.map(item => item.id === value.id ? value : item) }, 'CATALOGUE', true));
+  const commercial = templates.commercial ? { termsText: setupExampleText(templates.commercial.termsText, content), cancellationPolicyText: setupExampleText(templates.commercial.cancellationPolicyText, content) } : null;
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
   const [exampleFor, setExampleFor] = useState<string | null>(null);
   if (!content.formations.length) return <p>Aucune formation à tarifer dans ce brouillon.</p>;
@@ -325,8 +327,8 @@ function PricingStep({ content, templates, onChange, canWrite }: StepProps & { c
     </fieldset>
   </section>)}
     <ConfirmDialog open={exampleFor !== null} busy={false} title="Utiliser cet exemple ?" confirmLabel="Insérer dans le brouillon" onCancel={() => setExampleFor(null)} onConfirm={() => {
-      const formation = content.formations.find(item => item.id === exampleFor); if (formation && templates.commercial) update({ ...formation, termsText: templates.commercial.termsText, cancellationPolicyText: formation.existingOfferingId ? formation.cancellationPolicyText : templates.commercial.cancellationPolicyText }); setExampleFor(null);
-    }}><p>Ces textes remplaceront les conditions du brouillon. Complétez les passages entre crochets avant de confirmer.</p>{!content.formations.find(item => item.id === exampleFor)?.existingOfferingId && <><h3>Annulation</h3><p className="policy-copy">{templates.commercial?.cancellationPolicyText}</p></>}<h3>Tarif</h3><p className="policy-copy">{templates.commercial?.termsText}</p></ConfirmDialog>
+      const formation = content.formations.find(item => item.id === exampleFor); if (formation && commercial) update({ ...formation, termsText: commercial.termsText, cancellationPolicyText: formation.existingOfferingId ? formation.cancellationPolicyText : commercial.cancellationPolicyText }); setExampleFor(null);
+    }}><p>Ces textes remplaceront les conditions du brouillon. Relisez-les et adaptez-les avant de confirmer.</p>{!content.formations.find(item => item.id === exampleFor)?.existingOfferingId && <><h3>Annulation</h3><p className="policy-copy">{commercial?.cancellationPolicyText}</p></>}<h3>Tarif</h3><p className="policy-copy">{commercial?.termsText}</p></ConfirmDialog>
     <ConfirmDialog open={copyFrom !== null} busy={false} title="Reprendre ces conditions ?" confirmLabel="Appliquer aux autres formations" onCancel={() => setCopyFrom(null)} onConfirm={() => {
       const source = content.formations.find(item => item.id === copyFrom); if (source) onChange({ ...content, formations: content.formations.map(item => ({ ...item, termsText: source.termsText, cancellationPolicyText: item.existingOfferingId ? item.cancellationPolicyText : source.cancellationPolicyText })) }); setCopyFrom(null);
     }}><p>Les conditions des autres formations de ce brouillon seront remplacées. Pour un tarif rattaché à une formation existante, seules les conditions du tarif seront copiées.</p></ConfirmDialog>

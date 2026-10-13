@@ -49,6 +49,17 @@ export type SetupFormation = z.infer<typeof setupFormationSchema>;
 export type SetupTemplates = z.infer<typeof setupTemplatesSchema>;
 export type SetupPreview = z.infer<typeof setupPreviewSchema>;
 export type SetupSection = SetupContent['selectedSections'][number];
+export function setupExampleText(text: string, content: SetupContent): string {
+  return text.replaceAll('[Nom de l’école]', content.identity.name).replaceAll('[contact données]', content.privacy.contactEmail || content.identity.contactEmail);
+}
+/** Follow edited coordinates only while the proposed wording itself is still untouched. */
+export function refreshSetupExamples(previous: SetupContent, next: SetupContent, templates: SetupTemplates): SetupContent {
+  if (previous.identity === next.identity || previous.privacy.templateId !== templates.privacy.id || previous.privacy.templateVersion !== templates.privacy.version) return next;
+  const privacy = { ...next.privacy, contactEmail: previous.privacy.contactEmail === previous.identity.contactEmail ? next.identity.contactEmail : next.privacy.contactEmail };
+  const updated = { ...next, privacy };
+  for (const field of ['noticeText', 'retentionText'] as const) if (previous.privacy[field] === setupExampleText(templates.privacy[field], previous)) privacy[field] = setupExampleText(templates.privacy[field], updated);
+  return updated;
+}
 /** A catalogue editor never adopts the school identity, privacy notice or profile policy. */
 export function catalogueSetupContent(content: SetupContent, applied = false): SetupContent {
   return { ...content, selectedSections: ['CATALOGUE'], formations: applied

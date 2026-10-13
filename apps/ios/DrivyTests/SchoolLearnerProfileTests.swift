@@ -79,6 +79,10 @@ import Testing
         #expect(label(revoked: true) == nil)
         #expect(SchoolRecordingChoiceWorkspace.readingFailure(unreachable: true).hasPrefix("L’accord GPS n’a pas pu être lu"))
         #expect(SchoolRecordingChoiceWorkspace.readingFailure(unreachable: false) == "L’accord GPS n’a pas pu être lu.")
+        // Une école sans textes publiés n’est pas une panne : sa phrase reste, au lieu de « n’a pas pu être lu ».
+        let notReady = "L’école n’a pas encore publié ses textes de confidentialité. La leçon peut se faire sans GPS."
+        #expect(SchoolRecordingChoiceWorkspace.readingMessage(SchoolCaptureFailure.rejected(notReady), unreachable: false) == notReady)
+        #expect(SchoolRecordingChoiceWorkspace.readingMessage(SchoolCaptureFailure.unavailable, unreachable: true).hasPrefix("L’accord GPS n’a pas pu être lu"))
     }
 
     @Test func nextLessonMomentIsSaidToTheDay() {

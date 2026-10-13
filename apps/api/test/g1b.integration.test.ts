@@ -64,6 +64,7 @@ beforeAll(async()=>{
   for(const name of ['SchoolEnvelope','SchoolSetupEnvelopeV3','SchoolReadinessEnvelopeV3','OperationResultEnvelope','Problem']) validators.set(name,ajv.compile({$ref:`g1b-contract#/components/schemas/${name}`}));
   const policySchema=JSON.parse(await readFile(new URL('../contracts/g1b-data-policy.json',import.meta.url),'utf8')) as object;
   ajv.addSchema(policySchema);validators.set('SchoolDataPolicyEnvelope',ajv.compile({$ref:'urn:drivy:contract:g1b-data-policy:1#/$defs/SchoolDataPolicyEnvelope'}));
+  validators.set('DataPolicyChangeImpactEnvelope',ajv.compile({$ref:'urn:drivy:contract:g1b-data-policy:1#/$defs/DataPolicyChangeImpactEnvelope'}));
 });
 beforeEach(async()=>{
   await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);
@@ -145,12 +146,66 @@ describe('G1B · contrats, prérequis et adoption explicite',()=>{
     expect(readiness.json().data.capabilities.every((c:{ready:boolean})=>!c.ready)).toBe(true);
   });
   it('aucune adoption si textes blancs, trop longs, champ inconnu ou accord absent/faux',async()=>{
-    for(const change of [{noticeText:'  \n '},{retentionText:'x'.repeat(20001)},{reviewAcknowledged:false},{approvedByMembershipId:id.adminMember}]) {
+    for(const change of [{noticeText:'  \n '},{noticeText:'ddd'},{retentionText:` ${'x'.repeat(39)} `},{retentionText:'x'.repeat(20001)},{reviewAcknowledged:false},{approvedByMembershipId:id.adminMember}]) {
       const response=await call('PUT',`${school}/data-policy`,{...policyBody(),...change},1);expect(response.statusCode).toBe(400);
     }
     const body:Record<string,unknown>=policyBody();delete body.reviewAcknowledged;
     expect((await call('PUT',`${school}/data-policy`,body,1)).statusCode).toBe(400);
     expect(await counts()).toEqual({operations:0,audits:0,policies:1});
+  });
+  it('l’impact d’une nouvelle version compte les accords GPS des textes actuels et les trajets en cours, pour l’administration seule',async()=>{
+    const empty=await call('GET',`${school}/data-policy/impact`);expect(empty.statusCode,empty.body).toBe(200);
+    conforms('DataPolicyChangeImpactEnvelope',empty.json());expect(empty.json().data).toEqual({gpsAgreements:0,activeCaptures:0});
+    await prepare();
+    const notice=(await pool.query('SELECT notice_version_id FROM drivy.school_data_policy WHERE school_id=$1 AND version=2',[id.schoolA])).rows[0].notice_version_id;
+    for(const [learner,status] of [[id.aliceLearner,'ALLOWED'],[id.bobLearner,'REFUSED']] as const)
+      await pool.query(`INSERT INTO drivy.recording_choice(school_id,version,learner_id,status,notice_version_id,recorded_by,source)
+        VALUES($1,1,$2,$3,$4,$5,'RECORDED_VERBAL')`,[id.schoolA,learner,status,notice,id.instructorMember]);
+    expect((await call('GET',`${school}/data-policy/impact`)).json().data).toEqual({gpsAgreements:1,activeCaptures:0});
+    for(const subject of ['demo-instructor','demo-alice']) expect((await call('GET',`${school}/data-policy/impact`,undefined,undefined,subject)).statusCode).toBe(403);
+    // Une nouvelle version rend l'accord caduc : il n'est plus compté comme accord sur les textes actuels.
+    expect((await call('PUT',`${school}/data-policy`,policyBody(),2)).statusCode).toBe(200);
+    expect((await call('GET',`${school}/data-policy/impact`)).json().data).toEqual({gpsAgreements:0,activeCaptures:0});
+  });
+  it('les textes proposés nomment l’école, ne sont adoptés par aucune lecture et restent réservés à l’administration',async()=>{
+    const before=await counts();
+    const response=await call('GET',`${school}/text-proposals`);expect(response.statusCode,response.body).toBe(200);
+    const data=response.json().data;expect(data.dataPolicy.noticeText).toContain((await call('GET',school)).json().data.name);
+    expect(data.dataPolicy.noticeText).not.toContain('Mapbox');expect(data.profileFields.map((rule:{field:string})=>rule.field)).toEqual(['firstName','lastName','contactPhone','contactEmail']);
+    expect(data.procedure.cancellationPolicyText.length).toBeGreaterThan(0);expect(data.commercialTerms.termsText.length).toBeGreaterThan(0);
+    expect(await counts()).toEqual(before);
+    for(const subject of ['demo-instructor','demo-alice']) expect((await call('GET',`${school}/text-proposals`,undefined,undefined,subject)).statusCode).toBe(403);
+  });
+  it('adopter les textes proposés publie en même temps les informations demandées, une seule fois',async()=>{
+    const proposal=(await call('GET',`${school}/text-proposals`)).json().data.dataPolicy;
+    const first=await call('PUT',`${school}/data-policy`,{operationId:randomUUID(),...proposal,reviewAcknowledged:true,publishProposedFields:true},1);
+    expect(first.statusCode,first.body).toBe(200);conforms('SchoolDataPolicyEnvelope',first.json());
+    const published=await pool.query("SELECT fields,notice_version_id FROM drivy.profile_field_policy WHERE school_id=$1 AND status='PUBLISHED'",[id.schoolA]);
+    expect(published.rows.length).toBe(1);expect(published.rows[0].notice_version_id).toBe(first.json().data.noticeVersionId);
+    expect(published.rows[0].fields.filter((rule:{requirement:string})=>rule.requirement==='REQUIRED').map((rule:{field:string})=>rule.field)).toEqual(['firstName','lastName']);
+    const second=await call('PUT',`${school}/data-policy`,{operationId:randomUUID(),...proposal,reviewAcknowledged:true,publishProposedFields:true},2);
+    expect(second.statusCode,second.body).toBe(200);
+    expect((await pool.query("SELECT count(*)::int n FROM drivy.profile_field_policy WHERE school_id=$1",[id.schoolA])).rows[0].n).toBe(1);
+  });
+  it('l’accord GPS de chaque élève est lisible par l’administration seule, refus de l’élève prioritaire',async()=>{
+    expect((await call('GET',`${school}/recording-choices`)).json().data).toEqual({items:[]});
+    await prepare();
+    const notice=(await pool.query('SELECT notice_version_id FROM drivy.school_data_policy WHERE school_id=$1 AND version=2',[id.schoolA])).rows[0].notice_version_id;
+    const lesson=null;
+    // Alice refuse elle-même, puis un accord oral plus récent est saisi : son refus reste en vigueur.
+    for(const [version,status,source] of [[1,'REFUSED','SELF'],[2,'ALLOWED','RECORDED_VERBAL']] as const)
+      await pool.query(`INSERT INTO drivy.recording_choice(school_id,version,learner_id,lesson_id,status,notice_version_id,recorded_by,source)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id.schoolA,version,id.aliceLearner,lesson,status,notice,source==='SELF'?id.aliceMember:id.instructorMember,source]);
+    await pool.query(`INSERT INTO drivy.recording_choice(school_id,version,learner_id,status,notice_version_id,recorded_by,source)
+      VALUES($1,1,$2,'ALLOWED',$3,$4,'RECORDED_VERBAL')`,[id.schoolA,id.bobLearner,notice,id.instructorMember]);
+    const read=await call('GET',`${school}/recording-choices`);expect(read.statusCode,read.body).toBe(200);
+    const byLearner=Object.fromEntries(read.json().data.items.map((item:{learnerId:string})=>[item.learnerId,item]));
+    expect(byLearner[id.aliceLearner]).toMatchObject({status:'REFUSED',source:'SELF',currentNotice:true,lessonScoped:false});
+    expect(byLearner[id.bobLearner]).toMatchObject({status:'ALLOWED',source:'RECORDED_VERBAL',currentNotice:true,lessonScoped:false});
+    for(const subject of ['demo-instructor','demo-alice']) expect((await call('GET',`${school}/recording-choices`,undefined,undefined,subject)).statusCode).toBe(403);
+    // Une nouvelle version des textes : l'accord de Bob reste affiché, mais n'est plus valable pour les textes actuels.
+    expect((await call('PUT',`${school}/data-policy`,policyBody(),2)).statusCode).toBe(200);
+    expect((await call('GET',`${school}/recording-choices`)).json().data.items.find((item:{learnerId:string})=>item.learnerId===id.bobLearner).currentNotice).toBe(false);
   });
   it('T174 : confirmation seule ne rend jamais une école prête',async()=>{
     const response=await call('POST',`${school}/activate`,{operationId:randomUUID(),expectedConfigurationVersion:1,reviewAcknowledged:true},1);

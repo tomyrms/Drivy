@@ -7,6 +7,7 @@ import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type T
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
+import { PlanningReadinessBanner } from './planning-readiness';
 
 const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' | 'clock' }>> = {
   cancelled: { label: 'Annulée', tone: 'neutral', symbol: 'ban' },
@@ -63,6 +64,7 @@ export function AgendaSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Planning" title="Agenda" />
+      <PlanningReadinessBanner />
       <FirstLessonActions />
       <div className="agenda-toolbar">
         <div className="week-nav" role="group" aria-label="Semaine affichée">

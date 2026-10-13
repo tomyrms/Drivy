@@ -10,7 +10,7 @@ import {readiness,recordSettings} from './school-setup.js';
 import {cataloguePermission} from './lesson-setup.js';
 import {planningReadiness} from './lessons.js';
 import {missingProfileFieldsLateral} from './profile-completeness.js';
-import {contentIssues,emptySetupContent,setupContentSchema,setupSteps,setupTemplates,templateVersion,type SetupContent,type SetupFormation,type SetupIssue} from './school-onboarding-model.js';
+import {contentIssues,emptySetupContent,schoolSetupTemplates,setupContentSchema,setupSteps,templateVersion,type SetupContent,type SetupFormation,type SetupIssue} from './school-onboarding-model.js';
 
 const empty=z.object({}).strict();
 export const saveSetupDraftCommand=z.object({operationId:z.uuid(),currentStep:z.enum(setupSteps),content:setupContentSchema}).strict();
@@ -55,7 +55,6 @@ async function review(db:PoolClient,school:SchoolRow,current:Draft,activate:bool
     const identityIssues=contentIssues({...content,selectedSections:['IDENTITY'],identity:{name:school.name,timeZone:school.timeZone,contactEmail:school.contactEmail,contactPhone:school.contactPhone}});
     issues.push(...identityIssues);
   }
-  if(selected(content,'PROFILE')&&content.profile.effectiveFrom&&(await db.query("SELECT id FROM drivy.profile_field_policy WHERE school_id=$1 AND status='PUBLISHED' AND effective_from=$2",[school.id,content.profile.effectiveFrom])).rowCount)issue('profile.effectiveFrom','PROFILE_POLICY_DATE_CONFLICT','Une politique utilise déjà cette date d’effet.');
   const formations=activeFormations(content),references:unknown[]=[];
   if(formations.length) {
     const permitted=(await db.query<{ok:boolean}>('SELECT drivy.lesson_catalogue_manage($1) AS ok',[school.id])).rows[0]?.ok;
@@ -71,7 +70,11 @@ async function review(db:PoolClient,school:SchoolRow,current:Draft,activate:bool
       if(alreadyApplied)issue(`formations.${content.formations.indexOf(item)}.id`,'SETUP_ITEM_ALREADY_APPLIED','Cette prestation a déjà été créée. Préparez un nouveau tarif pour continuer.');
     }
   }
-  const effects=selected(content,'PRIVACY')&&school.status==='ACTIVE'?['Une nouvelle adoption des textes peut interrompre les captures autorisées et demander un nouveau choix GPS.']:[];
+  const effects:string[]=[];
+  if(selected(content,'PRIVACY')&&school.status==='ACTIVE') {
+    const impact=(await db.query<{gps_agreements:number;active_captures:number}>('SELECT * FROM drivy.data_policy_change_impact($1)',[school.id])).rows[0];
+    effects.push(`L’adoption rendra caducs ${impact?.gps_agreements??0} accord(s) GPS sur les textes actuels et interrompra ${impact?.active_captures??0} trajet(s) en cours. Un nouvel accord GPS sera nécessaire pour les prochains trajets.`);
+  }
   const state={schoolId:school.id,draftVersion:current.version,schoolVersion:school.version,configurationVersion:school.configurationVersion,activate,
     selectedSections:content.selectedSections,content};
   const reviewDigest=createHash('sha256').update(canonical({...state,currentPolicy:currentPolicy?.notice_version_id??null,references,templateVersion,effects})).digest('hex');
@@ -139,7 +142,7 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
   return {schoolId:school.id,actions,planningReady:planning.ready};
 }
 
-export function registerSchoolOnboarding(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier}) {
+export function registerSchoolOnboarding(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;mapMatching?:{provider:'mapbox'|'osrm'}|undefined}) {
   const path='/v1/schools/:schoolId/setup-draft';
   const schoolId=(request:FastifyRequest)=>z.object({schoolId:z.uuid()}).parse(request.params).schoolId;
   const envelope=(data:unknown,request:FastifyRequest)=>({data,requestId:request.id,serverTime:new Date().toISOString()});
@@ -149,7 +152,9 @@ export function registerSchoolOnboarding(app:FastifyInstance,options:{pool:Pool;
     if(!school)throw notFound();return work(db,school);
   });
   app.get(path,async(request,reply)=>{empty.parse(request.query);const data=await read(request,draft);reply.header('ETag',`"${data.version}"`);return envelope(data,request);});
-  app.get(`${path}/templates`,async request=>{empty.parse(request.query);return envelope(await read(request,async()=>setupTemplates),request);});
+  app.get(`${path}/templates`,async request=>{empty.parse(request.query);return envelope(await read(request,async()=>
+    // Le portail insère les coordonnées du brouillon au moment de choisir la proposition.
+    schoolSetupTemplates({schoolName:'[Nom de l’école]',contactEmail:'[contact données]',mapMatchingProvider:options.mapMatching?.provider})),request);});
   app.get(`${path}/next-actions`,async request=>{empty.parse(request.query);return envelope(await read(request,nextActions),request);});
   app.get(`${path}/preview`,async request=>{const {activate}=previewQuery.parse(request.query);return envelope(await read(request,async(db,school)=>review(db,school,await draft(db,school),activate)),request);});
   app.put(path,{bodyLimit:1_000_000},async(request,reply)=>{
@@ -181,7 +186,7 @@ export function registerSchoolOnboarding(app:FastifyInstance,options:{pool:Pool;
       let profilePolicyId:string|null=null;
       if(selected(content,'PROFILE')) {
         profilePolicyId=(await db.query<{id:string}>(`INSERT INTO drivy.profile_field_policy(school_id,effective_from,fields,notice_version_id,created_by_membership_id)
-          VALUES($1,coalesce($2::timestamptz,now()),$3,$4,$5) RETURNING id`,[id,content.profile.effectiveFrom,JSON.stringify(content.profile.fields),policy!.notice_version_id,actor.membershipId])).rows[0]!.id;
+          VALUES($1,statement_timestamp(),$2,$3,$4) RETURNING id`,[id,JSON.stringify(content.profile.fields),policy!.notice_version_id,actor.membershipId])).rows[0]!.id;
         await db.query("UPDATE drivy.profile_field_policy SET status='PUBLISHED',version=version+1,approved_at=now(),approved_by_membership_id=$2 WHERE id=$1",[profilePolicyId,actor.membershipId]);
       }
       const published=[];

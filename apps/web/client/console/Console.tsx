@@ -11,6 +11,7 @@ import { ConsoleContext, readError, sectionKeys, type ConsoleContextValue, type 
 import { OverviewSection } from './overview';
 import { ConfigurationSection } from './configuration';
 import { ProfileFieldsSection } from './profile-fields';
+import { PrivacySection } from './privacy';
 import { CurriculaSection, OfferingsSection, ProceduresSection } from './catalog';
 import { ProductsSection, TermsSection } from './commerce';
 import { InvitationsSection, TeamSection } from './people';
@@ -311,7 +312,7 @@ function Section({ section }: { section: SectionKey }): ReactNode {
   switch (section) {
     case 'apercu': return <OverviewSection />;
     case 'configuration': return <ConfigurationSection />;
-    case 'confidentialite': return <ConfigurationSection section="privacy" />;
+    case 'confidentialite': return <PrivacySection />;
     case 'champs-profil': return <ProfileFieldsSection />;
     case 'offres': return <OfferingsSection />;
     case 'formations': return <FormationsSection />;

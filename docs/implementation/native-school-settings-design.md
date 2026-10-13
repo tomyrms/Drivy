@@ -11,7 +11,7 @@ Les vues `SchoolCatalogView` et `SchoolConfigurationView` évoluent sans changem
 - Le catalogue utilise des lignes séparées, une hiérarchie catégorie / conditions / état, et une commande de création en tête de section. Les détails versionnés se déplient ; préparer une nouvelle version reste visible. Les anciennes révisions restent consultables.
 - Le sélecteur des trois sections devient un menu avec les tailles de texte d’accessibilité. La colonne garde une largeur de lecture bornée sur iPad.
 - Les coordonnées gardent des libellés visibles pendant la saisie. Une école active est présentée comme telle, sans lui redemander son activation.
-- Les textes adoptés sont consultables ; leur modification s’ouvre explicitement. Aucun contenu ni consentement n’est proposé automatiquement.
+- Les textes adoptés sont consultables ; leur modification s’ouvre explicitement. Depuis le 13 octobre 2026, Drivy propose les textes d’une nouvelle école, que l’administration relit et adopte d’un geste ; aucun consentement n’est créé ([décisions](decisions-2026-10-13.md)).
 - Les quatre capacités et leurs raisons viennent de `SchoolReadiness`. Elles se consultent séparément de l’activation ; les modules facultatifs ne créent pas une alerte globale.
 
 ## Confirmation et erreurs
@@ -35,5 +35,13 @@ Les coordonnées d’offre et références de compétence ont des libellés pers
 Une erreur de sauvegarde et la vérification/relance de la demande conservée restent dans la relecture. Les commandes utilisent toujours le workspace existant et sa réponse durable. Ce prolongement est relu et soumis à la même compilation Apple groupée, sans nouvelle campagne de tests.
 
 Le bouton de relecture indisponible précise ensuite le premier champ ou contenu à corriger : référence, catégorie, durée, prix, contenu lié, compétence, motif ou période. Ces indications accompagnent les prédicats existants sans les remplacer.
+
+## Entrée native et textes de confidentialité — intégration du 13 octobre 2026
+
+La préparation de l’école est désormais un parcours du portail web. Une école `DRAFT` affiche ce renvoi à son administration et une attente d’activation aux autres membres. Une école `ACTIVE` ouvre le terrain pour le moniteur ou l’élève ; le rôle `ADMIN` seul garde une entrée vers le bureau web. L’accueil personnel natif reste réservé aux rôles moniteur et élève d’une école active.
+
+Le composant commun `SchoolPrivacyLink` présente les textes publiés depuis cet accueil, le profil et le choix GPS. Le dossier de l’élève affiche « Tes données » lorsqu’il le consulte lui-même, et « Confidentialité » lorsqu’un moniteur le consulte. Ouvrir ou fermer les textes n’enregistre ni profil ni choix GPS. La notice et la conservation restent les textes de l’école ; le résumé GPS n’invente aucune durée.
+
+Les gardes sont couverts par `SchoolEntryDestinationTests`, `SchoolWorkspaceTests` et la suite UI `SchoolEntryTests`. `SchoolPrivacyTests` contrôle la lecture et le retour dans l’accueil et les deux perspectives du profil ; le scénario GPS de `FieldFlowTests` vérifie aussi la feuille commune et l’absence d’accord avant le choix explicite. La relecture locale ne remplace pas leur exécution sur runner Apple ; les résultats de la révision intégrée sont suivis dans `STATUS.md`.
 
 La capture iPad réelle `iPad-catalog-light-synthetic.png` du run `36057849015` (`e60e7d9`) a été inspectée : contenus et statuts lisibles, mais la commande de création dominait inutilement toute la colonne. Sur largeur régulière et texte courant, elle devient une commande native à côté du résumé de section. iPhone et tailles d’accessibilité conservent l’empilement et la largeur utile au libellé. Cette retouche est postérieure à la capture.

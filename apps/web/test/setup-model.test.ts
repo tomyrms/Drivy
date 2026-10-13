@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { catalogueSetupContent, issueStep, setupFormation, setupPrice, setupContentSchema, setupProfileRequirement } from '../client/setup-model.js';
+import { catalogueSetupContent, issueStep, setupFormation, setupPrice, setupContentSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples } from '../client/setup-model.js';
 import { matchSchoolRoute } from '../server/school-routes.js';
 import { commandSpecs, createCommand, receiptMatches } from '../client/command-core.js';
 import { randomUUID } from 'node:crypto';
@@ -40,6 +40,18 @@ describe('Préparation : préserver les choix avant adoption', () => {
     const field = { field: 'birthDate', requirement: 'REQUIRED', stage: 'BEFORE_COURSE', purposeCode: 'COURSE_ELIGIBILITY', explanation: 'Préparer le cours.' } as const;
     expect(setupProfileRequirement(field)).toBe('Avant un cours');
     expect(setupProfileRequirement({ ...field, stage: 'BEFORE_LESSON' })).toBe('Avant une leçon');
+  });
+  test('les coordonnées suivent le modèle intact sans écraser une rédaction adaptée', () => {
+    const templates = { version: '2', privacy: { id: 'notice', version: '2', noticeText: '[Nom de l’école] · [contact données]', retentionText: 'Contact : [contact données]' }, profileFields: [], formations: [] };
+    const previous = setupContentSchema.parse({ selectedSections: ['IDENTITY', 'PRIVACY'], identity: { name: 'Ancien nom', timeZone: 'Europe/Zurich', contactEmail: 'avant@example.invalid', contactPhone: null },
+      privacy: { noticeText: 'Ancien nom · avant@example.invalid', retentionText: 'Contact : avant@example.invalid', contactEmail: 'avant@example.invalid', templateId: 'notice', templateVersion: '2' }, profile: { fields: [], effectiveFrom: null }, formations: [] });
+    const identity = { ...previous.identity, name: 'Nouveau nom', contactEmail: 'apres@example.invalid' };
+    const updated = refreshSetupExamples(previous, { ...previous, identity }, templates);
+    expect(updated.privacy.noticeText).toBe('Nouveau nom · apres@example.invalid');
+    expect(updated.privacy.retentionText).toBe('Contact : apres@example.invalid');
+    const adapted = { ...previous, privacy: { ...previous.privacy, noticeText: 'Rédaction spécifique de l’école.' } };
+    expect(refreshSetupExamples(adapted, { ...adapted, identity }, templates).privacy.noticeText).toBe(adapted.privacy.noticeText);
+    expect(setupExampleText('Écrire à [contact données]', updated)).toBe('Écrire à apres@example.invalid');
   });
   test('écriture et adoption ont des reçus distincts et des versions obligatoires', () => {
     const schoolId = randomUUID();

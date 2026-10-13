@@ -21,7 +21,6 @@ struct SchoolOnboardingView: View {
     @State private var hasStarted = false
     @State private var editsInformation = false
     @State private var confirmsDiscard = false
-    @State private var showsNotice = false
     @State private var location = SchoolOnboardingLocationPermission()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Un écran a déjà été montré : le premier (squelette puis écran) apparaît en fondu, les suivants glissent.
@@ -48,7 +47,6 @@ struct SchoolOnboardingView: View {
                 } message: {
                     Text("Les étapes déjà confirmées par l’école restent enregistrées. Tu pourras reprendre plus tard.")
                 }
-                .sheet(isPresented: $showsNotice) { noticeSheet }
         }
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.hasEdits || model.isBusy)
@@ -214,14 +212,8 @@ struct SchoolOnboardingView: View {
                 }
                 .disabled(!model.canMutate)
                 if let notice = model.notice, notice.status == "APPROVED" {
-                    Button { showsNotice = true } label: {
-                        Label("Comment l’école utilise tes données", systemImage: "doc.text")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(minHeight: DrivyLayout.tapTarget)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(DrivyTheme.accent)
+                    SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                        identifier: "onboarding-privacy-link")
                 }
             } else {
                 DrivyInlineMessage(text: "Ton dossier n’est pas encore prêt chez \(schoolName). Tu peux continuer : l’école le préparera.",
@@ -582,36 +574,6 @@ struct SchoolOnboardingView: View {
         if location.isAuthorized { return "Position autorisée" }
         if location.isDenied { return "Position non autorisée" }
         return "À décider plus tard"
-    }
-
-    private var noticeSheet: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    if let notice = model.notice {
-                        Text(notice.noticeText).textSelection(.enabled)
-                        Text(notice.retentionText).textSelection(.enabled)
-                        if let email = notice.contactEmail {
-                            DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
-                        }
-                        Text("Version \(notice.version)")
-                            .font(.footnote.monospacedDigit())
-                            .foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .font(.body)
-                .foregroundStyle(DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .drivyPageContent()
-            }
-            .background(DrivyTheme.surface)
-            .navigationTitle("Tes données")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { showsNotice = false } }
-            }
-        }
-        .tint(DrivyTheme.accent)
     }
 
     /// Welcome and end of the flow answer each other: a brand plate, then the title. No sentence under it.

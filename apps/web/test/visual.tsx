@@ -9,6 +9,7 @@ import { TripsSection } from '../client/console/trips';
 import { AvailabilitySection } from '../client/console/availability';
 import { ConfigurationSection } from '../client/console/configuration';
 import { ProfileFieldsSection } from '../client/console/profile-fields';
+import { PrivacySection } from '../client/console/privacy';
 import { OverviewSection } from '../client/console/overview';
 import { ObservationThemesSection } from '../client/console/observation-themes';
 import { ManagementConsole } from '../client/console/Console';
@@ -233,7 +234,7 @@ if (new URLSearchParams(location.search).get('scheme') === 'light') {
   theme.textContent = reviewStyles.match(/:root\s*\{[\s\S]*?\}/)?.[0] ?? '';
   document.head.append(theme);
 }
-const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, absences: () => <AvailabilitySection section="absences" />, config: ConfigurationSection, privacy: () => <ConfigurationSection section="privacy" />, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
+const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, absences: () => <AvailabilitySection section="absences" />, config: ConfigurationSection, privacy: PrivacySection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
   curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = new URLSearchParams(location.search).get('shell') === '1';

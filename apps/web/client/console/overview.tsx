@@ -69,7 +69,7 @@ export function FirstLessonActions() {
   const { revision } = useCommandSnapshot();
   const [reduced, setReduced] = useState(false);
   const loaded = useLoad(() => readSchool(schoolId, 'setup-draft/next-actions', nextActionsSchema), [schoolId, school.version, revision]);
-  return <LoadState loaded={loaded} label="Vérification de la première leçon…">{next => next.actions.length > 0 && <section className="first-lesson-actions" aria-label="Première leçon">
+  return <LoadState loaded={loaded} label="Vérification de la première leçon…">{next => next.planningReady && next.actions.length > 0 && <section className="first-lesson-actions" aria-label="Première leçon">
     <div className="first-lesson-heading"><h2>Votre première leçon</h2><button type="button" className="button quiet" aria-expanded={!reduced} onClick={() => setReduced(!reduced)}>{reduced ? 'Afficher' : 'Réduire'}</button></div>
     {!reduced && <><ActionLink action={next.actions[0]!} /><button type="button" className="button quiet" onClick={() => navigate('apercu')}>Voir toute la préparation</button></>}
   </section>}</LoadState>;

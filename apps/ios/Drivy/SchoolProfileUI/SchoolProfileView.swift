@@ -325,16 +325,8 @@ struct SchoolProfileView: View {
                 }
                 if let notice {
                     // Same wording and content as the notice sheet of the guided welcome.
-                    DisclosureGroup("Comment l’école utilise tes données") {
-                        Text(notice.noticeText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        Text(notice.retentionText).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                        if let email = notice.contactEmail {
-                            DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
-                        }
-                        Text("Version \(notice.version)")
-                            .font(.footnote.monospacedDigit())
-                            .foregroundStyle(DrivyTheme.muted)
-                    }
+                    SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                        addressesLearner: model.isOwnProfile, identifier: "profile-privacy-link")
                 }
             }
             .drivyFormRows()

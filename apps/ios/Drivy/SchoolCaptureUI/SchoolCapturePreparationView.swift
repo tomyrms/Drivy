@@ -308,23 +308,17 @@ struct SchoolCapturePreparationView: View {
                     .accessibilityIdentifier("preparation-choice-state")
                 if let notice = model.notice {
                     if let choice = model.choice, choice.noticeVersionId != notice.noticeVersionId {
-                        DrivyInlineMessage(text: "L’information de l’école a changé. Relis-la avant de confirmer un nouvel accord.",
+                        DrivyInlineMessage(text: "Les textes de confidentialité ont changé. Relis-les avant de confirmer un nouvel accord.",
                             tone: .warning)
                     }
-                    DisclosureGroup("Information et conservation des données") {
-                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                            Text(notice.noticeText)
-                            Text("Conservation").font(.headline)
-                            Text(notice.retentionText)
-                            Label(notice.contactEmail, systemImage: "envelope").font(.subheadline)
-                        }.textSelection(.enabled).fixedSize(horizontal: false, vertical: true).padding(.top, DrivySpacing.s)
-                    }
+                    SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
+                        addressesLearner: false, identifier: "preparation-privacy-link")
                 }
                 if let error = model.noticeError { DrivyInlineMessage(text: error, tone: .warning) }
                 Button {
                     model.closeDiagnostic()
                     choiceRoute = ChoiceRoute(lessonID: model.lessonID, store: model.store)
-                } label: { Label("Lire la notice et choisir", systemImage: "doc.text") }
+                } label: { Label("Lire et choisir", systemImage: "doc.text") }
                     .buttonStyle(DrivySecondaryButtonStyle()).disabled(!model.mayOpenChoice)
                     .accessibilityIdentifier("preparation-open-choice")
             }
@@ -579,14 +573,8 @@ private struct SchoolCaptureStartReviewView: View {
                         }
                         .font(.subheadline.weight(.semibold))
                     }
-                    DisclosureGroup("Relire l’information GPS de l’école") {
-                        VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                            Text(review.notice.noticeText)
-                            Text("Conservation des données").font(.headline)
-                            Text(review.notice.retentionText)
-                            Text(review.notice.contactEmail).font(.subheadline)
-                        }.padding(.top, DrivySpacing.s).textSelection(.enabled)
-                    }
+                    SchoolPrivacyLink(text: .init(notice: review.notice.noticeText, retention: review.notice.retentionText,
+                        contact: review.notice.contactEmail), addressesLearner: false, identifier: "preparation-review-privacy-link")
                     if review.pendingMutation != nil {
                         Text("Cette confirmation reprend exactement la demande de départ conservée. La leçon, l’accord et le diagnostic seront vérifiés à nouveau.")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted)

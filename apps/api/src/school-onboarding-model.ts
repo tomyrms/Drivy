@@ -1,7 +1,8 @@
 import {z} from 'zod';
 import {fieldRule,validateRules} from './profiles.js';
 import {curriculumBody,policyBody} from './catalogue.js';
-import {policyCommand} from './school-setup.js';
+import {policyCommand,POLICY_TEXT_MINIMUM} from './school-setup.js';
+import {proposedCommercialTerms,proposedDataPolicy,proposedProcedure,proposedProfileFields,type ProposalContext} from './text-proposals.js';
 
 export const setupSteps=['IDENTITY','PRIVACY','PROFILE','FORMATIONS','PRICING','REVIEW'] as const;
 export const setupSections=['IDENTITY','PRIVACY','PROFILE','CATALOGUE'] as const;
@@ -28,11 +29,8 @@ export type SetupFormation=z.infer<typeof setupFormationSchema>;
 export const setupDraftSchema=z.object({id:z.uuid(),schoolId:z.uuid(),version:z.number().int().positive(),status:z.enum(['DRAFT','APPLIED']),currentStep:z.enum(setupSteps),
   content:setupContentSchema,updatedAt:z.iso.datetime().nullable(),updatedByMembershipId:z.uuid(),appliedAt:z.iso.datetime().nullable()}).strict();
 export interface SetupIssue {field:string;code:string;message:string}
-export const templateVersion='2026-10-13.1';
-export const defaultProfileFields:z.infer<typeof fieldRule>[]=[
-  {field:'firstName',requirement:'REQUIRED',stage:'JOIN',purposeCode:'IDENTIFICATION',explanation:'Identifier votre dossier dans l’école.'},
-  {field:'lastName',requirement:'REQUIRED',stage:'JOIN',purposeCode:'IDENTIFICATION',explanation:'Identifier votre dossier dans l’école.'}
-];
+export const templateVersion='2026-10-13.2';
+export const defaultProfileFields:z.infer<typeof fieldRule>[]=structuredClone([...proposedProfileFields]);
 const competencies=(twoWheels:boolean)=>[
   {key:'preparation',label:'Préparer la conduite',description:'Préparer le véhicule et son installation avant de partir.',sortOrder:0},
   {key:'observation',label:'Observer et anticiper',description:'Observer l’environnement et anticiper les situations de circulation.',sortOrder:1},
@@ -41,17 +39,19 @@ const competencies=(twoWheels:boolean)=>[
   {key:'intersections',label:'Franchir les intersections',description:'Observer, décider et communiquer avant de franchir une intersection.',sortOrder:4},
   {key:'manoeuvres',label:'Manœuvrer',description:'Réaliser les manœuvres travaillées en tenant compte des autres usagers.',sortOrder:5}
 ];
-/** Bases pédagogiques, sans âge, durée légale, habilitation ou attestation réglementaire. */
-export const setupTemplates={version:templateVersion,privacy:{id:'school-data-information',version:templateVersion,
-  noticeText:'[Nom de l’école] utilise Drivy pour gérer les dossiers, les rendez-vous et le suivi pédagogique. Les personnes habilitées de l’école accèdent aux données nécessaires à leur activité. L’élève retrouve les leçons réalisées, les observations partagées, les bilans et les objectifs ; les notes privées du moniteur ne lui sont pas montrées. Le suivi pédagogique peut être utilisé sans GPS. Pour une demande relative aux données : [contact données]. Complétez les destinataires et les pratiques propres à votre école : [à compléter].',
-  retentionText:'Décrivez les durées appliquées à vos dossiers, aux leçons, aux documents et aux trajets, ainsi que le traitement des demandes et des sauvegardes : [à compléter]. N’annoncez une suppression automatique que si elle est effectivement mise en œuvre.'},
-  commercial:{id:'individual-lesson-commercial',version:templateVersion,
-    cancellationPolicyText:'Pour modifier ou annuler une leçon, contactez l’école : [à compléter : moyen de contact et délai demandé]. En cas d’annulation tardive ou d’absence : [à compléter : traitement prévu et éventuels frais]. Les changements demandés par l’école sont traités ainsi : [à compléter : information de l’élève et report].',
-    termsText:'Cette prestation correspond à une leçon individuelle, avec la durée et le prix indiqués dans le tarif. Le règlement s’effectue selon les modalités suivantes : [à compléter : moyens de paiement et échéance]. Le prix comprend : [à compléter : éléments inclus]. Les éventuels frais supplémentaires sont : [à compléter : nature, montant et accord préalable]. Pour une modification ou une annulation, les modalités de l’école sont : [à compléter : reprendre les conditions d’annulation confirmées].'},
-  profileFields:defaultProfileFields,
-  formations:['A','A1','B','BE'].map(categoryCode=>({id:`pedagogy-${categoryCode.toLowerCase()}`,version:templateVersion,categoryCode,label:`Permis ${categoryCode}`,
-    competencies:competencies(categoryCode==='A'||categoryCode==='A1'),
-    procedureText:'Avant la première leçon, l’école examine le dossier et les justificatifs utiles. Le moniteur définit avec l’élève les objectifs de travail, adapte les exercices et consigne le suivi pédagogique. Cette proposition doit être adaptée aux pratiques de l’école.',durationMinutes:45}))};
+/** Le guide et les réglages proposent les mêmes textes ; aucune lecture ne vaut adoption. */
+export function schoolSetupTemplates(context:ProposalContext) {
+  const privacy=proposedDataPolicy(context),procedure=proposedProcedure(),commercial=proposedCommercialTerms(context);
+  return {version:templateVersion,privacy:{id:'school-data-information',version:templateVersion,
+    noticeText:privacy.noticeText,retentionText:privacy.retentionText},
+    commercial:{id:'individual-lesson-commercial',version:templateVersion,cancellationPolicyText:procedure.cancellationPolicyText,termsText:commercial.termsText},
+    profileFields:structuredClone(defaultProfileFields),
+    // Bases pédagogiques, sans âge, durée légale, habilitation ou attestation réglementaire.
+    formations:['A','A1','B','BE'].map(categoryCode=>({id:`pedagogy-${categoryCode.toLowerCase()}`,version:templateVersion,categoryCode,label:`Permis ${categoryCode}`,
+      competencies:competencies(categoryCode==='A'||categoryCode==='A1'),procedureText:procedure.procedureText,durationMinutes:45}))};
+}
+/** Identifiants/version stables pour les validations et bases synthétiques sans école. */
+export const setupTemplates=schoolSetupTemplates({schoolName:'[Nom de l’école]',contactEmail:'[contact données]'});
 
 export function emptySetupContent(school:{name:string;timeZone:string;contactEmail:string;contactPhone:string|null;status:string}):SetupContent {
   return {selectedSections:school.status==='DRAFT'?['IDENTITY','PRIVACY','PROFILE']:[],identity:{name:school.name,timeZone:school.timeZone,contactEmail:school.contactEmail,contactPhone:school.contactPhone},
@@ -74,11 +74,17 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
   if(content.selectedSections.includes('PRIVACY')) {
     const privacy=content.privacy;
     for(const key of ['noticeText','retentionText'] as const)nonblank(privacy[key],`privacy.${key}`,'Complétez le texte avant de l’adopter.');
-    if(!policyCommand.safeParse({operationId:validationOperation,noticeText:privacy.noticeText,retentionText:privacy.retentionText,contactEmail:privacy.contactEmail,reviewAcknowledged:true}).success && !z.email().safeParse(privacy.contactEmail).success)add('privacy.contactEmail','Indiquez un contact valide pour les demandes de données.');
+    const validated=policyCommand.safeParse({operationId:validationOperation,noticeText:privacy.noticeText,retentionText:privacy.retentionText,contactEmail:privacy.contactEmail,reviewAcknowledged:true});
+    if(!validated.success)for(const error of validated.error.issues) {
+      const field=error.path[0];
+      if(field==='contactEmail')add('privacy.contactEmail','Indiquez un contact valide pour les demandes de données.');
+      else if(field==='noticeText'||field==='retentionText')add(`privacy.${field}`,`Rédigez un texte d’au moins ${POLICY_TEXT_MINIMUM} caractères utiles avant de l’adopter.`,'POLICY_TEXT_TOO_SHORT');
+    }
     if(privacy.templateId!==null&&(privacy.templateId!==setupTemplates.privacy.id||privacy.templateVersion!==templateVersion))add('privacy.templateVersion','Relisez la version actuelle du modèle ou retirez sa référence pour utiliser votre texte.','SETUP_TEMPLATE_CHANGED');
   }
   if(content.selectedSections.includes('PROFILE')) {
     try {validateRules(z.array(fieldRule).parse(content.profile.fields));}catch {add('profile.fields','Vérifiez les informations, leur utilité et le moment où elles sont demandées.','PROFILE_POLICY_RULE_INVALID');}
+    if(content.profile.effectiveFrom!==null)add('profile.effectiveFrom','Les informations demandées prennent effet dès la confirmation. Retirez la date enregistrée pour continuer.','PROFILE_EFFECTIVE_NOW_REQUIRED');
   }
   if(content.selectedSections.includes('CATALOGUE')) {
     for(const [index,formation] of content.formations.entries()) {

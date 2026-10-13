@@ -61,7 +61,9 @@ Le PUT reçoit strictement :
 }
 ```
 
-Textes non blancs, chacun au plus 20 000 unités UTF-16, email valide au plus 320 caractères, JSON strict et corps au plus 200 000 octets. Aucun texte juridique n’est généré ou adopté par défaut. Le contact de demande de données est distinct du contact général scolaire. L’interface montre les deux textes et demande un geste d’adoption, jamais précoché. La saisie reste locale avant ce geste. Une adoption enregistre les octets logiques exacts reçus, une nouvelle version, l’auteur authentifié et l’instant serveur. Les anciennes révisions restent immuables ; modifier les textes exige une nouvelle adoption versionnée.
+Textes d’au moins 40 caractères utiles (depuis le 13 octobre 2026), chacun au plus 20 000 unités UTF-16, email valide au plus 320 caractères, JSON strict et corps au plus 200 000 octets. Drivy propose des textes (`GET /text-proposals`, décision du 13 octobre 2026) ; aucun n’est adopté sans la commande explicite de l’ADMIN, qui peut publier en même temps les informations demandées proposées (`publishProposedFields`). Le contact de demande de données est distinct du contact général scolaire. L’interface montre les deux textes et demande un geste d’adoption, jamais précoché. La saisie reste locale avant ce geste. Une adoption enregistre les octets logiques exacts reçus, une nouvelle version, l’auteur authentifié et l’instant serveur. Les anciennes révisions restent immuables ; modifier les textes exige une nouvelle adoption versionnée.
+
+`GET /data-policy/impact` (ADMIN, migration 029) donne avant l’adoption le nombre d’élèves ayant accepté le GPS avec les textes actuels et de trajets en cours : une nouvelle version les rend caducs ou les arrête.
 
 Cette preuve confirme le choix de l’ADMIN ; elle ne certifie ni conformité juridique ni exécution automatique de la conservation décrite. Aucun consentement d’élève, aucune autorisation GPS et aucune approbation de permis ne sont créés.
 

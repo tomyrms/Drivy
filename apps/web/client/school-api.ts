@@ -12,7 +12,7 @@ export const schoolSchema = z.object({
   contactEmail: z.string(), contactPhone: z.string().nullable(), configurationVersion: version,
   modules: z.object({ gpsEnabled: z.boolean(), packsEnabled: z.boolean(), collectiveCoursesEnabled: z.boolean(), courseOffersVisibleByDefault: z.boolean() }),
 });
-const blocker = z.object({ code: z.string(), message: z.string(), field: z.string().nullable().optional() });
+const blocker = z.object({ code: z.string(), message: z.string(), field: z.string().nullable().optional(), destinationKey: z.string().nullable().optional() });
 export const readinessSchema = z.object({
   schoolId: id, configurationVersion: version, computedAt: timestamp, activationReady: z.boolean(),
   activationBlockers: z.array(blocker).max(50),
@@ -26,6 +26,23 @@ export const dataPolicySchema = z.object({
   schoolId: id, version, status: z.enum(['DRAFT', 'APPROVED']), noticeText: z.string().max(20_000), retentionText: z.string().max(20_000),
   contactEmail: z.string().nullable(), approvedAt: timestamp.nullable(), noticeVersionId: id.nullable().optional(),
 });
+/** Minimum de caractères utiles d'un texte de confidentialité (même règle que l'API). */
+export const POLICY_TEXT_MINIMUM = 40;
+export const policyImpactSchema = z.object({ gpsAgreements: z.number().int().min(0), activeCaptures: z.number().int().min(0) });
+export type PolicyImpact = z.infer<typeof policyImpactSchema>;
+/** Textes proposés par Drivy : préremplissent les formulaires, jamais adoptés sans le geste de l'administration. */
+export const textProposalsSchema = z.object({
+  dataPolicy: z.object({ noticeText: z.string().max(20_000), retentionText: z.string().max(20_000), contactEmail: z.string() }),
+  profileFields: z.array(z.object({ field: z.string(), requirement: z.string(), stage: z.string(), purposeCode: z.string(), explanation: z.string().max(1000) })).max(7),
+  procedure: z.object({ procedureText: z.string().max(4000), cancellationPolicyText: z.string().max(4000) }),
+  commercialTerms: z.object({ label: z.string().max(200), termsText: z.string().max(20_000) }),
+});
+export type TextProposals = z.infer<typeof textProposalsSchema>;
+export const recordingChoiceSchema = z.object({
+  learnerId: id, status: z.enum(['ALLOWED', 'REFUSED', 'UNKNOWN']), source: z.enum(['SELF', 'RECORDED_VERBAL']), recordedAt: timestamp,
+  currentNotice: z.boolean(), lessonScoped: z.boolean(),
+});
+export type RecordingChoice = z.infer<typeof recordingChoiceSchema>;
 export const receiptSchema = z.object({
   operationId: id, commandType: z.string(), resourceType: z.string(), resourceId: id, committedAt: timestamp, resourceVersion: version,
 });

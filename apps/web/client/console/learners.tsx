@@ -15,6 +15,7 @@ import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } f
 import { DirectoryRow } from './directory';
 import { permitSummary, TrainingFollowUp } from './dossier';
 import { ProfileCompletion } from './profile-completion';
+import { GpsConsentLine } from './gps-consent';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, ReadRetry, SectionHeading, SplitView } from './layout';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
@@ -165,6 +166,7 @@ export function LearnersSection() {
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
           {!current.archivedAt && notReady(current) && <ProfileCompletion schoolId={schoolId} learner={current} canEdit={canEdit && membership.roles.includes('ADMIN')} />}
           <div className="detail-links"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Voir les trajets</button></div>
+          {!current.archivedAt && <GpsConsentLine learnerId={current.id} />}
           {dossier.status === 'error' && <Notice tone="error" title="Dossier incomplet" live={false}
             actions={<ReadRetry loaded={dossier} />}><p>{dossier.error ?? readError(null)}</p></Notice>}
           {trainingsOf(current.id).length === 0 && <p className="caption">Aucune formation.</p>}
