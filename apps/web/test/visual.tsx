@@ -18,6 +18,7 @@ import { CurriculaSection, ProceduresSection, OfferingsSection } from '../client
 import { ProductsSection, TermsSection } from '../client/console/commerce';
 import { App } from '../client/App';
 import { setupSteps, type SetupDraft, type SetupTemplates, type SetupPreview } from '../client/setup-model';
+import type { DataPolicy, TextProposals } from '../client/school-api';
 
 const parameters = new URLSearchParams(location.search);
 const page = parameters.get('page');
@@ -70,7 +71,13 @@ function setupPreview(activate: boolean): SetupPreview {
     activate, reviewDigest: `synthetic-${setupDraft.version}`, ready: issues.length === 0, issues, selectedSections: content.selectedSections,
     content: structuredClone(content), effects: activate ? [] : content.selectedSections.includes('PRIVACY') ? ['Les autorisations GPS en cours prennent fin.'] : [] };
 }
-let policyState = { schoolId, version: 1, status: 'APPROVED', noticeVersionId: noticeId, noticeText: 'Les informations de votre profil servent au suivi de votre formation. Seuls les membres autorisés de l’école peuvent les consulter.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique et traite les demandes de suppression auprès du contact ci-dessous.', contactEmail: 'ecole@example.test', approvedAt: stamp };
+let policyState: DataPolicy = { schoolId, version: 1, status: 'APPROVED', noticeVersionId: noticeId, noticeText: 'Les informations de votre profil servent au suivi de votre formation. Seuls les membres autorisés de l’école peuvent les consulter.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique et traite les demandes de suppression auprès du contact ci-dessous.', contactEmail: 'ecole@example.test', approvedAt: stamp };
+const textProposals: TextProposals = {
+  dataPolicy: { noticeText: policyState.noticeText, retentionText: policyState.retentionText, contactEmail: 'ecole@example.test' },
+  profileFields: [...setupTemplates.profileFields, { field: 'contactPhone', requirement: 'OPTIONAL', stage: 'OPTIONAL', purposeCode: 'LESSON_CONTACT', explanation: 'Pour vous prévenir d’un changement de leçon.' }],
+  procedure: { procedureText: 'Texte synthétique sur le déroulement des leçons, à relire par l’école.', cancellationPolicyText: 'Conditions synthétiques d’annulation à adapter.' },
+  commercialTerms: { label: 'Conditions de l’école', termsText: 'Conditions commerciales synthétiques à relire par l’école.' },
+};
 const member = (id: string, displayName: string, roles: string[], status = 'ACTIVE') => ({ id, schoolId, version: 1, personId: uuid(), displayName, status, roles, grants: id === marieId ? ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'] : [], accessEpoch: 1 });
 const offering = (id: string, offeringKey: string, version: number, enabled: boolean, categoryCode: string) => ({ id, schoolId, version, offeringKey, categoryCode, curriculumVersionId: categoryCode === 'A' ? curriculumA : curriculumB, policyVersionId: categoryCode === 'A' ? policyA : policyB, enabled, defaultDurationMinutes: 45, defaultPriceCents: 9500 });
 const db: Record<string, any> = {
@@ -118,6 +125,10 @@ if (parameters.get('stress') === '1') {
   for (let index = 0; index < 18; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(), displayName: `Dossier synthétique ${String(index + 1).padStart(2, '0')}` });
 }
 if (reviewState === 'empty') for (const key of Object.keys(db)) db[key] = [];
+if (parameters.get('policy') === 'unadopted') {
+  policyState = { ...policyState, status: 'DRAFT', noticeText: '', retentionText: '', approvedAt: null, noticeVersionId: null };
+  db['profile-field-policies'] = [];
+}
 // Signalements : le catalogue du contrat (douze affichés sur dix-huit à l'origine), versionné comme le serveur.
 const themeCatalogue: [string, string, boolean][] = [['vehicle', 'Maîtrise du véhicule', true], ['observation', 'Observation et contrôles', true], ['right-priority', 'Priorité à droite', true],
   ['signage', 'Signalisation', true], ['give-way', 'Céder le passage', true], ['intersections', 'Intersections et giratoires', true], ['speed', 'Vitesse', true],
@@ -132,6 +143,8 @@ const codes = ['K7Q4-MX2P', 'R2ZN-8HTC', 'B9WD-4LEA'];
 const envelope = (data: unknown) => ({ data, requestId: uuid(), serverTime: stamp });
 const log: string[] = [];
 (window as unknown as { __log: string[] }).__log = log;
+const reads: string[] = [];
+(window as unknown as { __reads: string[] }).__reads = reads;
 
 function reply(status: number, body: unknown, url: string) {
   return { status, ok: status < 400, url, headers: new Headers({ 'content-type': 'application/json' }), json: async () => body };
@@ -141,6 +154,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   const method = init?.method ?? 'GET'; const body = init?.body ? JSON.parse(String(init.body)) : null;
   await new Promise(resolve => setTimeout(resolve, reviewState === 'slow' && path === 'lessons' ? 1500 : 120));
   if (method === 'GET') {
+    reads.push(path);
     if (url.pathname.endsWith('/bff/session')) return reply(200, { authenticated: page !== 'signin', csrfToken: 'synthetic-review', invitationPending: page === 'invitation', user: { displayName: 'Luc Martin', email: 'luc@example.test', emailVerified: true } }, url.href);
     if (url.pathname.endsWith('/bff/me')) return reply(200, { data: { ...value.me, memberships: [value.membership] } }, url.href);
     if (path === '') return reply(200, envelope(value.school), url.href);
@@ -157,6 +171,12 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     ] : [] }), url.href);
     if (path === 'setup') return reply(200, envelope({ schoolId, version: 1, status: 'COMPLETED', currentStep: 'REVIEW', completedSteps: ['IDENTITY', 'DATA'], lastSavedAt: stamp, readiness }), url.href);
     if (path === 'data-policy') return reply(200, envelope(policyState), url.href);
+    if (path === 'text-proposals') return reply(200, envelope(textProposals), url.href);
+    if (path === 'data-policy/impact') {
+      if (parameters.get('impact') === 'slow') await new Promise(resolve => setTimeout(resolve, 1200));
+      if (parameters.get('impact') === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+      return reply(200, envelope(parameters.get('impact') === 'zero' ? { gpsAgreements: 0, activeCaptures: 0 } : { gpsAgreements: 3, activeCaptures: 1 }), url.href);
+    }
     if (/^trainings\/[^/]+\/assignments$/.test(path)) return reply(200, envelope({ items: db.assignments, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/permit-checks$/.test(path)) return reply(200, envelope({ items: db.permits, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/progress$/.test(path)) return reply(200, envelope({ trainingId: trainingA, computedAt: stamp, unobservedCompetencyIds: [comp2], items: [{ competencyId: comp1, label: 'Démarrer et s’arrêter', level: 'GUIDED', context: 'Parking', observedAt: stamp, sourceLessonId: lessonDone, sourceRevisionId: uuid() }] }), url.href);
@@ -184,9 +204,18 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     }
   }
   if (method === 'PUT' && path === 'data-policy') {
-    policyState = { ...policyState, ...body, version: policyState.version + 1, status: 'APPROVED' };
+    if ((init?.headers as Record<string, string>)?.['If-Match'] !== `"${policyState.version}"`) return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    policyState = { ...policyState, ...body, version: policyState.version + 1, status: 'APPROVED', approvedAt: stamp, noticeVersionId: uuid() };
+    if (body.publishProposedFields) db['profile-field-policies'].push({ id: uuid(), schoolId, version: 1, status: 'PUBLISHED', effectiveFrom: stamp, noticeVersionId: policyState.noticeVersionId, approvedByMembershipId: marieId, fields: structuredClone(textProposals.profileFields) });
     value.school.version++;
     return reply(200, envelope(policyState), url.href);
+  }
+  if (method === 'POST' && path === 'profile-field-policies') {
+    if ((init?.headers as Record<string, string>)?.['If-Match'] !== `"${value.school.version}"`) return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    const item = { id: uuid(), schoolId, version: 1, status: body.publishNow ? 'PUBLISHED' : 'DRAFT', effectiveFrom: stamp, noticeVersionId: body.noticeVersionId, approvedByMembershipId: body.publishNow ? marieId : null, fields: body.fields };
+    if (body.publishNow) db['profile-field-policies'].forEach((existing: any) => { existing.status = 'RETIRED'; });
+    db['profile-field-policies'].push(item); value.school.version++;
+    return reply(201, envelope(item), url.href);
   }
   if (method === 'PUT' && path === 'observation-themes') {
     // ?state=conflict : quelqu'un d'autre enregistre avant nous (412) ; ?state=forbidden : le droit a été retiré (403).

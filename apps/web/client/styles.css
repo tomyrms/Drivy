@@ -925,6 +925,12 @@ select, textarea { font: inherit; color: inherit; }
   .availability-grid { grid-template-columns: minmax(0, 1fr); gap: var(--space-m); }
 }
 @container (max-width: 26rem) {
+  .data-table.rules, .data-table.rules tbody { display: block; }
+  .data-table.rules thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .data-table.rules tbody tr { display: grid; grid-template-columns: minmax(0, 1fr); padding-block: var(--space-s); border-block-end: 1px solid var(--border); }
+  .data-table.rules tbody tr:last-child { border-block-end: 0; }
+  .data-table.rules tbody th, .data-table.rules tbody td { display: block; inline-size: auto; width: auto; border: 0; padding: var(--space-xxs) 0; }
+  .data-table.rules td > .field + .field { margin-block-start: var(--space-s); }
   .directory-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-xxs) var(--space-s); }
   .directory-identity { grid-column: 1; }
   .directory-detail { grid-column: 1; font-size: .875rem; }
