@@ -93,7 +93,7 @@ const db: Record<string, any> = {
   offerings: [offering(offerBOld, 'b-standard', 1, true, 'B'), offering(offerB, 'b-standard', 2, true, 'B'), offering(offerA, 'a-standard', 1, true, 'A')],
   invitations: [
     { id: uuid(), schoolId, version: 1, delivery: 'CODE', maskedEmail: null, roles: ['LEARNER'], status: 'PENDING', expiresAt: '2026-10-04T08:00:00.000Z', training: { offeringId: offerB, instructorMembershipId: marieId } },
-    { id: uuid(), schoolId, version: 1, delivery: 'CODE', maskedEmail: null, roles: ['INSTRUCTOR'], status: 'PENDING', expiresAt: '2026-10-20T08:00:00.000Z' },
+    { id: uuid(), schoolId, version: 1, delivery: 'EMAIL', maskedEmail: 'm***@example.test', roles: ['INSTRUCTOR'], status: 'PENDING', expiresAt: '2026-10-20T08:00:00.000Z' },
   ] as Record<string, unknown>[],
   learners: [
     { id: learnerA, schoolId, version: 3, personId: uuid(), displayName: 'Éloïse Müller', contactEmail: 'eloise@example.test', contactPhone: null, archivedAt: null, profileReadiness: 'ACTION_REQUIRED' },

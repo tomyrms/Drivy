@@ -102,26 +102,22 @@ Les hauteurs effectives des lignes et le nombre de lignes visibles doivent être
 | `ListPagination` | Intervalle affiché, total réel, précédent/suivant et nom accessible « Pagination des élèves » ou « Pagination des membres ». |
 | `.record-table` | Colonnes comparables, identité dominante, contacts et informations secondaires lisibles, états ordinaires sans badge. À petite largeur, les cellules se présentent avec leur libellé. |
 | `SplitView` / `DetailPanel` | Mode partagé conservé pour les autres usages ; mode `page` pour les registres élèves/équipe, titre principal unique et retour explicite. |
-| `CheckField` | Input et label natifs ; libellé accessible relié par `aria-labelledby`, aide séparée via `aria-describedby`. Dessin commun des états vide, coché, intermédiaire, désactivé et focus. `plain` pour choix usuels ; `confirmation` pour adoption ou confirmation explicite. |
+| `CheckField` | Input et label natifs ; libellé accessible relié par `aria-labelledby`, aide séparée via `aria-describedby`. Dessin commun des états vide, coché, intermédiaire, désactivé et focus. `plain` pour choix usuels ; `confirmation` pour dialogues métier et entrée par invitation. Le guide garde `plain` lorsque sa section de revue porte déjà le contexte et la conséquence de l’adoption, sans ajouter une carte imbriquée. |
 | `ConfirmDialog` et entrée par invitation | Réutilisent `CheckField variant="confirmation"`. L’ancienne apparence `confirm-card` est retirée. |
 | `ThemeControl` | Radios natifs avec dessin cohérent ; les choix Clair/Sombre/Système et leur persistance restent inchangés. |
 | `.editor-save-bar` | Barre d’enregistrement fixe dans le défilement seulement si largeur et hauteur du viewport dépassent 40 rem ; retour dans le flux sur écran étroit ou bas pour garder les champs visibles. |
 
 Survol, focus clavier et état coché ont des traitements distincts. Le focus général reste de 3 px ; le groupe de checkbox porte un contour de focus de 2 px autour du label. En couleurs forcées, checkbox et radio reviennent au dessin natif, les SVG décoratifs de checkbox sont masqués. Les badges restent réservés aux exceptions et les ombres aux superpositions. Le sombre utilise toujours les tokens sémantiques et `html[data-theme]`, y compris dans les dialogues et menus.
 
-## Vérification en cours
+## Résultat et preuves
 
-Cette section décrit l’état de consolidation, pas une recette terminée. Les rapports et chiffres seront complétés après gel des composants.
+La réalisation produit `1c43c35` est terminée et **déployée le 14 octobre 2026 à 00:10 Europe/Zurich**, après demande explicite du porteur et sauvegarde de la base vérifiée. [Portail](https://drivy.shulker.ch/app/) · [déploiement et retour arrière](web-registre-deployment-20261014.md).
 
-| Vérification | État de cette passe |
-|---|---|
-| Typage, build et tests du projet | Résultats finaux à consolider. |
-| Pagination, homonymes, filtres, liens natifs et retour de fiche | Recette finale et preuves à consolider. |
-| Lecture individuelle hors annuaire, 404, panne d’enrichissement | Recette finale et preuves à consolider. |
-| Checkbox vide/cochée/intermédiaire/désactivée, clavier et focus | Campagne finale en attente. |
-| Comparaison avant/après à contenu et viewport identiques | Captures et mesures finales en attente. |
-| Petits écrans, clair/sombre, reflow et couleurs forcées | Campagne finale en attente. |
+- **26 parcours locaux**, **439 tests API/PostgreSQL**, **233 tests web** et **80 contrôles intégrés OIDC/BFF/API/PostgreSQL** réussis ; types et compilations réussis.
+- **210 configurations visuelles distinctes**, clair et sombre à 1440/1024/390 px, sans débordement du document ni erreur JavaScript. **140 audits axe distincts** sans violation ; deux contrastes indéterminés résolus par inspection et mesure complémentaires, avec les résultats bruts conservés.
+- Quatre écrans comparés avant/après dans les deux thèmes : élèves, dossier, coordonnées et équipe. Huit captures de référence `afe2140` préservées avec empreintes. [Galerie](proofs/web-registre-20261013/index.html).
+- [Vérification détaillée, pages et parcours exécutés, corrections et limites](web-registre-verification-20261014.md).
 
-Une tentative de zoom natif par `Ctrl` + `+` n’a pas modifié la largeur CSS ni le DPR observés : elle ne qualifie pas un zoom navigateur à 200 %. Une campagne à largeur CSS 720 px et DPR 2 constitue seulement une vérification géométrique de reflow ; elle ne remplace pas cette qualification.
+La recherche, la navigation, les fiches, les thèmes et le catalogue utilisent les composants communs. Les pages d’entrée, d’ouverture, d’invitation et d’opérateur, ainsi que les six étapes du guide, ont été exercées avec les nouvelles fondations. Les routes existantes et les contrats sont préservés ; aucune modification des écrans natifs.
 
-Les données des captures et des essais locaux sont synthétiques. Une compilation, un calcul de contraste ou un résultat axe ne constitue pas une certification WCAG. Aucun usage d’un lecteur d’écran physique, aucune session de production, ni aucun résultat natif GPS/batterie n’est déduit de ces essais web.
+Le vrai zoom navigateur à 200 %, un lecteur d’écran, Safari et la recette avec une auto-école restent à qualifier. Le reflow 720 CSS px/DPR 2 ne vaut pas un zoom natif. Aucune certification WCAG complète ni qualification physique Apple n’est déduite de ces contrôles.

@@ -1,0 +1,37 @@
+{
+  "scope": "Revue des deux résultats axe incomplets du titre Nouveau référentiel ; aucun résultat brut supprimé.",
+  "browser": "Edge 155.0.4283.45",
+  "target": "curriculum-form",
+  "width": 1440,
+  "element": "h2 Nouveau référentiel",
+  "automatedResult": "color-contrast incomplete: background reported partially obscured; still incomplete after keyboard traversal",
+  "geometry": {
+    "x": 813.71875,
+    "y": 284,
+    "width": 182.203125,
+    "height": 27.5,
+    "unobscuredAtNinePoints": true
+  },
+  "reviews": [
+    {
+      "theme": "light",
+      "foreground": "rgb(32, 41, 54)",
+      "background": "rgb(255, 255, 255)",
+      "contrastRatio": 14.666250227311458,
+      "capture": "curriculum-form-1440-light-keyboard-synthetic.png",
+      "visuallyReviewed": true,
+      "resolution": "Visible, no overlap, measured contrast exceeds 4.5:1. Axe incomplete retained as tool limitation."
+    },
+    {
+      "theme": "dark",
+      "foreground": "rgb(242, 243, 245)",
+      "background": "rgb(34, 36, 40)",
+      "contrastRatio": 14.000075704892408,
+      "capture": "curriculum-form-1440-dark-keyboard-synthetic.png",
+      "visuallyReviewed": true,
+      "resolution": "Visible, no overlap, measured contrast exceeds 4.5:1. Axe incomplete retained as tool limitation."
+    }
+  ],
+  "unresolvedManualReviews": 0,
+  "limitations": "This targeted review is not a complete WCAG or physical assistive-technology qualification."
+}

@@ -1,0 +1,130 @@
+{
+  "checkedAt": "2026-10-13T22:10:55.8874958Z",
+  "commit": "1c43c35f3bbb6389719bdc55ebf0ee7f0d34b6fa",
+  "origin": "https://drivy.shulker.ch",
+  "checks": [
+    {
+      "path": "/app/apple-touch-icon.png",
+      "status": 200,
+      "sha256": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/assets/SourceSans3VF-Upright-BsWL4Kly.woff2",
+      "status": 200,
+      "sha256": "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8",
+      "matchesRelease": true,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "path": "/app/assets/index-DBkmYYS0.css",
+      "status": 200,
+      "sha256": "b97a35ac833d1a01438f803029a18c52fbfcfba80c099d81dc8925380635931c",
+      "matchesRelease": true,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "path": "/app/assets/index-mwOSEVEb.js",
+      "status": 200,
+      "sha256": "ed5ba2581e63142dabfdf40ed1a0827032b3a479cd010700c82a5d695f048a21",
+      "matchesRelease": true,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "path": "/app/favicon-32.png",
+      "status": 200,
+      "sha256": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/favicon.ico",
+      "status": 200,
+      "sha256": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/favicon.svg",
+      "status": 200,
+      "sha256": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/icon-192.png",
+      "status": 200,
+      "sha256": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/icon-512.png",
+      "status": 200,
+      "sha256": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/",
+      "status": 200,
+      "sha256": "abe61876afbe6f3bf62afd17840f3d7aac2e3453f35c180ed7e2bc25b91b8d3b",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/site.webmanifest",
+      "status": 200,
+      "sha256": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/theme-init.js",
+      "status": 200,
+      "sha256": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354",
+      "matchesRelease": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app",
+      "status": 200,
+      "newThemeScript": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/preferences",
+      "status": 200,
+      "newThemeScript": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/preferences/",
+      "status": 200,
+      "newThemeScript": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/gestion",
+      "status": 200,
+      "newThemeScript": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/invitation",
+      "status": 200,
+      "newThemeScript": true,
+      "cacheControl": "no-store"
+    },
+    {
+      "path": "/app/bff/session",
+      "status": 200,
+      "authenticated": false
+    },
+    {
+      "path": "/refonte/v1/me",
+      "status": 401
+    }
+  ]
+}

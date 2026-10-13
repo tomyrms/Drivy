@@ -1,0 +1,32 @@
+{
+  "scope": "Composants React et données synthétiques. Matrice finale dédupliquée ; les rapports ciblés remplacent leurs états précédents.",
+  "sourceReports": [
+    "review-results.json",
+    "targeted-invitations-invitations-team-results.json",
+    "targeted-curriculum-form-results.json"
+  ],
+  "functionalChecks": 26,
+  "functionalFailures": 0,
+  "matrixStates": 35,
+  "distinctMatrixConfigurations": 210,
+  "distinctInitialAxeAudits": 140,
+  "supplementalAxeAuditsAfterKeyboard": 2,
+  "horizontalOverflows": 0,
+  "pageErrors": 0,
+  "axeViolations": 0,
+  "axeInitialIncompleteConfigurations": 2,
+  "axeAfterKeyboardIncompleteConfigurations": 2,
+  "manualReview": "manual-contrast-review.json",
+  "manualReviewResolvedConfigurations": 2,
+  "unresolvedManualReviews": 0,
+  "supplementaryChecks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations",
+    "Couleurs forcées émulées : cases et radios natifs, SVG masqués"
+  ],
+  "limitations": [
+    "140 configurations axe distinctes, plus deux audits après clavier ; les pilotes et recaptures ne sont pas ajoutés au décompte.",
+    "Les deux indéterminés axe restent dans les résultats bruts ; les deux échecs de revue initiaux sont dépassés par le rapport ciblé final et la mesure de contraste.",
+    "Le premier chargement du nouvel onglet Edge échappe au BFF synthétique ; destination Ctrl-clic réelle validée avant rechargement de la même URL sous fixture.",
+    "Reflow équivalent géométrique du zoom 200 %, pas activation du zoom natif du navigateur. Aucun lecteur écran physique qualifié."
+  ]
+}

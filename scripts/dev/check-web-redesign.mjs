@@ -39,7 +39,13 @@ const settle = page => page.waitForTimeout(550);
 const noOverflow = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 const auditAccessibility = page => page.evaluate(async () => {
   const result = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations', 'incomplete'] });
-  const summarize = rows => rows.map(row => ({ id: row.id, impact: row.impact, help: row.help, helpUrl: row.helpUrl, nodes: row.nodes.map(node => ({ target: node.target, summary: node.failureSummary })) }));
+  const summarize = rows => rows.map(row => ({ id: row.id, impact: row.impact, help: row.help, helpUrl: row.helpUrl, nodes: row.nodes.map(node => {
+    const element = typeof node.target[0] === 'string' ? document.querySelector(node.target[0]) : null;
+    const rect = element?.getBoundingClientRect(), styles = [];
+    for (let current = element; current; current = current.parentElement) styles.push({ tag: current.tagName, className: current.className, background: getComputedStyle(current).backgroundColor, color: getComputedStyle(current).color });
+    const unobscured = rect && [.1, .5, .9].every(x => [.1, .5, .9].every(y => { const hit = document.elementFromPoint(rect.left + rect.width * x, rect.top + rect.height * y); return hit === element || element.contains(hit); }));
+    return { target: node.target, html: node.html, summary: node.failureSummary, rect: rect?.toJSON(), unobscuredAtNinePoints: unobscured, styles };
+  }) }));
   return { violations: summarize(result.violations), incomplete: summarize(result.incomplete) };
 });
 async function scenario(label, parameters, run) {
@@ -335,7 +341,8 @@ try {
               const file = `curriculum-form-${width}-${theme}-keyboard-synthetic.png`;
               await h.page.screenshot({ path: resolve(directory, file) });
               supplemental.push({ target, theme, width, file, state: 'after-keyboard-scroll' });
-              if (focusedAudit.violations.length || focusedAudit.incomplete.length) failures.push({ scenario: `axe après défilement ${target} ${width}px ${theme}`, error: 'Audit après parcours clavier non résolu' });
+              // Incomplete results remain in the report for manual review; they are not violations.
+              if (focusedAudit.violations.length) failures.push({ scenario: `axe après défilement ${target} ${width}px ${theme}`, error: focusedAudit.violations.map(item => item.id).join(', ') });
             }
           }
         }
