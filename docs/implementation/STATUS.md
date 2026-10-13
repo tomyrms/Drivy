@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 13 octobre 2026 — homelab : ouverture des écoles (PR #31) et web enfin à jour
+
+Déployé à la demande du porteur depuis la branche de la PR #31, non fusionnée : release `c5bfb73`, migrations 031 `school_opening` et 032 `school_setup_draft` (32 au total, empreintes vérifiées). Sauvegarde vérifiée de `drivy_refonte` juste avant, sur CT113 (`/root/drivy_refonte-before-c5bfb73…-20261013T194604Z-d376faba5ca1.dump`). Configuration de l’API inchangée : aucun opérateur d’ouverture déclaré (`SCHOOL_OPENING_OPERATORS_JSON` absent), donc personne ne peut encore émettre de lien d’ouverture.
+
+**Le web était figé depuis le 9 octobre** : le réglage systemd `90-brand-web-release.conf` (mise en ligne de la marque) pointait le service web vers `web-releases/b710303`, et les déploiements suivants, dont les textes de l’école (lots 0 et 1), n’avaient mis à jour que l’API. Réglage retiré (copie dans `/root/systemd-retired/` sur CT114) : le web tourne désormais dans `current/apps/web`, vérifié par le répertoire réel du processus. `/app`, `/app/ouvrir`, `/app/operateur`, `/app/gestion` répondent 200, en local et sur le domaine public.
+
+IPA correspondante : run 38427200996 (`43d0a3b`, dernier commit iOS de la PR), empreinte vérifiée. **Non exécuté** : parcours connecté sur le homelab après déploiement.
+
 ## 13 octobre 2026 — homelab remis à zéro
 
 À la demande du porteur, pour essayer le parcours d’une école neuve. **Sauvegarde vérifiée avant tout effacement** (`pg_dump` puis `pg_restore --list`) de `drivy_refonte` et `drivy_identity` : `/root/drivy-reset-20261013T112412Z/` sur CT113 et sur l’hôte Proxmox, copie dans `.local/backups/` (empreintes identiques). Toutes les données de Drivy sont effacées : écoles, élèves, leçons, trajets, bilans, textes. Les comptes de connexion (`luc`, `moniteur`, `eleve`) sont gardés. Une seule école est recréée : « Luc auto école », en préparation, vide, luc administrateur et moniteur, GPS actif (repris de l’ancienne école : une école neuve l’a désactivé et aucun écran ne permet de l’activer).
