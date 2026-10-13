@@ -192,6 +192,7 @@ export function commandMessage(code: string): string {
     SETUP_REVIEW_CHANGED: 'La préparation ou ses références ont changé. Vérifiez à nouveau le résumé avant de confirmer.',
     SETUP_DRAFT_ALREADY_APPLIED: 'Cette préparation est déjà appliquée. Enregistrez les nouveaux choix avant de les confirmer.',
     SETUP_ITEM_ALREADY_APPLIED: 'Ce tarif est déjà créé. Retirez cet élément du brouillon et préparez un nouveau tarif depuis sa formation.',
+    SETUP_INHERITED_CANCELLATION: 'Ce tarif conserve l’annulation de sa formation. Retirez le nouveau texte depuis l’étape Vos tarifs.',
     SETUP_PLACEHOLDER: 'Remplacez les passages à compléter dans les exemples avant de confirmer.',
     SETUP_TEMPLATE_CHANGED: 'Le modèle a changé. Relisez les propositions actuelles avant de confirmer.',
     SETUP_FIELD_REQUIRED: 'Complétez les champs indiqués dans la relecture de la préparation.',

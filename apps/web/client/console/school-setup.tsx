@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
 import { createCommand, formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
-import { readSchool, offeringSchema, readAll, type Offering } from '../school-api';
+import { confirmedData, readSchool, offeringSchema, readAll, type Offering } from '../school-api';
 import { RequestFailure } from '../protocol';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField } from '../ui';
-import { issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
-  setupStepLabels, setupSteps, setupTemplatesSchema, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
+import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
+  setupStepLabels, setupSteps, setupTemplatesSchema, setupProfileRequirement, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import './school-setup.css';
@@ -34,6 +34,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState<SetupPreview | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [readFailure, setReadFailure] = useState<string | null>(null);
   const [discard, setDiscard] = useState(false);
@@ -44,7 +45,11 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [stepsOpen, setStepsOpen] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const needsAdoption = useRef(false);
-  const runner = useCommandRunner(() => { needsAdoption.current = true; loaded.reload(); });
+  const localOperation = useRef<string | null>(null);
+  const followedSave = useRef<string | null>(null);
+  const pending = snapshot.entries.get(schoolId);
+  if (pending?.meta.kind === 'saveSetupDraft') followedSave.current = pending.meta.operationId;
+  const runner = useCommandRunner();
   const loaded = useLoad(async () => {
     const [draft, templates, offerings] = await Promise.all([
       readSchool(schoolId, 'setup-draft', setupDraftSchema),
@@ -55,11 +60,23 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     return { draft, templates, offerings: offerings.items.filter(item => item.enabled) };
   }, [schoolId, snapshot.revision]);
   const steps: readonly SetupStep[] = catalogueOnly ? ['FORMATIONS', 'PRICING', 'REVIEW'] : setupSteps;
-  const blocked = runner.busy || !!runner.pending || reviewing;
+  const blocked = saving || runner.busy || !!runner.pending || reviewing || needsAdoption.current;
   const key = `setup-draft:${catalogueOnly ? 'catalogue' : 'initial'}`;
 
+  // A receipt may settle a command restored after a page reload, with no local runner.
   useEffect(() => {
-    if (!loaded.data) return;
+    const confirmed = snapshot.confirmed;
+    if (!confirmed || confirmed.operationId !== followedSave.current) return;
+    followedSave.current = null;
+    if (confirmed.operationId === localOperation.current) return;
+    needsAdoption.current = true;
+    drafts?.delete(key);
+    setReadFailure(null);
+    loaded.reload();
+  }, [snapshot.confirmed]);
+
+  useEffect(() => {
+    if (!loaded.data || loaded.status !== 'ready') return;
     if (document && !needsAdoption.current) return;
     const saved = loaded.data.draft;
     const remembered = needsAdoption.current ? undefined : drafts?.get(key) as StoredDraft | undefined;
@@ -67,14 +84,18 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     if (remembered && remembered.version === saved.version && setupContentSchema.safeParse(remembered.content).success) {
       next = remembered.content; nextStep = remembered.step; nextDirty = remembered.dirty;
     } else if (catalogueOnly && (saved.status === 'APPLIED' || saved.content.selectedSections.length === 0)) {
-      next = { ...next, selectedSections: ['CATALOGUE'], formations: next.formations.filter(item => !item.apply || !saved.content.selectedSections.includes('CATALOGUE')) }; nextStep = 'FORMATIONS'; nextDirty = true;
+      next = catalogueSetupContent(next, saved.status === 'APPLIED'); nextStep = 'FORMATIONS'; nextDirty = true;
     } else if (!catalogueOnly && !next.privacy.noticeText && !next.privacy.templateId) {
       next.privacy = templatePrivacy(loaded.data.templates, next); nextDirty = true;
     }
+    if (catalogueOnly) {
+      nextDirty ||= next.selectedSections.length !== 1 || next.selectedSections[0] !== 'CATALOGUE';
+      next = catalogueSetupContent(next);
+    }
     needsAdoption.current = false;
     setDocument(saved); setContent(next); setStep(steps.includes(nextStep) ? nextStep : steps[0]!); setDirty(nextDirty);
-    setPreview(null); setAcknowledged(false);
-  }, [loaded.data]);
+    setPreview(null); setAcknowledged(false); setReadFailure(null);
+  }, [loaded.data, loaded.status]);
   useEffect(() => {
     if (content && document) drafts?.set(key, { version: document.version, content, step, dirty } satisfies StoredDraft);
   }, [content, document, step, dirty, drafts, key]);
@@ -107,25 +128,32 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     try {
       const result = await readSchool(schoolId, 'setup-draft/preview', setupPreviewSchema, { activate: String(school.status === 'DRAFT') });
       if (result.schoolId !== schoolId || result.draftVersion !== saved.version) throw new RequestFailure('VERSION_CONFLICT', 412);
+      if (catalogueOnly && result.selectedSections.some(section => section !== 'CATALOGUE')) throw new RequestFailure('SETUP_REVIEW_CHANGED', 409);
       setPreview(result);
     } catch (error) { setReadFailure(readError(error)); } finally { setReviewing(false); }
   }
   async function save(nextStep: SetupStep, value = content, exit = false, afterSave?: () => void) {
     if (!value || !document || blocked) return;
+    setSaving(true);
     setReadFailure(null); setPreview(null); setAcknowledged(false);
-    const result = await runner.run(createCommand({ schoolId, kind: 'saveSetupDraft', path: 'setup-draft',
-      ifMatch: document.version, resourceVersion: document.version, body: { currentStep: nextStep, content: value } }), 'La préparation est enregistrée.');
-    if (result.status !== 'confirmed') return;
-    setDirty(false); dirtyRef.current = false; needsAdoption.current = false;
     try {
-      const saved = await readSchool(schoolId, 'setup-draft', setupDraftSchema);
-      if (saved.schoolId !== schoolId || saved.version <= document.version) throw new RequestFailure('INVALID_RESPONSE');
+      const command = createCommand({ schoolId, kind: 'saveSetupDraft', path: 'setup-draft',
+        ifMatch: document.version, resourceVersion: document.version, body: { currentStep: nextStep, content: value } });
+      localOperation.current = command.operationId;
+      const result = await runner.run(command, 'La préparation est enregistrée.');
+      if (result.status !== 'confirmed') { localOperation.current = null; return; }
+      // Use the exact committed response: a later GET could contain another administrator’s edit.
+      const parsed = setupDraftSchema.safeParse(confirmedData(result.body));
+      if (!parsed.success || parsed.data.schoolId !== schoolId || parsed.data.id !== schoolId || parsed.data.version !== document.version + 1) throw new RequestFailure('INVALID_RESPONSE');
+      const saved = parsed.data;
+      setDirty(false); dirtyRef.current = false; needsAdoption.current = false;
       setDocument(saved); setContent(clone(saved.content)); setStep(nextStep);
       drafts?.delete(key);
       if (afterSave) { setLeave(null); afterSave(); }
       else if (exit) { if (onClose) onClose(); else navigate('configuration'); }
       else if (nextStep === 'REVIEW') await refreshReview(saved);
     } catch (error) { needsAdoption.current = true; setReadFailure(readError(error)); loaded.reload(); }
+    finally { setSaving(false); }
   }
   async function finish() {
     if (!preview?.ready || !acknowledged || !document || blocked || dirty || preview.draftVersion !== document.version) return;
@@ -150,7 +178,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     <SectionHeading title={catalogueOnly ? 'Préparer une formation' : 'Préparer votre école'} />
     <OutcomeNotice outcome={runner.outcome?.tone === 'success' ? null : runner.outcome} actions={runner.outcome?.code === 'VERSION_CONFLICT'
       ? <button type="button" className="button secondary" onClick={() => setDiscard(true)}>Relire la version enregistrée</button> : undefined} />
-    {readFailure && <Notice tone="error" title="Vérification impossible" actions={<button className="button secondary" type="button" onClick={() => document && void refreshReview(document)}>Réessayer</button>}><p>{readFailure}</p></Notice>}
+    {readFailure && <Notice tone="error" title="Vérification impossible" actions={<button className="button secondary" type="button" onClick={() => needsAdoption.current ? loaded.reload() : document && void refreshReview(document)}>Réessayer</button>}><p>{readFailure}</p></Notice>}
     {runner.blockedReason && <Notice tone="warning" title="Demande à vérifier"><p>{runner.blockedReason}</p></Notice>}
     <LoadState loaded={loaded} label="Lecture de votre préparation…">{data => content && document && <>
       <div className="setup-progress-mobile"><button type="button" className="button quiet" aria-expanded={stepsOpen} aria-controls="setup-progress" onClick={() => setStepsOpen(!stepsOpen)}>Étape {steps.indexOf(step) + 1} sur {steps.length}<Symbol kind="chevron" bare /></button></div>
@@ -174,7 +202,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
               </>}
             </fieldset>
             <div className="setup-actions">
-              <span className="setup-saved" role="status">{runner.busy ? 'Enregistrement…' : dirty ? 'Modifications non enregistrées' : 'Enregistré'}</span>
+              <span className="setup-saved" role="status">{saving || runner.busy ? 'Enregistrement…' : dirty ? 'Modifications non enregistrées' : 'Enregistré'}</span>
               <div className="button-row">
                 {steps.indexOf(step) > 0 && <button type="button" className="button quiet" disabled={blocked} onClick={() => jump(steps[steps.indexOf(step) - 1]!)}>Retour</button>}
                 {(['PROFILE', 'FORMATIONS', 'PRICING'] as SetupStep[]).includes(step) && !catalogueOnly && <button type="button" className="button quiet" disabled={blocked} onClick={skip}>Plus tard</button>}
@@ -233,12 +261,12 @@ function ProfileStep({ content, onChange }: StepProps) {
       const current = content.profile.fields.find(item => item.field === base.field), fixed = base.field === 'firstName' || base.field === 'lastName';
       return <div className="setup-profile-field" key={base.field}>
         <div className="setup-profile-control"><strong>{fieldLabels[base.field]}</strong>{fixed ? <span>À l’inscription</span> : <SelectField label={`Demander ${fieldLabels[base.field]!.toLocaleLowerCase('fr')}`} value={!current ? 'NONE' : current.requirement === 'OPTIONAL' ? 'OPTIONAL' : current.stage} options={[
-          { value: 'NONE', label: 'Non demandé' }, { value: 'OPTIONAL', label: 'Facultatif' }, { value: 'JOIN', label: 'À l’inscription' }, { value: 'BEFORE_LESSON', label: 'Avant une leçon' },
-        ]} onChange={value => { const rest = content.profile.fields.filter(item => item.field !== base.field); update(value === 'NONE' ? rest : [...rest, { ...(current ?? base), requirement: value === 'OPTIONAL' ? 'OPTIONAL' : 'REQUIRED', stage: value as 'OPTIONAL' | 'JOIN' | 'BEFORE_LESSON' }]); }} />}</div>
+          { value: 'NONE', label: 'Non demandé' }, { value: 'OPTIONAL', label: 'Facultatif' }, { value: 'BEFORE_LESSON', label: 'Avant une leçon' }, { value: 'BEFORE_COURSE', label: 'Avant un cours' },
+        ]} onChange={value => { const rest = content.profile.fields.filter(item => item.field !== base.field); update(value === 'NONE' ? rest : [...rest, { ...(current ?? base), requirement: value === 'OPTIONAL' ? 'OPTIONAL' : 'REQUIRED', stage: value as 'OPTIONAL' | 'BEFORE_LESSON' | 'BEFORE_COURSE' }]); }} />}</div>
         {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${base.field}.explanation`} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
       </div>;
     })}</div>
-    <details className="disclosure"><summary>Aperçu pour l’élève</summary><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span className="row-meta">{field.requirement === 'OPTIONAL' ? 'Facultatif' : field.stage === 'JOIN' ? 'À l’inscription' : 'Avant une leçon'}</span></li>)}</ul></details>
+    <details className="disclosure"><summary>Aperçu pour l’élève</summary><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span className="row-meta">{setupProfileRequirement(field)}</span></li>)}</ul></details>
   </div>;
 }
 function FormationStep({ content, templates, offerings, initialOfferingId, today, onChange, canWrite }: StepProps & { templates: SetupTemplates; offerings: Offering[]; initialOfferingId?: string | undefined; today: string; canWrite: boolean }) {
@@ -277,7 +305,8 @@ function PricingStep({ content, templates, onChange, canWrite }: StepProps & { c
       <div className="form-grid"><TextField name={`formations.${index}.durationMinutes`} label="Durée (minutes)" value={formation.durationMinutes === null ? '' : String(formation.durationMinutes)} inputMode="numeric" onChange={value => update({ ...formation, durationMinutes: /^\d+$/.test(value) ? Number(value) : null })} />
         <PriceField name={`formations.${index}.priceCents`} formation={formation} onChange={update} />
         <TextField name={`formations.${index}.validFrom`} label="Disponible dès le" type="date" value={formation.validFrom ?? ''} onChange={validFrom => update({ ...formation, validFrom: validFrom || null })} /></div>
-      <TextArea name={`formations.${index}.cancellationPolicyText`} label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
+      {!formation.existingOfferingId ? <TextArea name={`formations.${index}.cancellationPolicyText`} label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
+        : formation.cancellationPolicyText.trim() ? <Notice tone="warning" title="Annulation déjà définie" actions={<button type="button" className="button secondary" onClick={() => update({ ...formation, cancellationPolicyText: '' })}>Conserver l’annulation de la formation</button>}><p>Ce tarif utilise les conditions de sa formation. Le texte ajouté à ce brouillon ne peut pas les remplacer.</p></Notice> : <p>Le déroulement et les conditions d’annulation de la formation sont conservés.</p>}
       <TextArea name={`formations.${index}.termsText`} label="Conditions du tarif" value={formation.termsText} rows={4} maxLength={20000} onChange={termsText => update({ ...formation, termsText })} />
       {templates.commercial && <button type="button" className="button secondary" onClick={() => setExampleFor(formation.id)}>Insérer un exemple de conditions</button>}
       {index === 0 && content.formations.length > 1 && <button type="button" className="button secondary" onClick={() => setCopyFrom(formation.id)}>Utiliser ces conditions pour les autres formations</button>}
@@ -285,11 +314,11 @@ function PricingStep({ content, templates, onChange, canWrite }: StepProps & { c
     </fieldset>
   </section>)}
     <ConfirmDialog open={exampleFor !== null} busy={false} title="Utiliser cet exemple ?" confirmLabel="Insérer dans le brouillon" onCancel={() => setExampleFor(null)} onConfirm={() => {
-      const formation = content.formations.find(item => item.id === exampleFor); if (formation && templates.commercial) update({ ...formation, termsText: templates.commercial.termsText, cancellationPolicyText: templates.commercial.cancellationPolicyText }); setExampleFor(null);
-    }}><p>Ces textes remplaceront les conditions de cette formation dans le brouillon. Complétez les passages entre crochets avant de confirmer.</p><h3>Annulation</h3><p className="policy-copy">{templates.commercial?.cancellationPolicyText}</p><h3>Tarif</h3><p className="policy-copy">{templates.commercial?.termsText}</p></ConfirmDialog>
+      const formation = content.formations.find(item => item.id === exampleFor); if (formation && templates.commercial) update({ ...formation, termsText: templates.commercial.termsText, cancellationPolicyText: formation.existingOfferingId ? formation.cancellationPolicyText : templates.commercial.cancellationPolicyText }); setExampleFor(null);
+    }}><p>Ces textes remplaceront les conditions du brouillon. Complétez les passages entre crochets avant de confirmer.</p>{!content.formations.find(item => item.id === exampleFor)?.existingOfferingId && <><h3>Annulation</h3><p className="policy-copy">{templates.commercial?.cancellationPolicyText}</p></>}<h3>Tarif</h3><p className="policy-copy">{templates.commercial?.termsText}</p></ConfirmDialog>
     <ConfirmDialog open={copyFrom !== null} busy={false} title="Reprendre ces conditions ?" confirmLabel="Appliquer aux autres formations" onCancel={() => setCopyFrom(null)} onConfirm={() => {
-      const source = content.formations.find(item => item.id === copyFrom); if (source) onChange({ ...content, formations: content.formations.map(item => ({ ...item, termsText: source.termsText, cancellationPolicyText: source.cancellationPolicyText })) }); setCopyFrom(null);
-    }}><p>Les conditions des autres formations de ce brouillon seront remplacées.</p></ConfirmDialog>
+      const source = content.formations.find(item => item.id === copyFrom); if (source) onChange({ ...content, formations: content.formations.map(item => ({ ...item, termsText: source.termsText, cancellationPolicyText: item.existingOfferingId ? item.cancellationPolicyText : source.cancellationPolicyText })) }); setCopyFrom(null);
+    }}><p>Les conditions des autres formations de ce brouillon seront remplacées. Pour un tarif rattaché à une formation existante, seules les conditions du tarif seront copiées.</p></ConfirmDialog>
   </div>;
 }
 function PriceField({ formation, onChange, name }: { formation: SetupFormation; onChange: (value: SetupFormation) => void; name: string }) {
@@ -304,12 +333,12 @@ export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit
     {preview.issues.length > 0 && <Notice tone="warning" title="À compléter"><ul className="setup-issues">{preview.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><button type="button" className="text-link" onClick={() => onEdit(issueStep(issue.field), issue.field)}>{issue.message}</button></li>)}</ul></Notice>}
     {content.selectedSections.includes('IDENTITY') && <section><h3>École</h3><Facts items={[["Nom", content.identity.name], ['E-mail', content.identity.contactEmail], ['Téléphone', content.identity.contactPhone ?? 'Non renseigné'], ['Fuseau', content.identity.timeZone]]} /><button type="button" className="button quiet" onClick={() => onEdit('IDENTITY')}>Modifier</button></section>}
     {content.selectedSections.includes('PRIVACY') && <section><h3>Confidentialité</h3><div className="policy-copy"><h4>Information des personnes</h4><p>{content.privacy.noticeText}</p><h4>Conservation</h4><p>{content.privacy.retentionText}</p><p>{content.privacy.contactEmail}</p></div><button type="button" className="button quiet" onClick={() => onEdit('PRIVACY')}>Modifier</button></section>}
-    {content.selectedSections.includes('PROFILE') && <section><h3>Informations des élèves</h3><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span>{field.requirement === 'OPTIONAL' ? 'Facultatif' : field.stage === 'JOIN' ? 'À l’inscription' : 'Avant une leçon'}</span></li>)}</ul><button type="button" className="button quiet" onClick={() => onEdit('PROFILE')}>Modifier</button></section>}
+    {content.selectedSections.includes('PROFILE') && <section><h3>Informations des élèves</h3><ul className="plain-list">{content.profile.fields.map(field => <li key={field.field}><span>{fieldLabels[field.field]}</span><span>{setupProfileRequirement(field)}</span></li>)}</ul><button type="button" className="button quiet" onClick={() => onEdit('PROFILE')}>Modifier</button></section>}
     {content.formations.map(formation => <section key={formation.id}><h3>{formation.label || `Permis ${formation.categoryCode}`}</h3>
       {!formation.apply || !content.selectedSections.includes('CATALOGUE') ? <p>Conservée en brouillon · à terminer plus tard</p> : <>
         <Facts items={[["Permis", formation.categoryCode], ['Durée', `${formation.durationMinutes ?? '—'} min`], ['Prix', formation.priceCents === null ? 'À compléter' : formatCents(formation.priceCents)], ['Disponible dès le', formation.validFrom ?? 'À compléter']]} />
         {!formation.existingOfferingId && <details className="disclosure"><summary>Programme et déroulement</summary><ul>{formation.competencies.map(item => <li key={item.key}><strong>{item.label}</strong><p>{item.description}</p></li>)}</ul><p className="policy-copy">{formation.procedureText}</p></details>}
-        <h4>Annulation</h4><p className="policy-copy">{formation.cancellationPolicyText}</p><h4>Conditions du tarif</h4><p className="policy-copy">{formation.termsText}</p>
+        <h4>Annulation</h4><p className="policy-copy">{formation.existingOfferingId ? 'Le déroulement et les conditions d’annulation de la formation sont conservés.' : formation.cancellationPolicyText}</p><h4>Conditions du tarif</h4><p className="policy-copy">{formation.termsText}</p>
       </>}<button type="button" className="button quiet" onClick={() => onEdit('PRICING')}>Modifier</button>
     </section>)}
   </div>;

@@ -97,7 +97,7 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
         if(!procedure.success)add(`${prefix}.procedureText`,'Complétez le déroulement et les conditions d’annulation.');
         nonblank(formation.procedureText,`${prefix}.procedureText`,'Complétez le déroulement de la formation.');
         nonblank(formation.cancellationPolicyText,`${prefix}.cancellationPolicyText`,'Complétez les conditions d’annulation.');
-      }
+      } else if(formation.cancellationPolicyText.trim())add(`${prefix}.cancellationPolicyText`,'Les conditions d’annulation de la formation sont conservées. Retirez ce texte du brouillon, ou modifiez la procédure depuis la fiche de formation.','SETUP_INHERITED_CANCELLATION');
       if(formation.templateId!==null&&!setupTemplates.formations.some(template=>template.id===formation.templateId&&template.version===formation.templateVersion&&template.categoryCode===formation.categoryCode))add(`${prefix}.templateVersion`,'Relisez le modèle correspondant à ce permis ou retirez sa référence.','SETUP_TEMPLATE_CHANGED');
     }
   }

@@ -104,7 +104,8 @@ export function TeamSection() {
             badge={current.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined}>
             {current.roles.includes('INSTRUCTOR') && <div className="detail-links">
               <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor: current.id })}><Symbol kind="calendar" bare />Voir le planning</button>
-              <button type="button" className="button quiet" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités et absences</button>
+              <button type="button" className="button quiet" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités</button>
+              <button type="button" className="button quiet" onClick={() => navigate('absences', { instructor: current.id, from: 'equipe' })}>Absences</button>
             </div>}
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <fieldset className="fieldset">
@@ -392,7 +393,9 @@ export function InvitationsSection() {
       <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}
         title={dialog === 'create' ? (creating === 'code' ? 'Créer le code' : 'Envoyer l’invitation') : dialog === 'resend' ? (current?.delivery === 'CODE' ? 'Nouveau code' : 'Renvoyer l’invitation') : 'Révoquer l’invitation'}
         confirmLabel={dialog === 'create' ? (creating === 'code' ? 'Créer le code' : 'Envoyer l’invitation') : dialog === 'resend' ? (current?.delivery === 'CODE' ? 'Créer un nouveau code' : 'Envoyer un nouveau lien') : 'Révoquer l’invitation'}
-        disabledReason={dialog === 'revoke' && !filled(revokeReason, 1000) ? 'Indiquez le motif de la révocation.' : null}
+        disabledReason={!canWrite ? 'Actualisez les invitations avant de confirmer.'
+          : (dialog === 'create' && creating === 'email' || dialog === 'resend' && current?.delivery === 'EMAIL') && !emailInvitations ? 'L’envoi par e-mail n’est pas disponible.'
+          : dialog === 'revoke' && !filled(revokeReason, 1000) ? 'Indiquez le motif de la révocation.' : null}
         {...(dialog === 'create' ? { acknowledgement: creating === 'code' ? 'J’ai vérifié l’offre et le moniteur choisis.' : 'J’ai vérifié l’adresse et les rôles proposés.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         <OutcomeNotice outcome={runner.outcome} />
         {dialog === 'create' && creating === 'code' && <>

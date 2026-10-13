@@ -49,6 +49,17 @@ export type SetupFormation = z.infer<typeof setupFormationSchema>;
 export type SetupTemplates = z.infer<typeof setupTemplatesSchema>;
 export type SetupPreview = z.infer<typeof setupPreviewSchema>;
 export type SetupSection = SetupContent['selectedSections'][number];
+/** A catalogue editor never adopts the school identity, privacy notice or profile policy. */
+export function catalogueSetupContent(content: SetupContent, applied = false): SetupContent {
+  return { ...content, selectedSections: ['CATALOGUE'], formations: applied
+    ? content.formations.filter(item => !item.apply || !content.selectedSections.includes('CATALOGUE')) : content.formations };
+}
+export function setupProfileRequirement(field: SetupContent['profile']['fields'][number]): string {
+  if (field.requirement === 'OPTIONAL') return 'Facultatif';
+  if (field.stage === 'JOIN') return 'À l’inscription';
+  if (field.stage === 'BEFORE_COURSE') return field.requirement === 'CONDITIONAL' ? 'Selon la formation · avant un cours' : 'Avant un cours';
+  return 'Avant une leçon';
+}
 
 export function selectSetupSection(content: SetupContent, section: SetupSection, included: boolean): SetupContent {
   return { ...content, selectedSections: included ? [...new Set([...content.selectedSections, section])]

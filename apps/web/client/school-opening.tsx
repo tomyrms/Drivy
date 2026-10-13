@@ -26,7 +26,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
     if(preview.data.status==='USED')setResult(preview.data.school);else setReady(true);
   }
   async function boot() {
-    setError(null);setLoaded(false);
+    setError(null);setLoaded(false);setReady(false);setResult(null);setItems([]);setGenerated(null);setCopied(false);
     try {
       let current=await request('session',sessionSchema);setSession(current);
       if(link.error)throw new RequestFailure('OPENING_LINK_INVALID');

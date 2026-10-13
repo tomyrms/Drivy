@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { issueStep, setupFormation, setupPrice, setupContentSchema } from '../client/setup-model.js';
+import { catalogueSetupContent, issueStep, setupFormation, setupPrice, setupContentSchema, setupProfileRequirement } from '../client/setup-model.js';
 import { matchSchoolRoute } from '../server/school-routes.js';
 import { commandSpecs, createCommand, receiptMatches } from '../client/command-core.js';
 import { randomUUID } from 'node:crypto';
@@ -26,6 +26,20 @@ describe('Préparation : préserver les choix avant adoption', () => {
   test('la lecture accepte un brouillon incomplet', () => {
     expect(setupContentSchema.safeParse({ selectedSections: ['IDENTITY'], identity: { name: '', timeZone: '', contactEmail: '', contactPhone: null },
       privacy: { noticeText: '', retentionText: '', contactEmail: '', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [] }).success).toBe(true);
+  });
+  test('reprendre le catalogue ne peut pas réadopter les textes d’un brouillon initial', () => {
+    const content = setupContentSchema.parse({ selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE', 'CATALOGUE'], identity: { name: 'École', timeZone: 'Europe/Zurich', contactEmail: '', contactPhone: null },
+      privacy: { noticeText: 'Texte conservé', retentionText: '', contactEmail: '', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [setupFormation(null, '2026-10-13'), { ...setupFormation(null, '2026-10-13'), apply: true }] });
+    const resumed = catalogueSetupContent(content);
+    expect(resumed.selectedSections).toEqual(['CATALOGUE']); expect(resumed.privacy).toEqual(content.privacy); expect(resumed.formations).toHaveLength(2);
+    const afterApplication = catalogueSetupContent(content, true);
+    expect(afterApplication.formations).toEqual([content.formations[0]]);
+    expect(content.selectedSections).toHaveLength(4);
+  });
+  test('la relecture distingue un champ requis avant un cours et avant une leçon', () => {
+    const field = { field: 'birthDate', requirement: 'REQUIRED', stage: 'BEFORE_COURSE', purposeCode: 'COURSE_ELIGIBILITY', explanation: 'Préparer le cours.' } as const;
+    expect(setupProfileRequirement(field)).toBe('Avant un cours');
+    expect(setupProfileRequirement({ ...field, stage: 'BEFORE_LESSON' })).toBe('Avant une leçon');
   });
   test('écriture et adoption ont des reçus distincts et des versions obligatoires', () => {
     const schoolId = randomUUID();

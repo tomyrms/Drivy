@@ -159,10 +159,49 @@ async function main() {
     const notice='Recette synthétique uniquement. Les leçons et observations partagées sont visibles par l’élève ; les notes privées restent privées. Aucun compte réel.';
     const retention='Texte de recette synthétique uniquement. Les données de cette base éphémère sont supprimées à la fin du test.';
     await page.getByLabel('Information des personnes',{exact:true}).fill(notice);await page.getByLabel('Conservation des données',{exact:true}).fill(retention);
-    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
-    stage='reprise serveur après rechargement';await page.reload();await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
-    const draftResponse=await consumerContext.request.get(`${origin}/app/bff/schools/${school.id}/setup-draft`);const draft=await draftResponse.json() as {data:{currentStep:string;content:{privacy:{noticeText:string}}}};
-    assert(draftResponse.ok() && draft.data.currentStep==='PROFILE' && draft.data.content.privacy.noticeText===notice,'Le rechargement reprend le brouillon et l’étape réellement enregistrés');
+    const draftEndpoint=`${origin}/app/bff/schools/${school.id}/setup-draft`;
+    const draftBefore=z.object({data:z.object({version:z.number().int()})}).parse(await (await consumerContext.request.get(draftEndpoint)).json()).data;
+    let draftWrites=0,lostDraftOperation='',lostDraftHTTPStatus=0;
+    await page.route(draftEndpoint,async route=>{
+      if(route.request().method()!=='PUT'){await route.continue();return;}
+      draftWrites++;
+      if(draftWrites!==1){await route.continue();return;}
+      lostDraftOperation=route.request().headers()['idempotency-key']??'';
+      const committed=await route.fetch();lostDraftHTTPStatus=committed.status();await route.abort('failed');
+    });
+    stage='sauvegarde de confidentialité engagée puis réponse navigateur perdue';
+    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
+    await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();
+    assert(lostDraftHTTPStatus===200&&z.uuid().safeParse(lostDraftOperation).success,'La sauvegarde du brouillon est confirmée au serveur avant la perte de sa réponse');
+    assert(await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).isDisabled(),'Le guide bloque une nouvelle sauvegarde tant que le résultat précédent reste inconnu');
+    stage='rechargement du guide avec une sauvegarde au résultat inconnu';
+    page.once('dialog',async dialog=>{if(dialog.type()==='beforeunload')await dialog.accept();else await dialog.dismiss();});
+    await page.reload();await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();
+    assert(await page.getByRole('button',{name:'Renvoyer la même demande',exact:true}).count()===0,'Après rechargement, le suivi conserve les identifiants et ne recrée pas le corps de la commande');
+    const pendingDraft:unknown=JSON.parse(await page.evaluate(()=>sessionStorage.getItem('drivy-gestion-demandes-v1')??'[]'));
+    assert(Array.isArray(pendingDraft)&&pendingDraft.length===1&&parseMetadata(pendingDraft[0])?.operationId===lostDraftOperation,
+      'Le rechargement conserve la référence de sauvegarde sans persister les textes saisis');
+    stage='récupération de la sauvegarde depuis PendingPanel et AP72';
+    const recoveryResponse=page.waitForResponse(response=>response.request().method()==='GET'&&new URL(response.url()).pathname===`/app/bff/schools/${school.id}/operations/${lostDraftOperation}`);
+    await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).click();
+    const recoveredSave=await recoveryResponse;
+    const savedReceipt=z.object({data:z.object({operationId:z.uuid(),commandType:z.literal('SAVE_SCHOOL_SETUP_DRAFT'),resourceType:z.literal('SchoolSetupDraft'),
+      resourceId:z.uuid(),resourceVersion:z.number().int(),committedAt:z.iso.datetime({offset:true})})}).parse(await recoveredSave.json()).data;
+    assert(recoveredSave.ok()&&savedReceipt.operationId===lostDraftOperation&&savedReceipt.resourceId===school.id&&savedReceipt.resourceVersion===draftBefore.version+1,
+      'AP72 confirme la même opération et la seule nouvelle version du brouillon');
+    await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor({state:'hidden'});
+    await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    const draftResponse=await consumerContext.request.get(draftEndpoint);
+    const draft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await draftResponse.json());
+    assert(draftResponse.ok()&&draft.data.version===savedReceipt.resourceVersion&&draft.data.currentStep==='PROFILE'&&draft.data.content.privacy.noticeText===notice&&draft.data.content.privacy.retentionText===retention,
+      'Le guide reprend l’étape Profil et les textes réellement enregistrés après la réponse perdue');
+    await page.getByRole('button',{name:'Retour',exact:true}).click();await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
+    assert(await page.getByLabel('Information des personnes',{exact:true}).inputValue()===notice&&await page.getByLabel('Conservation des données',{exact:true}).inputValue()===retention,
+      'Les champs du guide retrouvent les textes du serveur après vérification du reçu');
+    await page.getByRole('button',{name:/Informations des élèves/}).click();await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    const durableSave=(await administration.query("SELECT count(*)::int AS n FROM drivy.operation WHERE school_id=$1 AND operation_id=$2 AND command_type='SAVE_SCHOOL_SETUP_DRAFT'",[school.id,lostDraftOperation])).rows[0];
+    assert(draftWrites===1&&durableSave.n===1,'La reprise AP72 et la navigation du guide ne renvoient aucune sauvegarde ni commande en double');
+    await page.unroute(draftEndpoint);
     await page.screenshot({path:resolve(artifactDirectory,'01-profil-desktop-synthetic.png'),fullPage:true});
     stage='préparation des informations élèves et du permis B';await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
     await page.getByRole('heading',{name:'Vos formations',exact:true}).waitFor();await page.getByRole('button',{name:'Permis B',exact:true}).click();

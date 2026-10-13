@@ -54,7 +54,9 @@ export class SessionStore {
   rotate(session: Session, tokens: Tokens): Session {
     if (!this.isCurrent(session)) throw new Error('SESSION_EXPIRED');
     const invitation = session.invitation;
-    const opening = session.opening; const operatorOpening = session.operatorOpening;
+    const opening = session.opening;
+    // Opening-link issuance belongs to its operator: another account starts a separate intention.
+    const operatorOpening = session.tokens?.principal.subject === tokens.principal.subject ? session.operatorOpening : undefined;
     const createdAt = session.createdAt;
     this.destroy(session);
     const next = this.create();

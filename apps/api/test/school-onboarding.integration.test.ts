@@ -137,7 +137,10 @@ it('annule toutes les écritures sur échec au milieu de la publication et conse
 it('ajoute un tarif à une école active sans réadopter les textes ni changer les anciennes références',async()=>{
   await prepared(true);const initial=await completion();const opened=(await call('POST',`${base}/complete`,initial.body,initial.version)).json().data;
   const current=await getDraft(),before=await counts(),item=formation();item.id=randomUUID();item.existingOfferingId=opened.applied.offeringIds[0];item.priceCents=10500;
-  current.content.selectedSections=['CATALOGUE'];current.content.formations=[item];await save(current.content,current.version);
+  current.content.selectedSections=['CATALOGUE'];current.content.formations=[item];const withIgnoredText=await save(current.content,current.version);
+  const invalid=await completion(false);expect((await call('POST',`${base}/complete`,invalid.body,invalid.version)).json().code).toBe('SETUP_INHERITED_CANCELLATION');
+  expect((await counts()).products).toBe(before.products);
+  withIgnoredText.content.formations[0]!.cancellationPolicyText='';await save(withIgnoredText.content,withIgnoredText.version);
   const command=await completion(false),response=await call('POST',`${base}/complete`,command.body,command.version);expect(response.statusCode,response.body).toBe(200);
   const after=await counts();expect(after.policies).toBe(before.policies);expect(after.profile_policies).toBe(before.profile_policies);expect(after.curricula).toBe(before.curricula);expect(after.products).toBe(before.products+1);
   expect(response.json().data.applied.offeringIds).toEqual(opened.applied.offeringIds);expect(response.json().data.applied.policyVersionId).toBeNull();

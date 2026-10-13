@@ -72,6 +72,36 @@ test('un autre compte OIDC ne peut pas rejouer une intention incertaine',async()
   const api=vi.fn(async()=>{throw new Error('synthetic_loss');}),h=await harness(api);await h.post('opening',{token:secret()});await h.login();await h.post('opening/create',fields);
   h.changeSubject('another-account');await h.login();expect((await h.post('opening/create',fields)).json().code).toBe('OPENING_IDENTITY_CHANGED');expect(api).toHaveBeenCalledTimes(1);
 });
+
+test('un reçu conservé relit activation et révocation avant chaque restitution au navigateur',async()=>{
+  const result=receipt(randomUUID());let active=false,revoked=false;
+  const api=vi.fn(async(command:OpeningRequest)=>{
+    if(command.method==='POST')return {status:201,body:{data:result}};
+    expect(command.path).toBe(`/v1/school-openings/operations/${result.operationId}`);
+    return revoked?{status:403,body:{code:'FORBIDDEN'}}:{status:200,body:{data:{...result,status:active?'ACTIVE':'DRAFT'}}};
+  });
+  const h=await harness(api);await h.post('opening',{token:secret()});await h.login();await h.post('opening/create',fields);
+  expect(h.current().opening!.operationId).not.toBe(result.operationId);active=true;
+  expect((await h.get('opening')).json().result.status).toBe('ACTIVE');
+  expect((await h.post('opening/preview',{})).json().data.school.status).toBe('ACTIVE');
+  expect((await h.post('opening/create',fields)).json().data.status).toBe('ACTIVE');
+  expect((await h.get('opening/result')).json().data.status).toBe('ACTIVE');
+  revoked=true;
+  for(const response of [await h.get('opening'),await h.post('opening/preview',{}),await h.post('opening/create',fields),await h.get('opening/result')]){
+    expect(response.statusCode).toBe(403);expect(response.body.includes(result.schoolId)).toBe(false);
+  }
+  expect(api.mock.calls.filter(([command])=>command.method==='POST')).toHaveLength(1);
+  expect(api.mock.calls.filter(([command])=>command.method==='GET')).toHaveLength(8);
+});
+
+test('un autre compte OIDC ne voit aucun reçu confirmé ni données du premier compte',async()=>{
+  const result=receipt(randomUUID()),api=vi.fn(async()=>({status:201,body:{data:result}})),h=await harness(api);
+  await h.post('opening',{token:secret()});await h.login();await h.post('opening/create',fields);h.changeSubject('another-account');await h.login();
+  for(const response of [await h.get('opening'),await h.post('opening/preview',{}),await h.post('opening/create',fields),await h.get('opening/result')]){
+    expect(response.statusCode).toBe(409);expect(response.json().code).toBe('OPENING_IDENTITY_CHANGED');expect(response.body.includes(result.schoolId)).toBe(false);
+  }
+  expect(api).toHaveBeenCalledTimes(1);
+});
 test('la page opérateur reçoit le refus serveur même si le navigateur possède une session',async()=>{
   const h=await harness(async()=>({status:403,body:{code:'OPERATOR_REQUIRED'}}));expect((await h.login('/app/operateur')).headers.location).toBe('/app/operateur');
   expect((await h.get('operator/school-opening-links')).json().code).toBe('OPERATOR_REQUIRED');
@@ -81,9 +111,20 @@ test('opérateur : même secret et opération sur nouvelle tentative ; liste san
   const writes:OpeningRequest[]=[],linkId=randomUUID(),row={id:linkId,status:'AVAILABLE',createdAt:new Date().toISOString(),expiresAt:new Date().toISOString(),usedAt:null,revokedAt:null};
   const h=await harness(async command=>{if(command.method==='GET')return {status:200,body:{data:{items:[row]}}};writes.push(command);if(writes.length===1)throw new Error('synthetic_loss');return {status:201,body:{data:row}};});
   await h.login('/app/operateur');const operationId=randomUUID();expect((await h.post('operator/school-opening-links',{operationId})).statusCode).toBe(503);
+  await h.login('/app/operateur');
   const listing=await h.get('operator/school-opening-links');expect(listing.json().pendingOperationId).toBe(operationId);expect(listing.body.includes(h.current().operatorOpening!.token)).toBe(false);
   const retried=await h.post('operator/school-opening-links',{operationId});expect(retried.statusCode).toBe(200);expect(JSON.stringify(writes[0])===JSON.stringify(writes[1])).toBe(true);
   expect(new URL(retried.json().link).pathname).toBe('/app/ouvrir');expect(new URL(retried.json().link).search).toBe('');
+});
+
+test('changer d’opérateur retire son intention et ne réutilise ni UUID ni secret du compte précédent',async()=>{
+  const writes:OpeningRequest[]=[],row={id:randomUUID(),status:'AVAILABLE',createdAt:new Date().toISOString(),expiresAt:new Date().toISOString(),usedAt:null,revokedAt:null};
+  const h=await harness(async command=>{if(command.method==='GET')return {status:200,body:{data:{items:[row]}}};writes.push(structuredClone(command));return {status:201,body:{data:row}};});
+  await h.login('/app/operateur');await h.post('operator/school-opening-links',{operationId:randomUUID()});
+  const prior=h.current().operatorOpening!;h.changeSubject('another-operator');await h.login('/app/operateur');
+  expect(h.current().operatorOpening).toBeUndefined();expect((await h.get('operator/school-opening-links')).json().pendingOperationId).toBeUndefined();
+  await h.post('operator/school-opening-links',{operationId:randomUUID()});const current=h.current().operatorOpening!;
+  expect(current.operationId).not.toBe(prior.operationId);expect(current.token).not.toBe(prior.token);expect(writes).toHaveLength(2);
 });
 test('aucun autre chemin, méthode ou query ne peut recevoir un jeton OIDC via le relais ouverture',async()=>{
   expect(allowedOpeningRequest({method:'GET',path:'/v1/operator/school-opening-links'})).toBe(true);

@@ -40,6 +40,13 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
     else if(result.status>=500 || (result.status<400 && !parsed.success))opening.uncertain=true;
     return parsed;
   };
+  const readReceipt=async(session:Session,opening:OpeningState)=>{
+    // A receipt remembers a durable outcome, never current school access or status.
+    // A revisited USED link can carry an older operation UUID than this browser's original intention.
+    const result=await deps.call(session,{method:'GET',path:`/v1/school-openings/operations/${opening.result?.operationId??opening.operationId}`});
+    const parsed=confirm(opening,result);if(result.status<400&&!parsed.success)throw deps.error(503,'INVALID_RESPONSE');
+    return result;
+  };
   app.post('/app/bff/opening',async(request,reply)=>{
     const admitted=deps.admit(request);empty.parse(request.query);const {token}=z.object({token:tokenSchema}).strict().parse(request.body);
     const session=deps.open(reply,admitted),previous=session.opening;
@@ -47,19 +54,20 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
     if(previous?.busy || (previous?.submitted && !previous.result))throw deps.error(409,'OPENING_IN_PROGRESS');
     session.opening={token,operationId:randomUUID()};return {ok:true};
   });
-  app.get('/app/bff/opening',async request=>{
+  app.get('/app/bff/opening',async(request,reply)=>{
     empty.parse(request.query);const session=deps.current(request),opening=requireOpening(session);scope(session,opening);
+    if(opening.result){const result=await readReceipt(session,opening);if(result.status>=400)return deps.send(reply,result);}
     return {pending:!opening.result,uncertain:!!opening.uncertain,...(opening.body?{draft:opening.body}:{}),...(opening.result?{result:opening.result}:{})};
   });
   app.post('/app/bff/opening/preview',async(request,reply)=>{
     empty.parse(request.query);empty.parse(request.body);const session=deps.protect(request),opening=requireOpening(session);scope(session,opening);
-    if(opening.result)return {data:{status:'USED',school:opening.result}};
+    if(opening.result){const result=await readReceipt(session,opening);return result.status>=400?deps.send(reply,result):{data:{status:'USED',school:opening.result}};}
     if(!opening.token)throw deps.error(404,'OPENING_LINK_MISSING');
     return deps.send(reply,await deps.call(session,{method:'POST',path:'/v1/school-openings/preview',body:{token:opening.token}}));
   });
   app.post('/app/bff/opening/create',async(request,reply)=>{
     empty.parse(request.query);const body=fields.parse(request.body),session=deps.protect(request),opening=requireOpening(session);scope(session,opening);
-    if(opening.result)return {data:opening.result};
+    if(opening.result)return deps.send(reply,await readReceipt(session,opening));
     if(opening.busy)throw deps.error(409,'OPENING_IN_PROGRESS');
     if(!opening.token)throw deps.error(404,'OPENING_LINK_MISSING');
     if(opening.submitted && JSON.stringify(opening.body)!==JSON.stringify(body))throw deps.error(409,'OPENING_IN_PROGRESS');
@@ -74,10 +82,7 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
   });
   app.get('/app/bff/opening/result',async(request,reply)=>{
     empty.parse(request.query);const session=deps.current(request),opening=requireOpening(session);scope(session,opening);
-    if(opening.result)return {data:opening.result};
-    const result=await deps.call(session,{method:'GET',path:`/v1/school-openings/operations/${opening.operationId}`});
-    const parsed=confirm(opening,result);if(result.status<400 && !parsed.success)throw deps.error(503,'INVALID_RESPONSE');
-    return deps.send(reply,result);
+    return deps.send(reply,await readReceipt(session,opening));
   });
   app.get('/app/bff/operator/school-opening-links',async(request,reply)=>{
     empty.parse(request.query);const session=deps.current(request);

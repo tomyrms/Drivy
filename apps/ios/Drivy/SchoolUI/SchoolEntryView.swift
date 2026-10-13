@@ -41,6 +41,7 @@ struct SchoolEntryView: View {
                     } else {
                         ContentUnavailableView {
                             Label(title, systemImage: symbol)
+                                .accessibilityIdentifier("school-entry-status")
                         } description: {
                             EmptyView()
                         } actions: {
@@ -60,7 +61,6 @@ struct SchoolEntryView: View {
                                 .disabled(isWorking)
                                 .accessibilityIdentifier("school-entry-refresh")
                         }
-                        .accessibilityIdentifier("school-entry-status")
                     }
                     if let error = portalError ?? workspace.schoolError {
                         SchoolErrorNotice(message: error)
