@@ -121,7 +121,7 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   assert(new URL(page.url()).searchParams.get('selection')===learner.id,'Le lien de préparation sélectionne le dossier de l’élève accepté');
   const profile=page.locator('.profile-completion');
   await profile.getByLabel('Prénom',{exact:true}).fill('Élève');await profile.getByLabel('Nom',{exact:true}).fill('Première leçon');
-  await profile.getByRole('button',{name:'Enregistrer',exact:true}).click();await profile.waitFor({state:'hidden'});
+  await profile.getByRole('button',{name:'Enregistrer le profil',exact:true}).click();await profile.waitFor({state:'hidden'});
   const withoutTraining=await read('setup-draft/next-actions',nextSchema);
   assert(withoutTraining.actions[0]?.code==='TRAINING_NOT_ACTIVE'&&withoutTraining.actions[0]?.query?.selection===learner.id,
     'Le dossier complété conduit à l’ouverture de sa formation, sans annoncer une leçon prête');
