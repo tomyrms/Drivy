@@ -26,7 +26,7 @@
 .agenda-identity-top { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .75rem; min-inline-size: 0; }
 .agenda-studio .agenda-identity .row-title { font: 500 .875rem / 1.45 var(--font); overflow-wrap: anywhere; }
 .agenda-identity-top > .row-meta { font-size: .75rem; }
-.agenda-lesson-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; overflow-wrap: anywhere; }
+.agenda-studio .agenda-lesson-meta { display: flex; flex-wrap: wrap; gap: .25rem 1rem; overflow-wrap: anywhere; }
 .agenda-open-indicator { color: var(--muted); opacity: .65; }
 .agenda-open-indicator .symbol { inline-size: 1rem; block-size: 1rem; }
 @container (max-width: 44rem) {
