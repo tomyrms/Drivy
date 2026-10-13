@@ -25,6 +25,16 @@ const fieldDefaults: SetupContent['profile']['fields'] = [
   { field: 'postalAddress', requirement: 'OPTIONAL', stage: 'OPTIONAL', purposeCode: 'POSTAL_CONTACT', explanation: 'Vous adresser les courriers nécessaires à votre dossier.' },
 ];
 const clone = <T,>(value: T): T => structuredClone(value);
+const atPath = (value: unknown, path: string): unknown => path.split('.').reduce<unknown>((current, key) =>
+  current !== null && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, value);
+function matchesReviewedField(current: unknown, reviewed: SetupContent, path: string): boolean {
+  if (!Object.is(atPath(current, path), atPath(reviewed, path))) return false;
+  const owners = [[/^formations\.\d+/, 'id'], [/^formations\.\d+\.competencies\.\d+/, 'key'], [/^profile\.fields\.\d+/, 'field']] as const;
+  return owners.every(([pattern, key]) => {
+    const prefix = path.match(pattern)?.[0];
+    return !prefix || atPath(current, `${prefix}.${key}`) === atPath(reviewed, `${prefix}.${key}`);
+  });
+}
 
 /** Same persisted editor for the first school setup and later formation preparation. */
 export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogueOnly?: boolean; onClose?: () => void }) {
@@ -37,6 +47,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const [editorRevision, setEditorRevision] = useState(0);
   const [preview, setPreview] = useState<SetupPreview | null>(null);
   const [reviewIssues, setReviewIssues] = useState<SetupPreview['issues']>([]);
+  const [reviewContent, setReviewContent] = useState<SetupContent | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -105,7 +116,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     needsAdoption.current = false;
     setDocument(saved); setContent(next); setStep(steps.includes(nextStep) ? nextStep : steps[0]!); setDirty(nextDirty);
     setEditorRevision(revision => revision + 1);
-    setPreview(null); setReviewIssues([]); setAcknowledged(false); setReadFailure(null);
+    setPreview(null); setReviewIssues([]); setReviewContent(null); setAcknowledged(false); setReadFailure(null);
   }, [loaded.data, loaded.status]);
   useEffect(() => {
     if (content && document) drafts?.set(key, { version: document.version, content, step, dirty } satisfies StoredDraft);
@@ -143,6 +154,8 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     return () => window.cancelAnimationFrame(frame);
   }, [step, focusField]);
   const update = (next: SetupContent) => { setContent(content && loaded.data ? refreshSetupExamples(content, next, loaded.data.templates) : next); setDirty(true); setPreview(null); setAcknowledged(false); runner.clearOutcome(); };
+  const errorFor = (path: string): string | null => reviewContent && matchesReviewedField(content, reviewContent, path)
+    ? reviewIssues.filter(issue => issue.field.replace(/^content\./, '') === path).map(issue => issue.message).join(' ') || null : null;
 
   async function refreshReview(saved: SetupDraft) {
     setReviewing(true); setReadFailure(null); setAcknowledged(false);
@@ -150,7 +163,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
       const result = await readSchool(schoolId, 'setup-draft/preview', setupPreviewSchema, { activate: String(school.status === 'DRAFT') });
       if (result.schoolId !== schoolId || result.draftVersion !== saved.version) throw new RequestFailure('VERSION_CONFLICT', 412);
       if (catalogueOnly && result.selectedSections.some(section => section !== 'CATALOGUE')) throw new RequestFailure('SETUP_REVIEW_CHANGED', 409);
-      setPreview(result); setReviewIssues(result.issues);
+      setPreview(result); setReviewIssues(result.issues); setReviewContent(result.content);
     } catch (error) { setReadFailure(readError(error)); } finally { setReviewing(false); }
   }
   async function save(nextStep: SetupStep, value = content, exit = false, afterSave?: () => void) {
@@ -215,11 +228,11 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
           <h2 ref={heading} tabIndex={-1} className="setup-title">{catalogueOnly && step === 'REVIEW' ? 'Vérifier la formation' : setupStepLabels[step]}</h2>
           <form onSubmit={event => { event.preventDefault(); if (step === 'REVIEW') void finish(); else void save(nextStep); }}>
             <fieldset className="setup-fields" disabled={blocked}>
-              {step === 'IDENTITY' && <IdentityStep content={content} onChange={update} />}
-              {step === 'PRIVACY' && <PrivacyStep content={content} templates={data.templates} onChange={update} />}
-              {step === 'PROFILE' && <ProfileStep content={content} onChange={update} />}
-              {step === 'FORMATIONS' && <FormationStep content={content} templates={data.templates} offerings={data.offerings} initialOfferingId={routeQuery?.selection} today={civilDateIn(school.timeZone)} onChange={update} canWrite={canConfigureCatalog} />}
-              {step === 'PRICING' && <PricingStep key={`${document.version}:${editorRevision}`} content={content} templates={data.templates} onChange={update} canWrite={canConfigureCatalog} />}
+              {step === 'IDENTITY' && <IdentityStep content={content} onChange={update} errorFor={errorFor} />}
+              {step === 'PRIVACY' && <PrivacyStep content={content} templates={data.templates} onChange={update} errorFor={errorFor} />}
+              {step === 'PROFILE' && <ProfileStep content={content} onChange={update} errorFor={errorFor} />}
+              {step === 'FORMATIONS' && <FormationStep content={content} templates={data.templates} offerings={data.offerings} initialOfferingId={routeQuery?.selection} today={civilDateIn(school.timeZone)} onChange={update} canWrite={canConfigureCatalog} errorFor={errorFor} />}
+              {step === 'PRICING' && <PricingStep key={`${document.version}:${editorRevision}`} content={content} templates={data.templates} onChange={update} canWrite={canConfigureCatalog} errorFor={errorFor} />}
               {step === 'REVIEW' && <>
                 {!preview && <button type="button" className="button secondary" onClick={() => dirty ? void save('REVIEW') : void refreshReview(document)}>Vérifier la préparation</button>}
                 {preview && <SetupReview preview={preview} onEdit={jump} />}
@@ -257,29 +270,29 @@ function templatePrivacy(templates: SetupTemplates, content: SetupContent): Setu
     retentionText: setupExampleText(templates.privacy.retentionText, content), contactEmail: content.privacy.contactEmail || content.identity.contactEmail,
     templateId: templates.privacy.id, templateVersion: templates.privacy.version };
 }
-type StepProps = { content: SetupContent; onChange: (value: SetupContent) => void };
-function IdentityStep({ content, onChange }: StepProps) {
+type StepProps = { content: SetupContent; onChange: (value: SetupContent) => void; errorFor: (path: string) => string | null };
+function IdentityStep({ content, onChange, errorFor }: StepProps) {
   const update = (value: Partial<SetupContent['identity']>) => onChange(selectSetupSection({ ...content, identity: { ...content.identity, ...value } }, 'IDENTITY', true));
   return <div className="form-grid">
-    <TextField name="identity.name" label="Nom de l’école" value={content.identity.name} maxLength={150} autoComplete="organization" onChange={name => update({ name })} />
-    <TextField name="identity.contactEmail" label="E-mail de l’école" type="email" value={content.identity.contactEmail} autoComplete="email" onChange={contactEmail => update({ contactEmail })} />
-    <TextField name="identity.contactPhone" label="Téléphone" type="tel" required={false} value={content.identity.contactPhone ?? ''} autoComplete="tel" onChange={contactPhone => update({ contactPhone: contactPhone || null })} />
-    <TextField name="identity.timeZone" label="Fuseau horaire" value={content.identity.timeZone} onChange={timeZone => update({ timeZone })} />
+    <TextField name="identity.name" label="Nom de l’école" value={content.identity.name} maxLength={150} autoComplete="organization" error={errorFor('identity.name')} onChange={name => update({ name })} />
+    <TextField name="identity.contactEmail" label="E-mail de l’école" type="email" value={content.identity.contactEmail} autoComplete="email" error={errorFor('identity.contactEmail')} onChange={contactEmail => update({ contactEmail })} />
+    <TextField name="identity.contactPhone" label="Téléphone" type="tel" required={false} value={content.identity.contactPhone ?? ''} autoComplete="tel" error={errorFor('identity.contactPhone')} onChange={contactPhone => update({ contactPhone: contactPhone || null })} />
+    <TextField name="identity.timeZone" label="Fuseau horaire" value={content.identity.timeZone} error={errorFor('identity.timeZone')} onChange={timeZone => update({ timeZone })} />
   </div>;
 }
-function PrivacyStep({ content, templates, onChange }: StepProps & { templates: SetupTemplates }) {
+function PrivacyStep({ content, templates, onChange, errorFor }: StepProps & { templates: SetupTemplates }) {
   const update = (value: Partial<SetupContent['privacy']>) => onChange(selectSetupSection({ ...content, privacy: { ...content.privacy, ...value } }, 'PRIVACY', true));
   const [replace, setReplace] = useState(false);
   return <div className="section-stack">
-    <TextField name="privacy.contactEmail" label="Contact pour les données" type="email" value={content.privacy.contactEmail} onChange={contactEmail => update({ contactEmail })} />
-    <TextArea name="privacy.noticeText" label="Information des personnes" value={content.privacy.noticeText} rows={10} maxLength={20_000} onChange={noticeText => update({ noticeText })} />
-    <TextArea name="privacy.retentionText" label="Conservation des données" value={content.privacy.retentionText} rows={6} maxLength={20_000} onChange={retentionText => update({ retentionText })} />
+    <TextField name="privacy.contactEmail" label="Contact pour les données" type="email" value={content.privacy.contactEmail} error={errorFor('privacy.contactEmail')} onChange={contactEmail => update({ contactEmail })} />
+    <TextArea name="privacy.noticeText" label="Information des personnes" value={content.privacy.noticeText} rows={10} maxLength={20_000} error={errorFor('privacy.noticeText')} onChange={noticeText => update({ noticeText })} />
+    <TextArea name="privacy.retentionText" label="Conservation des données" value={content.privacy.retentionText} rows={6} maxLength={20_000} error={errorFor('privacy.retentionText')} onChange={retentionText => update({ retentionText })} />
     <button type="button" className="button secondary" onClick={() => setReplace(true)}>Repartir de l’exemple Drivy</button>
     <details className="disclosure"><summary>Aperçu des textes</summary><div className="policy-copy"><h3>Information des personnes</h3><p>{content.privacy.noticeText}</p><h3>Conservation</h3><p>{content.privacy.retentionText}</p><p>{content.privacy.contactEmail}</p></div></details>
     <ConfirmDialog open={replace} busy={false} title="Reprendre l’exemple ?" confirmLabel="Utiliser l’exemple" onCancel={() => setReplace(false)} onConfirm={() => { update(templatePrivacy(templates, content)); setReplace(false); }}><p>Les textes de ce brouillon seront remplacés. Les textes déjà adoptés restent inchangés.</p></ConfirmDialog>
   </div>;
 }
-function ProfileStep({ content, onChange }: StepProps) {
+function ProfileStep({ content, onChange, errorFor }: StepProps) {
   const update = (fields: SetupContent['profile']['fields']) => onChange(selectSetupSection({ ...content, profile: { ...content.profile, fields, effectiveFrom: null } }, 'PROFILE', true));
   return <div className="section-stack">
     {content.profile.effectiveFrom !== null && <Notice tone="warning" title="Date d’effet à actualiser" actions={<button type="button" className="button secondary" onClick={() => update(content.profile.fields)}>Appliquer dès la confirmation</button>}><p>Les informations demandées prennent désormais effet dès leur confirmation. Ce brouillon conserve encore une ancienne date.</p></Notice>}
@@ -289,13 +302,13 @@ function ProfileStep({ content, onChange }: StepProps) {
         <div className="setup-profile-control"><strong>{fieldLabels[base.field]}</strong>{fixed ? <span>À l’inscription</span> : <SelectField label={`Demander ${fieldLabels[base.field]!.toLocaleLowerCase('fr')}`} value={!current ? 'NONE' : current.requirement === 'OPTIONAL' ? 'OPTIONAL' : current.stage} options={[
           { value: 'NONE', label: 'Non demandé' }, { value: 'OPTIONAL', label: 'Facultatif' }, { value: 'BEFORE_LESSON', label: 'Avant une leçon' }, { value: 'BEFORE_COURSE', label: 'Avant un cours' },
         ]} onChange={value => { const rest = content.profile.fields.filter(item => item.field !== base.field); update(value === 'NONE' ? rest : [...rest, { ...(current ?? base), requirement: value === 'OPTIONAL' ? 'OPTIONAL' : 'REQUIRED', stage: value as 'OPTIONAL' | 'BEFORE_LESSON' | 'BEFORE_COURSE' }]); }} />}</div>
-        {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${content.profile.fields.indexOf(current)}.explanation`} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
+        {current && <details className="disclosure"><summary>Pourquoi cette information ?</summary><TextArea name={`profile.fields.${content.profile.fields.indexOf(current)}.explanation`} error={errorFor(`profile.fields.${content.profile.fields.indexOf(current)}.explanation`)} label={`Explication · ${fieldLabels[base.field]}`} rows={2} value={current.explanation} onChange={explanation => update(content.profile.fields.map(item => item.field === base.field ? { ...item, explanation } : item))} /></details>}
       </div>;
     })}</div>
     <details className="disclosure"><summary>Aperçu pour l’élève</summary><ProfileFieldsPreview fields={content.profile.fields} /></details>
   </div>;
 }
-function FormationStep({ content, templates, offerings, initialOfferingId, today, onChange, canWrite }: StepProps & { templates: SetupTemplates; offerings: Offering[]; initialOfferingId?: string | undefined; today: string; canWrite: boolean }) {
+function FormationStep({ content, templates, offerings, initialOfferingId, today, onChange, canWrite, errorFor }: StepProps & { templates: SetupTemplates; offerings: Offering[]; initialOfferingId?: string | undefined; today: string; canWrite: boolean }) {
   const add = (value: SetupFormation) => onChange(selectSetupSection({ ...content, formations: [...content.formations, value] }, 'CATALOGUE', true));
   const update = (value: SetupFormation) => onChange({ ...content, formations: content.formations.map(item => item.id === value.id ? value : item) });
   const [chosen, setChosen] = useState(offerings.some(item => item.id === initialOfferingId) ? initialOfferingId! : '');
@@ -307,20 +320,20 @@ function FormationStep({ content, templates, offerings, initialOfferingId, today
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 12} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
       <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>
-      <div className="form-grid"><TextField name={`formations.${index}.categoryCode`} label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
-        <TextField name={`formations.${index}.label`} label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div>
+      <div className="form-grid"><TextField name={`formations.${index}.categoryCode`} error={errorFor(`formations.${index}.categoryCode`)} label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
+        <TextField name={`formations.${index}.label`} error={errorFor(`formations.${index}.label`)} label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div>
       {!formation.existingOfferingId && <>
         <details className="disclosure"><summary>Programme · {formation.competencies.length} compétences</summary><div className="section-stack">{formation.competencies.map((competence, position) => <div className="setup-competency" key={competence.key}>
-          <TextField name={`formations.${index}.competencies.${position}.label`} label={`Compétence ${position + 1}`} value={competence.label} onChange={label => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, label } : item) })} />
-          <TextArea name={`formations.${index}.competencies.${position}.description`} label="Description" value={competence.description} rows={2} onChange={description => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, description } : item) })} />
+          <TextField name={`formations.${index}.competencies.${position}.label`} error={errorFor(`formations.${index}.competencies.${position}.label`)} label={`Compétence ${position + 1}`} value={competence.label} onChange={label => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, label } : item) })} />
+          <TextArea name={`formations.${index}.competencies.${position}.description`} error={errorFor(`formations.${index}.competencies.${position}.description`)} label="Description" value={competence.description} rows={2} onChange={description => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, description } : item) })} />
           <button type="button" className="button quiet" onClick={() => update({ ...formation, competencies: formation.competencies.filter((_, i) => i !== position).map((item, sortOrder) => ({ ...item, sortOrder })) })}>Retirer cette compétence</button>
         </div>)}<button type="button" className="button secondary" disabled={formation.competencies.length >= 200} onClick={() => update({ ...formation, competencies: [...formation.competencies, { key: crypto.randomUUID(), label: '', description: '', sortOrder: formation.competencies.length }] })}>Ajouter une compétence</button></div></details>
-        <details className="disclosure"><summary>Déroulement de la formation</summary><TextArea name={`formations.${index}.procedureText`} label="Déroulement" value={formation.procedureText} rows={5} maxLength={4000} onChange={procedureText => update({ ...formation, procedureText })} /></details>
+        <details className="disclosure"><summary>Déroulement de la formation</summary><TextArea name={`formations.${index}.procedureText`} error={errorFor(`formations.${index}.procedureText`)} label="Déroulement" value={formation.procedureText} rows={5} maxLength={4000} onChange={procedureText => update({ ...formation, procedureText })} /></details>
       </>}
     </section>)}
   </div>;
 }
-function PricingStep({ content, templates, onChange, canWrite }: StepProps & { canWrite: boolean; templates: SetupTemplates }) {
+function PricingStep({ content, templates, onChange, canWrite, errorFor }: StepProps & { canWrite: boolean; templates: SetupTemplates }) {
   const update = (value: SetupFormation) => onChange(selectSetupSection({ ...content, formations: content.formations.map(item => item.id === value.id ? value : item) }, 'CATALOGUE', true));
   const commercial = templates.commercial ? { termsText: setupExampleText(templates.commercial.termsText, content), cancellationPolicyText: setupExampleText(templates.commercial.cancellationPolicyText, content) } : null;
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
@@ -329,12 +342,12 @@ function PricingStep({ content, templates, onChange, canWrite }: StepProps & { c
   return <div className="section-stack">{content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
     <h3>{formation.label || `Permis ${formation.categoryCode}`}</h3>
     <fieldset className="setup-fields" disabled={!canWrite}>
-      <div className="form-grid"><TextField name={`formations.${index}.durationMinutes`} label="Durée (minutes)" value={formation.durationMinutes === null ? '' : String(formation.durationMinutes)} inputMode="numeric" onChange={value => update({ ...formation, durationMinutes: /^\d+$/.test(value) ? Number(value) : null })} />
-        <PriceField name={`formations.${index}.priceCents`} formation={formation} onChange={update} />
-        <TextField name={`formations.${index}.validFrom`} label="Disponible dès le" type="date" value={formation.validFrom ?? ''} onChange={validFrom => update({ ...formation, validFrom: validFrom || null })} /></div>
-      {!formation.existingOfferingId ? <TextArea name={`formations.${index}.cancellationPolicyText`} label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
+      <div className="form-grid"><TextField name={`formations.${index}.durationMinutes`} error={errorFor(`formations.${index}.durationMinutes`)} label="Durée (minutes)" value={formation.durationMinutes === null ? '' : String(formation.durationMinutes)} inputMode="numeric" onChange={value => update({ ...formation, durationMinutes: /^\d+$/.test(value) ? Number(value) : null })} />
+        <PriceField name={`formations.${index}.priceCents`} error={errorFor(`formations.${index}.priceCents`)} formation={formation} onChange={update} />
+        <TextField name={`formations.${index}.validFrom`} error={errorFor(`formations.${index}.validFrom`)} label="Disponible dès le" type="date" value={formation.validFrom ?? ''} onChange={validFrom => update({ ...formation, validFrom: validFrom || null })} /></div>
+      {!formation.existingOfferingId ? <TextArea name={`formations.${index}.cancellationPolicyText`} error={errorFor(`formations.${index}.cancellationPolicyText`)} label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
         : formation.cancellationPolicyText.trim() ? <Notice tone="warning" title="Annulation déjà définie" actions={<button type="button" className="button secondary" onClick={() => update({ ...formation, cancellationPolicyText: '' })}>Conserver l’annulation de la formation</button>}><p>Ce tarif utilise les conditions de sa formation. Le texte ajouté à ce brouillon ne peut pas les remplacer.</p></Notice> : <p>Le déroulement et les conditions d’annulation de la formation sont conservés.</p>}
-      <TextArea name={`formations.${index}.termsText`} label="Conditions du tarif" value={formation.termsText} rows={4} maxLength={20000} onChange={termsText => update({ ...formation, termsText })} />
+      <TextArea name={`formations.${index}.termsText`} error={errorFor(`formations.${index}.termsText`)} label="Conditions du tarif" value={formation.termsText} rows={4} maxLength={20000} onChange={termsText => update({ ...formation, termsText })} />
       {templates.commercial && <button type="button" className="button secondary" onClick={() => setExampleFor(formation.id)}>Insérer un exemple de conditions</button>}
       {index === 0 && content.formations.length > 1 && <button type="button" className="button secondary" onClick={() => setCopyFrom(formation.id)}>Utiliser ces conditions pour les autres formations</button>}
       <CheckField label="Proposer cette formation et ce tarif après confirmation" checked={formation.apply} onChange={apply => update({ ...formation, apply })} />
@@ -348,9 +361,9 @@ function PricingStep({ content, templates, onChange, canWrite }: StepProps & { c
     }}><p>Les conditions des autres formations de ce brouillon seront remplacées. Pour un tarif rattaché à une formation existante, seules les conditions du tarif seront copiées.</p></ConfirmDialog>
   </div>;
 }
-function PriceField({ formation, onChange, name }: { formation: SetupFormation; onChange: (value: SetupFormation) => void; name: string }) {
+function PriceField({ formation, onChange, name, error }: { formation: SetupFormation; onChange: (value: SetupFormation) => void; name: string; error: string | null }) {
   const [raw, setRaw] = useState(formation.priceCents === null ? '' : String(formation.priceCents / 100));
-  return <TextField name={name} label="Prix (CHF)" value={raw} inputMode="decimal" error={raw && setupPrice(raw) === null ? 'Indiquez un montant avec deux décimales au maximum.' : null}
+  return <TextField name={name} label="Prix (CHF)" value={raw} inputMode="decimal" error={raw && setupPrice(raw) === null ? 'Indiquez un montant avec deux décimales au maximum.' : error}
     onChange={value => { setRaw(value); onChange({ ...formation, priceCents: setupPrice(value) }); }} />;
 }
 export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit: (step: SetupStep, field?: string) => void }) {

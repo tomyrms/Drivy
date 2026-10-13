@@ -223,8 +223,8 @@ async function main() {
     await page.getByRole('button',{name:/Vérifier et démarrer/}).click();
     await page.getByRole('button',{name:'Expliquez à l’élève pourquoi cette information est demandée.',exact:true}).click();
     await page.waitForFunction(()=>{const active=document.activeElement;return active instanceof HTMLTextAreaElement&&active.name.startsWith('profile.fields.')&&active.value==='';});
-    assert(await phoneExplanation.evaluate(element=>element===document.activeElement)&&await phoneExplanation.isVisible(),
-      'L’erreur d’explication retourne au téléphone concerné et ouvre son détail, sans viser le prénom valide');
+    assert(await phoneExplanation.evaluate(element=>element===document.activeElement&&element.getAttribute('aria-invalid')==='true'&&!!document.getElementById(element.getAttribute('aria-describedby')??'')?.textContent?.includes('pourquoi cette information'))&&await phoneExplanation.isVisible(),
+      'L’erreur d’explication retourne au téléphone concerné et lui associe son message, sans viser le prénom valide');
     await phoneExplanation.fill(originalPhoneExplanation);
     stage='transition du guide sur mobile depuis le bas de page';await page.setViewportSize({width:390,height:844});
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
@@ -234,12 +234,33 @@ async function main() {
     await page.setViewportSize({width:1440,height:1100});
     stage='préparation des informations élèves et du permis B';
     await page.getByRole('heading',{name:'Vos formations',exact:true}).waitFor();await page.getByRole('button',{name:'Permis B',exact:true}).click();
+    const secondCompetence=page.locator('[name="formations.0.competencies.1.label"]');
+    const thirdDescription=page.locator('[name="formations.0.competencies.2.description"]');
+    const originalSecondCompetence=await secondCompetence.inputValue(),originalThirdDescription=await thirdDescription.inputValue();
+    await page.locator('details').filter({has:secondCompetence}).locator('summary').click();
+    await secondCompetence.fill('');await thirdDescription.fill('');
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vos tarifs',exact:true}).waitFor();
     await page.getByLabel('Prix (CHF)',{exact:true}).fill('95');await page.getByLabel('Durée (minutes)',{exact:true}).fill('50');
-    await page.getByLabel('Conditions d’annulation',{exact:true}).fill('Recette synthétique : annulation au moins 24 heures avant la leçon.');
+    await page.getByLabel('Conditions d’annulation',{exact:true}).fill('');
     await page.getByLabel('Conditions du tarif',{exact:true}).fill('Tarif synthétique pour une leçon de 50 minutes, destiné seulement à cette recette.');
     await page.getByLabel('Proposer cette formation et ce tarif après confirmation',{exact:true}).check();
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vérifier et démarrer',exact:true}).waitFor();
+    stage='erreurs précises et associées dans les compétences et l’annulation';
+    for(const [field,message,value] of [
+      ['formations.0.competencies.1.label','Indiquez le nom de cette compétence.',originalSecondCompetence],
+      ['formations.0.competencies.2.description','Décrivez cette compétence.',originalThirdDescription],
+      ['formations.0.cancellationPolicyText','Complétez les conditions d’annulation.','Recette synthétique : annulation au moins 24 heures avant la leçon.']
+    ] as const) {
+      await page.getByRole('button',{name:message,exact:true}).click();
+      const fieldInput=page.locator(`[name="${field}"]`);
+      await page.waitForFunction(name=>document.activeElement?.getAttribute('name')===name,field);
+      const before=await fieldInput.evaluate(element=>({invalid:element.getAttribute('aria-invalid'),description:(element.getAttribute('aria-describedby')??'').split(/\s+/).map(id=>document.getElementById(id)?.textContent??'').join(' '),visible:element.getBoundingClientRect().top>=0&&element.getBoundingClientRect().bottom<=window.innerHeight}));
+      await fieldInput.fill(value);
+      await page.waitForFunction(name=>document.querySelector(`[name="${name}"]`)?.getAttribute('aria-invalid')!=='true',field);
+      assert(before.invalid==='true'&&before.description.includes(message)&&before.visible,`La revue cible ${field}, associe son erreur et retire celle-ci après correction`);
+      await page.getByRole('button',{name:/Vérifier et démarrer/}).click();
+      await page.getByRole('heading',{name:'Vérifier et démarrer',exact:true}).waitFor();
+    }
     const acknowledgement=page.getByLabel('J’ai relu ces choix et ces textes. Je les adopte pour mon école et confirme son activation.',{exact:true});await acknowledgement.waitFor();
     assert(!(await acknowledgement.isChecked()),'Les textes et l’activation ne sont jamais préconfirmés');
     assert((await administration.query('SELECT status FROM drivy.school WHERE id=$1',[school.id])).rows[0].status==='DRAFT','Les étapes enregistrées ne déclenchent aucune activation implicite');

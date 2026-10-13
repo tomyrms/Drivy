@@ -101,11 +101,17 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
       nonblank(formation.termsText,`${prefix}.termsText`,'Complétez les conditions de cette prestation.');
       if(formation.existingOfferingId===null) {
         const curriculum=curriculumBody.safeParse({operationId:validationOperation,categoryCode:formation.categoryCode,approved:true,approvalReason:'Configuration relue',competencies:formation.competencies});
-        if(!curriculum.success)add(`${prefix}.competencies`,'Complétez les compétences avec des clés distinctes, des noms et des descriptions.');
-        const procedure=policyBody.safeParse({operationId:validationOperation,categoryCode:formation.categoryCode,procedureText:formation.procedureText,cancellationPolicyText:formation.cancellationPolicyText,sourceUrls:formation.sourceUrls,approved:true,approvalReason:'Configuration relue'});
-        if(!procedure.success)add(`${prefix}.procedureText`,'Complétez le déroulement et les conditions d’annulation.');
+        if(!curriculum.success)for(const issue of curriculum.error.issues) {
+          const field=`${prefix}.${issue.path.length?issue.path.join('.'):'competencies'}`;
+          if(!issues.some(existing=>existing.field===field))add(field,issue.path.at(-1)==='label'?'Indiquez le nom de cette compétence.':issue.path.at(-1)==='description'?'Décrivez cette compétence.':'Complétez les compétences avec des clés distinctes, des noms et des descriptions.');
+        }
         nonblank(formation.procedureText,`${prefix}.procedureText`,'Complétez le déroulement de la formation.');
         nonblank(formation.cancellationPolicyText,`${prefix}.cancellationPolicyText`,'Complétez les conditions d’annulation.');
+        const procedure=policyBody.safeParse({operationId:validationOperation,categoryCode:formation.categoryCode,procedureText:formation.procedureText,cancellationPolicyText:formation.cancellationPolicyText,sourceUrls:formation.sourceUrls,approved:true,approvalReason:'Configuration relue'});
+        if(!procedure.success)for(const issue of procedure.error.issues) {
+          const field=`${prefix}.${issue.path.length?issue.path.join('.'):'procedureText'}`;
+          if(!issues.some(existing=>existing.field===field))add(field,'Vérifiez ce texte ou ce lien de référence.');
+        }
       } else if(formation.cancellationPolicyText.trim())add(`${prefix}.cancellationPolicyText`,'Les conditions d’annulation de la formation sont conservées. Retirez ce texte du brouillon, ou modifiez la procédure depuis la fiche de formation.','SETUP_INHERITED_CANCELLATION');
       if(formation.templateId!==null&&!setupTemplates.formations.some(template=>template.id===formation.templateId&&template.version===formation.templateVersion&&template.categoryCode===formation.categoryCode))add(`${prefix}.templateVersion`,'Relisez le modèle correspondant à ce permis ou retirez sa référence.','SETUP_TEMPLATE_CHANGED');
     }

@@ -2,7 +2,7 @@
 
 ## 13 octobre 2026 — vérification complémentaire de l’onboarding
 
-Six défauts reproduits et corrigés : étape suivante hors écran sur mobile, mauvais champ ciblé pour une explication, erreur de fuseau trop vague, styles de saisie absents à l’ouverture, prochaine action visant le mauvais réglage, dossier personnel introuvable pour ADMIN + LEARNER au-delà de la première page. [Vérification, preuves et limites](verification-onboarding-20261013.md).
+Défauts reproduits et corrigés : étape suivante hors écran sur mobile, mauvais champ ciblé pour une explication ou une compétence, erreurs absentes auprès des champs du guide, erreur de fuseau trop vague, styles de saisie absents à l’ouverture, prochaine action visant le mauvais réglage, dossier personnel introuvable pour ADMIN + LEARNER au-delà de la première page. [Vérification, preuves et limites](verification-onboarding-20261013.md).
 
 **Exécuté localement** : 228 tests web, types API/web, build web, parcours clavier et reprises sur réponses simulées, rendus d’ouverture clair/sombre à 320/390/1440 px. **À exécuter sur ces nouvelles sources** : PostgreSQL, navigateur intégré, unités Apple, IPA et scénario UI ADMIN + LEARNER. Aucun déploiement ni qualification physique. Le retour Safari/OIDC réel, le lecteur d’écran et la recette avec une école ne sont pas attestés par ces contrôles.
 

@@ -6,6 +6,8 @@ L’extension de réalisation GET `/v1/schools/{schoolId}/learners?own=true` ajo
 
 `DrivyAPIClient.ownLearners` demande explicitement `own=true&status=ALL`. `SchoolWorkspace` choisit cette lecture à l’entrée et au rafraîchissement lorsque la destination est élève. Les listes moniteur, y compris ADMIN + INSTRUCTOR + LEARNER, conservent leur recherche et pagination ordinaires.
 
+Mettre à jour l’API avant de distribuer cette nouvelle IPA : l’ancien serveur rejette le paramètre `own` inconnu. L’API étendue reste compatible avec les clients précédents qui ne l’envoient pas.
+
 La régression est décrite dans `g1a.integration.test.ts` sur PostgreSQL avec cinquante et un autres dossiers ajoutés, un dossier personnel actif puis archivé, l’annuaire inchangé, l’identité serveur, l’isolation scolaire, la révocation et la portée du curseur. Les tests Swift contrôlent la requête HTTP et les lectures du workspace pour LEARNER et ADMIN + LEARNER, ainsi que la liste ordinaire des combinaisons INSTRUCTOR. Le scénario UI `SchoolEntryTests/testAdminLearnerFindsOwnDossierBeyondTheFirstDirectoryPage` utilise une première page de cinquante autres dossiers et une lecture personnelle distincte : il exige « Aucune formation » plutôt que « Dossier pas encore ouvert », puis retrouve « Mes informations » dans Profil. Ces nouveaux contrôles doivent être qualifiés sur PostgreSQL et runner Apple ; leur présence dans les sources ne constitue pas une exécution.
 
 ## Limites des preuves d’entrée existantes

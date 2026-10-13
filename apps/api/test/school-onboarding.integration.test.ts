@@ -80,7 +80,9 @@ it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la
   const current=await getDraft();current.content.identity.name='';current.content.privacy.noticeText='Texte de travail incomplet';
   const phoneIndex=current.content.profile.fields.findIndex(field=>field.field==='contactPhone');expect(phoneIndex).toBeGreaterThanOrEqual(0);
   current.content.profile.fields[phoneIndex]!.explanation='';
-  const incompleteFormation=formation();incompleteFormation.durationMinutes=0;current.content.formations=[incompleteFormation];current.content.selectedSections.push('CATALOGUE');
+  const incompleteFormation=formation();incompleteFormation.durationMinutes=0;
+  incompleteFormation.competencies[1]!.label='';incompleteFormation.competencies[2]!.description='';incompleteFormation.cancellationPolicyText=' ';
+  current.content.formations=[incompleteFormation];current.content.selectedSections.push('CATALOGUE');
   const command={operationId:randomUUID(),currentStep:'PRIVACY',content:current.content};
   const first=await call('PUT',base,command,1);expect(first.statusCode,first.body).toBe(200);
   expect((await call('PUT',base,command,1)).json().data).toEqual(first.json().data);
@@ -92,6 +94,12 @@ it('sauvegarde partielle durable, sans adoption ; conflit et rejeu conservent la
   const review=await reviewed();expect(review.ready).toBe(false);
   expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['privacy.noticeText',`profile.fields.${phoneIndex}.explanation`,'formations.0.durationMinutes']));
   expect(review.issues.filter((issue:{field:string})=>issue.field.startsWith('profile.'))).toEqual([{field:`profile.fields.${phoneIndex}.explanation`,code:'PROFILE_POLICY_RULE_INVALID',message:'Expliquez à l’élève pourquoi cette information est demandée.'}]);
+  expect(review.issues.filter((issue:{field:string})=>issue.field.startsWith('formations.'))).toEqual([
+    {field:'formations.0.durationMinutes',code:'SETUP_FIELD_REQUIRED',message:'Confirmez une durée de leçon entre 1 et 480 minutes.'},
+    {field:'formations.0.competencies.1.label',code:'SETUP_FIELD_REQUIRED',message:'Indiquez le nom de cette compétence.'},
+    {field:'formations.0.competencies.2.description',code:'SETUP_FIELD_REQUIRED',message:'Décrivez cette compétence.'},
+    {field:'formations.0.cancellationPolicyText',code:'SETUP_FIELD_REQUIRED',message:'Complétez les conditions d’annulation.'}
+  ]);
   expect(review.issues).toEqual(expect.arrayContaining([expect.objectContaining({field:'privacy.noticeText',code:'POLICY_TEXT_TOO_SHORT'})]));
   expect((await pool.query('SELECT count(*)::int n FROM drivy.school_data_policy WHERE approved_at IS NOT NULL')).rows[0].n).toBe(0);
 });

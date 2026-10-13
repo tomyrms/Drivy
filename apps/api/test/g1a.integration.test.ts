@@ -114,11 +114,13 @@ describe('G1A · droits réels et isolation', () => {
   });
   it('ADMIN et LEARNER retrouve son dossier au-delà de cinquante élèves, même archivé, sans changer l’annuaire', async () => {
     await pool.query("UPDATE drivy.membership SET roles=ARRAY['ADMIN','LEARNER'] WHERE id=$1",[id.adminMember]);
-    await pool.query(`WITH persons AS (
-      INSERT INTO drivy.person(id,display_name) SELECT gen_random_uuid(),'Dossier synthétique '||n FROM generate_series(1,51) n
-      RETURNING id,display_name)
-      INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
-      SELECT gen_random_uuid(),$1,id,display_name,'2026-01-01T00:00:00Z' FROM persons`,[id.schoolA]);
+    const otherPersons=Array.from({length:51},()=>randomUUID());
+    await pool.query(`INSERT INTO drivy.person(id,display_name)
+      SELECT person_id,'Dossier synthétique '||ordinality FROM unnest($1::uuid[]) WITH ORDINALITY AS persons(person_id,ordinality)`,[otherPersons]);
+    await pool.query(`INSERT INTO drivy.membership(id,school_id,person_id,roles)
+      SELECT gen_random_uuid(),$1,person_id,ARRAY['LEARNER'] FROM unnest($2::uuid[]) AS persons(person_id)`,[id.schoolA,otherPersons]);
+    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
+      SELECT gen_random_uuid(),$1,id,display_name,'2026-01-01T00:00:00Z' FROM drivy.person WHERE id=ANY($2::uuid[])`,[id.schoolA,otherPersons]);
     const ownId=randomUUID();
     await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
       VALUES ($1,$2,$3,'Responsable élève','2026-02-01T00:00:00Z')`,[ownId,id.schoolA,id.admin]);
