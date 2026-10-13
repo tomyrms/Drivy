@@ -35,7 +35,7 @@ beforeAll(async()=>{
 });
 beforeEach(async()=>{
   await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);
-  const policy=await call('PUT',`/v1/schools/${id.schoolA}/data-policy`,{operationId:randomUUID(),noticeText:'Notice synthétique F02.',retentionText:'Conservation limitée à la recette.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true},1);
+  const policy=await call('PUT',`/v1/schools/${id.schoolA}/data-policy`,{operationId:randomUUID(),noticeText:'Notice synthétique F02 : finalités, destinataires et contact.',retentionText:'Conservation limitée à la recette, sans donnée réelle.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true},1);
   expect(policy.statusCode,policy.body).toBe(200);
 });
 afterAll(async()=>{await app?.close();await pool.end();});
@@ -67,7 +67,7 @@ describe('F02 · contrat et entrée explicite',()=>{
   it('T005 : preview sans effet puis identité, adhésion et élève atomiques sans formation',async()=>{
     const invitation=await invite();const before=await counts();
     const shown=await call('POST','/v1/invitations/preview',{token:invitation.token},undefined,'new-person',verified());
-    expect(shown.statusCode,shown.body).toBe(200);expect(shown.json().data).toMatchObject({schoolId:id.schoolA,roles:['LEARNER'],notice:{version:2,noticeText:'Notice synthétique F02.'}});
+    expect(shown.statusCode,shown.body).toBe(200);expect(shown.json().data).toMatchObject({schoolId:id.schoolA,roles:['LEARNER'],notice:{version:2,noticeText:'Notice synthétique F02 : finalités, destinataires et contact.'}});
     conforms('Preview',shown.json());
     expect(await counts()).toEqual(before);
     const response=await accept(invitation.token);expect(response.statusCode,response.body).toBe(201);conforms('MemberContextEnvelope',response.json());

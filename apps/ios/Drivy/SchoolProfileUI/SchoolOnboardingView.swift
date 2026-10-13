@@ -215,7 +215,7 @@ struct SchoolOnboardingView: View {
                 .disabled(!model.canMutate)
                 if let notice = model.notice, notice.status == "APPROVED" {
                     Button { showsNotice = true } label: {
-                        Label("Comment l’école utilise tes données", systemImage: "doc.text")
+                        Label("Tes données", systemImage: "doc.text")
                             .font(.subheadline.weight(.semibold))
                             .frame(minHeight: DrivyLayout.tapTarget)
                             .contentShape(Rectangle())
@@ -594,9 +594,6 @@ struct SchoolOnboardingView: View {
                         if let email = notice.contactEmail {
                             DrivyContactRow(title: "Contact pour tes données", value: email, symbol: "envelope")
                         }
-                        Text("Version \(notice.version)")
-                            .font(.footnote.monospacedDigit())
-                            .foregroundStyle(DrivyTheme.muted)
                     }
                 }
                 .font(.body)

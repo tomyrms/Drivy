@@ -8,11 +8,6 @@ import { consolePath } from './route';
 export const schoolStatus = (status: string): { label: string; tone: Tone } =>
   status === 'ACTIVE' ? { label: 'École active', tone: 'success' } : status === 'DRAFT' ? { label: 'En préparation', tone: 'warning' } : { label: 'École inactive', tone: 'neutral' };
 
-export const capabilityTitle = (capability: string) => ({
-  CAN_USE_WORKSPACE: 'Espace de l’école', CAN_PLAN_LESSON: 'Planification des leçons',
-  CAN_CAPTURE: 'Enregistrement des trajets', CAN_PUBLISH_COURSE: 'Publication des cours',
-} as Record<string, string>)[capability] ?? 'Autre fonction';
-
 async function settle<T>(work: Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
   try { return { ok: true, value: await work }; } catch (error) { return { ok: false, error: readError(error) }; }
 }
@@ -33,8 +28,8 @@ export function OverviewSection() {
   const identityCodes = ['SCHOOL_IDENTITY_REQUIRED', 'INVALID_TIME_ZONE', 'SCHOOL_CONTACT_REQUIRED'];
   const identityReady = data?.readiness.ok && !data.readiness.value.activationBlockers.some(item => identityCodes.includes(item.code));
   const rows: { title: string; section: SectionKey; done: boolean | undefined }[] = [
-    { title: 'École et confidentialité', section: 'configuration', done: data?.policy.ok && identityReady && data.policy.value.status === 'APPROVED' },
-    { title: 'Informations demandées aux élèves', section: 'champs-profil', done: data?.profile.ok && data.profile.value.items.some(item => item.status === 'PUBLISHED') },
+    { title: 'Coordonnées et confidentialité', section: 'configuration', done: data?.policy.ok && identityReady && data.policy.value.status === 'APPROVED' },
+    { title: 'Informations demandées', section: 'champs-profil', done: data?.profile.ok && data.profile.value.items.some(item => item.status === 'PUBLISHED') },
     { title: 'Formations et tarifs', section: 'formations', done: data?.readiness.ok && data.readiness.value.capabilities.some(item => item.capability === 'CAN_PLAN_LESSON' && item.ready) },
   ];
   const failures = data ? Object.values(data).filter(result => !result.ok).length : 0;

@@ -171,13 +171,13 @@ struct SchoolRecordingChoiceView: View {
 
     private func documentLinks(_ notice: SchoolRecordingNotice) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button("Informations de ton école") {
-                document = .init(id: "notice", title: "Informations de ton école", text: notice.noticeText, contact: notice.contactEmail)
+            Button("Tes données") {
+                document = .init(id: "notice", title: "Tes données", text: notice.noticeText, contact: notice.contactEmail)
             }
             .accessibilityIdentifier("recording-notice-link")
             .frame(minHeight: DrivyLayout.tapTarget)
-            Button("Conservation des données") {
-                document = .init(id: "retention", title: "Conservation des données", text: notice.retentionText, contact: notice.contactEmail)
+            Button("Conservation") {
+                document = .init(id: "retention", title: "Conservation", text: notice.retentionText, contact: notice.contactEmail)
             }
             .accessibilityIdentifier("recording-retention-link")
             .frame(minHeight: DrivyLayout.tapTarget)

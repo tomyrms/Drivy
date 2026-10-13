@@ -1,5 +1,16 @@
 # État de la réalisation
 
+## 13 octobre 2026 — textes de l’école : lot 0
+
+Suite de l’[analyse des textes de l’école](analyse-textes-ecole-20261013.md), lot 0 seulement (aucune décision juridique requise) :
+
+- **Adoption prévenue.** Le dialogue « Relire les textes » lit `GET /v1/schools/{id}/data-policy/impact` (administration seule, migration 029). Il dit combien d’élèves avaient accepté le GPS avec les textes actuels et combien de trajets en cours s’arrêteront. L’API ne renvoie que deux nombres, jamais un nom.
+- **Textes vides refusés.** L’information et la conservation demandent au moins 40 caractères utiles, dans l’API comme dans le web : « ddd » n’est plus accepté.
+- **École sans textes.** L’app affiche « L’école n’a pas encore publié ses textes de confidentialité. La leçon peut se faire sans GPS. » au lieu de « L’accord GPS n’a pas pu être lu ».
+- **Vocabulaire.** Web : « Confidentialité », « Lire les textes », « Modifier les textes », « Adoptés le … » au lieu de « Version 2 » ; « Informations demandées » dans le menu et le titre. « Services de l’école » (toujours « À configurer ») et « Enregistrer l’avancement » sont retirés ; le bloc « Activation » n’apparaît que pour une école en préparation. App : « Tes données » pour l’élève, « Confidentialité » pour le moniteur, « Conservation » ; plus de « notice » ni de « Version N » à l’écran.
+
+**Exécuté** : typecheck API ; web 193 tests (dont 3 nouveaux) et typecheck en local. **À exécuter sur la CI** : tests API sur PostgreSQL (nouveau test d’impact, textes trop courts), compilation de l’IPA. **Non exécuté** : tests Swift, captures, essai sur appareil. **Déployé le 13 octobre 2026** à la demande du porteur : release `a2ab75a` sur le homelab après sauvegarde vérifiée de `drivy_refonte`, 29 migrations aux empreintes conformes, services actifs (`.local/deploy-textes-release.py`). Les textes adoptés de Luc auto école restent « ddd » / « wssd » : les réécrire depuis le web redemandera l’accord GPS à 23 élèves (30 accords).
+
 ## 13 octobre 2026 — actions à effectuer : du point bleu jusqu’à la résolution
 
 Le point bleu d’« Élèves » et les lignes « Profil à compléter » ne menaient à rien dans le dossier. Cause : un état de profil stocké qui ne suivait pas la politique de l’école (11 faux « à compléter » sur le homelab, dont la politique n’exige que prénom et nom). L’API calcule désormais l’état à la lecture, avec la même règle que le dossier et la planification. Le dossier nomme chaque information manquante (« Profil à compléter · 3 informations manquantes ») ; chaque ligne ouvre le formulaire sur le champ, clavier prêt, et le formulaire marque d’un point les champs requis encore vides. Le point de l’onglet suit toute l’école, plus la page affichée, et s’éteint dès la correction relue. L’élève qui a laissé son accueil en route le reprend depuis Profil (« Reprendre l’accueil »), sans attendre sept jours. Sur le web, le dossier d’un élève incomplet nomme les informations manquantes et les fait saisir sur place. Corrigés aussi : « Leçon à terminer » s’allume à la fin prévue et s’éteint à la confirmation ; « Accord GPS » allume Profil sans visite préalable ; une panne ne retire plus « Reprendre l’accueil ». [Audit, décisions et limites](guidage-actions-20261013.md).
