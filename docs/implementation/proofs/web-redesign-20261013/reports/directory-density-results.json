@@ -1,0 +1,131 @@
+[
+  {
+    "target": "learners",
+    "device": "desktop",
+    "rows": [
+      44.5,
+      45,
+      45,
+      45,
+      45,
+      63.84375,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      45,
+      44.5
+    ],
+    "button": 32,
+    "padding": "6px",
+    "fine": true,
+    "overflow": false
+  },
+  {
+    "target": "learners",
+    "device": "touch-tablet",
+    "rows": [
+      60.5,
+      61,
+      61,
+      61,
+      61,
+      79.84375,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      60.5
+    ],
+    "button": 44,
+    "padding": "8px",
+    "fine": false,
+    "overflow": false
+  },
+  {
+    "target": "learners",
+    "device": "narrow",
+    "rows": [
+      60.5,
+      61,
+      61,
+      61,
+      61,
+      79.84375,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      61,
+      60.5
+    ],
+    "button": 44,
+    "padding": "8px",
+    "fine": true,
+    "overflow": false
+  },
+  {
+    "target": "team",
+    "device": "desktop",
+    "rows": [
+      44.5,
+      63.84375,
+      63.34375
+    ],
+    "button": 32,
+    "padding": "6px",
+    "fine": true,
+    "overflow": false
+  },
+  {
+    "target": "team",
+    "device": "touch-tablet",
+    "rows": [
+      60.5,
+      79.84375,
+      79.34375
+    ],
+    "button": 44,
+    "padding": "8px",
+    "fine": false,
+    "overflow": false
+  },
+  {
+    "target": "team",
+    "device": "narrow",
+    "rows": [
+      60.5,
+      79.84375,
+      79.34375
+    ],
+    "button": 44,
+    "padding": "8px",
+    "fine": true,
+    "overflow": false
+  }
+]

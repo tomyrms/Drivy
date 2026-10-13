@@ -8,6 +8,7 @@ import {
 import type { InvitationPreview, Me, Member, Session } from './protocol';
 import { StatusBadge, Symbol } from './ui';
 import { BrandSymbol } from './BrandSymbol';
+import { AccountMenu } from './preferences';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -225,7 +226,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
           <BrandSymbol />
           <span>Drivy</span>
         </a>
-        {session?.authenticated && <button className="button quiet" type="button" onClick={() => void logout()} disabled={isBusy}>Se déconnecter</button>}
+        <AccountMenu name={session?.authenticated ? personName : 'Apparence'} authenticated={!!session?.authenticated} busy={isBusy} onLogout={() => void logout()} />
       </header>
 
       <main id="main" className={`main${!session?.authenticated ? ' auth-entry' : ''}`} aria-busy={!loaded}>

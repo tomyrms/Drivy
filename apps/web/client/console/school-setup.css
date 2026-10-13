@@ -1,20 +1,20 @@
-.school-setup { max-inline-size: 78rem; margin-inline: auto; }
-.setup-layout { display: grid; grid-template-columns: minmax(12rem, 15rem) minmax(0, 1fr); gap: var(--space-xxl); align-items: start; }
-.setup-progress { position: sticky; inset-block-start: var(--space-l); }
+.school-setup { max-inline-size: 76rem; inline-size: 100%; margin-inline: auto; }
+.setup-layout { display: grid; grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr); gap: var(--space-xl); align-items: start; }
+.setup-progress { position: sticky; inset-block-start: calc(var(--header-height) + var(--space-l)); }
 .setup-progress ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
-.setup-progress button { inline-size: 100%; min-block-size: 44px; padding: var(--space-s); border: 0; border-radius: var(--radius-field); background: transparent; color: var(--muted); display: flex; align-items: center; gap: var(--space-s); text-align: start; font: inherit; cursor: pointer; }
+.setup-progress button { inline-size: 100%; min-block-size: 2.75rem; padding: var(--space-s); border: 0; border-inline-start: 3px solid transparent; border-radius: var(--radius-field); background: transparent; color: var(--muted); display: flex; align-items: center; gap: var(--space-s); text-align: start; font: inherit; cursor: pointer; }
 .setup-progress button > span:first-child { font-variant-numeric: tabular-nums; min-inline-size: 1.5em; }
 .setup-step-label { min-inline-size: 0; display: grid; gap: var(--space-xxs); }
 .setup-step-state { font-size: .8125rem; font-weight: 400; color: var(--muted); }
 .setup-step-state.needs-review { color: var(--warning); }
-.setup-progress button[aria-current] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
-.setup-progress button:hover { background: var(--surface-muted); }
-.setup-workspace { min-inline-size: 0; }
+.setup-progress button[aria-current] { background: var(--accent-soft); color: var(--accent); border-inline-start-color: var(--accent); font-weight: 650; }
+.setup-progress button:hover:not([aria-current]) { background: var(--surface-muted); }
+.setup-workspace { min-inline-size: 0; max-inline-size: 48rem; }
 .setup-title { font: var(--type-title); margin-block: 0 var(--space-l); }
 .setup-title:focus { outline: none; }
 .setup-fields { min-inline-size: 0; padding: 0; border: 0; margin: 0; }
 .setup-fields > .section-stack { gap: var(--space-l); }
-.setup-actions { margin-block-start: var(--space-xl); padding-block: var(--space-m); border-block-start: 1px solid var(--border); }
+.setup-actions { margin-block-start: var(--space-l); padding-block: var(--space-m) max(var(--space-m), env(safe-area-inset-bottom)); border-block-start: 1px solid var(--border); background: var(--surface); }
 .setup-actions .button-row { flex-wrap: wrap; justify-content: flex-end; }
 .setup-saved { display: block; color: var(--muted); font-size: .875rem; margin-block-end: var(--space-s); }
 .setup-permits { display: flex; flex-wrap: wrap; gap: var(--space-s); }
@@ -30,13 +30,13 @@
 .setup-issues { padding-inline-start: 1.25rem; }
 .setup-issues .text-link { text-align: start; }
 .setup-progress-mobile { display: none; }
-.setup-next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); padding: var(--space-m); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-content); flex-wrap: wrap; }
+.setup-next { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); padding: var(--space-m); background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--radius-content); flex-wrap: wrap; }
 .setup-next h2 { font-size: 1rem; margin: 0; }
-.first-lesson-actions { padding: var(--space-m); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-content); }
+.first-lesson-actions { padding-block: var(--space-m); background: var(--surface); border-block: 1px solid var(--border); }
 .first-lesson-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-m); }
 .first-lesson-heading h2 { font-size: 1rem; margin: 0; }
 button.preparation-link { inline-size: 100%; font: inherit; text-align: start; background: transparent; cursor: pointer; }
-@media (max-width: 760px) {
+@container workspace (max-width: 48rem) {
   .setup-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-l); }
   .setup-progress-mobile { display: block; }
   .setup-progress { position: static; display: none; }
@@ -44,4 +44,11 @@ button.preparation-link { inline-size: 100%; font: inherit; text-align: start; b
   .setup-progress ol { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
   .setup-profile-control { grid-template-columns: minmax(0, 1fr); gap: var(--space-xs); }
   .setup-actions .button { flex: 1 1 auto; white-space: normal; }
+}
+@media (max-width: 48rem) {
+  .setup-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-l); }
+  .setup-progress-mobile { display: block; }
+  .setup-progress { position: static; display: none; }
+  .setup-progress.is-open { display: block; }
+  .setup-profile-control { grid-template-columns: minmax(0, 1fr); gap: var(--space-xs); }
 }

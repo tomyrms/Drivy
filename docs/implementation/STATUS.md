@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 13 octobre 2026 — refonte complète du portail web
+
+La direction **Bureau de précision** est implémentée sur `codex/refonte-portail-web` : navigation stable et sous-pages visibles, séparation école/compte, recherche des paramètres jusqu’au champ, listes élèves/équipe, contexte conservé au retour, résolution des profils incomplets, formulaires et protection des saisies, thèmes Clair/Sombre/Système persistants. Les pages d’entrée, invitations, catalogue, guide et opérateur réutilisent les mêmes fondations. Liens existants et contrats préservés ; aucun changement Apple ni déploiement.
+
+**Exécuté localement** : typage, **233 tests web dans 21 fichiers**, build et contrôle des espaces réussis ; **18 parcours navigateur réussis**. **186 configurations visuelles distinctes** (138 de la campagne initiale et 48 complémentaires), à 1440/1024/390 px dans les deux thèmes, sans débordement du document ni erreur JavaScript. **124 audits axe distincts** sans violation ou vérification indéterminée, avec recontrôles ciblés après corrections. Contrastes : **60 couples sur 60** au seuil testé. Les scénarios fonctionnels exécutés et les retouches qualifiées sont détaillés dans la [preuve de vérification](web-redesign-verification-20261013.md). Inspection manuelle sur les captures, en complément des parcours clavier.
+
+**Limites** : les composants réels sont exercés avec des réponses BFF synthétiques. La recette OIDC/API/PostgreSQL réelle de cette branche n’est pas exécutée : Docker Desktop échoue sur son socket local avant le démarrage du moteur. Aucun volume n’est réinitialisé. Le reflow équivalent à 200 % est exécuté, sans manipulation du zoom natif ; lecteur d’écran, recette humaine des commandes métier longues et utilisation avec une école restent à qualifier. Aucune conformité WCAG complète ni qualification physique n’est déduite des tests. Le build conserve l’avertissement du script initial de thème classique et du bundle principal de plus de 500 Ko.
+
+[Synthèse et pages migrées](web-redesign-20261013.md) · [Direction, benchmark et tokens](web-redesign-design-20261013.md) · [Inventaire des parcours](web-redesign-inventory-20261013.md) · [Galerie avant/après clair et sombre](proofs/web-redesign-20261013/index.html).
+
 ## 13 octobre 2026 — sortie du guide et recette jusqu’à la première leçon
 
 Un défaut supplémentaire est reproduit et corrigé : « Enregistrer et quitter » restait bloqué si la sauvegarde réussissait mais que sa réponse était perdue. Le dialogue se ferme désormais pour laisser vérifier la demande ; la sortie reste explicite après récupération. Contrôles locaux clic/clavier, 228 tests web, types et build réussis. La recette intégrée ajoute la reconnexion dans un navigateur indépendant, ce cas de sortie et la préparation jusqu’à une première leçon réservée par l’API de l’app, sans écriture SQL de préparation.

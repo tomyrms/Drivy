@@ -1,0 +1,164 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations (équivalent géométrique du zoom desktop 200 %)"
+  ],
+  "captures": [
+    {
+      "target": "learners",
+      "theme": "light",
+      "width": 1440,
+      "file": "learners-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "learners",
+      "theme": "light",
+      "width": 1024,
+      "file": "learners-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "learners",
+      "theme": "light",
+      "width": 390,
+      "file": "learners-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "team",
+      "theme": "light",
+      "width": 1440,
+      "file": "team-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "team",
+      "theme": "light",
+      "width": 1024,
+      "file": "team-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "team",
+      "theme": "light",
+      "width": 390,
+      "file": "team-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "learners",
+      "theme": "dark",
+      "width": 1440,
+      "file": "learners-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "learners",
+      "theme": "dark",
+      "width": 1024,
+      "file": "learners-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "learners",
+      "theme": "dark",
+      "width": 390,
+      "file": "learners-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "team",
+      "theme": "dark",
+      "width": 1440,
+      "file": "team-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "team",
+      "theme": "dark",
+      "width": 1024,
+      "file": "team-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "team",
+      "theme": "dark",
+      "width": 390,
+      "file": "team-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "accessibility": [
+    {
+      "target": "learners",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "learners",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "team",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "team",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "learners",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "learners",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "team",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "team",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "failures": []
+}

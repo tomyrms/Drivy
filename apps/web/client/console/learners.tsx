@@ -11,8 +11,8 @@ import {
   type Assignment, type Learner, type Permit, type Training,
 } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
-import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection } from './context';
-import { DirectoryRow } from './directory';
+import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection, useUnsavedChanges } from './context';
+import { useListState } from './list-state';
 import { permitSummary, TrainingFollowUp } from './dossier';
 import { ProfileCompletion } from './profile-completion';
 import { GpsConsentLine } from './gps-consent';
@@ -35,8 +35,10 @@ export function LearnersSection() {
   const { schoolId, school, membership, navigate, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const [selected, setSelected] = useRouteSelection();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active');
+  const [search, setSearch] = useListState('learners/search', '');
+  const [statusFilter, setStatusFilter] = useListState<'active' | 'archived' | 'all'>('learners/status', 'active');
+  const [readinessFilter, setReadinessFilter] = useListState<'all' | 'incomplete'>('learners/readiness', 'all');
+  const [sort, setSort] = useListState<'name-asc' | 'name-desc'>('learners/sort', 'name-asc');
   const [offeringId, setOfferingId] = useState('');
   const schoolToday = () => civilDateIn(school.timeZone);
   const [startedOn, setStartedOn] = useState(schoolToday);
@@ -46,8 +48,10 @@ export function LearnersSection() {
   const [permit, setPermit] = useState<PermitDraft>(emptyPermit());
   const [acknowledged, setAcknowledged] = useState(false);
   // Une fois l'école a confirmé, les choix saisis ne doivent pas rester : sinon le moniteur affecté disparaît de la liste tout en restant « choisi ».
-  const runner = useCommandRunner(() => { setOfferingId(''); setStartedOn(schoolToday()); setInstructorFor({}); setDialog(null); setReason(''); setPermit(emptyPermit()); });
-  useEffect(() => { setDialog(null); setReason(''); setPermit(emptyPermit()); setOfferingId(''); }, [selected]);
+  const runner = useCommandRunner(() => { releaseChanges(); setOfferingId(''); setStartedOn(schoolToday()); setInstructorFor({}); setDialog(null); setReason(''); setPermit(emptyPermit()); });
+  const releaseChanges = useUnsavedChanges(!runner.busy && !runner.pending && !!(offeringId || Object.values(instructorFor).some(Boolean) || reason
+    || permit.physicalSeen || permit.validUntil || permit.reason || permit.decision !== 'APPROVED'));
+  useEffect(() => { setDialog(null); setReason(''); setPermit(emptyPermit()); setOfferingId(''); setInstructorFor({}); }, [selected]);
   const loaded = useLoad(async () => {
     const [learners, trainings, offerings, members, curricula] = await Promise.all([
       readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), readAll(schoolId, 'trainings', trainingSchema),
@@ -69,8 +73,11 @@ export function LearnersSection() {
   const data = loaded.data;
   const learners = useMemo(() => [...(data?.learners ?? [])]
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr')), [data]);
+  const notReady = (learner: Learner) => learner.profileReadiness === 'MINIMAL' || learner.profileReadiness === 'ACTION_REQUIRED';
   const visible = learners.filter(learner => (statusFilter === 'all' || (statusFilter === 'archived') === !!learner.archivedAt)
-    && matchesSearch([learner.displayName, learner.contactEmail], search));
+    && (readinessFilter === 'all' || (!learner.archivedAt && notReady(learner)))
+    && matchesSearch([learner.displayName, learner.contactEmail], search))
+    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.displayName.localeCompare(b.displayName, 'fr'));
   // Seule la dernière version active de chaque offre ouvre une formation (règle partagée avec les invitations par code).
   const offerings = useMemo(() => openOfferings(data?.offerings ?? []), [data]);
   const instructors = useMemo(() => activeInstructors(data?.members ?? []), [data]);
@@ -86,7 +93,6 @@ export function LearnersSection() {
   const availableOfferings = availableTrainingOfferings(offerings, data?.offerings ?? [], current ? trainingsOf(current.id) : []);
   const canReviewPermit = membership.roles.includes('ADMIN') || membership.roles.includes('INSTRUCTOR');
   const canArchive = membership.roles.includes('ADMIN');
-  const notReady = (learner: Learner) => learner.profileReadiness === 'MINIMAL' || learner.profileReadiness === 'ACTION_REQUIRED';
 
   function ask(next: Dialog) { runner.clearOutcome(); setReason(''); setPermit(emptyPermit()); setAcknowledged(false); setDialog(next); }
   async function openTraining() {
@@ -124,7 +130,7 @@ export function LearnersSection() {
     } else if (dialog.kind === 'archive' && !archiveError) {
       result = await runner.run(createCommand({ schoolId, kind: 'archiveLearner', path: `learners/${current.id}/archive`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: { reason: reason.trim() } }), 'Le dossier est archivé.');
-      if (result.status === 'confirmed') setSelected(null);
+      if (result.status === 'confirmed') { releaseChanges(); setSelected(null); }
     } else if (dialog.kind === 'restore' && !archiveError && membership.roles.includes('ADMIN')) {
       result = await runner.run(createCommand({ schoolId, kind: 'restoreLearner', path: `learners/${current.id}/restore`, ifMatch: current.version,
         resourceId: current.id, resourceVersion: current.version, body: { reason: reason.trim() } }), 'Le dossier est restauré.');
@@ -136,6 +142,7 @@ export function LearnersSection() {
   return (
     <div className="section-stack">
       {routeQuery?.from === 'agenda' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
+      {routeQuery?.from === 'trajets' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: routeQuery.learner, week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour aux trajets</button></div>}
       <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -146,21 +153,27 @@ export function LearnersSection() {
             <TextField label="Rechercher un élève" value={search} onChange={setSearch} placeholder="Nom ou e-mail" />
             <SelectField label="Dossiers" value={statusFilter} onChange={setStatusFilter}
               options={[{ value: 'active', label: 'Actifs' }, { value: 'archived', label: 'Archivés' }, { value: 'all', label: 'Tous' }]} />
-            {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
+            <SelectField label="Profil" value={readinessFilter} onChange={setReadinessFilter}
+              options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
+            <SelectField label="Trier par" value={sort} onChange={setSort}
+              options={[{ value: 'name-asc', label: 'Nom : A à Z' }, { value: 'name-desc', label: 'Nom : Z à A' }]} />
+            {(search || readinessFilter !== 'all' || statusFilter !== 'active') && <button type="button" className="button quiet" onClick={() => { setSearch(''); setReadinessFilter('all'); setStatusFilter('active'); }}>Réinitialiser les filtres</button>}
           </div>
+          <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'élève' : 'élèves'}{visible.length !== learners.length ? ` sur ${learners.length}` : ''}{value.truncated ? ' dans la liste chargée' : ''}</p>
           {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? '' : 'Créez un code pour inviter un élève.'} />
-            : <ul className="directory-list" aria-label="Dossiers élèves">{visible.map(learner => {
+            : <div className="directory-table-wrap"><table className="data-table directory-table"><caption className="visually-hidden">Dossiers élèves</caption>
+              <thead><tr><th scope="col">Élève</th><th scope="col">Formation</th></tr></thead><tbody>{visible.map(learner => {
               const categories = trainingsOf(learner.id).filter(training => training.status === 'ACTIVE').map(category).filter(Boolean);
-              return <DirectoryRow key={learner.id} title={learner.displayName} selected={learner.id === selected}
-                onSelect={() => { runner.clearOutcome(); setOfferingId(''); setSelected(learner.id); }}
-                detail={learner.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge>
-                  : categories.length ? `Permis ${[...new Set(categories)].join(', ')}` : <span className="row-meta">Sans formation en cours</span>}
-                badge={notReady(learner) ? <StatusBadge tone="warning" symbol="alert">Profil à compléter</StatusBadge> : undefined} />;
-            })}</ul>}
+              return <tr key={learner.id} className={learner.id === selected ? 'is-selected' : undefined}>
+                <th scope="row"><button type="button" className="row-button" aria-current={learner.id === selected ? 'true' : undefined}
+                  onClick={() => { runner.clearOutcome(); setSelected(learner.id); }}>{learner.displayName}</button>
+                  {!learner.archivedAt && notReady(learner) && <span className="row-meta block with-symbol"><Symbol kind="alert" bare />Profil à compléter</span>}</th>
+                <td data-label="Formation">{learner.archivedAt ? 'Archivé' : categories.length ? `Permis ${[...new Set(categories)].join(', ')}` : <span className="row-meta">Aucune en cours</span>}</td>
+              </tr>;
+            })}</tbody></table></div>}
         </>}
         detail={current ? <DetailPanel focusKey={current.id} title={current.displayName} meta={current.contactEmail ?? undefined}
-          badge={current.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge>
-            : notReady(current) ? <StatusBadge tone="warning" symbol="alert">Profil à compléter</StatusBadge> : undefined}
+          badge={current.archivedAt ? <StatusBadge tone="neutral" symbol="file">Archivé</StatusBadge> : undefined}
           actions={current.archivedAt ? membership.roles.includes('ADMIN') && <button type="button" className="button secondary" disabled={!canWrite}
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
@@ -220,7 +233,7 @@ export function LearnersSection() {
           </form></details>}
         </DetailPanel> : <Placeholder>Choisissez un élève.</Placeholder>} />}
       </LoadState>
-      <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => setDialog(null)} onConfirm={() => void confirm()}
+      <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => ask(null)} onConfirm={() => void confirm()}
         title={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer le moniteur' : dialog?.kind === 'permit' ? 'Consigner le permis' : dialog?.kind === 'restore' ? 'Restaurer le dossier' : 'Archiver le dossier'}
         confirmLabel={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer' : dialog?.kind === 'permit' ? 'Consigner' : dialog?.kind === 'restore' ? 'Restaurer' : 'Archiver'}
         disabledReason={runner.busy ? null : !canWrite ? 'Actualisez le dossier avant de confirmer.' : permitError ?? transitionError ?? archiveError}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { BrandSymbol } from './BrandSymbol';
+import { AccountMenu } from './preferences';
 import { request, sessionSchema, loginSchema, okSchema, type Session, RequestFailure } from './protocol';
 import { CheckField, Loading, Notice, TextField, formatDateTime } from './ui';
 import { openingState, openingPreview, openingReceipt, openingLinks, createdOpeningLink, openingLinkSchema,
@@ -81,7 +82,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
   return <div className="app-shell account-shell opening-shell">
     <a className="skip-link" href="#main">Aller au contenu</a>
     <header className="site-header"><a className="brand" href="/app/" aria-label="Drivy, votre espace"><BrandSymbol/><span>Drivy</span></a>
-      {session?.authenticated && <a className="button quiet" href="/app/">Mes écoles</a>}</header>
+      <AccountMenu authenticated={!!session?.authenticated} /></header>
     <main id="main" className="main" aria-busy={!loaded || busy}>
       <div className="page-heading"><h1 ref={heading} tabIndex={-1}>{operator?'Liens d’ouverture':result?'Votre école est créée':'Préparer votre école'}</h1></div>
       {error && <Notice tone="error" title={error} actions={!loaded?undefined:<button type="button" className="button quiet" disabled={busy} onClick={()=>void boot()}>Actualiser</button>}/>}

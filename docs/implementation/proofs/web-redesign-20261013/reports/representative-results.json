@@ -1,0 +1,88 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations (équivalent géométrique du zoom desktop 200 %)"
+  ],
+  "captures": [
+    {
+      "target": "themes",
+      "theme": "light",
+      "width": 1440,
+      "file": "themes-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "themes",
+      "theme": "light",
+      "width": 1024,
+      "file": "themes-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "themes",
+      "theme": "light",
+      "width": 390,
+      "file": "themes-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "themes",
+      "theme": "dark",
+      "width": 1440,
+      "file": "themes-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "themes",
+      "theme": "dark",
+      "width": 1024,
+      "file": "themes-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "themes",
+      "theme": "dark",
+      "width": 390,
+      "file": "themes-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "accessibility": [
+    {
+      "target": "themes",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "themes",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "themes",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "themes",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "failures": []
+}

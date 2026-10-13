@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { characters, createCommand, filled, isEmail, profilePolicyProblem, type ProfileField } from '../command-core';
 import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import {
@@ -6,7 +6,7 @@ import {
   type ProfilePolicy, type TextProposals,
 } from '../school-api';
 import { ConfirmDialog, Facts, Loading, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
-import { useCommandRunner, useConsole, useDraft, useLoad } from './context';
+import { useCommandRunner, useConsole, useDraft, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, type Choice, type FieldDraft } from './privacy-model';
 import { ProfileFieldsPreview } from './profile-fields-preview';
@@ -24,7 +24,7 @@ const fieldLabels: Record<ProfileField, string> = {
 };
 
 function PolicyTexts({ proposals, fieldsPublished, onAdopted }: { proposals: TextProposals | null; fieldsPublished: boolean; onAdopted: () => void }) {
-  const { schoolId, school } = useConsole();
+  const { schoolId, school, routeQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setEditing(false); onAdopted(); });
   const loaded = useLoad(() => readSchool(schoolId, 'data-policy', dataPolicySchema), [schoolId, revision, school.version]);
@@ -35,6 +35,7 @@ function PolicyTexts({ proposals, fieldsPublished, onAdopted }: { proposals: Tex
     : proposals ? { ...proposals.dataPolicy } : null : null;
   const texts = useDraft<PolicyText>(baseline);
   const [editing, setEditing] = useState(false);
+  useEffect(() => { if (routeQuery?.focus?.startsWith('privacy-')) setEditing(true); }, [routeQuery?.focus]);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const replacesTexts = reviewing && adopted;
@@ -56,6 +57,7 @@ function PolicyTexts({ proposals, fieldsPublished, onAdopted }: { proposals: Tex
     const result: SubmitResult = await runner.run(createCommand({ schoolId, kind: 'saveDataPolicy', path: 'data-policy', ifMatch: policy.version, resourceVersion: policy.version,
       body: { noticeText: value.noticeText, retentionText: value.retentionText, contactEmail: value.contactEmail.trim(), reviewAcknowledged: true,
         ...(publishesFields ? { publishProposedFields: true } : {}) } }), 'Les textes sont adoptés.');
+    if (result.status === 'confirmed') texts.markSaved({ ...value, contactEmail: value.contactEmail.trim() });
     if (result.status !== 'rejected') setReviewing(false);
   }
 
@@ -80,12 +82,13 @@ function PolicyTexts({ proposals, fieldsPublished, onAdopted }: { proposals: Tex
         {showForm && !value && <Loading label="Préparation des textes proposés…" />}
         {showForm && value && errors && <form className="form-grid" onSubmit={event => { event.preventDefault(); if (valid && mayEdit) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>
           {!adopted && <p className="caption with-symbol"><Symbol kind="file" bare />Textes proposés par Drivy, à relire et adapter.</p>}
-          <TextArea label="Information" rows={8} maxLength={20_000} value={value.noticeText} disabled={!mayEdit}
+          <TextArea id="privacy-information" label="Information" rows={8} maxLength={20_000} value={value.noticeText} disabled={!mayEdit}
             onChange={noticeText => texts.setDraft({ ...value, noticeText })} error={texts.edited ? errors.noticeText : null} />
-          <TextArea label="Conservation" rows={5} maxLength={20_000} value={value.retentionText} disabled={!mayEdit}
+          <TextArea id="privacy-retention" label="Conservation" rows={5} maxLength={20_000} value={value.retentionText} disabled={!mayEdit}
             onChange={retentionText => texts.setDraft({ ...value, retentionText })} error={texts.edited ? errors.retentionText : null} />
-          <TextField label="Contact pour les données" type="email" value={value.contactEmail} disabled={!mayEdit}
+          <TextField id="privacy-contact" label="Contact pour les données" type="email" value={value.contactEmail} disabled={!mayEdit}
             onChange={contactEmail => texts.setDraft({ ...value, contactEmail })} error={texts.edited ? errors.contactEmail : null} />
+          <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : texts.edited ? 'Modifications non enregistrées' : ''}</p>
           <div className="button-row compact">
             <button type="submit" className="button primary" disabled={!mayEdit || !valid || (adopted && !texts.edited)}>Relire et adopter</button>
             {adopted && <button type="button" className="button quiet" onClick={() => { texts.reset(); setEditing(false); }}>Annuler</button>}
@@ -125,6 +128,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
   const rules = rulesOf(shown);
   const problem = profilePolicyProblem(rules);
   const changed = !current || JSON.stringify(rules) !== JSON.stringify(current.fields);
+  useUnsavedChanges(drafts !== null && changed);
   const mayEdit = !!noticeVersionId && !runner.pending && !runner.busy;
   const update = (field: ProfileField, change: Partial<FieldDraft>) => setDrafts({ ...shown, [field]: { ...shown[field], ...change } });
   const blocksPlanning = rules.some(rule => rule.stage === 'BEFORE_LESSON' && !current?.fields.some(item => item.field === rule.field && item.stage === 'BEFORE_LESSON'));
@@ -167,6 +171,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
           </tbody>
         </table>
         <details className="disclosure"><summary>Aperçu pour l’élève</summary><ProfileFieldsPreview fields={rules} /></details>
+        <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : drafts && changed ? 'Modifications non enregistrées' : ''}</p>
         {problem && <p className="field-error"><Symbol kind="alert" bare />{problem}</p>}
         <div className="button-row compact">
           <button type="submit" className="button primary" disabled={!mayEdit || !!problem || !changed}>{current ? 'Enregistrer' : 'Publier'}</button>

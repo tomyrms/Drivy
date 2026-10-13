@@ -4,6 +4,8 @@ import { ManagementConsole } from './console/Console';
 import { readInvitationLink } from './invitation-link';
 import { SchoolOpeningPage } from './school-opening';
 import { readOpeningLink } from './school-opening-model';
+import { PreferencesPage } from './preferences';
+import './theme';
 import './styles.css';
 import './school-opening.css';
 
@@ -14,7 +16,9 @@ const invitationLink = readInvitationLink();
 const root = document.getElementById('root');
 if (!root) throw new Error('Élément racine introuvable.');
 // The management console is a separate desktop-style surface; the invitation and account pages keep their reading layout.
-if (isOpening || window.location.pathname === '/app/operateur') {
+if (window.location.pathname.replace(/\/$/, '') === '/app/preferences') {
+  createRoot(root).render(<PreferencesPage />);
+} else if (isOpening || window.location.pathname === '/app/operateur') {
   createRoot(root).render(<SchoolOpeningPage link={openingLink} operator={!isOpening} />);
 } else if (/^\/app\/gestion(\/|$)/.test(window.location.pathname)) {
   createRoot(root).render(<ManagementConsole />);

@@ -1,6 +1,9 @@
 import { createRoot } from 'react-dom/client';
 import '../client/styles.css';
-import reviewStyles from '../client/styles.css?raw';
+import '../client/theme';
+import { PreferencesPage } from '../client/preferences';
+import { SchoolOpeningPage } from '../client/school-opening';
+import '../client/school-opening.css';
 import { ConsoleContext, type ConsoleContextValue } from '../client/console/context';
 import { InvitationsSection, TeamSection } from '../client/console/people';
 import { LearnersSection } from '../client/console/learners';
@@ -20,10 +23,13 @@ import { App } from '../client/App';
 import { setupSteps, type SetupDraft, type SetupTemplates, type SetupPreview } from '../client/setup-model';
 import type { DataPolicy, TextProposals } from '../client/school-api';
 
-const parameters = new URLSearchParams(location.search);
+// Test-runner boot data is memory-only and is never loaded by the production entry.
+const reviewWindow = window as unknown as { __reviewBoot?: { parameters: string; snapshot?: any }; __reviewSnapshot?: () => unknown; __releaseSchoolRead?: () => void; __schoolReadWaiting?: boolean };
+const parameters = new URLSearchParams(reviewWindow.__reviewBoot?.parameters ?? location.search);
 const page = parameters.get('page');
 const reviewState = parameters.get('state');
-const uuid = () => crypto.randomUUID();
+let fixtureSequence = 0;
+const uuid = () => `11111111-1111-4111-8111-${String(++fixtureSequence).padStart(12, '0')}`;
 const schoolId = uuid(), meId = uuid(), lucId = uuid(), marieId = uuid(), offerB = uuid(), offerBOld = uuid(), offerA = uuid();
 const learnerA = uuid(), learnerB = uuid(), trainingA = uuid(), curriculumB = uuid(), comp1 = uuid(), comp2 = uuid(), lessonDone = uuid();
 const curriculumA = uuid(), policyA = uuid(), policyB = uuid(), termsId = uuid();
@@ -85,6 +91,7 @@ const db: Record<string, any> = {
   offerings: [offering(offerBOld, 'b-standard', 1, true, 'B'), offering(offerB, 'b-standard', 2, true, 'B'), offering(offerA, 'a-standard', 1, true, 'A')],
   invitations: [
     { id: uuid(), schoolId, version: 1, delivery: 'CODE', maskedEmail: null, roles: ['LEARNER'], status: 'PENDING', expiresAt: '2026-10-04T08:00:00.000Z', training: { offeringId: offerB, instructorMembershipId: marieId } },
+    { id: uuid(), schoolId, version: 1, delivery: 'CODE', maskedEmail: null, roles: ['INSTRUCTOR'], status: 'PENDING', expiresAt: '2026-10-20T08:00:00.000Z' },
   ] as Record<string, unknown>[],
   learners: [
     { id: learnerA, schoolId, version: 3, personId: uuid(), displayName: 'Éloïse Müller', contactEmail: 'eloise@example.test', contactPhone: null, archivedAt: null, profileReadiness: 'ACTION_REQUIRED' },
@@ -122,7 +129,13 @@ if (parameters.get('stress') === '1') {
   db.curricula[0].competencies[0].label = 'Préparer le véhicule, démarrer en côte et s’arrêter en sécurité';
   db.captures[0].learnerName = db.learners[0].displayName;
   db.captures[0].instructorName = db.members[1].displayName;
-  for (let index = 0; index < 18; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(), displayName: `Dossier synthétique ${String(index + 1).padStart(2, '0')}` });
+  const names = ['Camille Rochat', 'Nathan Morel', 'Jade Perrin', 'Sami Dubois', 'Léa Favre', 'Hugo Schneider', 'Clara Dufour', 'Noah Meier', 'Inès Martin', 'Luca Bernard', 'Zoé Girard', 'Louis Blanc', 'Mila Aubert', 'Adam Richard', 'Emma Berger', 'Raphaël Bonnet', 'Anna Rey', 'Gabriel Mercier'];
+  for (const [index, displayName] of names.entries()) {
+    const learnerId = uuid();
+    db.learners.push({ ...db.learners[1], id: learnerId, personId: uuid(), displayName });
+    const motorcycle = index % 4 === 0;
+    db.trainings.push({ ...db.trainings[0], id: uuid(), learnerId, offeringId: motorcycle ? offerA : offerB, categoryCode: motorcycle ? 'A' : 'B', status: index % 7 === 0 ? 'PAUSED' : 'ACTIVE' });
+  }
 }
 if (reviewState === 'empty') for (const key of Object.keys(db)) db[key] = [];
 if (parameters.get('policy') === 'unadopted') {
@@ -145,6 +158,9 @@ const log: string[] = [];
 (window as unknown as { __log: string[] }).__log = log;
 const reads: string[] = [];
 (window as unknown as { __reads: string[] }).__reads = reads;
+const administrativeProfile = { id: uuid(), schoolId, version: 1, learnerId: learnerA, policyVersionId: db['profile-field-policies'][0]?.id ?? noticeId };
+let schoolConflictOnce = reviewState === 'conflict-once';
+let savedSchoolReadGate: Promise<void> | null = null;
 
 function reply(status: number, body: unknown, url: string) {
   return { status, ok: status < 400, url, headers: new Headers({ 'content-type': 'application/json' }), json: async () => body };
@@ -156,8 +172,13 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   if (method === 'GET') {
     reads.push(path);
     if (url.pathname.endsWith('/bff/session')) return reply(200, { authenticated: page !== 'signin', csrfToken: 'synthetic-review', invitationPending: page === 'invitation', user: { displayName: 'Luc Martin', email: 'luc@example.test', emailVerified: true } }, url.href);
+    if (url.pathname.endsWith('/bff/opening')) return reply(200, { pending: true, uncertain: false }, url.href);
+    if (url.pathname.endsWith('/bff/operator/school-opening-links')) return reply(200, { data: { items: [{ id: uuid(), status: 'AVAILABLE', createdAt: stamp, expiresAt: '2026-10-20T08:00:00.000Z', usedAt: null, revokedAt: null }] } }, url.href);
     if (url.pathname.endsWith('/bff/me')) return reply(200, { data: { ...value.me, memberships: [value.membership] } }, url.href);
-    if (path === '') return reply(200, envelope(value.school), url.href);
+    if (path === '') {
+      if (savedSchoolReadGate) { reviewWindow.__schoolReadWaiting = true; await savedSchoolReadGate; reviewWindow.__schoolReadWaiting = false; savedSchoolReadGate = null; }
+      return reply(200, envelope(value.school), url.href);
+    }
     if (reviewState === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
     const readiness = { schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) };
     if (path === 'observation-themes') return reply(200, envelope(themesProjection()), url.href);
@@ -172,6 +193,8 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     if (path === 'setup') return reply(200, envelope({ schoolId, version: 1, status: 'COMPLETED', currentStep: 'REVIEW', completedSteps: ['IDENTITY', 'DATA'], lastSavedAt: stamp, readiness }), url.href);
     if (path === 'data-policy') return reply(200, envelope(policyState), url.href);
     if (path === 'text-proposals') return reply(200, envelope(textProposals), url.href);
+    if (/^learners\/[^/]+\/action-readiness$/.test(path)) return reply(200, envelope({ learnerId: learnerA, action: 'PLAN_LESSON', ready: db.learners[0]?.profileReadiness === 'READY', blockers: db.learners[0]?.profileReadiness === 'READY' ? [] : [{ code: 'PROFILE_ACTION_REQUIRED', field: 'birthDate', message: 'Date de naissance requise.' }] }), url.href);
+    if (/^learners\/[^/]+\/administrative-profile$/.test(path)) return reply(200, envelope(administrativeProfile), url.href);
     if (path === 'data-policy/impact') {
       if (parameters.get('impact') === 'slow') await new Promise(resolve => setTimeout(resolve, 1200));
       if (parameters.get('impact') === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
@@ -185,7 +208,22 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     return reply(200, envelope({ items: list, nextCursor: null }), url.href);
   }
   if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
+  if (url.pathname.endsWith('/bff/opening/preview')) return reply(200, { data: { status: 'AVAILABLE', expiresAt: '2026-10-20T08:00:00.000Z' } }, url.href);
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
+  if (method === 'PATCH' && path === '') {
+    if (schoolConflictOnce) { schoolConflictOnce = false; value.school.version++; value.school.contactPhone = '+41 21 555 00 00'; return reply(412, { code: 'VERSION_CONFLICT' }, url.href); }
+    if (reviewState === 'mutation-error') return reply(409, { code: 'INVALID_REQUEST' }, url.href);
+    if (reviewState === 'conflict' || (init?.headers as Record<string, string>)?.['If-Match'] !== `"${value.school.version}"`) return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    Object.assign(value.school, { name: body.name, contactEmail: body.contactEmail, contactPhone: body.contactPhone, version: value.school.version + 1 });
+    if (reviewState === 'slow-school-after-save') savedSchoolReadGate = new Promise(resolve => { reviewWindow.__releaseSchoolRead = resolve; });
+    value.membership.schoolName = value.school.name;
+    return reply(200, envelope(value.school), url.href);
+  }
+  if (method === 'PATCH' && /^learners\/[^/]+\/administrative-profile$/.test(path)) {
+    if (reviewState === 'mutation-error') return reply(409, { code: 'PROFILE_POLICY_CHANGED' }, url.href);
+    administrativeProfile.version++; db.learners[0].version++; db.learners[0].profileReadiness = 'READY';
+    return reply(200, envelope(administrativeProfile), url.href);
+  }
   if (path === 'setup-draft' || path === 'setup-draft/complete') {
     if (reviewState === 'conflict') return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
     if (reviewState === 'mutation-error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
@@ -263,21 +301,30 @@ if (parameters.get('stress') === '1') {
   value.school.name = 'École de conduite de la région du Lac et des Préalpes';
   value.membership.schoolName = value.school.name;
 }
-// Visual review only: apply the actual light tokens independently of the host OS.
-if (new URLSearchParams(location.search).get('scheme') === 'light') {
-  const theme = document.createElement('style');
-  theme.textContent = reviewStyles.match(/:root\s*\{[\s\S]*?\}/)?.[0] ?? '';
-  document.head.append(theme);
+if (parameters.get('role') === 'learner') value.membership.roles = ['LEARNER'];
+if (parameters.get('role') === 'instructor') value.membership.roles = ['INSTRUCTOR'];
+const saved = reviewWindow.__reviewBoot?.snapshot;
+if (saved) {
+  Object.assign(db, saved.db); Object.assign(value.school, saved.school); Object.assign(value.membership, saved.membership);
+  Object.assign(themeState, saved.themeState); Object.assign(administrativeProfile, saved.administrativeProfile);
+  policyState = saved.policyState;
+  fixtureSequence = Math.max(fixtureSequence, saved.fixtureSequence ?? 0);
 }
+reviewWindow.__reviewSnapshot = () => structuredClone({ db, school: value.school, membership: value.membership, themeState, administrativeProfile, policyState, fixtureSequence });
 const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, absences: () => <AvailabilitySection section="absences" />, config: ConfigurationSection, privacy: PrivacySection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
   curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
-const shell = new URLSearchParams(location.search).get('shell') === '1';
-if (shell) {
+const shell = parameters.get('shell') === '1';
+if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator'].includes(page ?? '')) {
   const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
-  window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}`);
+  const routeParameters = new URLSearchParams();
+  if (page === 'agenda') routeParameters.set('week', '2026-09-28');
+  if (page === 'invitations' && parameters.get('audience') === 'team') routeParameters.set('audience', 'team');
+  window.history.replaceState(null, '', `/app/gestion/${schoolId}/${sections[page ?? 'overview'] ?? 'invitations'}${routeParameters.size ? `?${routeParameters}` : ''}`);
 }
 const entry = ['signin', 'account', 'invitation'].includes(page ?? '');
 if (entry) window.history.replaceState(null, '', page === 'invitation' ? '/app/invitation' : '/app/');
+if (page === 'preferences') window.history.replaceState(null, '', '/app/preferences');
+if (page === 'opening' || page === 'operator') window.history.replaceState(null, '', page === 'opening' ? '/app/ouvrir' : '/app/operateur');
 createRoot(document.getElementById('root')!).render(
-  entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
+  page === 'opening' || page === 'operator' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={page === 'operator'} /> : location.pathname === '/app/preferences' ? <PreferencesPage /> : entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);

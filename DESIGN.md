@@ -100,56 +100,54 @@ La direction web Bureau du 30 septembre est conservée. À la demande du porteur
 
 Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. La première passe est consignée dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), puis remplacée par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md) et [la passe esthétique encre et papier](docs/implementation/web-craft-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
 
-## Web · Bureau
+## Web · Bureau de précision
 
-Choix utilisateur : « Sobre et précise : listes compactes, carte dominante, peu de cartes décoratives, couleurs discrètes. » Le web organise le travail administratif ; le trajet garde son rôle dans l’app terrain. Une carte n’est pas ajoutée artificiellement à un écran sans données cartographiques.
+La refonte du 13 octobre 2026 conserve la marque « La trace », Source Sans 3 et le cobalt Drivy. Cette section fait autorité pour le portail ; les tokens et règles Apple restent distincts. [Direction, benchmark et composants](docs/implementation/web-redesign-design-20261013.md) · [Inventaire des parcours](docs/implementation/web-redesign-inventory-20261013.md).
 
-### Composition
+### Composition et navigation
 
-- Cinq espaces stables : Planning, Élèves, Équipe, Formations et tarifs, Réglages. Cliquer une catégorie ouvre sa première page ; ses destinations apparaissent immédiatement dessous, dans le rail. Planning expose Agenda, Disponibilités et Absences. Les compétences et procédures s’ouvrent depuis la formation concernée ; les conditions restent accessibles dans Formations et tarifs.
-- Desktop : rail de 228 px sur fond perle et une seule surface de travail blanche, légèrement bordée. La liste et le dossier utilisent deux colonnes quand elles disposent de leur largeur utile. Le détail a un fond légèrement distinct et un en-tête ; ses actions ferment le panneau après son contenu.
-- Sur écran étroit, ouvrir un dossier remplace la liste par le détail et un retour visible. Le retour restaure le focus dans la liste. La sélection et les filtres de navigation autorisés vivent dans l’URL. La saisie non enregistrée reste en mémoire par personne, école et époque d’accès ; le guide possède un brouillon serveur versionné après enregistrement explicite.
-- Jusqu’à 1024 px : le bouton Menu ouvre les mêmes destinations dans le flux. Le libellé ouvre la première page ; un chevron distinct déplie les sous-pages. Sélectionner une destination ferme le menu ; Échap depuis le menu ou son bouton ferme le menu et restitue le focus au bouton.
-- L’école active ouvre sur Planning. La préparation appartient à Réglages et sert d’entrée pour l’école DRAFT : six étapes, exemples adaptables, sauvegarde et reprise, revue explicite avant activation. École, Confidentialité et Informations des élèves sont des destinations séparées. L’Agenda indique les manques de préparation et les prochaines actions réelles pour la première leçon. Le hub Formations regroupe enseignements, compétences, procédures et tarifs ; Ajouter une formation ou un tarif individuel reprend le même guide.
-- Les tableaux alignent les données, avec en-tête discret et repère latéral pour la ligne sélectionnée. Les heures, montants et dates utilisent les chiffres tabulaires. L’agenda se lit du jour vers l’horaire puis l’élève ; une leçon est une seule cible. Les catégories enseignées ont une identité typographique commune, reliée aux compétences, procédures et tarifs. Une couleur de surface sert une sélection, un contrôle ou un message.
-- Le fil d’Ariane apparaît dans les sous-pages. À la racine d’un espace, la navigation principale, l’onglet courant et le titre suffisent. Les petits contextes qui répétaient le nom de l’espace sont retirés.
-- Les formulaires composés adaptent leurs colonnes à leur conteneur. Un champ à l’intérieur d’un dossier ne dépend pas de la largeur totale de l’écran.
+- Rail plat de 232 px : Planning, Élèves, Équipe, Formations et tarifs ; Paramètres de l’école séparés. Les pages de l’espace courant apparaissent dans une navigation secondaire horizontale. Pas d’accordéon de navigation ni de menu imbriqué. Petit écran : Menu déplie le rail dans le flux, Échap le ferme.
+- École courante explicite ; sélecteur seulement pour les comptes qui administrent plusieurs écoles. Accès ADMIN relu au serveur, droits commerciaux conservés.
+- Listes denses avec recherche, filtres, compteur réel et colonnes utiles. Détail associé quand la largeur le permet ; sur petit écran, la fiche remplace la liste, avec retour et restitution de focus.
+- Les identifiants, semaine et catégorie autorisés restent dans l’URL. Les recherches nominatives, filtres privés et pages d’historique restent uniquement dans la mémoire du contexte personne/école/droits. Ne jamais les persister dans le navigateur.
+- Les paramètres de l’école sont séparés des préférences personnelles, accessibles depuis le compte. Une recherche indexe les intentions, champs et synonymes, puis ouvre la destination et focalise le champ lorsque possible. N’indexer que des fonctions implémentées.
+- L’agenda reste l’entrée quotidienne. L’accueil de préparation se fonde sur les actions serveur réelles ; aucun indicateur décoratif inventé.
 
-La deuxième passe du 30 septembre ajuste la densité sans changer ces tokens. Le fil d’Ariane est réservé aux destinations hors de la navigation locale. La composition liste/détail dépend du conteneur de travail (46 rem utiles), sans panneau vide avant sélection. Sur petit écran, le détail perd son cadre extérieur pour rendre cette largeur au contenu. Les annuaires emploient une ligne de sélection entière ; les chiffres, labels permanents et cibles tactiles restent lisibles. La navigation et la préparation du 13 octobre font évoluer le rangement sans changer cette identité. [Décisions de composition](docs/implementation/web-layout-pass2-20260930.md) · [Onboarding et preuves](docs/implementation/realisation-onboarding-ecole-20261013.md).
+### Tokens et composants
 
-### Tokens web
+Source d’exécution unique : `apps/web/client/styles.css`. Source Sans 3 auto-hébergée, titre 24–28 px/650, détail 22 px/650, section 17 px/600, corps 15–16 px, métadonnées 13–15 px. Chiffres tabulaires pour dates, heures et montants. Espacements 4/8/12/16/24/32/48 px. Rayons 6 px champs, 10 px détails, 12 px panneaux. Contrôles 40 px sur desktop et 44 px sur petit écran/pointeur tactile.
 
-Source d’exécution : `apps/web/client/styles.css`. Les hexadécimaux sont nommés par rôle, sans deuxième système de couleur. Le thème suit `prefers-color-scheme`.
-
-| Rôle | Clair | Sombre |
+| Rôle | Clair | Sombre Soft Charcoal |
 |---|---|---|
-| canvas | `#F2F4F7` | `#141920` |
-| surface | `#FFFFFF` | `#1C232D` |
-| surface-muted | `#E9EDF3` | `#293341` |
-| surface-inset | `#F8F9FC` | `#171E28` |
-| surface-detail | `#FAFBFE` | `#202934` |
-| text | `#202936` | `#EEF2F8` |
-| muted | `#596579` | `#AFBBCD` |
-| accent | `#245BD6` | `#91B5FF` |
-| accent-pressed | `#1947AD` | `#B4CCFF` |
-| on-accent | `#FFFFFF` | `#132A50` |
-| accent-soft | `#EAF0FE` | `#233859` |
-| border | `#DFE4EC` | `#344050` |
-| control-border | `#7E899B` | `#8491A5` |
+| canvas | `#F2F4F7` | `#191B1E` |
+| surface | `#FFFFFF` | `#222428` |
+| surface-muted | `#E9EDF3` | `#303338` |
+| surface-inset | `#F8F9FC` | `#1E2024` |
+| surface-detail | `#FAFBFE` | `#282B30` |
+| text | `#202936` | `#F2F3F5` |
+| muted | `#596579` | `#B3B7BE` |
+| accent (lien, focus) | `#245BD6` | `#91B5FF` |
+| accent-fill (action) | `#245BD6` | `#3766D3` |
+| on-accent | `#FFFFFF` | `#FFFFFF` |
+| accent-soft | `#EAF0FE` | `#2E3C56` |
+| border | `#DFE4EC` | `#3C4047` |
+| control-border | `#7E899B` | `#868C95` |
 
-Les couleurs sémantiques succès, alerte et erreur restent dans leurs rôles existants. Le bleu signale les actions, liens et sélections. Une réussite reçoit un texte ou symbole explicite. Les statuts courants restent du texte ; les badges servent les états inhabituels.
+Surfaces opaques, sans ombre de carte ou de contrôle. Ombre réservée au menu du compte ; bordure et fond séparent les données. Les couleurs sémantiques ne prennent jamais la couleur d’une école. Les badges sont réservés aux exceptions.
 
-Source Sans 3 variable auto-hébergée (fichier officiel Adobe sous OFL, sans requête à un hébergeur de polices), puis police système en repli. Titres principaux 28–30 px/650, titres de détail 22 px/650, sections 18 px/600, lignes 15 px et métadonnées 13–14 px. Les champs passent à 16 px sur petit écran ou pointeur tactile pour éviter le zoom de saisie Safari. Les textes utiles restent sélectionnables.
+Réutiliser `SectionHeading`, `SplitView`, `DetailPanel`, `TextField`, `TextArea`, `SelectField`, `LoadState`, `OutcomeNotice`, `ConfirmDialog`. Les formulaires de paramètres utilisent `settings-section` et une colonne de saisie bornée. Les tableaux utilisent `data-table` ; `directory-table` organise élèves et équipe. Les noms de classes et règles d’usage figurent dans la documentation de direction.
 
-Rayons web : champ et commande 6 px, détail et surface de travail 12 px, panneau d’entrée 16 px. Les contrôles de gestion gardent au moins 44 px de hauteur. Une seule action primaire par vue ; secondaires blancs avec contour et ombre légère, actions discrètes en texte. L’ombre distingue une commande ou la surface de travail ; les séparations internes restent des traits. Les menus déroulants gardent leur comportement HTML natif. Les couleurs et rayons web ne doivent pas être recopiés dans `DrivyTheme.swift`.
+### Thème personnel et enregistrement
 
-### Accessibilité et états
+`theme-init.js`, script externe compatible CSP exécuté avant React, applique le choix Clair / Sombre / Système. `theme.ts` suit ensuite les changements système et d’onglet. Seule la préférence `drivy.web.theme` est en localStorage ; ni compte ni école ni dossier. Une indisponibilité du stockage est signalée. `html[data-theme]` gouverne tous les composants et la variante du logo.
 
-Liens pour les destinations, boutons pour les actions, labels permanents, `aria-current` pour la rubrique active, `aria-expanded` et `aria-controls` pour le menu. Chaque panneau de détail possède un identifiant de titre unique. L’indicateur de focus de 3 px, le mouvement réduit et les couleurs forcées restent pris en charge. Les badges peuvent se replier sur plusieurs lignes.
+Coordonnées : enregistrement explicite direct, erreurs de champ, état non enregistré/en cours/à jour et succès seulement après réponse durable. Confidentialité, consentements, accès et commandes destructives conservent leurs confirmations métier. `useUnsavedChanges` protège les saisies ; les commandes incertaines restent dans le suivi AP72 existant. Le guide garde son mécanisme spécifique de sauvegarde/reprise.
 
-Conserver les refus serveur, les erreurs, la saisie et la demande incertaine. Un succès ne s’affiche qu’après la confirmation durable. Un style compact ne cache jamais une action nécessaire, un prix modifié ou un refus d’accès.
+### Accessibilité et vérification
 
-Contrastes calculés depuis les tokens : texte sur surface 14,67:1 clair / 14,08:1 sombre ; secondaire 5,90:1 / 8,14:1 ; action primaire 6,14:1 / 7,58:1 ; contour sur fond de champ 3,36:1 / 5,25:1. Les 52 couples vérifiés passent leurs seuils. [Mesures](docs/implementation/proofs/web-craft-contrast-20260930.json). La lecture VoiceOver/NVDA, le zoom navigateur à 200 % et les essais physiques restent à qualifier.
+Liens de navigation, labels permanents, focus visible 3 px, lien d’évitement, dialogues HTML natifs avec restitution de focus. Mouvement réduit, contraste accru et couleurs forcées restent pris en charge. Pas d’action au seul survol. Anciennes routes conservées ; ajout de `/app/preferences` et cibles `focus` limitées à l’index de recherche.
+
+[60 couples de contraste mesurés](docs/implementation/proofs/web-redesign-contrast-20261013.json) passent les seuils applicables. La recette navigateur et ses limites sont consignées dans [le rapport de refonte](docs/implementation/web-redesign-20261013.md). Ces calculs et tests automatiques ne constituent pas une certification WCAG ni une validation au lecteur d’écran.
 
 ## Apple · Cartographie native conservée
 

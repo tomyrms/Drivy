@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drivy — Comparaison du portail</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; background: #f2f4f7; color: #202936; font: 16px/1.5 system-ui, sans-serif; }
+    header, main { max-width: 1800px; padding: 24px; margin: auto; } header { border-bottom: 1px solid #cbd2de; }
+    h1 { font-size: 28px; line-height: 1.2; margin: 0 0 12px; } p { max-width: 90ch; margin: 12px 0; }
+    .controls { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; margin-top: 24px; }
+    label { display: grid; gap: 4px; font-weight: 600; } select { font: inherit; color: inherit; background: white; border: 1px solid #596579; border-radius: 6px; padding: 8px 12px; min-height: 44px; }
+    .comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+    .comparison.after-only { grid-template-columns: minmax(0, 1fr); } .after-only figure:first-child { display: none; }
+    figure { margin: 0; min-width: 0; } figcaption { margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
+    img { width: 100%; height: auto; display: block; border: 1px solid #cbd2de; background: white; }
+    a { color: #1947ad; text-underline-offset: 3px; } :focus-visible { outline: 3px solid #245bd6; outline-offset: 3px; }
+    #caption { color: #475267; } @media (max-width: 750px) { .comparison { grid-template-columns: minmax(0, 1fr); } header, main { padding: 16px; } h1 { font-size: 24px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Drivy · Avant / Après</h1>
+    <p>Portail web — direction « Bureau de précision », 13 octobre 2026. Captures du navigateur, sans retouche, à 1440 px. Données entièrement fictives.</p>
+    <div class="controls">
+      <label>Écran<select id="view"><option value="learners">Liste des élèves</option><option value="learner-detail">Dossier d’un élève</option><option value="config">Coordonnées de l’école</option></select></label>
+      <label>Thème<select id="theme"><option value="light">Clair</option><option value="dark">Sombre</option></select></label>
+      <label>Comparaison<select id="mode"><option value="both">Côte à côte</option><option value="after">Après en pleine largeur</option></select></label>
+    </div>
+    <p id="caption" aria-live="polite"></p>
+    <p><a href="../../web-redesign-20261013.md">Compte rendu et limites</a> · <a href="manifest.json">Provenance et empreintes des captures</a></p>
+  </header>
+  <main>
+    <div class="comparison" id="comparison">
+      <figure><figcaption>Avant <a id="before-link" target="_blank" rel="noopener">Ouvrir l’original</a></figcaption><img id="before" alt=""></figure>
+      <figure><figcaption>Après <a id="after-link" target="_blank" rel="noopener">Ouvrir l’original</a></figcaption><img id="after" alt=""></figure>
+    </div>
+  </main>
+  <script>
+    const views = {
+      learners: ['Liste des élèves', '20 élèves avant et après. Les noms génériques des lignes de stress ont été remplacés par des noms fictifs plausibles et les formations diversifiées.'],
+      'learner-detail': ['Dossier d’un élève', 'Même dossier fictif et nom long. La tâche de complétion du profil est directement accessible dans le détail.'],
+      config: ['Coordonnées de l’école', 'Avant : coordonnées présentées avec entrée en modification. Après : formulaire direct avec état d’enregistrement et validation au champ.']
+    };
+    function update() {
+      const view = document.getElementById('view').value, theme = document.getElementById('theme').value;
+      document.getElementById('comparison').classList.toggle('after-only', document.getElementById('mode').value === 'after');
+      for (const phase of ['before', 'after']) {
+        const file = `${phase}-${view}-1440-${theme}-synthetic.png`;
+        document.getElementById(phase).src = file;
+        document.getElementById(phase).alt = `${views[view][0]} — ${phase === 'before' ? 'avant' : 'après'}, thème ${theme === 'light' ? 'clair' : 'sombre'}, données fictives`;
+        document.getElementById(`${phase}-link`).href = file;
+      }
+      document.getElementById('caption').textContent = views[view][1];
+    }
+    for (const id of ['view', 'theme', 'mode']) document.getElementById(id).addEventListener('change', update);
+    update();
+  </script>
+</body>
+</html>

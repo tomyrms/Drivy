@@ -5,7 +5,7 @@ import { useCommandSnapshot } from '../command-store';
 import { confirmedData, readSchool, offeringSchema, readAll, type Offering } from '../school-api';
 import { RequestFailure } from '../protocol';
 import { setupStepState } from '../setup-progress';
-import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField } from '../ui';
+import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
 import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
   setupStepLabels, setupSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
@@ -389,7 +389,7 @@ export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit
     {preview.activate && !content.selectedSections.includes('CATALOGUE') && content.formations.length === 0 && <section><h3>Formations et tarifs</h3><p>Préparation reportée à plus tard.</p><button type="button" className="button quiet" onClick={() => onEdit('FORMATIONS')}>Modifier</button></section>}
     {content.formations.map(formation => <section key={formation.id}><h3>{formation.label || `Permis ${formation.categoryCode}`}</h3>
       {!formation.apply || !content.selectedSections.includes('CATALOGUE') ? <p>Conservée en brouillon · à terminer plus tard</p> : <>
-        <Facts items={[["Permis", formation.categoryCode], ['Durée', `${formation.durationMinutes ?? '—'} min`], ['Prix', formation.priceCents === null ? 'À compléter' : formatCents(formation.priceCents)], ['Disponible dès le', formation.validFrom ?? 'À compléter']]} />
+        <Facts items={[["Permis", formation.categoryCode], ['Durée', `${formation.durationMinutes ?? '—'} min`], ['Prix', formation.priceCents === null ? 'À compléter' : formatCents(formation.priceCents)], ['Disponible dès le', formation.validFrom ? formatCivilDate(formation.validFrom) : 'À compléter']]} />
         {!formation.existingOfferingId && <details className="disclosure"><summary>Programme et déroulement</summary><ul>{formation.competencies.map(item => <li key={item.key}><strong>{item.label}</strong><p>{item.description}</p></li>)}</ul><p className="policy-copy">{formation.procedureText}</p></details>}
         <h4>Annulation</h4><p className="policy-copy">{formation.existingOfferingId ? 'Le déroulement et les conditions d’annulation de la formation sont conservés.' : formation.cancellationPolicyText}</p><h4>Conditions du tarif</h4><p className="policy-copy">{formation.termsText}</p>
       </>}<button type="button" className="button quiet" onClick={() => onEdit('PRICING')}>Modifier</button>

@@ -1,6 +1,7 @@
-.profile-fields-preview { display: grid; gap: var(--space-m); margin-block-start: var(--space-m); max-inline-size: 40rem; }
+.profile-fields-preview { display: grid; gap: var(--space-l); margin-block-start: var(--space-m); max-inline-size: 40rem; padding: var(--space-l); border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface-inset); }
 .profile-preview-field { display: grid; gap: var(--space-xs); min-inline-size: 0; }
 .profile-preview-label { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); }
 .profile-preview-field input, .profile-preview-field textarea { inline-size: 100%; min-inline-size: 0; cursor: default; }
 .profile-preview-field .caption { margin: 0; }
 .profile-preview-photo { inline-size: 5rem; block-size: 5rem; border: 1px solid var(--border); border-radius: var(--radius-field); background: var(--surface-inset); }
+@media (max-width: 40rem) { .profile-fields-preview { padding: var(--space-m); } }

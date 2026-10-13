@@ -1,9 +1,16 @@
-/* Opening uses the existing account layout, controls and palette on every width. */
+/* School creation uses the entry shell, semantic tokens and shared form controls. */
+.opening-shell .main { max-inline-size: 48rem; }
+.opening-shell form { max-inline-size: 40rem; }
 .opening-shell .identity-row { flex-wrap:wrap; }
 .opening-shell .identity-row > .row-text { flex:1 1 16rem; }
 .opening-shell .identity-row > .button { margin-inline-start:0; }
-.opening-fields { display:grid; gap:var(--space-m); border:0; padding:0; margin:0; min-width:0; }
+.opening-fields { display:grid; gap:var(--space-l); border:0; padding:0; margin:0; min-width:0; }
 .opening-fields details { padding-block:var(--space-s); }
 .opening-fields details[open] summary { margin-block-end:var(--space-m); }
 .opening-links { list-style:none; padding:0; margin:0; }
 .opening-links > li { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-m); padding-block:var(--space-m); border-block-end:1px solid var(--border); }
+@media (max-width: 40rem) {
+  .opening-shell .identity-row > .row-text { flex-basis: 12rem; }
+  .opening-links > li { align-items: flex-start; }
+  .opening-links > li > .button { inline-size: 100%; }
+}

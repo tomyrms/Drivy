@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
 import { createCommand, isCivilDate, schoolTimeToInstant } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { availabilitySchema, closureSchema, memberSchema, readAll, type Availability, type Closure } from '../school-api';
 import { CheckField, EmptyState, SelectField, Symbol, TextField, formatCivilDate, formatDateTime } from '../ui';
-import { useCommandRunner, useConsole, useLoad } from './context';
+import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 
 const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
@@ -20,7 +20,12 @@ function dayRange(weekdays: readonly number[]): string {
 export function AvailabilitySection({ section = 'availability' }: { section?: 'availability' | 'absences' } = {}) {
   const { schoolId, school, membership, routeQuery, setRouteQuery, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
-  const runner = useCommandRunner();
+  const addition = useRef<'rule' | 'absence' | null>(null);
+  const runner = useCommandRunner(() => {
+    if (addition.current === 'rule') { setDirty(false); setRuleOpen(false); setRuleSubmitted(false); }
+    if (addition.current === 'absence') { setDirty(false); setAbsenceStart(''); setAbsenceEnd(''); setAbsenceOpen(false); setAbsenceSubmitted(false); }
+    addition.current = null;
+  });
   const loaded = useLoad(async () => {
     const [members, rules, closures] = await Promise.all([readAll(schoolId, 'members', memberSchema),
       readAll(schoolId, 'availability-rules', availabilitySchema), readAll(schoolId, 'closures', closureSchema)]);
@@ -44,6 +49,13 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
   const [absenceOpen, setAbsenceOpen] = useState(false);
   const [ruleSubmitted, setRuleSubmitted] = useState(false);
   const [absenceSubmitted, setAbsenceSubmitted] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty);
+  useEffect(() => {
+    setDirty(false); setRuleOpen(false); setAbsenceOpen(false); setAbsenceStart(''); setAbsenceEnd('');
+    setWeekdays([1, 2, 3, 4, 5]); setStart('08:00'); setEnd('18:00'); setFrom(civilDateIn(school.timeZone));
+    setRuleSubmitted(false); setAbsenceSubmitted(false);
+  }, [instructor, school.timeZone]);
   // Un retrait ferme des créneaux à la planification : le second appui, sur la même ligne, le confirme.
   const [removing, setRemoving] = useState<string | null>(null);
   const canWrite = school.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy && instructors.some(item => item.id === instructor);
@@ -60,23 +72,29 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
   async function addRule() {
     setRuleSubmitted(true);
     if (!ruleValid || !canWrite) return;
+    addition.current = 'rule';
     const result = await runner.run(createCommand({ schoolId, kind: 'createAvailabilityRule', path: 'availability-rules', resourceVersion: 0,
       body: { instructorMembershipId: instructor, weekdays: [...weekdays].sort(), localStart: start, localEnd: end, validFrom: from, validUntil: null } }),
       'La disponibilité est ajoutée.');
-    if (result.status === 'confirmed') { setRuleOpen(false); setRuleSubmitted(false); }
+    if (result.status === 'confirmed') { setDirty(false); setRuleOpen(false); setRuleSubmitted(false); }
+    if (result.status === 'rejected') addition.current = null;
   }
   async function removeRule(rule: Availability) {
+    addition.current = null;
     await runner.run(createCommand({ schoolId, kind: 'removeAvailabilityRule', path: `availability-rules/${rule.id}/remove`,
       resourceId: rule.id, resourceVersion: rule.version, ifMatch: rule.version, body: { reason: removal } }), 'La disponibilité est retirée.');
   }
   async function addAbsence() {
     setAbsenceSubmitted(true);
     if (!absenceValid || !canWrite) return;
+    addition.current = 'absence';
     const result = await runner.run(createCommand({ schoolId, kind: 'createClosure', path: 'closures', resourceVersion: 0,
       body: { instructorMembershipId: instructor, startsAt: absenceFrom, endsAt: absenceUntil, reason: null } }), 'L’absence est ajoutée.');
-    if (result.status === 'confirmed') { setAbsenceStart(''); setAbsenceEnd(''); setAbsenceOpen(false); setAbsenceSubmitted(false); }
+    if (result.status === 'confirmed') { setDirty(false); setAbsenceStart(''); setAbsenceEnd(''); setAbsenceOpen(false); setAbsenceSubmitted(false); }
+    if (result.status === 'rejected') addition.current = null;
   }
   async function removeAbsence(closure: Closure) {
+    addition.current = null;
     await runner.run(createCommand({ schoolId, kind: 'removeClosure', path: `closures/${closure.id}/remove`,
       resourceId: closure.id, resourceVersion: closure.version, ifMatch: closure.version, body: { reason: removal } }), 'L’absence est retirée.');
   }
@@ -105,7 +123,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                 <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => { if (removing === rule.id) { setRemoving(null); void removeRule(rule); } else setRemoving(rule.id); }} onBlur={() => setRemoving(null)}>{removing === rule.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={ruleOpen} onToggle={event => setRuleOpen(event.currentTarget.open)}><summary>Ajouter un horaire</summary>
-            <form className="form-grid" onSubmit={event => { event.preventDefault(); void addRule(); }}>
+            <form className="form-grid" onChangeCapture={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void addRule(); }}>
               <fieldset className="fieldset" aria-describedby={ruleSubmitted && weekdays.length === 0 ? 'weekly-days-error' : undefined}>
                 <legend>Jours</legend>
                 <div className="day-picker">{days.map((label, index) => <CheckField key={label} label={label} checked={weekdays.includes(index + 1)} disabled={!canWrite}
@@ -132,7 +150,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                 <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => { if (removing === item.id) { setRemoving(null); void removeAbsence(item); } else setRemoving(item.id); }} onBlur={() => setRemoving(null)}>{removing === item.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={absenceOpen} onToggle={event => setAbsenceOpen(event.currentTarget.open)}><summary>Ajouter une absence</summary>
-            <form className="form-grid" onSubmit={event => { event.preventDefault(); void addAbsence(); }}>
+            <form className="form-grid" onChangeCapture={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void addAbsence(); }}>
               <div className="form-row">
                 <TextField label="Du" type="datetime-local" required value={absenceStart} disabled={!canWrite} onChange={setAbsenceStart}
                   error={absenceSubmitted && absenceStart && !absenceFrom ? 'Cette heure n’existe pas dans le fuseau de l’école.' : null} />

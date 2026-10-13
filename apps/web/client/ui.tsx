@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 
 export type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock'
   | 'home' | 'settings' | 'list' | 'layers' | 'book' | 'file' | 'tag' | 'receipt' | 'users' | 'plus' | 'edit' | 'send'
-  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron' | 'chevron-up' | 'grip';
+  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron' | 'chevron-up' | 'grip' | 'search';
 
 const symbolPaths: Record<SymbolKind, ReactNode> = {
+  search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
   account: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>,
   school: <path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" />,
   alert: <><path d="M10.3 4 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4M12 17h.01" /></>,
@@ -85,7 +86,7 @@ export function EmptyState({ symbol, title, message, action }: { symbol: SymbolK
   );
 }
 
-type FieldProps = { label: string; hint?: string | undefined; error?: string | null | undefined; disabled?: boolean | undefined; required?: boolean | undefined };
+type FieldProps = { id?: string; label: string; hint?: string | undefined; error?: string | null | undefined; disabled?: boolean | undefined; required?: boolean | undefined };
 
 function FieldFrame({ id, label, hint, error, required, children, counter }: FieldProps & { id: string; children: ReactNode; counter?: ReactNode }) {
   return (
@@ -101,11 +102,11 @@ function FieldFrame({ id, label, hint, error, required, children, counter }: Fie
 const describedBy = (id: string, hint?: string, error?: string | null, counter?: boolean) =>
   [hint || counter ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
 
-export function TextField({ label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly, name }: FieldProps & {
+export function TextField({ id: suppliedId, label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly, name }: FieldProps & {
   value: string; onChange: (value: string) => void; type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'datetime-local' | 'url' | 'number';
   maxLength?: number; autoComplete?: string; inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel'; placeholder?: string; readOnly?: boolean; name?: string;
 }) {
-  const id = useId();
+  const generatedId = useId(), id = suppliedId ?? generatedId;
   return (
     <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
       <input id={id} name={name} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
@@ -116,10 +117,10 @@ export function TextField({ label, value, onChange, hint, error, disabled, requi
   );
 }
 
-export function TextArea({ label, value, onChange, hint, error, disabled, required, maxLength, rows = 5, name }: FieldProps & {
+export function TextArea({ id: suppliedId, label, value, onChange, hint, error, disabled, required, maxLength, rows = 5, name }: FieldProps & {
   value: string; onChange: (value: string) => void; maxLength?: number; rows?: number; name?: string;
 }) {
-  const id = useId();
+  const generatedId = useId(), id = suppliedId ?? generatedId;
   const length = [...value].length;
   const counter = maxLength && length > maxLength * .8
     ? <span className={length > maxLength ? 'counter over' : 'counter'}> {length.toLocaleString('fr-CH')} / {maxLength.toLocaleString('fr-CH')} caractères</span> : null;

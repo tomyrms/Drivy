@@ -8,6 +8,7 @@ import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
+import { useListState } from './list-state';
 
 const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' | 'clock' }>> = {
   cancelled: { label: 'Annulée', tone: 'neutral', symbol: 'ban' },
@@ -25,7 +26,7 @@ export function AgendaSection() {
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   const [localMonday, setLocalMonday] = useState(() => weekStart(civilDateIn(school.timeZone)));
   const [localInstructor, setLocalInstructor] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useListState('agenda/search', '');
   const monday = routeQuery ? weekStart(routeQuery.week ?? civilDateIn(school.timeZone)) : localMonday;
   const instructor = routeQuery ? routeQuery.instructor ?? '' : localInstructor;
   const setMonday = (week: string) => { setLocalMonday(week); setRouteQuery?.({ ...routeQuery, week }); };
@@ -56,6 +57,7 @@ export function AgendaSection() {
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
   const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], search), school.timeZone),
     [data, directory.data, search, school.timeZone]);
+  const lessonCount = days.reduce((total, day) => total + day.items.length, 0);
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
   const thisWeek = weekStart(civilDateIn(school.timeZone));
@@ -82,6 +84,7 @@ export function AgendaSection() {
       <LoadState loaded={directory} label="Lecture des élèves et moniteurs…">{() => null}</LoadState>
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
+        <p className="list-summary" role="status">{lessonCount} {lessonCount === 1 ? 'leçon' : 'leçons'}{search ? lessonCount === 1 ? ' trouvée' : ' trouvées' : ' cette semaine'}</p>
         {days.length === 0 ? <EmptyState symbol="clock" title={search && value.lessons.length ? 'Aucune leçon trouvée' : 'Aucune leçon cette semaine'} message="" />
           : days.map(day => {
             const [weekday, ...date] = formatDayHeading(day.day).split(' ');

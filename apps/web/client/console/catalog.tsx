@@ -6,6 +6,7 @@ import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, Stat
 import { useCommandRunner, useConsole, useLoad, useRouteSelection, useSectionDraft } from './context';
 import { DetailPanel, LoadState, OutcomeNotice, Placeholder, RowButton, SectionHeading, SplitView } from './layout';
 import { consolePath } from './route';
+import { useListState } from './list-state';
 
 export const approvalBadge = (approved: boolean, feminine = false) => approved
   ? <span className="status-text with-symbol"><Symbol kind="check" bare />{feminine ? 'Approuvée' : 'Approuvé'}</span>
@@ -47,7 +48,8 @@ function curriculumProblems(draft: CurriculumDraft) {
 }
 
 export function CurriculaSection() {
-  const { schoolId, school, routeQuery } = useConsole();
+  const { schoolId, school, routeQuery, confirmNavigation } = useConsole();
+  const leaveForm = (proceed: () => void) => confirmNavigation ? confirmNavigation(proceed) : proceed();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(() => readAll(schoolId, 'curricula', curriculumSchema), [schoolId, revision]);
@@ -86,16 +88,16 @@ export function CurriculaSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Compétences enseignées"
-        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
+        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouveau référentiel</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
+      <LoadState loaded={loaded} label="Lecture des référentiels…">{data => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
         list={items.length === 0 ? <EmptyState symbol="book" title="Aucun référentiel" message="Préparez un premier référentiel pour une catégorie, puis approuvez-le pour ouvrir une offre." />
           : <table className="data-table">
             <caption className="visually-hidden">Référentiels de l’école{data.truncated ? ' (liste partielle)' : ''}</caption>
             <thead><tr><th scope="col">Référentiel</th><th scope="col" className="numeric">Compétences</th></tr></thead>
             <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Catégorie {item.categoryCode}</RowButton>
+              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>Catégorie {item.categoryCode}</RowButton>
                 <span className="row-meta block">Révision {item.revision}</span>{!item.approved && approvalBadge(false)}</th>
               <td className="numeric">{item.competencies.length}</td>
             </tr>)}</tbody>
@@ -107,6 +109,7 @@ export function CurriculaSection() {
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
+              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
               <TextField label="Catégorie" value={draft.categoryCode} maxLength={30} placeholder="Par exemple B" disabled={!canWrite || !!draft.basedOn}
                 onChange={categoryCode => update({ categoryCode })} error={showErrors ? problems.category : null}
                 hint={draft.basedOn ? 'Une nouvelle révision garde la catégorie.' : undefined} />
@@ -177,7 +180,8 @@ function procedureProblems(draft: ProcedureDraft) {
 }
 
 export function ProceduresSection() {
-  const { schoolId, school, routeQuery } = useConsole();
+  const { schoolId, school, routeQuery, confirmNavigation } = useConsole();
+  const leaveForm = (proceed: () => void) => confirmNavigation ? confirmNavigation(proceed) : proceed();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(() => readAll(schoolId, 'policy-versions', catalogPolicySchema), [schoolId, revision]);
@@ -214,16 +218,16 @@ export function ProceduresSection() {
   return (
     <div className="section-stack">
       <SectionHeading context="Formations et tarifs" title="Déroulement et annulation"
-        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => { setSelected(null); edit(null); }}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
+        actions={<button type="button" className={current || draft ? 'button secondary' : 'button primary'} disabled={!canWrite} onClick={() => leaveForm(() => { setSelected(null); edit(null); })}><Symbol kind="plus" bare />Nouvelle procédure</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des procédures…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
+      <LoadState loaded={loaded} label="Lecture des procédures…">{() => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
         list={items.length === 0 ? <EmptyState symbol="file" title="Aucune procédure" message="Rédigez la procédure d’une catégorie, puis approuvez-la pour ouvrir une offre." />
           : <table className="data-table">
             <caption className="visually-hidden">Procédures de l’école</caption>
             <thead><tr><th scope="col">Procédure</th><th scope="col">Approuvée le</th></tr></thead>
             <tbody>{items.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>Catégorie {item.categoryCode}</RowButton>
+              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>Catégorie {item.categoryCode}</RowButton>
                 <span className="row-meta block">Version {item.version}</span>{!item.approved && approvalBadge(false, true)}</th>
               <td>{item.approvedAt ? formatDateTime(item.approvedAt, school.timeZone) : '—'}</td>
             </tr>)}</tbody>
@@ -235,6 +239,7 @@ export function ProceduresSection() {
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
+              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
               <TextField label="Catégorie" value={draft.categoryCode} maxLength={30} placeholder="Par exemple B" disabled={!canWrite || !!draft.basedOn}
                 onChange={categoryCode => update({ categoryCode })} error={showErrors ? problems.category : null} />
               <TextArea label="Déroulement de la formation" rows={4} maxLength={4000} value={draft.procedureText} disabled={!canWrite}
@@ -279,7 +284,8 @@ export function ProceduresSection() {
 type OfferingDraft = { offeringKey: string; categoryCode: string; curriculumVersionId: string; policyVersionId: string; enabled: boolean; duration: string; basedOn: Offering | null };
 
 export function OfferingsSection() {
-  const { schoolId, navigate, routeQuery } = useConsole();
+  const { schoolId, navigate, routeQuery, confirmNavigation } = useConsole();
+  const leaveForm = (proceed: () => void) => confirmNavigation ? confirmNavigation(proceed) : proceed();
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { setDraft(null); setSelected(null); });
   const loaded = useLoad(async () => {
@@ -288,7 +294,7 @@ export function OfferingsSection() {
     return { offerings: offerings.items, curricula: curricula.items, policies: policies.items };
   }, [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
-  const [history, setHistory] = useState(false);
+  const [history, setHistory] = useListState('offerings/history', false);
   const [draft, setDraft] = useSectionDraft<OfferingDraft>('offering');
   const [showErrors, setShowErrors] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -350,7 +356,7 @@ export function OfferingsSection() {
         actions={<button type="button" className="button primary" disabled={!canWrite} onClick={() => navigate('apercu', { from: 'formations', category: routeQuery?.category })}><Symbol kind="plus" bare />Ajouter une formation</button>} />
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => { setDraft(null); setSelected(null); }}
+      <LoadState loaded={loaded} label="Lecture des offres…">{value => <SplitView mobileDetail={!!selected || !!draft} onBack={() => leaveForm(() => { setDraft(null); setSelected(null); })}
         list={<>
           <div className="list-toolbar"><CheckField label="Afficher les versions précédentes" checked={history} onChange={setHistory} /></div>
           {rows.length === 0 ? <EmptyState symbol="layers" title="Aucune formation" message="Choisissez un permis dans le guide pour préparer une formation et son tarif." />
@@ -358,20 +364,21 @@ export function OfferingsSection() {
             <caption className="visually-hidden">Offres de l’école</caption>
             <thead><tr><th scope="col">Formation</th><th scope="col" className="numeric">Durée</th></tr></thead>
             <tbody>{rows.map(item => <tr key={item.id} className={item.id === selected && !draft ? 'selected' : undefined}>
-              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => { setDraft(null); setSelected(item.id); }}>{item.offeringKey}</RowButton>
+              <th scope="row"><RowButton selected={item.id === selected && !draft} onSelect={() => leaveForm(() => { setDraft(null); setSelected(item.id); })}>Permis {item.categoryCode}</RowButton>
                 <span className="row-meta block">Catégorie {item.categoryCode} · v{item.version}{latest.get(item.offeringKey)?.id !== item.id ? ' · ancienne version' : ''}</span>
                 {!item.enabled && offerState(item)}</th>
               <td className="numeric">{formatDuration(item.defaultDurationMinutes)}</td>
             </tr>)}</tbody>
           </table>}
         </>}
-        detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · ${draft.basedOn.offeringKey}` : 'Nouvelle offre'}
+        detail={draft && problems ? <DetailPanel focusKey={`edit-${draft.basedOn?.id ?? 'new'}`} title={draft.basedOn ? `Nouvelle version · permis ${draft.basedOn.categoryCode}` : 'Nouvelle offre'}
             meta={draft.basedOn ? `À partir de la version ${draft.basedOn.version}, qui reste inchangée.` : undefined}
             actions={<>
               <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (problems.valid) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>Relire avant d’enregistrer</button>
               <button type="button" className="button quiet" onClick={() => setDraft(null)} disabled={runner.busy}>Annuler</button>
             </>}>
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
+              <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : 'Version non enregistrée'}</p>
               <div className="form-row">
                 <TextField label="Référence de l’offre" value={draft.offeringKey} maxLength={80} disabled={!canWrite || !!draft.basedOn} placeholder="Par exemple b-standard"
                   onChange={offeringKey => update({ offeringKey })} error={showErrors ? problems.key : null} />
@@ -394,9 +401,10 @@ export function OfferingsSection() {
               {problems.enabled && <p className="field-error"><Symbol kind="alert" bare />{problems.enabled}</p>}
             </form>
           </DetailPanel>
-          : current ? <DetailPanel focusKey={current.id} title={current.offeringKey} meta={`Catégorie ${current.categoryCode} · version ${current.version}`} badge={offerState(current)}
+          : current ? <DetailPanel focusKey={current.id} title={`Permis ${current.categoryCode}`} meta={`Version ${current.version}`} badge={offerState(current)}
             actions={<button type="button" className="button primary" disabled={!canWrite} onClick={() => edit(current)}><Symbol kind="edit" bare />Nouvelle version</button>}>
             <Facts items={[["Durée par défaut", formatDuration(current.defaultDurationMinutes)]]} />
+            <details className="disclosure"><summary>Référence de la formation</summary><code>{current.offeringKey}</code></details>
             <ul className="catalog-links">
               {([
                 { section: 'referentiels', selection: current.curriculumVersionId, title: 'Compétences enseignées',
