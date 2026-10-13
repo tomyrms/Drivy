@@ -1,0 +1,91 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "nativeTabFixture": "Destination Ctrl-clic vérifiée avant rechargement du même URL pour installer le BFF synthétique dans le nouvel onglet Edge.",
+  "checkFilter": null,
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations (équivalent géométrique du zoom desktop 200 %)"
+  ],
+  "captures": [
+    {
+      "target": "agenda",
+      "theme": "light",
+      "width": 1440,
+      "file": "agenda-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "agenda",
+      "theme": "light",
+      "width": 1024,
+      "file": "agenda-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "agenda",
+      "theme": "light",
+      "width": 390,
+      "file": "agenda-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "agenda",
+      "theme": "dark",
+      "width": 1440,
+      "file": "agenda-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "agenda",
+      "theme": "dark",
+      "width": 1024,
+      "file": "agenda-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "agenda",
+      "theme": "dark",
+      "width": 390,
+      "file": "agenda-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "supplemental": [],
+  "accessibility": [
+    {
+      "target": "agenda",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "agenda",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "agenda",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "agenda",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "failures": []
+}

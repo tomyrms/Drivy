@@ -1,0 +1,42 @@
+[
+  {
+    "target": "learners",
+    "theme": "light",
+    "width": 390,
+    "height": 844,
+    "hasTouch": true,
+    "file": "learners-390-light-touch-viewport-synthetic.png",
+    "overflow": false,
+    "pageErrors": []
+  },
+  {
+    "target": "team",
+    "theme": "light",
+    "width": 390,
+    "height": 844,
+    "hasTouch": true,
+    "file": "team-390-light-touch-viewport-synthetic.png",
+    "overflow": false,
+    "pageErrors": []
+  },
+  {
+    "target": "learners",
+    "theme": "dark",
+    "width": 390,
+    "height": 844,
+    "hasTouch": true,
+    "file": "learners-390-dark-touch-viewport-synthetic.png",
+    "overflow": false,
+    "pageErrors": []
+  },
+  {
+    "target": "team",
+    "theme": "dark",
+    "width": 390,
+    "height": 844,
+    "hasTouch": true,
+    "file": "team-390-dark-touch-viewport-synthetic.png",
+    "overflow": false,
+    "pageErrors": []
+  }
+]

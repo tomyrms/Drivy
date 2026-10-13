@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 14 octobre 2026 — Studio, portail inspiré de Mercury, déployé
+
+Version **`2b4ca81` publiée à 01:01 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/), depuis `codex/portail-studio-20261014`, à la demande explicite du porteur. Sauvegarde de la base vérifiée avant bascule, 32 migrations existantes contrôlées, aucune migration exécutée ; seul le web redémarre. **19 contrôles HTTPS réussis** et page publique inspectée sans erreur console. [Version et retour arrière](web-studio-deployment-20261014.md).
+
+La démo Mercury a été parcourue réellement : **35 captures sur 17 chemins**, menus, filtres, recherche, fiches, formulaires et deux thèmes. Studio reprend sa composition et ses proportions avec le cobalt Drivy et un sombre anthracite : Manrope embarquée, navigation secondaire dans le rail, espace de paramètres séparé, menus de choix dessinés et recherchables, listes avec identité/contact, fiches et éditeurs dédiés, paramètres en lecture puis modification, agenda regroupé par jour. Parcours, droits et contrats conservés ; aucun changement Apple. [Direction et composants](web-studio-20261014.md) · [Benchmark](web-studio-benchmark-20261014.md) · [Pages et parcours couverts](web-studio-inventory-20261014.md).
+
+**Exécuté sur la version publiée** : [439 tests API/PostgreSQL, 233 tests web, types, builds et contrôles documentaires](https://github.com/tomyrms/Drivy/actions/runs/38481209557), [80 contrôles intégrés OIDC/BFF/API/PostgreSQL](https://github.com/tomyrms/Drivy/actions/runs/38481209552). Campagne locale consolidée : **41 scénarios réussis**, **240 configurations visuelles distinctes** clair/sombre à 1440/1024/390 px, aucun débordement ni erreur JavaScript. Les reprises ciblées remplacent les configurations antérieures sans gonfler le total. **160 audits axe** : 140 sur les pages produit et 8 sur composants fermés sans violation ni indétermination ; les 12 audits de menus ouverts conservent quatre signalements de sentinelles Base UI et 24 règles indéterminées, examinés et documentés avec leurs résultats bruts. Aucune conformité globale revendiquée. [Rapport, preuves et limites](web-studio-verification-20261014.md).
+
+[Galerie de 21 captures avant/après](proofs/web-studio-20261014/index.html), quatre écrans représentatifs, thèmes clair/sombre et liste mobile. Restent à qualifier : zoom navigateur natif à 200 %, Safari, lecteur d’écran et recette avec une auto-école ; le reflow émulé et les données synthétiques ne les remplacent pas.
+
 ## 14 octobre 2026 — Registre Drivy déployé
 
 À la demande explicite du porteur, version **`1c43c35` publiée à 00:10 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/), depuis `codex/portail-registre-20261013`. Sauvegarde `drivy_refonte` vérifiée avant bascule, 32 migrations existantes contrôlées, aucune migration exécutée. Seul le web redémarre ; API et identité inchangées. **19 contrôles HTTPS réussis** et page publique inspectée sans erreur console. [Version, preuve et retour arrière](web-registre-deployment-20261014.md).

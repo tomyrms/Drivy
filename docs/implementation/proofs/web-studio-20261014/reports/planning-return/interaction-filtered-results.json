@@ -1,0 +1,13 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "nativeTabFixture": "Destination Ctrl-clic vérifiée avant rechargement du même URL pour installer le BFF synthétique dans le nouvel onglet Edge.",
+  "checkFilter": "^Agenda :",
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Agenda : semaine, moniteur et recherche conservés au retour du dossier"
+  ],
+  "captures": [],
+  "supplemental": [],
+  "accessibility": [],
+  "failures": []
+}

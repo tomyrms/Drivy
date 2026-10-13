@@ -1,0 +1,173 @@
+{
+  "productCommit": "2b4ca81",
+  "configurations": [
+    {
+      "theme": "light",
+      "width": 1440,
+      "metadata": [
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Gare"
+          ]
+        },
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Parking de l’école"
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "metadata": [
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Gare"
+          ]
+        },
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Parking de l’école"
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "metadata": [
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": false,
+          "actualGap": 4,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Gare"
+          ]
+        },
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": false,
+          "actualGap": 4,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Parking de l’école"
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "metadata": [
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Gare"
+          ]
+        },
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Parking de l’école"
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "metadata": [
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Gare"
+          ]
+        },
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": true,
+          "actualGap": 16,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Parking de l’école"
+          ]
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "metadata": [
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": false,
+          "actualGap": 4,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Gare"
+          ]
+        },
+        {
+          "display": "flex",
+          "columnGap": "16px",
+          "rowGap": "4px",
+          "sameRow": false,
+          "actualGap": 4,
+          "texts": [
+            "Marie-Christine Dupré de Villeneuve",
+            "Parking de l’école"
+          ]
+        }
+      ]
+    }
+  ]
+}

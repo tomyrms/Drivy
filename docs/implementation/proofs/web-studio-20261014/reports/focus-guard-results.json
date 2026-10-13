@@ -1,0 +1,1802 @@
+{
+  "scope": "Recette accessibilité : focus programmatique sur sentinelles internes, sans sélection ni commande métier. Axe complet conservé sans exclusion.",
+  "results": [
+    {
+      "kind": "simple",
+      "index": 0,
+      "type": "outside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_0_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_0_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_1_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_0_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_0_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_1_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 2.7000000029802322
+    },
+    {
+      "kind": "simple",
+      "index": 1,
+      "type": "outside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 8.5
+    },
+    {
+      "kind": "simple",
+      "index": 2,
+      "type": "inside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_0_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_0_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_1_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_0_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_0_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_1_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 5.9000000059604645
+    },
+    {
+      "kind": "simple",
+      "index": 3,
+      "type": "inside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 9
+    },
+    {
+      "kind": "search",
+      "index": 0,
+      "type": "outside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" aria-controls=\"base-ui-_r_5_-popup\" data-popup-side=\"bottom\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" aria-controls=\"base-ui-_r_5_-popup\" data-popup-side=\"bottom\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 12.5
+    },
+    {
+      "kind": "search",
+      "index": 1,
+      "type": "outside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_8_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_8_-label\" class=\"choice-trigger\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_8_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_8_-label\" class=\"choice-trigger\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 22.399999998509884
+    },
+    {
+      "kind": "search",
+      "index": 2,
+      "type": "inside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" aria-controls=\"base-ui-_r_5_-popup\" data-popup-side=\"bottom\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" aria-controls=\"base-ui-_r_5_-popup\" data-popup-side=\"bottom\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 6.699999995529652
+    },
+    {
+      "kind": "search",
+      "index": 3,
+      "type": "inside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_8_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_8_-label\" class=\"choice-trigger\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_8_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_8_-label\" class=\"choice-trigger\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 19
+    },
+    {
+      "kind": "dialog",
+      "index": 0,
+      "type": "outside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_16_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_16_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_17_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_16_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_16_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_17_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 7.200000002980232
+    },
+    {
+      "kind": "dialog",
+      "index": 1,
+      "type": "outside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_1a_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_1a_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_1a_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_1a_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 11.199999995529652
+    },
+    {
+      "kind": "dialog",
+      "index": 2,
+      "type": "inside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_16_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_16_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_17_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Permis A",
+        "guard": false,
+        "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_16_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_16_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_17_-list\"><span class=\"choice-value\">Permis A</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 3.100000001490116
+    },
+    {
+      "kind": "dialog",
+      "index": 3,
+      "type": "inside",
+      "immediate": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_1a_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_1a_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "afterFrames": {
+        "tag": "BUTTON",
+        "text": "Choisir",
+        "guard": false,
+        "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_1a_\" role=\"combobox\" aria-expanded=\"false\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_1a_-label\" class=\"choice-trigger\"><span class=\"choice-value choice-placeholder\">Choisir</span><svg class=\"choice-chevron\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 8 4 4 4-4\"></path></svg></button>"
+      },
+      "elapsedMs": 9.300000004470348
+    }
+  ],
+  "scans": [
+    {
+      "kind": "simple",
+      "before": {
+        "expanded": "true",
+        "controls": "base-ui-_r_1_-list",
+        "targetExists": true,
+        "listboxes": [
+          {
+            "id": "base-ui-_r_1_-list",
+            "options": 3
+          }
+        ],
+        "active": "<div data-selected=\"\" role=\"option\" aria-selected=\"true\" tabindex=\"0\" class=\"choice-option\" data-highlighted=\"\"><div>Permis A</div><span data-selected=\"\" aria-hidden=\"true\" class=\"choice-indicator\"><svg class=\"choice-check\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m4.5 10 3.5 3.5 7.5-7.5\"></path></svg></span></div>"
+      },
+      "after": {
+        "expanded": "true",
+        "controls": "base-ui-_r_1_-list",
+        "targetExists": true,
+        "listboxes": [
+          {
+            "id": "base-ui-_r_1_-list",
+            "options": 3
+          }
+        ],
+        "active": "<div data-selected=\"\" role=\"option\" aria-selected=\"true\" tabindex=\"0\" class=\"choice-option\" data-highlighted=\"\"><div>Permis A</div><span data-selected=\"\" aria-hidden=\"true\" class=\"choice-indicator\"><svg class=\"choice-check\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m4.5 10 3.5 3.5 7.5-7.5\"></path></svg></span></div>"
+      },
+      "allReferences": [
+        {
+          "id": "_r_0_",
+          "controls": "base-ui-_r_1_-list",
+          "exists": true
+        }
+      ],
+      "uncoveredActions": null,
+      "violations": [
+        {
+          "id": "aria-hidden-focus",
+          "impact": "serious",
+          "help": "ARIA hidden element must not be focusable or contain focusable elements",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/aria-hidden-focus?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"]:nth-child(3)"
+              ],
+              "html": "<span data-type=\"outside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Focusable content should have tabindex=\"-1\", be removed from the DOM, or not be hidden with aria-hidden",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "left": 0
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"]:nth-child(5)"
+              ],
+              "html": "<span data-type=\"outside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Focusable content should have tabindex=\"-1\", be removed from the DOM, or not be hidden with aria-hidden",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "left": 0
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"]:nth-child(1)"
+              ],
+              "html": "<span data-type=\"inside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Focusable content should have tabindex=\"-1\", be removed from the DOM, or not be hidden with aria-hidden",
+              "rect": {
+                "x": 560,
+                "y": 245,
+                "width": 1,
+                "height": 1,
+                "top": 245,
+                "right": 561,
+                "bottom": 246,
+                "left": 560
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"]:nth-child(3)"
+              ],
+              "html": "<span data-type=\"inside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Focusable content should have tabindex=\"-1\", be removed from the DOM, or not be hidden with aria-hidden",
+              "rect": {
+                "x": 560,
+                "y": 245,
+                "width": 1,
+                "height": 1,
+                "top": 245,
+                "right": 561,
+                "bottom": 246,
+                "left": 560
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "incomplete": [
+        {
+          "id": "aria-valid-attr-value",
+          "impact": "critical",
+          "help": "ARIA attributes must conform to valid values",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/aria-valid-attr-value?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_0_"
+              ],
+              "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_0_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_0_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_1_-list\">",
+              "summary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"base-ui-_r_1_-list\"",
+              "rect": {
+                "x": 560,
+                "y": 193.375,
+                "width": 504,
+                "height": 46,
+                "top": 193.375,
+                "right": 1064,
+                "bottom": 239.375,
+                "left": 560
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "BUTTON",
+                  "className": "choice-trigger",
+                  "background": "rgb(245, 246, 248)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "search",
+      "before": {
+        "expanded": "true",
+        "controls": "base-ui-_r_5_-popup",
+        "targetExists": true,
+        "listboxes": [
+          {
+            "id": "_r_6_",
+            "options": 9
+          }
+        ],
+        "active": "<input data-popup-open=\"\" data-pressed=\"\" autocomplete=\"off\" spellcheck=\"false\" autocorrect=\"off\" autocapitalize=\"none\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-autocomplete=\"list\" id=\"base-ui-_r_1f_\" aria-label=\"Rechercher : Personne de test\" placeholder=\"Rechercher…\" class=\"choice-search\" value=\"\" data-popup-side=\"bottom\" aria-controls=\"_r_6_\">"
+      },
+      "after": {
+        "expanded": "true",
+        "controls": "base-ui-_r_5_-popup",
+        "targetExists": true,
+        "listboxes": [
+          {
+            "id": "_r_6_",
+            "options": 9
+          }
+        ],
+        "active": "<input data-popup-open=\"\" data-pressed=\"\" autocomplete=\"off\" spellcheck=\"false\" autocorrect=\"off\" autocapitalize=\"none\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-autocomplete=\"list\" id=\"base-ui-_r_1f_\" aria-label=\"Rechercher : Personne de test\" placeholder=\"Rechercher…\" class=\"choice-search\" value=\"\" data-popup-side=\"bottom\" aria-controls=\"_r_6_\">"
+      },
+      "allReferences": [
+        {
+          "id": "_r_4_",
+          "controls": "base-ui-_r_5_-popup",
+          "exists": true
+        },
+        {
+          "id": "base-ui-_r_1f_",
+          "controls": "_r_6_",
+          "exists": true
+        }
+      ],
+      "uncoveredActions": null,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "impact": "serious",
+          "help": "ARIA hidden element must not be focusable or contain focusable elements",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/aria-hidden-focus?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(3)"
+              ],
+              "html": "<span data-type=\"outside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "left": 0
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(5)"
+              ],
+              "html": "<span data-type=\"outside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "left": 0
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(1)"
+              ],
+              "html": "<span data-type=\"inside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 560,
+                "y": 336,
+                "width": 1,
+                "height": 1,
+                "top": 336,
+                "right": 561,
+                "bottom": 337,
+                "left": 560
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"][aria-hidden=\"true\"]:nth-child(3)"
+              ],
+              "html": "<span data-type=\"inside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 560,
+                "y": 336,
+                "width": 1,
+                "height": 1,
+                "top": 336,
+                "right": 561,
+                "bottom": 337,
+                "left": 560
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "impact": "critical",
+          "help": "ARIA attributes must conform to valid values",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/aria-valid-attr-value?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_4_"
+              ],
+              "html": "<button type=\"button\" data-placeholder=\"\" tabindex=\"0\" id=\"_r_4_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"dialog\" aria-labelledby=\"_r_4_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" aria-controls=\"base-ui-_r_5_-popup\" data-popup-side=\"bottom\">",
+              "summary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"base-ui-_r_5_-popup\"",
+              "rect": {
+                "x": 560,
+                "y": 283.765625,
+                "width": 504,
+                "height": 46,
+                "top": 283.765625,
+                "right": 1064,
+                "bottom": 329.765625,
+                "left": 560
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "BUTTON",
+                  "className": "choice-trigger",
+                  "background": "rgb(245, 246, 248)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "#base-ui-_r_1f_"
+              ],
+              "html": "<input data-popup-open=\"\" data-pressed=\"\" autocomplete=\"off\" spellcheck=\"false\" autocorrect=\"off\" autocapitalize=\"none\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-autocomplete=\"list\" id=\"base-ui-_r_1f_\" aria-label=\"Rechercher : Personn...\" placeholder=\"Rechercher…\" ...>",
+              "summary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"_r_6_\"",
+              "rect": {
+                "x": 571,
+                "y": 347,
+                "width": 482,
+                "height": 40,
+                "top": 347,
+                "right": 1053,
+                "bottom": 387,
+                "left": 571
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "INPUT",
+                  "className": "choice-search",
+                  "background": "rgb(245, 246, 248)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-search-wrap",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-popup",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "dialog",
+      "before": {
+        "expanded": "true",
+        "controls": "base-ui-_r_17_-list",
+        "targetExists": true,
+        "listboxes": [
+          {
+            "id": "base-ui-_r_17_-list",
+            "options": 3
+          }
+        ],
+        "active": "<div data-selected=\"\" role=\"option\" aria-selected=\"true\" tabindex=\"0\" class=\"choice-option\" data-highlighted=\"\"><div>Permis A</div><span data-selected=\"\" aria-hidden=\"true\" class=\"choice-indicator\"><svg class=\"choice-check\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m4.5 10 3.5 3.5 7.5-7.5\"></path></svg></span></div>"
+      },
+      "after": {
+        "expanded": "true",
+        "controls": "base-ui-_r_17_-list",
+        "targetExists": true,
+        "listboxes": [
+          {
+            "id": "base-ui-_r_17_-list",
+            "options": 3
+          }
+        ],
+        "active": "<div data-selected=\"\" role=\"option\" aria-selected=\"true\" tabindex=\"0\" class=\"choice-option\" data-highlighted=\"\"><div>Permis A</div><span data-selected=\"\" aria-hidden=\"true\" class=\"choice-indicator\"><svg class=\"choice-check\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><path d=\"m4.5 10 3.5 3.5 7.5-7.5\"></path></svg></span></div>"
+      },
+      "allReferences": [
+        {
+          "id": "_r_16_",
+          "controls": "base-ui-_r_17_-list",
+          "exists": true
+        }
+      ],
+      "uncoveredActions": [
+        {
+          "text": "Retour",
+          "rect": {
+            "x": 780.828125,
+            "y": 592,
+            "width": 79.1875,
+            "height": 40,
+            "top": 592,
+            "right": 860.015625,
+            "bottom": 632,
+            "left": 780.828125
+          },
+          "unobscured": true
+        },
+        {
+          "text": "Fermer la revue",
+          "rect": {
+            "x": 872.015625,
+            "y": 592,
+            "width": 134.984375,
+            "height": 40,
+            "top": 592,
+            "right": 1007,
+            "bottom": 632,
+            "left": 872.015625
+          },
+          "unobscured": true
+        }
+      ],
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "aria-hidden-focus",
+          "impact": "serious",
+          "help": "ARIA hidden element must not be focusable or contain focusable elements",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/aria-hidden-focus?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"]:nth-child(3)"
+              ],
+              "html": "<span data-type=\"outside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "left": 0
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "dialog-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"outside\"][data-base-ui-focus-guard=\"\"]:nth-child(5)"
+              ],
+              "html": "<span data-type=\"outside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 1,
+                "height": 1,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "left": 0
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "dialog-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"]:nth-child(1)"
+              ],
+              "html": "<span data-type=\"inside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 433,
+                "y": 488,
+                "width": 1,
+                "height": 1,
+                "top": 488,
+                "right": 434,
+                "bottom": 489,
+                "left": 433
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                "span[data-type=\"inside\"][data-base-ui-focus-guard=\"\"]:nth-child(3)"
+              ],
+              "html": "<span data-type=\"inside\" aria-hidden=\"true\" tabindex=\"0\" data-base-ui-focus-guard=\"\" style=\"clip-path: inset(50%); overflow: hidden; white-space: nowrap; border: 0px; padding: 0px; width: 1px; height: 1px; margin: 0px; position: fixed; top: 0px; left: 0px;\"></span>",
+              "summary": "Fix all of the following:\n  Check that focusable elements are not tabbable in the current state",
+              "rect": {
+                "x": 433,
+                "y": 488,
+                "width": 1,
+                "height": 1,
+                "top": 488,
+                "right": 434,
+                "bottom": 489,
+                "left": 433
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "SPAN",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "choice-positioner",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "aria-valid-attr-value",
+          "impact": "critical",
+          "help": "ARIA attributes must conform to valid values",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/aria-valid-attr-value?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_16_"
+              ],
+              "html": "<button type=\"button\" tabindex=\"0\" id=\"_r_16_\" role=\"combobox\" aria-expanded=\"true\" aria-haspopup=\"listbox\" aria-labelledby=\"_r_16_-label\" class=\"choice-trigger\" data-popup-open=\"\" data-pressed=\"\" data-popup-side=\"bottom\" aria-controls=\"base-ui-_r_17_-list\">",
+              "summary": "Fix all of the following:\n  Unable to determine if aria-controls referenced ID exists on the page while using aria-haspopup: aria-controls=\"base-ui-_r_17_-list\"",
+              "rect": {
+                "x": 433,
+                "y": 439,
+                "width": 574,
+                "height": 43,
+                "top": 439,
+                "right": 1007,
+                "bottom": 482,
+                "left": 433
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "BUTTON",
+                  "className": "choice-trigger",
+                  "background": "rgb(245, 246, 248)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "field choice-field",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "dialog-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "target-size",
+          "impact": "serious",
+          "help": "All touch targets must be 24px large, or leave sufficient space",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/target-size?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                ".dialog-actions > .secondary.button[type=\"button\"]"
+              ],
+              "html": "<button type=\"button\" class=\"button secondary\">Retour</button>",
+              "summary": "Fix any of the following:\n  Target has insufficient size because it is partially obscured by a neighbor with negative tabindex (smallest space is 79.2px by 11px, should be at least 24px by 24px). Is the neighbor a target?\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 18px instead of at least 24px. Is the neighbor a target?",
+              "rect": {
+                "x": 780.828125,
+                "y": 592,
+                "width": 79.1875,
+                "height": 40,
+                "top": 592,
+                "right": 860.015625,
+                "bottom": 632,
+                "left": 780.828125
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "BUTTON",
+                  "className": "button secondary",
+                  "background": "rgb(245, 246, 248)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "dialog-actions",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            },
+            {
+              "target": [
+                ".primary.button[type=\"button\"]"
+              ],
+              "html": "<button type=\"button\" class=\"button primary\" aria-busy=\"false\">Fermer la revue</button>",
+              "summary": "Fix any of the following:\n  Target has insufficient size because it is partially obscured by a neighbor with negative tabindex (smallest space is 135px by 11px, should be at least 24px by 24px). Is the neighbor a target?\n  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 18px instead of at least 24px. Is the neighbor a target?",
+              "rect": {
+                "x": 872.015625,
+                "y": 592,
+                "width": 134.984375,
+                "height": 40,
+                "top": 592,
+                "right": 1007,
+                "bottom": 632,
+                "left": 872.015625
+              },
+              "unobscuredAtNinePoints": false,
+              "styles": [
+                {
+                  "tag": "BUTTON",
+                  "className": "button primary",
+                  "background": "rgb(36, 91, 214)",
+                  "color": "rgb(255, 255, 255)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "dialog-actions",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIALOG",
+                  "className": "confirm-dialog",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "settings-section-body form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "settings-section",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "form-grid",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "main",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "app-shell personal-preferences",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(247, 248, 250)",
+                  "color": "rgb(39, 44, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
