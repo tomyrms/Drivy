@@ -38,6 +38,16 @@ Déploiement demandé et effectué à **23:12 Europe/Zurich** : portail et BFF `
 
 [Preuve, version, retour arrière et override à traiter au prochain déploiement global](web-redesign-deployment-20261013.md). Restent la recette avec une école, le lecteur d’écran, le zoom natif et les essais physiques ; les données métier de production ne servent pas à la recette.
 
+## 13 octobre 2026 — homelab : ouverture des écoles (PR #31) et web enfin à jour
+
+Déployé à la demande du porteur depuis la branche de la PR #31, non fusionnée : release `c5bfb73`, migrations 031 `school_opening` et 032 `school_setup_draft` (32 au total, empreintes vérifiées). Sauvegarde vérifiée de `drivy_refonte` juste avant, sur CT113 (`/root/drivy_refonte-before-c5bfb73…-20261013T194604Z-d376faba5ca1.dump`). Configuration de l’API inchangée : aucun opérateur d’ouverture déclaré (`SCHOOL_OPENING_OPERATORS_JSON` absent), donc personne ne peut encore émettre de lien d’ouverture.
+
+**Le web était figé depuis le 9 octobre** : le réglage systemd `90-brand-web-release.conf` (mise en ligne de la marque) pointait le service web vers `web-releases/b710303`, et les déploiements suivants, dont les textes de l’école (lots 0 et 1), n’avaient mis à jour que l’API. Réglage retiré (copie dans `/root/systemd-retired/` sur CT114) : le web tourne désormais dans `current/apps/web`, vérifié par le répertoire réel du processus. `/app`, `/app/ouvrir`, `/app/operateur`, `/app/gestion` répondent 200, en local et sur le domaine public.
+
+Puis, à la demande du porteur, « Luc auto école » est supprimée pour essayer l’ouverture d’une école de bout en bout (sauvegarde vérifiée de `drivy_refonte` et `drivy_identity` dans `/root/drivy-before-opening-20261013T194941Z/` sur CT113). Les personnes et comptes de connexion restent. Un lien d’ouverture valable sept jours est inséré directement en base, faute d’opérateur déclaré ; le jeton n’est enregistré nulle part dans le dépôt.
+
+IPA correspondante : run 38427200996 (`43d0a3b`, dernier commit iOS de la PR), empreinte vérifiée. **Non exécuté** : parcours connecté sur le homelab après déploiement.
+
 ## 13 octobre 2026 — refonte complète du portail web
 
 La direction **Bureau de précision** est implémentée sur `codex/refonte-portail-web` : navigation stable et sous-pages visibles, séparation école/compte, recherche des paramètres jusqu’au champ, listes élèves/équipe, contexte conservé au retour, résolution des profils incomplets, formulaires et protection des saisies, thèmes Clair/Sombre/Système persistants. Les pages d’entrée, invitations, catalogue, guide et opérateur réutilisent les mêmes fondations. Liens existants et contrats préservés ; aucun changement Apple ni déploiement.
