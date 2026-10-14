@@ -182,9 +182,18 @@ async function formationList(db:PoolClient,schoolId:string){
   WHERE t.school_id=$1 AND t.status IN('ACTIVE','PAUSED') GROUP BY o.category_code`,[schoolId])).rows;
  const categories=[...new Set([...programmes.map(item=>item.categoryCode),...products.flatMap(item=>item.categoryCode?[item.categoryCode]:[]),...extra.map(item=>item.category_code)])].sort((a,b)=>a.localeCompare(b,'fr'));
  const tariffs=products.map(product=>({product,status:tariffStatus(product,terms.get(product.termsVersionId),today)}));
+ const competencies=(await db.query<{id:string;count:string}>('SELECT curriculum_version_id AS id,count(*) FROM drivy.competency_definition WHERE school_id=$1 AND curriculum_version_id=ANY($2::uuid[]) GROUP BY curriculum_version_id',
+  [schoolId,programmes.flatMap(item=>item.curriculumVersionId?[item.curriculumVersionId]:[])])).rows;
  return {today,canConfigureCatalog:await commercialAccess(db,schoolId),categories:categories.map(code=>{
   const own=programmes.filter(item=>item.categoryCode===code),prices=tariffs.filter(item=>item.product.categoryCode===code);
-  return {categoryCode:code,...categoryState(own,prices),programmeCount:own.length,tariffCount:prices.length,activeTrainings:Number(learners.find(item=>item.category_code===code)?.count??0)};
+  // Résumé de lecture : durées habituelles des parcours, leçons proposées (ou annoncées) et taille des programmes actuels.
+  const lessons=prices.filter(item=>item.product.type==='INDIVIDUAL_LESSON'&&['OFFERED','NOT_YET','TERMS_NOT_YET'].includes(item.status))
+   .sort((a,b)=>(a.product.durationMinutes??0)-(b.product.durationMinutes??0)||Number(a.product.unitPriceCents)-Number(b.product.unitPriceCents))
+   .map(item=>({label:item.product.label,durationMinutes:item.product.durationMinutes,unitPriceCents:Number(item.product.unitPriceCents),unitLabel:item.product.unitLabel,upcoming:item.status!=='OFFERED'}));
+  const counts=own.map(item=>Number(competencies.find(row=>row.id===item.curriculumVersionId)?.count??0));
+  return {categoryCode:code,...categoryState(own,prices),programmeCount:own.length,tariffCount:prices.length,activeTrainings:Number(learners.find(item=>item.category_code===code)?.count??0),
+   lessonDurations:[...new Set(own.flatMap(item=>item.defaultDurationMinutes?[item.defaultDurationMinutes]:[]))].sort((a,b)=>a-b),
+   lessonTariffs:lessons.slice(0,20),competencyCounts:counts};
  }),uncategorizedTariffCount:tariffs.filter(item=>item.product.categoryCode===null).length};
 }
 

@@ -29,7 +29,8 @@ const newFormation=(extra:Record<string,unknown>={})=>({operationId:randomUUID()
 describe('lecture agrégée',()=>{
  it('liste des permis, fiche complète et accès réservé à l’administration',async()=>{
   const list=await call('GET','/formations',undefined,null,admin);expect(list.statusCode,list.body).toBe(200);
-  expect(list.json().data.categories).toEqual([{categoryCode:'B',state:'READY',issues:[],programmeCount:1,tariffCount:1,activeTrainings:2}]);
+  expect(list.json().data.categories).toEqual([{categoryCode:'B',state:'READY',issues:[],programmeCount:1,tariffCount:1,activeTrainings:2,lessonDurations:[50],competencyCounts:[2],
+   lessonTariffs:[{label:'Leçon 50 min',durationMinutes:50,unitPriceCents:9000,unitLabel:'leçon',upcoming:false}]}]);
   const data=await sheet('B');
   expect(data).toMatchObject({categoryCode:'B',state:'READY',canConfigureCatalog:true});
   expect(data.programmes).toHaveLength(1);

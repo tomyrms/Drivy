@@ -102,7 +102,10 @@ export function formationFixture({ db, schoolId, uuid, stamp, today, state }: Fi
     if (method === 'GET') {
       if (path === 'formations') return { status: 200, body: envelope({ today, canConfigureCatalog: state !== 'readonly', uncategorizedTariffCount: tariffHeads().filter(item => !item.categoryCode).length,
         categories: categories().map(code => { const own = heads().filter(item => item.categoryCode === code), prices = tariffHeads().filter(item => item.categoryCode === code);
-          return { categoryCode: code, ...categoryState(own, prices), programmeCount: own.length, tariffCount: prices.length, activeTrainings: own.reduce((sum, head) => sum + offerings().filter(item => item.offeringKey === head.offeringKey).reduce((total, item) => total + trainings(item.id), 0), 0) }; }) }) };
+          return { categoryCode: code, ...categoryState(own, prices), programmeCount: own.length, tariffCount: prices.length,
+            lessonDurations: [...new Set(own.map(head => head.defaultDurationMinutes).filter(Boolean))].sort((a, b) => a - b),
+            lessonTariffs: prices.filter(row => row.type === 'INDIVIDUAL_LESSON' && ['OFFERED', 'NOT_YET'].includes(status(row))).map(row => ({ label: row.label, durationMinutes: row.durationMinutes, unitPriceCents: row.unitPriceCents, unitLabel: row.unitLabel, upcoming: status(row) !== 'OFFERED' })),
+            competencyCounts: own.map(head => curriculum(head.curriculumVersionId)?.competencies.length ?? 0), activeTrainings: own.reduce((sum, head) => sum + offerings().filter(item => item.offeringKey === head.offeringKey).reduce((total, item) => total + trainings(item.id), 0), 0) }; }) }) };
       if (path === 'formations/sheet') { const value = sheet(url.searchParams.get('category') ?? ''); return value ? { status: 200, body: envelope(value) } : { status: 404, body: { code: 'NOT_FOUND' } }; }
       if (path === 'formations/uncategorized-tariffs') return { status: 200, body: envelope({ today, canConfigureCatalog: state !== 'readonly', tariffs: tariffHeads().filter(item => !item.categoryCode).map(tariff) }) };
       if (path === 'formations/terms') return { status: 200, body: envelope({ truncated: false, items: terms().map(item => ({ ...termsOf(item.id)!, tariffs: new Set(products().filter(row => row.termsVersionId === item.id).map(row => row.productKey)).size,

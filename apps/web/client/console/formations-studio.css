@@ -5,6 +5,11 @@
 
 /* Liste des permis */
 .formation-studio .formation-table th[scope='row'] { font-weight: 400; }
+.formation-studio .formation-table :is(th, td) { vertical-align: top; padding-block: 1rem; }
+.formation-studio .formation-table th[scope='row'] .row-link { min-block-size: 0; }
+.formation-studio .formation-lesson-prices { margin: 0; padding: 0; list-style: none; display: grid; gap: .25rem; }
+.formation-studio .formation-lesson-prices li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; }
+.formation-studio .lesson-price { font-weight: 550; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .formation-studio .formation-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; }
 .formation-studio .row-link { color: var(--text); font-weight: 550; text-decoration: none; min-block-size: 2.25rem; display: inline-flex; align-items: center; }
 .formation-studio .row-link:hover { text-decoration: underline; text-underline-offset: .2em; }
@@ -100,6 +105,8 @@
 .formation-studio .wizard-review { display: grid; gap: 1rem; }
 
 @container workspace (max-width: 40rem) {
+  .formation-studio .formation-table td[data-label] { grid-template-columns: 9.5rem minmax(0, 1fr); text-align: start; padding-block: .25rem; }
+  .formation-studio .formation-table tbody th { padding-block: .25rem .5rem; }
   .formation-studio .formation-tabs ul { flex-wrap: wrap; overflow-x: visible; column-gap: 1.25rem; }
   .formation-studio .formation-tabs a { white-space: normal; }
   .formation-studio .formation-header .section-head-actions { justify-content: flex-start; inline-size: 100%; }

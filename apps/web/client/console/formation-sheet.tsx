@@ -47,15 +47,24 @@ export function FormationList() {
           action={data.canConfigureCatalog ? <ConsoleLink section="formations" query={{ view: 'nouvelle' }} className="button secondary">Ajouter une formation</ConsoleLink> : undefined} />
         : <table className="data-table record-table formation-table">
           <caption className="visually-hidden">Permis préparés par l’école</caption>
-          <thead><tr><th scope="col">Permis</th><th scope="col" className="numeric">Tarifs</th><th scope="col" className="numeric">Élèves en formation</th></tr></thead>
+          <thead><tr><th scope="col">Permis</th><th scope="col">Durée habituelle</th><th scope="col">Prix d’une leçon</th>
+            <th scope="col" className="numeric">Compétences</th><th scope="col" className="numeric">Tarifs</th><th scope="col" className="numeric">Élèves en formation</th></tr></thead>
           <tbody>{data.categories.map(item => {
             const badge = categoryBadge(item.state);
+            const lessons = item.lessonTariffs.slice(0, 3);
             return <tr key={item.categoryCode}>
               <th scope="row"><div className="formation-row-title">
                 <ConsoleLink section="formations" query={{ category: item.categoryCode }} className="row-link">Permis {item.categoryCode}</ConsoleLink>
                 {item.programmeCount > 1 && <span className="row-meta">{item.programmeCount} parcours</span>}
                 {badge && <StatusBadge tone={badge.tone} symbol={badge.tone === 'warning' ? 'alert' : 'dot'}>{badge.label}</StatusBadge>}
               </div></th>
+              <td data-label="Durée habituelle">{item.lessonDurations.length ? item.lessonDurations.map(formatDuration).join(' · ') : <span className="secondary-text">—</span>}</td>
+              <td data-label="Prix d’une leçon">{lessons.length ? <ul className="formation-lesson-prices">{lessons.map((lesson, index) => <li key={index}>
+                <span className="lesson-price">{formatCents(lesson.unitPriceCents)}</span>
+                <span className="row-meta">{lesson.durationMinutes ? formatDuration(lesson.durationMinutes) : lesson.label}{lesson.upcoming ? ' · à venir' : ''}</span>
+              </li>)}{item.lessonTariffs.length > lessons.length && <li className="row-meta">+ {item.lessonTariffs.length - lessons.length} autre{item.lessonTariffs.length - lessons.length > 1 ? 's' : ''}</li>}</ul>
+                : <span className="secondary-text">Aucun tarif de leçon</span>}</td>
+              <td className="numeric" data-label="Compétences">{item.competencyCounts.length ? item.competencyCounts.join(' · ') : '—'}</td>
               <td className="numeric" data-label="Tarifs">{item.tariffCount}</td>
               <td className="numeric" data-label="Élèves en formation">{item.activeTrainings}</td>
             </tr>;

@@ -13,7 +13,10 @@ const categoryState = { state: z.enum(['READY', 'INCOMPLETE', 'NOT_OFFERED']), i
 
 export const formationListSchema = z.object({
   today: civil, canConfigureCatalog: z.boolean(), uncategorizedTariffCount: count,
-  categories: z.array(z.object({ categoryCode: z.string().min(1).max(30), ...categoryState, programmeCount: count, tariffCount: count, activeTrainings: count })).max(200),
+  categories: z.array(z.object({ categoryCode: z.string().min(1).max(30), ...categoryState, programmeCount: count, tariffCount: count, activeTrainings: count,
+    lessonDurations: z.array(z.number().int().min(1).max(480)).max(50),
+    lessonTariffs: z.array(z.object({ label: z.string().max(200), durationMinutes: z.number().int().nullable(), unitPriceCents: z.number().int().min(0), unitLabel: z.string().max(100), upcoming: z.boolean() })).max(20),
+    competencyCounts: z.array(count).max(50) })).max(200),
 });
 export const competencySchema = z.object({ id, key: z.string().min(1).max(80), label: z.string().max(200), description: z.string().max(4000), sortOrder: z.number().int() });
 export const curriculumContentSchema = z.object({ id, revision: z.number().int().positive(), approved: z.boolean(), categoryCode: z.string(), createdAt: timestamp, competencies: z.array(competencySchema).max(200) });
