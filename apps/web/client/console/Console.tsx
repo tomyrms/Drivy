@@ -14,14 +14,13 @@ import { OverviewSection } from './overview';
 import { ConfigurationSection } from './configuration';
 import { ProfileFieldsSection } from './profile-fields';
 import { PrivacySection } from './privacy';
-import { CurriculaSection, OfferingsSection, ProceduresSection } from './catalog';
-import { ProductsSection, TermsSection } from './commerce';
 import { InvitationsSection, TeamSection } from './people';
 import { LearnersSection } from './learners';
 import { AvailabilitySection } from './availability';
 import { AgendaSection } from './agenda';
 import { TripsSection } from './trips';
 import { FormationsSection } from './formations';
+import { LegacyReferenceRoute, TermsArchiveSection, UncategorizedTariffsSection } from './formation-references';
 import { ObservationThemesSection } from './observation-themes';
 import { isLocalItemCurrent, localNavigationQuery, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
@@ -204,16 +203,23 @@ export function ManagementConsole() {
     csrf: () => csrf.current,
     refreshCsrf: async () => { const next = await request('session', sessionSchema); csrf.current = next.csrfToken; return next.csrfToken; },
     routeQuery: route.query,
-    setRouteQuery: (query: NavigationQuery, replace = false) => {
+    setRouteQuery: (query: NavigationQuery, replace = false, keepForms = false) => {
       const path = consolePath(state.membership.schoolId, route.section, query);
       if (`${window.location.pathname}${window.location.search}` === path) return;
       const apply = () => {
         if (replace) window.history.replaceState({ drivyIndex: historyIndex.current }, '', path); else pushPath(path);
         setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
       };
-      if (replace) apply(); else proceedNavigation(apply);
+      // keepForms : la section reste montée et garde ses saisies (rubriques d'une même fiche) ; aucune perte, donc aucune question.
+      if (replace || keepForms) apply(); else proceedNavigation(apply);
     },
-    navigate: (section: SectionKey, query: NavigationQuery = {}) => {
+    navigate: (section: SectionKey, query: NavigationQuery = {}, options: { replace?: boolean } = {}) => {
+      // Redirection d'une ancienne adresse : elle remplace l'entrée d'historique, sans saisie à protéger.
+      if (options.replace) {
+        window.history.replaceState({ drivyIndex: historyIndex.current }, '', consolePath(state.membership.schoolId, section, query));
+        setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
+        return;
+      }
       proceedNavigation(() => {
         pushPath(consolePath(state.membership.schoolId, section, query));
         setRoute(parseConsoleRoute(window.location.pathname, window.location.search));
@@ -348,12 +354,11 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'configuration': return <ConfigurationSection />;
     case 'confidentialite': return <PrivacySection />;
     case 'champs-profil': return <ProfileFieldsSection />;
-    case 'offres': return <OfferingsSection />;
     case 'formations': return <FormationsSection />;
-    case 'referentiels': return <CurriculaSection />;
-    case 'procedures': return <ProceduresSection />;
-    case 'prestations': return <ProductsSection />;
-    case 'conditions': return <TermsSection />;
+    // Anciennes adresses du catalogue : retrouvent la version désignée dans la fiche du permis.
+    case 'offres': case 'referentiels': case 'procedures': return <LegacyReferenceRoute section={section} />;
+    case 'prestations': return <UncategorizedTariffsSection />;
+    case 'conditions': return <TermsArchiveSection />;
     case 'equipe': return <TeamSection />;
     case 'invitations': return <InvitationsSection />;
     case 'eleves': return <LearnersSection />;

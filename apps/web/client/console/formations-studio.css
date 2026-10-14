@@ -1,0 +1,116 @@
+/* Formations et tarifs : une fiche par permis, lecture puis édition sur place, au rythme Studio (tokens partagés). */
+.formation-studio { --settings-label-width: 34%; }
+.formation-studio .formation-back { margin-block-end: -.5rem; }
+.formation-studio .formation-back .button { padding-inline: .5rem .75rem; margin-inline-start: -.5rem; }
+
+/* Liste des permis */
+.formation-studio .formation-table th[scope='row'] { font-weight: 400; }
+.formation-studio .formation-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; }
+.formation-studio .row-link { color: var(--text); font-weight: 550; text-decoration: none; min-block-size: 2.25rem; display: inline-flex; align-items: center; }
+.formation-studio .row-link:hover { text-decoration: underline; text-underline-offset: .2em; }
+.formation-studio .formation-other-link { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .25rem 1rem; padding-block-start: 1.5rem; border-block-start: 1px solid var(--border); }
+.formation-studio .formation-other-link > .row-meta { grid-row: 2; }
+.formation-studio .formation-other-link > .button { grid-row: 1 / span 2; grid-column: 2; }
+
+/* En-tête de fiche et rubriques */
+.formation-studio .formation-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem 1.5rem; flex-wrap: wrap; }
+.formation-studio .formation-title { display: grid; gap: .375rem; justify-items: start; min-inline-size: 0; }
+.formation-studio .formation-title h1 { font: var(--type-screen-title); letter-spacing: -.01em; }
+.formation-studio .formation-title h1:focus { outline: none; }
+.formation-studio .formation-title h1:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: .25rem; }
+.formation-studio .formation-kicker { color: var(--muted); }
+.formation-studio .formation-title .context { margin: 0; color: var(--muted); font: var(--type-subheadline); }
+.formation-studio > * { min-inline-size: 0; }
+.formation-studio .formation-tabs { border-block-end: 1px solid var(--border); min-inline-size: 0; max-inline-size: 100%; }
+.formation-studio .formation-tabs ul { display: flex; gap: .25rem 1.5rem; margin: 0; padding: 0; list-style: none; overflow-x: auto; scrollbar-width: thin; }
+.formation-studio .formation-tabs a { position: relative; display: inline-flex; align-items: center; gap: .375rem; min-block-size: 2.75rem; color: var(--muted); font: 500 .9375rem / 1.5 var(--font); text-decoration: none; white-space: nowrap; }
+.formation-studio .formation-tabs a:hover { color: var(--text); }
+.formation-studio .formation-tabs a[aria-current='page'] { color: var(--text); }
+.formation-studio .formation-tabs a[aria-current='page']::after { content: ''; position: absolute; inset-inline: 0; inset-block-end: -1px; block-size: 2px; background: var(--accent-fill); border-radius: 1px; }
+.formation-studio .formation-tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: .25rem; }
+.formation-studio .formation-tab-dot { display: inline-flex; color: var(--accent); }
+.formation-studio .formation-tab-dot .symbol svg { inline-size: .625rem; block-size: .625rem; fill: currentColor; }
+.formation-studio .plain-list { margin: 0; padding: 0; list-style: none; display: grid; gap: .375rem; }
+
+/* Parcours */
+.formation-studio .programme-switch { display: grid; gap: .5rem; max-inline-size: 44rem; }
+.formation-studio .formation-scope { margin: 0; padding: .625rem .875rem; border-radius: var(--radius-field); background: var(--surface-inset); font: var(--type-subheadline); }
+.formation-studio .formation-more { margin: 0; }
+
+/* Lecture */
+.formation-studio .competency-read { margin: 0; padding: 0; list-style: none; counter-reset: competency; border-block-start: 1px solid var(--border); }
+.formation-studio .competency-read > li { counter-increment: competency; display: grid; grid-template-columns: 2rem minmax(0, 1fr); column-gap: .75rem; padding-block: 1rem; border-block-end: 1px solid var(--border); }
+.formation-studio .competency-read > li::before { content: counter(competency); grid-row: 1 / span 2; color: var(--muted); font: 500 .875rem / 1.6 var(--font); font-variant-numeric: tabular-nums; }
+.formation-studio .competency-read .row-title { font: 500 .9375rem / 1.5 var(--font); }
+.formation-studio .competency-read .row-meta { margin-block-start: .125rem; max-inline-size: 72ch; }
+.formation-studio .rules-read { display: grid; gap: 1.5rem; }
+.formation-studio .rules-read h3, .formation-studio .reference-content h3, .formation-studio .history-block h3 { margin: 0 0 .5rem; font: 500 1rem / 1.5 var(--font); }
+.formation-studio .policy-copy { white-space: pre-line; max-inline-size: 72ch; margin: 0; }
+.formation-studio .empty-inline { color: var(--muted); }
+
+/* Édition */
+.formation-studio .formation-editor { max-inline-size: 40rem; }
+.formation-studio .formation-editor.wide { max-inline-size: 48rem; }
+.formation-studio .formation-save-bar { display: grid; gap: .5rem; }
+.formation-studio .formation-save-bar .save-effect { margin: 0; color: var(--muted); max-inline-size: 60ch; }
+.formation-studio .field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.formation-studio .competency-editor { display: grid; gap: 1rem; }
+.formation-studio .competency-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; border-block-start: 1px solid var(--border); }
+.formation-studio .competency-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .75rem; align-items: start; padding-block: 1.25rem; border-block-end: 1px solid var(--border); }
+.formation-studio .competency-index { padding-block-start: 2.25rem; color: var(--muted); font: 500 .875rem / 1.5 var(--font); font-variant-numeric: tabular-nums; }
+.formation-studio .competency-fields { display: grid; gap: .75rem; min-inline-size: 0; }
+.formation-studio .competency-actions { display: flex; gap: .25rem; padding-block-start: 1.75rem; }
+.formation-studio .button.icon-only { inline-size: 2.5rem; padding-inline: 0; justify-content: center; }
+.formation-studio .rules-editor { display: grid; gap: 1.25rem; }
+.formation-studio .rules-field { display: grid; gap: .25rem; }
+.formation-studio .example-text { display: flex; }
+.formation-studio .disclosure.compact > summary { min-block-size: 2.5rem; align-content: center; font: 500 .875rem / 1.5 var(--font); color: var(--text); cursor: pointer; }
+.formation-studio .disclosure.compact[open] > summary { margin-block-end: .5rem; }
+.formation-studio .editor-title { margin: 0; font: 500 1rem / 1.5 var(--font); }
+.formation-studio .tariff-form { padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); display: grid; gap: 1.25rem; max-inline-size: 44rem; }
+
+/* Tarifs */
+.formation-studio .tariff-list { margin: 0; padding: 0; list-style: none; border-block-start: 1px solid var(--border); }
+.formation-studio .tariff-list > li { padding-block: 1rem .5rem; border-block-end: 1px solid var(--border); }
+.formation-studio .tariff-list > li.selected { box-shadow: inset 3px 0 0 var(--accent-fill); padding-inline-start: .875rem; }
+.formation-studio .tariff-main { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .5rem 1.25rem; align-items: start; }
+.formation-studio .tariff-main .row-title { font: 500 .9375rem / 1.5 var(--font); }
+.formation-studio .tariff-main .row-text { display: grid; gap: .25rem; justify-items: start; }
+.formation-studio .tariff-main .price { margin: 0; font: 550 1.0625rem / 1.4 var(--font); text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.formation-studio .tariff-main .price .row-meta { font-weight: 400; }
+.formation-studio .tariff-terms { margin-block-start: .25rem; border: 0; padding: 0; background: none; }
+.formation-studio .tariff-terms > summary { color: var(--muted); padding-inline: 0; }
+
+/* Historique et références */
+.formation-studio .history-block { display: grid; gap: .5rem; }
+.formation-studio .history-block + .history-block { margin-block-start: 1.5rem; }
+.formation-studio .history-table th[scope='row'] { font-weight: 400; }
+.formation-studio tr.selected > * { background: var(--accent-soft); }
+.formation-studio .reference-content { display: grid; gap: 1rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.formation-studio .reference-content .settings-values { border-block-start: 1px solid var(--border); }
+.formation-studio .reference-usage { display: grid; gap: .25rem; }
+
+/* Assistant */
+.formation-studio .wizard-steps { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0; padding: 0 0 1rem; list-style: none; border-block-end: 1px solid var(--border); color: var(--muted); font: var(--type-subheadline); }
+.formation-studio .wizard-steps li { display: inline-flex; align-items: center; gap: .5rem; }
+.formation-studio .wizard-step-number { display: inline-grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; border-radius: 999px; border: 1px solid var(--control-border); font: 500 .75rem / 1 var(--font); }
+.formation-studio .wizard-steps li[aria-current='step'] { color: var(--text); font-weight: 550; }
+.formation-studio .wizard-steps li[aria-current='step'] .wizard-step-number { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); }
+.formation-studio .wizard-steps li.done .wizard-step-number { border-color: var(--accent); color: var(--accent); }
+.formation-studio .wizard-review { display: grid; gap: 1rem; }
+
+@container workspace (max-width: 40rem) {
+  .formation-studio .formation-tabs ul { flex-wrap: wrap; overflow-x: visible; column-gap: 1.25rem; }
+  .formation-studio .formation-tabs a { white-space: normal; }
+  .formation-studio .formation-header .section-head-actions { justify-content: flex-start; inline-size: 100%; }
+  .formation-studio .formation-header .section-head-actions .button { inline-size: auto; margin-inline-start: -.5rem; }
+  .formation-studio .field-pair { grid-template-columns: minmax(0, 1fr); }
+  .formation-studio .competency-row { grid-template-columns: minmax(0, 1fr); gap: .5rem; }
+  .formation-studio .competency-index { display: none; }
+  .formation-studio .competency-actions { padding-block-start: 0; flex-wrap: wrap; }
+  .formation-studio .tariff-main { grid-template-columns: minmax(0, 1fr) auto; }
+  .formation-studio .tariff-main > .button { grid-column: 1 / -1; justify-self: start; }
+  .formation-studio .formation-other-link { grid-template-columns: minmax(0, 1fr); }
+  .formation-studio .formation-other-link > .button { grid-row: auto; grid-column: auto; justify-self: start; }
+  .formation-studio .tariff-form, .formation-studio .reference-content { padding: 1rem; }
+}

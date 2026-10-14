@@ -21,12 +21,13 @@ export interface ConsoleContextValue {
   reloadSchool: () => Promise<void>;
   csrf: () => string;
   refreshCsrf: () => Promise<string>;
-  navigate: (section: SectionKey, query?: NavigationQuery) => void;
+  navigate: (section: SectionKey, query?: NavigationQuery, options?: { replace?: boolean }) => void;
   setNavigationGuard?: (guard: ((proceed: () => void) => void) | null) => void;
   registerUnsavedChanges?: (id: string) => () => void;
   confirmNavigation?: (proceed: () => void) => void;
   routeQuery?: NavigationQuery;
-  setRouteQuery?: (query: NavigationQuery, replace?: boolean) => void;
+  /** `keepForms` : navigation interne à une section qui reste montée avec ses formulaires (rubriques d'une fiche). */
+  setRouteQuery?: (query: NavigationQuery, replace?: boolean, keepForms?: boolean) => void;
   /** Unsent catalogue drafts, memory only, renewed with the authenticated school/access scope. */
   drafts?: Map<string, unknown>;
   /** Sign in again with the same account; `reauthenticate` forces the identity provider to ask for the password. */

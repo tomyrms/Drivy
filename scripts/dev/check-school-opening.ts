@@ -17,6 +17,7 @@ import { createIdentityProvider } from '../../apps/web/server/oidc.js';
 import { SessionStore } from '../../apps/web/server/session.js';
 import { parseMetadata } from '../../apps/web/client/command-core.js';
 import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
+import { verifySchoolFormations } from './check-school-formations.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -346,57 +347,6 @@ async function main() {
     await page.getByRole('heading',{name:'Préparer une formation',exact:true}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Le guide de formation mobile ne déborde pas horizontalement');
     await page.screenshot({path:resolve(artifactDirectory,'05-formation-mobile-synthetic.png'),fullPage:true});
-    stage='ajout guidé d’un tarif à la formation existante';await page.setViewportSize({width:1440,height:1100});
-    const catalogueBefore=(await administration.query(`SELECT
-      (SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1) AS products,
-      (SELECT count(*)::int FROM drivy.offering_version WHERE school_id=$1) AS offerings`,[school.id])).rows[0];
-    await page.getByText('Ajouter un tarif à une formation existante',{exact:true}).click();
-    await page.getByLabel('Formation',{exact:true}).click();
-    await page.getByRole('combobox',{name:'Rechercher : Formation',exact:true}).fill('Permis B');
-    await page.getByRole('option',{name:'Permis B · 50 min',exact:true}).click();
-    await page.getByRole('button',{name:'Préparer ce tarif',exact:true}).click();
-    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vos tarifs',exact:true}).waitFor();
-    await page.getByLabel('Prix (CHF)',{exact:true}).fill('105');
-    await page.getByLabel('Conditions du tarif',{exact:true}).fill('Tarif supplémentaire synthétique de 105 CHF pour la recette de reprise.');
-    await page.getByLabel('Proposer cette formation et ce tarif après confirmation',{exact:true}).check();
-    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vérifier la formation',exact:true}).waitFor();
-    const catalogueReview=page.getByLabel('J’ai relu les formations et tarifs sélectionnés. Je confirme leur mise à disposition.',{exact:true});
-    assert(!(await catalogueReview.isChecked()),'Le tarif supplémentaire exige sa propre confirmation et ne réactive pas l’école');
-    const catalogueDraft=z.object({data:z.object({version:z.number().int()})}).parse(await (await consumerContext.request.get(draftEndpoint)).json()).data;
-    const completeEndpoint=`${draftEndpoint}/complete`;let applyWrites=0,lostApplyOperation='',lostApplyHTTPStatus=0;
-    await page.route(completeEndpoint,async route=>{
-      if(route.request().method()!=='POST'){await route.continue();return;}
-      applyWrites++;if(applyWrites!==1){await route.continue();return;}
-      lostApplyOperation=route.request().headers()['idempotency-key']??'';
-      const committed=await route.fetch();lostApplyHTTPStatus=committed.status();await route.abort('failed');
-    });
-    const catalogueDocumentOrigin=await page.evaluate(()=>performance.timeOrigin);
-    stage='application catalogue engagée puis réponse navigateur perdue';await catalogueReview.check();
-    await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).click();
-    await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();
-    assert(lostApplyHTTPStatus===200&&z.uuid().safeParse(lostApplyOperation).success,'L’ajout du tarif est durable avant la perte de la réponse d’application');
-    assert(await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).isDisabled(),'La relecture du catalogue bloque une deuxième application au résultat inconnu');
-    stage='récupération AP72 de l’application catalogue sans recharger la page';
-    const applyRecoveryResponse=page.waitForResponse(response=>response.request().method()==='GET'&&new URL(response.url()).pathname===`/app/bff/schools/${school.id}/operations/${lostApplyOperation}`);
-    await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).click();const recoveredApply=await applyRecoveryResponse;
-    const applyReceipt=z.object({data:z.object({operationId:z.uuid(),commandType:z.literal('APPLY_SCHOOL_SETUP_DRAFT'),resourceType:z.literal('SchoolSetupDraft'),
-      resourceId:z.uuid(),resourceVersion:z.number().int(),committedAt:z.iso.datetime({offset:true})})}).parse(await recoveredApply.json()).data;
-    assert(recoveredApply.ok()&&applyReceipt.operationId===lostApplyOperation&&applyReceipt.resourceId===school.id&&applyReceipt.resourceVersion===catalogueDraft.version+1,
-      'AP72 confirme la même application du catalogue et sa seule version supplémentaire');
-    await page.getByRole('heading',{name:'Formations et tarifs',exact:true}).waitFor();
-    assert(new URL(page.url()).pathname===`/app/gestion/${school.id}/formations`&&await page.evaluate(()=>performance.timeOrigin)===catalogueDocumentOrigin,
-      'La confirmation AP72 quitte le guide catalogue et revient aux formations sans rechargement');
-    const catalogueAfter=(await administration.query(`SELECT
-      (SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1) AS products,
-      (SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1 AND unit_price_cents=10500) AS added,
-      (SELECT count(*)::int FROM drivy.offering_version WHERE school_id=$1) AS offerings,
-      (SELECT count(*)::int FROM drivy.operation WHERE school_id=$1 AND operation_id=$2 AND command_type='APPLY_SCHOOL_SETUP_DRAFT') AS operations`,[school.id,lostApplyOperation])).rows[0];
-    assert(applyWrites===1&&catalogueAfter.products===catalogueBefore.products+1&&catalogueAfter.added===1&&catalogueAfter.offerings===catalogueBefore.offerings&&catalogueAfter.operations===1,
-      'La reprise crée exactement un tarif supplémentaire, sans nouvelle formation ni seconde commande');
-    await page.unroute(completeEndpoint);
-    await page.locator('.formation-prices').getByText(/105[.,]00\s*CHF/).waitFor();
-    assert(await page.locator('.formation-prices > li').count()===catalogueBefore.products+1,'Les formations affichent le nouveau tarif après la confirmation du reçu');
-    await page.screenshot({path:resolve(artifactDirectory,'07-catalogue-reprise-synthetic.png'),fullPage:true});
     const browserStorage=await page.evaluate(()=>({localKeys:localStorage.length,sessionEntries:Object.keys(sessionStorage).map(key=>[key,sessionStorage.getItem(key)!])}));
     assert(browserStorage.localKeys===0&&browserStorage.sessionEntries.every(([key,value])=>{
       if(key!=='drivy-gestion-demandes-v1')return false;const metadata:unknown=JSON.parse(value!);
@@ -457,6 +407,8 @@ async function main() {
         const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
         if(!token)throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');return token;
       },assert,setStage:value=>{stage=value;},artifactDirectory});
+    // Formations et tarifs après une première leçon réelle : l'inscription et la réservation existantes doivent rester intactes.
+    await verifySchoolFormations({page,consumerContext,schoolId:school.id,origin,administration,artifactDirectory,assert,setStage:value=>{stage=value;}});
     stage='récupération du compte OIDC par courrier';
     const recoveryContext=await browser.newContext({locale:'fr-CH'});recoveryContext.setDefaultTimeout(20_000);
     await recoveryContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
@@ -489,7 +441,9 @@ async function main() {
     if(temporary){const absolute=resolve(temporary),prefix=resolve(tmpdir())+sep+'drivy-opening-e2e-';if(absolute.startsWith(prefix))await rm(absolute,{recursive:true,force:true});}
   }
 }
-main().catch(async()=>{
+main().catch(async(error:unknown)=>{
   await mkdir(artifactDirectory,{recursive:true});await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'FAILED',stage,passedChecks:checks,checkedAt:new Date().toISOString()},null,2));
   console.error(`Recette ouverture école interrompue : ${stage}. Aucun journal réseau ni identifiant de connexion enregistré.`);process.exitCode=1;
+  // Diagnostic local explicite : seulement la première ligne de l'erreur (jamais en CI, jamais dans un artefact).
+  if(process.env.DRIVY_E2E_DEBUG==='1'&&!process.env.CI)console.error(String(error instanceof Error?error.message:error).split('\n')[0]?.slice(0,300));
 });

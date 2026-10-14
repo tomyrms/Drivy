@@ -331,42 +331,77 @@ try {
       await h.page.getByRole('heading', { name: 'Éloïse Müller', exact: true }).waitFor();
       assert.match(await h.page.locator('main').innerText(), /indisponible|impossible|non consultable|non disponibles/i);
     });
-    await scenario('Catalogue : recherche par compétence, conservation au retour et validation par Entrée', 'page=curricula&shell=1', async h => {
-      const search = h.page.getByLabel('Rechercher un référentiel', { exact: true });
-      await search.fill('equilibre'); assert.equal(await h.page.locator('.data-table tbody tr').count(), 1);
-      await h.page.getByRole('button', { name: 'Catégorie A', exact: true }).click();
-      await h.page.getByRole('heading', { name: 'Catégorie A', exact: true, level: 1 }).waitFor();
-      await h.page.getByText('Révision 1', { exact: true }).waitFor();
-      await h.page.goBack(); await settle(h.page); assert.equal(await search.inputValue(), 'equilibre');
-      await h.page.getByRole('button', { name: 'Effacer la recherche', exact: true }).click(); assert.equal(await h.page.locator('.data-table tbody tr').count(), 2);
-      await h.page.getByRole('button', { name: 'Nouveau référentiel', exact: true }).click();
-      await h.page.getByLabel('Catégorie', { exact: true }).fill('BE'); await h.page.getByLabel('Catégorie', { exact: true }).press('Enter');
+    await scenario('Formations : Permis B depuis la liste, rubriques adressables, précédent et suivant', 'page=formations&shell=1', async h => {
+      await h.page.getByRole('link', { name: 'Permis B', exact: true }).click();
+      await h.page.getByRole('heading', { name: 'Permis B', level: 1 }).waitFor();
+      const tabs = h.page.getByRole('navigation', { name: 'Rubriques du permis B', exact: true });
+      await tabs.getByRole('link', { name: 'Tarifs', exact: true }).click(); await h.page.getByRole('heading', { name: 'Tarifs', exact: true }).waitFor();
+      assert.equal(new URL(h.page.url()).searchParams.get('view'), 'tarifs');
+      await h.page.goBack(); await h.page.getByRole('heading', { name: 'Général', exact: true }).waitFor();
+      await h.page.goForward(); await h.page.getByRole('heading', { name: 'Tarifs', exact: true }).waitFor();
+      await h.reload(); await h.page.getByRole('heading', { name: 'Tarifs', exact: true }).waitFor();
+      assert.equal(await h.page.evaluate(() => window.__log.length), 0);
+    });
+    await scenario('Formations : compétences modifiées sur place, saisie conservée entre rubriques, une seule commande', 'page=formation&view=competences&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Modifier les compétences', exact: true }).click();
+      await h.page.getByRole('button', { name: 'Ajouter une compétence', exact: true }).click();
+      const added = h.page.locator('.competency-row').nth(2);
+      await h.page.getByRole('button', { name: 'Enregistrer les compétences', exact: true }).click();
       await h.page.waitForFunction(() => document.activeElement?.getAttribute('aria-invalid') === 'true');
-      const label = h.page.getByLabel('Libellé', { exact: true });
-      assert(await label.evaluate(input => input === document.activeElement && input.getAttribute('aria-invalid') === 'true'));
-      assert.equal(await h.page.evaluate(() => window.__log.length), 0); assert.equal(await h.page.getByRole('dialog').count(), 0);
+      assert.equal(await h.page.evaluate(() => window.__log.length), 0);
+      await added.getByRole('textbox').first().fill('Conduite de nuit'); await added.locator('textarea').fill('Adapter sa conduite.');
+      const up = h.page.getByRole('button', { name: 'Monter Conduite de nuit', exact: true }); await up.focus(); await h.page.keyboard.press('Enter');
+      assert.equal(await h.page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Monter Conduite de nuit');
+      const tabs = h.page.getByRole('navigation', { name: 'Rubriques du permis B', exact: true });
+      await tabs.getByRole('link', { name: 'Tarifs', exact: true }).click(); await tabs.getByRole('link', { name: /Compétences.*modification en cours/ }).click();
+      assert.equal(await h.page.locator('.competency-row').nth(1).getByRole('textbox').first().inputValue(), 'Conduite de nuit');
+      assert.equal(await h.page.evaluate(() => Object.keys(localStorage).every(key => key === 'drivy.web.theme')), true);
+      await h.page.getByRole('button', { name: 'Enregistrer les compétences', exact: true }).click();
+      await h.page.getByText('Les compétences sont enregistrées pour les nouvelles inscriptions.', { exact: true }).waitFor();
+      const writes = await h.page.evaluate(() => window.__log.filter(line => line.startsWith('POST')));
+      assert.equal(writes.length, 1); assert.match(writes[0], /^POST formations\/programmes /);
+      await h.page.getByText('Conduite de nuit', { exact: true }).waitFor();
     });
-    await scenario('Catalogue : conditions valides ouvrent la relecture par Entrée sans écriture anticipée', 'page=terms&shell=1', async h => {
-      await h.page.getByRole('button', { name: 'Nouvelles conditions', exact: true }).click();
-      await h.page.getByLabel('Libellé', { exact: true }).fill('Conditions synthétiques de recette');
-      await h.page.getByLabel('Texte des conditions', { exact: true }).fill('Texte local utilisé pour vérifier la relecture avant confirmation.');
-      await h.page.getByLabel('Valables dès le', { exact: true }).fill('2026-10-13');
-      await h.page.getByLabel('Libellé', { exact: true }).press('Enter');
-      await h.page.getByRole('dialog').waitFor(); assert.equal(await h.page.evaluate(() => window.__log.length), 0);
-      assert.equal(await h.page.getByRole('dialog').getByRole('checkbox').isChecked(), false);
+    await scenario('Formations : tarif ajouté depuis la fiche, prix absent refusé puis zéro accepté', 'page=formation&view=tarifs&shell=1', async h => {
+      await h.page.getByRole('button', { name: 'Ajouter un tarif', exact: true }).click();
+      await h.page.getByLabel('Nom du tarif', { exact: true }).fill('Leçon d’essai offerte');
+      await h.page.getByRole('button', { name: 'Ajouter le tarif', exact: true }).click();
+      await h.page.waitForFunction(() => document.activeElement?.getAttribute('aria-invalid') === 'true');
+      assert.equal(await h.page.getByLabel('Prix (CHF)', { exact: true }).getAttribute('aria-invalid'), 'true');
+      assert.equal(await h.page.evaluate(() => window.__log.length), 0);
+      await h.page.getByLabel('Prix (CHF)', { exact: true }).fill('0');
+      await h.page.getByRole('button', { name: 'Ajouter le tarif', exact: true }).click();
+      await h.page.getByText('Le tarif est ajouté.', { exact: true }).waitFor();
+      const write = await h.page.evaluate(() => window.__log.find(line => line.startsWith('POST formations/tariffs')));
+      assert.match(write, /"priceCents":0/); assert.match(write, /"categoryCode":"B"/);
+      assert.equal(await h.page.evaluate(() => window.__log.some(line => line.includes('setup-draft'))), false);
     });
-    await scenario('Catalogue : la barre d’enregistrement ne masque aucun champ parcouru au clavier', 'page=curricula&shell=1', async h => {
-      await h.page.getByRole('button', { name: 'Nouveau référentiel', exact: true }).click();
-      for (const viewport of [{ width: 1440, height: 1000 }, { width: 1280, height: 720 }, { width: 720, height: 500 }]) {
-        await h.page.setViewportSize(viewport); await h.page.getByLabel('Catégorie', { exact: true }).focus();
-        for (let index = 0; index < 7; index++) {
-          assert(await h.page.evaluate(() => {
-            const active = document.activeElement, rect = active.getBoundingClientRect(), bar = document.querySelector('.editor-save-bar').getBoundingClientRect();
-            return rect.top >= 0 && rect.bottom <= innerHeight && !(rect.left < bar.right && rect.right > bar.left && rect.top < bar.bottom && rect.bottom > bar.top);
-          }), `Champ focalisé visible à ${viewport.width}×${viewport.height}`);
-          await h.page.keyboard.press('Tab');
-        }
-      }
+    await scenario('Formations : conflit explicite sans perte de saisie', 'page=formation&view=tarifs&shell=1&state=conflict', async h => {
+      await h.page.getByRole('button', { name: /^Modifier / }).first().click();
+      await h.page.getByLabel('Prix (CHF)', { exact: true }).fill('111');
+      await h.page.getByRole('button', { name: 'Enregistrer le tarif', exact: true }).click();
+      await h.page.getByText(/Ce tarif a été modifié entre-temps/).first().waitFor();
+      assert.equal(await h.page.getByLabel('Prix (CHF)', { exact: true }).inputValue(), '111');
+      await h.page.getByRole('button', { name: 'Recharger la fiche', exact: true }).click();
+      await h.page.getByText('Ce tarif a changé pendant votre modification', { exact: true }).waitFor();
+      await h.page.getByRole('button', { name: 'Enregistrer le tarif', exact: true }).click();
+      await h.page.getByText(/Le tarif est enregistré/).waitFor();
+    });
+    await scenario('Formations : ancienne adresse d’une version précédente retrouvée dans l’historique', 'page=legacy&shell=1', async h => {
+      await h.page.getByText('Version précédente', { exact: true }).first().waitFor();
+      const url = new URL(h.page.url());
+      assert.equal(url.pathname.endsWith('/formations'), true); assert.equal(url.searchParams.get('view'), 'historique');
+    });
+    await scenario('Formations : ancienne adresse d’un contenu actuel ouvre sa rubrique', 'page=legacy-current&shell=1', async h => {
+      await h.page.getByRole('heading', { name: 'Compétences', exact: true }).waitFor();
+      assert.equal(new URL(h.page.url()).searchParams.get('view'), 'competences');
+    });
+    await scenario('Formations : un permis déjà préparé n’est pas recréé par l’assistant', 'page=formation-new&shell=1', async h => {
+      await h.page.getByLabel('Permis', { exact: true }).click();
+      await h.page.getByRole('combobox', { name: 'Rechercher : Permis', exact: true }).fill('B');
+      await h.page.getByRole('option', { name: 'Permis B · déjà préparé', exact: true }).click();
+      await h.page.getByRole('link', { name: 'Ouvrir sa fiche', exact: true }).waitFor();
+      assert.equal(await h.page.getByRole('button', { name: 'Continuer', exact: true }).isDisabled(), true);
     });
     await scenario('Choix simple : clavier, option désactivée, Échap, Tab et restitution du focus', 'page=choices', async h => {
       const trigger = h.page.getByLabel('Permis de test', { exact: true }), count = h.page.getByLabel('Nombre de changements', { exact: true });
@@ -445,12 +480,12 @@ try {
     });
   }
   if (!process.argv.includes('--checks-only')) {
-    const pages = process.env.DRIVY_CAPTURE_TARGETS?.split(',') ?? ['learners', 'learner-detail', 'config', 'config-form', 'agenda', 'trips', 'privacy', 'preferences', 'team', 'team-detail', 'availability', 'absences', 'themes', 'formations', 'curricula', 'curriculum-form', 'procedures', 'offerings', 'products', 'terms', 'overview', 'profile', 'invitations', 'invitations-team', 'signin', 'account', 'invitation', 'opening', 'operator', 'setup-identity', 'setup-privacy', 'setup-profile', 'setup-formations', 'setup-pricing', 'setup-review', 'controls', 'choices', 'choice-menu', 'choice-search', 'choice-dialog'];
+    const pages = process.env.DRIVY_CAPTURE_TARGETS?.split(',') ?? ['learners', 'learner-detail', 'config', 'config-form', 'agenda', 'trips', 'privacy', 'preferences', 'team', 'team-detail', 'availability', 'absences', 'themes', 'formations', 'formation', 'formation-competences', 'formation-competences-form', 'formation-rules', 'formation-tariffs', 'formation-tariff-form', 'formation-history', 'formation-new', 'uncategorized', 'conditions', 'overview', 'profile', 'invitations', 'invitations-team', 'signin', 'account', 'invitation', 'opening', 'operator', 'setup-identity', 'setup-privacy', 'setup-profile', 'setup-formations', 'setup-pricing', 'setup-review', 'controls', 'choices', 'choice-menu', 'choice-search', 'choice-dialog'];
     for (const theme of ['light', 'dark']) for (const target of pages) {
       stage = `capture ${target} ${theme}`;
       const widths = [1440, 1024, 390];
       const parameters = target.startsWith('setup-') ? `page=overview&status=draft&step=${target.slice(6).toUpperCase()}&setup=ready`
-        : target === 'curriculum-form' ? 'page=curricula'
+        : target.startsWith('formation-') && target !== 'formation-new' ? `page=formation&view=${{ 'formation-competences': 'competences', 'formation-competences-form': 'competences', 'formation-rules': 'deroulement', 'formation-tariffs': 'tarifs', 'formation-tariff-form': 'tarifs', 'formation-history': 'historique' }[target]}`
         : target === 'config-form' ? 'page=config'
         : target.startsWith('choice-') ? 'page=choices'
         : target === 'learner-detail' ? 'page=learners'
@@ -460,7 +495,8 @@ try {
       try {
         await h.open();
         if (target === 'setup-review') { await h.page.getByRole('button', { name: 'Vérifier la préparation', exact: true }).click(); await settle(h.page); }
-        if (target === 'curriculum-form') { await h.page.getByRole('button', { name: 'Nouveau référentiel', exact: true }).click(); await settle(h.page); }
+        if (target === 'formation-competences-form') { await h.page.getByRole('button', { name: 'Modifier les compétences', exact: true }).click(); await settle(h.page); }
+        if (target === 'formation-tariff-form') { await h.page.getByRole('button', { name: 'Ajouter un tarif', exact: true }).click(); await settle(h.page); }
         if (target === 'config-form') { await h.page.getByRole('button', { name: 'Modifier les coordonnées', exact: true }).click(); await settle(h.page); }
         if (target === 'learner-detail') { await h.page.getByRole('link', { name: /Éloïse/ }).first().click(); await settle(h.page); }
         if (target === 'team-detail') { await h.page.getByRole('link', { name: /Marie-Christine/ }).first().click(); await settle(h.page); }
@@ -481,12 +517,12 @@ try {
             const audit = await auditAccessibility(h.page);
             accessibility.push({ target, theme, width, ...audit });
             if (audit.violations.length) failures.push({ scenario: `axe ${target} ${width}px ${theme}`, error: audit.violations.map(item => item.id).join(', ') });
-            if (target === 'curriculum-form' && width === 1440 && audit.incomplete.length) {
-              await h.page.getByLabel('Catégorie', { exact: true }).focus();
+            if (target === 'formation-competences-form' && width === 1440 && audit.incomplete.length) {
+              await h.page.getByRole('button', { name: 'Ajouter une compétence', exact: true }).focus();
               for (let index = 0; index < 6; index++) await h.page.keyboard.press('Tab');
               const focusedAudit = await auditAccessibility(h.page);
               accessibility.push({ target, theme, width, state: 'after-keyboard-scroll', ...focusedAudit });
-              const file = `curriculum-form-${width}-${theme}-keyboard-synthetic.png`;
+              const file = `formation-competences-form-${width}-${theme}-keyboard-synthetic.png`;
               await h.page.screenshot({ path: resolve(directory, file) });
               supplemental.push({ target, theme, width, file, state: 'after-keyboard-scroll' });
               // Incomplete results remain in the report for manual review; they are not violations.

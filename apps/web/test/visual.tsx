@@ -19,8 +19,8 @@ import { OverviewSection } from '../client/console/overview';
 import { ObservationThemesSection } from '../client/console/observation-themes';
 import { ManagementConsole } from '../client/console/Console';
 import { FormationsSection } from '../client/console/formations';
-import { CurriculaSection, ProceduresSection, OfferingsSection } from '../client/console/catalog';
-import { ProductsSection, TermsSection } from '../client/console/commerce';
+import { TermsArchiveSection, UncategorizedTariffsSection } from '../client/console/formation-references';
+import { formationFixture } from './formation-fixture';
 import { App } from '../client/App';
 import { setupSteps, type SetupDraft, type SetupTemplates, type SetupPreview } from '../client/setup-model';
 import type { DataPolicy, TextProposals } from '../client/school-api';
@@ -170,6 +170,7 @@ const log: string[] = [];
 (window as unknown as { __log: string[] }).__log = log;
 const reads: string[] = [];
 (window as unknown as { __reads: string[] }).__reads = reads;
+const formationReplies = formationFixture({ db, schoolId, uuid, stamp, today: '2026-09-29', state: reviewState });
 const administrativeProfile = { id: uuid(), schoolId, version: 1, learnerId: learnerA, policyVersionId: db['profile-field-policies'][0]?.id ?? noticeId };
 let schoolConflictOnce = reviewState === 'conflict-once';
 let savedSchoolReadGate: Promise<void> | null = null;
@@ -202,6 +203,8 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
       return member ? reply(200, envelope(member), url.href) : reply(404, { code: 'MEMBERSHIP_NOT_FOUND' }, url.href);
     }
     const readiness = { schoolId, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON', 'CAN_CAPTURE'].map(capability => ({ capability, ready: true, blockers: [] })) };
+    const formationReply = path.startsWith('formations') ? formationReplies('GET', path, url, null) : null;
+    if (formationReply) return reply(formationReply.status, formationReply.body, url.href);
     if (path === 'observation-themes') return reply(200, envelope(themesProjection()), url.href);
     if (path === 'readiness') return reply(200, envelope(readiness), url.href);
     if (path === 'invitation-options') return reply(200, envelope({ emailInvitationsAvailable: parameters.get('email') === '1', codeInvitationsAvailable: true }), url.href);
@@ -281,6 +284,10 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     db['profile-field-policies'].push(item); value.school.version++;
     return reply(201, envelope(item), url.href);
   }
+  if (path.startsWith('formations')) {
+    const formationReply = formationReplies(method, path, url, body);
+    if (formationReply) return reply(formationReply.status, formationReply.body, url.href);
+  }
   if (method === 'POST' && path === 'service-products') {
     const version = Math.max(0, ...db['service-products'].filter((item: any) => item.productKey === body.productKey).map((item: any) => item.version)) + 1;
     const item = { ...body, id: uuid(), schoolId, version };
@@ -339,13 +346,17 @@ if (saved) {
 }
 reviewWindow.__reviewSnapshot = () => structuredClone({ db, school: value.school, membership: value.membership, themeState, administrativeProfile, policyState, setupDraft, fixtureSequence });
 const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, absences: () => <AvailabilitySection section="absences" />, config: ConfigurationSection, privacy: PrivacySection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
-  curricula: CurriculaSection, procedures: ProceduresSection, offerings: OfferingsSection, products: ProductsSection, terms: TermsSection };
+  formation: FormationsSection, 'formation-new': FormationsSection, uncategorized: UncategorizedTariffsSection, conditions: TermsArchiveSection };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = parameters.get('shell') === '1';
 if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls', 'choices'].includes(page ?? '')) {
-  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', curricula: 'referentiels', procedures: 'procedures', offerings: 'offres', products: 'prestations', terms: 'conditions' };
+  const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', formation: 'formations', 'formation-new': 'formations', uncategorized: 'prestations', conditions: 'conditions', legacy: 'offres', 'legacy-current': 'referentiels' };
   const routeParameters = new URLSearchParams();
   if (page === 'agenda') routeParameters.set('week', '2026-09-28');
+  if (page === 'formation') { routeParameters.set('category', parameters.get('category') ?? 'B'); if (parameters.get('view')) routeParameters.set('view', parameters.get('view')!); }
+  if (page === 'formation-new') routeParameters.set('view', 'nouvelle');
+  // Ancienne adresse d'une version précédente du programme B (offre v1).
+  if (page === 'legacy' || page === 'legacy-current') { routeParameters.set('selection', page === 'legacy-current' ? curriculumB : offerBOld); routeParameters.set('category', 'B'); routeParameters.set('from', 'formations'); }
   if (page === 'invitations' && parameters.get('audience') === 'team') routeParameters.set('audience', 'team');
   if (page === 'learners' && parameters.get('selection') === 'outside') routeParameters.set('selection', outsideLearner.id);
   if (page === 'learners' && parameters.get('selection') === 'missing') routeParameters.set('selection', missingLearnerId);

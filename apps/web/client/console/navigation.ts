@@ -18,7 +18,7 @@ export const workspaces: readonly Workspace[] = [
     { section: 'equipe', label: 'Membres et accès' }, { section: 'invitations', label: 'Invitations', query: { audience: 'team' } },
   ] },
   { key: 'formations', label: 'Formations et tarifs', symbol: 'book', home: 'formations', items: [
-    { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Tarifs' }, { section: 'conditions', label: 'Conditions' },
+    { section: 'formations', label: 'Formations' }, { section: 'prestations', label: 'Prestations sans permis' },
   ] },
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
     { section: 'configuration', label: 'École' }, { section: 'confidentialite', label: 'Confidentialité' },
@@ -29,8 +29,8 @@ export const workspaces: readonly Workspace[] = [
 
 export const sectionTitles: Record<SectionKey, string> = {
   agenda: 'Agenda', disponibilites: 'Disponibilités', absences: 'Absences', eleves: 'Élèves', invitations: 'Invitations',
-  equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations proposées',
-  referentiels: 'Compétences enseignées', procedures: 'Déroulement et annulation', prestations: 'Tarifs',
+  equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations et tarifs',
+  referentiels: 'Formations et tarifs', procedures: 'Formations et tarifs', prestations: 'Prestations sans permis',
   conditions: 'Conditions commerciales', configuration: 'École', confidentialite: 'Confidentialité', 'champs-profil': 'Informations des élèves',
   apercu: 'Préparation de l’école', signalements: 'Signalements',
 };
@@ -46,12 +46,12 @@ export function workspaceFor(section: SectionKey, query: NavigationQuery = {}): 
 
 export function isLocalItemCurrent(item: NavigationItem, section: SectionKey): boolean {
   if (item.section === section) return true;
-  if (item.section === 'formations') return ['offres', 'referentiels', 'procedures', 'apercu'].includes(section);
+  if (item.section === 'formations') return ['offres', 'referentiels', 'procedures', 'conditions', 'apercu'].includes(section);
   return false;
 }
 
 export function parentSection(section: SectionKey): SectionKey | null {
-  if (section === 'offres' || section === 'referentiels' || section === 'procedures') return 'formations';
+  if (section === 'offres' || section === 'referentiels' || section === 'procedures' || section === 'conditions' || section === 'prestations') return 'formations';
   return null;
 }
 
@@ -61,5 +61,5 @@ export function localNavigationQuery(workspace: Workspace, item: NavigationItem,
     ...(query.instructor ? { instructor: query.instructor } : {}), ...(query.week ? { week: query.week } : {}),
     ...(query.from === 'equipe' && item.section !== 'agenda' ? { from: 'equipe' as const } : {}), ...item.query,
   };
-  return { ...(workspace.key === 'formations' && query.category ? { category: query.category } : {}), ...item.query };
+  return { ...item.query };
 }

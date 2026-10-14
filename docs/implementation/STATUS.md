@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 14 octobre 2026 — Formations et tarifs : une fiche par permis (non déployé)
+
+Branche `claude/formations-tarifs-20261014`, partie de `5482dd8`, DA Studio conservée. « Formations et tarifs » liste les permis ; Permis A s’ouvre directement sur sa fiche (Général, Compétences, Déroulement et annulation, Tarifs, Historique en action secondaire), chaque rubrique ayant son adresse, avec lecture puis édition sur place. Assistant distinct d’une seule formation, prestations sans permis à part, anciennes adresses `/offres`, `/referentiels`, `/procedures`, `/prestations`, `/conditions` résolues vers la version exacte. Socle : lecture agrégée indépendante de `readAll`, trois commandes composées atomiques (`CREATE_FORMATION`, `UPDATE_FORMATION_PROGRAMME`, `SAVE_TARIFF`) avec têtes attendues sous verrou, droits relus, audit et reçu AP72 ; migration 033 (nom facultatif d’un parcours) ; refus d’une version future sur un tarif applicable.
+
+**Exécuté localement** (PostgreSQL 17 isolée en conteneur) : 451 tests API dont 12 scénarios Formations (concurrence, rollback injecté, AP72, droits, historique élève/bilan/réservation), 247 tests web, types et builds ; **98 contrôles intégrés** navigateur → OIDC → BFF → API → PostgreSQL sur le build compilé ; 45 scénarios et 66 captures axe sur fixture, sans échec. **À qualifier** : exécution CI, Safari, lecteur d’écran, zoom natif 200 %, recette avec une école ; cinq arbitrages à valider.
+
+[Décisions, contrats, résultats et limites](formations-tarifs-20261014.md) · [Captures synthétiques](proofs/formations-tarifs-20261014/index.html).
+
 ## 14 octobre 2026 — Studio, portail inspiré de Mercury, déployé
 
 Version **`2b4ca81` publiée à 01:01 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/), depuis `codex/portail-studio-20261014`, à la demande explicite du porteur. Sauvegarde de la base vérifiée avant bascule, 32 migrations existantes contrôlées, aucune migration exécutée ; seul le web redémarre. **19 contrôles HTTPS réussis** et page publique inspectée sans erreur console. [Version et retour arrière](web-studio-deployment-20261014.md).

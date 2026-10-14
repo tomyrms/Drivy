@@ -15,6 +15,7 @@ import type { SchoolOpeningConfig } from './school-opening-model.js';
 import { registerInvitations } from './invitations.js';
 import { registerProfiles } from './profiles.js';
 import { registerCatalogue } from './catalogue.js';
+import { registerFormations } from './formation-catalogue.js';
 import { registerLessons } from './lessons.js';
 import { registerLessonSetup } from './lesson-setup.js';
 import { registerLessonReports } from './lesson-reports.js';
@@ -193,6 +194,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerInvitations(app,options);
   registerProfiles(app,options);
   registerCatalogue(app,options);
+  registerFormations(app,options);
   registerLessonSetup(app,options);
   registerLessons(app,options);
   registerLessonReports(app,options);

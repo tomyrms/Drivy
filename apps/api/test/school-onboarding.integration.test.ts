@@ -255,5 +255,6 @@ it('oriente le tarif manquant vers la formation exacte de l’élève quand un a
   expect(disabled.statusCode,disabled.body).toBe(201);
   const next=(await call('GET',`${base}/next-actions`)).json().data;
   expect(next.planningReady).toBe(true);
-  expect(next.actions).toEqual([{code:'COMMERCIAL_SETUP_REQUIRED',label:'Ajouter un tarif pour la formation de l’élève',section:'apercu',query:{from:'formations',selection:applied.offeringIds[0]}}]);
+  // La fiche du permis s'ouvre sur ses tarifs ; le guide de préparation n'est plus le chemin d'ajout d'un tarif.
+  expect(next.actions).toEqual([{code:'COMMERCIAL_SETUP_REQUIRED',label:'Ajouter un tarif pour la formation de l’élève',section:'formations',query:{selection:applied.offeringIds[0],view:'tarifs'}}]);
 });

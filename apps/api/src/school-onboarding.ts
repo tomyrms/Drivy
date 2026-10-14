@@ -1,4 +1,4 @@
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
@@ -8,6 +8,7 @@ import {ApiError,notFound} from './errors.js';
 import {canonical,checkIdempotency,checkVersion,requireVersion,schoolColumns,schoolCommand,schoolProjection,type SchoolRow,type CommandActor} from './commands.js';
 import {readiness,recordSettings} from './school-setup.js';
 import {cataloguePermission} from './lesson-setup.js';
+import {insertCurriculum,insertOffering,insertProcedure,insertProduct,insertTerms} from './formation-catalogue.js';
 import {planningReadiness} from './lessons.js';
 import {missingProfileFieldsLateral} from './profile-completeness.js';
 import {contentIssues,emptySetupContent,schoolSetupTemplates,setupContentSchema,setupSteps,templateVersion,type SetupContent,type SetupFormation,type SetupIssue} from './school-onboarding-model.js';
@@ -36,7 +37,7 @@ async function draft(db:PoolClient,school:SchoolRow) {
     content,updatedAt:row.draft_updated_at?.toISOString()??null,updatedByMembershipId:row.draft_updated_by??row.configured_by,appliedAt:row.draft_applied_at?.toISOString()??null};
 }
 type Draft=Awaited<ReturnType<typeof draft>>;
-interface NextAction {code:string;label:string;section:string;query?:{selection?:string;learner?:string;instructor?:string;from?:'formations';audience?:'learners'|'team'}}
+interface NextAction {code:string;label:string;section:string;query?:{selection?:string;learner?:string;instructor?:string;from?:'formations';audience?:'learners'|'team';view?:'tarifs'}}
 const selected=(content:SetupContent,section:SetupContent['selectedSections'][number])=>content.selectedSections.includes(section);
 const activeFormations=(content:SetupContent)=>selected(content,'CATALOGUE')?content.formations.filter(item=>item.apply):[];
 
@@ -81,22 +82,18 @@ async function review(db:PoolClient,school:SchoolRow,current:Draft,activate:bool
   return {...state,reviewDigest,ready:issues.length===0,issues,effects};
 }
 
-/** Versions nouvelles uniquement : les références des engagements précédents restent intactes. */
+/** Versions nouvelles uniquement : les références des engagements précédents restent intactes. Écritures communes à la fiche de formation. */
 async function publishFormation(db:PoolClient,school:SchoolRow,actor:CommandActor,item:SetupFormation,reason:string) {
   let offeringId=item.existingOfferingId;
   if(offeringId===null) {
-    const curriculumId=(await db.query<{id:string}>(`INSERT INTO drivy.curriculum_version(school_id,category_code,revision,approved,approval_reason,created_by,approved_at)
-      SELECT $1,$2,coalesce(max(revision),0)+1,true,$3,$4,now() FROM drivy.curriculum_version WHERE school_id=$1 AND category_code=$2 RETURNING id`,[school.id,item.categoryCode,reason,actor.membershipId])).rows[0]!.id;
-    for(const c of item.competencies)await db.query('INSERT INTO drivy.competency_definition(school_id,curriculum_version_id,stable_key,label,description,sort_order) VALUES($1,$2,$3,$4,$5,$6)',[school.id,curriculumId,c.key,c.label,c.description,c.sortOrder]);
-    const policyId=(await db.query<{id:string}>(`INSERT INTO drivy.school_policy_version(school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at)
-      SELECT $1,$2,coalesce(max(version),0)+1,$3,$4,$5,true,$6,$7,now() FROM drivy.school_policy_version WHERE school_id=$1 AND category_code=$2 RETURNING id`,[school.id,item.categoryCode,item.procedureText,item.cancellationPolicyText,item.sourceUrls,reason,actor.membershipId])).rows[0]!.id;
-    offeringId=(await db.query<{id:string}>(`INSERT INTO drivy.offering_version(id,school_id,offering_key,category_code,version,enabled,curriculum_version_id,policy_version_id,default_duration_minutes,default_price_cents)
-      VALUES($1,$2,$3,$4,1,true,$5,$6,$7,$8) RETURNING id`,[randomUUID(),school.id,`setup-${item.id}`,item.categoryCode,curriculumId,policyId,item.durationMinutes,item.priceCents])).rows[0]!.id;
+    const curriculumId=await insertCurriculum(db,school.id,actor.membershipId,item.categoryCode,item.competencies,reason);
+    const policyId=await insertProcedure(db,school.id,actor.membershipId,item.categoryCode,item,reason);
+    offeringId=(await insertOffering(db,school.id,{offeringKey:`setup-${item.id}`,categoryCode:item.categoryCode,enabled:true,curriculumVersionId:curriculumId,policyVersionId:policyId,
+      defaultDurationMinutes:item.durationMinutes!,defaultPriceCents:item.priceCents!,label:null})).id;
   }
-  const termsId=(await db.query<{id:string}>(`INSERT INTO drivy.commercial_terms_version(school_id,version,label,terms_text,valid_from,valid_until,approved,approval_reason,approved_by,approved_at,created_by)
-    SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,NULL,true,$5,$6,now(),$6 FROM drivy.commercial_terms_version WHERE school_id=$1 RETURNING id`,[school.id,`Conditions · ${item.label}`.slice(0,200),item.termsText,item.validFrom,reason,actor.membershipId])).rows[0]!.id;
-  const productId=(await db.query<{id:string}>(`INSERT INTO drivy.service_product_version(school_id,version,product_key,label,type,category_code,site_id,duration_minutes,unit_label,unit_price_cents,valid_from,valid_until,terms_version_id,enabled)
-    SELECT $1,coalesce(max(version),0)+1,$2,$3,'INDIVIDUAL_LESSON',$4,NULL,$5,'leçon',$6,$7,NULL,$8,true FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2 RETURNING id`,[school.id,`setup-${item.id}`,item.label,item.categoryCode,item.durationMinutes,item.priceCents,item.validFrom,termsId])).rows[0]!.id;
+  const termsId=await insertTerms(db,school.id,actor.membershipId,{label:`Conditions · ${item.label}`,termsText:item.termsText,validFrom:item.validFrom!},reason);
+  const productId=(await insertProduct(db,school.id,{productKey:`setup-${item.id}`,label:item.label,type:'INDIVIDUAL_LESSON',categoryCode:item.categoryCode,durationMinutes:item.durationMinutes,
+    unitLabel:'leçon',unitPriceCents:item.priceCents!,validFrom:item.validFrom!,validUntil:null,termsVersionId:termsId,enabled:true})).id;
   return {offeringId,productId,termsId};
 }
 
@@ -128,7 +125,7 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
     SCHOOL_ARCHIVED:{label:'Consulter l’état de l’école',section:'configuration',order:2},
     PROFILE_POLICY_NOT_READY:{label:'Confirmer les informations demandées aux élèves',section:'champs-profil',order:3},
     OFFERING_REQUIRED:{label:'Préparer une formation',section:'formations',order:4},
-    COMMERCIAL_SETUP_REQUIRED:{label:'Ajouter le tarif d’une leçon',section:'prestations',order:5},
+    COMMERCIAL_SETUP_REQUIRED:{label:'Ajouter le tarif d’une leçon',section:'formations',order:5},
     INSTRUCTOR_REQUIRED:{label:'Ajouter un moniteur actif',section:'equipe',order:6},
     AVAILABILITY_REQUIRED:{label:'Définir les disponibilités du moniteur',section:'disponibilites',order:7}
   };
@@ -155,7 +152,7 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
       if(blocker?.code==='AVAILABILITY_REQUIRED'||blocker?.code==='COMMERCIAL_SETUP_REQUIRED') {
         const target=await learnerPreparationTarget(db,school.id,learner.id,blocker.code==='COMMERCIAL_SETUP_REQUIRED');
         if(blocker.code==='AVAILABILITY_REQUIRED')actions.push({code:blocker.code,label:'Définir les disponibilités du moniteur affecté',section:'disponibilites',...(target?{query:{instructor:target.instructor_membership_id}}:{})});
-        else actions.push({code:blocker.code,label:'Ajouter un tarif pour la formation de l’élève',section:'apercu',query:{from:'formations',...(target?{selection:target.offering_id}:{})}});
+        else actions.push({code:blocker.code,label:'Ajouter un tarif pour la formation de l’élève',section:'formations',...(target?{query:{selection:target.offering_id,view:'tarifs' as const}}:{})});
       } else if(blocker)actions.push({code:blocker.code,label:blocker.code==='TRAINING_NOT_ACTIVE'?'Ouvrir la formation de l’élève':blocker.code==='INSTRUCTOR_NOT_ASSIGNED'?'Affecter un moniteur à la formation':'Préparer la formation de l’élève',section:'eleves',query:{selection:learner.id}});
       else actions.push({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:learner.id}});
     }

@@ -70,10 +70,15 @@ describe('Navigation entre les tâches de gestion', () => {
     expect(workspaceFor('absences').home).toBe('agenda');
     expect(workspaceFor('confidentialite').home).toBe('configuration');
     expect(workspaceFor('agenda').items.map(item => item.section)).toEqual(['agenda', 'disponibilites', 'absences']);
-    expect(workspaceFor('formations').items.map(item => item.section)).toEqual(['formations', 'prestations', 'conditions']);
-    expect(parentSection('conditions')).toBeNull();
-    expect(isLocalItemCurrent({ section: 'prestations', label: 'Tarifs' }, 'conditions')).toBe(false);
-    expect(isLocalItemCurrent({ section: 'conditions', label: 'Conditions' }, 'conditions')).toBe(true);
+    // Formations et tarifs : la fiche d'un permis regroupe le catalogue ; seules les prestations sans permis ont leur page.
+    expect(workspaceFor('formations').items.map(item => item.section)).toEqual(['formations', 'prestations']);
+    for (const legacy of ['offres', 'referentiels', 'procedures', 'conditions', 'prestations'] as const) {
+      expect(parentSection(legacy)).toBe('formations');
+      expect(workspaceFor(legacy).key).toBe('formations');
+      expect(restore(consolePath(school, legacy, { selection: learner, category: 'B', from: 'formations' }))).toEqual({ schoolId: school, section: legacy, query: { selection: learner, category: 'B', from: 'formations' } });
+    }
+    expect(isLocalItemCurrent({ section: 'prestations', label: 'Prestations sans permis' }, 'conditions')).toBe(false);
+    expect(isLocalItemCurrent({ section: 'formations', label: 'Formations' }, 'conditions')).toBe(true);
     expect(isLocalItemCurrent({ section: 'formations', label: 'Formations' }, 'referentiels')).toBe(true);
   });
 
@@ -87,11 +92,24 @@ describe('Navigation entre les tâches de gestion', () => {
 
   test('les liens locaux gardent le permis ou le public, sans la sélection du dernier éditeur', () => {
     const formations = workspaceFor('formations');
-    expect(localNavigationQuery(formations, formations.items[2]!, { category: 'B', selection: learner, from: 'offres' }))
-      .toEqual({ category: 'B' });
+    // Le menu ramène à la liste des permis ou aux prestations sans permis : ni le permis ouvert ni sa rubrique ne suivent.
+    expect(localNavigationQuery(formations, formations.items[1]!, { category: 'B', view: 'tarifs', selection: learner, from: 'offres' })).toEqual({});
+    expect(localNavigationQuery(formations, formations.items[0]!, { category: 'B', view: 'competences', programme: 'category-b' })).toEqual({});
     const team = workspaceFor('equipe');
     expect(localNavigationQuery(team, team.items[1]!, { audience: 'learners', selection: learner }))
       .toEqual({ audience: 'team' });
+  });
+
+  test('les rubriques d’une fiche ont une adresse propre, rechargeable et partageable', () => {
+    const path = consolePath(school, 'formations', { category: 'A', view: 'competences', programme: 'formation-0f1' });
+    expect(path).toBe(`/app/gestion/${school}/formations?category=A&view=competences&programme=formation-0f1`);
+    expect(restore(path).query).toEqual({ category: 'A', view: 'competences', programme: 'formation-0f1' });
+    for (const view of ['general', 'competences', 'deroulement', 'tarifs', 'historique', 'nouvelle']) expect(readNavigationQuery(`view=${view}`).view).toBe(view);
+    expect(readNavigationQuery('view=offres')).toEqual({});
+    expect(readNavigationQuery('view=tarifs&view=general')).toEqual({});
+    expect(readNavigationQuery(`programme=${'x'.repeat(81)}`)).toEqual({});
+    expect(readNavigationQuery('programme=a%00b')).toEqual({});
+    expect(readNavigationQuery(`category=B&view=historique&selection=${learner.toUpperCase()}`)).toEqual({ category: 'B', view: 'historique', selection: learner });
   });
 
   test('un lien vers un tarif précis ne rouvre pas le brouillon précédent', () => {

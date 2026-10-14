@@ -16,7 +16,8 @@ export type CommandKind =
   | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
-  | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
+  | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
+  | 'createFormation' | 'saveFormationProgramme' | 'saveTariff';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -63,6 +64,10 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
   createClosure: { operationType: 'CREATE_CLOSURE', resourceType: 'Closure', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une absence' },
   removeClosure: { operationType: 'REMOVE_CLOSURE', resourceType: 'Closure', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une absence' },
+  // Formations et tarifs : chaque intention est une seule opération serveur (nouvelles versions, références, audit et reçu dans un commit).
+  createFormation: { operationType: 'CREATE_FORMATION', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une formation' },
+  saveFormationProgramme: { operationType: 'UPDATE_FORMATION_PROGRAMME', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Modification d’une formation' },
+  saveTariff: { operationType: 'SAVE_TARIFF', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un tarif' },
 };
 
 export interface SchoolCommand {
@@ -248,6 +253,18 @@ export function commandMessage(code: string): string {
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',
     NOT_FOUND: 'Cette information n’est plus disponible avec vos accès actuels.',
+    FORMATION_CHANGED: 'Ce parcours a été modifié entre-temps. Votre saisie est conservée : rechargez la fiche, relisez la version actuelle, puis enregistrez.',
+    FORMATION_UNCHANGED: 'Aucune modification à enregistrer.',
+    FORMATION_ALREADY_EXISTS: 'Ce permis est déjà préparé. Ouvrez sa fiche, ou choisissez explicitement d’ajouter un autre parcours.',
+    FORMATION_NOT_FOUND: 'Ce permis n’a pas encore de parcours. Préparez d’abord sa formation.',
+    PROGRAMME_LABEL_TAKEN: 'Un autre parcours de ce permis porte déjà ce nom.',
+    PROGRAMME_INCOMPLETE: 'Ce parcours doit avoir des compétences, des règles et une durée habituelle pour être enregistré.',
+    PROGRAMME_REFERENCE_PRICE_MISSING: 'Ce parcours ancien n’a pas de prix de référence. Préparez-le de nouveau avec « Ajouter une formation ».',
+    COMPETENCY_KEY_UNKNOWN: 'Une compétence reprise n’appartient plus à ce parcours. Rechargez la fiche.',
+    COMPETENCY_KEY_DUPLICATED: 'Une compétence figure deux fois.',
+    TARIFF_CHANGED: 'Ce tarif a été modifié entre-temps. Votre saisie est conservée : rechargez la fiche, relisez la version actuelle, puis enregistrez.',
+    TARIFF_UNCHANGED: 'Aucune modification à enregistrer.',
+    TARIFF_SCHEDULING_UNSUPPORTED: 'Une modification de tarif s’applique dès aujourd’hui ; une date future laisserait ce tarif sans prix applicable.',
     REQUEST_FAILED: 'L’école a refusé cette demande.',
   };
   return messages[code] ?? 'La demande n’a pas pu être confirmée. Vérifiez son résultat auprès de l’école avant de continuer.';
