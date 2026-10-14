@@ -45,9 +45,17 @@ export const saveTariffCommand=z.discriminatedUnion('mode',[
  z.object({operationId:z.uuid(),mode:z.literal('CREATE'),categoryCode:categoryCode.nullable(),...tariffFields,validFrom:civil,termsText:longText(20000)}).strict(),
  z.object({operationId:z.uuid(),mode:z.literal('UPDATE'),productKey:z.string().min(1).max(100),expectedProductVersionId:z.uuid(),...tariffFields,terms:termsChoice}).strict(),
 ]);
-type ProgrammeCommand=z.infer<typeof updateProgrammeCommand>;
-type FormationCommand=z.infer<typeof createFormationCommand>;
-type TariffCommand=z.infer<typeof saveTariffCommand>;
+// Types écrits à la main plutôt qu'inférés : l'inférence zod de ces schémas coûtait ~90 000 instanciations au compilateur,
+// au-delà de la mémoire allouée à la compilation de production. Les schémas restent l'unique validation à l'exécution.
+interface CompetencyInput {key:string|null;label:string;description:string}
+interface ProcedureInput {procedureText:string;cancellationPolicyText:string;sourceUrls:string[]}
+interface ProgrammeCommand {operationId:string;offeringKey:string;expectedOfferingVersionId:string;label?:string|null|undefined;enabled?:boolean|undefined;
+ defaultDurationMinutes?:number|undefined;competencies?:CompetencyInput[]|undefined;procedure?:ProcedureInput|undefined}
+interface FormationCommand {operationId:string;categoryCode:string;intent:'NEW'|'ADDITIONAL_PROGRAMME';programmeLabel:string|null;competencies:CompetencyInput[];procedure:ProcedureInput;
+ source?:{templateId:string|null;templateVersion:string|null}|undefined;tariff:{label:string;durationMinutes:number;priceCents:number;validFrom:string;validUntil:string|null;termsText:string}}
+interface TariffFields {operationId:string;type:typeof productTypes[number];label:string;durationMinutes:number|null;unitLabel:string;priceCents:number;validUntil:string|null;enabled:boolean}
+type TariffCommand=(TariffFields&{mode:'CREATE';categoryCode:string|null;validFrom:string;termsText:string})
+ |(TariffFields&{mode:'UPDATE';productKey:string;expectedProductVersionId:string;terms:{mode:'KEEP'}|{mode:'NEW';termsText:string}});
 
 /* ------------------------------------------------------------ Écritures communes (guide et fiche) */
 
@@ -432,9 +440,9 @@ export function registerFormations(app:FastifyInstance,options:{pool:Pool;verify
  app.get(`${base}/terms`,async request=>{empty.parse(request.query);return envelope(await read(request,termsList),request);});
  app.get(`${base}/references/:referenceId`,async request=>{empty.parse(request.query);const {referenceId}=z.object({schoolId:z.uuid(),referenceId:z.uuid()}).parse(request.params);
   return envelope(await read(request,(db,schoolId)=>reference(db,schoolId,referenceId)),request);});
- const command=<B extends {operationId:string},T>(path:string,type:string,schema:z.ZodType<B>,work:(db:PoolClient,actor:CommandActor,school:SchoolRow,body:B)=>Promise<{data:T&{id:string;version:number};action:string;resourceType:string;resourceId:string;changedFields:string[];reason?:string}>,limit:number)=>
+ const command=<B extends {operationId:string},T>(path:string,type:string,schema:{parse:(value:unknown)=>unknown},work:(db:PoolClient,actor:CommandActor,school:SchoolRow,body:B)=>Promise<{data:T&{id:string;version:number};action:string;resourceType:string;resourceId:string;changedFields:string[];reason?:string}>,limit:number)=>
   app.post(path,{bodyLimit:limit},async(request,reply)=>{
-   empty.parse(request.query);const body=schema.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);const schoolId=schoolID(request);
+   empty.parse(request.query);const body=schema.parse(request.body) as B;checkIdempotency(request.headers['idempotency-key'],body.operationId);const schoolId=schoolID(request);
    const data=await schoolCommand(options.pool,await options.verifyToken(request.headers.authorization),schoolId,type,body,null,(db,actor,school)=>work(db,actor,school,body));
    reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,request);
   });

@@ -42,7 +42,7 @@ def main():
     node = str(ROOT / 'runtime/node/bin/node')
     npm = str(ROOT / 'runtime/node/bin/npm')
     environment = os.environ | {'PATH': str(ROOT / 'runtime/node/bin') + ':' + os.environ.get('PATH', ''),
-                                'npm_config_cache': str(ROOT / 'npm-cache'), 'NODE_OPTIONS': '--max-old-space-size=256'}
+                                'npm_config_cache': str(ROOT / 'npm-cache'), 'NODE_OPTIONS': '--max-old-space-size=512'}
     migration = environment_file(Path('/etc/drivy-refonte/migration.env'))
     runtime = environment_file(Path('/etc/drivy-refonte/api.env'))
     for url, role in [(migration['MIGRATION_DATABASE_URL'], 'drivy_refonte_owner'),
