@@ -4,6 +4,130 @@ import Testing
 
 @MainActor
 struct SchoolWorkspaceTests {
+    @Test(arguments: [["LEARNER"], ["ADMIN", "LEARNER"]], [false, true])
+    func learnerTabsLoadTheirOwnDossierIncludingAnArchivedOneInsteadOfTheDirectory(roles: [String], archived: Bool) async {
+        let membership = SchoolMembership(membershipId: UUID(), schoolId: WorkspaceFixture.firstSchool,
+            schoolName: "École test A", roles: roles, grants: [], accessEpoch: 1)
+        let api = WorkspaceAPIStub(memberships: [membership])
+        let own = SchoolLearner(id: UUID(), schoolId: membership.schoolId, personId: api.person.personId, version: 1,
+            displayName: "Élève responsable", contactEmail: nil, contactPhone: nil,
+            archivedAt: archived ? "2026-10-01T00:00:00Z" : nil, profileReadiness: nil, profilePhotoDocumentId: nil)
+        let directory = (0..<50).map { _ in WorkspaceFixture.learner(id: UUID()) }
+        api.learnersHandler = { _, _, _ in .init(items: directory, nextCursor: "page-2") }
+        api.ownLearnersHandler = { _ in .init(items: [own], nextCursor: nil) }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.entryDestination == .learner)
+        #expect(workspace.learners == [own])
+        #expect(workspace.nextLearnersCursor == nil)
+        #expect(api.ownLearnersCalls == 1 && api.learnerQueries.isEmpty)
+        // La relecture silencieuse suit la même portée et ne remet jamais la première page administrative.
+        await workspace.refreshLearners(minimumInterval: 0)
+        #expect(workspace.learners == [own])
+        #expect(api.ownLearnersCalls == 2 && api.learnerQueries.isEmpty)
+    }
+
+    @Test(arguments: [["INSTRUCTOR"], ["ADMIN", "INSTRUCTOR"], ["ADMIN", "INSTRUCTOR", "LEARNER"]])
+    func instructorTabsKeepTheStaffListEvenWhenTheAccountIsAlsoALearner(roles: [String]) async {
+        let membership = SchoolMembership(membershipId: UUID(), schoolId: WorkspaceFixture.firstSchool,
+            schoolName: "École test A", roles: roles, grants: [], accessEpoch: 1)
+        let api = WorkspaceAPIStub(memberships: [membership])
+        let directory = [WorkspaceFixture.learner(), WorkspaceFixture.learner(id: UUID())]
+        api.learnersHandler = { _, _, _ in .init(items: directory, nextCursor: "page-2") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        await workspace.refreshLearners(minimumInterval: 0)
+        #expect(workspace.entryDestination == .instructor)
+        #expect(workspace.learners == directory)
+        #expect(workspace.nextLearnersCursor == "page-2")
+        #expect(api.ownLearnersCalls == 0 && api.learnerQueries.count == 2)
+    }
+
+    @Test func returningFromTheWebReadsActivationEvenWithTheSameMembership() async {
+        let api = WorkspaceAPIStub(memberships: [WorkspaceFixture.adminMembership])
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "DRAFT") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.entryDestination == .prepareSchool)
+        let reads = api.schoolReads
+        workspace.willOpenManagement()
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "ACTIVE") }
+        await workspace.refreshOnForeground()
+        #expect(api.schoolReads == reads + 1)
+        #expect(workspace.entryDestination == .management)
+        #expect(workspace.membership == WorkspaceFixture.adminMembership)
+        #expect(!workspace.isRefreshingEntry)
+        // Le retour ordinaire suivant n'ajoute pas une lecture scolaire.
+        await workspace.refreshOnForeground()
+        #expect(api.schoolReads == reads + 1)
+    }
+
+    @Test func draftWithoutAdminAlsoSeesActivationAtTheNextForeground() async {
+        let api = WorkspaceAPIStub()
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "DRAFT") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.entryDestination == .waitingForActivation)
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "ACTIVE") }
+        await workspace.refreshOnForeground()
+        #expect(workspace.entryDestination == .instructor)
+        #expect(!workspace.learners.isEmpty)
+    }
+
+    @Test func failedReturnKeepsTheConfirmedStateAndRetriesInsteadOfInventingActivation() async {
+        let api = WorkspaceAPIStub(memberships: [WorkspaceFixture.adminMembership])
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "DRAFT") }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.willOpenManagement()
+        api.meHandler = { throw SchoolAPIError.unavailable }
+        let reads = api.schoolReads
+        await workspace.refreshOnForeground()
+        #expect(workspace.entryDestination == .prepareSchool)
+        #expect(workspace.schoolError != nil)
+        #expect(api.schoolReads == reads)
+        api.meHandler = nil
+        api.schoolHandler = { _ in throw SchoolAPIError.unavailable }
+        await workspace.refreshOnForeground()
+        #expect(workspace.entryDestination == .prepareSchool)
+        #expect(workspace.schoolError != nil)
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "ACTIVE") }
+        await workspace.refreshOnForeground()
+        #expect(workspace.entryDestination == .management)
+        #expect(workspace.schoolError == nil)
+    }
+
+    @Test func returnFromWebAppliesNewRolesOnceAndDoesNotRestoreRevokedAccess() async {
+        let api = WorkspaceAPIStub(memberships: [WorkspaceFixture.adminMembership])
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.willOpenManagement()
+        let previous = WorkspaceFixture.adminMembership
+        let instructor = SchoolMembership(membershipId: previous.membershipId, schoolId: previous.schoolId,
+            schoolName: previous.schoolName, roles: ["ADMIN", "INSTRUCTOR"], grants: [], accessEpoch: 2)
+        api.meHandler = { SchoolPerson(personId: api.person.personId, version: 2, displayName: api.person.displayName,
+            locale: "fr", memberships: [instructor]) }
+        let reads = api.schoolReads
+        await workspace.refreshOnForeground()
+        #expect(workspace.entryDestination == .instructor)
+        #expect(api.schoolReads == reads + 1)
+        workspace.willOpenManagement()
+        api.meHandler = { throw SchoolAPIError.forbidden }
+        await workspace.refreshOnForeground()
+        #expect(workspace.accessRevoked)
+        #expect(workspace.membership == nil && workspace.school == nil && workspace.person == nil)
+    }
+
+    @Test func archivedSchoolAfterPortalReturnClosesTheFieldDestination() async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        workspace.willOpenManagement()
+        api.schoolHandler = { WorkspaceFixture.school($0, status: "ARCHIVED") }
+        await workspace.refreshOnForeground()
+        #expect(workspace.entryDestination == .archived)
+    }
+
     @Test func theAdministrationReadsProfilesToCompleteSchoolWideAndEachRereadCorrectsThem() async {
         let api = WorkspaceAPIStub(memberships: [WorkspaceFixture.adminMembership])
         let first = WorkspaceFixture.learner(id: UUID(), name: "Incomplet A", readiness: "ACTION_REQUIRED")
@@ -604,9 +728,12 @@ private final class WorkspaceAPIStub: SchoolAPI {
     var meHandler: (() async throws -> SchoolPerson)?
     var schoolHandler: ((UUID) async throws -> SchoolDetails)?
     var learnersHandler: ((UUID, String, String?) async throws -> SchoolPage<SchoolLearner>)?
+    var ownLearnersHandler: ((UUID) async throws -> SchoolPage<SchoolLearner>)?
+    var ownLearnersCalls = 0
     var trainingsHandler: ((UUID, UUID, String?) async throws -> SchoolPage<SchoolTraining>)?
     var learnerHandler: ((UUID, UUID) async throws -> SchoolLearner)?
     var learnerQueries: [String] = []
+    var schoolReads = 0
     var learnersToCompleteHandler: ((UUID) async throws -> [SchoolLearner])?
     var learnersToCompleteCalls = 0
 
@@ -618,6 +745,7 @@ private final class WorkspaceAPIStub: SchoolAPI {
         return person
     }
     func school(id: UUID) async throws -> SchoolDetails {
+        schoolReads += 1
         if let schoolHandler { return try await schoolHandler(id) }
         return WorkspaceFixture.school(id)
     }
@@ -625,6 +753,11 @@ private final class WorkspaceAPIStub: SchoolAPI {
         learnerQueries.append(query)
         if let learnersHandler { return try await learnersHandler(schoolID, query, cursor) }
         return .init(items: [WorkspaceFixture.learner(school: schoolID)], nextCursor: nil)
+    }
+    func ownLearners(schoolID: UUID) async throws -> SchoolPage<SchoolLearner> {
+        ownLearnersCalls += 1
+        if let ownLearnersHandler { return try await ownLearnersHandler(schoolID) }
+        return try await learners(schoolID: schoolID, query: "", cursor: nil)
     }
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? {
         learnersToCompleteCalls += 1

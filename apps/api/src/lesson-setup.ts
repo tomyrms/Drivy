@@ -8,6 +8,7 @@ import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandA
 import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {registerPlanningDefaults} from './planning-defaults.js';
+import {ensureNoTariffGap} from './formation-catalogue.js';
 const id=z.uuid(),text=(max:number)=>z.string().trim().min(1).max(max),op={operationId:id};
 const amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const termsCommand=z.object({...op,label:text(200),termsText:text(20000),validFrom:z.iso.date(),validUntil:z.iso.date().nullable(),approved:z.boolean(),approvalReason:text(1000).optional()}).strict();
@@ -101,6 +102,7 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
    if(body.type==='INDIVIDUAL_LESSON'&&(!body.durationMinutes||!body.categoryCode))throw new ApiError(422,'INVALID_SERVICE_PRODUCT','Une leçon exige une catégorie et une durée explicites.');
    const terms=(await db.query<{approved:boolean}>(`SELECT approved FROM drivy.commercial_terms_version WHERE school_id=$1 AND id=$2`,[school.id,body.termsVersionId])).rows[0];
    if(!terms||(body.enabled&&!terms.approved))throw new ApiError(422,'COMMERCIAL_TERMS_NOT_APPROVED','Sélectionnez des conditions commerciales approuvées.');
+   await ensureNoTariffGap(db,school.id,body.productKey,body.validFrom);
    const row=(await db.query<Row>(`INSERT INTO drivy.service_product_version(id,school_id,version,product_key,label,type,category_code,site_id,duration_minutes,unit_label,unit_price_cents,valid_from,valid_until,terms_version_id,enabled)
     VALUES($1,$2,(SELECT coalesce(max(version),0)+1 FROM drivy.service_product_version WHERE school_id=$2 AND product_key=$3),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
     [randomUUID(),school.id,body.productKey,body.label,body.type,body.categoryCode,body.siteId,body.durationMinutes,body.unitLabel,body.unitPriceCents,body.validFrom,body.validUntil,body.termsVersionId,body.enabled])).rows[0]!;

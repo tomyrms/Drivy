@@ -104,6 +104,22 @@ struct SchoolAPIClientTests {
         #expect(request.httpMethod == "GET")
     }
 
+    @Test func personalLearnerReadExplicitlyFiltersTheAccountAndIncludesArchivedDossiers() async throws {
+        let transport = ResponseTransport(data: try apiFixture("learners"))
+        let client = DrivyAPIClient(baseURL: base, tokenSource: TestAccessToken(), transport: transport)
+        _ = try await client.ownLearners(schoolID: school)
+        _ = try await client.learners(schoolID: school, query: "", cursor: nil)
+        let requests = await transport.recordedRequests()
+        #expect(requests.count == 2)
+        let own = try #require(URLComponents(url: requests[0].url!, resolvingAgainstBaseURL: false))
+        #expect(own.path == "/v1/schools/\(school.uuidString)/learners")
+        #expect(own.queryItems?.first(where: { $0.name == "own" })?.value == "true")
+        #expect(own.queryItems?.first(where: { $0.name == "status" })?.value == "ALL")
+        #expect(own.queryItems?.contains(where: { $0.name == "personId" }) == false)
+        let directory = try #require(URLComponents(url: requests[1].url!, resolvingAgainstBaseURL: false))
+        #expect(directory.queryItems?.contains(where: { $0.name == "own" || $0.name == "status" }) == false)
+    }
+
     @Test func refusesForeignSchoolPayloadAndRedirect() async throws {
         let data = try apiFixture("learner")
         let foreign = UUID(uuidString: "10000000-0000-4000-8000-000000000002")!

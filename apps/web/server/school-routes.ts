@@ -4,7 +4,7 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action';
+type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action' | 'activate' | 'category';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -21,6 +21,12 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: [] },
   { method: 'PATCH', segments: [], ifMatch: true, bodyLimit: 4_096 },
   { method: 'GET', segments: ['setup'] },
+  { method: 'GET', segments: ['setup-draft'] },
+  { method: 'PUT', segments: ['setup-draft'], ifMatch: true, bodyLimit: 1_000_000 },
+  { method: 'GET', segments: ['setup-draft', 'templates'] },
+  { method: 'GET', segments: ['setup-draft', 'next-actions'] },
+  { method: 'GET', segments: ['setup-draft', 'preview'], query: ['activate'] },
+  { method: 'POST', segments: ['setup-draft', 'complete'], ifMatch: true, bodyLimit: 4_096 },
   { method: 'PATCH', segments: ['setup'], ifMatch: true, bodyLimit: 2_048 },
   { method: 'GET', segments: ['readiness'] },
   { method: 'GET', segments: ['data-policy'], query: ['noticeVersionId'] },
@@ -33,6 +39,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['members'], query: list },
   { method: 'PATCH', segments: ['members', ':id'], ifMatch: true, bodyLimit: 8_192 },
   { method: 'GET', segments: ['invitations'], query: list },
+  { method: 'GET', segments: ['invitation-options'] },
   { method: 'POST', segments: ['invitations'], bodyLimit: 8_192 },
   { method: 'POST', segments: ['invitations', ':id', 'resend'], ifMatch: true, bodyLimit: 1_024 },
   { method: 'POST', segments: ['invitations', ':id', 'revoke'], ifMatch: true, bodyLimit: 8_192 },
@@ -46,6 +53,15 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['commercial-terms'], bodyLimit: 100_000 },
   { method: 'GET', segments: ['service-products'], query: list },
   { method: 'POST', segments: ['service-products'], bodyLimit: 8_192 },
+  // Formations et tarifs : lecture agrégée d'un permis et commandes composées (une opération, un reçu AP72).
+  { method: 'GET', segments: ['formations'] },
+  { method: 'GET', segments: ['formations', 'sheet'], query: ['category'] },
+  { method: 'GET', segments: ['formations', 'uncategorized-tariffs'] },
+  { method: 'GET', segments: ['formations', 'terms'] },
+  { method: 'GET', segments: ['formations', 'references', ':id'] },
+  { method: 'POST', segments: ['formations'], bodyLimit: 1_000_000 },
+  { method: 'POST', segments: ['formations', 'programmes'], bodyLimit: 1_000_000 },
+  { method: 'POST', segments: ['formations', 'tariffs'], bodyLimit: 100_000 },
   { method: 'GET', segments: ['profile-field-policies'], query: list },
   { method: 'POST', segments: ['profile-field-policies'], ifMatch: true, bodyLimit: 32_768 },
   { method: 'POST', segments: ['profile-field-policies', ':id', 'publish'], ifMatch: true, bodyLimit: 1_024 },
@@ -91,6 +107,9 @@ export const schoolRoutes: readonly SchoolRoute[] = [
 
 const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const queryRules: Record<QueryKey, RegExp> = {
+  activate: /^(?:true|false)$/,
+  // Code de permis tel qu'enregistré (30 caractères, sans caractère de contrôle) ; aucune donnée personnelle.
+  category: /^[^\u0000-\u001f\u007f]{1,30}$/u,
   limit: /^(?:[1-9]|[1-9][0-9]|100)$/,
   cursor: /^[A-Za-z0-9_-]{1,6000}$/,
   noticeVersionId: uuid,

@@ -1,0 +1,620 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations (équivalent géométrique du zoom desktop 200 %)"
+  ],
+  "captures": [
+    {
+      "target": "trips",
+      "theme": "light",
+      "width": 1440,
+      "file": "trips-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "trips",
+      "theme": "light",
+      "width": 1024,
+      "file": "trips-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "trips",
+      "theme": "light",
+      "width": 390,
+      "file": "trips-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "light",
+      "width": 1440,
+      "file": "invitations-team-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "light",
+      "width": 1024,
+      "file": "invitations-team-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "light",
+      "width": 390,
+      "file": "invitations-team-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "light",
+      "width": 1440,
+      "file": "setup-identity-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "light",
+      "width": 1024,
+      "file": "setup-identity-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "light",
+      "width": 390,
+      "file": "setup-identity-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "light",
+      "width": 1440,
+      "file": "setup-privacy-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "light",
+      "width": 1024,
+      "file": "setup-privacy-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "light",
+      "width": 390,
+      "file": "setup-privacy-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "light",
+      "width": 1440,
+      "file": "setup-profile-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "light",
+      "width": 1024,
+      "file": "setup-profile-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "light",
+      "width": 390,
+      "file": "setup-profile-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "light",
+      "width": 1440,
+      "file": "setup-formations-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "light",
+      "width": 1024,
+      "file": "setup-formations-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "light",
+      "width": 390,
+      "file": "setup-formations-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "light",
+      "width": 1440,
+      "file": "setup-pricing-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "light",
+      "width": 1024,
+      "file": "setup-pricing-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "light",
+      "width": 390,
+      "file": "setup-pricing-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "light",
+      "width": 1440,
+      "file": "setup-review-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "light",
+      "width": 1024,
+      "file": "setup-review-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "light",
+      "width": 390,
+      "file": "setup-review-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "trips",
+      "theme": "dark",
+      "width": 1440,
+      "file": "trips-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "trips",
+      "theme": "dark",
+      "width": 1024,
+      "file": "trips-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "trips",
+      "theme": "dark",
+      "width": 390,
+      "file": "trips-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "dark",
+      "width": 1440,
+      "file": "invitations-team-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "dark",
+      "width": 1024,
+      "file": "invitations-team-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "dark",
+      "width": 390,
+      "file": "invitations-team-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "dark",
+      "width": 1440,
+      "file": "setup-identity-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "dark",
+      "width": 1024,
+      "file": "setup-identity-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "dark",
+      "width": 390,
+      "file": "setup-identity-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "dark",
+      "width": 1440,
+      "file": "setup-privacy-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "dark",
+      "width": 1024,
+      "file": "setup-privacy-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "dark",
+      "width": 390,
+      "file": "setup-privacy-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "dark",
+      "width": 1440,
+      "file": "setup-profile-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "dark",
+      "width": 1024,
+      "file": "setup-profile-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "dark",
+      "width": 390,
+      "file": "setup-profile-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "dark",
+      "width": 1440,
+      "file": "setup-formations-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "dark",
+      "width": 1024,
+      "file": "setup-formations-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "dark",
+      "width": 390,
+      "file": "setup-formations-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "dark",
+      "width": 1440,
+      "file": "setup-pricing-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "dark",
+      "width": 1024,
+      "file": "setup-pricing-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "dark",
+      "width": 390,
+      "file": "setup-pricing-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "dark",
+      "width": 1440,
+      "file": "setup-review-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "dark",
+      "width": 1024,
+      "file": "setup-review-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "dark",
+      "width": 390,
+      "file": "setup-review-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "accessibility": [
+    {
+      "target": "trips",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "trips",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "trips",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "trips",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "invitations-team",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-identity",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-privacy",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-profile",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-formations",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-pricing",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "setup-review",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "failures": []
+}

@@ -1,0 +1,1228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:school-setup-draft:1",
+  "title": "Préparation scolaire web : brouillon durable et application explicite",
+  "description": "GET/PUT /v1/schools/{schoolId}/setup-draft ; GET preview?activate=true|false ; POST complete. ADMIN courant, Idempotency-Key et If-Match draft requis pour les écritures. Validation métier et droits revérifiés au commit.",
+  "$defs": {
+    "SchoolSetupDraft": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "schoolId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "APPLIED"
+          ]
+        },
+        "currentStep": {
+          "type": "string",
+          "enum": [
+            "IDENTITY",
+            "PRIVACY",
+            "PROFILE",
+            "FORMATIONS",
+            "PRICING",
+            "REVIEW"
+          ]
+        },
+        "content": {
+          "type": "object",
+          "properties": {
+            "selectedSections": {
+              "maxItems": 4,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "IDENTITY",
+                  "PRIVACY",
+                  "PROFILE",
+                  "CATALOGUE"
+                ]
+              }
+            },
+            "identity": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 150
+                },
+                "timeZone": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "contactEmail": {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                "contactPhone": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 32
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "timeZone",
+                "contactEmail",
+                "contactPhone"
+              ],
+              "additionalProperties": false
+            },
+            "privacy": {
+              "type": "object",
+              "properties": {
+                "noticeText": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "retentionText": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "contactEmail": {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                "templateId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "templateVersion": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "noticeText",
+                "retentionText",
+                "contactEmail",
+                "templateId",
+                "templateVersion"
+              ],
+              "additionalProperties": false
+            },
+            "profile": {
+              "type": "object",
+              "properties": {
+                "fields": {
+                  "maxItems": 7,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "enum": [
+                          "firstName",
+                          "lastName",
+                          "birthDate",
+                          "postalAddress",
+                          "contactEmail",
+                          "contactPhone",
+                          "profilePhotoDocumentId"
+                        ]
+                      },
+                      "requirement": {
+                        "type": "string",
+                        "enum": [
+                          "REQUIRED",
+                          "CONDITIONAL",
+                          "OPTIONAL"
+                        ]
+                      },
+                      "stage": {
+                        "type": "string",
+                        "enum": [
+                          "JOIN",
+                          "BEFORE_LESSON",
+                          "BEFORE_COURSE",
+                          "OPTIONAL"
+                        ]
+                      },
+                      "purposeCode": {
+                        "type": "string",
+                        "enum": [
+                          "IDENTIFICATION",
+                          "LESSON_CONTACT",
+                          "COURSE_ELIGIBILITY",
+                          "CERTIFICATE",
+                          "POSTAL_CONTACT",
+                          "PERSONALISATION"
+                        ]
+                      },
+                      "explanation": {
+                        "type": "string",
+                        "maxLength": 1000
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "requirement",
+                      "stage",
+                      "purposeCode",
+                      "explanation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "effectiveFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "fields",
+                "effectiveFrom"
+              ],
+              "additionalProperties": false
+            },
+            "formations": {
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "apply": {
+                    "type": "boolean"
+                  },
+                  "categoryCode": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "templateId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "templateVersion": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "competencies": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "description": {
+                          "type": "string",
+                          "maxLength": 4000
+                        },
+                        "sortOrder": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "label",
+                        "description",
+                        "sortOrder"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "procedureText": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "cancellationPolicyText": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "sourceUrls": {
+                    "maxItems": 30,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 2048,
+                      "format": "uri"
+                    }
+                  },
+                  "durationMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 480
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "priceCents": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "termsText": {
+                    "type": "string",
+                    "maxLength": 20000
+                  },
+                  "validFrom": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "existingOfferingId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "apply",
+                  "categoryCode",
+                  "label",
+                  "templateId",
+                  "templateVersion",
+                  "competencies",
+                  "procedureText",
+                  "cancellationPolicyText",
+                  "sourceUrls",
+                  "durationMinutes",
+                  "priceCents",
+                  "termsText",
+                  "validFrom",
+                  "existingOfferingId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "selectedSections",
+            "identity",
+            "privacy",
+            "profile",
+            "formations"
+          ],
+          "additionalProperties": false
+        },
+        "updatedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updatedByMembershipId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "appliedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "schoolId",
+        "version",
+        "status",
+        "currentStep",
+        "content",
+        "updatedAt",
+        "updatedByMembershipId",
+        "appliedAt"
+      ],
+      "additionalProperties": false
+    },
+    "SchoolSetupDraftContent": {
+      "type": "object",
+      "properties": {
+        "selectedSections": {
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "IDENTITY",
+              "PRIVACY",
+              "PROFILE",
+              "CATALOGUE"
+            ]
+          }
+        },
+        "identity": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 150
+            },
+            "timeZone": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "contactEmail": {
+              "type": "string",
+              "maxLength": 320
+            },
+            "contactPhone": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "timeZone",
+            "contactEmail",
+            "contactPhone"
+          ],
+          "additionalProperties": false
+        },
+        "privacy": {
+          "type": "object",
+          "properties": {
+            "noticeText": {
+              "type": "string",
+              "maxLength": 20000
+            },
+            "retentionText": {
+              "type": "string",
+              "maxLength": 20000
+            },
+            "contactEmail": {
+              "type": "string",
+              "maxLength": 320
+            },
+            "templateId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "templateVersion": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "noticeText",
+            "retentionText",
+            "contactEmail",
+            "templateId",
+            "templateVersion"
+          ],
+          "additionalProperties": false
+        },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "fields": {
+              "maxItems": 7,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "enum": [
+                      "firstName",
+                      "lastName",
+                      "birthDate",
+                      "postalAddress",
+                      "contactEmail",
+                      "contactPhone",
+                      "profilePhotoDocumentId"
+                    ]
+                  },
+                  "requirement": {
+                    "type": "string",
+                    "enum": [
+                      "REQUIRED",
+                      "CONDITIONAL",
+                      "OPTIONAL"
+                    ]
+                  },
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "JOIN",
+                      "BEFORE_LESSON",
+                      "BEFORE_COURSE",
+                      "OPTIONAL"
+                    ]
+                  },
+                  "purposeCode": {
+                    "type": "string",
+                    "enum": [
+                      "IDENTIFICATION",
+                      "LESSON_CONTACT",
+                      "COURSE_ELIGIBILITY",
+                      "CERTIFICATE",
+                      "POSTAL_CONTACT",
+                      "PERSONALISATION"
+                    ]
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "field",
+                  "requirement",
+                  "stage",
+                  "purposeCode",
+                  "explanation"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "effectiveFrom": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "fields",
+            "effectiveFrom"
+          ],
+          "additionalProperties": false
+        },
+        "formations": {
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "apply": {
+                "type": "boolean"
+              },
+              "categoryCode": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "templateId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "templateVersion": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "competencies": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 4000
+                    },
+                    "sortOrder": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "description",
+                    "sortOrder"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "procedureText": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "cancellationPolicyText": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "sourceUrls": {
+                "maxItems": 30,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 2048,
+                  "format": "uri"
+                }
+              },
+              "durationMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 480
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "priceCents": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "termsText": {
+                "type": "string",
+                "maxLength": 20000
+              },
+              "validFrom": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "existingOfferingId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "apply",
+              "categoryCode",
+              "label",
+              "templateId",
+              "templateVersion",
+              "competencies",
+              "procedureText",
+              "cancellationPolicyText",
+              "sourceUrls",
+              "durationMinutes",
+              "priceCents",
+              "termsText",
+              "validFrom",
+              "existingOfferingId"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "selectedSections",
+        "identity",
+        "privacy",
+        "profile",
+        "formations"
+      ],
+      "additionalProperties": false
+    },
+    "SaveSchoolSetupDraftCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "currentStep": {
+          "type": "string",
+          "enum": [
+            "IDENTITY",
+            "PRIVACY",
+            "PROFILE",
+            "FORMATIONS",
+            "PRICING",
+            "REVIEW"
+          ]
+        },
+        "content": {
+          "type": "object",
+          "properties": {
+            "selectedSections": {
+              "maxItems": 4,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "IDENTITY",
+                  "PRIVACY",
+                  "PROFILE",
+                  "CATALOGUE"
+                ]
+              }
+            },
+            "identity": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 150
+                },
+                "timeZone": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "contactEmail": {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                "contactPhone": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 32
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "timeZone",
+                "contactEmail",
+                "contactPhone"
+              ],
+              "additionalProperties": false
+            },
+            "privacy": {
+              "type": "object",
+              "properties": {
+                "noticeText": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "retentionText": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "contactEmail": {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                "templateId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 100
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "templateVersion": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "noticeText",
+                "retentionText",
+                "contactEmail",
+                "templateId",
+                "templateVersion"
+              ],
+              "additionalProperties": false
+            },
+            "profile": {
+              "type": "object",
+              "properties": {
+                "fields": {
+                  "maxItems": 7,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "enum": [
+                          "firstName",
+                          "lastName",
+                          "birthDate",
+                          "postalAddress",
+                          "contactEmail",
+                          "contactPhone",
+                          "profilePhotoDocumentId"
+                        ]
+                      },
+                      "requirement": {
+                        "type": "string",
+                        "enum": [
+                          "REQUIRED",
+                          "CONDITIONAL",
+                          "OPTIONAL"
+                        ]
+                      },
+                      "stage": {
+                        "type": "string",
+                        "enum": [
+                          "JOIN",
+                          "BEFORE_LESSON",
+                          "BEFORE_COURSE",
+                          "OPTIONAL"
+                        ]
+                      },
+                      "purposeCode": {
+                        "type": "string",
+                        "enum": [
+                          "IDENTIFICATION",
+                          "LESSON_CONTACT",
+                          "COURSE_ELIGIBILITY",
+                          "CERTIFICATE",
+                          "POSTAL_CONTACT",
+                          "PERSONALISATION"
+                        ]
+                      },
+                      "explanation": {
+                        "type": "string",
+                        "maxLength": 1000
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "requirement",
+                      "stage",
+                      "purposeCode",
+                      "explanation"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "effectiveFrom": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "fields",
+                "effectiveFrom"
+              ],
+              "additionalProperties": false
+            },
+            "formations": {
+              "maxItems": 12,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "apply": {
+                    "type": "boolean"
+                  },
+                  "categoryCode": {
+                    "type": "string",
+                    "maxLength": 30
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "templateId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "templateVersion": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "competencies": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "description": {
+                          "type": "string",
+                          "maxLength": 4000
+                        },
+                        "sortOrder": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 100000
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "label",
+                        "description",
+                        "sortOrder"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "procedureText": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "cancellationPolicyText": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "sourceUrls": {
+                    "maxItems": 30,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 2048,
+                      "format": "uri"
+                    }
+                  },
+                  "durationMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 480
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "priceCents": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "termsText": {
+                    "type": "string",
+                    "maxLength": 20000
+                  },
+                  "validFrom": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "existingOfferingId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "apply",
+                  "categoryCode",
+                  "label",
+                  "templateId",
+                  "templateVersion",
+                  "competencies",
+                  "procedureText",
+                  "cancellationPolicyText",
+                  "sourceUrls",
+                  "durationMinutes",
+                  "priceCents",
+                  "termsText",
+                  "validFrom",
+                  "existingOfferingId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "selectedSections",
+            "identity",
+            "privacy",
+            "profile",
+            "formations"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "operationId",
+        "currentStep",
+        "content"
+      ],
+      "additionalProperties": false
+    },
+    "ApplySchoolSetupDraftCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "expectedSchoolVersion": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedConfigurationVersion": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reviewDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "reviewAcknowledged": {
+          "type": "boolean",
+          "const": true
+        },
+        "activate": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operationId",
+        "expectedSchoolVersion",
+        "expectedConfigurationVersion",
+        "reviewDigest",
+        "reviewAcknowledged",
+        "activate"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

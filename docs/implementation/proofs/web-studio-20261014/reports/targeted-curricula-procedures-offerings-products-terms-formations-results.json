@@ -1,0 +1,291 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "nativeTabFixture": "Destination Ctrl-clic vérifiée avant rechargement du même URL pour installer le BFF synthétique dans le nouvel onglet Edge.",
+  "checkFilter": null,
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations (équivalent géométrique du zoom desktop 200 %)"
+  ],
+  "captures": [
+    {
+      "target": "curricula",
+      "theme": "light",
+      "width": 1024,
+      "file": "curricula-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curricula",
+      "theme": "light",
+      "width": 390,
+      "file": "curricula-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "procedures",
+      "theme": "light",
+      "width": 1024,
+      "file": "procedures-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "procedures",
+      "theme": "light",
+      "width": 390,
+      "file": "procedures-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "offerings",
+      "theme": "light",
+      "width": 1024,
+      "file": "offerings-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "offerings",
+      "theme": "light",
+      "width": 390,
+      "file": "offerings-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "products",
+      "theme": "light",
+      "width": 1024,
+      "file": "products-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "products",
+      "theme": "light",
+      "width": 390,
+      "file": "products-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "terms",
+      "theme": "light",
+      "width": 1024,
+      "file": "terms-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "terms",
+      "theme": "light",
+      "width": 390,
+      "file": "terms-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "formations",
+      "theme": "light",
+      "width": 1024,
+      "file": "formations-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "formations",
+      "theme": "light",
+      "width": 390,
+      "file": "formations-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curricula",
+      "theme": "dark",
+      "width": 1024,
+      "file": "curricula-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curricula",
+      "theme": "dark",
+      "width": 390,
+      "file": "curricula-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "procedures",
+      "theme": "dark",
+      "width": 1024,
+      "file": "procedures-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "procedures",
+      "theme": "dark",
+      "width": 390,
+      "file": "procedures-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "offerings",
+      "theme": "dark",
+      "width": 1024,
+      "file": "offerings-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "offerings",
+      "theme": "dark",
+      "width": 390,
+      "file": "offerings-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "products",
+      "theme": "dark",
+      "width": 1024,
+      "file": "products-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "products",
+      "theme": "dark",
+      "width": 390,
+      "file": "products-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "terms",
+      "theme": "dark",
+      "width": 1024,
+      "file": "terms-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "terms",
+      "theme": "dark",
+      "width": 390,
+      "file": "terms-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "formations",
+      "theme": "dark",
+      "width": 1024,
+      "file": "formations-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "formations",
+      "theme": "dark",
+      "width": 390,
+      "file": "formations-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "supplemental": [],
+  "accessibility": [
+    {
+      "target": "curricula",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "procedures",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "offerings",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "products",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "terms",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "formations",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "curricula",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "procedures",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "offerings",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "products",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "terms",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "formations",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "failures": []
+}

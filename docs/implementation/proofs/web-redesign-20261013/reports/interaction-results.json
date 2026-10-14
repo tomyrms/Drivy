@@ -1,0 +1,27 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Thèmes : changement immédiat, rechargement, choix manuel et suivi système",
+    "Recherche réglages : résultat profond, clavier, Échap et retour du focus",
+    "Élève : recherche, fiche, trajet et retour à la liste filtrée",
+    "Recherche sans résultat : état explicite et réinitialisation utile",
+    "Menu compte au clavier : ouverture, choix du thème et Échap rend le focus",
+    "Profil incomplet : correction, écriture confirmée et disparition du signal",
+    "Coordonnées : modification puis rechargement de l’URL et du résultat confirmé",
+    "Refus enregistrement : erreur, saisie conservée, aucun faux succès",
+    "Validation formulaire : erreur près du champ, focus et absence d’envoi invalide",
+    "Conflit coordonnées : relecture version serveur, saisie conservée et nouvel envoi confirmé",
+    "Valeur confirmée avant relecture : ancienne valeur modifiée et Annuler rétablit la valeur durable",
+    "Saisie non enregistrée : navigation annulée puis acceptée, historique arrière et avant intact",
+    "Signalements : retour à la valeur initiale et sauvegarde libèrent la sortie ; vraie saisie reste protégée",
+    "Accès direct console refusé au rôle learner",
+    "Accès direct console refusé au rôle instructor",
+    "État empty lisible sans erreur JavaScript",
+    "État error lisible sans erreur JavaScript",
+    "État slow lisible sans erreur JavaScript"
+  ],
+  "captures": [],
+  "accessibility": [],
+  "failures": []
+}

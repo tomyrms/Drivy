@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import type { SchoolCommand } from '../command-core';
 import { commandMessage } from '../command-core';
 import { commandStore, useCommandSnapshot, type PendingEntry, type SubmitResult } from '../command-store';
@@ -21,9 +21,13 @@ export interface ConsoleContextValue {
   reloadSchool: () => Promise<void>;
   csrf: () => string;
   refreshCsrf: () => Promise<string>;
-  navigate: (section: SectionKey, query?: NavigationQuery) => void;
+  navigate: (section: SectionKey, query?: NavigationQuery, options?: { replace?: boolean }) => void;
+  setNavigationGuard?: (guard: ((proceed: () => void) => void) | null) => void;
+  registerUnsavedChanges?: (id: string) => () => void;
+  confirmNavigation?: (proceed: () => void) => void;
   routeQuery?: NavigationQuery;
-  setRouteQuery?: (query: NavigationQuery, replace?: boolean) => void;
+  /** `keepForms` : navigation interne à une section qui reste montée avec ses formulaires (rubriques d'une fiche). */
+  setRouteQuery?: (query: NavigationQuery, replace?: boolean, keepForms?: boolean) => void;
   /** Unsent catalogue drafts, memory only, renewed with the authenticated school/access scope. */
   drafts?: Map<string, unknown>;
   /** Sign in again with the same account; `reauthenticate` forces the identity provider to ask for the password. */
@@ -35,6 +39,18 @@ export function useConsole(): ConsoleContextValue {
   const value = useContext(ConsoleContext);
   if (!value) throw new Error('Console absente.');
   return value;
+}
+
+/** Memory-only registration; multiple forms can protect navigation without replacing each other's guard. */
+export function useUnsavedChanges(dirty: boolean) {
+  const context = useContext(ConsoleContext), id = useId();
+  const register = context?.registerUnsavedChanges;
+  const release = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    if (dirty && register) release.current = register(id);
+    return () => { release.current?.(); release.current = undefined; };
+  }, [dirty, register, id]);
+  return () => { release.current?.(); release.current = undefined; };
 }
 
 /** Selection survives reload/back; only an identifier enters browser history. */
@@ -49,17 +65,19 @@ export function useRouteSelection() {
   return [selected, select] as const;
 }
 
-/** Keep a catalogue form during contextual navigation, never across reload/sign-out. */
-export function useSectionDraft<T>(key: string) {
+/** Keep a form during contextual navigation; configuration editors may protect only effective changes. */
+export function useSectionDraft<T>(key: string, shouldProtectDraft: (draft: T) => boolean = () => true) {
   const { drafts, routeQuery } = useConsole();
   const [draft, setDraft] = useState<T | null>(() => resumableDraft<T>(drafts?.get(key), routeQuery));
   const current = useRef(draft);
+  const releaseGuard = useUnsavedChanges(draft !== null && shouldProtectDraft(draft));
   useEffect(() => {
     const restored = resumableDraft<T>(drafts?.get(key), routeQuery);
     current.current = restored; setDraft(restored);
   }, [drafts, key, routeQuery?.selection, routeQuery?.category]);
   const update = (value: T | null | ((previous: T | null) => T | null)) => {
     const next = typeof value === 'function' ? (value as (previous: T | null) => T | null)(current.current) : value;
+    if (next === null) releaseGuard();
     current.current = next;
     if (next === null) drafts?.delete(key); else drafts?.set(key, next);
     setDraft(next);
@@ -99,6 +117,7 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], s
 /** Draft that follows the school's value until the person edits it. */
 export function useDraft<T>(baseline: T | null) {
   const [draft, setDraft] = useState<T | null>(baseline);
+  const [acknowledged, setAcknowledged] = useState<string | null>(null);
   const previous = useRef<string | null>(baseline === null ? null : JSON.stringify(baseline));
   const serialized = baseline === null ? null : JSON.stringify(baseline);
   useEffect(() => {
@@ -106,10 +125,14 @@ export function useDraft<T>(baseline: T | null) {
     const before = previous.current;
     setDraft(current => current === null || before === null || JSON.stringify(current) === before ? JSON.parse(serialized) as T : current);
     previous.current = serialized;
+    setAcknowledged(null);
   }, [serialized]);
-  const edited = draft !== null && serialized !== null && JSON.stringify(draft) !== serialized;
-  const reset = useCallback(() => { if (serialized !== null) setDraft(JSON.parse(serialized) as T); }, [serialized]);
-  return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset };
+  const saved = acknowledged ?? serialized;
+  const edited = draft !== null && saved !== null && JSON.stringify(draft) !== saved;
+  const releaseGuard = useUnsavedChanges(edited);
+  const reset = () => { releaseGuard(); if (saved !== null) setDraft(JSON.parse(saved) as T); };
+  const markSaved = (value: T) => { releaseGuard(); setDraft(value); setAcknowledged(JSON.stringify(value)); };
+  return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset, markSaved };
 }
 
 export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; message: string; code?: string; needsLogin?: boolean } | null;

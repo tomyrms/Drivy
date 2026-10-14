@@ -1,60 +1,76 @@
+import { useState } from 'react';
+import { z } from 'zod';
 import { useCommandSnapshot } from '../command-store';
-import { dataPolicySchema, profilePolicySchema, readAll, readSchool, readinessSchema } from '../school-api';
-import { Notice, StatusBadge, Symbol, type Tone } from '../ui';
-import { readError, useConsole, useLoad, type SectionKey } from './context';
-import { SectionHeading } from './layout';
-import { consolePath } from './route';
+import { readSchool } from '../school-api';
+import { setupDraftSchema } from '../setup-model';
+import { ConfirmDialog, Symbol, type Tone } from '../ui';
+import { useConsole, useLoad } from './context';
+import { LoadState, SectionHeading } from './layout';
+import { consolePath, readNavigationQuery } from './route';
+import { sectionKeys } from './sections';
+import { SchoolSetupGuide } from './school-setup';
 
 export const schoolStatus = (status: string): { label: string; tone: Tone } =>
   status === 'ACTIVE' ? { label: 'École active', tone: 'success' } : status === 'DRAFT' ? { label: 'En préparation', tone: 'warning' } : { label: 'École inactive', tone: 'neutral' };
 
-async function settle<T>(work: Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
-  try { return { ok: true, value: await work }; } catch (error) { return { ok: false, error: readError(error) }; }
+export const capabilityTitle = (capability: string) => ({
+  CAN_USE_WORKSPACE: 'Espace de l’école', CAN_PLAN_LESSON: 'Planification des leçons',
+  CAN_CAPTURE: 'Enregistrement des trajets', CAN_PUBLISH_COURSE: 'Publication des cours',
+} as Record<string, string>)[capability] ?? 'Autre fonction';
+
+const nextActionsSchema = z.object({ schoolId: z.string().uuid(), planningReady: z.boolean(), actions: z.array(z.object({
+  code: z.string(), label: z.string(), section: z.enum(sectionKeys), query: z.record(z.string(), z.string()).optional(),
+})).max(30) });
+type NextAction = z.infer<typeof nextActionsSchema>['actions'][number];
+
+function ActionLink({ action }: { action: NextAction }) {
+  const { schoolId, navigate } = useConsole();
+  const [showApp, setShowApp] = useState(false);
+  const query = readNavigationQuery(new URLSearchParams(action.query).toString());
+  if (action.code === 'PLAN_FIRST_LESSON') return <>
+    <button type="button" className="preparation-link" onClick={() => setShowApp(true)}><span className="row-title">Planifier dans l’app Drivy</span><span className="flip"><Symbol kind="back" bare /></span></button>
+    <ConfirmDialog open={showApp} busy={false} title="Votre première leçon" confirmLabel="Voir le dossier" onCancel={() => setShowApp(false)} onConfirm={() => { setShowApp(false); navigate('eleves', { selection: query.selection ?? query.learner }); }}>
+      <p>Connectez-vous à l’app Drivy avec votre compte moniteur. Dans Élèves, ouvrez le dossier puis choisissez « Planifier une leçon ».</p>
+    </ConfirmDialog>
+  </>;
+  return <a className="preparation-link" href={consolePath(schoolId, action.section, query)} onClick={event => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault(); navigate(action.section, query);
+  }}><span className="row-title">{action.label}</span><span className="flip"><Symbol kind="back" bare /></span></a>;
 }
 
-/** First-run preparation lives in Settings, never as the working homepage of an active school. */
 export function OverviewSection() {
+  const { school, routeQuery, navigate } = useConsole();
+  if (school.status === 'DRAFT') return <SchoolSetupGuide />;
+  if (routeQuery?.from === 'formations' || routeQuery?.from === 'prestations') return <SchoolSetupGuide catalogueOnly onClose={() => navigate('formations')} />;
+  return <SchoolPreparation />;
+}
+
+function SchoolPreparation() {
   const { schoolId, school, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
   const loaded = useLoad(async () => {
-    const [readiness, policy, profile] = await Promise.all([
-      settle(readSchool(schoolId, 'readiness', readinessSchema)),
-      settle(readSchool(schoolId, 'data-policy', dataPolicySchema)),
-      settle(readAll(schoolId, 'profile-field-policies', profilePolicySchema)),
-    ]);
-    return { readiness, policy, profile };
-  }, [schoolId, revision, school.version]);
-  const data = loaded.data, status = schoolStatus(school.status);
-  const identityCodes = ['SCHOOL_IDENTITY_REQUIRED', 'INVALID_TIME_ZONE', 'SCHOOL_CONTACT_REQUIRED'];
-  const identityReady = data?.readiness.ok && !data.readiness.value.activationBlockers.some(item => identityCodes.includes(item.code));
-  const rows: { title: string; section: SectionKey; done: boolean | undefined }[] = [
-    { title: 'Coordonnées', section: 'configuration', done: identityReady },
-    { title: 'Confidentialité et conditions', section: 'confidentialite', done: data?.policy.ok && data.policy.value.status === 'APPROVED'
-      && data.profile.ok && data.profile.value.items.some(item => item.status === 'PUBLISHED') },
-    { title: 'Formations et tarifs', section: 'formations', done: data?.readiness.ok && data.readiness.value.capabilities.some(item => item.capability === 'CAN_PLAN_LESSON' && item.ready) },
-  ];
-  const failures = data ? Object.values(data).filter(result => !result.ok).length : 0;
-  return <div className="section-stack">
-    <SectionHeading title="Préparation de l’école" actions={school.status !== 'ACTIVE' ? <StatusBadge tone={status.tone} symbol="clock">{status.label}</StatusBadge> : undefined} />
-    {loaded.status === 'loading' && !data && <p className="loading" role="status"><span className="spinner" aria-hidden="true" />Vérification de l’école…</p>}
-    {failures > 0 && <Notice tone="warning" title="Préparation à vérifier" actions={<button type="button" className="button retry" onClick={loaded.reload}>Réessayer</button>}>
-      <p>Certaines informations n’ont pas pu être lues.</p>
-    </Notice>}
-    <ul className="preparation-list">{rows.map((row, index) => <li key={row.section}>
-      <a className="preparation-link" href={consolePath(schoolId, row.section)} onClick={event => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-        event.preventDefault(); navigate(row.section);
-      }}>
-        <span className={row.done ? 'preparation-marker done' : 'preparation-marker'} aria-hidden="true">{row.done ? <Symbol kind="check" bare /> : String(index + 1).padStart(2, '0')}</span>
-        <div className="row-text"><h2 className="row-title">{row.title}</h2>{row.done && <span className="row-meta">Prêt</span>}</div>
-        <span className="flip"><Symbol kind="back" bare /></span>
-      </a>
-    </li>)}</ul>
-    {school.status === 'DRAFT' && <div className="preparation-next">
-      <button type="button" className="button primary" onClick={() => navigate('configuration')}>Relire et activer l’école</button>
-    </div>}
-    {school.status === 'ACTIVE' && <div className="preparation-next">
-      <button type="button" className="button primary" onClick={() => navigate('agenda')}>Ouvrir le planning</button>
-    </div>}
+    const [next, draft] = await Promise.all([readSchool(schoolId, 'setup-draft/next-actions', nextActionsSchema), readSchool(schoolId, 'setup-draft', setupDraftSchema)]);
+    return { next, deferred: draft.content.formations.filter(item => !item.apply) };
+  }, [schoolId, school.version, revision]);
+  return <div className="section-stack"><SectionHeading title="Préparation de l’école" />
+    <LoadState loaded={loaded} label="Lecture de la préparation…">{({ next, deferred }) => <>
+      {next.actions.length ? <ul className="preparation-list">{next.actions.map(action => <li key={action.code}><ActionLink action={action} /></li>)}</ul>
+        : <p className="empty-inline">La préparation de l’école est terminée.</p>}
+      {deferred.length > 0 && <button type="button" className="button secondary" onClick={() => navigate('apercu', { from: 'formations' })}>Reprendre les formations mises de côté ({deferred.length})</button>}
+    </>}</LoadState>
+    <div className="form-actions"><button type="button" className="button primary" onClick={() => navigate('agenda')}>Ouvrir le planning</button>
+      <button type="button" className="button secondary" onClick={() => navigate('apercu', { from: 'formations' })}>Préparer une formation</button></div>
   </div>;
+}
+
+export function FirstLessonActions() {
+  const { schoolId, school, navigate } = useConsole();
+  const { revision } = useCommandSnapshot();
+  const [reduced, setReduced] = useState(false);
+  const loaded = useLoad(() => readSchool(schoolId, 'setup-draft/next-actions', nextActionsSchema), [schoolId, school.version, revision]);
+  return <LoadState loaded={loaded} label="Vérification de la première leçon…">{next => next.planningReady && next.actions.length > 0 && <section className="first-lesson-actions" aria-label="Première leçon">
+    <div className="first-lesson-heading"><h2>Votre première leçon</h2><button type="button" className="button quiet" aria-expanded={!reduced} onClick={() => setReduced(!reduced)}>{reduced ? 'Afficher' : 'Réduire'}</button></div>
+    {!reduced && <><ActionLink action={next.actions[0]!} /><button type="button" className="button quiet" onClick={() => navigate('apercu')}>Voir toute la préparation</button></>}
+  </section>}</LoadState>;
 }

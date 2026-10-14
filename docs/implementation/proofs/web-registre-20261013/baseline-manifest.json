@@ -1,0 +1,49 @@
+{
+  "sourceCommit": "afe2140ee280f09387f6f491a9c582dca03de16e",
+  "capturedAt": "2026-10-13T23:41:46.0734084+02:00",
+  "scope": "Huit captures de référence synthétiques 1440 px, clair et sombre ; autres captures partielles de campagne non utilisées comme référence exhaustive.",
+  "functionalChecks": 18,
+  "functionalFailures": 0,
+  "files": [
+    {
+      "file": "learners-1440-light-synthetic.png",
+      "bytes": 100883,
+      "sha256": "f02c42c761a458b5603d42f9eb0e04a2311e0ab56f87c8207c7d0374d614883b"
+    },
+    {
+      "file": "learners-1440-dark-synthetic.png",
+      "bytes": 101373,
+      "sha256": "2165a858b74919e8bda175651e7dd9ee2f9c4705b9bd6177d1eb4100a238ec69"
+    },
+    {
+      "file": "learner-detail-1440-light-synthetic.png",
+      "bytes": 144706,
+      "sha256": "09815aff83d55cbdd3dedb2ae1294c451bc980dde59577aedd7de21b3384ff19"
+    },
+    {
+      "file": "learner-detail-1440-dark-synthetic.png",
+      "bytes": 145417,
+      "sha256": "49329be9a426d8691d7c43f300e5185f7509446a18dce7637072f30caa894cae"
+    },
+    {
+      "file": "config-1440-light-synthetic.png",
+      "bytes": 55686,
+      "sha256": "ebd3b0c64b4523c802adbbf6a3d2bde764afb8624fd97bcd48f8730f65dac6b1"
+    },
+    {
+      "file": "config-1440-dark-synthetic.png",
+      "bytes": 56032,
+      "sha256": "7eace30702eeb7ad0fddf69983659449b7bac4fa743509c1d534f4919133d55a"
+    },
+    {
+      "file": "team-1440-light-synthetic.png",
+      "bytes": 55477,
+      "sha256": "164885f246839eaf68187f78e3777878abb403c682ad9870641153e6db083624"
+    },
+    {
+      "file": "team-1440-dark-synthetic.png",
+      "bytes": 56040,
+      "sha256": "378925d32b91d48a0f77de1d677d13a5dca676d967dbab43f6295a2509d45d80"
+    }
+  ]
+}

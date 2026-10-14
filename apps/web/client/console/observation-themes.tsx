@@ -36,12 +36,13 @@ function ThemesEditor({ data, reload }: { data: ObservationThemes; reload: () =>
   const uid = useId();
   const [saved, setSaved] = useState(false);
   const runner = useCommandRunner(() => setSaved(true));
-  const [draft, setDraft] = useSectionDraft<Draft>('observation-themes');
+  const baseline = useMemo(() => data.themes.map(toRow), [data]);
+  const [draft, setDraft] = useSectionDraft<Draft>('observation-themes', candidate =>
+    !saved && candidate.version === data.version && isDirty(settingsOf(candidate.rows), settingsOf(baseline)));
   const [notice, setNotice] = useState<'conflict' | 'forbidden' | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [dragging, setDragging] = useState<string | null>(null);
 
-  const baseline = useMemo(() => data.themes.map(toRow), [data]);
   // Un brouillon d'une version plus ancienne n'est jamais rejoué sur une configuration plus récente.
   const rows = draft && draft.version === data.version ? draft.rows : baseline;
   const dirty = isDirty(settingsOf(rows), settingsOf(baseline));

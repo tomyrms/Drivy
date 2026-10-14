@@ -50,6 +50,7 @@ export const memberSchema = z.object({
   id, schoolId: id, version, personId: id, displayName: z.string(), status: z.string(),
   roles: z.array(z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER'])).max(3), grants: z.array(z.string()).max(20), accessEpoch: z.number().int(),
 });
+export const invitationOptionsSchema = z.object({ emailInvitationsAvailable: z.boolean(), codeInvitationsAvailable: z.boolean() });
 export const offeringSchema = z.object({
   id, schoolId: id, version, offeringKey: z.string(), categoryCode: z.string(), curriculumVersionId: id, policyVersionId: id,
   enabled: z.boolean(), defaultDurationMinutes: z.number().int().min(1).max(480), defaultPriceCents: z.number().int().min(0),

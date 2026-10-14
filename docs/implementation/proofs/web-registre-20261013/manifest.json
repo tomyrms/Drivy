@@ -1,0 +1,142 @@
+{
+  "baselineCommit": "afe2140ee280f09387f6f491a9c582dca03de16e",
+  "implementationCommit": "1c43c35f3bbb6389719bdc55ebf0ee7f0d34b6fa",
+  "scope": "Captures brutes. Avant/après et contrôles locaux : composants React réels dans Edge avec BFF et données synthétiques. integrated-first-lesson.png : navigateur CI avec OIDC, BFF, API et PostgreSQL de test. production-anonymous.png : page publique anonyme déployée, sans commande métier. Les quatre vues avant/après sont à 1440 px. Aucun lecteur d’écran qualifié.",
+  "files": [
+    {
+      "file": "before-learners-1440-light-synthetic.png",
+      "sha256": "f02c42c761a458b5603d42f9eb0e04a2311e0ab56f87c8207c7d0374d614883b",
+      "bytes": 100883
+    },
+    {
+      "file": "before-learners-1440-dark-synthetic.png",
+      "sha256": "2165a858b74919e8bda175651e7dd9ee2f9c4705b9bd6177d1eb4100a238ec69",
+      "bytes": 101373
+    },
+    {
+      "file": "before-learner-detail-1440-light-synthetic.png",
+      "sha256": "09815aff83d55cbdd3dedb2ae1294c451bc980dde59577aedd7de21b3384ff19",
+      "bytes": 144706
+    },
+    {
+      "file": "before-learner-detail-1440-dark-synthetic.png",
+      "sha256": "49329be9a426d8691d7c43f300e5185f7509446a18dce7637072f30caa894cae",
+      "bytes": 145417
+    },
+    {
+      "file": "before-config-1440-light-synthetic.png",
+      "sha256": "ebd3b0c64b4523c802adbbf6a3d2bde764afb8624fd97bcd48f8730f65dac6b1",
+      "bytes": 55686
+    },
+    {
+      "file": "before-config-1440-dark-synthetic.png",
+      "sha256": "7eace30702eeb7ad0fddf69983659449b7bac4fa743509c1d534f4919133d55a",
+      "bytes": 56032
+    },
+    {
+      "file": "before-team-1440-light-synthetic.png",
+      "sha256": "164885f246839eaf68187f78e3777878abb403c682ad9870641153e6db083624",
+      "bytes": 55477
+    },
+    {
+      "file": "before-team-1440-dark-synthetic.png",
+      "sha256": "378925d32b91d48a0f77de1d677d13a5dca676d967dbab43f6295a2509d45d80",
+      "bytes": 56040
+    },
+    {
+      "file": "after-learners-1440-light-synthetic.png",
+      "sha256": "d9905c01be630b4309fce9efd7e79e93fd2312983339279ce57bf49b20812d22",
+      "bytes": 152097
+    },
+    {
+      "file": "after-learners-1440-dark-synthetic.png",
+      "sha256": "3e936bd0f7440b731fae5deef194294650d54596bdc8b92973cfd3e32c03a411",
+      "bytes": 153038
+    },
+    {
+      "file": "after-learner-detail-1440-light-synthetic.png",
+      "sha256": "1d82a0a73ccdd5d91687b642579df31a7bd12729ae6d3d8e1a9358fbaa8d3afa",
+      "bytes": 73228
+    },
+    {
+      "file": "after-learner-detail-1440-dark-synthetic.png",
+      "sha256": "61edab4780047248fc38cd68b890f21390c25a40f97788bd2d4ffddcdbd5e8ed",
+      "bytes": 73494
+    },
+    {
+      "file": "after-config-1440-light-synthetic.png",
+      "sha256": "5c94b05d5675fb51f4636725e2c5f9e6cf5312f4a21321300bdeff7bc09372a8",
+      "bytes": 55473
+    },
+    {
+      "file": "after-config-1440-dark-synthetic.png",
+      "sha256": "750f03a1dc69871fac79e5635873bfdada311337200f27214d67d0d301099ad6",
+      "bytes": 55967
+    },
+    {
+      "file": "after-team-1440-light-synthetic.png",
+      "sha256": "680f4cc394baa553677544544021f565e93378d2f3813fafc50669c20d55a19d",
+      "bytes": 59139
+    },
+    {
+      "file": "after-team-1440-dark-synthetic.png",
+      "sha256": "b2b4298c0e1f72777c73eefe0f634a814e09724cf9cf02eb4805e352b1c8e3c4",
+      "bytes": 59864
+    },
+    {
+      "file": "controls-1440-light-synthetic.png",
+      "sha256": "cc0e256544f624dc0ee3c0d4deb6a7900135cf5926b87ae5879f7d65c39795c3",
+      "bytes": 58708
+    },
+    {
+      "file": "controls-1440-dark-synthetic.png",
+      "sha256": "3647e546bff638e620a5ec5e8800fe524c1f3d1bc149881453d685ea72f9ae0d",
+      "bytes": 58873
+    },
+    {
+      "file": "learners-390-light-synthetic.png",
+      "sha256": "a0b6bfa47901f8b1d9b48cba54eaba846380d62875a364071915d73e233a7268",
+      "bytes": 195356
+    },
+    {
+      "file": "learners-390-dark-synthetic.png",
+      "sha256": "5236e410607540fae5f25692588d173123713cdbca94aaf4c2b85f7b5a3d349c",
+      "bytes": 198724
+    },
+    {
+      "file": "curriculum-form-390-light-synthetic.png",
+      "sha256": "6f914955040e4357dce865ba595db57278af0e95fb75ce2b83fea918b3d84260",
+      "bytes": 56343
+    },
+    {
+      "file": "curriculum-form-390-dark-synthetic.png",
+      "sha256": "82b741233c88da3ba710f1aff1f3f6624502bed11e023e0cb8e6264c95831174",
+      "bytes": 57252
+    },
+    {
+      "file": "curriculum-form-1440-dark-keyboard-synthetic.png",
+      "sha256": "20b9ab473f7d9bd690217e01b4a49763df469c0bd473ba0dca09206eb3370280",
+      "bytes": 87482
+    },
+    {
+      "file": "curriculum-form-1440-light-keyboard-synthetic.png",
+      "sha256": "98c3579781130b8f67f02e34ed045530238c6e766fe9f9de651bb4ff525c84a2",
+      "bytes": 86495
+    },
+    {
+      "file": "integrated-first-lesson.png",
+      "sha256": "77d5fae21c92a1ee4e1e2537718689b75b8983800a23f1aac950b1df9f3abb38",
+      "bytes": 49420
+    },
+    {
+      "file": "production-anonymous.png",
+      "sha256": "9178407bd26ec7beb6c726c94c2d1d54784b9ecf7e52c4177984bd6ea2bed82d",
+      "bytes": 16212
+    },
+    {
+      "file": "controls-1440-forced-colors-synthetic.png",
+      "sha256": "9b5ff722f72a99916299e564dc398641687108aab74d9aff0572307d9035a447",
+      "bytes": 55330
+    }
+  ]
+}

@@ -1,0 +1,550 @@
+{
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "nativeTabFixture": "Destination Ctrl-clic vérifiée avant rechargement du même URL pour installer le BFF synthétique dans le nouvel onglet Edge.",
+  "checkFilter": null,
+  "browser": "155.0.4283.45",
+  "checks": [
+    "Reflow 720 CSS px à échelle 2 et réduction des animations (équivalent géométrique du zoom desktop 200 %)"
+  ],
+  "captures": [
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 1440,
+      "file": "curriculum-form-1440-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 1024,
+      "file": "curriculum-form-1024-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 390,
+      "file": "curriculum-form-390-light-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 1440,
+      "file": "curriculum-form-1440-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 1024,
+      "file": "curriculum-form-1024-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 390,
+      "file": "curriculum-form-390-dark-synthetic.png",
+      "horizontalOverflow": false,
+      "pageErrors": []
+    }
+  ],
+  "supplemental": [
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 1440,
+      "file": "curriculum-form-1440-light-keyboard-synthetic.png",
+      "state": "after-keyboard-scroll"
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 1440,
+      "file": "curriculum-form-1440-dark-keyboard-synthetic.png",
+      "state": "after-keyboard-scroll"
+    }
+  ],
+  "accessibility": [
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 1440,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_6_"
+              ],
+              "html": "<h2 id=\"_r_6_\" tabindex=\"-1\">Nouveau référentiel</h2>",
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element",
+              "rect": {
+                "x": 813.71875,
+                "y": 284,
+                "width": 182.203125,
+                "height": 27.5,
+                "top": 284,
+                "right": 995.921875,
+                "bottom": 311.5,
+                "left": 813.71875
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "H2",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "row-text",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "detail-head",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "detail-panel",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-view has-mobile-navigation shows-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "section-stack",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "console-main",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-shell",
+                  "background": "rgb(242, 244, 247)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(242, 244, 247)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 1440,
+      "state": "after-keyboard-scroll",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_6_"
+              ],
+              "html": "<h2 id=\"_r_6_\" tabindex=\"-1\">Nouveau référentiel</h2>",
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element",
+              "rect": {
+                "x": 813.71875,
+                "y": 284,
+                "width": 182.203125,
+                "height": 27.5,
+                "top": 284,
+                "right": 995.921875,
+                "bottom": 311.5,
+                "left": 813.71875
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "H2",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "row-text",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "detail-head",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "detail-panel",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-view has-mobile-navigation shows-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "section-stack",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "console-main",
+                  "background": "rgb(255, 255, 255)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-shell",
+                  "background": "rgb(242, 244, 247)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(242, 244, 247)",
+                  "color": "rgb(32, 41, 54)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(0, 0, 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "light",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 1440,
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_6_"
+              ],
+              "html": "<h2 id=\"_r_6_\" tabindex=\"-1\">Nouveau référentiel</h2>",
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element",
+              "rect": {
+                "x": 813.71875,
+                "y": 284,
+                "width": 182.203125,
+                "height": 27.5,
+                "top": 284,
+                "right": 995.921875,
+                "bottom": 311.5,
+                "left": 813.71875
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "H2",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "row-text",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "detail-head",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "detail-panel",
+                  "background": "rgb(34, 36, 40)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-view has-mobile-navigation shows-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "section-stack",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "console-main",
+                  "background": "rgb(34, 36, 40)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-shell",
+                  "background": "rgb(25, 27, 30)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(25, 27, 30)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(255, 255, 255)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 1440,
+      "state": "after-keyboard-scroll",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "impact": "serious",
+          "help": "Elements must meet minimum color contrast ratio thresholds",
+          "helpUrl": "https://dequeuniversity.com/rules/axe/4.14/color-contrast?application=axeAPI",
+          "nodes": [
+            {
+              "target": [
+                "#_r_6_"
+              ],
+              "html": "<h2 id=\"_r_6_\" tabindex=\"-1\">Nouveau référentiel</h2>",
+              "summary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element",
+              "rect": {
+                "x": 813.71875,
+                "y": 284,
+                "width": 182.203125,
+                "height": 27.5,
+                "top": 284,
+                "right": 995.921875,
+                "bottom": 311.5,
+                "left": 813.71875
+              },
+              "unobscuredAtNinePoints": true,
+              "styles": [
+                {
+                  "tag": "H2",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "row-text",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "detail-head",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "SECTION",
+                  "className": "detail-panel",
+                  "background": "rgb(34, 36, 40)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "split-view has-mobile-navigation shows-detail",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "section-stack",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "MAIN",
+                  "className": "console-main",
+                  "background": "rgb(34, 36, 40)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-body",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "console-shell",
+                  "background": "rgb(25, 27, 30)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "DIV",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "BODY",
+                  "className": "",
+                  "background": "rgb(25, 27, 30)",
+                  "color": "rgb(242, 243, 245)"
+                },
+                {
+                  "tag": "HTML",
+                  "className": "",
+                  "background": "rgba(0, 0, 0, 0)",
+                  "color": "rgb(255, 255, 255)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "curriculum-form",
+      "theme": "dark",
+      "width": 390,
+      "violations": [],
+      "incomplete": []
+    }
+  ],
+  "failures": []
+}

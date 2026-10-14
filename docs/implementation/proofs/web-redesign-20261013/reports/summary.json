@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-13",
+  "scope": "Edge et vrais composants React ; BFF et rechargement synthétiques en mémoire du test. Aucun OIDC/PostgreSQL/lecteur d’écran physique qualifié.",
+  "browser": "155.0.4283.45",
+  "functional": {
+    "passed": 18,
+    "failures": []
+  },
+  "captures": {
+    "distinct": 186,
+    "overflow": 0,
+    "pageErrors": 0
+  },
+  "axe": {
+    "distinct": 124,
+    "violations": 0,
+    "incomplete": 0
+  },
+  "web": {
+    "typecheck": "passed",
+    "tests": 233,
+    "testFiles": 21,
+    "build": "passed",
+    "diffCheck": "passed",
+    "lint": "No standalone web lint script"
+  },
+  "reports": [
+    "review-results.json",
+    "interaction-results.json",
+    "representative-results.json",
+    "targeted-learners-team-results.json",
+    "targeted-trips-invitations-team-setup-identity-setup-privacy-setup-profile-setup-formations-setup-pricing-setup-review-results.json",
+    "targeted-setup-review-results.json",
+    "directory-density-results.json"
+  ]
+}

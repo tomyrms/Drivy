@@ -6,8 +6,9 @@ import {
   request, RequestFailure, roleLabel, sessionSchema,
 } from './protocol';
 import type { InvitationPreview, Me, Member, Session } from './protocol';
-import { StatusBadge, Symbol } from './ui';
+import { CheckField, StatusBadge, Symbol } from './ui';
 import { BrandSymbol } from './BrandSymbol';
+import { AccountMenu } from './preferences';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -225,7 +226,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
           <BrandSymbol />
           <span>Drivy</span>
         </a>
-        {session?.authenticated && <button className="button quiet" type="button" onClick={() => void logout()} disabled={isBusy}>Se déconnecter</button>}
+        <AccountMenu name={session?.authenticated ? personName : 'Apparence'} authenticated={!!session?.authenticated} busy={isBusy} onLogout={() => void logout()} />
       </header>
 
       <main id="main" className={`main${!session?.authenticated ? ' auth-entry' : ''}`} aria-busy={!loaded}>
@@ -307,10 +308,8 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
               <p className="caption">Pour toute question : <a href={`mailto:${preview.data.notice.contactEmail}`}>{preview.data.notice.contactEmail}</a></p>
             </div>
             <div className="acceptance">
-              <label className="confirm-card">
-                <input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} disabled={isBusy} />
-                <span>Je confirme rejoindre <strong>{preview.data.schoolName}</strong> avec le compte indiqué ci-dessus.</span>
-              </label>
+              <CheckField variant="confirmation" checked={reviewed} onChange={setReviewed} disabled={isBusy}
+                label={<>Je confirme rejoindre <strong>{preview.data.schoolName}</strong> avec le compte indiqué ci-dessus.</>} />
               <p className="caption">Ce rattachement ne réserve aucune leçon et n’autorise aucun enregistrement GPS.</p>
               {acceptanceHint && <p className="caption" id="acceptance-hint">Cochez la confirmation pour rejoindre l’école.</p>}
               {!emailVerified && <p className="caption">Vérifiez d’abord votre adresse pour rejoindre l’école.</p>}

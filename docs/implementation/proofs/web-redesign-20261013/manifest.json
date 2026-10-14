@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-13",
+  "scope": "Captures navigateur non retouchées. Données entièrement synthétiques. Liste de 20 élèves avant et après ; noms et variété des formations enrichis après refonte.",
+  "files": [
+    {
+      "file": "before-learners-1440-light-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/before/learners-1440-light-synthetic.png",
+      "sha256": "ccbd89a2b25016f48693a8f204e5b248421e2ccfb3df2fd1e49467252f3b013d",
+      "bytes": 134068
+    },
+    {
+      "file": "before-learners-1440-dark-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/before/learners-1440-dark-synthetic.png",
+      "sha256": "8b513ba019c43c15741f4c59c7e1849b82d149a223975303cfcd1b2ae891f191",
+      "bytes": 132295
+    },
+    {
+      "file": "before-learner-detail-1440-light-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/before/learner-detail-1440-light-synthetic.png",
+      "sha256": "405c4af4971e0e96164e5e535e6feff9d02df5be7061eed866178b219c110649",
+      "bytes": 181977
+    },
+    {
+      "file": "before-learner-detail-1440-dark-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/before/learner-detail-1440-dark-synthetic.png",
+      "sha256": "93006cb27da4b808914c7b9606c88a071d50763e57050dd1f104084eea7ff26b",
+      "bytes": 182547
+    },
+    {
+      "file": "before-config-1440-light-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/before/config-1440-light-synthetic.png",
+      "sha256": "3d07c8ecd45ecc6b4ee8aa07ac8b28a274cfcf7143c0000a2f836cd7c082e594",
+      "bytes": 53536
+    },
+    {
+      "file": "before-config-1440-dark-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/before/config-1440-dark-synthetic.png",
+      "sha256": "215a81e8c7ba8d41ff04b55a9a95aa9dc69b63a4e10a2024171ad03348000b75",
+      "bytes": 52590
+    },
+    {
+      "file": "after-learners-1440-light-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/after/learners-1440-light-synthetic.png",
+      "sha256": "f02c42c761a458b5603d42f9eb0e04a2311e0ab56f87c8207c7d0374d614883b",
+      "bytes": 100883
+    },
+    {
+      "file": "after-learners-1440-dark-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/after/learners-1440-dark-synthetic.png",
+      "sha256": "2165a858b74919e8bda175651e7dd9ee2f9c4705b9bd6177d1eb4100a238ec69",
+      "bytes": 101373
+    },
+    {
+      "file": "after-learner-detail-1440-light-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/after/learner-detail-1440-light-synthetic.png",
+      "sha256": "09815aff83d55cbdd3dedb2ae1294c451bc980dde59577aedd7de21b3384ff19",
+      "bytes": 144706
+    },
+    {
+      "file": "after-learner-detail-1440-dark-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/after/learner-detail-1440-dark-synthetic.png",
+      "sha256": "49329be9a426d8691d7c43f300e5185f7509446a18dce7637072f30caa894cae",
+      "bytes": 145417
+    },
+    {
+      "file": "after-config-1440-light-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/after/config-1440-light-synthetic.png",
+      "sha256": "ebd3b0c64b4523c802adbbf6a3d2bde764afb8624fd97bcd48f8730f65dac6b1",
+      "bytes": 55686
+    },
+    {
+      "file": "after-config-1440-dark-synthetic.png",
+      "source": "artifacts/web-redesign-20261013/after/config-1440-dark-synthetic.png",
+      "sha256": "7eace30702eeb7ad0fddf69983659449b7bac4fa743509c1d534f4919133d55a",
+      "bytes": 56032
+    }
+  ]
+}

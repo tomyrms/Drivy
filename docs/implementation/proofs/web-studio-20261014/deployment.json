@@ -1,0 +1,123 @@
+{
+  "commit": "2b4ca811a777d6f7283fd6910bd179451acc0cba",
+  "base": "c5bfb73060405de9aa0b57b8197e79954ac85588",
+  "previousWeb": "1c43c35f3bbb6389719bdc55ebf0ee7f0d34b6fa",
+  "previousOverride": "[Service]\nWorkingDirectory=/opt/drivy-refonte/web-releases/1c43c35f3bbb6389719bdc55ebf0ee7f0d34b6fa/apps/web\n",
+  "archiveSHA256": "ddf035b06827577f08c675f62c227686af47806124196de54846ff0db27c89e3",
+  "release": "/opt/drivy-refonte/web-releases/2b4ca811a777d6f7283fd6910bd179451acc0cba",
+  "node": "v24.21.0",
+  "before": {
+    "api": {
+      "MainPID": "26154",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/releases/c5bfb73060405de9aa0b57b8197e79954ac85588/apps/api"
+    },
+    "web": {
+      "MainPID": "26858",
+      "WorkingDirectory": "/opt/drivy-refonte/web-releases/1c43c35f3bbb6389719bdc55ebf0ee7f0d34b6fa/apps/web",
+      "ActiveState": "active",
+      "DropInPaths": "/etc/systemd/system/drivy-refonte-web.service.d/90-web-release.conf",
+      "actualCwd": "/opt/drivy-refonte/web-releases/1c43c35f3bbb6389719bdc55ebf0ee7f0d34b6fa/apps/web"
+    },
+    "identity": {
+      "MainPID": "149",
+      "WorkingDirectory": "/opt/drivy-refonte/runtime/keycloak",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/runtime/keycloak"
+    },
+    "ingress": {
+      "MainPID": "0",
+      "WorkingDirectory": "",
+      "ActiveState": "active",
+      "DropInPaths": ""
+    }
+  },
+  "files": {
+    "apple-touch-icon.png": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+    "assets/Manrope-Variable-D0hgXaxw.woff2": "22f962f7e0e72d1e5d99888e902132b4ad4ad8b18ccc3a65e1bb7c87566bb56d",
+    "assets/index-BabFcOUb.js": "b4af4266240e0e7a75f6a0bf9133eb16b592fd7d87b2d20d0970400b3de9cf51",
+    "assets/index-CPrm3-8e.css": "b7b373dbdc811767fed6b905c62cb63d1135b60a9dc0270c0172a914497eeca1",
+    "favicon-32.png": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+    "favicon.ico": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+    "favicon.svg": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+    "icon-192.png": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+    "icon-512.png": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+    "index.html": "ee651f8269355993d94204c09788650b1d917a181f492c31914964b00fd4dc76",
+    "site.webmanifest": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+    "theme-init.js": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354"
+  },
+  "after": {
+    "api": {
+      "MainPID": "26154",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/releases/c5bfb73060405de9aa0b57b8197e79954ac85588/apps/api"
+    },
+    "web": {
+      "MainPID": "27250",
+      "WorkingDirectory": "/opt/drivy-refonte/web-releases/2b4ca811a777d6f7283fd6910bd179451acc0cba/apps/web",
+      "ActiveState": "active",
+      "DropInPaths": "/etc/systemd/system/drivy-refonte-web.service.d/90-web-release.conf",
+      "actualCwd": "/opt/drivy-refonte/web-releases/2b4ca811a777d6f7283fd6910bd179451acc0cba/apps/web"
+    },
+    "identity": {
+      "MainPID": "149",
+      "WorkingDirectory": "/opt/drivy-refonte/runtime/keycloak",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/runtime/keycloak"
+    },
+    "ingress": {
+      "MainPID": "0",
+      "WorkingDirectory": "",
+      "ActiveState": "active",
+      "DropInPaths": ""
+    }
+  },
+  "override": "/etc/systemd/system/drivy-refonte-web.service.d/90-web-release.conf",
+  "apiAndIdentityUnchanged": true,
+  "privateEnvironmentsUnchanged": true,
+  "migrationsExecuted": false,
+  "deployedAt": "2026-10-13T23:01:46.848505+00:00",
+  "backupPath": "/root/drivy_refonte-before-web-2b4ca811a777d6f7283fd6910bd179451acc0cba-20261013T230144Z-241b1b53ffbc.dump",
+  "backupBytes": 1023446,
+  "backupVerified": true,
+  "migrations": {
+    "001_g1a.sql": "ab648269d745bffe74cfb07a39066d80a7985482e06b622d434fcddd3db0cd17",
+    "002_g1b_school_setup.sql": "769f78bbceec1b5bca629a92e26907dbadc32d0358cf8e3115da8a822c1aed9e",
+    "003_g1c_invitations.sql": "d1a35b84e4e33e43935b97fc274e89526b6fd839a6923258fd443e9c1d430edb",
+    "004_g1d_profiles.sql": "68c5905af2c45d514adbf468a0ee3b6f437a4db35ddc306b2e7f537f8261f5ca",
+    "005_g1d_catalogue.sql": "59ae7b56acad88294fe32f67538ca346ec525fcf7eb0036e27476e9ec7d699da",
+    "006_lessons.sql": "4212873103e767c9242b9cfd2990b74a2485050d60a6d581b8f4e3f4cf122a3e",
+    "007_lesson_reports.sql": "1568b7265e813e37a87eb29cb4aaf6cd48b9e5236ad40b5a306e4078ef87a176",
+    "008_capture.sql": "ca2fea2c610d2ce5deeee8cf68fc72c28d68f06d1b5120ee5005146e77221049",
+    "009_capture_observations.sql": "28e61c0bd55224dcb96a81ef04fdaa06e7d35ad42150fb7cf4b9b6024ff01c47",
+    "010_permit_checks.sql": "ee887828e69b74cadda8288bb244213ec54f2e7b0f26acc9ea0874ef210a7d5b",
+    "011_lesson_outcomes.sql": "2a0667b975febeaf8e8d8189e12f3b2d252422f9ab2f6dad9df7c33078b4c324",
+    "012_learner_sharing.sql": "d10c40236282e1fb43311a0742ddb8fbfcb84ed5ea76dacc11390335c8d38244",
+    "013_invitation_training.sql": "7d70c9fa7451f87d10af0316142c160955d0132091c3fb702420e989a75ec6c4",
+    "014_admin_trip_access.sql": "728807c7e61d46e485521b7d876329df8450e5d059893f55e634c9b0bd55c2ef",
+    "015_invitation_code.sql": "dcec3bc1325817b6cf49ad06da2d0dc66f547efa13e5fbad0d39ce229be6e968",
+    "016_access_lifecycle.sql": "4b4c8bb9a92505db9fe2959bda474ea2797f8e11c2b9a299f37c8377e25c1807",
+    "017_planning_corrections.sql": "57635de78ccc286c4142d62d22d7fde17587f2ea0ebe090a6075c235291016fc",
+    "018_invitation_trainings.sql": "4edd96984ac5de98b70ee10e0d8c4276ca3989c738743b2e37eba7f0caafac86",
+    "019_optional_report_content.sql": "c9b5a061e2a7a6267ae4772b28097b74ad9574325f05c0a0545601dfd1f2b99c",
+    "020_admin_progress_read.sql": "12dd9dffd9ea0237cf30d8f8621df4d8a9b4debf7a421270a9f3c7ad147ff30f",
+    "021_planning_defaults.sql": "68a3518c0eeff111bbfaff154a6e0a854017a0dc1b68c65e9a91d97f52a6b93f",
+    "022_lesson_availability.sql": "5d21396574781c924b340e29d6deb133523f9fa32fc6ee880c8366edbbe71bb0",
+    "023_explicit_lesson_start.sql": "65ed284f6812c607f062e78cb8ecd6d00bb1a39eac1afcdf14b4d4dbce4b0d0e",
+    "024_matched_route.sql": "fd6aceb38f1b780e49e052a8cb653d3918959354ba72f49ae0a59933915026fb",
+    "025_capture_rights_and_indexes.sql": "aaed45d31139fd980642cf767a72063daee70a0bf34e84f63c0664a3fdaf86ce",
+    "026_observation_themes.sql": "755d70ae98b7140c0d4afc08d88e013c5f1d3f45b209497e6a6152303bf37e05",
+    "027_report_reading.sql": "0de8f19421836e1321160188e467b300860eadbf3f5fb40d86e63a472293a572",
+    "028_observation_ranking.sql": "ff98dd4cca2ac5816805cd1d6e9193a79df0fdd4f2f1a0c9a54ac646502aec33",
+    "029_data_policy_change_impact.sql": "00dec154c5d4660129acbc19721cff909ee2f281999d336c0796b8ff65c9eb06",
+    "030_admin_recording_choices.sql": "79da0ffa30fe5cd6ed0c1c1186c1499bf6d25486c684b8860597919275fc2358",
+    "031_school_opening.sql": "ebb0aa25099f1009e6f9335eb7a252d166fa3aada664c544b009b37480eea3b3",
+    "032_school_setup_draft.sql": "462fecb4cdc15686897ad3c96be0803b57d42c94176c127ab818bd76b6af51b9"
+  }
+}

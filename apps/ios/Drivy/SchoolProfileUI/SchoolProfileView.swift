@@ -326,7 +326,7 @@ struct SchoolProfileView: View {
                 if let notice {
                     // Same wording and content as the notice sheet of the guided welcome.
                     SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
-                        identifier: "profile-privacy-link")
+                        addressesLearner: model.isOwnProfile, identifier: "profile-privacy-link")
                 }
             }
             .drivyFormRows()

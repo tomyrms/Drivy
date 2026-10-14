@@ -15,7 +15,7 @@ const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(maximum:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=maximum);
 const nullableText=(maximum:number)=>z.string().refine(value=>[...value].length<=maximum).nullable();
 const fields=['firstName','lastName','birthDate','postalAddress','contactEmail','contactPhone','profilePhotoDocumentId'] as const;
-const fieldRule=z.object({field:z.enum(fields),requirement:z.enum(['REQUIRED','CONDITIONAL','OPTIONAL']),stage:z.enum(['JOIN','BEFORE_LESSON','BEFORE_COURSE','OPTIONAL']),
+export const fieldRule=z.object({field:z.enum(fields),requirement:z.enum(['REQUIRED','CONDITIONAL','OPTIONAL']),stage:z.enum(['JOIN','BEFORE_LESSON','BEFORE_COURSE','OPTIONAL']),
   purposeCode:z.enum(['IDENTIFICATION','LESSON_CONTACT','COURSE_ELIGIBILITY','CERTIFICATE','POSTAL_CONTACT','PERSONALISATION']),explanation:text(1000)}).strict();
 type Rule=z.infer<typeof fieldRule>;
 // publishNow : effet immédiat, sans brouillon ni date (décision du porteur du 13 octobre 2026) ; la version reste immuable.
@@ -42,7 +42,7 @@ interface Blocker {code:string;message:string;field:string|null;purpose:string|n
 const block=(code:string,message:string,field:string|null=null,purpose:string|null=null):Blocker=>({code,message,field,purpose,resourceId:null,destinationKey:'PROFILE'});
 const policyDTO=(row:PolicyRow)=>({id:row.id,schoolId:row.school_id,version:row.version,status:row.status,effectiveFrom:row.effective_from.toISOString(),fields:row.fields,
   noticeVersionId:row.notice_version_id,approvedByMembershipId:row.approved_by_membership_id});
-function validateRules(rules:Rule[]) {
+export function validateRules(rules:Rule[]) {
   const fail=()=>{throw new ApiError(422,'PROFILE_POLICY_RULE_INVALID','Vérifiez les champs, leurs finalités et leurs étapes.');};
   if(new Set(rules.map(rule=>rule.field)).size!==rules.length) fail();
   for(const name of ['firstName','lastName']) if(!rules.some(rule=>rule.field===name && rule.requirement==='REQUIRED' && rule.stage==='JOIN' && rule.purposeCode==='IDENTIFICATION')) fail();

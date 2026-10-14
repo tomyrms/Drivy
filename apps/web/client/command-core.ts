@@ -8,7 +8,7 @@
  */
 
 export type CommandKind =
-  | 'updateSchool' | 'saveSetup' | 'activate' | 'saveDataPolicy'
+  | 'updateSchool' | 'saveSetup' | 'activate' | 'saveDataPolicy' | 'saveSetupDraft' | 'applySetupDraft'
   | 'createInvitation' | 'resendInvitation' | 'revokeInvitation'
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
@@ -16,7 +16,8 @@ export type CommandKind =
   | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
-  | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure';
+  | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
+  | 'createFormation' | 'saveFormationProgramme' | 'saveTariff';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -32,6 +33,8 @@ interface CommandSpec {
 export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   updateSchool: { operationType: 'UPDATE_SCHOOL', resourceType: 'School', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Modification des coordonnées' },
   saveSetup: { operationType: 'SAVE_SCHOOL_SETUP', resourceType: 'SchoolSetup', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Enregistrement de l’avancement' },
+  saveSetupDraft: { operationType: 'SAVE_SCHOOL_SETUP_DRAFT', resourceType: 'SchoolSetupDraft', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Enregistrement de la préparation' },
+  applySetupDraft: { operationType: 'APPLY_SCHOOL_SETUP_DRAFT', resourceType: 'SchoolSetupDraft', target: 'school', method: 'POST', expectedStatus: 200, label: 'Confirmation de la préparation' },
   activate: { operationType: 'ACTIVATE_SCHOOL', resourceType: 'School', target: 'school', method: 'POST', expectedStatus: 200, label: 'Activation de l’école' },
   saveDataPolicy: { operationType: 'ADOPT_SCHOOL_DATA_POLICY', resourceType: 'SchoolDataPolicy', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Adoption des textes d’information' },
   createInvitation: { operationType: 'CREATE_INVITATION', resourceType: 'Invitation', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une invitation' },
@@ -61,6 +64,10 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
   createClosure: { operationType: 'CREATE_CLOSURE', resourceType: 'Closure', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une absence' },
   removeClosure: { operationType: 'REMOVE_CLOSURE', resourceType: 'Closure', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une absence' },
+  // Formations et tarifs : chaque intention est une seule opération serveur (nouvelles versions, références, audit et reçu dans un commit).
+  createFormation: { operationType: 'CREATE_FORMATION', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une formation' },
+  saveFormationProgramme: { operationType: 'UPDATE_FORMATION_PROGRAMME', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Modification d’une formation' },
+  saveTariff: { operationType: 'SAVE_TARIFF', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un tarif' },
 };
 
 export interface SchoolCommand {
@@ -187,6 +194,14 @@ export function commandMessage(code: string): string {
     PRECONDITION_REQUIRED: 'La version affichée est requise. Rechargez les informations avant de confirmer.',
     IDEMPOTENCY_MISMATCH: 'Cette référence de demande a déjà servi pour un autre contenu. Vérifiez son résultat auprès de l’école.',
     SETUP_INCOMPLETE: 'L’école n’est pas encore prête. Vérifiez les éléments à compléter.',
+    SETUP_REVIEW_CHANGED: 'La préparation ou ses références ont changé. Vérifiez à nouveau le résumé avant de confirmer.',
+    SETUP_DRAFT_ALREADY_APPLIED: 'Cette préparation est déjà appliquée. Enregistrez les nouveaux choix avant de les confirmer.',
+    SETUP_ITEM_ALREADY_APPLIED: 'Ce tarif est déjà créé. Retirez cet élément du brouillon et préparez un nouveau tarif depuis sa formation.',
+    SETUP_INHERITED_CANCELLATION: 'Ce tarif conserve l’annulation de sa formation. Retirez le nouveau texte depuis l’étape Vos tarifs.',
+    SETUP_PLACEHOLDER: 'Remplacez les passages à compléter dans les exemples avant de confirmer.',
+    SETUP_TEMPLATE_CHANGED: 'Le modèle a changé. Relisez les propositions actuelles avant de confirmer.',
+    SETUP_FIELD_REQUIRED: 'Complétez les champs indiqués dans la relecture de la préparation.',
+    CATALOGUE_ACCESS_REQUIRED: 'L’autorisation de configurer les formations et tarifs est nécessaire.',
     CONFIG_IMPACT_REVIEW_REQUIRED: 'Cette modification demande une analyse d’impact dédiée (par exemple un changement de fuseau).',
     MODULE_NOT_READY: 'Ce changement n’est pas encore disponible.',
     POLICY_REVIEW_REQUIRED: 'Adoptez d’abord les textes d’information et de conservation de l’école.',
@@ -216,7 +231,7 @@ export function commandMessage(code: string): string {
     INVITATION_USED: 'Cette invitation a déjà été utilisée.',
     INVITATION_REVOKED: 'Cette invitation a déjà été révoquée.',
     INVITATION_ROLE_FORBIDDEN: 'Vos accès ne permettent pas d’inviter avec ce rôle.',
-    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Aucune invitation n’a été créée : utilisez un code élève.',
+    INVITATION_DELIVERY_UNAVAILABLE: 'L’envoi par e-mail n’est pas disponible. Cette demande n’a pas été appliquée.',
     INVITATION_TRAINING_INVALID: 'Choisissez une offre ouverte et un moniteur actif.',
     INVITATION_CODE_INVALID: 'Ce code n’est plus valable. Créez-en un nouveau.',
     PROFILE_POLICY_RULE_INVALID: 'Vérifiez les champs, leur utilité et le moment où ils sont demandés.',
@@ -238,6 +253,18 @@ export function commandMessage(code: string): string {
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',
     NOT_FOUND: 'Cette information n’est plus disponible avec vos accès actuels.',
+    FORMATION_CHANGED: 'Ce parcours a été modifié entre-temps. Votre saisie est conservée : rechargez la fiche, relisez la version actuelle, puis enregistrez.',
+    FORMATION_UNCHANGED: 'Aucune modification à enregistrer.',
+    FORMATION_ALREADY_EXISTS: 'Ce permis est déjà préparé. Ouvrez sa fiche, ou choisissez explicitement d’ajouter un autre parcours.',
+    FORMATION_NOT_FOUND: 'Ce permis n’a pas encore de parcours. Préparez d’abord sa formation.',
+    PROGRAMME_LABEL_TAKEN: 'Un autre parcours de ce permis porte déjà ce nom.',
+    PROGRAMME_INCOMPLETE: 'Ce parcours doit avoir des compétences, des règles et une durée habituelle pour être enregistré.',
+    PROGRAMME_REFERENCE_PRICE_MISSING: 'Ce parcours ancien n’a pas de prix de référence. Préparez-le de nouveau avec « Ajouter une formation ».',
+    COMPETENCY_KEY_UNKNOWN: 'Une compétence reprise n’appartient plus à ce parcours. Rechargez la fiche.',
+    COMPETENCY_KEY_DUPLICATED: 'Une compétence figure deux fois.',
+    TARIFF_CHANGED: 'Ce tarif a été modifié entre-temps. Votre saisie est conservée : rechargez la fiche, relisez la version actuelle, puis enregistrez.',
+    TARIFF_UNCHANGED: 'Aucune modification à enregistrer.',
+    TARIFF_SCHEDULING_UNSUPPORTED: 'Une modification de tarif s’applique dès aujourd’hui ; une date future laisserait ce tarif sans prix applicable.',
     REQUEST_FAILED: 'L’école a refusé cette demande.',
   };
   return messages[code] ?? 'La demande n’a pas pu être confirmée. Vérifiez son résultat auprès de l’école avant de continuer.';

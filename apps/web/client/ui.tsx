@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 
 export type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock'
   | 'home' | 'settings' | 'list' | 'layers' | 'book' | 'file' | 'tag' | 'receipt' | 'users' | 'plus' | 'edit' | 'send'
-  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron' | 'chevron-up' | 'grip';
+  | 'ban' | 'back' | 'info' | 'dot' | 'menu' | 'calendar' | 'route' | 'chevron' | 'chevron-up' | 'grip' | 'search';
 
 const symbolPaths: Record<SymbolKind, ReactNode> = {
+  search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
   account: <><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-3a7 7 0 0 1 14 0v3" /></>,
   school: <path d="M4 21V5l8-3 8 3v16M2 21h20M9 21v-5h6v5M8 7h1m6 0h1M8 11h1m6 0h1" />,
   alert: <><path d="M10.3 4 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0Z" /><path d="M12 9.5v4M12 17h.01" /></>,
@@ -85,7 +86,7 @@ export function EmptyState({ symbol, title, message, action }: { symbol: SymbolK
   );
 }
 
-type FieldProps = { label: string; hint?: string | undefined; error?: string | null | undefined; disabled?: boolean | undefined; required?: boolean | undefined };
+type FieldProps = { id?: string; label: string; hint?: string | undefined; error?: string | null | undefined; disabled?: boolean | undefined; required?: boolean | undefined };
 
 function FieldFrame({ id, label, hint, error, required, children, counter }: FieldProps & { id: string; children: ReactNode; counter?: ReactNode }) {
   return (
@@ -101,14 +102,14 @@ function FieldFrame({ id, label, hint, error, required, children, counter }: Fie
 const describedBy = (id: string, hint?: string, error?: string | null, counter?: boolean) =>
   [hint || counter ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
 
-export function TextField({ label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly }: FieldProps & {
+export function TextField({ id: suppliedId, label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly, name }: FieldProps & {
   value: string; onChange: (value: string) => void; type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'datetime-local' | 'url' | 'number';
-  maxLength?: number; autoComplete?: string; inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel'; placeholder?: string; readOnly?: boolean;
+  maxLength?: number; autoComplete?: string; inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel'; placeholder?: string; readOnly?: boolean; name?: string;
 }) {
-  const id = useId();
+  const generatedId = useId(), id = suppliedId ?? generatedId;
   return (
     <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
-      <input id={id} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
+      <input id={id} name={name} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
         autoComplete={autoComplete ?? 'off'} inputMode={inputMode} maxLength={maxLength}
         aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error)}
         onChange={event => onChange(event.target.value)} />
@@ -116,51 +117,42 @@ export function TextField({ label, value, onChange, hint, error, disabled, requi
   );
 }
 
-export function TextArea({ label, value, onChange, hint, error, disabled, required, maxLength, rows = 5 }: FieldProps & {
-  value: string; onChange: (value: string) => void; maxLength?: number; rows?: number;
+export function TextArea({ id: suppliedId, label, value, onChange, hint, error, disabled, required, maxLength, rows = 5, name }: FieldProps & {
+  value: string; onChange: (value: string) => void; maxLength?: number; rows?: number; name?: string;
 }) {
-  const id = useId();
+  const generatedId = useId(), id = suppliedId ?? generatedId;
   const length = [...value].length;
   const counter = maxLength && length > maxLength * .8
     ? <span className={length > maxLength ? 'counter over' : 'counter'}> {length.toLocaleString('fr-CH')} / {maxLength.toLocaleString('fr-CH')} caractères</span> : null;
   return (
     <FieldFrame id={id} label={label} hint={hint} error={error} required={required} counter={counter}>
-      <textarea id={id} value={value} disabled={disabled} required={required} rows={rows}
+      <textarea id={id} name={name} value={value} disabled={disabled} required={required} rows={rows}
         aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error, counter !== null)}
         onChange={event => onChange(event.target.value)} />
     </FieldFrame>
   );
 }
 
-export function SelectField<T extends string>({ label, value, onChange, options, hint, error, disabled, required, placeholder }: FieldProps & {
-  value: T | ''; onChange: (value: T) => void; options: readonly { value: T; label: string; disabled?: boolean }[]; placeholder?: string;
-}) {
-  const id = useId();
-  return (
-    <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
-      <div className="select-control">
-        <select id={id} value={value} disabled={disabled} required={required} aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy(id, hint, error)} onChange={event => onChange(event.target.value as T)}>
-          {placeholder !== undefined && <option value="" disabled>{placeholder}</option>}
-          {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-        </select>
-        <Symbol kind="chevron" bare />
-      </div>
-    </FieldFrame>
-  );
-}
+export { SelectField, SegmentField } from './choice-field';
 
-/** The single selection pattern (DrivySelectionCardStyle): native checkbox, soft accent when checked. */
-export function CheckField({ label, description, checked, onChange, disabled }: {
-  label: string; description?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean;
+/** Native checkbox with one drawing across settings, permissions and confirmations. */
+export function CheckField({ label, description, checked, onChange, disabled, indeterminate = false, variant = 'plain' }: {
+  label: ReactNode; description?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean;
+  indeterminate?: boolean; variant?: 'plain' | 'confirmation';
 }) {
   const id = useId();
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (input.current) input.current.indeterminate = indeterminate; }, [indeterminate]);
   return (
-    <label className="check-field" htmlFor={id}>
-      <input id={id} type="checkbox" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)}
-        aria-describedby={description ? `${id}-description` : undefined} />
+    <label className={`check-field${variant === 'confirmation' ? ' check-confirmation' : ''}`} htmlFor={id}>
+      <span className="check-control"><input ref={input} id={id} type="checkbox" checked={checked} disabled={disabled}
+        onChange={event => { event.target.indeterminate = indeterminate; onChange(event.target.checked); }}
+        aria-labelledby={`${id}-label`} aria-describedby={description ? `${id}-description` : undefined} />
+        <svg className="check-mark" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m4 9 3.2 3.2L14 5.8" /></svg>
+        <svg className="check-mixed" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M4 9h10" /></svg>
+      </span>
       <span className="check-text">
-        <span className="check-label">{label}</span>
+        <span className="check-label" id={`${id}-label`}>{label}</span>
         {description && <span className="caption" id={`${id}-description`}>{description}</span>}
       </span>
     </label>
@@ -230,7 +222,7 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
       <div className="dialog-body">
         {children}
         {acknowledgement !== undefined && onAcknowledge &&
-          <CheckField label={acknowledgement} checked={!!acknowledged} onChange={onAcknowledge} disabled={busy} />}
+          <CheckField variant="confirmation" label={acknowledgement} checked={!!acknowledged} onChange={onAcknowledge} disabled={busy} />}
         {disabledReason && <p className="caption">{disabledReason}</p>}
       </div>
       <div className="dialog-actions">

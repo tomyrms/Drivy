@@ -1,0 +1,505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:formations:1",
+  "title": "Formations et tarifs : fiche d’un permis et commandes composées",
+  "description": "GET /v1/schools/{schoolId}/formations, /formations/sheet?category=, /formations/uncategorized-tariffs, /formations/terms, /formations/references/{id} (ADMIN courant). POST /formations (CREATE_FORMATION), /formations/programmes (UPDATE_FORMATION_PROGRAMME), /formations/tariffs (SAVE_TARIFF) : Idempotency-Key = operationId, 201, une opération et un reçu AP72 par commande ; têtes attendues comparées sous le verrou scolaire ; CONFIGURE_CATALOG requis pour toute écriture commerciale.",
+  "$defs": {
+    "CreateFormationCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "categoryCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "intent": {
+          "type": "string",
+          "enum": [
+            "NEW",
+            "ADDITIONAL_PROGRAMME"
+          ]
+        },
+        "programmeLabel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "competencies": {
+          "minItems": 1,
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "procedure": {
+          "type": "object",
+          "properties": {
+            "procedureText": {
+              "type": "string"
+            },
+            "cancellationPolicyText": {
+              "type": "string"
+            },
+            "sourceUrls": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 2048,
+                "format": "uri"
+              }
+            }
+          },
+          "required": [
+            "procedureText",
+            "cancellationPolicyText",
+            "sourceUrls"
+          ],
+          "additionalProperties": false
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "templateId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "templateVersion": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "templateId",
+            "templateVersion"
+          ],
+          "additionalProperties": false
+        },
+        "tariff": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "durationMinutes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 480
+            },
+            "priceCents": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "validFrom": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "validUntil": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "termsText": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "label",
+            "durationMinutes",
+            "priceCents",
+            "validFrom",
+            "validUntil",
+            "termsText"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "operationId",
+        "categoryCode",
+        "intent",
+        "programmeLabel",
+        "competencies",
+        "procedure",
+        "tariff"
+      ],
+      "additionalProperties": false
+    },
+    "UpdateFormationProgrammeCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "offeringKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "expectedOfferingVersionId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "defaultDurationMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 480
+        },
+        "competencies": {
+          "minItems": 1,
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "procedure": {
+          "type": "object",
+          "properties": {
+            "procedureText": {
+              "type": "string"
+            },
+            "cancellationPolicyText": {
+              "type": "string"
+            },
+            "sourceUrls": {
+              "maxItems": 30,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 2048,
+                "format": "uri"
+              }
+            }
+          },
+          "required": [
+            "procedureText",
+            "cancellationPolicyText",
+            "sourceUrls"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "operationId",
+        "offeringKey",
+        "expectedOfferingVersionId"
+      ],
+      "additionalProperties": false
+    },
+    "SaveTariffCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "mode": {
+              "type": "string",
+              "const": "CREATE"
+            },
+            "categoryCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 30
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "INDIVIDUAL_LESSON",
+                "COLLECTIVE_COURSE",
+                "EXAM_SUPPORT",
+                "EXTERNAL_SERVICE"
+              ]
+            },
+            "label": {
+              "type": "string"
+            },
+            "durationMinutes": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1440
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unitLabel": {
+              "type": "string"
+            },
+            "priceCents": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "validUntil": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "validFrom": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "termsText": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "operationId",
+            "mode",
+            "categoryCode",
+            "type",
+            "label",
+            "durationMinutes",
+            "unitLabel",
+            "priceCents",
+            "validUntil",
+            "enabled",
+            "validFrom",
+            "termsText"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "mode": {
+              "type": "string",
+              "const": "UPDATE"
+            },
+            "productKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "expectedProductVersionId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "INDIVIDUAL_LESSON",
+                "COLLECTIVE_COURSE",
+                "EXAM_SUPPORT",
+                "EXTERNAL_SERVICE"
+              ]
+            },
+            "label": {
+              "type": "string"
+            },
+            "durationMinutes": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1440
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unitLabel": {
+              "type": "string"
+            },
+            "priceCents": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "validUntil": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "terms": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "const": "KEEP"
+                    }
+                  },
+                  "required": [
+                    "mode"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "const": "NEW"
+                    },
+                    "termsText": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mode",
+                    "termsText"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "operationId",
+            "mode",
+            "productKey",
+            "expectedProductVersionId",
+            "type",
+            "label",
+            "durationMinutes",
+            "unitLabel",
+            "priceCents",
+            "validUntil",
+            "enabled",
+            "terms"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

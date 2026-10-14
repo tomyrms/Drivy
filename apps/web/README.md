@@ -41,7 +41,7 @@ Les sessions sont en mémoire d’un **seul processus**, bornées à 10 000, ave
 
 ## Web de gestion (administration)
 
-Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une console de bureau : navigation latérale avec menu sur petit écran, liste + panneau de détail, formulaires à libellés permanents et confirmation des commandes sensibles. La direction « Encre et papier » et les tokens de `client/styles.css` sont propres au web ; clair/sombre, contraste accru et couleurs forcées restent pris en charge.
+Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une console de bureau : navigation latérale avec menu sur petit écran, liste + panneau de détail, formulaires à libellés permanents et confirmation des commandes sensibles. La direction « Bureau de précision » et les tokens de `client/styles.css` sont propres au web. Rail plat, navigation secondaire et recherche de paramètres conduisant aux champs. Le compte donne accès à `/app/preferences` : Clair / Sombre / Système, appliqué avant React et conservé dans `drivy.web.theme` (aucune donnée scolaire). Contraste accru et couleurs forcées restent pris en charge. [Refonte et vérifications du 13 octobre](../../docs/implementation/web-redesign-20261013.md).
 
 | Écran (chemin) | Lectures | Écritures (commande, If-Match) |
 |---|---|---|
@@ -51,7 +51,7 @@ Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une
 | Dossiers (`eleves`) | élèves, formations, affectations, permis, progression, bilans publiés | Ouverture et transition des formations, affectation/retrait du moniteur, permis, archivage/restauration |
 | Trajets (`trajets`) | captures autorisées dans l’école, filtre élève ou pages de l’historique | Lecture seule |
 | Formations (`formations`) | offres et versions liées de catalogue | Navigation contextuelle vers offres, compétences, procédures et tarifs |
-| Configuration (`configuration`) | école, setup, data-policy, readiness | `PATCH /` coordonnées (version école) · `PUT data-policy` adoption (version politique) · `PATCH setup` avancement (version setup) · `POST activate` (version école + `expectedConfigurationVersion`) |
+| Configuration (`configuration`) | école, setup, data-policy, readiness | `PATCH /` coordonnées, enregistrement direct (version école) · `PUT data-policy` adoption (version politique) · `PATCH setup` avancement (version setup) · `POST activate` (version école + `expectedConfigurationVersion`) |
 | Champs du profil (`champs-profil`) | profile-field-policies, data-policy (+ notice liée `?noticeVersionId=`) | `POST profile-field-policies` (If-Match version école) · `POST …/{id}/publish` (version politique) |
 | Offres (`offres`) | offerings, curricula, policy-versions | `POST offerings` (nouvelle version, désactivée sauf activation cochée) |
 | Référentiels (`referentiels`), Procédures (`procedures`) | curricula / policy-versions | `POST curricula` / `POST policy-versions` : révision immuable, approbation cochée + motif + accusé de relecture |
@@ -89,7 +89,7 @@ Lectures : session requise. Écritures : Origin exacte, `X-CSRF-Token`, `Content
 
 ### Reste à qualifier ou à construire
 
-- Pas de test navigateur automatisé en CI : la console a été relue par captures Chromium locales sur un faux BFF synthétique (clair, sombre, 390 px). Aucun essai avec l’API et Keycloak réels, ni lecteur d’écran réel.
+- La recette de refonte est reproductible avec `node scripts/dev/check-web-redesign.mjs`, Vite lancé sur 127.0.0.1:5173 et Edge disponible. Elle utilise les vrais composants, des réponses synthétiques, des contrôles clavier, axe-core optionnel et des captures clair/sombre à 1440/1024/390 px. La disponibilité de PostgreSQL/Keycloak doit être vérifiée séparément pour une recette complète ; le moteur Docker local était indisponible pendant cette refonte. Voir le rapport pour les preuves exactes et limites.
 - Hors des parcours web implémentés : capture GPS, démarrage/fin de leçon, édition détaillée du profil administratif d’un élève, règlements, packs/cours collectifs et documents. Les disponibilités, dossiers, formations et affectations existent dans les rubriques ci-dessus.
 - Les listes chargent au plus 1 000 éléments (10 pages) ; au-delà, la liste est signalée partielle.
 

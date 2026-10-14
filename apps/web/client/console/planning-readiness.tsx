@@ -6,7 +6,7 @@ import { useConsole, useLoad, type SectionKey } from './context';
 /** Où se corrige chaque manque signalé par le serveur (destinationKey des blocages de CAN_PLAN_LESSON). */
 export const destinationSection: Record<string, SectionKey> = {
   OFFERINGS: 'formations', TEAM: 'equipe', AVAILABILITY: 'disponibilites', COMMERCIAL: 'prestations',
-  PROFILE_POLICY: 'confidentialite', SCHOOL_SETUP: 'configuration',
+  PROFILE_POLICY: 'champs-profil', SCHOOL_SETUP: 'apercu',
 };
 
 /** Ce qui manque encore pour planifier une leçon, en tête de l'Agenda : rien quand tout est prêt. */

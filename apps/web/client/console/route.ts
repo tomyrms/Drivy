@@ -1,4 +1,5 @@
 import { sectionKeys, type SectionKey } from './sections.js';
+import { settingTargets } from './settings-search-model.js';
 
 /** Only navigation identifiers belong in URLs; never drafts, names, reports or tokens. */
 export interface NavigationQuery {
@@ -9,13 +10,22 @@ export interface NavigationQuery {
   from?: SectionKey | undefined;
   audience?: 'learners' | 'team' | undefined;
   week?: string | undefined;
+  focus?: string | undefined;
+  /** Rubrique d'une fiche de formation, ou assistant de création. */
+  view?: FormationView | undefined;
+  /** Parcours (offering_key) d'un permis : identifiant technique, jamais un nom saisi. */
+  programme?: string | undefined;
 }
+export const formationViews = ['general', 'competences', 'deroulement', 'tarifs', 'historique', 'nouvelle'] as const;
+export type FormationView = typeof formationViews[number];
 export interface ConsoleRoute { schoolId: string | null; section: SectionKey; query: NavigationQuery }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sections: readonly string[] = sectionKeys;
 
 export function readNavigationQuery(search: string): NavigationQuery {
   const params = new URLSearchParams(search), query: NavigationQuery = {};
+  const focus = params.get('focus');
+  if (focus && params.getAll('focus').length === 1 && settingTargets.includes(focus)) query.focus = focus;
   for (const key of ['selection', 'learner', 'instructor'] as const) {
     const value = params.get(key);
     if (value && params.getAll(key).length === 1 && uuid.test(value)) query[key] = value.toLowerCase();
@@ -24,6 +34,10 @@ export function readNavigationQuery(search: string): NavigationQuery {
   if (category && category.length <= 30 && !/[\u0000-\u001f\u007f]/.test(category) && params.getAll('category').length === 1) query.category = category;
   const from = params.get('from');
   if (from && sections.includes(from) && params.getAll('from').length === 1) query.from = from as SectionKey;
+  const view = params.get('view');
+  if (view && (formationViews as readonly string[]).includes(view) && params.getAll('view').length === 1) query.view = view as FormationView;
+  const programme = params.get('programme');
+  if (programme && programme.length <= 80 && !/[\u0000-\u001f\u007f]/.test(programme) && params.getAll('programme').length === 1) query.programme = programme;
   const audience = params.get('audience');
   if ((audience === 'learners' || audience === 'team') && params.getAll('audience').length === 1) query.audience = audience;
   const week = params.get('week');

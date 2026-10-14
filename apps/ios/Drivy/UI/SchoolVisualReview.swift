@@ -15,7 +15,9 @@ struct SchoolVisualReview: View {
     var body: some View {
         VStack(spacing: 0) {
           Group {
-            if SchoolAccountVisualReview.screenNames.contains(screen) {
+            if SchoolEntryVisualReview.screenNames.contains(screen) {
+                SchoolEntryVisualReview(screen: screen)
+            } else if SchoolAccountVisualReview.screenNames.contains(screen) {
                 SchoolAccountVisualReview(screen: screen)
             } else if let context {
                 switch screen {
@@ -105,7 +107,7 @@ struct SchoolVisualReview: View {
             } else { ProgressView("Préparation du rendu…") }
           }
             // The tab shell shows its real tab bar: no banner over it.
-            if !Self.shellScreens.contains(screen) {
+            if !Self.shellScreens.contains(screen) && !SchoolEntryVisualReview.screenNames.contains(screen) {
                 Text(screen == "replay" ? "Rendu de contrôle · coordonnées synthétiques" : "Rendu de contrôle · données fictives")
                     .font(.caption2).foregroundStyle(DrivyTheme.muted)
                     .padding(.vertical, 5).frame(maxWidth: .infinity).background(DrivyTheme.surface)
@@ -115,7 +117,7 @@ struct SchoolVisualReview: View {
         .environment(\.locale, Locale(identifier: "fr_CH"))
         .tint(DrivyTheme.accent)
         .task {
-            guard !SchoolAccountVisualReview.screenNames.contains(screen) else { return }
+            guard !SchoolAccountVisualReview.screenNames.contains(screen), !SchoolEntryVisualReview.screenNames.contains(screen) else { return }
             guard context == nil else { return }
             do {
                 context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "learner-lesson",

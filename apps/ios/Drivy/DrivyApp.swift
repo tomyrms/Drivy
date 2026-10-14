@@ -16,6 +16,23 @@ struct DrivyApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        #if DEBUG && targetEnvironment(simulator)
+        if let fixture = SchoolRootEntryFixture.current {
+            let configuration = fixture.configuration
+            self.configuration = configuration
+            let identity = fixture.makeIdentity()
+            _identity = State(initialValue: identity)
+            let appLock = fixture.makeAppLock()
+            _appLock = State(initialValue: appLock)
+            _cover = State(initialValue: AppCoverPresenter(lock: appLock))
+            let transport = SchoolURLSessionTransport()
+            _workspace = State(initialValue: SchoolWorkspace(api: DrivyAPIClient(
+                baseURL: configuration.apiBaseURL, tokenSource: identity, transport: transport)))
+            _clients = State(initialValue: SchoolHomeClients(
+                configuration: configuration, tokenSource: identity, transport: transport))
+            return
+        }
+        #endif
         let configuration = AppConfiguration.fromBundle()
         self.configuration = configuration
         let identity = IdentitySession(configuration: configuration)
@@ -91,12 +108,11 @@ struct DrivyApp: App {
                     if previous != .active, current == .active {
                         appLock.didBecomeActive(authenticated: identity.isAuthenticated)
                     }
-                    // Coming back never tears the screen down: the account is re-read silently,
-                    // at most every five minutes, and only a change of rights reloads the school.
+                    // Les retours ordinaires restent bornés. Après le portail, ou pour une école en préparation,
+                    // droits et état scolaire sont relus même si l'adhésion n'a pas changé.
                     if previous != .active, current == .active, identity.isAuthenticated,
                        let workspace, workspace.person != nil, !workspace.isLoadingAccount {
-                        // Puis la liste des élèves (ou le dossier de l’élève), au plus une fois par minute.
-                        Task { await workspace.refreshAccount(); await workspace.refreshLearners() }
+                        Task { await workspace.refreshOnForeground() }
                     }
                     // Après le verrouillage éventuel : au retour, le verrou remplace le masque sans montrer l’app.
                     cover.update(sceneIsActive: current == .active, hasSession: identity.isAuthenticated)

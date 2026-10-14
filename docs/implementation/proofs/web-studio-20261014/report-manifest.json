@@ -1,0 +1,117 @@
+{
+  "generatedAt": "2026-10-13T23:04:10.1104459Z",
+  "productCommit": "2b4ca811a777d6f7283fd6910bd179451acc0cba",
+  "testAndFixtureCommit": "3f898d487a5827adbf6f4f92dbeeee1e8aea6d7c",
+  "scope": "Rapports bruts et agregats, diagnostic, captures et CI Drivy synthetiques uniquement. Aucune capture Mercury, aucun journal CI complet. Galerie suivie dans son manifeste distinct.",
+  "rawFindingsPreserved": true,
+  "files": [
+    {
+      "file": "reports/agenda-spacing-results.json",
+      "origin": "artifacts/web-studio-20261014/after/agenda-spacing-results.json",
+      "bytes": 3858,
+      "sha256": "e0f3b419c0e173db6962c97b1c36c102f7ec30248071804dd0911dca9ccf30cb"
+    },
+    {
+      "file": "reports/ci-checks-result.json",
+      "origin": "GitHub Actions 38481209557: gh run view metadata and filtered test-summary lines",
+      "bytes": 1389,
+      "sha256": "e1a61dbad17eef08598efc643125efeb185d508cc4be8583c742f8d1130525c4"
+    },
+    {
+      "file": "reports/coverage-summary.json",
+      "origin": "artifacts/web-studio-20261014/after/coverage-summary.json",
+      "bytes": 321656,
+      "sha256": "819855efcf1d1abd05d61f96c57c010ead0dd38c552beadf259cfe9b61990681"
+    },
+    {
+      "file": "reports/focus-guard-results.json",
+      "origin": "artifacts/web-studio-20261014/after/focus-guard-results.json",
+      "bytes": 75744,
+      "sha256": "8673e0089a80e5eb2d20dc11ddda707e06e5c88eb6b61f9493024574783a3bb7"
+    },
+    {
+      "file": "reports/gallery-check.json",
+      "origin": "artifacts/web-studio-20261014/gallery-check.json",
+      "bytes": 248,
+      "sha256": "795ec3a0231a4103669fa513d3853e4d10320b6c9ef77666d3a442b318f09744"
+    },
+    {
+      "file": "reports/interaction-results.json",
+      "origin": "artifacts/web-studio-20261014/after/interaction-results.json",
+      "bytes": 4148,
+      "sha256": "522a2ef1bec36ff666f6267b4b398d8d1715a93e826ec6ac98b0adcf357c5086"
+    },
+    {
+      "file": "reports/review-results.json",
+      "origin": "artifacts/web-studio-20261014/after/review-results.json",
+      "bytes": 306013,
+      "sha256": "56aaa8fd40f5fe41df40349c19bb2990028d7b209a7daae33333d6977cbdcc36"
+    },
+    {
+      "file": "reports/targeted-agenda-results.json",
+      "origin": "artifacts/web-studio-20261014/after/targeted-agenda-results.json",
+      "bytes": 2248,
+      "sha256": "a24a6e3829bdab62371a4c3554e85ad1b545cc00334bc0f4003e930d993a7383"
+    },
+    {
+      "file": "reports/targeted-curricula-procedures-offerings-products-terms-formations-results.json",
+      "origin": "artifacts/web-studio-20261014/after/targeted-curricula-procedures-offerings-products-terms-formations-results.json",
+      "bytes": 6832,
+      "sha256": "25dbc5bbe9c80c85f709f8c6e56256dea332f3f8be8bbbf44fda44ff1d85af53"
+    },
+    {
+      "file": "reports/targeted-team-team-detail-results.json",
+      "origin": "artifacts/web-studio-20261014/after/targeted-team-team-detail-results.json",
+      "bytes": 3952,
+      "sha256": "ee4ae539421c9f86d47354de625b749e2107747ec60c48a4418f3f190d9a1247"
+    },
+    {
+      "file": "reports/targeted-trips-results.json",
+      "origin": "artifacts/web-studio-20261014/after/targeted-trips-results.json",
+      "bytes": 2232,
+      "sha256": "d47c877b0d838ad042cd47d591d29b2769ef9e638b66ea6a0a75f0f64b346cbd"
+    },
+    {
+      "file": "reports/token-contrast-results.json",
+      "origin": "artifacts/web-studio-20261014/after/token-contrast-results.json",
+      "bytes": 14128,
+      "sha256": "5558114227fdcc7c94b9abf9979e4725c2834d271480fb6b205ca5205fe8668d"
+    },
+    {
+      "file": "reports/touch-viewport-results.json",
+      "origin": "artifacts/web-studio-20261014/after/touch-viewport-results.json",
+      "bytes": 874,
+      "sha256": "c9c38779ac8631e3dc208e67d5c5cfd85355e9f938308553ebb3abb38c8579e9"
+    },
+    {
+      "file": "reports/planning-return/interaction-filtered-results.json",
+      "origin": "artifacts/web-studio-20261014/after/planning-return/interaction-filtered-results.json",
+      "bytes": 556,
+      "sha256": "5bd5867caf2666a5fd4dafaee73a25bc7c25d7f311e58b7b34b3a45fa912ed01"
+    },
+    {
+      "file": "reports/team-identity/interaction-filtered-results.json",
+      "origin": "artifacts/web-studio-20261014/after/team-identity/interaction-filtered-results.json",
+      "bytes": 564,
+      "sha256": "6f799cb6c9d725ff6e7d863525e47ac0fa2679a18496cd01aced194d64132572"
+    },
+    {
+      "file": "reports/touch-controls/interaction-filtered-results.json",
+      "origin": "artifacts/web-studio-20261014/after/touch-controls/interaction-filtered-results.json",
+      "bytes": 567,
+      "sha256": "00b48795fd4777136c166bab87e0fd645abef10d62b6e026cd294b623f773f52"
+    },
+    {
+      "file": "ci-2b4ca81/08-premiere-lecon-planifiee-synthetic.png",
+      "origin": "artifacts/web-studio-20261014/ci-2b4ca81/08-premiere-lecon-planifiee-synthetic.png",
+      "bytes": 55344,
+      "sha256": "58621bbd52de5982c99916562809787c5e84be97b2b60580bf587a83f32df420"
+    },
+    {
+      "file": "ci-2b4ca81/result.json",
+      "origin": "artifacts/web-studio-20261014/ci-2b4ca81/result.json",
+      "bytes": 7473,
+      "sha256": "29d488af883be79badd06eaa2f12fc17105747ca344ed33d00c68a8c6c90f747"
+    }
+  ]
+}

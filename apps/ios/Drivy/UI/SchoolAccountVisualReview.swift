@@ -6,7 +6,7 @@ import SwiftUI
 struct SchoolAccountVisualReview: View {
     static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock", "app-privacy",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
-        "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome", "onboarding-information",
+        "join-link", "join-link-preview", "profile", "profile-error", "profile-instructor", "onboarding-welcome", "onboarding-information",
         "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff"]
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -82,9 +82,11 @@ struct SchoolAccountVisualReview: View {
             membershipID: SchoolVisualData.membershipID, accessEpoch: 1, apiBaseURL: "https://visual.drivy.invalid")
         let api = SchoolAccountVisualProfileAPI(school: school, scope: scope, screen: screen)
         let isStaff = screen == "onboarding-staff"
-        let model = SchoolProfileWorkspace(scope: scope, roles: isStaff ? ["INSTRUCTOR"] : ["LEARNER"],
+        let isInstructorProfile = screen == "profile-instructor"
+        let model = SchoolProfileWorkspace(scope: scope, roles: isStaff || isInstructorProfile ? ["INSTRUCTOR"] : ["LEARNER"],
             learnerID: isStaff ? nil : SchoolVisualData.learnerID,
-            isOwnProfile: true, onboardingKind: isStaff ? .staff : .student, api: api, outbox: SchoolVisualOutbox())
+            isOwnProfile: !isInstructorProfile, onboardingKind: isInstructorProfile ? nil : (isStaff ? .staff : .student),
+            api: api, outbox: SchoolVisualOutbox())
         await model.load()
         profileModel = model
     }
@@ -193,6 +195,11 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
             pendingActions: [], returnDestinationKey: nil, returnResourceId: nil)
     }
     func operation(schoolID: UUID, id: UUID) async throws -> SchoolOperationReceipt { throw SchoolProfileFailure.operationUnknown }
-    func send(_ command: PendingSchoolCommand) async throws -> SchoolProfileResult { throw SchoolProfileFailure.unavailable }
+    func send(_ command: PendingSchoolCommand) async throws -> SchoolProfileResult {
+        if ProcessInfo.processInfo.environment["DRIVY_VISUAL_FORBID_PROFILE_WRITES"] == "1" {
+            preconditionFailure("Une lecture de confidentialité a tenté une écriture dans la fixture.")
+        }
+        throw SchoolProfileFailure.unavailable
+    }
 }
 #endif
