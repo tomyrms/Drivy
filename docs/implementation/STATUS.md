@@ -1,6 +1,8 @@
 # État de la réalisation
 
-## 14 octobre 2026 — Formations et tarifs : une fiche par permis (non déployé)
+## 14 octobre 2026 — Formations et tarifs : une fiche par permis, déployé
+
+À la demande explicite du porteur, version **`0f76da1` publiée vers 12:55 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/) (API et portail). Sauvegarde `drivy_refonte` vérifiée avant bascule (`pg_restore --list`), migration 033 appliquée, 33 empreintes de migration contrôlées ; le drop-in qui figeait le web sur `web-releases/2b4ca81` est retiré, API et web tournent sur la même release. Une première tentative (`8801aee`) s’est arrêtée avant toute migration : la compilation API dépassait les 256 Mo de l’installeur ; typage allégé et limite portée à 512 Mo. Vérifié après bascule : portail 200 servant la nouvelle interface, routes Formations protégées (401 sans session), `/health/ready` 200, services actifs, aucune erreur journalisée, aucun parcours existant renommé.
 
 Branche `claude/formations-tarifs-20261014`, partie de `5482dd8`, DA Studio conservée. « Formations et tarifs » liste les permis ; Permis A s’ouvre directement sur sa fiche (Général, Compétences, Déroulement et annulation, Tarifs, Historique en action secondaire), chaque rubrique ayant son adresse, avec lecture puis édition sur place. Assistant distinct d’une seule formation, prestations sans permis à part, anciennes adresses `/offres`, `/referentiels`, `/procedures`, `/prestations`, `/conditions` résolues vers la version exacte. Socle : lecture agrégée indépendante de `readAll`, trois commandes composées atomiques (`CREATE_FORMATION`, `UPDATE_FORMATION_PROGRAMME`, `SAVE_TARIFF`) avec têtes attendues sous verrou, droits relus, audit et reçu AP72 ; migration 033 (nom facultatif d’un parcours) ; refus d’une version future sur un tarif applicable.
 

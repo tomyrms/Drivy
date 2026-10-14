@@ -1,6 +1,6 @@
 # Formations et tarifs : une fiche par permis
 
-Réalisation du 14 octobre 2026, branche `claude/formations-tarifs-20261014`, partie de `5482dd8` (Studio). Le dossier de conception 3.17 et le canon OpenAPI 3.11.0 sont inchangés ; R35, R75 et T049 ont été relus, ainsi que les décisions du 13 octobre (textes proposés, motif d’approbation retiré de l’interface). La direction Studio est conservée : Manrope, cobalt, sombre anthracite, Base UI, tokens sémantiques, tables sobres et formulaires bornés. Les écrans Apple ne sont pas modifiés. **Rien n’est déployé.**
+Réalisation du 14 octobre 2026, branche `claude/formations-tarifs-20261014`, partie de `5482dd8` (Studio). Le dossier de conception 3.17 et le canon OpenAPI 3.11.0 sont inchangés ; R35, R75 et T049 ont été relus, ainsi que les décisions du 13 octobre (textes proposés, motif d’approbation retiré de l’interface). La direction Studio est conservée : Manrope, cobalt, sombre anthracite, Base UI, tokens sémantiques, tables sobres et formulaires bornés. Les écrans Apple ne sont pas modifiés. **Déployé le 14 octobre 2026 à la demande du porteur** : release `0f76da1`, sauvegarde vérifiée avant bascule (voir STATUS).
 
 ## 1. Cartographie réelle
 
@@ -82,4 +82,4 @@ Localement, sur cette branche, avec PostgreSQL 17 isolée en conteneur (jamais u
 
 ## 8. Limites
 
-Pas encore exécuté en CI au moment de la rédaction. Non qualifiés : Safari, lecteur d’écran physique, zoom natif à 200 %, recette avec une auto-école. Les résultats axe « incomplets » restent à relire. La fixture visuelle ne prouve ni durabilité ni historique ; ces garanties reposent sur les tests PostgreSQL et la recette intégrée. Aucun déploiement, aucune donnée d’exploitation lue.
+Pas encore exécuté en CI au moment de la rédaction. Déploiement : la compilation API de production est limitée par l’installeur ; elle passait à 253 Mo sur 256 avant ce chantier, d’où les types écrits à la main dans `formation-catalogue.ts` et la limite portée à 512 Mo. Non qualifiés : Safari, lecteur d’écran physique, zoom natif à 200 %, recette avec une auto-école. Les résultats axe « incomplets » restent à relire. La fixture visuelle ne prouve ni durabilité ni historique ; ces garanties reposent sur les tests PostgreSQL et la recette intégrée. Aucune donnée d’exploitation lue par les tests ; aucune recette métier exécutée sur le service publié.
