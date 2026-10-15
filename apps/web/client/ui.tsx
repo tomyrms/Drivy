@@ -103,7 +103,7 @@ const describedBy = (id: string, hint?: string, error?: string | null, counter?:
   [hint || counter ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
 
 export function TextField({ id: suppliedId, label, value, onChange, hint, error, disabled, required, type = 'text', maxLength, autoComplete, inputMode, placeholder, readOnly, name }: FieldProps & {
-  value: string; onChange: (value: string) => void; type?: 'text' | 'email' | 'tel' | 'date' | 'time' | 'datetime-local' | 'url' | 'number';
+  value: string; onChange: (value: string) => void; type?: 'text' | 'email' | 'password' | 'tel' | 'date' | 'time' | 'datetime-local' | 'url' | 'number';
   maxLength?: number; autoComplete?: string; inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel'; placeholder?: string; readOnly?: boolean; name?: string;
 }) {
   const generatedId = useId(), id = suppliedId ?? generatedId;

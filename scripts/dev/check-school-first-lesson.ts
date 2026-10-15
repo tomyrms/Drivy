@@ -100,17 +100,15 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   try {
     await learnerContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const learnerPage=await learnerContext.newPage();await learnerPage.goto(invitationURL);
-    await learnerPage.getByRole('button',{name:'Se connecter',exact:true}).click();await learnerPage.locator('#kc-registration a').click();
-    await learnerPage.locator('input[name="username"]').fill('premier-eleve-recette');await learnerPage.locator('input[name="email"]').fill(learnerEmail);
-    await learnerPage.locator('input[name="firstName"]').fill('Élève');await learnerPage.locator('input[name="lastName"]').fill('Synthétique');
-    await learnerPage.locator('input[type="submit"],button[type="submit"]').first().click();
-    await learnerPage.goto(mailLink(await ownMail(learnerEmail),keycloakOrigin,`/realms/${realmName}/login-actions/action-token`));
-    const password=randomBytes(36).toString('base64url');
-    await learnerPage.locator('input[name="password-new"]').fill(password);await learnerPage.locator('input[name="password-confirm"]').fill(password);
-    await learnerPage.locator('input[type="submit"],button[type="submit"]').first().click();await learnerPage.waitForURL(`${origin}/app/invitation`);
+    // Le lien reçu par e-mail ouvre la création du compte, à l'adresse invitée seulement ; l'inscription libre du fournisseur est fermée.
+    await learnerPage.getByRole('heading',{name:'Rejoindre votre école',exact:true}).waitFor();
+    await learnerPage.getByLabel('Prénom',{exact:true}).fill('Élève');await learnerPage.getByLabel('Nom',{exact:true}).fill('Synthétique');
+    await learnerPage.getByLabel('E-mail',{exact:true}).fill(learnerEmail);await learnerPage.getByLabel('Mot de passe',{exact:true}).fill(randomBytes(36).toString('base64url'));
+    await learnerPage.getByRole('button',{name:'Créer mon compte',exact:true}).click();
+    await learnerPage.getByRole('heading',{name:school.name,exact:true}).waitFor();
     const session=await learnerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await session.json()).success,
-      'Le premier élève vérifie son adresse OIDC avant d’accepter le rattachement');
+      'Le lien reçu à son adresse vaut vérification : le premier élève peut accepter le rattachement');
     await learnerPage.getByRole('checkbox').check();await learnerPage.getByRole('button',{name:'Rejoindre cette école',exact:true}).click();
     await learnerPage.getByText(`Vous avez rejoint ${school.name}`,{exact:true}).waitFor();
   } finally {await learnerContext.close();}

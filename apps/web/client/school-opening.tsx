@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { BrandSymbol } from './BrandSymbol';
 import { AccountMenu } from './preferences';
-import { request, sessionSchema, loginSchema, okSchema, type Session, RequestFailure } from './protocol';
+import { endSession, request, sessionSchema, okSchema, type Session, RequestFailure } from './protocol';
+import { AccountEntry } from './account-entry';
 import { CheckField, Loading, Notice, TextField, formatDateTime } from './ui';
 import { openingState, openingPreview, openingReceipt, openingLinks, createdOpeningLink, openingLinkSchema,
   openingFailure, openingFieldErrors, schoolOpeningDestination, type OpeningFieldErrors, type OpeningLink, type OpeningFields, type OpeningReceipt } from './school-opening-model';
@@ -12,9 +13,8 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
   const [ready,setReady]=useState(false),[uncertain,setUncertain]=useState(false),[result,setResult]=useState<OpeningReceipt|null>(null);
   const [fields,setFields]=useState<OpeningFields>({schoolName:'',displayName:'',contactEmail:'',contactPhone:null,timeZone:'Europe/Zurich',instructs:false});
   const [fieldErrors,setFieldErrors]=useState<OpeningFieldErrors>({}),[invalidField,setInvalidField]=useState<keyof OpeningFields|null>(null);
-  const [items,setItems]=useState<z.infer<typeof openingLinkSchema>[]>([]),[generated,setGenerated]=useState<string|null>(null),[copied,setCopied]=useState(false);
+  const [items,setItems]=useState<z.infer<typeof openingLinkSchema>[]>([]),[generated,setGenerated]=useState<string|null>(null),[generatedCode,setGeneratedCode]=useState<string|null>(null),[copied,setCopied]=useState(false);
   const operatorOperation=useRef<string|null>(null),started=useRef(false),heading=useRef<HTMLHeadingElement>(null),form=useRef<HTMLFormElement>(null);
-  const returnTo=operator?'/app/operateur':'/app/ouvrir';
   async function list() {
     const response=await request('operator/school-opening-links',openingLinks);setItems(response.data.items);
     operatorOperation.current=response.pendingOperationId ?? operatorOperation.current;setReady(true);
@@ -43,10 +43,10 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
     if(input instanceof HTMLInputElement){for(let parent=input.parentElement;parent&&parent!==form.current;parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;input.focus();}
     setInvalidField(null);
   },[invalidField]);
-  async function login(changeAccount=false) {
-    if(!session)return;setBusy(true);setError(null);
-    try{const next=await request('login',loginSchema,{csrf:session.csrfToken,body:{returnTo,...(changeAccount?{reauthenticate:true}:{})}});window.location.assign(next.url);}
-    catch(reason){setError(openingFailure(reason));setBusy(false);}
+  /** Another account: sign out here, then the same link offers sign-in or account creation again. */
+  async function changeAccount() {
+    setBusy(true);setError(null);
+    try{await endSession();await boot();}catch(reason){setError(openingFailure(reason));}finally{setBusy(false);}
   }
   async function createSchool() {
     if(!session)return;
@@ -66,7 +66,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
       if(generated){await request('operator/school-opening-links/clear',okSchema,{csrf:session.csrfToken,body:{}});operatorOperation.current=null;setGenerated(null);}
       operatorOperation.current ??= crypto.randomUUID();
       const response=await request('operator/school-opening-links',createdOpeningLink,{csrf:session.csrfToken,body:{operationId:operatorOperation.current}});
-      setGenerated(response.link);await list();
+      setGenerated(response.link);setGeneratedCode(response.code);await list();
     }catch(reason){setError(openingFailure(reason));}finally{setBusy(false);}
   }
   async function revoke(id:string) {
@@ -84,19 +84,17 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
     <header className="site-header"><a className="brand" href="/app/" aria-label="Drivy, votre espace"><BrandSymbol/><span>Drivy</span></a>
       <AccountMenu authenticated={!!session?.authenticated} /></header>
     <main id="main" className="main" aria-busy={!loaded || busy}>
-      <div className="page-heading"><h1 ref={heading} tabIndex={-1}>{operator?'Liens d’ouverture':result?'Votre école est créée':'Préparer votre école'}</h1></div>
+      {(session?.authenticated || !loaded) && <div className="page-heading"><h1 ref={heading} tabIndex={-1}>{operator?'Liens d’ouverture':result?'Votre école est créée':'Préparer votre école'}</h1></div>}
       {error && <Notice tone="error" title={error} actions={!loaded?undefined:<button type="button" className="button quiet" disabled={busy} onClick={()=>void boot()}>Actualiser</button>}/>}
       {!loaded && <Loading label="Chargement…"/>}
-      {loaded && !session?.authenticated && !link.error && <section className="section">
-        <button className="button primary" type="button" disabled={busy} onClick={()=>void login()}>Créer mon compte ou me connecter</button>
-      </section>}
+      {loaded && !session?.authenticated && !link.error && <AccountEntry {...(!operator && link.token?{initialCode:link.token}:{})} onSignedIn={()=>void boot()}/>}
       {loaded && session?.authenticated && <>
         <section className="section"><div className="identity-row"><div className="row-text"><strong>{session.user?.displayName}</strong><span className="row-meta">{session.user?.email}</span></div>
-          <button className="button quiet" type="button" disabled={busy || uncertain} onClick={()=>void login(true)}>Changer de compte</button></div></section>
+          <button className="button quiet" type="button" disabled={busy || uncertain} onClick={()=>void changeAccount()}>Changer de compte</button></div></section>
         {result ? <section className="panel form-grid"><h2>{result.schoolName}</h2><a className="button primary" href={schoolOpeningDestination(result)}>Continuer la préparation</a></section>
           : operator && ready ? <>
             <section className="section form-grid"><button className="button primary" type="button" disabled={busy} onClick={()=>void createLink()}>{busy?'Création…':operatorOperation.current&&!generated?'Retrouver le lien':'Créer un lien d’ouverture'}</button>
-              {generated && <div className="panel form-grid"><TextField label="Lien à transmettre" value={generated} onChange={()=>{}} readOnly/>
+              {generated && <div className="panel form-grid"><TextField label="Code à transmettre" value={generatedCode ?? ''} onChange={()=>{}} readOnly/><TextField label="Lien à transmettre" value={generated} onChange={()=>{}} readOnly/>
                 <button type="button" className="button secondary" onClick={()=>void copy()}>Copier le lien</button>{copied && <p role="status">Lien copié.</p>}</div>}
             </section>
             <section className="section" aria-labelledby="opening-links"><h2 id="opening-links">Liens créés</h2>

@@ -15,15 +15,19 @@ import Observation
     private(set) var errorMessage: String?
     /// Joined, but the school still has to open the invited training.
     private(set) var trainingNotOpened = false
+    /// The code opens a school rather than joining one: the root continues with the opening form.
+    private(set) var openingCode: String?
+    @ObservationIgnored private let accessClient: SchoolAccountClient?
     @ObservationIgnored private let store: any SchoolCodeJoinStore
     @ObservationIgnored private var principal: SchoolJoinPrincipal?
     @ObservationIgnored private var previewedCode: String?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
 
-    init(client: SchoolJoinClient, store: (any SchoolCodeJoinStore)? = nil) {
+    init(client: SchoolJoinClient, store: (any SchoolCodeJoinStore)? = nil, accessClient: SchoolAccountClient? = nil) {
         self.client = client
         self.store = store ?? SchoolCodeJoinJournal()
+        self.accessClient = accessClient
     }
 
     var member: SchoolMembership? { record?.membership }
@@ -62,6 +66,14 @@ import Observation
             let value = try await client.previewCode(code, principal: principal)
             guard current(request) else { return }
             preview = value; previewedCode = code; isBusy = false
+        } catch SchoolJoinFailure.invalidCode where accessClient != nil {
+            // Not a learner code: it may open a school. Read once more, without consuming it.
+            let display = String(code.prefix(4)) + "-" + String(code.dropFirst(4))
+            let opening = try? await accessClient?.preview(.code(display))
+            guard current(request) else { return }
+            isBusy = false
+            if opening?.kind == .schoolOpening { openingCode = display }
+            else { errorMessage = SchoolJoinFailure.invalidCode.codeMessage }
         } catch {
             guard current(request) else { return }
             isBusy = false; errorMessage = Self.message(error)

@@ -4,11 +4,11 @@ import cookie from '@fastify/cookie';
 import staticFiles from '@fastify/static';
 import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
-import { IdentityUnavailable, type IdentityProvider } from './oidc.js';
+import { IdentityUnavailable, InvalidCredentials, type IdentityProvider } from './oidc.js';
 import { RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session } from './session.js';
-import { createGateway, createSchoolGateway, createOpeningGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
-import { registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
+import { createAnonymousGateway, createGateway, createSchoolGateway, createOpeningGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
 class WebError extends Error {
@@ -23,6 +23,17 @@ const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(dat
 const returnPath = /^\/app\/(?:gestion(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]{1,40})?)?|ouvrir|operateur)$/;
 const loginBody = z.object({ returnTo: z.string().max(200).regex(returnPath).optional(), reauthenticate: z.boolean().optional() }).strict();
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
+const credentials = { email: z.string().trim().min(3).max(254), password: z.string().min(1).max(128) };
+/** A typed code keeps only letters and digits (XXXX-XXXX); a long opening link token is kept as is. */
+export function normalizeAccessCode(value: string): string {
+  const trimmed = value.trim();
+  if (/^[A-Za-z0-9_-]{43}$/.test(trimmed)) return trimmed;
+  const compact = trimmed.toUpperCase().replace(/[\s-]/g, '');
+  return compact.length === 8 ? `${compact.slice(0,4)}-${compact.slice(4)}` : compact;
+}
+const accessCode = z.string().max(80).transform(normalizeAccessCode).pipe(openingTokenSchema);
+const codeKind = z.object({ data: z.object({ kind: z.enum(['LEARNER_INVITATION','SCHOOL_OPENING']), schoolName: z.string().max(200).optional(),
+  expiresAt: z.iso.datetime({offset:true}) }) });
 /** Fastify parser refusals (size, media type, malformed JSON) stay client errors, without echoing details. */
 function clientError(error: unknown): WebError | undefined {
   const status = (error as { statusCode?: unknown }).statusCode;
@@ -33,7 +44,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const sessionMinutes = { idle: config.sessionIdleMinutes ?? 480, max: config.sessionMaxMinutes ?? 720 };
@@ -45,6 +56,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const gateway = options.gateway ?? createGateway(config.apiBaseURL);
   const schoolGateway = options.schoolGateway ?? createSchoolGateway(config.apiBaseURL);
   const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
+  const anonymousGateway = options.anonymousGateway ?? createAnonymousGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
   // After a sign-out the identity provider may still hold its own session: the next login must ask for the credentials.
   const reloginName = config.development ? 'drivy-dev-relogin' : '__Host-drivy-relogin';
@@ -172,6 +184,53 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
     session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}) };
     return {url:result.url};
+  });
+  /** Sign-in by the form of this origin. The session (and an opening code typed before) carries over to the signed-in session. */
+  const passwordSignIn = async (reply: FastifyReply, session: Session, email: string, password: string): Promise<Session> => {
+    let tokens;
+    try { tokens = await identity.password(email,password); }
+    catch (error) {
+      if (error instanceof InvalidCredentials) throw new WebError(401,'INVALID_CREDENTIALS');
+      if (error instanceof IdentityUnavailable) throw new WebError(503,'SERVICE_UNAVAILABLE');
+      throw error;
+    }
+    if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
+    const next = store.rotate(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
+    return next;
+  };
+  const keepOpening = (session: Session, code: string) => {
+    if (session.opening?.token === code) return;
+    if (session.opening?.busy || (session.opening?.submitted && !session.opening.result)) throw new WebError(409,'OPENING_IN_PROGRESS');
+    session.opening = { token: code, operationId: randomUUID() };
+  };
+  app.post('/app/bff/password-login',async (request,reply) => {
+    const admitted = admit(request); const body = z.object(credentials).strict().parse(request.body);
+    await passwordSignIn(reply,open(reply,admitted),body.email,body.password);
+    return {ok:true};
+  });
+  /** « J'ai un code » : what the code opens. An opening code is kept in the session for the school form after sign-in. */
+  app.post('/app/bff/access-code',async (request,reply) => {
+    const admitted = admit(request); const { code } = z.object({ code: accessCode }).strict().parse(request.body);
+    const result = await anonymousGateway('/v1/access-codes/preview',{code},request.ip);
+    if (result.status >= 400) return sendApi(reply,result);
+    const parsed = codeKind.parse(result.body).data;
+    if (parsed.kind === 'SCHOOL_OPENING') keepOpening(open(reply,admitted),code);
+    return { kind: parsed.kind, ...(parsed.schoolName ? { schoolName: parsed.schoolName } : {}), expiresAt: parsed.expiresAt };
+  });
+  /** Account creation is only possible with a valid code; the person is then signed in with the password just chosen. */
+  app.post('/app/bff/accounts',async (request,reply) => {
+    const admitted = admit(request);
+    const body = z.object({ code: accessCode.optional(), firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100),
+      ...credentials }).strict().parse(request.body);
+    // Without a typed code, the invitation link opened in this browser names the invitation (it never leaves the server).
+    const code = body.code ?? admitted?.invitation?.token;
+    if (!code) throw new WebError(400,'INVALID_REQUEST');
+    const result = await anonymousGateway('/v1/accounts',{ ...body, code },request.ip);
+    if (result.status >= 400) return sendApi(reply,result);
+    const { kind } = z.object({ data: z.object({ kind: z.enum(['LEARNER_INVITATION','SCHOOL_OPENING','EMAIL_INVITATION']) }) }).parse(result.body).data;
+    const session = await passwordSignIn(reply,open(reply,admitted),body.email,body.password);
+    if (kind === 'SCHOOL_OPENING') keepOpening(session,code);
+    return { kind };
   });
   app.get('/app/bff/callback',async (request,reply) => {
     const session = store.get(request.cookies[cookieName]);

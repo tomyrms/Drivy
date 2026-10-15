@@ -5,7 +5,7 @@
   "loginTheme": "drivy",
   "enabled": true,
   "sslRequired": "all",
-  "registrationAllowed": true,
+  "registrationAllowed": false,
   "resetPasswordAllowed": false,
   "rememberMe": false,
   "loginWithEmailAllowed": true,
@@ -38,7 +38,7 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
@@ -71,8 +71,35 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "drivy-accounts",
+      "name": "Drivy création de comptes",
+      "protocol": "openid-connect",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true,
+      "redirectUris": [],
+      "webOrigins": []
     }
   ],
   "registrationEmailAsUsername": true,
-  "verifyEmail": false
+  "verifyEmail": false,
+  "users": [
+    {
+      "username": "service-account-drivy-accounts",
+      "enabled": true,
+      "serviceAccountClientId": "drivy-accounts",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users"
+        ]
+      }
+    }
+  ]
 }

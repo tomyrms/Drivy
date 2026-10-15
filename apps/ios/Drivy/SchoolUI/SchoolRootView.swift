@@ -36,6 +36,11 @@ struct SchoolRootView: View {
     @State private var joinMembershipToOpen: SchoolMembership?
     @State private var pendingJoinLink: String?
     @State private var joinsByCodeAfterSignIn = false
+    /// « J’ai un code » avant connexion, puis ce qu’il reste à faire une fois connecté.
+    @State private var accessWorkspace: SchoolAccessWorkspace?
+    @State private var accessRoute: SchoolWorkspaceSheet<SchoolAccessWorkspace>?
+    @State private var openingWorkspace: SchoolOpeningWorkspace?
+    @State private var openingRoute: SchoolWorkspaceSheet<SchoolOpeningWorkspace>?
     @State private var selectedHomeTab: SchoolHomeTab = .session
     @State private var captureController = SchoolCaptureSessionController()
     @Environment(\.scenePhase) private var scenePhase
@@ -49,6 +54,7 @@ struct SchoolRootView: View {
 
     private var presentsSheet: Bool {
         joinRoute != nil || codeJoinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil
+            || accessRoute != nil || openingRoute != nil
     }
 
     var body: some View {
@@ -170,7 +176,8 @@ struct SchoolRootView: View {
             .sheet(item: $codeJoinRoute, onDismiss: codeJoinDismissed) { route in
                 SchoolCodeJoinView(model: route.model, openSchool: { membership in
                     joinMembershipToOpen = membership; codeJoinRoute = nil
-                }, useLink: { opensLinkAfterCode = true; codeJoinRoute = nil })
+                }, useLink: { opensLinkAfterCode = true; codeJoinRoute = nil },
+                openSchoolWithCode: { _ in codeJoinRoute = nil })
             }
     }
 
@@ -199,7 +206,18 @@ struct SchoolRootView: View {
         }
     }
 
-    private var presentations: some View { profileLayer }
+    private var accessLayer: some View {
+        profileLayer
+            .sheet(item: $accessRoute, onDismiss: accessDismissed) { route in
+                SchoolAccessCodeView(model: route.model)
+                    .onChange(of: route.model.isFinished) { _, finished in if finished { accessRoute = nil } }
+            }
+            .sheet(item: $openingRoute, onDismiss: openingDismissed) { route in
+                SchoolOpeningView(model: route.model, openSchool: { _ in openingRoute = nil })
+            }
+    }
+
+    private var presentations: some View { accessLayer }
 
     private func invitationSheet<Content: View>(_ content: Content, model: SchoolInvitationWorkspace) -> some View {
         content
@@ -331,12 +349,54 @@ struct SchoolRootView: View {
         openJoinedSchool(membership, principal: principal, client: client)
     }
 
+    // MARK: J’ai un code (avant connexion)
+
+    private func openAccessCode(link: String? = nil) {
+        guard let configuration, !identity.isAuthenticated, accessRoute == nil else { return }
+        identity.clearError()
+        let model = SchoolAccessWorkspace(client: SchoolAccountClient(configuration: configuration), identity: identity, link: link)
+        accessWorkspace = model; accessRoute = SchoolWorkspaceSheet(model: model)
+    }
+    private func accessDismissed() {
+        let outcome = accessWorkspace?.outcome
+        accessWorkspace?.invalidate(); accessWorkspace = nil
+        if let outcome { continueAccess(outcome) }
+    }
+    /// Connecté avec le code gardé : rejoindre l’école (élève), ouvrir l’école (code d’ouverture), ou relire l’invitation reçue.
+    private func continueAccess(_ outcome: SchoolAccessOutcome) {
+        Task {
+            guard await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
+                  identity.isAuthenticated, !presentsSheet, let configuration else { return }
+            switch (outcome.kind, outcome.input) {
+            case (.schoolOpening, _):
+                let model = SchoolOpeningWorkspace(client: SchoolOpeningClient(configuration: configuration, tokenSource: identity),
+                                                   code: outcome.input.secret, displayName: outcome.displayName, email: outcome.email)
+                openingWorkspace = model; openingRoute = SchoolWorkspaceSheet(model: model)
+            case (.learnerInvitation, .code(let code)):
+                openCodeJoin(code: code)
+            case (.emailInvitation, .invitationLink(let token)):
+                var parts = URLComponents()
+                parts.scheme = configuration.apiBaseURL.scheme; parts.host = configuration.apiBaseURL.host; parts.port = configuration.apiBaseURL.port
+                parts.path = "/app/invitation"; parts.percentEncodedFragment = "token=\(token)"
+                pendingJoinLink = parts.string; openJoin()
+            default:
+                break
+            }
+        }
+    }
+    private func closeOpening() { openingRoute = nil }
+    private func openingDismissed() {
+        let created = openingWorkspace?.receipt != nil
+        openingWorkspace = nil
+        if created { Task { await workspace?.loadAccount() } }
+    }
+
     // MARK: Rejoindre avec un code
 
     private var joinByCodeAction: (() -> Void)? {
         configuration != nil && identity.isAuthenticated ? { openCodeJoin() } : nil
     }
-    private func openCodeJoin() {
+    private func openCodeJoin(code: String? = nil) {
         guard identity.isAuthenticated, let configuration else { return }
         if presentsSheet {
             // Une route restée posée sans feuille à l’écran (présentation écartée par une autre) ne condamne pas
@@ -347,7 +407,10 @@ struct SchoolRootView: View {
             return
         }
         codeJoinWorkspace?.invalidate()
-        let model = SchoolCodeJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity))
+        let model = SchoolCodeJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity),
+                                            accessClient: SchoolAccountClient(configuration: configuration))
+        // Code saisi avant la connexion : la feuille le lit aussitôt, sans le redemander.
+        if let code { model.code = code }
         codeJoinWorkspace = model; codeJoinRoute = SchoolWorkspaceSheet(model: model)
     }
     private func closeCodeJoin() { codeJoinWorkspace?.invalidate(); codeJoinRoute = nil; opensLinkAfterCode = false }
@@ -355,8 +418,15 @@ struct SchoolRootView: View {
         let membership = joinMembershipToOpen ?? codeJoinWorkspace?.member
         let principal = codeJoinWorkspace?.record?.principal
         let client = codeJoinWorkspace?.client
+        let openingCode = codeJoinWorkspace?.openingCode
         joinMembershipToOpen = nil; codeJoinWorkspace?.invalidate(); codeJoinWorkspace = nil
         if opensLinkAfterCode { opensLinkAfterCode = false; openJoin(); return }
+        if let openingCode {
+            // Connecté, avec un code d’ouverture : le formulaire de l’école suit, au nom du compte.
+            continueAccess(SchoolAccessOutcome(input: .code(openingCode), kind: .schoolOpening,
+                                               displayName: workspace?.person?.displayName, email: nil))
+            return
+        }
         openJoinedSchool(membership, principal: principal, client: client)
     }
 
@@ -539,10 +609,14 @@ struct SchoolRootView: View {
     // MARK: Connexion
 
     private var signInLanding: some View {
-        SchoolSignInLanding(isConfigured: configuration != nil, isWorking: identity.isWorking,
-            errorMessage: identity.errorMessage, canPresent: presenter != nil,
-            signIn: { joinsByCodeAfterSignIn = false; signIn() },
-            joinWithCode: { joinsByCodeAfterSignIn = true; signIn() })
+        SchoolSignInLanding(isConfigured: configuration != nil, isWorking: identity.isWorking && accessRoute == nil,
+            errorMessage: accessRoute == nil ? identity.errorMessage : nil,
+            signIn: { email, password in
+                joinsByCodeAfterSignIn = false
+                Task { await identity.signIn(email: email, password: password) }
+            },
+            joinWithCode: { openAccessCode() },
+            clearError: { identity.clearError() })
     }
 
     @ViewBuilder
@@ -560,8 +634,8 @@ struct SchoolRootView: View {
                         Button("Se reconnecter") {
                             workspace.reset()
                             Task {
+                                // La page de connexion de l’app reprend la main.
                                 await identity.signOut()
-                                signIn()
                             }
                         }
                         .buttonStyle(DrivyPrimaryButtonStyle())
@@ -584,10 +658,6 @@ struct SchoolRootView: View {
         }
     }
 
-    private func signIn() {
-        guard let presenter else { return }
-        Task { await identity.signIn(presenting: presenter) }
-    }
 
     private func signOut() {
         captureController.setScope(nil)
@@ -601,7 +671,7 @@ struct SchoolRootView: View {
 
     private func closeAll() {
         onboardingToResume = nil
-        closeJoin(); closeCodeJoin(); closeInvitations(); closeProfile()
+        closeJoin(); closeCodeJoin(); closeInvitations(); closeProfile(); closeOpening()
     }
 
     // MARK: Portée

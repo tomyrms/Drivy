@@ -5,6 +5,7 @@ import SwiftUI
 /// Aucune connexion OIDC, requête réseau ou permission GPS n'est demandée.
 struct SchoolAccountVisualReview: View {
     static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock", "app-privacy",
+        "access-code", "access-register", "access-opening", "school-opening",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "profile-instructor", "onboarding-welcome", "onboarding-information",
         "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff"]
@@ -13,6 +14,8 @@ struct SchoolAccountVisualReview: View {
     @State private var codeModel: SchoolCodeJoinWorkspace?
     @State private var linkModel: SchoolJoinWorkspace?
     @State private var profileModel: SchoolProfileWorkspace?
+    @State private var accessModel: SchoolAccessWorkspace?
+    @State private var openingModel: SchoolOpeningWorkspace?
     @State private var lock = AppLock(store: UserDefaults(suiteName: "ch.drivy.visual-review.lock")!)
     @State private var error: String?
 
@@ -21,14 +24,18 @@ struct SchoolAccountVisualReview: View {
             if screen.hasPrefix("sign-in") {
                 NavigationStack {
                     SchoolSignInLanding(isConfigured: screen != "sign-in-unconfigured", isWorking: screen == "sign-in-loading",
-                        errorMessage: screen == "sign-in-error" ? "La connexion n’a pas abouti. Vérifiez le réseau puis réessayez." : nil,
-                        canPresent: true, signIn: {}, joinWithCode: {})
+                        errorMessage: screen == "sign-in-error" ? IdentityFailure.invalidCredentials.localizedDescription : nil,
+                        signIn: { _, _ in }, joinWithCode: {})
                         .navigationTitle("Drivy")
                 }
             } else if screen == "app-lock" {
                 AppLockView(lock: lock, automaticallyUnlocks: false)
             } else if screen == "app-privacy" {
                 AppPrivacyShield()
+            } else if let accessModel {
+                SchoolAccessCodeView(model: accessModel)
+            } else if let openingModel {
+                SchoolOpeningView(model: openingModel, openSchool: { _ in })
             } else if let codeModel {
                 SchoolCodeJoinView(model: codeModel, openSchool: { _ in }, useLink: {}, loadsOnAppear: false)
             } else if let linkModel {
@@ -46,13 +53,36 @@ struct SchoolAccountVisualReview: View {
             } else { ProgressView("Préparation du rendu…") }
         }
         .task {
-            guard context == nil, codeModel == nil, linkModel == nil, profileModel == nil else { return }
+            guard context == nil, codeModel == nil, linkModel == nil, profileModel == nil, accessModel == nil, openingModel == nil else { return }
             do { try await prepare() } catch { self.error = error.localizedDescription }
         }
     }
 
     @MainActor private func prepare() async throws {
         if screen.hasPrefix("sign-in") || screen == "app-lock" || screen == "app-privacy" { return }
+        if screen.hasPrefix("access-") || screen == "school-opening" {
+            // Écrans de compte : aucun envoi, le modèle est posé directement dans l’état à regarder.
+            let configuration = AppConfiguration(apiBaseURL: URL(string: "https://visual.drivy.invalid")!,
+                issuer: URL(string: "https://visual.drivy.invalid/identity")!, clientID: "visual", redirectURL: AppConfiguration.callback)
+            if screen == "school-opening" {
+                openingModel = SchoolOpeningWorkspace(client: SchoolOpeningClient(configuration: configuration, tokenSource: SchoolAccountVisualToken()),
+                                                      code: "K7Q4-MX2P", displayName: "Camille Rochat", email: "camille@example.invalid")
+                return
+            }
+            let model = SchoolAccessWorkspace(client: SchoolAccountClient(configuration: configuration),
+                                              identity: IdentitySession(configuration: configuration))
+            switch screen {
+            case "access-register":
+                model.review(SchoolAccessPreview(kind: .learnerInvitation, schoolName: "Auto-école Horizon", expiresAt: "2026-10-22T12:00:00Z"),
+                             input: .code("K7Q4-MX2P"))
+            case "access-opening":
+                model.review(SchoolAccessPreview(kind: .schoolOpening, schoolName: nil, expiresAt: "2026-10-22T12:00:00Z"), input: .code("K7Q4-MX2P"))
+            default:
+                model.codeText = "K7Q4-MX2P"
+            }
+            accessModel = model
+            return
+        }
         if screen.hasPrefix("join-") {
             let configuration = AppConfiguration(apiBaseURL: URL(string: "https://visual.drivy.invalid")!,
                 issuer: URL(string: "https://visual.drivy.invalid/identity")!, clientID: "visual", redirectURL: AppConfiguration.callback)

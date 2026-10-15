@@ -13,6 +13,7 @@ final class IdentitySession: AccessTokenSource {
     @ObservationIgnored private let configuration: AppConfiguration?
     @ObservationIgnored private let vault: any IdentityVault
     @ObservationIgnored private let authorizer: any IdentityAuthorizing
+    @ObservationIgnored private let passwordAuthorizer: any PasswordAuthorizing
     @ObservationIgnored private var state: OIDAuthState?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var restored = false
@@ -23,10 +24,12 @@ final class IdentitySession: AccessTokenSource {
         self.init(configuration: configuration, vault: KeychainIdentityVault(), authorizer: AppAuthAuthorization())
     }
 
-    init(configuration: AppConfiguration?, vault: any IdentityVault, authorizer: any IdentityAuthorizing) {
+    init(configuration: AppConfiguration?, vault: any IdentityVault, authorizer: any IdentityAuthorizing,
+         passwordAuthorizer: (any PasswordAuthorizing)? = nil) {
         self.configuration = configuration.flatMap { $0.isValid ? $0 : nil }
         self.vault = vault
         self.authorizer = authorizer
+        self.passwordAuthorizer = passwordAuthorizer ?? AppAuthPasswordAuthorization()
     }
 
     func restore() async {
@@ -95,6 +98,45 @@ final class IdentitySession: AccessTokenSource {
             if !(error is CancellationError) { errorMessage = message(for: error) }
         }
     }
+
+    /// Connexion par le formulaire de l’app. Même règle que par le navigateur : la session n’est annoncée
+    /// connectée qu’après son écriture durable dans le Trousseau. Rend `true` une fois connecté.
+    @discardableResult
+    func signIn(email: String, password: String) async -> Bool {
+        guard !isWorking, !isAuthenticated else { return isAuthenticated }
+        guard let configuration else { errorMessage = IdentityFailure.notConfigured.localizedDescription; return false }
+        generation = UUID()
+        authorizer.cancel()
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshID = nil
+        state = nil
+        let expected = generation
+        isWorking = true
+        errorMessage = nil
+        defer { if generation == expected { isWorking = false } }
+        do {
+            let newState = try await passwordAuthorizer.signIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                               password: password, configuration: configuration)
+            try Task.checkCancellation()
+            guard generation == expected else { throw CancellationError() }
+            guard newState.isAuthorized, OIDCPolicy.accepts(newState, configuration: configuration),
+                  newState.lastTokenResponse?.accessToken?.isEmpty == false,
+                  newState.lastTokenResponse?.tokenType?.lowercased() == "bearer" else { throw IdentityFailure.reauthentication }
+            try vault.write(StoredIdentity.encode(newState, configuration: configuration))
+            state = newState
+            restored = true
+            isAuthenticated = true
+            return true
+        } catch {
+            guard generation == expected else { return false }
+            if !(error is CancellationError) { errorMessage = message(for: error) }
+            return false
+        }
+    }
+
+    /// Efface le message affiché (nouvelle saisie, autre écran).
+    func clearError() { errorMessage = nil }
 
     func accessToken() async throws -> String {
         try Task.checkCancellation()

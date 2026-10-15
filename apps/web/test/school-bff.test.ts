@@ -20,7 +20,7 @@ async function harness(schoolGateway: SchoolGateway) {
     principal: { subject: randomUUID(), displayName: 'Test local', email: 'test@example.test', emailVerified: true } };
   const identity: IdentityProvider = {
     begin: vi.fn(async () => ({ transaction: { state: secret(), nonce: secret(), verifier: secret(), expiresAt: now + 300_000 }, url: 'https://identity.example/auth' })),
-    complete: vi.fn(async () => tokens), refresh: vi.fn(async () => tokens), revoke: vi.fn(async () => {}),
+    complete: vi.fn(async () => tokens), password: vi.fn(async () => tokens), refresh: vi.fn(async () => tokens), revoke: vi.fn(async () => {}),
   };
   const store = new SessionStore();
   const app = await buildWebApp({ config, identity, store, schoolGateway, gateway: vi.fn(async () => ({ status: 200, body: {} })) });

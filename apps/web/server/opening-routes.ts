@@ -14,7 +14,14 @@ export function allowedOpeningRequest(request:OpeningRequest):boolean {
     && typeof request.idempotencyKey==='string' && z.uuid().safeParse(request.idempotencyKey).success;
 }
 const empty=z.object({}).strict();
-const tokenSchema=z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/);
+/** A long link token, or a short opening code typed by hand (XXXX-XXXX, invitation-code alphabet). */
+export const openingTokenSchema=z.string().regex(/^(?:[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]|[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/);
+const tokenSchema=openingTokenSchema;
+// Opening code: 8 characters without ambiguous O/0/I/1 (32 symbols, 40 bits), like invitation codes; 256 is a multiple of 32.
+const codeAlphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export function openingCode():string {
+  const chars=Array.from(randomBytes(8),byte=>codeAlphabet[byte%32]).join('');return `${chars.slice(0,4)}-${chars.slice(4)}`;
+}
 const fields=z.object({schoolName:z.string().trim().min(1).max(150),displayName:z.string().trim().min(1).max(200),
   contactEmail:z.email().max(254),contactPhone:z.string().trim().min(1).max(32).nullable(),timeZone:z.string().min(1).max(100),instructs:z.boolean()}).strict();
 export type OpeningFields=z.infer<typeof fields>;
@@ -94,13 +101,13 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
     empty.parse(request.query);const {operationId}=z.object({operationId:z.uuid()}).strict().parse(request.body);const session=deps.protect(request);
     const previous=session.operatorOpening;
     if(previous && previous.operationId!==operationId)throw deps.error(409,'OPENING_IN_PROGRESS');
-    const command=previous ?? {operationId,token:randomBytes(32).toString('base64url')};session.operatorOpening=command;
+    const command=previous ?? {operationId,token:openingCode()};session.operatorOpening=command;
     if(command.busy)throw deps.error(409,'OPENING_IN_PROGRESS');command.busy=true;
     try {
       const result=await deps.call(session,{method:'POST',path:'/v1/operator/school-opening-links',body:{operationId,token:command.token},idempotencyKey:operationId});
       if(result.status>=400)return deps.send(reply,result);
       const parsed=linkResult.parse(result.body);
-      return {...parsed,link:`${deps.origin}/app/ouvrir#token=${command.token}`};
+      return {...parsed,code:command.token,link:`${deps.origin}/app/ouvrir#token=${command.token}`};
     }finally{delete command.busy;}
   });
   app.post('/app/bff/operator/school-opening-links/clear',async request=>{
