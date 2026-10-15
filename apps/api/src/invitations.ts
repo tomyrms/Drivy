@@ -212,7 +212,7 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
  * Aperçu d'un code : lecture seule, aucune personne ni adhésion requise. Tout échec (inconnu, expiré, utilisé, révoqué, émetteur
  * sans droit, école inactive) répond de la même façon pour ne rien apprendre à qui essaie des codes.
  */
-async function previewCode(pool:Pool,hashed:string) {
+export async function previewCode(pool:Pool,hashed:string) {
   const db=await pool.connect();let broken=false;try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await db.query('SET LOCAL ROLE drivy_app');
     await db.query("SELECT set_config('app.invitation_code_hash',$1,true)",[hashed]);

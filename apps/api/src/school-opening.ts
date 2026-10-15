@@ -6,7 +6,8 @@ import type { Identity, TokenVerifier } from './auth.js';
 import { ApiError, forbidden, notFound } from './errors.js';
 import { rollbackQuietly } from './database.js';
 import { checkIdempotency, commandHash, recordCommand } from './commands.js';
-import { createOpeningLinkBody, openingPreviewBody, schoolOpeningBody, openingHash, openingLinkProjection,
+import { invitationCodeHasher } from './invitation-code.js';
+import { createOpeningLinkBody, openingPreviewBody, schoolOpeningBody, openingDigest, openingLinkProjection,
   type OpeningLinkRow, type SchoolOpeningConfig, type SchoolOpeningCommand } from './school-opening-model.js';
 export { readSchoolOpeningConfig } from './school-opening-model.js';
 
@@ -19,13 +20,13 @@ function assertAvailable(row:OpeningLinkRow) {
   if(row.status==='USED') throw new ApiError(409,'OPENING_LINK_USED','Ce lien a déjà été utilisé.');
   if(row.expires_at.getTime()<=Date.now()) throw new ApiError(410,'OPENING_LINK_EXPIRED','Ce lien a expiré. Demandez un nouveau lien à Drivy.');
 }
-async function transaction<T>(pool:Pool,identity:Identity,operator:boolean,token:string|undefined,work:(db:PoolClient)=>Promise<T>) {
+async function transaction<T>(pool:Pool,identity:Identity,operator:boolean,tokenHash:string|undefined,work:(db:PoolClient)=>Promise<T>) {
   const db=await pool.connect();let broken=false;
   try {
     await db.query('BEGIN');await db.query("SET LOCAL lock_timeout='5s'");await db.query("SET LOCAL statement_timeout='10s'");
     await db.query('SET LOCAL ROLE drivy_app');
     await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject',$2,true),set_config('app.school_opening_operator',$3,true),set_config('app.school_opening_hash',$4,true)",
-      [identity.issuer,identity.subject,operator?'true':'false',token?openingHash(token):'']);
+      [identity.issuer,identity.subject,operator?'true':'false',tokenHash ?? '']);
     const result=await work(db);await db.query('COMMIT');return result;
   } catch(error) { broken=!(await rollbackQuietly(db));throw error; } finally {db.release(broken);}
 }
@@ -40,8 +41,8 @@ async function currentResult(db:PoolClient,row:OpeningLinkRow,identity:Identity)
   if(!result) throw forbidden();
   return { ...result,operationId:row.consume_operation_id,committedAt:row.used_at!.toISOString() };
 }
-async function createSchool(pool:Pool,identity:Identity,body:SchoolOpeningCommand) {
-  return transaction(pool,identity,false,body.token,async db=>{
+async function createSchool(pool:Pool,identity:Identity,body:SchoolOpeningCommand,tokenHash:string) {
+  return transaction(pool,identity,false,tokenHash,async db=>{
     // Same lock as invitation acceptance: the same OIDC identity cannot create two Person rows in parallel.
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`oidc:${identity.issuer}:${identity.subject}`]);
     const linked=(await db.query<{person_id:string}>('SELECT person_id FROM drivy.identity_link WHERE issuer=$1 AND subject=$2',[identity.issuer,identity.subject])).rows[0]?.person_id;
@@ -53,7 +54,7 @@ async function createSchool(pool:Pool,identity:Identity,body:SchoolOpeningComman
     const previous=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE used_by_issuer=$1 AND used_by_subject=$2 AND consume_operation_id=$3',
       [identity.issuer,identity.subject,body.operationId])).rows[0];
     if(previous){if(previous.consume_hash!==hash)throw mismatch();return currentResult(db,previous,identity);}
-    const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE token_hash=$1 FOR UPDATE',[openingHash(body.token)])).rows[0];
+    const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE token_hash=$1 FOR UPDATE',[tokenHash])).rows[0];
     if(!row) throw invalid();
     // A revisited link can recover its original receipt after the browser lost its operation UUID.
     // This is read-only recovery: newly submitted fields never alter the already-created school.
@@ -82,8 +83,9 @@ async function createSchool(pool:Pool,identity:Identity,body:SchoolOpeningComman
 }
 
 /** Opening is closed to operators by default; consumers still need an issued, unexpired bearer link and OIDC. */
-export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;schoolOpening?:SchoolOpeningConfig}) {
+export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationCodeSecret?:string;schoolOpening?:SchoolOpeningConfig}) {
   const config=options.schoolOpening ?? {operators:[],validityDays:7};
+  const hashOf=openingDigest(invitationCodeHasher(options.cursorSecret,options.invitationCodeSecret));
   const envelope=(data:unknown,request:FastifyRequest)=>({data,requestId:request.id,serverTime:new Date().toISOString()});
   const operator=async(request:FastifyRequest)=>{
     const identity=await options.verifyToken(request.headers.authorization);
@@ -104,7 +106,7 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
       const known=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE created_by_issuer=$1 AND created_by_subject=$2 AND create_operation_id=$3',[identity.issuer,identity.subject,body.operationId])).rows[0];
       if(known){if(known.create_hash!==hash)throw mismatch();return openingLinkProjection(known);}
       const row=(await db.query<OpeningLinkRow>(`INSERT INTO drivy.school_opening_link(id,token_hash,reserved_school_id,reserved_membership_id,created_by_issuer,created_by_subject,create_operation_id,create_hash,expires_at)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+make_interval(days=>$9)) RETURNING *`,[randomUUID(),openingHash(body.token),randomUUID(),randomUUID(),identity.issuer,identity.subject,body.operationId,hash,config.validityDays])).rows[0]!;
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+make_interval(days=>$9)) RETURNING *`,[randomUUID(),hashOf(body.token),randomUUID(),randomUUID(),identity.issuer,identity.subject,body.operationId,hash,config.validityDays])).rows[0]!;
       return openingLinkProjection(row);
     });reply.status(201);return envelope(data,request);
   });
@@ -126,8 +128,9 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
   });
   app.post('/v1/school-openings/preview',async request=>{
     const identity=await options.verifyToken(request.headers.authorization);empty.parse(request.query);const {token}=openingPreviewBody.parse(request.body);
-    const data=await transaction(options.pool,identity,false,token,async db=>{
-      const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE token_hash=$1',[openingHash(token)])).rows[0];
+    const tokenHash=hashOf(token);
+    const data=await transaction(options.pool,identity,false,tokenHash,async db=>{
+      const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE token_hash=$1',[tokenHash])).rows[0];
       if(!row)throw invalid();
       if(row.status==='USED')return {status:'USED',school:await currentResult(db,row,identity)};
       assertAvailable(row);return {status:'AVAILABLE',expiresAt:row.expires_at.toISOString()};
@@ -136,7 +139,7 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
   app.post('/v1/school-openings',async(request,reply)=>{
     const identity=await options.verifyToken(request.headers.authorization);empty.parse(request.query);
     const body=schoolOpeningBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);
-    const data=await createSchool(options.pool,identity,body);reply.status(201);return envelope(data,request);
+    const data=await createSchool(options.pool,identity,body,hashOf(body.token));reply.status(201);return envelope(data,request);
   });
   app.get('/v1/school-openings/operations/:operationId',async request=>{
     const identity=await options.verifyToken(request.headers.authorization);empty.parse(request.query);

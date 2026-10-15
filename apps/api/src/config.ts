@@ -9,6 +9,8 @@ const schema = z.object({
   CURSOR_SECRET: z.string().min(32),
   // Facultatif : clé propre aux codes d'invitation. Sans elle, la clé se dérive de CURSOR_SECRET (HKDF, étiquette dédiée).
   INVITATION_CODE_SECRET: z.string().min(32).optional(),
+  // Facultatif : adresses du proxy public (liste séparée par des virgules) dont l'en-tête X-Forwarded-For est cru.
+  TRUST_PROXY: z.string().regex(/^[0-9a-fA-F.:/,]{1,500}$/).optional(),
   REAUTH_MAX_AGE_SECONDS:z.coerce.number().int().min(30).max(900).default(300),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   HOST: z.string().default('127.0.0.1')

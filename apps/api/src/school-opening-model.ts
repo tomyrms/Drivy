@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 
-export const openingToken = z.string().regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/);
+const longOpeningToken = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+/** Un code d'ouverture court (XXXX-XXXX, alphabet des codes d'invitation), tapé à la main ; la casse et le tiret sont tolérés. */
+export const openingCodePattern = /^[A-HJ-NP-Za-hj-np-z2-9]{4}-?[A-HJ-NP-Za-hj-np-z2-9]{4}$/;
+export const isOpeningCode = (token:string) => openingCodePattern.test(token);
+/** Jeton long (lien) ou code court : les deux désignent un droit d'ouverture. */
+export const openingToken = z.string().max(64).refine(value => longOpeningToken.test(value) || isOpeningCode(value));
 export const openingIdentity = z.object({ issuer:z.url().max(2048), subject:z.string().trim().min(1).max(512) }).strict();
 export type OpeningOperator = z.infer<typeof openingIdentity>;
 export type SchoolOpeningConfig = { operators: OpeningOperator[]; validityDays: number };
@@ -11,6 +16,11 @@ export function readSchoolOpeningConfig(env:NodeJS.ProcessEnv=process.env):Schoo
   return {operators,validityDays};
 }
 export const openingHash=(token:string)=>createHash('sha256').update(token).digest('hex');
+/**
+ * Empreinte d'un droit d'ouverture. Un jeton long (256 bits) garde son SHA-256 ; un code court (40 bits) prend l'empreinte à clé
+ * serveur des codes d'invitation, pour que la base seule ne permette pas de le deviner.
+ */
+export const openingDigest=(codeDigest:(code:string)=>string)=>(token:string)=>isOpeningCode(token)?codeDigest(token):openingHash(token);
 export const createOpeningLinkBody=z.object({operationId:z.uuid(),token:openingToken}).strict();
 export const openingPreviewBody=z.object({token:openingToken}).strict();
 export const schoolOpeningBody=z.object({operationId:z.uuid(),token:openingToken,
