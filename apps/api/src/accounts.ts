@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -21,7 +22,7 @@ const accountBody = z.object({ code: openingToken,
   email: z.email().max(254).transform(value => value.trim().normalize('NFC').toLowerCase()),
   password: z.string().min(8).max(128) }).strict();
 
-export type AccessCodeKind = 'LEARNER_INVITATION' | 'SCHOOL_OPENING';
+export type AccessCodeKind = 'LEARNER_INVITATION' | 'SCHOOL_OPENING' | 'EMAIL_INVITATION';
 const invalid = () => new ApiError(404, 'ACCESS_CODE_INVALID', 'Ce code n’est pas valide ou n’est plus utilisable.');
 
 async function previewOpening(pool: Pool, tokenHash: string) {
@@ -33,6 +34,22 @@ async function previewOpening(pool: Pool, tokenHash: string) {
     await db.query('COMMIT');
     if (!row || row.status !== 'AVAILABLE' || row.expires_at.getTime() <= Date.now()) return undefined;
     return { kind: 'SCHOOL_OPENING' as const, expiresAt: row.expires_at.toISOString() };
+  } catch (error) { broken = !(await rollbackQuietly(db)); throw error; } finally { db.release(broken); }
+}
+
+/**
+ * Lien d'invitation par e-mail (jeton long) : il ne se lit qu'avec l'adresse invitée, comme à l'acceptation.
+ * Le lien a été reçu dans cette boîte : le compte créé avec cette adresse est donc tenu pour vérifié.
+ */
+async function emailInvitation(pool: Pool, token: string, email: string) {
+  const db = await pool.connect(); let broken = false;
+  try {
+    await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'); await db.query('SET LOCAL ROLE drivy_app');
+    await db.query("SELECT set_config('app.issuer','',true),set_config('app.subject','',true),set_config('app.person_id','',true),set_config('app.invitation_hash',$1,true),set_config('app.verified_email',$2,true)",
+      [createHash('sha256').update(token).digest('hex'), email]);
+    const row = (await db.query<{ status: string; expires_at: Date }>("SELECT status,expires_at FROM drivy.invitation WHERE delivery='EMAIL' AND token_hash=current_setting('app.invitation_hash') AND email=current_setting('app.verified_email')")).rows[0];
+    await db.query('COMMIT');
+    return !!row && row.status === 'PENDING' && row.expires_at.getTime() > Date.now();
   } catch (error) { broken = !(await rollbackQuietly(db)); throw error; } finally { db.release(broken); }
 }
 
@@ -82,10 +99,20 @@ export function registerAccounts(app: FastifyInstance, options: { pool: Pool; cu
     const key = `ip:${request.ip}`;
     try { creations.check(key); } catch (error) { throw tooMany(error); }
     let kind: AccessCodeKind;
-    try { kind = (await guarded(request, () => resolve(body.code))).kind; } catch (error) { throw tooMany(error); }
+    try {
+      kind = await guarded(request, async () => {
+        try { return (await resolve(body.code)).kind; }
+        catch (error) {
+          // Un lien long qui n'ouvre pas d'école peut être une invitation par e-mail, lisible seulement avec l'adresse invitée.
+          if (isOpeningCode(body.code) || !(error instanceof ApiError) || error.code !== 'ACCESS_CODE_INVALID') throw error;
+          if (await emailInvitation(options.pool, body.code, body.email)) return 'EMAIL_INVITATION' as const;
+          throw error;
+        }
+      });
+    } catch (error) { throw tooMany(error); }
     // Chaque création réussie ou refusée par le fournisseur compte : on ne crée pas des comptes en série depuis une même adresse.
     creations.fail(key); if (creations.size > 1000) creations.sweep();
-    await options.provisionAccount({ email: body.email, firstName: body.firstName, lastName: body.lastName, password: body.password });
+    await options.provisionAccount({ email: body.email, firstName: body.firstName, lastName: body.lastName, password: body.password, emailVerified: kind === 'EMAIL_INVITATION' });
     reply.code(201);
     return envelope({ kind, email: body.email }, request);
   });

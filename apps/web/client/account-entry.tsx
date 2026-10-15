@@ -4,9 +4,9 @@ import { errorMessage, okSchema, request, RequestFailure, sessionSchema } from '
 import { Notice, TextField } from './ui';
 
 /** What a code opens, as the server read it. */
-export type AccessKind = 'LEARNER_INVITATION' | 'SCHOOL_OPENING';
+export type AccessKind = 'LEARNER_INVITATION' | 'SCHOOL_OPENING' | 'EMAIL_INVITATION';
 const codeSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING']), schoolName: z.string().max(200).optional(), expiresAt: z.string() });
-const accountSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING']) });
+const accountSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING', 'EMAIL_INVITATION']) });
 type Step = 'login' | 'code' | 'register' | 'learner-ready';
 
 /**
@@ -24,6 +24,7 @@ const messages: Record<string, string> = {
   ACCESS_CODE_INVALID: 'Ce code n’est pas valide ou n’est plus utilisable.',
   ACCESS_CODE_ATTEMPTS: 'Trop de tentatives. Réessayez dans quelques minutes.',
   ACCOUNT_EXISTS: 'Un compte existe déjà avec cette adresse. Connectez-vous : votre code sera repris.',
+  EMAIL_INVITATION_MISMATCH: 'Utilisez l’adresse à laquelle l’école a envoyé l’invitation.',
   ACCOUNT_PASSWORD_REJECTED: 'Ce mot de passe n’est pas accepté. Choisissez-en un plus long ou moins courant.',
   ACCOUNT_CREATION_UNAVAILABLE: 'La création de compte est momentanément indisponible. Réessayez plus tard.',
   INVALID_REQUEST: 'Vérifiez les champs puis réessayez.',
@@ -35,10 +36,12 @@ const failure = (cause: unknown) => cause instanceof RequestFailure && messages[
  * Sign-in and account creation of the web, the same as in the app: « Se connecter », or « J'ai un code ».
  * Only a valid code (or opening link) can create an account; the password goes to the identity service and is never kept here.
  */
-export function AccountEntry({ initialCode, onSignedIn }: { initialCode?: string; onSignedIn: (kind: AccessKind | null) => void }) {
-  const [step, setStep] = useState<Step>(initialCode ? 'register' : 'login');
+export function AccountEntry({ initialCode, invitation = false, onSignedIn }: {
+  initialCode?: string; invitation?: boolean; onSignedIn: (kind: AccessKind | null) => void;
+}) {
+  const [step, setStep] = useState<Step>(initialCode || invitation ? 'register' : 'login');
   const [code, setCode] = useState(initialCode ?? '');
-  const [kind, setKind] = useState<AccessKind | null>(initialCode ? 'SCHOOL_OPENING' : null);
+  const [kind, setKind] = useState<AccessKind | null>(initialCode ? 'SCHOOL_OPENING' : invitation ? 'EMAIL_INVITATION' : null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [email, setEmail] = useState(''), [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState(''), [lastName, setLastName] = useState('');
@@ -69,14 +72,21 @@ export function AccountEntry({ initialCode, onSignedIn }: { initialCode?: string
   }); };
   const submitCode = (event: FormEvent) => { event.preventDefault(); void run(csrf => inspect(code, csrf)); };
   const register = (event: FormEvent) => { event.preventDefault(); void run(async csrf => {
-    const result = await request('accounts', accountSchema, { csrf, body: { code: codeFromInput(code), firstName, lastName, email, password } });
+    // An e-mail invitation is named by the link already opened in this browser: no code is sent.
+    const named = kind === 'EMAIL_INVITATION' ? {} : { code: codeFromInput(code) };
+    let result: z.infer<typeof accountSchema>;
+    try { result = await request('accounts', accountSchema, { csrf, body: { ...named, firstName, lastName, email, password } }); }
+    catch (cause) {
+      if (kind === 'EMAIL_INVITATION' && cause instanceof RequestFailure && cause.code === 'ACCESS_CODE_INVALID') throw new RequestFailure('EMAIL_INVITATION_MISMATCH', 404);
+      throw cause;
+    }
     setPassword('');
     if (result.kind === 'LEARNER_INVITATION') { setStep('learner-ready'); return; }
     onSignedIn(result.kind);
   }); };
 
   const title = step === 'login' ? 'Se connecter à Drivy' : step === 'code' ? 'J’ai un code'
-    : step === 'learner-ready' ? 'Votre compte est prêt' : kind === 'SCHOOL_OPENING' ? 'Ouvrir votre école' : schoolName ? `Rejoindre ${schoolName}` : 'Créer votre compte';
+    : step === 'learner-ready' ? 'Votre compte est prêt' : kind === 'SCHOOL_OPENING' ? 'Ouvrir votre école' : kind === 'EMAIL_INVITATION' ? 'Rejoindre votre école' : schoolName ? `Rejoindre ${schoolName}` : 'Créer votre compte';
 
   return <section className="sign-in account-entry" aria-labelledby="account-entry-title">
     <h1 id="account-entry-title" ref={heading} tabIndex={-1}>{title}</h1>

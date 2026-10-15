@@ -6,7 +6,7 @@ import { ApiError } from './errors.js';
  * L'inscription libre du realm est fermée : seul ce chemin, ouvert par un code ou un lien valable, crée un compte.
  * Le mot de passe ne fait que traverser l'API : il n'est ni stocké, ni journalisé, ni renvoyé.
  */
-export type NewAccount = { email: string; firstName: string; lastName: string; password: string };
+export type NewAccount = { email: string; firstName: string; lastName: string; password: string; emailVerified?: boolean };
 export type AccountProvisioner = (account: NewAccount) => Promise<void>;
 
 export type AccountProvisioningConfig = { baseURL: string; realm: string; clientId: string; clientSecret: string };
@@ -48,7 +48,7 @@ export function createKeycloakProvisioner(config: AccountProvisioningConfig, fet
       response = await fetcher(`${config.baseURL}/admin/realms/${config.realm}/users`, { method: 'POST', signal: signal(),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ username: account.email, email: account.email, firstName: account.firstName, lastName: account.lastName,
-          enabled: true, emailVerified: false, credentials: [{ type: 'password', value: account.password, temporary: false }] }) });
+          enabled: true, emailVerified: account.emailVerified === true, credentials: [{ type: 'password', value: account.password, temporary: false }] }) });
     } catch { throw unavailable(); }
     if (response.status === 201) return;
     if (response.status === 409) throw new ApiError(409, 'ACCOUNT_EXISTS', 'Un compte existe déjà avec cette adresse. Connectez-vous, puis saisissez votre code.');

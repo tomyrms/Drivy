@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { readInvitationLink } from './invitation-link';
 import type { InvitationLink } from './invitation-link';
 import {
-  acceptedSchema, endSession, errorMessage, loginSchema, meSchema, okSchema, previewSchema,
+  acceptedSchema, endSession, errorMessage, meSchema, okSchema, previewSchema,
   request, RequestFailure, roleLabel, sessionSchema,
 } from './protocol';
 import type { InvitationPreview, Me, Member, Session } from './protocol';
@@ -144,25 +144,10 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
     if (loaded) heading.current?.focus({ preventScroll: true });
   }, [page, loaded]);
 
-  async function login() {
-    await perform('Ouverture de la connexion…', async current => {
-      const next = await request('session', sessionSchema);
-      if (current !== generation.current) return;
-      const result = await request('login', loginSchema, { csrf: next.csrfToken, body: {} });
-      if (current !== generation.current) return;
-      const target = new URL(result.url);
-      const local = ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname);
-      const localPage = window.location.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-      if ((target.protocol !== 'https:' && !(localPage && local && target.protocol === 'http:')) || target.username || target.password || target.hash) {
-        throw new RequestFailure('INVALID_RESPONSE');
-      }
-      window.location.assign(target.href);
-    });
-  }
-
   /** An opening code continues to the school form; otherwise the account page is read again. */
   function signedIn(kind: AccessKind | null) {
     if (kind === 'SCHOOL_OPENING') { window.location.assign('/app/ouvrir'); return; }
+    setLinkMustReopen(false);
     void perform('Ouverture de votre espace…', refresh);
   }
 
@@ -237,7 +222,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       </header>
 
       <main id="main" className={`main${!session?.authenticated ? ' auth-entry' : ''}`} aria-busy={!loaded}>
-        {(session?.authenticated || page === 'invitation') && <div className="page-heading">
+        {(session?.authenticated || (page === 'invitation' && (linkMustReopen || invitationLink.error))) && <div className="page-heading">
           {page === 'account' && session?.authenticated && <p className="context">{personName}</p>}
           <h1 id="entry-title" ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre une école' : session?.authenticated ? 'Vos écoles' : 'Se connecter à Drivy'}</h1>
         </div>}
@@ -270,11 +255,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
         {loaded && !session?.authenticated && page === 'account' && <AccountEntry onSignedIn={signedIn} />}
 
-        {loaded && !session?.authenticated && page === 'invitation' && <section className="sign-in" aria-labelledby="entry-title">
-          {page === 'invitation' && <p className="secondary-text">Utilisez l’adresse à laquelle votre école a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.</p>}
-          <button className="button primary" type="button" disabled={isBusy || invitationLink.token !== null || invitationLink.error} onClick={() => void login()}>Se connecter</button>
-          {page === 'invitation' && <p className="caption">Si vous fermez cette page avant la fin de la préparation, rouvrez le lien envoyé par votre école.</p>}
-        </section>}
+        {loaded && !session?.authenticated && page === 'invitation' && !linkMustReopen && !invitationLink.error && <AccountEntry invitation onSignedIn={signedIn} />}
 
         {loaded && session?.authenticated && page === 'invitation' && <>
           <section className="section invitation-identity" aria-labelledby="identity-title">

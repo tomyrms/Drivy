@@ -220,13 +220,16 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   /** Account creation is only possible with a valid code; the person is then signed in with the password just chosen. */
   app.post('/app/bff/accounts',async (request,reply) => {
     const admitted = admit(request);
-    const body = z.object({ code: accessCode, firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100),
+    const body = z.object({ code: accessCode.optional(), firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100),
       ...credentials }).strict().parse(request.body);
-    const result = await anonymousGateway('/v1/accounts',body,request.ip);
+    // Without a typed code, the invitation link opened in this browser names the invitation (it never leaves the server).
+    const code = body.code ?? admitted?.invitation?.token;
+    if (!code) throw new WebError(400,'INVALID_REQUEST');
+    const result = await anonymousGateway('/v1/accounts',{ ...body, code },request.ip);
     if (result.status >= 400) return sendApi(reply,result);
-    const { kind } = z.object({ data: z.object({ kind: z.enum(['LEARNER_INVITATION','SCHOOL_OPENING']) }) }).parse(result.body).data;
+    const { kind } = z.object({ data: z.object({ kind: z.enum(['LEARNER_INVITATION','SCHOOL_OPENING','EMAIL_INVITATION']) }) }).parse(result.body).data;
     const session = await passwordSignIn(reply,open(reply,admitted),body.email,body.password);
-    if (kind === 'SCHOOL_OPENING') keepOpening(session,body.code);
+    if (kind === 'SCHOOL_OPENING') keepOpening(session,code);
     return { kind };
   });
   app.get('/app/bff/callback',async (request,reply) => {

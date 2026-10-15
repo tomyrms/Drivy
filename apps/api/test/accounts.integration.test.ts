@@ -28,6 +28,9 @@ beforeEach(async()=>{
   await pool.query(`INSERT INTO drivy.school_policy_version(id,school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,'Recette','Recette','{}',true,'Synthétique',$3,now())`,[policy,id.schoolA,id.adminMember]);
   await pool.query(`INSERT INTO drivy.curriculum_version(id,school_id,category_code,revision,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,true,'Synthétique',$3,now())`,[curriculum,id.schoolA,id.adminMember]);
   await pool.query('UPDATE drivy.offering_version SET curriculum_version_id=$2,policy_version_id=$3,default_duration_minutes=50,default_price_cents=9000,enabled=true WHERE id=$1',[id.offeringA,curriculum,policy]);
+  const body={operationId:randomUUID(),noticeText:'Notice synthétique : finalités, destinataires et contact.',retentionText:'Conservation limitée à la recette, sans donnée réelle.',contactEmail:'privacy@example.invalid',reviewAcknowledged:true};
+  const notice=await app.inject({method:'PUT',url:`/v1/schools/${id.schoolA}/data-policy`,headers:{authorization:'Bearer demo-admin','idempotency-key':body.operationId,'if-match':'"1"'},payload:body});
+  expect(notice.statusCode,notice.body).toBe(200);
 });
 afterAll(async()=>{await app?.close();await pool?.end();});
 
@@ -68,7 +71,7 @@ test('un compte ne se crée qu’avec un code valable, sans le consommer',async(
   const response=await call('POST','/v1/accounts',account(code));
   expect(response.statusCode,response.body).toBe(201);
   expect(response.json().data).toEqual({kind:'SCHOOL_OPENING',email:'camille.recette@example.invalid'});
-  expect(created).toEqual([{email:'camille.recette@example.invalid',firstName:'Camille',lastName:'Recette',password:chosenSecret}]);
+  expect(created).toEqual([{email:'camille.recette@example.invalid',firstName:'Camille',lastName:'Recette',password:chosenSecret,emailVerified:false}]);
   expect(JSON.stringify(response.json())).not.toContain(chosenSecret);
   // Le code reste disponible : c'est l'ouverture, connectée, qui le consomme, par le code court lui-même.
   const opened=await call('POST','/v1/school-openings',{operationId:randomUUID(),token:code,schoolName:'École par code',displayName:'Camille Recette',
