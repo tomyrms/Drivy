@@ -49,7 +49,7 @@ const account=(code:string,extra:Record<string,unknown>={})=>({code,firstName:'C
 
 test('un code se lit sans connexion : élève, ouverture d’école, ou refus identique',async()=>{
   const learner=await learnerCode();
-  const preview=await call('POST','/v1/access-codes/preview',{code:learner.toLowerCase().replace('-',' ')});
+  const preview=await call('POST','/v1/access-codes/preview',{code:learner.toLowerCase().replace('-','')});
   expect(preview.statusCode,preview.body).toBe(200);
   expect(preview.json().data).toMatchObject({kind:'LEARNER_INVITATION',roles:['LEARNER']});
   const opening=await openingCode();

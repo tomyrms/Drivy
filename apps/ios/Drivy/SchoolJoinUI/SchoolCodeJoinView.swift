@@ -40,7 +40,9 @@ struct SchoolCodeJoinView: View {
         .task {
             guard loadsOnAppear else { return }
             await model.load()
-            if model.isReady && model.preview == nil && !model.isPending { fieldFocused = true }
+            // Un code déjà saisi avant la connexion se lit aussitôt ; sinon le champ attend la saisie.
+            if model.canPreview { await model.inspect() }
+            else if model.isReady && model.preview == nil && !model.isPending { fieldFocused = true }
         }
         .accessibilityIdentifier("join-school-code")
     }
