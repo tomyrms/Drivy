@@ -59,7 +59,8 @@ export function registerAccounts(app: FastifyInstance, options: { pool: Pool; cu
   const openingHashOf = openingDigest(codeDigest);
   // Sans connexion, la seule identité est l'adresse : chaque code refusé compte pour elle, et chaque compte créé aussi.
   const attempts = options.accessCodeAttempts ?? new AttemptLimiter(10, 15 * 60_000);
-  const creations = options.accountCreations ?? new AttemptLimiter(10, 60 * 60_000);
+  // Une classe sur le Wi-Fi de l'école partage une adresse : la limite des créations reste large, celle des codes refusés stricte.
+  const creations = options.accountCreations ?? new AttemptLimiter(30, 60 * 60_000);
   const envelope = (data: unknown, request: FastifyRequest) => ({ data, requestId: request.id, serverTime: new Date().toISOString() });
 
   async function resolve(code: string) {

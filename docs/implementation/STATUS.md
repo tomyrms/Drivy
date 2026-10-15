@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 15 octobre 2026 — connexion native, inscription réservée aux codes
+
+- Exécuté : routes `access-codes/preview` et `accounts` (tests unitaires et PostgreSQL), BFF et écrans web « Se connecter » / « J’ai un code » (251 tests web), recette navigateur complète avec Keycloak réel à inscription fermée (compte responsable par code d’ouverture, moniteur et élève par lien d’invitation SMTP), écrans iOS natifs (connexion, code, création de compte, ouverture d’école).
+- À qualifier : rendu iOS sur appareil, connexion Face ID après une connexion par mot de passe, parcours complet élève dans l’app. Détails : [connexion-native-20261015.md](connexion-native-20261015.md).
+
 ## 14 octobre 2026 — Formations et tarifs : une fiche par permis, déployé
 
 À la demande explicite du porteur, version **`0f76da1` publiée vers 12:55 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/) (API et portail). Sauvegarde `drivy_refonte` vérifiée avant bascule (`pg_restore --list`), migration 033 appliquée, 33 empreintes de migration contrôlées ; le drop-in qui figeait le web sur `web-releases/2b4ca81` est retiré, API et web tournent sur la même release. Une première tentative (`8801aee`) s’est arrêtée avant toute migration : la compilation API dépassait les 256 Mo de l’installeur ; typage allégé et limite portée à 512 Mo. Complément publié à la demande du porteur : release **`061f846`** (nouvelle sauvegarde vérifiée), la liste des permis affiche en colonnes durée habituelle, prix des leçons, compétences, tarifs et élèves en formation. Vérifié après bascule : portail 200 servant la nouvelle interface, routes Formations protégées (401 sans session), `/health/ready` 200, services actifs, aucune erreur journalisée, aucun parcours existant renommé.
