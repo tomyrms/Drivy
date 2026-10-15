@@ -176,7 +176,8 @@ struct SchoolRootView: View {
             .sheet(item: $codeJoinRoute, onDismiss: codeJoinDismissed) { route in
                 SchoolCodeJoinView(model: route.model, openSchool: { membership in
                     joinMembershipToOpen = membership; codeJoinRoute = nil
-                }, useLink: { opensLinkAfterCode = true; codeJoinRoute = nil })
+                }, useLink: { opensLinkAfterCode = true; codeJoinRoute = nil },
+                openSchoolWithCode: { _ in codeJoinRoute = nil })
             }
     }
 
@@ -406,7 +407,8 @@ struct SchoolRootView: View {
             return
         }
         codeJoinWorkspace?.invalidate()
-        let model = SchoolCodeJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity))
+        let model = SchoolCodeJoinWorkspace(client: SchoolJoinClient(configuration: configuration, tokenSource: identity),
+                                            accessClient: SchoolAccountClient(configuration: configuration))
         // Code saisi avant la connexion : la feuille le lit aussitôt, sans le redemander.
         if let code { model.code = code }
         codeJoinWorkspace = model; codeJoinRoute = SchoolWorkspaceSheet(model: model)
@@ -416,8 +418,15 @@ struct SchoolRootView: View {
         let membership = joinMembershipToOpen ?? codeJoinWorkspace?.member
         let principal = codeJoinWorkspace?.record?.principal
         let client = codeJoinWorkspace?.client
+        let openingCode = codeJoinWorkspace?.openingCode
         joinMembershipToOpen = nil; codeJoinWorkspace?.invalidate(); codeJoinWorkspace = nil
         if opensLinkAfterCode { opensLinkAfterCode = false; openJoin(); return }
+        if let openingCode {
+            // Connecté, avec un code d’ouverture : le formulaire de l’école suit, au nom du compte.
+            continueAccess(SchoolAccessOutcome(input: .code(openingCode), kind: .schoolOpening,
+                                               displayName: workspace?.person?.displayName, email: nil))
+            return
+        }
         openJoinedSchool(membership, principal: principal, client: client)
     }
 

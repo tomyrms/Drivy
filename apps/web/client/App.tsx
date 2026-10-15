@@ -28,6 +28,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   const [error, setError] = useState<string | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const [linkMustReopen, setLinkMustReopen] = useState(false);
+  const [enteringCode, setEnteringCode] = useState(false);
   const inFlight = useRef(false);
   const generation = useRef(0);
   const acceptedSession = useRef<string | null>(null);
@@ -351,11 +352,14 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
                   {member.roles.includes('ADMIN') && <a className="button secondary compact" href={`/app/gestion/${member.schoolId}`} aria-label={`Ouvrir l’école ${member.schoolName}`}>Ouvrir l’école</a>}
                 </li>)}</ul>
               : !isBusy && !error
-                ? <div className="empty-state">
+                ? enteringCode
+                  ? <AccountEntry signedIn onSignedIn={signedIn} />
+                  : <div className="empty-state">
                     <Symbol kind="school" />
                     <div className="row-text">
                       <h3 className="row-title">Votre école n’apparaît pas encore</h3>
-                      <p className="row-meta">Ouvrez le lien d’invitation envoyé par votre école. Sans invitation, contactez directement votre école.</p>
+                      <p className="row-meta">Saisissez le code reçu, ou ouvrez le lien envoyé par votre école.</p>
+                      <button className="button secondary" type="button" onClick={() => setEnteringCode(true)}>J’ai un code</button>
                     </div>
                   </div>
                 : isBusy

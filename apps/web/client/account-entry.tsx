@@ -36,10 +36,10 @@ const failure = (cause: unknown) => cause instanceof RequestFailure && messages[
  * Sign-in and account creation of the web, the same as in the app: « Se connecter », or « J'ai un code ».
  * Only a valid code (or opening link) can create an account; the password goes to the identity service and is never kept here.
  */
-export function AccountEntry({ initialCode, invitation = false, onSignedIn }: {
-  initialCode?: string; invitation?: boolean; onSignedIn: (kind: AccessKind | null) => void;
+export function AccountEntry({ initialCode, invitation = false, signedIn = false, onSignedIn }: {
+  initialCode?: string; invitation?: boolean; signedIn?: boolean; onSignedIn: (kind: AccessKind | null) => void;
 }) {
-  const [step, setStep] = useState<Step>(initialCode || invitation ? 'register' : 'login');
+  const [step, setStep] = useState<Step>(signedIn ? 'code' : initialCode || invitation ? 'register' : 'login');
   const [code, setCode] = useState(initialCode ?? '');
   const [kind, setKind] = useState<AccessKind | null>(initialCode ? 'SCHOOL_OPENING' : invitation ? 'EMAIL_INVITATION' : null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
@@ -62,7 +62,10 @@ export function AccountEntry({ initialCode, invitation = false, onSignedIn }: {
   }
   async function inspect(value: string, csrf: string) {
     const result = await request('access-code', codeSchema, { csrf, body: { code: codeFromInput(value) } });
-    setKind(result.kind); setSchoolName(result.schoolName ?? null); setStep('register');
+    setKind(result.kind); setSchoolName(result.schoolName ?? null);
+    // Already signed in: an opening code goes straight to the school form, a learner code to the app.
+    if (signedIn) { if (result.kind === 'SCHOOL_OPENING') onSignedIn('SCHOOL_OPENING'); else setStep('learner-ready'); return; }
+    setStep('register');
   }
   function go(next: Step) { setError(null); setPassword(''); setStep(next); }
 
@@ -89,7 +92,9 @@ export function AccountEntry({ initialCode, invitation = false, onSignedIn }: {
     : step === 'learner-ready' ? 'Votre compte est prêt' : kind === 'SCHOOL_OPENING' ? 'Ouvrir votre école' : kind === 'EMAIL_INVITATION' ? 'Rejoindre votre école' : schoolName ? `Rejoindre ${schoolName}` : 'Créer votre compte';
 
   return <section className="sign-in account-entry" aria-labelledby="account-entry-title">
-    <h1 id="account-entry-title" ref={heading} tabIndex={-1}>{title}</h1>
+    {signedIn
+      ? <h2 id="account-entry-title" className="section-title" ref={heading} tabIndex={-1}>{title}</h2>
+      : <h1 id="account-entry-title" ref={heading} tabIndex={-1}>{title}</h1>}
     {error && <Notice tone="error" title={error} />}
 
     {step === 'login' && <form className="form-grid" noValidate onSubmit={signIn}>
@@ -103,7 +108,7 @@ export function AccountEntry({ initialCode, invitation = false, onSignedIn }: {
     {step === 'code' && <form className="form-grid" noValidate onSubmit={submitCode}>
       <TextField name="code" label="Code ou lien reçu" value={code} onChange={setCode} placeholder="XXXX-XXXX" autoComplete="one-time-code" maxLength={300} required disabled={busy} />
       <button className="button primary" type="submit" disabled={busy || !code.trim()}>{busy ? 'Vérification…' : 'Continuer'}</button>
-      <button className="button quiet" type="button" disabled={busy} onClick={() => go('login')}>J’ai déjà un compte</button>
+      {!signedIn && <button className="button quiet" type="button" disabled={busy} onClick={() => go('login')}>J’ai déjà un compte</button>}
     </form>}
 
     {step === 'register' && <form className="form-grid" noValidate onSubmit={register}>
@@ -119,7 +124,7 @@ export function AccountEntry({ initialCode, invitation = false, onSignedIn }: {
     </form>}
 
     {step === 'learner-ready' && <div className="form-grid">
-      <p>Ouvrez l’app Drivy, connectez-vous avec {email}, puis saisissez votre code pour rejoindre {schoolName ?? 'votre école'}.</p>
+      <p>{signedIn ? 'Ouvrez l’app Drivy avec ce compte' : `Ouvrez l’app Drivy, connectez-vous avec ${email}`}, puis saisissez votre code pour rejoindre {schoolName ?? 'votre école'}.</p>
       <button className="button primary" type="button" onClick={() => onSignedIn('LEARNER_INVITATION')}>Continuer</button>
     </div>}
   </section>;
