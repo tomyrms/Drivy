@@ -9,6 +9,7 @@ import type { InvitationPreview, Me, Member, Session } from './protocol';
 import { CheckField, StatusBadge, Symbol } from './ui';
 import { BrandSymbol } from './BrandSymbol';
 import { AccountMenu } from './preferences';
+import { AccountEntry, type AccessKind } from './account-entry';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -159,6 +160,12 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
     });
   }
 
+  /** An opening code continues to the school form; otherwise the account page is read again. */
+  function signedIn(kind: AccessKind | null) {
+    if (kind === 'SCHOOL_OPENING') { window.location.assign('/app/ouvrir'); return; }
+    void perform('Ouverture de votre espace…', refresh);
+  }
+
   async function logout() {
     if (!session) return;
     await perform('Déconnexion en cours…', async current => {
@@ -230,10 +237,10 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       </header>
 
       <main id="main" className={`main${!session?.authenticated ? ' auth-entry' : ''}`} aria-busy={!loaded}>
-        <div className="page-heading">
+        {(session?.authenticated || page === 'invitation') && <div className="page-heading">
           {page === 'account' && session?.authenticated && <p className="context">{personName}</p>}
           <h1 id="entry-title" ref={heading} tabIndex={-1}>{page === 'invitation' ? 'Rejoindre une école' : session?.authenticated ? 'Vos écoles' : 'Se connecter à Drivy'}</h1>
-        </div>
+        </div>}
 
         <div className="feedback" aria-live="polite" aria-atomic="true">
           {busy && <p className="loading"><span className="spinner" aria-hidden="true" />{busy}</p>}
@@ -261,7 +268,9 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
         {!loaded && <div className="panel skeleton" aria-hidden="true"><span /><span /><span /></div>}
 
-        {loaded && !session?.authenticated && <section className="sign-in" aria-labelledby="entry-title">
+        {loaded && !session?.authenticated && page === 'account' && <AccountEntry onSignedIn={signedIn} />}
+
+        {loaded && !session?.authenticated && page === 'invitation' && <section className="sign-in" aria-labelledby="entry-title">
           {page === 'invitation' && <p className="secondary-text">Utilisez l’adresse à laquelle votre école a envoyé ce lien. Vous pourrez relire les informations avant d’accepter.</p>}
           <button className="button primary" type="button" disabled={isBusy || invitationLink.token !== null || invitationLink.error} onClick={() => void login()}>Se connecter</button>
           {page === 'invitation' && <p className="caption">Si vous fermez cette page avant la fin de la préparation, rouvrez le lien envoyé par votre école.</p>}

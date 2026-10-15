@@ -4,6 +4,8 @@ import type { LoginTransaction, Tokens } from './session.js';
 
 /** The identity provider could not be reached: the session is not at fault and must survive the outage. */
 export class IdentityUnavailable extends Error { constructor() { super('IDENTITY_UNAVAILABLE'); } }
+/** The identity provider refused the e-mail and password (or the account is locked for a while): nothing else is told. */
+export class InvalidCredentials extends Error { constructor() { super('INVALID_CREDENTIALS'); } }
 
 /**
  * True only for a transport failure or a 5xx of the identity provider (network error, timeout, server error).
@@ -25,6 +27,8 @@ export interface IdentityProvider {
   /** `reauthenticate` forces the identity provider to ask for the credentials again (step-up, or right after a sign-out). */
   begin(options?: { reauthenticate?: boolean }): Promise<{ transaction: LoginTransaction; url: string }>;
   complete(url: URL, transaction: LoginTransaction): Promise<Tokens>;
+  /** Sign-in with the form of this origin: the password goes to the identity provider and is never kept. */
+  password(username: string, password: string): Promise<Tokens>;
   refresh(tokens: Tokens): Promise<Tokens>;
   revoke(tokens: Tokens): Promise<void>;
 }
@@ -71,6 +75,15 @@ export async function createIdentityProvider(config: WebConfig): Promise<Identit
     async complete(url, transaction) {
       return tokensFrom(await oidc.authorizationCodeGrant(client,url,{ expectedState: transaction.state,
         expectedNonce: transaction.nonce, pkceCodeVerifier: transaction.verifier, idTokenExpected: true }));
+    },
+    async password(username, password) {
+      try { return tokensFrom(await oidc.genericGrantRequest(client,'password',{ username, password, scope: 'openid profile email' })); }
+      catch (error) {
+        if (identityUnreachable(error)) throw new IdentityUnavailable();
+        const code = (error as { error?: unknown }).error;
+        if (code === 'invalid_grant') throw new InvalidCredentials();
+        throw error;
+      }
     },
     async refresh(tokens) {
       if (!tokens.refreshToken) throw new Error('Session expirée.');
