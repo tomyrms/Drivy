@@ -83,7 +83,7 @@
       "directAccessGrantsEnabled": false,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": true,
-      "fullScopeAllowed": false,
+      "fullScopeAllowed": true,
       "redirectUris": [],
       "webOrigins": []
     }

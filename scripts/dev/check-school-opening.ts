@@ -69,7 +69,11 @@ async function fillRegistration(page:Page,account:NewAccount) {
 }
 /** Account creation with the code or link already opened; waits until the form is gone. */
 async function register(page:Page,account:NewAccount) {
-  await fillRegistration(page,account);await page.getByRole('button',{name:'Créer mon compte',exact:true}).waitFor({state:'detached'});
+  await fillRegistration(page,account);
+  const refused=page.locator('.account-entry .notice.error');
+  await Promise.race([page.getByRole('button',{name:'Créer mon compte',exact:true}).waitFor({state:'detached'}),refused.waitFor()]);
+  // Le message affiché (texte d'interface, sans donnée de personne) rejoint l'étape pour le diagnostic de la recette.
+  if(await refused.count())throw new Error(`REGISTRATION_REFUSED: ${await refused.innerText()}`);
 }
 /** A refused creation: returns the message shown, the form stays. */
 async function submitRegistration(page:Page,account:NewAccount) {
@@ -116,7 +120,7 @@ async function main() {
       protocolMappers:[{name:'drivy-api-audience',protocol:'openid-connect',protocolMapper:'oidc-audience-mapper',consentRequired:false,
         config:{'included.custom.audience':'drivy-api','id.token.claim':'false','access.token.claim':'true','introspection.token.claim':'true'}}]},
       {clientId:'drivy-accounts-e2e',protocol:'openid-connect',enabled:true,publicClient:false,secret:accountsSecret,standardFlowEnabled:false,
-        directAccessGrantsEnabled:false,implicitFlowEnabled:false,serviceAccountsEnabled:true,fullScopeAllowed:false,redirectUris:[],webOrigins:[]}];
+        directAccessGrantsEnabled:false,implicitFlowEnabled:false,serviceAccountsEnabled:true,fullScopeAllowed:true,redirectUris:[],webOrigins:[]}];
     realm.users=[{username:'operateur-recette',enabled:true,email:'operator@example.invalid',emailVerified:true,firstName:'Opérateur',lastName:'Synthétique',
       credentials:[{type:'password',value:operatorPassword,temporary:false}]},
       {username:'service-account-drivy-accounts-e2e',enabled:true,serviceAccountClientId:'drivy-accounts-e2e',clientRoles:{'realm-management':['manage-users']}}];
@@ -427,6 +431,8 @@ async function main() {
   }
 }
 main().catch(async(error:unknown)=>{
+  const refusal=error instanceof Error&&error.message.startsWith('REGISTRATION_REFUSED: ')?error.message.slice(22,200):'';
+  if(refusal)stage=`${stage} · refus affiché : ${refusal}`;
   await mkdir(artifactDirectory,{recursive:true});await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'FAILED',stage,passedChecks:checks,checkedAt:new Date().toISOString()},null,2));
   console.error(`Recette ouverture école interrompue : ${stage}. Aucun journal réseau ni identifiant de connexion enregistré.`);process.exitCode=1;
   // Diagnostic local explicite : seulement la première ligne de l'erreur (jamais en CI, jamais dans un artefact).
