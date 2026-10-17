@@ -328,7 +328,7 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolCaptureFailure.unauthorized }
-        catch { throw SchoolCaptureFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolCaptureFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolCaptureFailure.unauthorized }
         return token
     }
@@ -367,8 +367,7 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         }
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) }
-        catch is CancellationError { throw CancellationError() }
-        catch { throw SchoolCaptureFailure.unavailable }
+        catch { throw error.unlessCancelled(SchoolCaptureFailure.unavailable) }
         try Task.checkCancellation()
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolCaptureFailure.invalidResponse }
         let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
