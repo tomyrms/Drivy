@@ -62,6 +62,28 @@ import Testing
         #expect(SchoolTodayPresentation.unfinishedLessons([started], before: sameDay).isEmpty)
     }
 
+    @Test func aMissedLessonStaysFeaturedUntilAnotherIsPlanned() {
+        // Rendez-vous de 12:00 à 12:50 UTC, jamais démarré : manqué à partir de 13:20.
+        let missed = HubFixture.lesson()
+        let now = HubFixture.date("2026-09-28T13:30:00Z")
+        #expect(missed.drivyState(now: now).rowNote?.text == "En attente")
+        #expect(SchoolTodayPresentation.featured(in: [missed], now: now)?.id == missed.id)
+        // Une prochaine leçon non manquée passe devant elle ; une leçon démarrée passe devant tout.
+        let later = Self.planned(start: "2026-09-28T14:00:00Z")
+        #expect(SchoolTodayPresentation.featured(in: [missed, later], now: now)?.id == later.id)
+        #expect(SchoolTodayPresentation.featured(in: [], now: now) == nil)
+    }
+
+    private static func planned(start: String) -> SchoolLesson {
+        let end = ISO8601DateFormatter().string(from: HubFixture.date(start).addingTimeInterval(50 * 60))
+        return SchoolLesson(id: UUID(uuidString: "50000000-0000-4000-8000-000000000099")!, schoolId: HubFixture.schoolID,
+            version: 1, trainingId: HubFixture.trainingID, learnerId: HubFixture.learnerID,
+            instructorMembershipId: ConfigurationFixture.membershipID, plannedStart: start, plannedEnd: end,
+            timeZone: "Europe/Zurich", meetingPoint: "Gare", status: "PLANNED", priceCentsSnapshot: 9_000,
+            bufferMinutesSnapshot: 10, actualStart: nil, actualEnd: nil, permitWarning: false, publicationVersion: 0,
+            currentPublishedRevisionId: nil, commercialRevisionVersion: 1)
+    }
+
     private func client(_ server: MissingReceiptServer) -> SchoolPlanningClient {
         SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)
     }
