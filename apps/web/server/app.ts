@@ -5,7 +5,7 @@ import staticFiles from '@fastify/static';
 import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
 import { IdentityUnavailable, type IdentityProvider } from './oidc.js';
-import { RateLimiter } from './rate-limit.js';
+import { clientKey, RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session } from './session.js';
 import { createGateway, createSchoolGateway, createOpeningGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
@@ -59,6 +59,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       'X-Frame-Options':'DENY', 'Cross-Origin-Opener-Policy':'same-origin',
       'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' });
+    // Hors développement, le navigateur ne doit plus jamais tenter le HTTP pour cette origine.
+    if (!config.development) reply.header('Strict-Transport-Security','max-age=31536000');
     if (request.headers['sec-fetch-site'] === 'cross-site' && request.url.startsWith('/app/bff/') && !request.url.startsWith('/app/bff/callback?')) {
       throw new WebError(403,'CROSS_SITE_REQUEST');
     }
@@ -94,10 +96,12 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
    * created by `open`, once the body has proved valid.
    */
   const admit = (request: FastifyRequest): Session | null => {
-    if (!entryLimiter.allow(request.ip)) throw new WebError(429,'RATE_LIMITED');
+    // A visitor with a valid session is not counted: only anonymous requests draw on the per-address budget.
     if (store.get(request.cookies[cookieName])) return protect(request);
     if (request.headers.origin !== config.origin || !matchesSecret(request.headers['x-csrf-token'],anonymousCsrf) ||
       request.headers['content-type']?.split(';')[0]?.trim() !== 'application/json') throw new WebError(403,'CSRF_REJECTED');
+    // Counted only once the request is proven same-origin and well-formed, so forged requests cannot exhaust the budget.
+    if (!entryLimiter.allow(clientKey(request.ip))) throw new WebError(429,'RATE_LIMITED');
     return null;
   };
   const open = (reply: FastifyReply, admitted: Session | null): Session => {
