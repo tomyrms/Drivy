@@ -99,6 +99,15 @@ describe('Complétude du dossier · une règle pour la liste, le dossier et la p
     expect((await listed(true)).map(item=>item.id)).not.toContain(id.aliceLearner);
     expect((await listed(false)).find(item=>item.id===id.aliceLearner)?.profileReadiness).toBe('READY');
   });
+  it('un téléphone fait d’espaces ne satisfait pas une exigence ; une date antérieure à 1900 est refusée',async()=>{
+    await publish([...names(),required('contactPhone','BEFORE_LESSON','LESSON_CONTACT'),optional('profilePhotoDocumentId','PERSONALISATION')]);
+    const policyVersionId=(await call('GET',`${learnerPath}/administrative-profile`)).json().data.policyVersionId as string;
+    await patch({firstName:'Alice',lastName:'Exemple',contactPhone:'   '},policyVersionId);
+    expect(await readiness()).toBe('ACTION_REQUIRED');expect(await namedFields()).toEqual(['contactPhone']);
+    const version=(await call('GET',`${learnerPath}/administrative-profile`)).json().data.version as number;
+    const refused=await call('PATCH',`${learnerPath}/administrative-profile`,{operationId:randomUUID(),policyVersionId,birthDate:'1850-01-01'},version);
+    expect(refused.statusCode,refused.body).toBe(422);expect(refused.json().code).toBe('INVALID_BIRTH_DATE');
+  });
   it('un champ vidé rend le dossier de nouveau incomplet, sans relance',async()=>{
     await publish([...names(),required('contactPhone','BEFORE_LESSON','LESSON_CONTACT'),optional('profilePhotoDocumentId','PERSONALISATION')]);
     const policyVersionId=(await call('GET',`${learnerPath}/administrative-profile`)).json().data.policyVersionId as string;

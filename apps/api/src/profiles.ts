@@ -14,6 +14,8 @@ import { missingRules,readinessOf,PLANNING_STAGES } from './profile-completeness
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(maximum:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=maximum);
 const nullableText=(maximum:number)=>z.string().refine(value=>[...value].length<=maximum).nullable();
+// Téléphone : espaces retirés avant la limite ; une chaîne vide (ou faite d’espaces) devient null, comme l’effacement.
+const contactPhoneText=z.string().transform(value=>value.trim()).pipe(z.string().max(32)).transform(value=>value===''?null:value);
 const fields=['firstName','lastName','birthDate','postalAddress','contactEmail','contactPhone','profilePhotoDocumentId'] as const;
 export const fieldRule=z.object({field:z.enum(fields),requirement:z.enum(['REQUIRED','CONDITIONAL','OPTIONAL']),stage:z.enum(['JOIN','BEFORE_LESSON','BEFORE_COURSE','OPTIONAL']),
   purposeCode:z.enum(['IDENTIFICATION','LESSON_CONTACT','COURSE_ELIGIBILITY','CERTIFICATE','POSTAL_CONTACT','PERSONALISATION']),explanation:text(1000)}).strict();
@@ -23,8 +25,8 @@ const policyCommand=z.object({...operation,effectiveFrom:z.iso.datetime({offset:
   .refine(value=>(value.publishNow===true)!==(value.effectiveFrom!==undefined));
 const address=z.object({line1:text(200),line2:nullableText(200),postalCode:text(20),locality:text(150),countryCode:z.string().regex(/^[A-Z]{2}$/)}).strict();
 const profileCommand=z.object({...operation,policyVersionId:z.uuid(),firstName:text(150).optional(),lastName:text(150).optional(),birthDate:z.iso.date().nullable().optional(),
-  postalAddress:address.nullable().optional(),contactEmail:z.email().nullable().optional(),contactPhone:nullableText(32).optional(),profilePhotoDocumentId:z.uuid().nullable().optional()}).strict().refine(value=>Object.keys(value).length>=3);
-const learnerCommand=z.object({...operation,displayName:text(150).optional(),contactEmail:z.email().nullable().optional(),contactPhone:nullableText(32).optional()}).strict().refine(value=>Object.keys(value).length>=2);
+  postalAddress:address.nullable().optional(),contactEmail:z.email().nullable().optional(),contactPhone:contactPhoneText.nullable().optional(),profilePhotoDocumentId:z.uuid().nullable().optional()}).strict().refine(value=>Object.keys(value).length>=3);
+const learnerCommand=z.object({...operation,displayName:text(150).optional(),contactEmail:z.email().nullable().optional(),contactPhone:contactPhoneText.nullable().optional()}).strict().refine(value=>Object.keys(value).length>=2);
 const kinds=['STUDENT','STAFF'] as const;type Kind=typeof kinds[number];
 const onboardingCommand=z.object({...operation,kind:z.enum(kinds),currentStep:z.enum(['IDENTITY','FORMATIONS','INFORMATION','DEVICE','REVIEW']),
   skippedOptionalSteps:z.array(z.enum(['PHOTO','NOTIFICATIONS','DEVICE'])).max(3).refine(value=>new Set(value).size===value.length).optional(),policyVersionId:z.uuid(),
@@ -121,6 +123,9 @@ async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,lea
     throw new ApiError(409,'DOCUMENT_NOT_READY','Le dépôt et la vérification de photo ne sont pas encore disponibles. La photo reste facultative.');
   if('birthDate' in body && body.birthDate && (await db.query('SELECT $1::date>(now() AT TIME ZONE $2)::date AS future',[body.birthDate,school.timeZone])).rows[0].future)
     throw new ApiError(422,'INVALID_BIRTH_DATE','La date de naissance ne peut pas être future.');
+  // Borne basse : une date antérieure à 1900 est une faute de saisie. ApiError 422 comme la règle voisine (un ZodError sort en 400).
+  if('birthDate' in body && body.birthDate && body.birthDate<'1900-01-01')
+    throw new ApiError(422,'INVALID_BIRTH_DATE','La date de naissance doit être postérieure au 1er janvier 1900.');
   const map:Record<string,string>={displayName:'display_name',firstName:'first_name',lastName:'last_name',birthDate:'birth_date',postalAddress:'postal_address',contactEmail:'contact_email',contactPhone:'contact_phone',profilePhotoDocumentId:'profile_photo_document_id'};
   const values:unknown[]=[learnerId,school.id,policy.id,actor.membershipId,row.person_id===actor.personId?'SELF':'STAFF_ASSISTED'];
   const assignments=writableFields(body).map(field=>{values.push((body as Record<string,unknown>)[field]);return `${map[field]}=$${values.length}`;});
