@@ -56,7 +56,7 @@ a { color: var(--accent); text-underline-offset: .2em; text-decoration-thickness
 button, a, input, label { -webkit-tap-highlight-color: transparent; }
 button, a, label { touch-action: manipulation; }
 button { cursor: pointer; }
-button:disabled { cursor: not-allowed; }
+button:disabled, button[aria-disabled="true"] { cursor: not-allowed; }
 /* Controls are not content: no text selection or callout on long-press. */
 button, .button, .brand { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -162,22 +162,22 @@ h3 { font: var(--type-headline); }
   transition-timing-function: var(--ease-out);
 }
 .button.primary { color: var(--on-accent); background: var(--accent-fill); border-color: transparent; }
-.button.primary:active:not(:disabled) { background: var(--accent-pressed); }
+.button.primary:active:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-pressed); }
 .button.secondary { color: var(--text); background: var(--surface-inset); border-color: var(--border); }
-.button.secondary:active:not(:disabled) { background: var(--accent-soft); }
+.button.secondary:active:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-soft); }
 .button.quiet { min-height: var(--control-height); padding: var(--space-xs) var(--space-s); color: var(--accent); background: transparent; font: var(--type-subheadline); font-weight: 600; border-radius: var(--radius-field); }
-.button.quiet:active:not(:disabled) { background: var(--accent-soft); }
+.button.quiet:active:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-soft); }
 /* Retry inside an error notice: outlined in the danger tone, 44 px (DrivyRetryButton). */
 .button.retry { min-height: var(--control-height); padding: var(--space-xs) var(--space-s); color: var(--danger); background: transparent; border-color: var(--danger); font: var(--type-subheadline); font-weight: 600; border-radius: var(--radius-field); }
-.button.retry:active:not(:disabled) { background: var(--surface); }
+.button.retry:active:not(:disabled):not([aria-disabled="true"]) { background: var(--surface); }
 /* Hover exists only where the pointer can hover; touch never keeps a stuck state. */
 @media (hover: hover) and (pointer: fine) {
-  .button.primary:hover:not(:disabled) { background: var(--accent-pressed); }
-  .button.secondary:hover:not(:disabled), .button.quiet:hover:not(:disabled) { background: var(--accent-soft); }
-  .button.retry:hover:not(:disabled) { background: var(--surface); }
+  .button.primary:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-pressed); }
+  .button.secondary:hover:not(:disabled):not([aria-disabled="true"]), .button.quiet:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-soft); }
+  .button.retry:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--surface); }
 }
-.button:disabled { color: var(--disabled-text); background: var(--disabled-surface); border-color: transparent; box-shadow: none; }
-.button.quiet:disabled { background: transparent; }
+.button:disabled, .button[aria-disabled="true"] { color: var(--disabled-text); background: var(--disabled-surface); border-color: transparent; box-shadow: none; }
+.button.quiet:disabled, .button.quiet[aria-disabled="true"] { background: transparent; }
 .button-row { display: flex; flex-wrap: wrap; gap: var(--space-s); }
 .button-row > .button { flex: 1 1 12rem; }
 
@@ -271,7 +271,7 @@ h3 { font: var(--type-headline); }
 /* ---------- Preferences ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-  .button:active:not(:disabled) { transform: none; }
+  .button:active:not(:disabled):not([aria-disabled="true"]) { transform: none; }
 }
 @media (prefers-contrast: more) {
   :root { --border: var(--control-border); --muted: var(--text); }
@@ -282,7 +282,7 @@ h3 { font: var(--type-headline); }
 @media (forced-colors: active) {
   .symbol.tile, .panel, .notice, .button, .badge, .check-confirmation { border: 1px solid CanvasText; }
   .brand-symbol { color: CanvasText; }
-  .button:disabled { color: GrayText; border-color: GrayText; }
+  .button:disabled, .button[aria-disabled="true"] { color: GrayText; border-color: GrayText; }
   :focus-visible { outline-color: Highlight; }
 }
 
@@ -349,8 +349,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 
 /* Secondary command variants */
 .button.danger { color: var(--danger); }
-.button.danger:active:not(:disabled) { background: var(--danger-surface); }
-@media (hover: hover) and (pointer: fine) { .button.quiet.danger:hover:not(:disabled) { background: var(--danger-surface); } }
+.button.danger:active:not(:disabled):not([aria-disabled="true"]) { background: var(--danger-surface); }
+@media (hover: hover) and (pointer: fine) { .button.quiet.danger:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--danger-surface); } }
 .button.compact { min-height: var(--control-height); padding: var(--space-xs) var(--space-s); font: var(--type-subheadline); font-weight: 600; flex: none; }
 .button-row.compact > .button { flex: 0 1 auto; }
 .spinner.on-accent { border-color: color-mix(in srgb, var(--on-accent) 35%, transparent); border-top-color: var(--on-accent); }
@@ -818,8 +818,8 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
   .catalog-links a:hover .row-title { text-decoration: underline; text-underline-offset: .2em; }
   .agenda-lesson:hover { background: var(--surface-inset); }
   .data-table tbody tr:not(.selected):hover { background: var(--surface-inset); }
-  :is(.console-shell, .opening-shell) input:not(:disabled):not(:focus-visible):hover, :is(.console-shell, .opening-shell) select:not(:disabled):not(:focus-visible):hover, :is(.console-shell, .opening-shell) textarea:not(:disabled):not(:focus-visible):hover { border-color: var(--text); }
-  .button.secondary:hover:not(:disabled) { border-color: var(--control-border); background: var(--surface-inset); }
+  :is(.console-shell, .opening-shell) input:not(:disabled):not([aria-disabled="true"]):not(:focus-visible):hover, :is(.console-shell, .opening-shell) select:not(:disabled):not([aria-disabled="true"]):not(:focus-visible):hover, :is(.console-shell, .opening-shell) textarea:not(:disabled):not([aria-disabled="true"]):not(:focus-visible):hover { border-color: var(--text); }
+  .button.secondary:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--control-border); background: var(--surface-inset); }
 }
 
 @media (max-width: 40rem) {
@@ -1040,7 +1040,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .theme-handle .symbol.bare { inline-size: 1.5rem; block-size: 1.5rem; }
 .theme-handle:disabled { cursor: not-allowed; color: var(--disabled-text); }
 .is-dragging .theme-handle { cursor: grabbing; color: var(--accent); }
-@media (hover: hover) and (pointer: fine) { .theme-handle:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); } }
+@media (hover: hover) and (pointer: fine) { .theme-handle:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--accent-soft); color: var(--accent); } }
 .theme-icon { display: grid; place-items: center; flex: none; inline-size: 2rem; block-size: 2rem; color: var(--accent); }
 .theme-icon svg { inline-size: 1.5rem; block-size: 1.5rem; }
 .theme-icon.is-fallback { color: var(--muted); }
