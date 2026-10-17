@@ -73,12 +73,14 @@ export async function verifySchoolCodeEntry(options:{browser:Browser;origin:stri
         await page.getByRole('button',{name:fresh?'Créer mon compte':'Se connecter',exact:true}).click();
       }
       step('affichage de l’aperçu de l’école');
-      await page.getByRole('heading',{name:school.name,exact:true}).waitFor();
+      // Le compte connecté affiche déjà ce nom dans sa liste d'écoles : attendre la région d'invitation.
+      const preview=page.getByRole('region',{name:school.name,exact:true});
+      await preview.getByRole('heading',{name:school.name,exact:true}).waitFor();
       step('identité présentée avant confirmation');
-      assert(await page.locator('.invitation-facts').getByText(`${firstName} ${lastName}`,{exact:true}).isVisible()
+      assert(await preview.locator('.invitation-facts').getByText(`${firstName} ${lastName}`,{exact:true}).isVisible()
         &&await page.getByLabel('Code ou lien reçu',{exact:true}).count()===0,
         `Le code du ${fresh?'nouveau compte':'compte existant'} est conservé jusqu’à l’aperçu de l’école et de l’identité, sans nouvelle saisie`);
-      const join=page.getByRole('button',{name:'Rejoindre cette école',exact:true});
+      const join=preview.getByRole('button',{name:'Rejoindre cette école',exact:true});
       step('absence de dossier avant la confirmation');
       assert(await join.isDisabled()&&(await administration.query('SELECT count(*)::int AS n FROM drivy.learner_profile WHERE school_id=$1',[schoolId])).rows[0].n===before,
         'Lire l’aperçu du code ne crée aucun dossier avant la confirmation volontaire');
@@ -89,7 +91,7 @@ export async function verifySchoolCodeEntry(options:{browser:Browser;origin:stri
           'Le compte créé par code arrive à la confirmation sans détour par la vérification d’une adresse non utilisée par l’invitation');
       }
       step('confirmation volontaire du rattachement');
-      await page.getByRole('checkbox').check();await join.click();
+      await preview.getByRole('checkbox').check();await join.click();
       step('affichage du rattachement confirmé');
       await page.getByText(`Vous avez rejoint ${school.name}`,{exact:true}).waitFor();
       step('relecture de l’adhésion et des rôles');
