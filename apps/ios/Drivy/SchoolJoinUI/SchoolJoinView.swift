@@ -83,6 +83,7 @@ struct SchoolJoinView: View {
     private func invitation(_ preview: SchoolJoinPreview) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             schoolSummary(preview)
+            if let identity = preview.profileIdentity { SchoolJoinAccountIdentity(identity: identity) }
             Divider().overlay(DrivyTheme.border)
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 Text("Tes données")
@@ -208,6 +209,15 @@ struct SchoolJoinView: View {
 // MARK: - Éléments communs aux parcours « code » et « lien »
 
 /// Ligne de fait sous le nom de l’école : symbole et texte, identiques dans les deux parcours.
+struct SchoolJoinAccountIdentity: View {
+    let identity: SchoolJoinProfileIdentity
+
+    var body: some View {
+        DrivyKeyValueRow(title: "Identité du compte", value: identity.fullName)
+            .accessibilityIdentifier("join-account-identity")
+    }
+}
+
 struct SchoolJoinFact: Identifiable {
     let symbol: String
     let text: String

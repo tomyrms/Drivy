@@ -61,13 +61,74 @@ struct SchoolWorkspaceTests {
         let api = WorkspaceAPIStub(memberships: [membership])
         let directory = [WorkspaceFixture.learner(), WorkspaceFixture.learner(id: UUID())]
         api.learnersHandler = { _, _, _ in .init(items: directory, nextCursor: "page-2") }
+        api.ownLearnersHandler = { _ in .init(items: [], nextCursor: nil) }
         let workspace = SchoolWorkspace(api: api)
         await workspace.loadAccount()
         await workspace.refreshLearners(minimumInterval: 0)
         #expect(workspace.entryDestination == .instructor)
         #expect(workspace.learners == directory)
         #expect(workspace.nextLearnersCursor == "page-2")
-        #expect(api.ownLearnersCalls == 0 && api.learnerQueries.count == 2)
+        #expect(api.ownLearnersCalls == (roles.contains("LEARNER") ? 1 : 0) && api.learnerQueries.count == 2)
+    }
+
+    @Test func aDualRoleAccountKeepsItsOwnDossierOutsideDirectorySearchAndSelection() async {
+        let membership = SchoolMembership(membershipId: UUID(), schoolId: WorkspaceFixture.firstSchool,
+            schoolName: "École test A", roles: ["INSTRUCTOR", "LEARNER"], grants: [], accessEpoch: 1)
+        let api = WorkspaceAPIStub(memberships: [membership])
+        let own = SchoolLearner(id: UUID(), schoolId: membership.schoolId, personId: api.person.personId, version: 1,
+            displayName: "Mon dossier", contactEmail: nil, contactPhone: nil,
+            archivedAt: "2026-10-01T00:00:00Z", profileReadiness: nil, profilePhotoDocumentId: nil)
+        let assigned = WorkspaceFixture.learner(id: UUID())
+        api.learnersHandler = { _, query, _ in .init(items: query.isEmpty ? [assigned] : [], nextCursor: nil) }
+        api.ownLearnersHandler = { _ in .init(items: [own], nextCursor: nil) }
+        api.learnerHandler = { _, _ in assigned }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        #expect(workspace.entryDestination == .instructor && workspace.learners == [assigned])
+        #expect(workspace.ownLearner == own && workspace.ownLearnerError == nil)
+        workspace.selectLearner(assigned.id)
+        await workspace.loadSelectedLearner()
+        #expect(workspace.learner == assigned && workspace.ownLearner == own)
+        await workspace.searchLearners("sans résultat")
+        #expect(workspace.learners.isEmpty && workspace.ownLearner == own)
+        api.ownLearnersHandler = { _ in throw SchoolAPIError.unavailable }
+        await workspace.refreshOwnLearner(minimumInterval: 0)
+        #expect(workspace.ownLearner == own && workspace.ownLearnerError != nil)
+        // Une projection étrangère ne remplace jamais le dossier déjà autorisé.
+        api.ownLearnersHandler = { _ in .init(items: [assigned], nextCursor: nil) }
+        await workspace.refreshOwnLearner(minimumInterval: 0)
+        #expect(workspace.ownLearner == own && workspace.ownLearnerError == SchoolAPIError.invalidResponse.localizedDescription)
+        workspace.reset()
+        #expect(workspace.ownLearner == nil && workspace.ownLearnerError == nil)
+    }
+
+    @Test func switchingSchoolsDropsTheOwnDossierAndRejectsItsLateResponse() async {
+        let first = SchoolMembership(membershipId: UUID(), schoolId: WorkspaceFixture.firstSchool,
+            schoolName: "École test A", roles: ["INSTRUCTOR", "LEARNER"], grants: [], accessEpoch: 1)
+        let second = SchoolMembership(membershipId: UUID(), schoolId: WorkspaceFixture.secondSchool,
+            schoolName: "École test B", roles: ["INSTRUCTOR", "LEARNER"], grants: [], accessEpoch: 1)
+        let api = WorkspaceAPIStub(memberships: [first, second])
+        func own(_ school: UUID) -> SchoolLearner {
+            .init(id: UUID(), schoolId: school, personId: api.person.personId, version: 1, displayName: "Mon dossier",
+                contactEmail: nil, contactPhone: nil, archivedAt: nil, profileReadiness: nil, profilePhotoDocumentId: nil)
+        }
+        let oldDossier = own(first.schoolId), currentDossier = own(second.schoolId)
+        let held = WorkspaceResponse<SchoolPage<SchoolLearner>>()
+        api.ownLearnersHandler = { school in
+            if school == first.schoolId { return try await held.value() }
+            return .init(items: [currentDossier], nextCursor: nil)
+        }
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let old = Task { await workspace.selectSchool(first) }
+        await held.waitUntilRequested()
+        await workspace.selectSchool(second)
+        #expect(workspace.ownLearner == currentDossier)
+        held.succeed(.init(items: [oldDossier], nextCursor: nil))
+        await old.value
+        #expect(workspace.membership == second && workspace.ownLearner == currentDossier)
+        workspace.leaveSchool()
+        #expect(workspace.ownLearner == nil && workspace.ownLearnerError == nil)
     }
 
     @Test func returningFromTheWebReadsActivationEvenWithTheSameMembership() async {

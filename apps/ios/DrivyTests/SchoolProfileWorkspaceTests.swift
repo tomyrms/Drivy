@@ -12,6 +12,38 @@ struct SchoolProfileWorkspaceTests {
         #expect(api.commands.isEmpty && !model.hasEdits)
         #expect(model.editableFields.contains(.firstName))
     }
+    @Test func knownJoinIdentitySkipsRepeatedInformationWithoutCompletingTheWelcome() async throws {
+        let api = ProfileAPIStub()
+        api.profileValue = ProfileFixture.profile(firstName: "Anne-Marie", lastName: "de la Côte", email: nil, phone: nil)
+        let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
+            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub())
+        #expect(!model.canSkipOnboardingInformation)
+        await model.load()
+        #expect(model.canSkipOnboardingInformation && !model.hasEdits)
+        #expect(model.onboarding?.currentStep == .identity && api.commands.isEmpty)
+        #expect(model.draft.firstName == "Anne-Marie" && model.draft.lastName == "de la Côte")
+        // Les coordonnées utiles plus tard restent absentes : l’accueil n’impose aucune ressaisie.
+        #expect(model.profile?.contactEmail == nil && model.profile?.contactPhone == nil)
+        #expect(await model.saveOnboarding(step: .formations, skipping: []))
+        #expect(api.commands.map(\.kind) == [.saveOnboarding])
+        #expect(model.onboarding?.currentStep == .formations && model.onboarding?.status != "COMPLETED")
+        #expect(model.profile == api.profileValue && !model.hasEdits)
+    }
+    @Test func missingNamesOrAnUnresolvedJoinRequirementKeepTheInformationStep() async {
+        let api = ProfileAPIStub()
+        let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
+            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub())
+        api.profileValue = ProfileFixture.profile(firstName: nil, lastName: nil)
+        await model.load()
+        #expect(!model.canSkipOnboardingInformation && api.commands.isEmpty)
+        api.profileValue = ProfileFixture.profile()
+        api.onboardingValue = ProfileFixture.onboarding(pendingActions: [
+            .init(code: "PROFILE_ACTION_REQUIRED", message: "Vérifie le nom.", field: "lastName", purpose: nil,
+                resourceId: nil, destinationKey: "PROFILE")
+        ])
+        await model.load()
+        #expect(!model.canSkipOnboardingInformation && api.commands.isEmpty)
+    }
     @Test func instructorWritesOnlyContactsWithSharedVersionAndDistinctRoute() async throws {
         let api = ProfileAPIStub(); let box = ConfigurationOutboxStub()
         let model = ProfileFixture.workspace(api: api, box: box, roles: ["INSTRUCTOR"])
@@ -465,9 +497,15 @@ final class ProfileAPIStub: SchoolProfileAPI {
         case .publishProfilePolicy:
             let value = ProfileFixture.policy(id: command.resourceID!, status: "PUBLISHED", version: command.resourceVersion + 1)
             policyValues.removeAll { $0.id == value.id }; policyValues.append(value); return .policy(value)
-        case .saveOnboarding, .completeOnboarding:
+        case .saveOnboarding:
+            struct SavedStep: Decodable { let currentStep: SchoolOnboardingStep }
+            let step = try JSONDecoder().decode(SavedStep.self, from: command.body).currentStep
             onboardingValue = ProfileFixture.onboarding(version: command.resourceVersion + 1,
-                status: command.kind == .completeOnboarding ? "COMPLETED" : "READY", step: .review)
+                status: step == .review ? "READY" : "IN_PROGRESS", step: step)
+            return .onboarding(onboardingValue)
+        case .completeOnboarding:
+            onboardingValue = ProfileFixture.onboarding(version: command.resourceVersion + 1,
+                status: "COMPLETED", step: .review)
             return .onboarding(onboardingValue)
         default: throw SchoolProfileFailure.invalidResponse
         }
@@ -507,11 +545,12 @@ enum ProfileFixture {
         var value = ConfigurationFixture.policy(approved: true); value.noticeVersionId = noticeID; return value
     }
     static func onboarding(version: Int = 1, status: String = "IN_PROGRESS", step: SchoolOnboardingStep = .identity,
-        kind: SchoolOnboardingKind = .student, membershipID: UUID = ConfigurationFixture.membershipID) -> SchoolOnboarding {
+        kind: SchoolOnboardingKind = .student, membershipID: UUID = ConfigurationFixture.membershipID,
+        pendingActions: [SchoolActionBlocker]? = nil) -> SchoolOnboarding {
         .init(id: onboardingID, schoolId: ConfigurationFixture.schoolID, version: version, personId: ConfigurationFixture.personID,
             membershipId: membershipID, kind: kind, status: status, currentStep: step,
             skippedOptionalSteps: [], policyVersionId: policyID, lastSavedAt: ConfigurationFixture.timestamp,
-            pendingActions: step == .review ? [] : [.init(code: "ONBOARDING_REVIEW_REQUIRED", message: "Relis ton arrivée.", field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")],
+            pendingActions: pendingActions ?? (step == .review ? [] : [.init(code: "ONBOARDING_REVIEW_REQUIRED", message: "Relis ton arrivée.", field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")]),
             returnDestinationKey: nil, returnResourceId: nil)
     }
     static func workspace(api: ProfileAPIStub, box: ConfigurationOutboxStub = ConfigurationOutboxStub(), roles: [String] = ["ADMIN"]) -> SchoolProfileWorkspace {

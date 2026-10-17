@@ -57,12 +57,27 @@ struct SchoolAccessOutcome: Equatable {
     }
 
     func inspect() async {
-        guard canInspect, let parsed = parsedInput else { return }
+        await inspect(next: .register)
+    }
+
+    /// Un compte existant garde aussi le code déjà saisi avant de se connecter.
+    func continueWithExistingAccount() async {
+        guard !isBusy else { return }
+        if codeText.trimmed.isEmpty { show(.signIn); return }
+        await inspect(next: .signIn)
+    }
+
+    private func inspect(next: Step) async {
+        guard !isBusy else { return }
+        guard let parsed = parsedInput else {
+            errorMessage = SchoolAccountFailure.invalidCode.localizedDescription
+            return
+        }
         let request = begin()
         do {
             let value = try await client.preview(parsed)
             guard request == generation else { return }
-            input = parsed; preview = value; step = .register; isBusy = false
+            input = parsed; preview = value; step = next; isBusy = false
         } catch { fail(error, request) }
     }
 
@@ -91,7 +106,8 @@ struct SchoolAccessOutcome: Equatable {
 
     func show(_ next: Step) {
         guard !isBusy else { return }
-        errorMessage = nil; password = ""; step = next
+        errorMessage = nil; password = ""
+        step = next == .register && input == nil ? .code : next
     }
 
     func invalidate() { generation = UUID(); isBusy = false; password = "" }

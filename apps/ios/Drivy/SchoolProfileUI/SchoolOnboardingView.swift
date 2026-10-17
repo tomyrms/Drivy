@@ -20,6 +20,7 @@ struct SchoolOnboardingView: View {
     @Environment(\.openURL) private var openURL
     @State private var hasStarted = false
     @State private var editsInformation = false
+    @State private var includesInformationStep = true
     @State private var confirmsDiscard = false
     @State private var location = SchoolOnboardingLocationPermission()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -41,6 +42,7 @@ struct SchoolOnboardingView: View {
                 .task {
                     if startsWithInformation { hasStarted = true }
                     if loadsOnAppear { await model.load() }
+                    includesInformationStep = startsWithInformation || !model.canSkipOnboardingInformation
                 }
                 .alert("Quitter sans enregistrer tes informations ?", isPresented: $confirmsDiscard) {
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
@@ -63,7 +65,8 @@ struct SchoolOnboardingView: View {
 
     private var screen: Screen? {
         guard let onboarding = model.onboarding else { return nil }
-        if onboarding.status == "COMPLETED" { return editsInformation ? .information : .ready }
+        if editsInformation, model.profile != nil { return .information }
+        if onboarding.status == "COMPLETED" { return .ready }
         switch onboarding.currentStep {
         case .identity: return isStaff || !hasStarted ? .welcome : .information
         case .formations: return .formation
@@ -72,7 +75,7 @@ struct SchoolOnboardingView: View {
         }
     }
     private var steps: [Screen] {
-        var value: [Screen] = isStaff ? [] : [.information]
+        var value: [Screen] = !isStaff && includesInformationStep ? [.information] : []
         value.append(.formation)
         if gpsEnabled || screen == .gps { value.append(.gps) }
         value.append(.ready)
@@ -179,7 +182,9 @@ struct SchoolOnboardingView: View {
                 if isStaff {
                     DrivyEntityRow(title: "Ton rôle", leading: .symbol("person.badge.key"))
                 } else {
-                    DrivyEntityRow(title: "Tes informations", leading: .symbol("person.text.rectangle"))
+                    if !model.canSkipOnboardingInformation {
+                        DrivyEntityRow(title: "Tes informations", leading: .symbol("person.text.rectangle"))
+                    }
                     DrivyEntityRow(title: "Ta formation", leading: .symbol("car"))
                 }
                 if gpsEnabled {
@@ -351,10 +356,11 @@ struct SchoolOnboardingView: View {
         switch screen {
         case .welcome:
             Button {
-                if isStaff { save(.formations) } else { hasStarted = true }
+                if isStaff || model.canSkipOnboardingInformation { save(.formations) }
+                else { hasStarted = true }
             } label: { DrivyBusyLabel(title: "Commencer", isBusy: model.isBusy) }
             .buttonStyle(DrivyPrimaryButtonStyle())
-            .disabled(isStaff ? !model.canMutate : model.onboarding == nil)
+            .disabled(isStaff || model.canSkipOnboardingInformation ? !model.canMutate : model.onboarding == nil)
             .accessibilityIdentifier("onboarding-start")
         case .information:
             Button(action: continueFromInformation) {
@@ -411,14 +417,10 @@ struct SchoolOnboardingView: View {
                 .buttonStyle(DrivyPrimaryButtonStyle())
                 .disabled(model.isBusy)
                 .accessibilityIdentifier("onboarding-done")
-            if model.profile != nil, !model.editableFields.isEmpty {
-                Button { editsInformation = true } label: { Text("Modifier mes informations") }
-                    .buttonStyle(DrivySecondaryButtonStyle())
-                    .disabled(isWorking)
-            }
         } else if blockers.contains(where: { $0.field != nil }) && model.profile != nil {
             Button {
                 hasStarted = true
+                includesInformationStep = true
                 save(.identity)
             } label: { DrivyBusyLabel(title: "Compléter mes informations", isBusy: isWorking) }
             .buttonStyle(DrivyPrimaryButtonStyle())
@@ -430,6 +432,12 @@ struct SchoolOnboardingView: View {
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.canMutate || !blockers.isEmpty)
             .accessibilityIdentifier("onboarding-complete")
+        }
+        if (isCompleted || blockers.isEmpty), model.profile != nil, !model.editableFields.isEmpty {
+            Button { editsInformation = true } label: { Text("Modifier mes informations") }
+                .buttonStyle(DrivySecondaryButtonStyle())
+                .disabled(isWorking)
+                .accessibilityIdentifier("onboarding-edit-information")
         }
     }
 
@@ -457,24 +465,24 @@ struct SchoolOnboardingView: View {
         model.draft.isValid(allowed: model.editableFields.intersection([.firstName, .lastName]), timeZone: timeZone)
     }
     private var informationActionTitle: String {
-        guard isCompleted else { return "Continuer" }
+        guard isCompleted || editsInformation else { return "Continuer" }
         return model.hasEdits ? "Enregistrer" : "Revenir"
     }
     private var canContinueInformation: Bool {
-        if isCompleted && !model.hasEdits { return !model.isBusy }
+        if (isCompleted || editsInformation) && !model.hasEdits { return !isWorking }
         guard model.canMutate else { return false }
         guard model.profile != nil else { return true }
         return namesValid && (!model.hasEdits || model.canSaveProfile)
     }
     private func continueFromInformation() {
         // Sortir de la modification des informations revient à l’écran « C’est prêt » : l’écran arrive du bord de départ.
-        if isCompleted && !model.hasEdits { cameBack = true; editsInformation = false; return }
+        if (isCompleted || editsInformation) && !model.hasEdits { cameBack = true; editsInformation = false; return }
         guard canContinueInformation else { return }
         Task {
             if model.hasEdits {
                 guard await model.saveProfileAfterConfirmation() else { return }
             }
-            if isCompleted { cameBack = true; editsInformation = false; return }
+            if isCompleted || editsInformation { cameBack = true; editsInformation = false; return }
             _ = await model.saveOnboarding(step: .formations, skipping: [])
         }
     }
@@ -508,7 +516,7 @@ struct SchoolOnboardingView: View {
     /// Going back is a saved step too, so resuming on another device shows the same screen.
     private var backAction: (() -> Void)? {
         guard let screen else { return nil }
-        if isCompleted {
+        if isCompleted || editsInformation {
             guard editsInformation else { return nil }
             return {
                 if let profile = model.profile { model.draft = SchoolProfileDraft(profile) }
@@ -521,7 +529,7 @@ struct SchoolOnboardingView: View {
         case .information: return { cameBack = true; hasStarted = false }
         case .formation:
             guard model.canMutate else { return nil }
-            return { cameBack = true; hasStarted = true; save(.identity) }
+            return { cameBack = true; hasStarted = includesInformationStep; save(.identity) }
         case .gps:
             guard model.canMutate else { return nil }
             return { cameBack = true; save(.formations) }

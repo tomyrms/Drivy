@@ -122,6 +122,7 @@ struct SchoolCodeJoinView: View {
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
             SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts, isConfirmed: model.isConfirmed)
             if !model.isConfirmed && !model.isPending {
+                if let identity = preview.profileIdentity { SchoolJoinAccountIdentity(identity: identity) }
                 secondaryLink("Saisir un autre code") { model.anotherCode() }
             }
         }

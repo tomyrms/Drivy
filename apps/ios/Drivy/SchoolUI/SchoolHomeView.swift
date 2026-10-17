@@ -250,7 +250,7 @@ struct SchoolHomeView: View {
     }
 
     private var ownLearner: SchoolLearner? {
-        workspace.learners.first { $0.personId == workspace.person?.personId }
+        workspace.ownLearner
     }
 
     /// Toutes les formations de l’élève, celle en cours d’abord ; la page les filtre par permis.

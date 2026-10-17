@@ -6,11 +6,12 @@ import SwiftUI
 @MainActor @Observable final class SchoolOpeningWorkspace: Identifiable {
     let id = UUID()
     let code: String
-    var displayName: String
+    var displayName: String { didSet { hasEditedDisplayName = true } }
     var schoolName = ""
     var contactEmail: String
     var phone = ""
-    var instructs = true
+    var instructs = false
+    private var hasEditedDisplayName = false
     private(set) var isBusy = false
     private(set) var errorMessage: String?
     private(set) var receipt: SchoolOpeningReceipt?
@@ -20,6 +21,19 @@ import SwiftUI
     init(client: SchoolOpeningClient, code: String, displayName: String?, email: String?) {
         self.client = client; self.code = code
         self.displayName = displayName ?? ""; self.contactEmail = email ?? ""
+    }
+
+    static func prefilledDisplayName(accountCreationName: String?, knownPersonName: String?) -> String? {
+        [accountCreationName, knownPersonName].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+    }
+
+    /// La lecture du compte peut finir après la connexion. Elle complète la proposition initiale,
+    /// sans remplacer un nom déjà saisi ou effacé volontairement dans le formulaire.
+    func prefillAccountDisplayName(_ name: String?) {
+        guard !hasEditedDisplayName, displayName.isEmpty,
+              let name = Self.prefilledDisplayName(accountCreationName: nil, knownPersonName: name) else { return }
+        displayName = name
     }
 
     /// Une demande dont la réponse manque : les champs restent figés jusqu’à son résultat.
