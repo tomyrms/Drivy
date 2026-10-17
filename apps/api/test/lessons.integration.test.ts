@@ -93,6 +93,12 @@ describe('leçons (AP39–AP43)',()=>{
   expect((await call('GET',`/lessons?from=${encodeURIComponent(slot(3).plannedStart)}&to=${encodeURIComponent(slot(2).plannedStart)}`)).json().code).toBe('INVALID_INTERVAL');
   // Fermeture sur un rendez-vous existant : refusée.
   expect((await call('POST','/closures',{operationId:randomUUID(),instructorMembershipId:id.instructorMember,startsAt:lesson.plannedStart,endsAt:lesson.plannedEnd,reason:null})).json().code).toBe('EXISTING_BOOKINGS');
+  // Retrait de l'ouverture qui porte le rendez-vous planifié : refusé en 409 métier, la plage reste en place.
+  const covering=(await call('GET',`/availability-rules?instructorMembershipId=${id.instructorMember}`,undefined,null,'demo-admin')).json().data.items as {id:string;version:number;validFrom:string;validUntil:string|null}[];
+  const openRule=covering.find(r=>r.validFrom<=today&&r.validUntil===null)!;
+  const refusedRemoval=await call('POST',`/availability-rules/${openRule.id}/remove`,{operationId:randomUUID(),reason:'Retrait refusé'},openRule.version,'demo-admin');
+  expect(refusedRemoval.statusCode).toBe(409);expect(refusedRemoval.json().code).toBe('EXISTING_BOOKINGS');
+  expect((await call('GET',`/availability-rules?instructorMembershipId=${id.instructorMember}`,undefined,null,'demo-admin')).json().data.items.map((r:{id:string})=>r.id)).toContain(openRule.id);
   // Déplacement : If-Match, accord explicite, ancien créneau libéré.
   const move={operationId:randomUUID(),...slot(3),timeZone:'Europe/Zurich',meetingPoint:'Place (synthétique)',instructorMembershipId:id.instructorMember,agreementConfirmed:true,reason:null};
   expect((await call('POST',`/lessons/${lesson.id}/move`,move)).statusCode).toBe(428);

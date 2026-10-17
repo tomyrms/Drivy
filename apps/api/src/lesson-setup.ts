@@ -162,5 +162,11 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
 }
 async function checkBookings(db:PoolClient,schoolId:string,instructorId:string){
  const rows=(await db.query<{planned_start:Date;planned_end:Date;time_zone:string}>(`SELECT planned_start,planned_end,time_zone FROM drivy.lesson WHERE school_id=$1 AND instructor_membership_id=$2 AND status='PLANNED' AND actual_start IS NULL AND planned_end>now()`,[schoolId,instructorId])).rows;
- for(const row of rows)try{await ensureOpen(db,schoolId,instructorId,row.planned_start.toISOString(),row.planned_end.toISOString(),row.time_zone);}catch{throw new ApiError(409,'EXISTING_BOOKINGS','Des rendez-vous doivent être traités avant de modifier ces ouvertures.');}
+ // Seul un refus métier de ensureOpen (SLOT_UNAVAILABLE, INVALID_INTERVAL) signifie qu'un rendez-vous ne tient plus ;
+ // toute autre erreur (base, délai, droits) est relancée telle quelle.
+ for(const row of rows)try{await ensureOpen(db,schoolId,instructorId,row.planned_start.toISOString(),row.planned_end.toISOString(),row.time_zone);}
+  catch(error){
+   if(error instanceof ApiError&&(error.code==='SLOT_UNAVAILABLE'||error.code==='INVALID_INTERVAL'))throw new ApiError(409,'EXISTING_BOOKINGS','Des rendez-vous doivent être traités avant de modifier ces ouvertures.');
+   throw error;
+  }
 }
