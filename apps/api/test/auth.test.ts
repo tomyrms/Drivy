@@ -11,13 +11,23 @@ beforeAll(async () => {
   const publicKey = await exportJWK(keys.publicKey);
   verify = createTokenVerifier(config, createLocalJWKSet({ keys: [{ ...publicKey, kid: 'test-key', alg: 'RS256' }] }));
 });
-const token = async (options: { issuer?: string; audience?: string; expiration?: number; sub?: string } = {}) =>
-  new SignJWT({}).setProtectedHeader({ alg: 'RS256', kid: 'test-key' }).setIssuer(options.issuer ?? config.OIDC_ISSUER)
+const token = async (options: { issuer?: string; audience?: string; expiration?: number; sub?: string; claims?: Record<string,unknown> } = {}) =>
+  new SignJWT(options.claims ?? {}).setProtectedHeader({ alg: 'RS256', kid: 'test-key' }).setIssuer(options.issuer ?? config.OIDC_ISSUER)
     .setAudience(options.audience ?? config.OIDC_AUDIENCE).setSubject(options.sub ?? 'test-person')
     .setIssuedAt().setExpirationTime(options.expiration ?? Math.floor(Date.now()/1000)+300).sign(keys.privateKey);
 describe('Vérification OIDC cryptographique', () => {
   it('vérifie la signature, issuer et audience puis ne conserve que issuer/subject', async () => {
     await expect(verify(`Bearer ${await token()}`)).resolves.toEqual({ issuer: config.OIDC_ISSUER, subject: 'test-person' });
+  });
+  it('reprend exactement les noms structurés signés sans découper le nom public', async () => {
+    await expect(verify(`Bearer ${await token({claims:{given_name:'Élève Camille',family_name:'De la Tour-Roux',name:'Nom public'}})}`))
+      .resolves.toMatchObject({firstName:'Élève Camille',lastName:'De la Tour-Roux',displayName:'Nom public'});
+    const identity=await verify(`Bearer ${await token({claims:{name:'Élève Camille De la Tour-Roux'}})}`);
+    expect(identity.firstName).toBeUndefined();expect(identity.lastName).toBeUndefined();
+  });
+  it.each([42,{},'', '   ', 'x'.repeat(151),'Nom\nAutre','Nom\u0000Autre'])('ignore un nom structuré mal formé sans invalider la session : %j', async value => {
+    const identity=await verify(`Bearer ${await token({claims:{given_name:value,family_name:value}})}`);
+    expect(identity).toEqual({issuer:config.OIDC_ISSUER,subject:'test-person'});
   });
   it.each(['issuer','audience'] as const)('refuse un %s différent', async claim => {
     await expect(verify(`Bearer ${await token({ [claim]: 'https://other.example.invalid' })}`)).rejects.toMatchObject({ status: 401 });

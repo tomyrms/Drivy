@@ -34,6 +34,16 @@ const pagination=z.object({limit:z.coerce.number().int().min(1).max(100).default
 const parameters=z.object({schoolId:z.uuid(),invitationId:z.uuid().optional()});
 const digest=(token:string)=>createHash('sha256').update(token).digest('hex');
 const normalizeEmail=(email:string)=>email.trim().normalize('NFC').toLowerCase();
+/** Identité du compte montrée avant de rejoindre l'école ; jamais lue dans le dossier d'une autre école. */
+const profileIdentity=(identity:Identity,roles:readonly string[])=>roles.includes('LEARNER') && identity.firstName && identity.lastName
+  ? {profileIdentity:{firstName:identity.firstName,lastName:identity.lastName}} : {};
+/** Les noms structurés sont repris uniquement à la création. Une réinvitation ne réécrit aucun dossier existant. */
+async function createLearnerProfile(db:PoolClient,schoolId:string,personId:string,email:string|null,identity:Identity) {
+  const names=profileIdentity(identity,['LEARNER']).profileIdentity;
+  await db.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,profile_readiness,first_name,last_name)
+    SELECT $1,$2,id,COALESCE($5,display_name),$3,'MINIMAL',$6,$7 FROM drivy.person WHERE id=$4`,
+    [randomUUID(),schoolId,email,personId,names?`${names.firstName} ${names.lastName}`:null,names?.firstName ?? null,names?.lastName ?? null]);
+}
 interface InvitationRow {
   id:string;school_id:string;email:string|null;delivery:'EMAIL'|'CODE';roles:string[];token_hash:string;status:'PENDING'|'ACCEPTED'|'REVOKED';version:number;
   expires_at:Date;inviter_membership_id:string;inviter_person_id:string;accepted_by_person_id:string|null;notice_version:number;_createdAt?:string;
@@ -99,7 +109,8 @@ async function preview(pool:Pool,identity:Identity,token:string) {
       FROM drivy.school_data_policy WHERE school_id=$1 AND version=$2 AND approved_at IS NOT NULL`,[school.id,invitation.notice_version])).rows[0];
     if(!notice) throw new ApiError(409,'POLICY_REVIEW_REQUIRED','La notice de l’école n’est pas disponible.');
     await db.query('COMMIT');const dto=projection(invitation);
-    return {invitationId:invitation.id,schoolId:school.id,schoolName:school.name,roles:invitation.roles,maskedEmail:dto.maskedEmail,expiresAt:dto.expiresAt,notice};
+    return {invitationId:invitation.id,schoolId:school.id,schoolName:school.name,roles:invitation.roles,maskedEmail:dto.maskedEmail,expiresAt:dto.expiresAt,notice,
+      ...profileIdentity(identity,invitation.roles)};
   } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 /** Une invitation avec formation : rôle Élève seul, offre ouverte, moniteur actif ; un moniteur ne s'affecte que lui-même. */
@@ -189,8 +200,7 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
       if(invitation.roles.includes('LEARNER')) {
         const learner=(await db.query('SELECT id,archived_at FROM drivy.learner_profile WHERE school_id=$1 AND person_id=$2',[school.id,personId])).rows[0];
         if(learner?.archived_at) throw new ApiError(409,'LEARNER_ARCHIVED','Le dossier existant doit être traité par l’administration.');
-        if(!learner) await db.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,profile_readiness)
-          SELECT $1,$2,id,display_name,$3,'MINIMAL' FROM drivy.person WHERE id=$4`,[randomUUID(),school.id,identity.verifiedEmail,personId]);
+        if(!learner) await createLearnerProfile(db,school.id,personId,identity.verifiedEmail ?? null,identity);
       }
       await db.query("UPDATE drivy.invitation SET status='ACCEPTED',accepted_by_person_id=$2,version=version+1 WHERE id=$1",[invitation.id,personId]);
       await cancelInvitationMail(db,invitation.id);
@@ -212,7 +222,7 @@ async function accept(pool:Pool,identity:Identity,body:z.infer<typeof acceptBody
  * Aperçu d'un code : lecture seule, aucune personne ni adhésion requise. Tout échec (inconnu, expiré, utilisé, révoqué, émetteur
  * sans droit, école inactive) répond de la même façon pour ne rien apprendre à qui essaie des codes.
  */
-export async function previewCode(pool:Pool,hashed:string) {
+export async function previewCode(pool:Pool,hashed:string,identity?:Identity) {
   const db=await pool.connect();let broken=false;try {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');await db.query('SET LOCAL ROLE drivy_app');
     await db.query("SELECT set_config('app.invitation_code_hash',$1,true)",[hashed]);
@@ -230,8 +240,17 @@ export async function previewCode(pool:Pool,hashed:string) {
       const category=(await db.query<{category:string|null}>('SELECT drivy.invitation_code_category($1) AS category',[training.offeringId])).rows[0]?.category;
       if(category && !categories.includes(category)) categories.push(category);
     }
+    // Le formulaire public de création de compte ne reçoit que l'aperçu minimal.
+    // Une fois connecté, le web peut présenter et accepter la même invitation que l'app.
+    let authenticatedDetails:Record<string,unknown>={};
+    if(identity) {
+      const notice=(await db.query(`SELECT version,notice_text AS "noticeText",retention_text AS "retentionText",contact_email AS "contactEmail"
+        FROM drivy.school_data_policy WHERE school_id=$1 AND version=$2 AND approved_at IS NOT NULL`,[school.id,invitation.notice_version])).rows[0];
+      if(!notice) throw new ApiError(409,'POLICY_REVIEW_REQUIRED','La notice de l’école n’est pas disponible.');
+      authenticatedDetails={invitationId:invitation.id,schoolId:school.id,delivery:'CODE',maskedEmail:null,notice,...profileIdentity(identity,invitation.roles)};
+    }
     await db.query('COMMIT');
-    return {schoolName:school.name,roles:invitation.roles,trainingCategoryCode:categories[0] ?? null,trainingCategoryCodes:categories,expiresAt:invitation.expires_at.toISOString()};
+    return {schoolName:school.name,roles:invitation.roles,trainingCategoryCode:categories[0] ?? null,trainingCategoryCodes:categories,expiresAt:invitation.expires_at.toISOString(),...authenticatedDetails};
   } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
 /** Comme l'acceptation par jeton (mêmes verrous, mêmes écritures, même preuve), sans adresse vérifiée : le code prouve l'invitation. */
@@ -294,8 +313,7 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
         [randomUUID(),school.id,personId,invitation.roles,email,onboarding]);
       const learner=(await db.query('SELECT id,archived_at FROM drivy.learner_profile WHERE school_id=$1 AND person_id=$2',[school.id,personId])).rows[0];
       if(learner?.archived_at) throw new ApiError(409,'LEARNER_ARCHIVED','Le dossier existant doit être traité par l’administration.');
-      if(!learner) await db.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,profile_readiness)
-        SELECT $1,$2,id,display_name,$3,'MINIMAL' FROM drivy.person WHERE id=$4`,[randomUUID(),school.id,email,personId]);
+      if(!learner) await createLearnerProfile(db,school.id,personId,email,identity);
       await db.query("UPDATE drivy.invitation SET status='ACCEPTED',accepted_by_person_id=$2,version=version+1 WHERE id=$1",[invitation.id,personId]);
       for(const training of invitedTrainings(invitation)) {
         if(!await openInvitedTraining(db,school.id,personId,training.offeringId,training.instructorMembershipId)) throw invalidCode();
@@ -329,7 +347,7 @@ export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verif
   // Extension du 28 septembre 2026 : invitation par code. Connexion requise (toute identité, même sans compte Drivy) ; aucune adresse vérifiée n'est exigée.
   app.post('/v1/invitations/code/preview',async request=>{empty.parse(request.query);const body=codeBody.parse(request.body);
     const identity=await options.verifyToken(request.headers.authorization);
-    return envelope(await guarded(identity,()=>previewCode(options.pool,codeDigest(body.code))),request);});
+    return envelope(await guarded(identity,()=>previewCode(options.pool,codeDigest(body.code),identity)),request);});
   app.post('/v1/invitations/code/accept',async(request,reply)=>{empty.parse(request.query);const body=codeAcceptBody.parse(request.body);
     checkIdempotency(request.headers['idempotency-key'],body.operationId);const identity=await options.verifyToken(request.headers.authorization);
     const data=await guarded(identity,()=>acceptCode(options.pool,identity,body,codeDigest(body.code)));reply.code(201);return envelope(data,request);});

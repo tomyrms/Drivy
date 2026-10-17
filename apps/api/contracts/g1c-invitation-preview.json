@@ -17,6 +17,10 @@
         "roles":{"type":"array","items":{"enum":["ADMIN","INSTRUCTOR","LEARNER"]},"minItems":1,"maxItems":3,"uniqueItems":true},
         "maskedEmail":{"type":"string","minLength":1},
         "expiresAt":{"type":"string","format":"date-time"},
+        "profileIdentity": {
+          "type":"object","additionalProperties":false,"required":["firstName","lastName"],
+          "properties": {"firstName":{"type":"string","minLength":1,"maxLength":150},"lastName":{"type":"string","minLength":1,"maxLength":150}}
+        },
         "notice": {
           "type":"object","additionalProperties":false,
           "required":["version","noticeText","retentionText","contactEmail"],
