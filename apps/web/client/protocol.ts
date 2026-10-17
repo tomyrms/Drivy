@@ -9,6 +9,7 @@ export const sessionSchema = z.object({
   authenticated: z.boolean(),
   csrfToken: z.string().min(1).max(512),
   invitationPending: z.boolean(),
+  reauthenticationRequired: z.boolean().optional(),
   user: z.object({
     displayName: z.string().max(300),
     email: z.string().max(254).optional(),

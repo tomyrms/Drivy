@@ -4,7 +4,7 @@ import cookie from '@fastify/cookie';
 import staticFiles from '@fastify/static';
 import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
-import { IdentityUnavailable, InvalidCredentials, type IdentityProvider } from './oidc.js';
+import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session, type Tokens } from './session.js';
 import { createAnonymousGateway, createGateway, createSchoolGateway, createOpeningGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
@@ -50,6 +50,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
+  const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
   const sessionMinutes = { idle: config.sessionIdleMinutes ?? 480, max: config.sessionMaxMinutes ?? 720 };
   const store = options.store ?? new SessionStore(now,10_000,{ idleMs: sessionMinutes.idle * 60_000, maxMs: sessionMinutes.max * 60_000 });
   // Only the two anonymous entry points (login, invitation link) can create a session: a bounded number per address.
@@ -177,7 +178,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (session.tokens) await accessToken(session);
     const user = session.tokens?.principal;
     return { authenticated:!!user, csrfToken:session.csrf, invitationPending:!!session.invitation && !session.invitation.accepted,
-      ...(user ? {user:{displayName:user.displayName,emailVerified:user.emailVerified,...(user.email ? {email:user.email} : {})}} : {}) };
+      ...(user ? {reauthenticationRequired:!recentAuthentication(user,now(),reauthMaxAge),
+        user:{displayName:user.displayName,emailVerified:user.emailVerified,...(user.email ? {email:user.email} : {})}} : {}) };
   });
   app.post('/app/bff/login',async (request,reply) => {
     const admitted = admit(request); const body = loginBody.parse(request.body);
@@ -185,7 +187,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     const reauthenticate = body.reauthenticate === true || request.cookies[reloginName] === '1';
     const result = await identity.begin(reauthenticate ? { reauthenticate: true } : undefined);
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
-    session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}) };
+    session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}),
+      ...(body.reauthenticate && session.tokens ? { reauthenticationSubject: session.tokens.principal.subject } : {}) };
     return {url:result.url};
   });
   const rotateSession = (session: Session, tokens: Tokens) => {
@@ -234,6 +237,33 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     await passwordSignIn(reply,open(reply,admitted),body.email,body.password);
     return {ok:true};
   });
+  /** Confirm this session's account in Drivy, without changing the selected school or a reviewed command. */
+  app.post('/app/bff/reauthenticate',async (request,reply) => {
+    const session = protect(request);
+    if (!session.tokens) throw new WebError(401,'SESSION_EXPIRED');
+    if (!entryLimiter.allow(request.ip)) throw new WebError(429,'RATE_LIMITED');
+    const body = z.object(credentials).strict().parse(request.body);
+    if (session.reauthenticating) throw new WebError(409,'REAUTH_IN_PROGRESS');
+    session.reauthenticating = true;
+    let candidate: Tokens | undefined, accepted = false;
+    try {
+      try { candidate = await identity.password(body.email,body.password); }
+      catch (error) {
+        if (error instanceof InvalidCredentials) throw new WebError(401,'INVALID_CREDENTIALS');
+        if (error instanceof IdentityUnavailable) throw new WebError(503,'SERVICE_UNAVAILABLE');
+        throw error;
+      }
+      if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
+      if (candidate.principal.subject !== session.tokens.principal.subject) throw new WebError(409,'REAUTH_ACCOUNT_MISMATCH');
+      if (!recentAuthentication(candidate.principal,now(),reauthMaxAge)) throw new WebError(503,'REAUTH_PROOF_UNAVAILABLE');
+      const next = rotateSession(session,candidate); accepted = true;
+      setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
+      return {ok:true};
+    } finally {
+      delete session.reauthenticating;
+      if (candidate && !accepted) { try { await identity.revoke(candidate); } catch { /* No credentials or provider details leave this boundary. */ } }
+    }
+  });
   /** « J'ai un code » : what the code opens. An opening code is kept in the session for the school form after sign-in. */
   app.post('/app/bff/access-code',async (request,reply) => {
     const admitted = admit(request); const { code } = z.object({ code: accessCode }).strict().parse(request.body);
@@ -276,6 +306,10 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     delete session.login;
     try {
       const tokens = await identity.complete(url,transaction);
+      if (transaction.reauthenticationSubject && (tokens.principal.subject !== transaction.reauthenticationSubject || !recentAuthentication(tokens.principal,now(),reauthMaxAge))) {
+        try { await identity.revoke(tokens); } catch { /* Keep the original session; never expose provider details. */ }
+        return reply.redirect('/app?auth=failed');
+      }
       const next = rotateSession(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
       return reply.redirect(transaction.returnTo==='/app/ouvrir' || transaction.returnTo==='/app/operateur' ? transaction.returnTo : next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
     } catch { return reply.redirect('/app?auth=failed'); }

@@ -1,16 +1,16 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { OpeningState, OperatorOpeningState } from './opening-routes.js';
 
-export type Principal = { subject: string; displayName: string; email?: string; emailVerified: boolean };
+export type Principal = { subject: string; displayName: string; email?: string; emailVerified: boolean; authenticatedAt?: number };
 export type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number; principal: Principal };
-export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number; returnTo?: string };
+export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number; returnTo?: string; reauthenticationSubject?: string };
 export type InvitationState = {
   token: string; delivery?: 'EMAIL' | 'CODE'; operationId: string; confirmation?: { id: string; invitationId: string; digest: string; data: unknown };
   accepting?: boolean; submitted?: boolean; uncertain?: boolean; accepted?: boolean;
 };
 export type Session = {
   id: string; csrf: string; createdAt: number; lastSeen: number;
-  tokens?: Tokens; login?: LoginTransaction; invitation?: InvitationState; refresh?: Promise<Tokens>;
+  tokens?: Tokens; login?: LoginTransaction; invitation?: InvitationState; refresh?: Promise<Tokens>; reauthenticating?: boolean;
   opening?: OpeningState; operatorOpening?: OperatorOpeningState;
 };
 const random = () => randomBytes(32).toString('base64url');
@@ -72,7 +72,7 @@ export class SessionStore {
   }
   destroy(session: Session): void {
     this.sessions.delete(session.id);
-    delete session.tokens; delete session.login; delete session.invitation; delete session.refresh;
+    delete session.tokens; delete session.login; delete session.invitation; delete session.refresh; delete session.reauthenticating;
     delete session.opening; delete session.operatorOpening;
   }
   clear(): void { for (const session of this.sessions.values()) this.destroy(session); }

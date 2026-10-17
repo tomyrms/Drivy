@@ -163,9 +163,9 @@ export function CheckField({ label, description, checked, onChange, disabled, in
  * Review before a durable write. Native modal dialog: focus stays inside, Échap cancels,
  * focus returns to the control that opened it. The confirm button waits for the school.
  */
-export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, busy, acknowledgement, acknowledged, onAcknowledge, children, disabledReason }: {
+export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, busy, acknowledgement, acknowledged, onAcknowledge, children, disabledReason, disabled = false, busyLabel = 'Confirmation par l’école…' }: {
   open: boolean; title: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void; busy: boolean;
-  acknowledgement?: string; acknowledged?: boolean; onAcknowledge?: (value: boolean) => void; children: ReactNode; disabledReason?: string | null;
+  acknowledgement?: string; acknowledged?: boolean; onAcknowledge?: (value: boolean) => void; children: ReactNode; disabledReason?: string | null; disabled?: boolean; busyLabel?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleHeading = useRef<HTMLHeadingElement>(null);
@@ -195,7 +195,7 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
       else document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
     };
   }, []);
-  const blocked = busy || (acknowledgement !== undefined && !acknowledged) || !!disabledReason;
+  const blocked = busy || disabled || (acknowledgement !== undefined && !acknowledged) || !!disabledReason;
   return (
     <dialog ref={dialog} className="confirm-dialog" aria-labelledby={titleId}
       onKeyDown={event => {
@@ -228,7 +228,7 @@ export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, 
       <div className="dialog-actions">
         <button type="button" className="button secondary" onClick={onCancel} disabled={busy}>Retour</button>
         <button type="button" className="button primary" onClick={onConfirm} disabled={blocked} aria-busy={busy}>
-          {busy && <span className="spinner on-accent" aria-hidden="true" />}{busy ? 'Confirmation par l’école…' : confirmLabel}
+          {busy && <span className="spinner on-accent" aria-hidden="true" />}{busy ? busyLabel : confirmLabel}
         </button>
       </div>
     </dialog>

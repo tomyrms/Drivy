@@ -1,0 +1,29 @@
+{
+  "directGrantFlow": "drivy-direct-grant",
+  "authenticationFlows": [
+    {
+      "alias": "drivy-direct-grant",
+      "description": "Password and configured OTP validation, then authentication time for Drivy sensitive commands",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        { "authenticator": "direct-grant-validate-username", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 10, "userSetupAllowed": false },
+        { "authenticator": "direct-grant-validate-password", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 20, "userSetupAllowed": false },
+        { "flowAlias": "drivy-direct-grant-conditional-otp", "authenticatorFlow": true, "requirement": "CONDITIONAL", "priority": 30, "userSetupAllowed": false },
+        { "authenticator": "drivy-direct-grant-auth-time", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 40, "userSetupAllowed": false }
+      ]
+    },
+    {
+      "alias": "drivy-direct-grant-conditional-otp",
+      "description": "Require OTP when configured, as in the Keycloak direct grant flow",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        { "authenticator": "conditional-user-configured", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 10, "userSetupAllowed": false },
+        { "authenticator": "direct-grant-validate-otp", "authenticatorFlow": false, "requirement": "REQUIRED", "priority": 20, "userSetupAllowed": false }
+      ]
+    }
+  ]
+}
