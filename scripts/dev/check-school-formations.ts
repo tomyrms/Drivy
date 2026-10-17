@@ -16,6 +16,20 @@ const sheetSchema=z.object({categoryCode:z.string(),programmes:z.array(z.object(
   curriculum:z.object({id:z.uuid(),competencies:z.array(z.object({key:z.string(),label:z.string()}))}).nullable()})),
   tariffs:z.array(z.object({productKey:z.string(),head:z.object({id:z.uuid(),label:z.string(),unitPriceCents:z.number(),durationMinutes:z.number().nullable(),type:z.string()})}))});
 
+/** Reproduit un rendu retardé : la personne peut choisir le champ suivant avant un callback d'animation. */
+async function deferAnimationCallbacks(page:Page):Promise<()=>Promise<void>> {
+  const pending=await page.evaluateHandle(()=>{
+    const request=window.requestAnimationFrame.bind(window),cancel=window.cancelAnimationFrame.bind(window);
+    let next=0;const callbacks=new Map<number,FrameRequestCallback>();
+    window.requestAnimationFrame=callback=>{callbacks.set(++next,callback);return next;};
+    window.cancelAnimationFrame=id=>{callbacks.delete(id);};
+    return ()=>{window.requestAnimationFrame=request;window.cancelAnimationFrame=cancel;
+      for(const callback of callbacks.values())callback(performance.now());};
+  });
+  let released=false;
+  return async()=>{if(released)return;released=true;try{await pending.evaluate(release=>release());}finally{await pending.dispose();}};
+}
+
 export async function verifySchoolFormations(options:FormationsOptions):Promise<void> {
   let stage='formations : préparation';
   const setStage=(value:string)=>{stage=value;options.setStage(value);};
@@ -80,13 +94,22 @@ async function run(options:FormationsOptions):Promise<void> {
   setStage('formations : ouverture de l’éditeur de compétences');
   await page.getByRole('button',{name:'Modifier les compétences',exact:true}).click();
   setStage('formations : ajout d’une ligne de compétence');
-  await page.getByRole('button',{name:'Ajouter une compétence',exact:true}).click();
   const count=initial.programmes[0]!.curriculum!.competencies.length;
   const added=page.locator('.competency-row').nth(count);
-  setStage('formations : saisie du nom de la nouvelle compétence');
-  await added.getByLabel(`Compétence ${count+1}`,{exact:true}).fill('Conduite de nuit');
-  setStage('formations : saisie de la description de la nouvelle compétence');
-  await added.locator('textarea').fill('Adapter sa conduite à l’obscurité et à l’éblouissement.');
+  const releaseFrames=await deferAnimationCallbacks(page);
+  try {
+    await page.getByRole('button',{name:'Ajouter une compétence',exact:true}).click();
+    setStage('formations : saisie du nom de la nouvelle compétence');
+    await added.getByLabel(`Compétence ${count+1}`,{exact:true}).fill('Conduite de nuit');
+    setStage('formations : saisie de la description après un rendu retardé');
+    await added.locator('textarea').focus();
+    await releaseFrames();
+    await page.keyboard.insertText('Adapter sa conduite à l’obscurité et à l’éblouissement.');
+  } finally {await releaseFrames();}
+  assert(await added.getByLabel(`Compétence ${count+1}`,{exact:true}).inputValue()==='Conduite de nuit'
+    &&await added.locator('textarea').inputValue()==='Adapter sa conduite à l’obscurité et à l’éblouissement.'
+    &&await added.locator('textarea').evaluate(element=>document.activeElement===element),
+    'L’ajout conserve chaque saisie dans son champ, sans déplacement de focus tardif');
   setStage('formations : déplacement de la compétence au clavier');
   const up=page.getByRole('button',{name:'Monter Conduite de nuit',exact:true});await up.focus();await page.keyboard.press('Enter');
   setStage('formations : ordre et focus après le déplacement clavier');
