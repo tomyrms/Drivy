@@ -5,26 +5,34 @@ import { identityConfirmationMessage } from './identity-confirmation-model';
 
 /** Memory only: same-origin form, no external navigation and no password in a draft or command journal. */
 export function IdentityConfirmationDialog({ mode, initialEmail, onConfirmed, onCancel }: {
-  mode: 'confirm' | 'login'; initialEmail: string; onConfirmed: (session: Session) => void; onCancel: () => void;
+  mode: 'confirm' | 'login'; initialEmail: string; onConfirmed: (session: Session) => void | Promise<void>; onCancel: () => void;
 }) {
   const [email, setEmail] = useState(initialEmail), [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
+  const mounted = useRef(true);
   const form = useRef<HTMLFormElement>(null);
-  useEffect(() => { form.current?.querySelector<HTMLInputElement>('input[name="password"]')?.focus(); }, []);
+  useEffect(() => {
+    mounted.current = true;
+    form.current?.querySelector<HTMLInputElement>('input[name="password"]')?.focus();
+    return () => { mounted.current = false; };
+  }, []);
   async function submit() {
     if (submitting.current || !email.trim() || !password) return;
     submitting.current = true; setBusy(true); setError(null);
     try {
       const session = await request('session', sessionSchema);
+      if (!mounted.current) return;
       await request(mode === 'confirm' ? 'reauthenticate' : 'password-login', okSchema, { csrf: session.csrfToken, body: { email, password } });
+      if (!mounted.current) return;
       setPassword('');
       const next = await request('session', sessionSchema);
+      if (!mounted.current) return;
       if (!next.authenticated) throw new RequestFailure('SESSION_EXPIRED', 401);
       if (mode === 'confirm' && next.reauthenticationRequired !== false) throw new RequestFailure('REAUTH_PROOF_UNAVAILABLE', 503);
-      onConfirmed(next);
-    } catch (cause) { setPassword(''); setError(identityConfirmationMessage(cause)); }
-    finally { submitting.current = false; setBusy(false); }
+      await onConfirmed(next);
+    } catch (cause) { if (mounted.current) { setPassword(''); setError(identityConfirmationMessage(cause)); } }
+    finally { submitting.current = false; if (mounted.current) setBusy(false); }
   }
   return <ConfirmDialog open title={mode === 'confirm' ? 'Confirmer votre identité' : 'Se connecter à Drivy'}
     confirmLabel={mode === 'confirm' ? 'Confirmer mon identité' : 'Se connecter'} busyLabel="Vérification…" busy={busy}

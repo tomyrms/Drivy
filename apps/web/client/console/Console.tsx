@@ -9,6 +9,7 @@ import { ConfirmDialog, Loading, Notice, SelectField, Symbol, formatDateTime } f
 import { BrandSymbol } from '../BrandSymbol';
 import { AccountMenu } from '../preferences';
 import { AccountEntry } from '../account-entry';
+import { accountEntryDestination } from '../account-entry-route';
 import { IdentityConfirmationDialog } from '../identity-confirmation';
 import { SettingsFocus, SettingsSearch } from './settings-search';
 import { ConsoleContext, readError, sectionKeys, type ConsoleContextValue, type SectionKey } from './context';
@@ -26,7 +27,7 @@ import { LegacyReferenceRoute, TermsArchiveSection, UncategorizedTariffsSection 
 import { ObservationThemesSection } from './observation-themes';
 import { isLocalItemCurrent, localNavigationQuery, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
-import { ConsoleAccessReader } from './access-reader';
+import { ConsoleAccessReader, sameConsoleAccess } from './access-reader';
 
 type State =
   | { status: 'loading' }
@@ -171,6 +172,25 @@ export function ManagementConsole() {
     const resolve = identityResult.current; identityResult.current = null;
     setIdentityDialog(null); resolve?.(confirmed);
   }
+  async function confirmedIdentity(next: Session) {
+    if (identityDialog?.mode === 'login') {
+      finishIdentity(false);
+      await load(route.schoolId);
+      return;
+    }
+    if (state.status !== 'ready') { finishIdentity(false); return; }
+    const scope = generation.current;
+    const access = await accessReader.current.read(state.membership.schoolId);
+    if (scope !== generation.current) return;
+    if (!access) throw new RequestFailure('API_UNAVAILABLE');
+    const retained = sameConsoleAccess(state, access);
+    if ('me' in access) acceptPerson(access.me);
+    if (!retained) generation.current++;
+    csrf.current = next.csrfToken; setSession(access.status === 'signin' ? null : next);
+    if (access.status === 'unavailable') setState({ status: 'error', message: readError(access.error) });
+    else setState(access);
+    finishIdentity(retained);
+  }
   function login(options?: { reauthenticate?: boolean }) {
     if (options?.reauthenticate) { void confirmIdentity(); return; }
     if (!working.current) setIdentityDialog({ mode: 'login', email: currentSession.current?.user?.email ?? '' });
@@ -280,7 +300,11 @@ export function ManagementConsole() {
             <p>{state.message}</p></Notice>}
           {state.status === 'signin' && <>
             {snapshot.entries.size > 0 && <Notice tone="warning" title="Une demande reste à vérifier"><p>Après connexion, ouvrez la même école pour consulter son résultat.</p></Notice>}
-            <AccountEntry onSignedIn={() => void load(route.schoolId)} />
+            <AccountEntry onSignedIn={kind => {
+              const destination = accountEntryDestination(kind);
+              if (destination) window.location.assign(destination);
+              else void load(route.schoolId);
+            }} />
           </>}
           {state.status === 'choose' && <ChooseSchool schools={state.admin} onChoose={schoolId => { pushPath(`/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); }} />}
           {state.status === 'denied' && <Denied membership={state.membership} />}
@@ -297,12 +321,7 @@ export function ManagementConsole() {
         <p>Vos modifications ne sont pas enregistrées auprès de l’école.</p>
       </ConfirmDialog>
       {identityDialog && <IdentityConfirmationDialog mode={identityDialog.mode} initialEmail={identityDialog.email}
-        onCancel={() => finishIdentity(false)} onConfirmed={next => {
-          csrf.current = next.csrfToken; setSession(next);
-          const mode = identityDialog.mode;
-          finishIdentity(true);
-          if (mode === 'login') void load(route.schoolId);
-        }} />}
+        onCancel={() => finishIdentity(false)} onConfirmed={confirmedIdentity} />}
     </div>
   );
 }

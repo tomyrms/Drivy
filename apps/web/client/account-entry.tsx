@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { z } from 'zod';
 import { errorMessage, okSchema, request, RequestFailure, sessionSchema } from './protocol';
 import { Notice, TextField } from './ui';
+import type { AccessKind } from './account-entry-route';
 
 /** What a code opens, as the server read it. */
-export type AccessKind = 'LEARNER_INVITATION' | 'SCHOOL_OPENING' | 'EMAIL_INVITATION';
+export type { AccessKind } from './account-entry-route';
 const codeSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING']), schoolName: z.string().max(200).optional(), expiresAt: z.string() });
 const accountSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING', 'EMAIL_INVITATION']) });
 type Step = 'login' | 'code' | 'register';

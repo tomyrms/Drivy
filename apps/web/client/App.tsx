@@ -10,6 +10,7 @@ import { CheckField, StatusBadge, Symbol } from './ui';
 import { BrandSymbol } from './BrandSymbol';
 import { AccountMenu } from './preferences';
 import { AccountEntry, type AccessKind } from './account-entry';
+import { accountEntryDestination } from './account-entry-route';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -149,8 +150,9 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   /** An opening code continues to the school form; otherwise the account page is read again. */
   function signedIn(kind: AccessKind | null) {
     setEnteringCode(false);
-    if (kind === 'SCHOOL_OPENING') { window.location.assign('/app/ouvrir'); return; }
-    if (kind === 'LEARNER_INVITATION' || kind === 'EMAIL_INVITATION') navigate('invitation');
+    const destination = accountEntryDestination(kind);
+    if (destination === '/app/ouvrir') { window.location.assign(destination); return; }
+    if (destination === '/app/invitation') navigate('invitation');
     setLinkMustReopen(false);
     void perform('Ouverture de votre espace…', refresh);
   }
