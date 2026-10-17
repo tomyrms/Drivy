@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createCommand, formatCents, parseCents } from '../command-core';
 import { formationListSchema, proposalsSchema, readFormationSheet, textProposalsLite } from '../formation-api';
+import { civilDateIn } from '../agenda-model';
 import { readSchool } from '../school-api';
 import { Notice, SegmentField, SelectField, Symbol, TextField, formatCivilDate, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
@@ -22,11 +23,11 @@ const steps = ['Permis', 'Compétences et règles', 'Premier tarif', 'Vérificat
 const otherCategory = '__autre__';
 
 export function FormationWizard({ initialCategory }: { initialCategory?: string | undefined }) {
-  const { schoolId, navigate } = useConsole();
+  const { schoolId, school, navigate } = useConsole();
   const list = useLoad(() => readSchool(schoolId, 'formations', formationListSchema), [schoolId]);
   const templates = useLoad(() => readSchool(schoolId, 'setup-draft/templates', proposalsSchema), [schoolId]);
   const texts = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsLite), [schoolId]);
-  const today = list.data?.today ?? new Date().toISOString().slice(0, 10);
+  const today = list.data?.today ?? civilDateIn(school.timeZone);
   const [step, setStep] = useState(0);
   const [attempted, setAttempted] = useState<Record<number, boolean>>({});
   const [choice, setChoice] = useState<string>(initialCategory ? (commonCategories as readonly string[]).includes(initialCategory) ? initialCategory : otherCategory : '');

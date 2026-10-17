@@ -93,6 +93,10 @@ export function setupPrice(value: string): number | null {
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
   return Number.isSafeInteger(cents) ? cents : null;
 }
+/** Un permis déjà présent dans le brouillon ne se prépare pas une seconde fois. */
+export function templateAlreadyAdded(formations: readonly Pick<SetupFormation, 'categoryCode'>[], categoryCode: string): boolean {
+  return formations.some(item => item.categoryCode === categoryCode);
+}
 export function setupFormation(template: SetupTemplates['formations'][number] | null, today: string): SetupFormation {
   return { id: crypto.randomUUID(), apply: false, categoryCode: template?.categoryCode ?? '', label: template?.label ?? '',
     templateId: template?.id ?? null, templateVersion: template?.version ?? null,
