@@ -9,6 +9,7 @@ import { Cursors } from './cursor.js';
 import { ApiError,forbidden,notFound } from './errors.js';
 import { cancelInvitationMail,queueInvitationMail,type InvitationMailConfig } from './invitation-mail.js';
 import { AttemptLimiter } from './attempt-limiter.js';
+import { reauthAge, reauthenticate } from './reauth.js';
 import { generateInvitationCode,invitationCodeHasher } from './invitation-code.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
@@ -309,8 +310,8 @@ async function acceptCode(pool:Pool,identity:Identity,body:z.infer<typeof codeAc
     await db.query('COMMIT');return result;
   } catch(error) {broken=!(await rollbackQuietly(db));throw error;} finally {db.release(broken);}
 }
-export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationMail?:InvitationMailConfig;codeAttempts?:AttemptLimiter;invitationCodeSecret?:string}) {
-  const cursors=new Cursors(options.cursorSecret);const attempts=options.codeAttempts ?? new AttemptLimiter();
+export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationMail?:InvitationMailConfig;codeAttempts?:AttemptLimiter;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number}) {
+  const cursors=new Cursors(options.cursorSecret);const attempts=options.codeAttempts ?? new AttemptLimiter();const age=reauthAge(options.reauthMaxAgeSeconds);
   // Empreinte à clé serveur des codes (HMAC-SHA256) : voir invitation-code.ts.
   const codeDigest=invitationCodeHasher(options.cursorSecret,options.invitationCodeSecret);
   // Chaque code refusé (aperçu ou acceptation) compte pour l'identité OIDC qui l'a essayé ; l'accès est coupé au-delà de la limite.
@@ -358,6 +359,8 @@ export function registerInvitations(app:FastifyInstance,options:{pool:Pool;verif
     empty.parse(request.query);const {schoolId}=parameters.parse(request.params);const parsed=createBody.parse(request.body);
     const body={...parsed,email:parsed.email===undefined?null:normalizeEmail(parsed.email),roles:[...parsed.roles].sort()};checkIdempotency(request.headers['idempotency-key'],body.operationId);
     const identity=await options.verifyToken(request.headers.authorization);
+    // Toute invitation qui accorde un rôle de l'école (ADMIN, INSTRUCTOR) est un changement d'accès : réauthentification exigée.
+    if(body.roles.some(role=>role!=='LEARNER')) reauthenticate(identity,age);
     // Le code en clair n'existe que dans la réponse qui le génère : il n'entre ni dans l'opération stockée ni dans une projection.
     // Un rejeu idempotent ne réexécute pas la commande : la variable reste vide et la réponse rend l'invitation sans code.
     let issuedCode:string|undefined;
