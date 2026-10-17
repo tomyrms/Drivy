@@ -100,6 +100,8 @@ export function programmeName(programme: Programme, all: readonly Programme[]): 
 
 /* ---------------------------------------------------------------- Tarifs */
 
+/** Message commun des champs de prix (fiche de tarif et brouillon d'école). */
+export const priceAmountProblem = 'Indiquez un montant en CHF, par exemple 95 ou 95.50.';
 export const tariffTypeLabels: Record<TariffType, string> = {
   INDIVIDUAL_LESSON: 'Leçon individuelle', EXAM_SUPPORT: 'Accompagnement à l’examen', COLLECTIVE_COURSE: 'Cours collectif', EXTERNAL_SERVICE: 'Autre prestation',
 };
@@ -124,7 +126,7 @@ export function tariffProblems(draft: TariffDraft, mode: 'CREATE' | 'UPDATE', to
     duration: lesson && duration === null ? 'Une leçon a une durée : indiquez-la en minutes.'
       : draft.duration.trim() !== '' && (duration === null || duration < 1 || duration > maximum) ? `Indiquez une durée de 1 à ${maximum} minutes.` : null,
     unitLabel: filled(draft.unitLabel, 100) ? null : 'Indiquez l’unité facturée (par exemple « leçon »).',
-    price: draft.price.trim() === '' ? 'Indiquez le prix en CHF (0 pour une prestation offerte).' : cents === null ? 'Indiquez un montant en CHF, par exemple 95 ou 95.50.' : null,
+    price: draft.price.trim() === '' ? 'Indiquez le prix en CHF (0 pour une prestation offerte).' : cents === null ? priceAmountProblem : null,
     validFrom: mode === 'UPDATE' ? null : !isCivilDate(draft.validFrom) ? 'Indiquez la date de début.' : null,
     validUntil: draft.validUntil === '' ? null : !isCivilDate(draft.validUntil) ? 'Indiquez une date valide.'
       : draft.validUntil < start ? 'La fin précède le début de validité.' : draft.enabled && draft.validUntil < today ? 'Cette date est déjà passée.' : null,
