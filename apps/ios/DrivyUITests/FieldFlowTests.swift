@@ -9,8 +9,8 @@ import XCTest
         waitUntilEnabled(start, in: app)
         XCTAssertEqual(start.label, "Démarrer sans GPS")
         XCTAssertTrue(app.descendants(matching: .any)["gps-unavailable-notice"].exists, app.debugDescription)
-        XCTAssertTrue(app.buttons["gps-refresh-school"].exists)
-        XCTAssertFalse(app.buttons["gps-answer-allowed"].exists)
+        XCTAssertTrue(app.buttons["Actualiser les accès"].exists, app.debugDescription)
+        XCTAssertFalse(app.buttons["Avec GPS"].exists)
         XCTAssertFalse(app.buttons["lesson-complete"].exists)
         capture(app, name: "start-now-gps-disabled")
 
@@ -25,7 +25,7 @@ import XCTest
     func testStartWithoutAnAnswerKeepsGPSPreparationAvailableFromTheLesson() {
         continueAfterFailure = false
         let app = launch("start-now-gps-permission")
-        let allow = app.buttons["gps-answer-allowed"]
+        let allow = app.buttons["Avec GPS"]
         XCTAssertTrue(allow.waitForExistence(timeout: 20), app.debugDescription)
         let start = app.buttons["start-now-confirm"]
         waitUntilEnabled(start, in: app)
@@ -41,7 +41,7 @@ import XCTest
         prepare.tap()
         XCTAssertTrue(app.navigationBars["Démarrer le trajet"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(allow.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(app.buttons["gps-answer-refused"].exists)
+        XCTAssertTrue(app.buttons["Sans GPS"].exists)
         XCTAssertTrue(app.buttons["capture-continue-without-gps"].exists)
         capture(app, name: "start-now-gps-choice-from-lesson")
         // La préparation attend un accord : ce contrôle n’émet ni autorisation signée ni point.
@@ -51,7 +51,7 @@ import XCTest
     func testChoosingGPSRequestsPermissionAndExplainsItsRefusal() {
         continueAfterFailure = false
         let app = launch("start-now-gps-permission")
-        let allow = app.buttons["gps-answer-allowed"]
+        let allow = app.buttons["Avec GPS"]
         XCTAssertTrue(allow.waitForExistence(timeout: 20), app.debugDescription)
         waitUntilEnabled(allow, in: app)
         for _ in 0..<3 where !allow.isHittable { app.swipeUp() }
@@ -73,7 +73,7 @@ import XCTest
         capture(app, name: "start-now-gps-permission-refused")
     }
 
-    func testLeavingLiveThroughTabsKeepsTheLessonAndCancellationIsInTheMenu() {
+    func testLeavingLiveThroughTabsKeepsTheStartedLessonWithoutOfferingCancellation() {
         continueAfterFailure = false
         let app = launch("live")
         let signal = app.buttons["capture-signal-observation"]
@@ -81,8 +81,8 @@ import XCTest
         XCTAssertFalse(app.buttons["capture-cancel-lesson"].exists)
         XCTAssertFalse(app.buttons["Revenir à la leçon"].exists)
         app.buttons["capture-more"].tap()
-        XCTAssertTrue(app.buttons["Annuler la leçon"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.buttons["Voir la leçon"].exists)
+        XCTAssertTrue(app.buttons["Voir la leçon"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["Annuler la leçon"].exists)
         // Dismiss the menu outside its actions, then leave through the actual tab bar.
         nativeTab("Agenda", in: app).tap()
         if signal.exists { nativeTab("Agenda", in: app).tap() }

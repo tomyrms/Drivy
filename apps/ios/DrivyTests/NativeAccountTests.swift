@@ -79,6 +79,69 @@ struct NativeAccountTests {
             knownPersonName: "  Camille Anne De la Tour-Roux\n") == "Camille Anne De la Tour-Roux")
         #expect(SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: "  ", knownPersonName: "Camille") == "Camille")
         #expect(SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: nil, knownPersonName: " \n") == nil)
+        #expect(SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: nil, knownPersonName: "Nom public choisi",
+            identityDisplayName: "Nom du fournisseur") == "Nom public choisi")
+        #expect(SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: "Nom saisi", knownPersonName: nil,
+            identityDisplayName: "Nom du fournisseur") == "Nom saisi")
+    }
+
+    @Test func anInterruptedOpeningReusesTheNameFromTheRestoredNativeSessionWithoutAPerson() async throws {
+        let name = "Camille Anne De la Tour-Roux"
+        let vault = MemoryVault()
+        let state = try passwordState(configuration, idToken: accountIDToken(["name": name]))
+        let session = IdentitySession(configuration: configuration, vault: vault, authorizer: UnusedAuthorizer(),
+            passwordAuthorizer: PasswordStub(state: state))
+        #expect(session.suggestedDisplayName == nil)
+        #expect(await session.signIn(email: "camille@example.test", password: "synthetic-password"))
+        #expect(session.suggestedDisplayName == name)
+
+        let restored = IdentitySession(configuration: configuration, vault: vault, authorizer: UnusedAuthorizer())
+        await restored.restore()
+        #expect(restored.isAuthenticated)
+        let proposed = SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: nil, knownPersonName: nil,
+            identityDisplayName: restored.suggestedDisplayName)
+        let model = opening(displayName: proposed)
+        #expect(model.displayName == name)
+        model.displayName = "Nom public choisi"
+        model.prefillAccountDisplayName(restored.suggestedDisplayName)
+        #expect(model.displayName == "Nom public choisi")
+        await restored.signOut()
+        #expect(restored.suggestedDisplayName == nil && vault.data == nil)
+    }
+
+    @Test func identityNameSuggestionKeepsWholeNamesAndNeedsTheSessionIssuerAndAudience() throws {
+        let fullName = "Camille Anne De la Tour-Roux"
+        let structured: [String: Any] = ["given_name": "Camille Anne", "family_name": "De la Tour-Roux"]
+        #expect(IdentityDisplayName.suggestion(fromIDToken: try accountIDToken(structured), configuration: configuration) == fullName)
+        var publicName = structured
+        publicName["name"] = "Nom public distinct"
+        #expect(IdentityDisplayName.suggestion(fromIDToken: try accountIDToken(publicName), configuration: configuration) == "Nom public distinct")
+        let invalidClaims: [[String: Any]] = [
+            ["name": fullName, "iss": "https://foreign.example.test"],
+            ["name": fullName, "aud": "other-client"],
+            ["name": fullName, "sub": ""],
+            ["name": "Camille\nExemple"],
+            ["name": String(repeating: "x", count: 201)],
+            ["name": ["Camille"]],
+            ["given_name": "Camille"]
+        ]
+        for values in invalidClaims {
+            #expect(IdentityDisplayName.suggestion(fromIDToken: try accountIDToken(values), configuration: configuration) == nil)
+        }
+        let invalidTokens: [String?] = [nil, "invalid", "e30.invalid.signature", String(repeating: "x", count: 65_537)]
+        for token in invalidTokens {
+            #expect(IdentityDisplayName.suggestion(fromIDToken: token, configuration: configuration) == nil)
+        }
+    }
+
+    @Test func aNameSuggestionIsNeverExposedWhenTheSessionCannotBeSaved() async throws {
+        let vault = MemoryVault()
+        vault.failWrites = true
+        let state = try passwordState(configuration, idToken: accountIDToken(["name": "Camille Exemple"]))
+        let session = IdentitySession(configuration: configuration, vault: vault, authorizer: UnusedAuthorizer(),
+            passwordAuthorizer: PasswordStub(state: state))
+        #expect(await session.signIn(email: "camille@example.test", password: "synthetic-password") == false)
+        #expect(session.suggestedDisplayName == nil && !session.isAuthenticated)
     }
 
     @Test func schoolOpeningReusesAccountInformationAndDoesNotSelectInstructorByDefault() {
@@ -166,6 +229,17 @@ struct NativeAccountTests {
         SchoolOpeningWorkspace(client: SchoolOpeningClient(configuration: configuration, tokenSource: OpeningToken()),
             code: "K7Q4-MX2P", displayName: displayName, email: "camille@example.test")
     }
+
+    private func accountIDToken(_ values: [String: Any]) throws -> String {
+        let defaults: [String: Any] = ["iss": configuration.issuer.absoluteString, "aud": configuration.clientID,
+                                      "sub": "synthetic-unlinked-account"]
+        let claims = defaults.merging(values) { _, supplied in supplied }
+        func encode(_ value: [String: Any]) throws -> String {
+            try JSONSerialization.data(withJSONObject: value).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        }
+        return try encode(["alg": "RS256"]) + "." + encode(claims) + ".synthetic-signature"
+    }
 }
 
 private actor AccessPreviewTransport: SchoolHTTPTransport {
@@ -192,24 +266,30 @@ private actor AccessPreviewTransport: SchoolHTTPTransport {
 }
 
 @MainActor
-private func passwordState(_ configuration: AppConfiguration) throws -> OIDAuthState {
+private func passwordState(_ configuration: AppConfiguration, idToken: String? = nil) throws -> OIDAuthState {
     let service = OIDServiceConfiguration(authorizationEndpoint: URL(string: "https://drivy.example.test/identity/realms/drivy/auth")!,
         tokenEndpoint: URL(string: "https://drivy.example.test/identity/realms/drivy/token")!, issuer: configuration.issuer)
     let request = OIDCPolicy.request(service: service, configuration: configuration)
     let response = OIDAuthorizationResponse(request: request,
         parameters: ["code": "password-sign-in" as NSString, "state": (request.state ?? "") as NSString])
     let exchange = try #require(response.tokenExchangeRequest())
-    let token = OIDTokenResponse(request: exchange, parameters: [
+    var parameters: [String: NSObject & NSCopying] = [
         "access_token": "synthetic-test-access" as NSString, "refresh_token": "synthetic-test-refresh" as NSString,
         "token_type": "Bearer" as NSString, "expires_in": NSNumber(value: 300)
-    ])
+    ]
+    if let idToken { parameters["id_token"] = idToken as NSString }
+    let token = OIDTokenResponse(request: exchange, parameters: parameters)
     return OIDAuthState(authorizationResponse: response, tokenResponse: token)
 }
 
 @MainActor private final class MemoryVault: IdentityVault {
     var data: Data?
+    var failWrites = false
     func read() throws -> Data? { data }
-    func write(_ value: Data) throws { data = value }
+    func write(_ value: Data) throws {
+        if failWrites { throw IdentityFailure.storage }
+        data = value
+    }
     func clear() throws { data = nil }
 }
 

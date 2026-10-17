@@ -22,6 +22,7 @@ struct SchoolOnboardingView: View {
     @State private var editsInformation = false
     @State private var includesInformationStep = true
     @State private var confirmsDiscard = false
+    @State private var returnsToReviewAfterDiscard = false
     @State private var location = SchoolOnboardingLocationPermission()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Un écran a déjà été montré : le premier (squelette puis écran) apparaît en fondu, les suivants glissent.
@@ -44,10 +45,15 @@ struct SchoolOnboardingView: View {
                     if loadsOnAppear { await model.load() }
                     includesInformationStep = startsWithInformation || !model.canSkipOnboardingInformation
                 }
-                .alert("Quitter sans enregistrer tes informations ?", isPresented: $confirmsDiscard) {
-                    Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                .alert(returnsToReviewAfterDiscard ? "Revenir sans enregistrer tes informations ?" : "Quitter sans enregistrer tes informations ?",
+                       isPresented: $confirmsDiscard) {
+                    Button("Continuer à modifier", role: .cancel) {}
+                    Button(returnsToReviewAfterDiscard ? "Revenir sans enregistrer" : "Quitter sans enregistrer", role: .destructive) {
+                        if returnsToReviewAfterDiscard { returnToReviewDiscardingEdits() } else { dismiss() }
+                    }
                 } message: {
-                    Text("Les étapes déjà confirmées par l’école restent enregistrées. Tu pourras reprendre plus tard.")
+                    Text(returnsToReviewAfterDiscard ? "Tes modifications ne seront pas enregistrées."
+                         : "Les étapes déjà confirmées par l’école restent enregistrées. Tu pourras reprendre plus tard.")
                 }
         }
         .tint(DrivyTheme.accent)
@@ -504,6 +510,7 @@ struct SchoolOnboardingView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             Button(closeTitle) {
+                returnsToReviewAfterDiscard = false
                 if model.hasEdits { confirmsDiscard = true } else { dismiss() }
             }
             .disabled(model.isBusy)
@@ -519,9 +526,10 @@ struct SchoolOnboardingView: View {
         if isCompleted || editsInformation {
             guard editsInformation else { return nil }
             return {
-                if let profile = model.profile { model.draft = SchoolProfileDraft(profile) }
-                cameBack = true
-                editsInformation = false
+                if model.hasEdits {
+                    returnsToReviewAfterDiscard = true
+                    confirmsDiscard = true
+                } else { returnToReviewDiscardingEdits() }
             }
         }
         switch screen {
@@ -537,6 +545,12 @@ struct SchoolOnboardingView: View {
             guard model.canMutate else { return nil }
             return { cameBack = true; save(gpsEnabled ? .information : .formations) }
         }
+    }
+
+    private func returnToReviewDiscardingEdits() {
+        if let profile = model.profile { model.draft = SchoolProfileDraft(profile) }
+        cameBack = true
+        editsInformation = false
     }
 
     // MARK: - Helpers

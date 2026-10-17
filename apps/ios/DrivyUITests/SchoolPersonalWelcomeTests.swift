@@ -36,6 +36,29 @@ import XCTest
         XCTAssertTrue(complete.isEnabled)
         XCTAssertFalse(app.buttons["onboarding-continue"].exists)
         XCTAssertFalse(app.buttons["onboarding-done"].exists)
+
+        edit.tap()
+        let firstName = app.textFields["profile-first-name"]
+        XCTAssertTrue(firstName.waitForExistence(timeout: 10), app.debugDescription)
+        let originalName = firstName.value as? String ?? ""
+        firstName.tap()
+        firstName.typeText(" Synthétique")
+        let editedName = firstName.value as? String
+        XCTAssertNotEqual(editedName, originalName)
+        app.buttons["onboarding-back"].tap()
+        let discard = app.alerts["Revenir sans enregistrer tes informations ?"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 5), app.debugDescription)
+        discard.buttons["Continuer à modifier"].tap()
+        XCTAssertEqual(firstName.value as? String, editedName)
+        XCTAssertEqual(backToReview.label, "Enregistrer")
+        app.buttons["onboarding-back"].tap()
+        discard.buttons["Revenir sans enregistrer"].tap()
+        XCTAssertTrue(complete.waitForExistence(timeout: 10), app.debugDescription)
+        edit.tap()
+        XCTAssertTrue(firstName.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(firstName.value as? String, originalName)
+        backToReview.tap()
+        XCTAssertTrue(complete.waitForExistence(timeout: 10), app.debugDescription)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "personal-welcome-known-identity-review-synthetic"
         attachment.lifetime = .keepAlways

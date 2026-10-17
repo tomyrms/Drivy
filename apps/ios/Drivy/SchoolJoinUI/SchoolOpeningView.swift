@@ -23,8 +23,8 @@ import SwiftUI
         self.displayName = displayName ?? ""; self.contactEmail = email ?? ""
     }
 
-    static func prefilledDisplayName(accountCreationName: String?, knownPersonName: String?) -> String? {
-        [accountCreationName, knownPersonName].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+    static func prefilledDisplayName(accountCreationName: String?, knownPersonName: String?, identityDisplayName: String? = nil) -> String? {
+        [accountCreationName, knownPersonName, identityDisplayName].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
     }
 

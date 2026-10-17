@@ -127,6 +127,9 @@ struct SchoolRootView: View {
         .onChange(of: workspace?.person?.displayName) { _, name in
             openingWorkspace?.prefillAccountDisplayName(name)
         }
+        .onChange(of: identity.suggestedDisplayName) { _, name in
+            openingWorkspace?.prefillAccountDisplayName(workspace?.person?.displayName ?? name)
+        }
         .onChange(of: workspace?.isLoadingAccount) { _, loading in
             if loading == false { verifyPresentedScopes() }
         }
@@ -380,7 +383,7 @@ struct SchoolRootView: View {
                 let model = SchoolOpeningWorkspace(client: SchoolOpeningClient(configuration: configuration, tokenSource: identity),
                     code: outcome.input.secret,
                     displayName: SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: outcome.displayName,
-                        knownPersonName: workspace?.person?.displayName), email: outcome.email)
+                        knownPersonName: workspace?.person?.displayName, identityDisplayName: identity.suggestedDisplayName), email: outcome.email)
                 openingWorkspace = model; openingRoute = SchoolWorkspaceSheet(model: model)
             case (.learnerInvitation, .code(let code)):
                 openCodeJoin(code: code)
