@@ -163,8 +163,18 @@ async function run(options:FormationsOptions):Promise<void> {
 
   setStage('formations : modification du prix concurrente puis conflit explicite');
   const lessonTariff=(await sheet('B')).tariffs.find(item=>item.head.unitPriceCents===9500&&item.head.durationMinutes===50)!;
-  await page.getByRole('button',{name:`Modifier ${lessonTariff.head.label}`,exact:true}).click();
-  await page.getByLabel('Prix (CHF)',{exact:true}).fill('99');
+  const releaseTariffFrames=await deferAnimationCallbacks(page);
+  const priceInput=page.getByLabel('Prix (CHF)',{exact:true});
+  try {
+    await page.getByRole('button',{name:`Modifier ${lessonTariff.head.label}`,exact:true}).click();
+    await priceInput.focus();await page.keyboard.press('ControlOrMeta+A');
+    await releaseTariffFrames();
+    await page.keyboard.insertText('99');
+  } finally {await releaseTariffFrames();}
+  assert(await priceInput.inputValue()==='99'
+    &&await page.getByLabel('Nom du tarif',{exact:true}).inputValue()===lessonTariff.head.label
+    &&await priceInput.evaluate(element=>document.activeElement===element),
+    'L’ouverture du tarif conserve la saisie et le focus dans le prix malgré un rendu retardé');
   const concurrent=await page.evaluate(async({path,body})=>{
     const session=await (await fetch('/app/bff/session',{credentials:'same-origin'})).json() as {csrfToken:string};
     const response=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken,'Idempotency-Key':body.operationId},body:JSON.stringify(body)});

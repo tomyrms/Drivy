@@ -349,14 +349,20 @@ export function TariffsPanel({ tariffs, categoryCode, today, canConfigure, edito
   const openKey = Object.keys(editors.editors).find(key => key.startsWith('tariff:'));
   const state = openKey ? editors.editors[openKey] : undefined;
   const editingTariff = state?.kind === 'tariff' ? tariffs.find(item => item.productKey === state.productKey) : undefined;
+  const focusOnOpen = useRef(false);
+  useLayoutEffect(() => {
+    if (!focusOnOpen.current || state?.kind !== 'tariff') return;
+    focusOnOpen.current = false;
+    document.querySelector<HTMLElement>('#tariff-editor input')?.focus();
+  }, [state]);
   const selected = useRef<HTMLLIElement>(null);
   useEffect(() => { if (selection) selected.current?.scrollIntoView({ block: 'center' }); }, [selection]);
   const lockedBy = state && editors.isDirty(openKey!) ? 'Terminez la modification en cours avant d’en ouvrir une autre.' : null;
   const open = (tariff: Tariff | null) => {
+    focusOnOpen.current = true;
     if (openKey) editors.close(openKey);
     editors.open(tariff ? { kind: 'tariff', productKey: tariff.productKey, baseId: tariff.head.id, draft: tariffDraft(tariff) }
       : { kind: 'tariff', productKey: null, baseId: null, draft: newTariffDraft(types[0]!, today, tariffs.find(item => item.terms)?.terms?.termsText ?? proposals?.commercialTerms.termsText ?? '') });
-    window.requestAnimationFrame(() => document.querySelector<HTMLElement>('#tariff-editor input')?.focus());
   };
   const headingId = 'rubric-tarifs';
   let editor: ReactNode = null;
