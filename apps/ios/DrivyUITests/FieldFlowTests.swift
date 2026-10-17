@@ -67,7 +67,7 @@ import XCTest
         // confirme que le parcours a demandé l’autorisation ; il ne qualifie pas l’alerte système d’iOS.
         XCTAssertTrue(app.staticTexts["La localisation n’est pas autorisée pour Drivy. La leçon continue sans GPS."]
             .waitForExistence(timeout: 20), app.debugDescription)
-        XCTAssertTrue(app.buttons["lesson-prepare-gps"].exists)
+        XCTAssertTrue(app.buttons["lesson-prepare-gps"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.buttons["lesson-complete"].exists)
         XCTAssertFalse(app.buttons["capture-signal-observation"].exists)
         capture(app, name: "start-now-gps-permission-refused")
