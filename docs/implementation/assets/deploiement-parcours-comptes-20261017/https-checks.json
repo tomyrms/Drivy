@@ -1,0 +1,114 @@
+{
+  "checkedAt": "2026-10-17T15:00:27.855265+00:00",
+  "commit": "d97dfa96cad63990aa661671b125d0ebb25d3307",
+  "origin": "https://drivy.shulker.ch",
+  "apiReady": true,
+  "checks": [
+    {
+      "path": "/app/apple-touch-icon.png",
+      "status": 200,
+      "sha256": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/assets/Manrope-Variable-D0hgXaxw.woff2",
+      "status": 200,
+      "sha256": "22f962f7e0e72d1e5d99888e902132b4ad4ad8b18ccc3a65e1bb7c87566bb56d",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/assets/index-Bi7spECT.js",
+      "status": 200,
+      "sha256": "a16fa381097d79fb5b08fcf7206ce6424854a7ff8a93fdefb0901de3e3342707",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/assets/index-DEEIcJDN.css",
+      "status": 200,
+      "sha256": "0c7812d3cdd5c3ce7d9bb94cf73ecbc38ebe7379cc085a711d067b9ab3f8b91d",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/favicon-32.png",
+      "status": 200,
+      "sha256": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/favicon.ico",
+      "status": 200,
+      "sha256": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/favicon.svg",
+      "status": 200,
+      "sha256": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/icon-192.png",
+      "status": 200,
+      "sha256": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/icon-512.png",
+      "status": 200,
+      "sha256": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/",
+      "status": 200,
+      "sha256": "e7326bcae7b916673232bfbfb926cb653ae09f62cb5da3f4261bf03a6e55e3c7",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/site.webmanifest",
+      "status": 200,
+      "sha256": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app/theme-init.js",
+      "status": 200,
+      "sha256": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354",
+      "matchesRelease": true
+    },
+    {
+      "path": "/app",
+      "status": 200,
+      "themeScriptPresent": true
+    },
+    {
+      "path": "/app/preferences",
+      "status": 200,
+      "themeScriptPresent": true
+    },
+    {
+      "path": "/app/preferences/",
+      "status": 200,
+      "themeScriptPresent": true
+    },
+    {
+      "path": "/app/gestion",
+      "status": 200,
+      "themeScriptPresent": true
+    },
+    {
+      "path": "/app/invitation",
+      "status": 200,
+      "themeScriptPresent": true
+    },
+    {
+      "path": "/app/bff/session",
+      "status": 200,
+      "authenticated": false
+    },
+    {
+      "path": "/refonte/v1/me",
+      "status": 401
+    }
+  ]
+}

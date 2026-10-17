@@ -28,6 +28,8 @@ API : `ACCOUNT_ADMIN_URL` (fournisseur local, `http://127.0.0.1:8081/identity`),
 
 ## Limites connues
 
+Mise à jour du 17 octobre : la [confirmation GPS web reste dans Drivy](re-authentification-gps-20261017.md), et les [codes sont acceptés jusqu’au rattachement sur le web](audit-parcours-comptes-20261017.md). Les deux limites correspondantes ci-dessous décrivent l’état du 15 octobre ; la réauthentification native renforcée reste distincte.
+
 - La confirmation renforcée (étape sensible, `prompt=login`) passe encore par la page du fournisseur, dans l’app comme sur le web.
 - Aucun « mot de passe oublié » : le realm n’a ni réinitialisation ni relais SMTP. Un oubli se règle par l’opérateur.
 - Sur le web, un élève qui crée son compte avec son code est renvoyé vers l’app pour rejoindre son école (le web est le bureau).

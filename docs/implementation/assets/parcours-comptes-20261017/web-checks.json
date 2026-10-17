@@ -1,0 +1,16 @@
+{
+  "checks": [
+    "opening/desktop: no overflow and expected state",
+    "privacy/desktop: no overflow and expected state",
+    "formations/desktop: no overflow and expected state",
+    "signin/desktop: no overflow and expected state",
+    "account/desktop: no overflow and expected state",
+    "invitation/desktop: no overflow and expected state",
+    "opening/mobile: no overflow and expected state",
+    "privacy/mobile: no overflow and expected state",
+    "formations/mobile: no overflow and expected state",
+    "signin/mobile: no overflow and expected state",
+    "account/mobile: no overflow and expected state",
+    "invitation/mobile: no overflow and expected state"
+  ]
+}
