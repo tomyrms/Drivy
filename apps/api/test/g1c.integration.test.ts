@@ -40,7 +40,7 @@ beforeEach(async()=>{
 });
 afterAll(async()=>{await app?.close();await pool.end();});
 async function call(method:'GET'|'POST'|'PUT',route:string,body?:Record<string,unknown>,version?:number,subject='demo-admin',claims:Record<string,unknown>={}) {
-  const jwt=await new SignJWT(claims).setProtectedHeader({alg:'RS256',kid:'g1c'}).setSubject(subject).setIssuer(issuer).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+  const jwt=await new SignJWT({auth_time:Math.floor(Date.now()/1000),...claims}).setProtectedHeader({alg:'RS256',kid:'g1c'}).setSubject(subject).setIssuer(issuer).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
   return app.inject({method,url:route,headers:{authorization:`Bearer ${jwt}`,...(body?.operationId?{'idempotency-key':String(body.operationId)}:{}),...(version?{'if-match':`"${version}"`}:{})},...(body?{payload:body}:{})});
 }
 function conforms(name:string,value:unknown) {const v=validators.get(name)!;expect(v(value),JSON.stringify(v.errors)).toBe(true);}
@@ -682,5 +682,18 @@ describe('Invitation avec formation · offre republiée depuis l’envoi',()=>{
     void next;
     const response=await acceptInvitation('demo-alice');expect(response.statusCode,response.body).toBe(201);expect('trainingOpened' in response.json().data).toBe(false);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.training WHERE learner_id=$1',[id.aliceLearner])).rows[0].n).toBe(1);
+  });
+});
+
+describe('réauthentification des invitations qui accordent un rôle',()=>{
+  it('un jeton ancien ne crée ni moniteur ni administrateur ; une invitation élève reste possible',async()=>{
+    const stale=Math.floor(Date.now()/1000)-3600;
+    const countInvitations=async()=>(await pool.query('SELECT count(*)::int n FROM drivy.invitation WHERE school_id=$1',[id.schoolA])).rows[0].n as number;
+    const before=await countInvitations();
+    const refused=await call('POST',path,{operationId:randomUUID(),email:'stale@example.invalid',roles:['INSTRUCTOR']},undefined,'demo-admin',{auth_time:stale});
+    expect(refused.statusCode,refused.body).toBe(401);expect(refused.json().code).toBe('REAUTH_REQUIRED');
+    expect(await countInvitations()).toBe(before);
+    const learner=await call('POST',path,{operationId:randomUUID(),email:'stale-learner@example.invalid',roles:['LEARNER']},undefined,'demo-admin',{auth_time:stale});
+    expect(learner.statusCode,learner.body).toBe(201);
   });
 });
