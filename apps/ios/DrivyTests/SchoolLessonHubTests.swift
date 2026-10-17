@@ -104,7 +104,7 @@ struct SchoolLessonHubTests {
             hasController: true, controllerCanPrepare: true) == .schoolInactive)
         let otherID = UUID()
         let other = SchoolDetails(id: otherID, schoolId: otherID, version: 1, name: "Autre école", timeZone: "Europe/Zurich",
-            status: "ACTIVE", contactEmail: nil, contactPhone: nil, logoAssetId: nil,
+            status: "ACTIVE", contactEmail: "autre@example.invalid", contactPhone: nil, logoAssetId: nil,
             modules: .init(gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false),
             configurationVersion: 1)
         #expect(SchoolLessonHubRules.captureUnavailableReason(lesson: lesson, isAuthor: true, school: other,
