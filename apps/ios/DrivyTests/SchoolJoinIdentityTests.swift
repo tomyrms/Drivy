@@ -62,6 +62,7 @@ private actor JoinIdentityPreviewTransport: SchoolHTTPTransport {
 
     private struct Envelope<Value: Encodable>: Encodable {
         let data: Value
+        let requestId = UUID()
         let serverTime = "2026-10-17T10:00:00Z"
     }
 }
