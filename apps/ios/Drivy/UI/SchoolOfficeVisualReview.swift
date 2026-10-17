@@ -228,7 +228,7 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
         }
         if request.httpMethod == "POST", url.lastPathComponent == "start-now" {
             let lessonPath = url.deletingLastPathComponent().appendingPathComponent(SchoolVisualData.plannedLessonID.uuidString).path
-            guard let bytes = responses[lessonPath], let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+            guard let initialBytes = responses[lessonPath], let value = try JSONSerialization.jsonObject(with: initialBytes) as? [String: Any],
                   var lesson = value["data"] as? [String: Any],
                   let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] else {
                 throw SchoolAPIError.invalidResponse
