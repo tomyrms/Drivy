@@ -4,6 +4,33 @@ import Testing
 
 @MainActor
 struct SchoolWorkspaceTests {
+    @Test func refreshingTheSchoolRecoversGPSWithoutSigningInAgainOrStartingCapture() async {
+        let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
+            schoolName: "École de test", roles: ["ADMIN", "INSTRUCTOR"], grants: [], accessEpoch: 1)
+        let api = WorkspaceAPIStub(memberships: [membership])
+        api.schoolHandler = { _ in HubFixture.school(gps: false) }
+        let workspace = SchoolWorkspace(api: api), controller = SchoolCaptureSessionController()
+        await workspace.loadAccount()
+        let person = workspace.person
+        let lesson = HubFixture.lesson(actualStart: "2026-09-28T12:00:00Z"), now = HubFixture.date("2026-09-28T12:05:00Z")
+        #expect(!SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: true, school: workspace.school,
+            capture: .none, controllerCanPrepare: controller.canPrepareCapture, now: now))
+        // Le portail change uniquement le module ; les droits et la connexion restent identiques.
+        api.schoolHandler = { _ in HubFixture.school(gps: true) }
+        workspace.willOpenManagement()
+        await workspace.refreshOnForeground()
+        #expect(workspace.person == person && workspace.membership == membership)
+        #expect(SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: true, school: workspace.school,
+            capture: .none, controllerCanPrepare: controller.canPrepareCapture, now: now))
+        #expect(controller.state == .idle && controller.captureID == nil)
+        #expect(!workspace.requiresAuthentication && workspace.schoolError == nil)
+        // Une panne de la relecture explicite conserve le réglage confirmé et affiche son erreur.
+        api.schoolHandler = { _ in throw SchoolAPIError.unavailable }
+        await workspace.refreshEntry()
+        #expect(workspace.school?.modules.gpsEnabled == true && workspace.schoolError != nil)
+        #expect(controller.state == .idle && controller.captureID == nil)
+    }
+
     @Test(arguments: [["LEARNER"], ["ADMIN", "LEARNER"]], [false, true])
     func learnerTabsLoadTheirOwnDossierIncludingAnArchivedOneInsteadOfTheDirectory(roles: [String], archived: Bool) async {
         let membership = SchoolMembership(membershipId: UUID(), schoolId: WorkspaceFixture.firstSchool,

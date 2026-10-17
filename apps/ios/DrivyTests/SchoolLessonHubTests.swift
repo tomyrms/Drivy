@@ -74,6 +74,45 @@ struct SchoolLessonHubTests {
         #expect(!may(start, lesson: HubFixture.lesson(status: "COMPLETED")))
     }
 
+    @Test func aStartedLessonExplainsWhyItsGPSCannotBeOffered() {
+        let lesson = HubFixture.lesson(actualStart: "2026-09-28T12:00:00Z")
+        let now = HubFixture.date("2026-09-28T12:05:00Z")
+        func reason(school: SchoolDetails? = HubFixture.school(gps: true),
+                    capture: SchoolLessonCaptureStatus = .none, canPrepare: Bool = true,
+                    author: Bool = true) -> SchoolGPSUnavailableReason? {
+            SchoolLessonHubRules.captureUnavailableReason(lesson: lesson, isAuthor: author, school: school,
+                capture: capture, controllerCanPrepare: canPrepare, now: now)
+        }
+        // Une école créée sans module GPS ne laisse plus la fiche avec le seul geste « Terminer ».
+        #expect(reason(school: HubFixture.school(gps: false)) == .moduleDisabled)
+        #expect(reason(school: nil) == .schoolUnavailable)
+        #expect(reason(capture: .unknown) == .controllerUnavailable)
+        #expect(reason(canPrepare: false) == .captureUnfinished)
+        #expect(reason(capture: .stopped) == .captureStopped)
+        #expect(reason(capture: .stopped, canPrepare: false) == .captureStopped)
+        #expect(reason(capture: .collecting, canPrepare: false) == nil)
+        #expect(reason(author: false) == nil)
+        #expect(reason() == nil)
+        // Rétablir le module ouvre seulement le geste de départ ; un trajet arrêté ne repart pas.
+        #expect(!SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: true, school: HubFixture.school(gps: true),
+            capture: .stopped, controllerCanPrepare: true, now: now))
+    }
+
+    @Test func GPSRecoveryDoesNotTreatAnInactiveOrDifferentSchoolAsAvailable() {
+        let lesson = HubFixture.lesson(), now = HubFixture.date("2026-09-28T12:05:00Z")
+        #expect(SchoolLessonHubRules.capturePreparationUnavailableReason(school: ConfigurationFixture.school(),
+            hasController: true, controllerCanPrepare: true) == .schoolInactive)
+        let otherID = UUID()
+        let other = SchoolDetails(id: otherID, schoolId: otherID, version: 1, name: "Autre école", timeZone: "Europe/Zurich",
+            status: "ACTIVE", contactEmail: nil, contactPhone: nil, logoAssetId: nil,
+            modules: .init(gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false),
+            configurationVersion: 1)
+        #expect(SchoolLessonHubRules.captureUnavailableReason(lesson: lesson, isAuthor: true, school: other,
+            capture: .none, controllerCanPrepare: true, now: now) == .schoolUnavailable)
+        #expect(SchoolLessonHubRules.captureUnavailableReason(lesson: HubFixture.lesson(status: "COMPLETED"), isAuthor: true,
+            school: HubFixture.school(gps: false), capture: .none, controllerCanPrepare: true, now: now) == nil)
+    }
+
     /// 12:00–12:50 UTC, soit 14:00–14:50 à Zurich : commencer le jour même, jusqu’à 30 minutes après la fin.
     @Test func aLessonBeginsOnlyOnItsDayAndAMissedOneIsNoLongerNext() {
         let lesson = HubFixture.lesson(permitWarning: false)

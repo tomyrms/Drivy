@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 17 octobre 2026 — démarrage d’une leçon et GPS inaccessible
+
+Cause reproduite dans le code : une nouvelle école garde le GPS désactivé, aucun écran web ne permettait son activation, et l’app ouvrait une leçon commencée avec seulement « Terminer » sans expliquer le trajet absent. Correction : réglage explicite **Trajets GPS** dans la confidentialité du portail, motif et relecture dans l’app, départ libellé **avec GPS / sans GPS**. La connexion native est conservée ; la relecture d’un réglage ne démarre jamais une capture. [Décisions et vérification](demarrage-lecon-gps-20261017.md).
+
+**En cours de vérification** : tests web, Swift, parcours UI et IPA sur runner Apple. **Non qualifiés** : GPS physique, batterie, VoiceOver et fluidité ressentie sur appareil. Aucun réglage d’école réelle ni déploiement n’a été effectué à ce stade.
+
 ## 15 octobre 2026 — connexion native, inscription réservée aux codes
 
 - Exécuté : routes `access-codes/preview` et `accounts` (tests unitaires et PostgreSQL), BFF et écrans web « Se connecter » / « J’ai un code » (251 tests web), recette navigateur complète avec Keycloak réel à inscription fermée (compte responsable par code d’ouverture, moniteur et élève par lien d’invitation SMTP), écrans iOS natifs (connexion, code, création de compte, ouverture d’école).

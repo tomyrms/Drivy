@@ -10,6 +10,7 @@ import { useCommandRunner, useConsole, useDraft, useLoad, useUnsavedChanges } fr
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, type Choice, type FieldDraft } from './privacy-model';
 import { ProfileFieldsPreview } from './profile-fields-preview';
+import { GPSSettings } from './gps-settings';
 import './settings-studio.css';
 
 /* ------------------------------------------------------------ Textes de confidentialité */
@@ -236,6 +237,7 @@ export function PrivacySection({ section = 'privacy' }: { section?: 'privacy' | 
   return <div className={`section-stack settings-studio settings-${section}`}>
     <SectionHeading title={section === 'fields' ? 'Informations des élèves' : 'Confidentialité'} symbol={section === 'fields' ? 'users' : 'shield'} />
     <div className="config-sections">
+      {section === 'privacy' && <GPSSettings />}
       {section === 'privacy' && <PolicyTexts proposals={proposals.data ?? null} fieldsPublished={!!context.data?.fields.some(item => item.status === 'PUBLISHED')} onAdopted={context.reload} />}
       {section === 'fields' && <LoadState loaded={context} label="Lecture des informations demandées…">{data => <RequestedFields proposals={proposals.data ?? null} policies={data.fields} noticeVersionId={notice} />}</LoadState>}
       {section === 'privacy' && <details className="disclosure"><summary>Conditions de l’école</summary><Conditions /></details>}

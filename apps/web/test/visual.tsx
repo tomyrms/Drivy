@@ -319,7 +319,13 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   if (path.endsWith('/end')) { db.assignments[0].version++; db.assignments[0].validUntil = stamp; return reply(200, envelope(db.assignments[0]), url.href); }
   if (path.endsWith('/archive')) { const l = db.learners.find((item: any) => path.includes(item.id)); l.version++; l.archivedAt = stamp; return reply(200, envelope(l), url.href); }
   if (path.endsWith('/permit-checks')) { const permit = { id: uuid(), schoolId, version: 1, trainingId: trainingA, documentId: null, physicalSeen: body.physicalSeen, categoryCode: body.categoryCode, validUntil: body.validUntil, decision: body.decision, reviewerMembershipId: marieId, reviewedAt: stamp, reason: body.reason, isExpired: false }; db.permits.push(permit); db.trainings[0].version++; return reply(200, envelope(permit), url.href); }
-  if (path === 'modules') { value.school.version++; value.school.modules.gpsEnabled = body.gpsEnabled; return reply(200, envelope(value.school), url.href); }
+  if (method === 'PUT' && path === 'modules') {
+    if (reviewState === 'gps-reauth') return reply(401, { code: 'REAUTH_REQUIRED' }, url.href);
+    if (reviewState === 'gps-conflict' || (init?.headers as Record<string, string>)?.['If-Match'] !== `"${value.school.version}"`)
+      return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    value.school.version++; value.school.configurationVersion++; value.school.modules.gpsEnabled = body.gpsEnabled;
+    return reply(200, envelope(value.school), url.href);
+  }
   return reply(404, { code: 'NOT_FOUND' }, url.href);
 }) as typeof fetch;
 
@@ -327,7 +333,7 @@ const value: ConsoleContextValue = {
   schoolId, me: { personId: meId, displayName: 'Luc Martin', version: 1, memberships: [] },
   membership: { membershipId: lucId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: reviewState === 'readonly' ? [] : ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'], accessEpoch: 1 },
   school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: parameters.get('status') === 'draft' ? 'DRAFT' : 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
-    modules: { gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
+    modules: { gpsEnabled: parameters.get('gps') !== 'off', packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
   canConfigureCatalog: reviewState !== 'readonly', reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),
 };
 if (parameters.get('stress') === '1') {

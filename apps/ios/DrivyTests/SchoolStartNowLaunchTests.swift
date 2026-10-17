@@ -19,10 +19,12 @@ import Testing
         let (launch, form) = makeLaunch(server: server)
         // Élève imposé par sa fiche : le récapitulatif d’emblée, sans liste.
         #expect(launch.step == .summary)
+        #expect(!launch.canLaunch)
         await launch.open()
         try #require(form.canStart)
         // Sans contrôleur de trajet, aucun accord GPS n’est demandé et aucun rideau ne se montre.
         #expect(launch.gps == nil)
+        #expect(launch.startTitle == "Démarrer sans GPS" && launch.canLaunch)
         launch.launch(); launch.launch()
         #expect(launch.phase == .creating && launch.launches == 1 && launch.isBusy)
         try await HubFixture.wait { launch.phase == .done }
@@ -33,6 +35,7 @@ import Testing
         // La feuille reste ouverte sur la leçon : c’est sa fermeture qui termine le geste.
         #expect(!launch.closesSheet && !launch.finishesItself && launch.tripIssue == nil)
         #expect(!launch.isBusy)
+        #expect(!launch.canLaunch)
     }
 
     @Test func aPlanningConflictKeepsTheSummaryAndOffersPlanningInstead() async throws {

@@ -16,7 +16,7 @@ struct SchoolOfficeVisualReview: View {
             if let models {
                 switch screen {
                 case "planning": SchoolPlanningView(model: models.planning)
-                case "start-now": SchoolStartNowView(launch: models.startNowLaunch)
+                case "start-now", "start-now-gps-disabled", "start-now-gps-permission": SchoolStartNowView(launch: models.startNowLaunch)
                 case "planning-settings":
                     NavigationStack {
                         SchoolPlanningSettingsView(scope: models.planning.scope, client: models.agenda.planningClient,
@@ -53,7 +53,8 @@ struct SchoolOfficeVisualReview: View {
         .task {
             guard models == nil else { return }
             do {
-                let loaded = try SchoolOfficeVisualModels(context: context, permitWarning: screen == "lesson-permit")
+                let loaded = try SchoolOfficeVisualModels(context: context, permitWarning: screen == "lesson-permit",
+                    testsStartNowGPS: screen == "start-now-gps-disabled" || screen == "start-now-gps-permission")
                 await loaded.prepare(screen: screen)
                 models = loaded
                 if screen == "lesson-finish" || screen == "lesson-permit" { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }
@@ -71,7 +72,7 @@ struct SchoolOfficeVisualReview: View {
     let invitations: SchoolInvitationWorkspace
     let outbox: SchoolOfficeVisualOutbox
 
-    init(context: SchoolVisualContext, permitWarning: Bool = false) throws {
+    init(context: SchoolVisualContext, permitWarning: Bool = false, testsStartNowGPS: Bool = false) throws {
         guard let person = context.workspace.person, let membership = context.workspace.membership else { throw SchoolAPIError.invalidResponse }
         let scope = context.agenda.scope(person: person, membership: membership)
         let baseURL = URL(string: "https://visual.drivy.invalid")!, token = SchoolVisualToken()
@@ -85,8 +86,21 @@ struct SchoolOfficeVisualReview: View {
         let startForm = SchoolStartNowWorkspace(scope: scope, client: agenda.planningClient,
             learnerID: SchoolVisualData.learnerID, outbox: outbox)
         startNow = startForm
-        // Sans contrôleur de trajet : la capture montre le récapitulatif, sans accord GPS ni rideau.
-        startNowLaunch = SchoolStartNowLaunch(form: startForm, agenda: agenda, workspace: context.workspace, controller: nil)
+        if testsStartNowGPS {
+            // Même orchestration que l’app, avec un journal temporaire chiffré et une permission refusée
+            // explicitement par la source de contrôle. Aucun appel Core Location ni point synthétique.
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("start-now-visual-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let store = try SQLCipherSchoolCaptureStore(url: directory.appendingPathComponent("fixture.sqlite"),
+                key: Data(repeating: 23, count: 32))
+            let controller = SchoolCaptureSessionController(store: store)
+            controller.setScope(scope, retainsInstructorRole: true)
+            startNowLaunch = SchoolStartNowLaunch(form: startForm, agenda: agenda, workspace: context.workspace,
+                controller: controller, makeLocationSource: { SchoolOfficeVisualLocationSource() })
+        } else {
+            // Le rendu historique reste un récapitulatif sans contrôleur de trajet.
+            startNowLaunch = SchoolStartNowLaunch(form: startForm, agenda: agenda, workspace: context.workspace, controller: nil)
+        }
         invitations = SchoolInvitationWorkspace(scope: scope, roles: membership.roles,
             api: SchoolInvitationClient(baseURL: baseURL, tokenSource: token, transport: transport), outbox: outbox)
     }
@@ -175,6 +189,30 @@ struct SchoolOfficeVisualReview: View {
     }
 }
 
+/// Source exclusive au harnais DEBUG : constate le geste de permission, puis reproduit son refus.
+/// Elle ne sait ni diagnostiquer ni démarrer une capture, même si le parcours tentait de le faire.
+@MainActor private final class SchoolOfficeVisualLocationSource: SchoolCaptureLocationProviding {
+    var onEvent: (@MainActor (SchoolCaptureLocationEvent) -> Void)?
+    private(set) var permission: SchoolCaptureLocationPermission = .notDetermined
+    var isRunning: Bool { false }
+    func requestPermission() { permission = .denied; onEvent?(.diagnosticChanged) }
+    func requestDiagnosticSample() throws { throw SchoolCaptureLocationFailure.permissionRequired }
+    func diagnosticSnapshot() throws -> SchoolCaptureDeviceSnapshot { throw SchoolCaptureLocationFailure.permissionRequired }
+    func diagnosticBody(operationID: UUID, networkAvailable: Bool) throws -> SchoolDeviceAssessmentBody {
+        throw SchoolCaptureLocationFailure.permissionRequired
+    }
+    func updateScope(_ scope: SchoolCommandScope?) {}
+    func prepareSegment(authorization: SchoolCaptureAuthorization, lease: SchoolCaptureLease,
+                        scope: SchoolCommandScope, clockReference: SchoolCaptureClockReference,
+                        policy: SchoolCaptureLocationPolicy) throws -> SchoolCaptureLocationSegment {
+        throw SchoolCaptureLocationFailure.permissionRequired
+    }
+    func start(segment: SchoolCaptureLocationSegment, handle: SchoolCaptureSegmentHandle) throws {
+        throw SchoolCaptureLocationFailure.permissionRequired
+    }
+    @discardableResult func stop() -> SchoolCaptureLocationStop? { nil }
+}
+
 private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     private var responses: [String: Data]
     private let allowsWrites: Bool
@@ -187,6 +225,35 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
         guard allowsWrites || (request.httpMethod ?? "GET") == "GET" else { throw SchoolAPIError.invalidResponse }
         func envelope(_ value: Any) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
+        }
+        if request.httpMethod == "POST", url.lastPathComponent == "start-now" {
+            let lessonPath = url.deletingLastPathComponent().appendingPathComponent(SchoolVisualData.plannedLessonID.uuidString).path
+            guard let bytes = responses[lessonPath], let value = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+                  var lesson = value["data"] as? [String: Any],
+                  let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any] else {
+                throw SchoolAPIError.invalidResponse
+            }
+            let now = Date(), iso = ISO8601DateFormatter()
+            lesson["version"] = 2
+            lesson["plannedStart"] = iso.string(from: now)
+            lesson["plannedEnd"] = iso.string(from: now.addingTimeInterval(3_000))
+            lesson["actualStart"] = iso.string(from: now)
+            lesson["meetingPoint"] = body["meetingPoint"] ?? ""
+            let bytes = try envelope(lesson)
+            responses[lessonPath] = bytes
+            try receipt(body: body, url: url, command: "START_LESSON_NOW", resource: "Lesson", id: lesson["id"] as! String)
+            return SchoolHTTPResponse(data: bytes, status: 201, url: url, contentType: "application/json")
+        }
+        if request.httpMethod == "POST", url.lastPathComponent == "recording-choice" {
+            let body = try JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: request.httpBody ?? Data())
+            let choice: [String: Any] = ["id": body.operationId.uuidString, "schoolId": SchoolVisualData.schoolID.uuidString,
+                "version": 2, "learnerId": SchoolVisualData.learnerID.uuidString,
+                "lessonId": body.lessonId?.uuidString as Any? ?? NSNull(), "status": body.status.rawValue,
+                "noticeVersionId": body.noticeVersionId.uuidString, "recordedBy": SchoolVisualData.membershipID.uuidString,
+                "recordedAt": "2026-09-29T10:00:00Z", "source": body.source.rawValue]
+            let bytes = try envelope(choice)
+            responses[url.path] = bytes
+            return SchoolHTTPResponse(data: bytes, status: 200, url: url, contentType: "application/json")
         }
         if request.httpMethod == "POST", ["start", "complete"].contains(url.lastPathComponent) {
             let lessonPath = url.deletingLastPathComponent().path

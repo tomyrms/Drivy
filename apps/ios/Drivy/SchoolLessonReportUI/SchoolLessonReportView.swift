@@ -410,6 +410,7 @@ private struct SchoolLessonReportContent: View {
             Form {
                 headerSection
                 lessonNotices
+                captureUnavailableNotice
                 // Leçon restée à terminer : son trajet déjà reçu par l’école se revoit d’ici, sans réglage.
                 if showsPlannedTrip {
                     SchoolReportTripSection(model: model, router: router, context: reportContext, editable: false)
@@ -443,6 +444,23 @@ private struct SchoolLessonReportContent: View {
     private var showsPlannedTrip: Bool {
         isPlanned && SchoolReportFlowRules.showsTrip(readsLesson: readsLesson, hasTrack: !model.track.isEmpty,
             replayableCount: model.replayableCaptures.count, noteCount: 0, isPlanned: true)
+    }
+
+    @ViewBuilder private var captureUnavailableNotice: some View {
+        if let lesson = model.lesson,
+           let reason = SchoolLessonHubRules.captureUnavailableReason(lesson: lesson, isAuthor: model.isAuthor,
+               school: schoolWorkspace.school, capture: captureStatus,
+               controllerCanPrepare: capture?.canPrepareCapture == true, now: Date()) {
+            Section {
+                SchoolGPSUnavailableNotice(reason: reason, workspace: schoolWorkspace,
+                    managementURL: AppConfiguration.fromBundle()?.gpsManagementURL(schoolID: model.scope.schoolID),
+                    openCapture: {
+                        guard capture?.lessonID == model.lessonID, captureStatus == .stopped else { return }
+                        showsLive = true
+                    })
+            }
+            .drivyFormRows()
+        }
     }
 
     @ViewBuilder private func plannedSections(bar: PlannedBar?) -> some View {

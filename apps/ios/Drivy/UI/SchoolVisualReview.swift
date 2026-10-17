@@ -23,7 +23,7 @@ struct SchoolVisualReview: View {
                 switch screen {
                 case "gps-choice", "signal", "signal-all", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "start-now", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
+                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled", "lesson-competencies", "lesson-route",
                      "learner-lesson", "learner-lesson-planned":
@@ -403,7 +403,7 @@ struct SchoolVisualShell: View {
         let school: [String: Any] = ["id": schoolID.uuidString, "schoolId": schoolID.uuidString,
             "version": 1, "name": "Auto-école du Val-de-Ruz", "timeZone": "Europe/Zurich", "status": "ACTIVE",
             "contactEmail": "contact@example.invalid", "contactPhone": null, "logoAssetId": null,
-            "modules": ["gpsEnabled": true, "packsEnabled": false, "collectiveCoursesEnabled": false,
+            "modules": ["gpsEnabled": ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] != "start-now-gps-disabled", "packsEnabled": false, "collectiveCoursesEnabled": false,
                 "courseOffersVisibleByDefault": false], "configurationVersion": 1]
         let training: [String: Any] = ["id": trainingID.uuidString, "schoolId": schoolID.uuidString,
             "learnerId": learnerID.uuidString, "offeringId": offeringID.uuidString, "version": 1,

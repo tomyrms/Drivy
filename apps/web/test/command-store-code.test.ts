@@ -51,6 +51,47 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+describe('Activation GPS : confirmation durable et reprise', () => {
+  const change = (gpsEnabled: boolean) => createCommand({ schoolId, kind: 'updateModules', path: 'modules',
+    ifMatch: 4, resourceVersion: 4, body: { gpsEnabled } });
+
+  test('le réglage est confirmé seulement après une réponse scolaire versionnée', async () => {
+    const store = await loadStore(), command = change(true);
+    const fetch = answer(200, envelope({ id: schoolId, schoolId, version: 5 }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await store.submit(command, 'csrf')).toMatchObject({ status: 'confirmed', via: 'response' });
+    expect(store.get(schoolId)).toBeUndefined();
+    const request = vi.mocked(globalThis.fetch).mock.calls[0]!;
+    expect(String(request[0])).toContain(`/schools/${schoolId}/modules`);
+    expect(request[1]).toMatchObject({ method: 'PUT', headers: { 'If-Match': '"4"', 'Idempotency-Key': command.operationId } });
+    expect(JSON.parse(String(request[1]?.body))).toEqual({ operationId: command.operationId, gpsEnabled: true });
+  });
+
+  test('une réponse perdue attend le reçu de la même opération, sans seconde activation', async () => {
+    const store = await loadStore(), command = change(true);
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    expect((await store.submit(command, 'csrf')).status).toBe('pending');
+    expect(store.getSnapshot().revision).toBe(0);
+    const read = answer(200, envelope({ operationId: command.operationId, commandType: 'UPDATE_SCHOOL_MODULES',
+      resourceType: 'School', resourceId: schoolId, resourceVersion: 5, committedAt: '2026-10-17T08:00:00.000Z' }));
+    vi.stubGlobal('fetch', read);
+    expect((await store.verify(schoolId)).status).toBe('confirmed');
+    expect(store.get(schoolId)).toBeUndefined();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0]![0])).toContain(`/operations/${command.operationId}`);
+  });
+
+  test('réauthentification et conflit ne confirment ni activation ni désactivation', async () => {
+    for (const [status, code] of [[401, 'REAUTH_REQUIRED'], [412, 'VERSION_CONFLICT']] as const) {
+      const store = await loadStore();
+      vi.stubGlobal('fetch', answer(status, { code }));
+      expect(await store.submit(change(false), 'csrf')).toMatchObject({ status: 'rejected', code, needsLogin: code === 'REAUTH_REQUIRED' });
+      expect(store.getSnapshot().revision).toBe(0);
+      expect(store.get(schoolId)).toBeUndefined();
+    }
+  });
+});
+
 describe('Journal des demandes : le code à usage unique n’est jamais conservé', () => {
   const offeringId = randomUUID(), instructorMembershipId = randomUUID();
   const create = () => createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,

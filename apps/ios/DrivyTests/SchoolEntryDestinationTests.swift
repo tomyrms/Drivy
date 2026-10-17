@@ -47,4 +47,15 @@ struct SchoolEntryDestinationTests {
         #expect(configuration.managementURL(schoolID: school, preparation: true)?.query == nil)
         #expect(configuration.managementURL(schoolID: school, preparation: true)?.fragment == nil)
     }
+
+    @Test func GPSManagementOpensTheSchoolSettingDirectly() throws {
+        let school = UUID(uuidString: "AAAAAAAA-1111-4111-8111-111111111111")!
+        let configuration = AppConfiguration(apiBaseURL: URL(string: "https://drivy.example.test:8443/refonte")!,
+            issuer: URL(string: "https://identity.example.test")!, clientID: "drivy-apple", redirectURL: AppConfiguration.callback)
+        let url = try #require(configuration.gpsManagementURL(schoolID: school))
+        #expect(url.absoluteString == "https://drivy.example.test:8443/app/gestion/aaaaaaaa-1111-4111-8111-111111111111/confidentialite?focus=school-gps")
+        let parts = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(parts.queryItems == [URLQueryItem(name: "focus", value: "school-gps")])
+        #expect(parts.fragment == nil && parts.user == nil && parts.password == nil)
+    }
 }
