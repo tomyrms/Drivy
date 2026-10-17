@@ -198,4 +198,10 @@ describe('client du moteur de recalage',()=>{
   await expect(run(200,{code:'Ok',matchings:[],tracepoints:[null]})).rejects.toMatchObject({failure:'INVALID_RESPONSE'});
   await expect(createMapMatcher(config,(async()=>{throw new Error('réseau');}) as never)(points)).rejects.toMatchObject({failure:'PROVIDER_UNAVAILABLE'});
  });
+ it('géométrie illisible : rejet en réponse incohérente, jamais un résultat « aucune route »',async()=>{
+  const config=readMapMatchingConfig({MAP_MATCHING_PROVIDER:'osrm',MAP_MATCHING_BASE_URL:'http://127.0.0.1:5000'})!;
+  expect(decodePolyline('!!!')).toEqual([]);
+  const body={code:'Ok',matchings:[{confidence:0.9,geometry:'!!!'}],tracepoints:[{matchings_index:0,waypoint_index:0,location:[0,0]},{matchings_index:0,waypoint_index:1,location:[0.001,0]}]};
+  await expect(createMapMatcher(config,reply(200,body) as never)(points)).rejects.toMatchObject({failure:'INVALID_RESPONSE'});
+ });
 });
