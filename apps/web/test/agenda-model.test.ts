@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, startOfDay, weekStart, weekWindow } from '../client/agenda-model.js';
+import { addDays, civilDateIn, dayOf, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, searchForLessons, startOfDay, weekStart, weekWindow } from '../client/agenda-model.js';
 
 describe('Agenda : heure prévue distincte du démarrage enregistré', () => {
   const lesson = { status: 'PLANNED', plannedStart: '2026-10-09T12:00:00Z', plannedEnd: '2026-10-09T13:00:00Z', actualStart: null };
@@ -88,5 +88,18 @@ describe('Agenda : semaine dans le fuseau de l’école', () => {
     expect(formatWeek('2026-09-28')).toContain('2026');
     expect(formatWeek('2026-09-28')).toContain('28');
     expect(formatWeek('2026-09-28')).toContain('4 octobre');
+  });
+});
+
+describe('Agenda : filtre élève tant que l’annuaire n’est pas chargé', () => {
+  const lessons = [{ id: '1', learnerId: 'a' }, { id: '2', learnerId: 'b' }];
+  test('sans annuaire chargé, la recherche est ignorée et toutes les leçons restent visibles', () => {
+    const search = searchForLessons('elodie', false);
+    expect(search).toBe('');
+    expect(lessonsOfLearners(lessons, [], search).map(lesson => lesson.id)).toEqual(['1', '2']);
+  });
+  test('annuaire chargé : la recherche s’applique', () => {
+    const learners = [{ id: 'a', displayName: 'Élodie Müller' }, { id: 'b', displayName: 'Noé Favre' }];
+    expect(lessonsOfLearners(lessons, learners, searchForLessons('elodie', true)).map(lesson => lesson.id)).toEqual(['1']);
   });
 });

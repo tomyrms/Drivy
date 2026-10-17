@@ -74,6 +74,11 @@ export function lessonsOfLearners<T extends { learnerId: string }>(lessons: read
   return lessons.filter(lesson => wanted.has(lesson.learnerId));
 }
 
+/** Le filtre par élève ne s'applique qu'à un annuaire chargé : sinon toutes les leçons restent visibles. */
+export function searchForLessons(search: string, directoryReady: boolean): string {
+  return directoryReady ? search : '';
+}
+
 export function formatDayHeading(civil: string): string {
   const [year, month, day] = parts(civil);
   return new Intl.DateTimeFormat('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, day, 12)));

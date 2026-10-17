@@ -2,6 +2,7 @@ import { useCommandSnapshot } from '../command-store';
 import { readSchool, readinessSchema } from '../school-api';
 import { Notice, Symbol } from '../ui';
 import { useConsole, useLoad, type SectionKey } from './context';
+import { ReadRetry } from './layout';
 
 /** Où se corrige chaque manque signalé par le serveur (destinationKey des blocages de CAN_PLAN_LESSON). */
 export const destinationSection: Record<string, SectionKey> = {
@@ -14,6 +15,7 @@ export function PlanningReadinessBanner() {
   const { schoolId, school, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
   const loaded = useLoad(() => readSchool(schoolId, 'readiness', readinessSchema), [schoolId, revision, school.version]);
+  if (school.status === 'ACTIVE' && loaded.status === 'error') return <Notice tone="error" title="Lecture impossible" actions={<ReadRetry loaded={loaded} />}><p>{loaded.error}</p></Notice>;
   const planning = loaded.data?.capabilities.find(item => item.capability === 'CAN_PLAN_LESSON');
   if (school.status !== 'ACTIVE' || !planning || planning.ready) return null;
   const blockers = planning.blockers.filter((item, index, all) => all.findIndex(other => other.code === item.code) === index);

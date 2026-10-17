@@ -121,7 +121,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                   <h3 className="row-title">{dayRange(rule.weekdays)} <span className="schedule-period">{rule.localStart}–{rule.localEnd}</span></h3>
                   <p className="row-meta">Dès le {formatCivilDate(rule.validFrom)}{rule.validUntil ? ` jusqu’au ${formatCivilDate(rule.validUntil)}` : ''}</p>
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => { if (removing === rule.id) { setRemoving(null); void removeRule(rule); } else setRemoving(rule.id); }} onBlur={() => setRemoving(null)}>{removing === rule.id ? 'Confirmer le retrait' : 'Retirer'}</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={removing === rule.id ? `Confirmer le retrait de l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}` : `Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => { if (removing === rule.id) { setRemoving(null); void removeRule(rule); } else setRemoving(rule.id); }} onBlur={() => setRemoving(null)}>{removing === rule.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={ruleOpen} onToggle={event => setRuleOpen(event.currentTarget.open)}><summary>Ajouter un horaire</summary>
             <form className="form-grid" onChangeCapture={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void addRule(); }}>
@@ -148,7 +148,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                   <h3 className="row-title schedule-period"><time dateTime={item.startsAt}>{formatDateTime(item.startsAt, school.timeZone)}</time><span aria-hidden="true"> → </span><span className="visually-hidden"> au </span><time dateTime={item.endsAt}>{formatDateTime(item.endsAt, school.timeZone)}</time></h3>
                   {item.reason && <p className="row-meta">{item.reason}</p>}
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => { if (removing === item.id) { setRemoving(null); void removeAbsence(item); } else setRemoving(item.id); }} onBlur={() => setRemoving(null)}>{removing === item.id ? 'Confirmer le retrait' : 'Retirer'}</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={removing === item.id ? `Confirmer le retrait de l’absence du ${formatDateTime(item.startsAt, school.timeZone)}` : `Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => { if (removing === item.id) { setRemoving(null); void removeAbsence(item); } else setRemoving(item.id); }} onBlur={() => setRemoving(null)}>{removing === item.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={absenceOpen} onToggle={event => setAbsenceOpen(event.currentTarget.open)}><summary>Ajouter une absence</summary>
             <form className="form-grid" onChangeCapture={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void addAbsence(); }}>
