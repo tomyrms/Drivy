@@ -262,3 +262,25 @@ describe('AP88/AP50 correction encadrée d’un résultat',()=>{
   }
  });
 });
+
+describe('motif de retrait lisible par le personnel seulement (migration 034)',()=>{
+ /** Requête sous le rôle d'exécution, avec le contexte d'une personne : la politique RLS décide de la ligne. */
+ async function readReasons(personId:string,membershipId:string,lessonId:string){
+  const db=await pool.connect();
+  try{
+   await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');
+   await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true),set_config('app.membership_id',$3,true)",[id.schoolA,personId,membershipId]);
+   return (await db.query<{reason:string}>('SELECT reason FROM drivy.report_publication_withdrawal WHERE lesson_id=$1',[lessonId])).rows.map(row=>row.reason);
+  }finally{await db.query('ROLLBACK');db.release();}
+ }
+ it('le motif saisi au retrait n’est lisible ni par l’élève de la leçon, ni par un autre élève ; le moniteur affecté et l’administration le lisent',async()=>{
+  const lesson=await plan();await complete(lesson);
+  const current=await lessonNow(lesson.id);const reason='Motif de retrait réservé au personnel';
+  const withdrawn=await call('POST',`/lessons/${lesson.id}/report-publication/withdraw`,{operationId:randomUUID(),reason},current.version);
+  expect(withdrawn.statusCode,withdrawn.body).toBe(200);
+  expect(await readReasons(id.alice,id.aliceMember,lesson.id)).toEqual([]);
+  expect(await readReasons(id.bob,id.bobMember,lesson.id)).toEqual([]);
+  expect(await readReasons(id.instructor,id.instructorMember,lesson.id)).toEqual([reason]);
+  expect(await readReasons(id.admin,id.adminMember,lesson.id)).toEqual([reason]);
+ });
+});
