@@ -37,6 +37,8 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
     }catch(reason){setError(openingFailure(reason));}finally{setLoaded(true);}
   }
   useEffect(()=>{if(started.current)return;started.current=true;document.title=operator?'Liens d’ouverture · Drivy':'Préparer votre école · Drivy';void boot();},[]);
+  // Every result comes from the creation response or its durable receipt, including recovery.
+  useEffect(()=>{if(result&&!operator)window.location.replace(schoolOpeningDestination(result));},[result,operator]);
   useEffect(()=>{
     if(!invalidField)return;
     const input=form.current?.elements.namedItem(invalidField);
@@ -84,14 +86,14 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
     <header className="site-header"><a className="brand" href="/app/" aria-label="Drivy, votre espace"><BrandSymbol/><span>Drivy</span></a>
       <AccountMenu authenticated={!!session?.authenticated} /></header>
     <main id="main" className="main" aria-busy={!loaded || busy}>
-      {(session?.authenticated || !loaded) && <div className="page-heading"><h1 ref={heading} tabIndex={-1}>{operator?'Liens d’ouverture':result?'Votre école est créée':'Préparer votre école'}</h1></div>}
+      {(session?.authenticated || !loaded) && <div className="page-heading"><h1 ref={heading} tabIndex={-1}>{operator?'Liens d’ouverture':'Préparer votre école'}</h1></div>}
       {error && <Notice tone="error" title={error} actions={!loaded?undefined:<button type="button" className="button quiet" disabled={busy} onClick={()=>void boot()}>Actualiser</button>}/>}
       {!loaded && <Loading label="Chargement…"/>}
       {loaded && !session?.authenticated && !link.error && <AccountEntry {...(!operator && link.token?{initialCode:link.token}:{})} onSignedIn={()=>void boot()}/>}
       {loaded && session?.authenticated && <>
         <section className="section"><div className="identity-row"><div className="row-text"><strong>{session.user?.displayName}</strong><span className="row-meta">{session.user?.email}</span></div>
           <button className="button quiet" type="button" disabled={busy || uncertain} onClick={()=>void changeAccount()}>Changer de compte</button></div></section>
-        {result ? <section className="panel form-grid"><h2>{result.schoolName}</h2><a className="button primary" href={schoolOpeningDestination(result)}>Continuer la préparation</a></section>
+        {result ? <Loading label="Ouverture de votre école…"/>
           : operator && ready ? <>
             <section className="section form-grid"><button className="button primary" type="button" disabled={busy} onClick={()=>void createLink()}>{busy?'Création…':operatorOperation.current&&!generated?'Retrouver le lien':'Créer un lien d’ouverture'}</button>
               {generated && <div className="panel form-grid"><TextField label="Code à transmettre" value={generatedCode ?? ''} onChange={()=>{}} readOnly/><TextField label="Lien à transmettre" value={generated} onChange={()=>{}} readOnly/>
@@ -103,11 +105,11 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
             </section>
           </> : !operator && ready && <form ref={form} noValidate className="panel form-grid" onSubmit={event=>{event.preventDefault();void createSchool();}}>
             <h2>Votre école</h2><fieldset disabled={busy || uncertain} className="opening-fields"><legend className="visually-hidden">Coordonnées de l’école et du responsable</legend>
-              <TextField name="displayName" label="Votre nom" value={fields.displayName} onChange={value=>update('displayName',value)} error={fieldErrors.displayName} maxLength={200} autoComplete="name" required/>
               <TextField name="schoolName" label="Nom de l’auto-école" value={fields.schoolName} onChange={value=>update('schoolName',value)} error={fieldErrors.schoolName} maxLength={150} autoComplete="organization" required/>
-              <TextField name="contactEmail" label="E-mail professionnel" value={fields.contactEmail} onChange={value=>update('contactEmail',value)} error={fieldErrors.contactEmail} maxLength={254} type="email" autoComplete="email" required/>
+              <TextField name="contactEmail" label="E-mail de l’école" value={fields.contactEmail} onChange={value=>update('contactEmail',value)} error={fieldErrors.contactEmail} maxLength={254} type="email" autoComplete="email" required/>
               <TextField name="contactPhone" label="Téléphone (facultatif)" value={fields.contactPhone??''} onChange={value=>update('contactPhone',value||null)} error={fieldErrors.contactPhone} maxLength={32} type="tel" autoComplete="tel"/>
               <CheckField label="Je donne aussi des leçons" checked={fields.instructs} onChange={value=>update('instructs',value)}/>
+              <details open={!!fieldErrors.displayName||!fields.displayName.trim()}><summary>Nom affiché du responsable</summary><TextField name="displayName" label="Nom affiché" value={fields.displayName} onChange={value=>update('displayName',value)} error={fieldErrors.displayName} maxLength={200} autoComplete="name" required/></details>
               <details><summary>Fuseau horaire</summary><TextField name="timeZone" label="Fuseau horaire" value={fields.timeZone} onChange={value=>update('timeZone',value)} error={fieldErrors.timeZone} maxLength={100} required/></details>
             </fieldset>
             {uncertain && <Notice tone="warning" title="Création à vérifier" actions={<button type="button" className="button secondary" disabled={busy} onClick={()=>void verify()}>Vérifier le résultat</button>}/>}

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { ConsoleAccessReader } from '../client/console/access-reader.js';
+import { ConsoleAccessReader, sameConsoleAccess } from '../client/console/access-reader.js';
 import { RequestFailure, type Me } from '../client/protocol.js';
 import type { School } from '../client/school-api.js';
 
@@ -16,6 +16,30 @@ function deferred<T>() {
 }
 
 describe('Relecture concurrente des droits de gestion', () => {
+  test('la confirmation du même compte attend ses droits puis conserve la revue', async () => {
+    const pendingSchool = deferred<School>();
+    const reader = new ConsoleAccessReader(async () => admin, () => pendingSchool.promise);
+    const resume = vi.fn();
+    const reading = reader.read(schoolId).then(access => resume(sameConsoleAccess({ me: admin, membership: admin.memberships[0]! }, access)));
+    await Promise.resolve();
+    expect(resume).not.toHaveBeenCalled();
+    pendingSchool.resolve(school);
+    await reading;
+    expect(resume).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  test.each([
+    { reason: 'personne remplacée par un autre onglet', me: { ...admin, personId: '44444444-4444-4444-8444-444444444444' } },
+    { reason: 'époque des droits modifiée', me: { ...admin, memberships: [{ ...admin.memberships[0]!, accessEpoch: 2 }] } },
+    { reason: 'rattachement remplacé', me: { ...admin, memberships: [{ ...admin.memberships[0]!, membershipId: '55555555-5555-4555-8555-555555555555' }] } },
+    { reason: 'administration retirée', me: { ...admin, memberships: [] } },
+  ])('la confirmation ne reprend pas une ancienne revue : $reason', async ({ me }) => {
+    const reader = new ConsoleAccessReader(async () => me, async () => school);
+    const access = await reader.read(schoolId);
+    expect(sameConsoleAccess({ me: admin, membership: admin.memberships[0]! }, access)).toBe(false);
+    expect(access).toHaveProperty('me.personId', me.personId);
+  });
+
   test('une ancienne réponse ADMIN ne rétablit pas les écrans après un retrait plus récent', async () => {
     const oldMe = deferred<Me>();
     const readMe = vi.fn().mockReturnValueOnce(oldMe.promise).mockResolvedValueOnce({ ...admin, memberships: [] });

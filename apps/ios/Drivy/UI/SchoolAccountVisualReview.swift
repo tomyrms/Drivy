@@ -8,7 +8,7 @@ struct SchoolAccountVisualReview: View {
         "access-code", "access-register", "access-opening", "school-opening",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "profile-instructor", "onboarding-welcome", "onboarding-information",
-        "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff"]
+        "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff", "onboarding-known-identity"]
     let screen: String
     @State private var context: SchoolVisualContext?
     @State private var codeModel: SchoolCodeJoinWorkspace?
@@ -113,10 +113,11 @@ struct SchoolAccountVisualReview: View {
         let api = SchoolAccountVisualProfileAPI(school: school, scope: scope, screen: screen)
         let isStaff = screen == "onboarding-staff"
         let isInstructorProfile = screen == "profile-instructor"
+        let outbox: any SchoolCommandOutbox = screen == "onboarding-known-identity" ? SchoolWelcomeVisualOutbox() : SchoolVisualOutbox()
         let model = SchoolProfileWorkspace(scope: scope, roles: isStaff || isInstructorProfile ? ["INSTRUCTOR"] : ["LEARNER"],
             learnerID: isStaff ? nil : SchoolVisualData.learnerID,
             isOwnProfile: !isInstructorProfile, onboardingKind: isInstructorProfile ? nil : (isStaff ? .staff : .student),
-            api: api, outbox: SchoolVisualOutbox())
+            api: api, outbox: outbox)
         await model.load()
         profileModel = model
     }
@@ -148,12 +149,14 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
                 schoolId: schoolID, schoolName: "Auto-école du Val-de-Ruz", roles: ["LEARNER"], grants: [], accessEpoch: 1))
         } else if url.path.contains("/code/") {
             result = try JSONEncoder().encode(SchoolCodePreview(schoolName: "Auto-école du Val-de-Ruz", roles: ["LEARNER"],
-                trainingCategoryCode: "B", expiresAt: "2026-10-06T10:00:00Z", trainingCategoryCodes: ["B", "A1"]))
+                trainingCategoryCode: "B", expiresAt: "2026-10-06T10:00:00Z", trainingCategoryCodes: ["B", "A1"],
+                profileIdentity: .init(firstName: "Camille", lastName: "Martin")))
         } else {
             result = try JSONEncoder().encode(SchoolJoinPreview(invitationId: UUID(uuidString: "10000000-0000-4000-8000-000000000009")!, schoolId: schoolID,
                 schoolName: "Auto-école du Val-de-Ruz", roles: ["LEARNER"], maskedEmail: "c***@example.invalid", expiresAt: "2026-10-06T10:00:00Z",
                 notice: SchoolJoinNotice(version: 1, noticeText: "Notice fictive : les leçons, trajets et bilans sont visibles dans votre dossier.",
-                    retentionText: "La durée de conservation est fixée par l’école.", contactEmail: "contact@example.invalid")))
+                    retentionText: "La durée de conservation est fixée par l’école.", contactEmail: "contact@example.invalid"),
+                profileIdentity: .init(firstName: "Camille", lastName: "Martin")))
         }
         let envelope = try JSONSerialization.data(withJSONObject: ["data": JSONSerialization.jsonObject(with: result),
             "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
@@ -182,6 +185,7 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
     let schoolValue: SchoolDetails
     let scope: SchoolCommandScope
     let screen: String
+    private var savedWelcome: SchoolOnboarding?
     init(school: SchoolDetails, scope: SchoolCommandScope, screen: String) { schoolValue = school; self.scope = scope; self.screen = screen }
     func school(id: UUID) async throws -> SchoolDetails {
         if screen == "profile-error" { throw SchoolProfileFailure.unavailable }
@@ -212,6 +216,7 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
         .init(learnerId: learnerID, action: action, resourceId: nil, ready: true, blockers: [], policyVersionId: SchoolVisualData.policyID, computedAt: "2026-09-24T10:00:00Z")
     }
     func onboarding(schoolID: UUID, kind: SchoolOnboardingKind) async throws -> SchoolOnboarding {
+        if let savedWelcome { return savedWelcome }
         let step: SchoolOnboardingStep
         switch screen {
         case "onboarding-formation": step = .formations
@@ -229,7 +234,31 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
         if ProcessInfo.processInfo.environment["DRIVY_VISUAL_FORBID_PROFILE_WRITES"] == "1" {
             preconditionFailure("Une lecture de confidentialité a tenté une écriture dans la fixture.")
         }
-        throw SchoolProfileFailure.unavailable
+        guard screen == "onboarding-known-identity" else { throw SchoolProfileFailure.unavailable }
+        precondition(command.kind == .saveOnboarding, "Ce parcours ne doit ni renvoyer les noms déjà connus ni terminer l’accueil à la place de l’élève.")
+        struct StepCommand: Decodable { let kind: SchoolOnboardingKind; let currentStep: SchoolOnboardingStep }
+        let body = try JSONDecoder().decode(StepCommand.self, from: command.body)
+        let previous = try await onboarding(schoolID: scope.schoolID, kind: body.kind)
+        guard command.resourceVersion == previous.version else { throw SchoolProfileFailure.conflict }
+        let value = SchoolOnboarding(id: previous.id, schoolId: previous.schoolId, version: previous.version + 1,
+            personId: previous.personId, membershipId: previous.membershipId, kind: body.kind,
+            status: body.currentStep == .review ? "READY" : "IN_PROGRESS", currentStep: body.currentStep,
+            skippedOptionalSteps: [], policyVersionId: previous.policyVersionId, lastSavedAt: "2026-10-17T10:00:00Z",
+            pendingActions: body.currentStep == .review ? [] : [.init(code: "ONBOARDING_REVIEW_REQUIRED", message: "Relis ton accueil.",
+                field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")], returnDestinationKey: nil, returnResourceId: nil)
+        savedWelcome = value
+        return .onboarding(value)
+    }
+}
+
+/// Journal exclusivement en mémoire pour le parcours UI synthétique, isolé des rendus sans écriture.
+@MainActor private final class SchoolWelcomeVisualOutbox: SchoolCommandOutbox {
+    private var command: PendingSchoolCommand?
+    func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { command?.scope == scope ? command : nil }
+    func save(_ command: PendingSchoolCommand) throws { self.command = command }
+    func remove(_ command: PendingSchoolCommand) throws {
+        guard self.command?.id == command.id else { throw SchoolConfigurationFailure.storage }
+        self.command = nil
     }
 }
 #endif

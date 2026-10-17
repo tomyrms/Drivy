@@ -39,6 +39,27 @@ struct SchoolLessonHeaderIdentity: Equatable, Sendable {
     let role: String?
 }
 
+/// Pourquoi la leçon continue sans enregistrement, sans confondre réglage scolaire, appareil et trajet arrêté.
+enum SchoolGPSUnavailableReason: Equatable {
+    case schoolUnavailable, schoolInactive, moduleDisabled, controllerUnavailable, captureUnfinished, captureStopped
+
+    func message(isAdministrator: Bool) -> String {
+        switch self {
+        case .schoolUnavailable: "Les réglages GPS de l’école n’ont pas pu être vérifiés. Actualise les accès."
+        case .schoolInactive: "Le GPS n’est pas disponible tant que l’école n’est pas active."
+        case .moduleDisabled:
+            isAdministrator
+                ? "Le GPS est désactivé pour cette école. Active-le dans le portail web."
+                : "Le GPS est désactivé pour cette école. Demande à l’administration de l’activer."
+        case .controllerUnavailable: "L’enregistrement GPS n’est pas disponible sur cet appareil. La leçon peut continuer sans GPS."
+        case .captureUnfinished: "Un autre trajet est encore ouvert. Reviens à Aujourd’hui pour le terminer."
+        case .captureStopped: "Le trajet est arrêté. La leçon continue."
+        }
+    }
+
+    var canRefreshSchool: Bool { self == .schoolUnavailable || self == .schoolInactive || self == .moduleDisabled }
+}
+
 /// Règles de l’écran unique d’une leçon. Toutes sont relues par le serveur ;
 /// elles évitent seulement de proposer une action qu’il refuserait à coup sûr.
 enum SchoolLessonHubRules {
@@ -135,6 +156,28 @@ enum SchoolLessonHubRules {
         guard isAuthor, lesson.status == "PLANNED", let school, school.id == lesson.schoolId,
               school.status == "ACTIVE", school.modules.gpsEnabled else { return false }
         return capture == .none && controllerCanPrepare && withinCaptureWindow(lesson, now: now)
+    }
+
+    /// Même prérequis que le départ, mais avec une raison visible lorsque le choix GPS serait absent.
+    static func capturePreparationUnavailableReason(school: SchoolDetails?, hasController: Bool,
+                                                     controllerCanPrepare: Bool) -> SchoolGPSUnavailableReason? {
+        guard let school else { return .schoolUnavailable }
+        guard school.status == "ACTIVE" else { return .schoolInactive }
+        guard school.modules.gpsEnabled else { return .moduleDisabled }
+        guard hasController else { return .controllerUnavailable }
+        guard controllerCanPrepare else { return .captureUnfinished }
+        return nil
+    }
+
+    static func captureUnavailableReason(lesson: SchoolLesson, isAuthor: Bool, school: SchoolDetails?,
+                                         capture: SchoolLessonCaptureStatus, controllerCanPrepare: Bool,
+                                         now: Date) -> SchoolGPSUnavailableReason? {
+        guard isAuthor, lesson.status == "PLANNED", withinCaptureWindow(lesson, now: now), capture != .collecting else { return nil }
+        // Un trajet arrêté n’est ni un GPS désactivé, ni une autorisation de recommencer la collecte.
+        if capture == .stopped { return .captureStopped }
+        let currentSchool = school?.id == lesson.schoolId ? school : nil
+        return capturePreparationUnavailableReason(school: currentSchool, hasController: capture != .unknown,
+            controllerCanPrepare: controllerCanPrepare)
     }
 
     /// La leçon a déjà un trajet chez l’école (fermeture, crash ou redémarrage pendant la leçon) : un nouveau départ

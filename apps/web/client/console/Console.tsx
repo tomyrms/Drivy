@@ -2,12 +2,15 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react';
 import { commandSpecs } from '../command-core';
 import { commandStore, pendingActions, useCommandSnapshot } from '../command-store';
-import { endSession, loginSchema, meSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
+import { endSession, meSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
 import { ConfirmDialog, Loading, Notice, SelectField, Symbol, formatDateTime } from '../ui';
 import { BrandSymbol } from '../BrandSymbol';
 import { AccountMenu } from '../preferences';
+import { AccountEntry } from '../account-entry';
+import { accountEntryDestination } from '../account-entry-route';
+import { IdentityConfirmationDialog } from '../identity-confirmation';
 import { SettingsFocus, SettingsSearch } from './settings-search';
 import { ConsoleContext, readError, sectionKeys, type ConsoleContextValue, type SectionKey } from './context';
 import { OverviewSection } from './overview';
@@ -24,7 +27,7 @@ import { LegacyReferenceRoute, TermsArchiveSection, UncategorizedTariffsSection 
 import { ObservationThemesSection } from './observation-themes';
 import { isLocalItemCurrent, localNavigationQuery, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
-import { ConsoleAccessReader } from './access-reader';
+import { ConsoleAccessReader, sameConsoleAccess } from './access-reader';
 
 type State =
   | { status: 'loading' }
@@ -40,7 +43,9 @@ export function ManagementConsole() {
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [identityDialog, setIdentityDialog] = useState<{ mode: 'confirm' | 'login'; email: string } | null>(null);
+  const identityResult = useRef<((confirmed: boolean) => void) | null>(null);
+  const currentSession = useRef(session); currentSession.current = session;
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationButton = useRef<HTMLButtonElement>(null);
   const csrf = useRef('');
@@ -69,6 +74,16 @@ export function ManagementConsole() {
   const draftScope = state.status === 'ready'
     ? `${state.me.personId}/${state.membership.schoolId}/${state.membership.membershipId}/${state.membership.accessEpoch}` : null;
   const drafts = useMemo(() => new Map<string, unknown>(), [draftScope]);
+  useEffect(() => () => { identityResult.current?.(false); identityResult.current = null; setIdentityDialog(null); }, [draftScope]);
+
+  const acceptPerson = useCallback((me: Me): boolean => {
+    const changed = commandStore.scopeToPerson(me.personId);
+    if (changed) {
+      unsaved.current.clear(); navigationGuard.current = null; setDeparture(null);
+      identityResult.current?.(false); identityResult.current = null; setIdentityDialog(null);
+    }
+    return changed;
+  }, []);
 
   const load = useCallback(async (schoolId: string | null) => {
     const current = ++generation.current;
@@ -81,6 +96,7 @@ export function ManagementConsole() {
       if (!next.authenticated) { setState({ status: 'signin' }); return; }
       const me = (await request('me', meSchema)).data;
       if (current !== generation.current) return;
+      acceptPerson(me);
       const admin = me.memberships.filter(member => member.roles.includes('ADMIN'));
       const target = schoolId ?? (admin.length === 1 ? admin[0]!.schoolId : null);
       if (!target) { setState(admin.length ? { status: 'choose', me, admin } : { status: 'denied', me, membership: null }); return; }
@@ -100,7 +116,7 @@ export function ManagementConsole() {
       if (error instanceof RequestFailure && error.status === 401) { setState({ status: 'signin' }); return; }
       setState({ status: 'error', message: readError(error) });
     }
-  }, []);
+  }, [acceptPerson]);
 
   useEffect(() => { void load(route.schoolId); }, [route.schoolId]);
   useEffect(() => {
@@ -121,8 +137,8 @@ export function ManagementConsole() {
     const onBeforeUnload = (event: BeforeUnloadEvent) => { if (unsaved.current.size) { event.preventDefault(); event.returnValue = ''; } };
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      // Back from the identity provider: the page is restored as it was left, mid sign-in. Start again from the server's answer.
-      working.current = false; setBusy(false); setLoginError(null);
+      // A restored page rereads the session and rights before exposing its saved school view.
+      working.current = false; setBusy(false);
       void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId);
     };
     window.addEventListener('popstate', onPopState);
@@ -144,30 +160,40 @@ export function ManagementConsole() {
 
   // Guards live in refs: `context.login` is memoised and must never read a stale `busy`.
   const working = useRef(false);
-  const readyRef = useRef(false);
-  readyRef.current = state.status === 'ready';
 
-  async function login(options?: { reauthenticate?: boolean }) {
-    if (working.current) return;
-    working.current = true;
-    setBusy(true); setLoginError(null);
-    try {
-      const next = await request('session', sessionSchema);
-      const returnTo = window.location.pathname.replace(/\/$/, '');
-      const result = await request('login', loginSchema, { csrf: next.csrfToken, body: {
-        ...(/^\/app\/gestion(\/|$)/.test(returnTo) ? { returnTo } : {}), ...(options?.reauthenticate ? { reauthenticate: true } : {}) } });
-      const target = new URL(result.url);
-      const loopback = ['localhost', '127.0.0.1', '[::1]'];
-      const localPage = window.location.protocol === 'http:' && loopback.includes(window.location.hostname);
-      if ((target.protocol !== 'https:' && !(localPage && loopback.includes(target.hostname) && target.protocol === 'http:')) || target.username || target.password || target.hash) {
-        throw new RequestFailure('INVALID_RESPONSE');
-      }
-      window.location.assign(target.href);
-    } catch (error) {
-      working.current = false; setBusy(false);
-      // A console that is open keeps its sections and unsent forms: the failure is shown above them.
-      if (readyRef.current) setLoginError(readError(error)); else setState({ status: 'error', message: readError(error) });
+  function confirmIdentity(): Promise<boolean> {
+    if (working.current || identityResult.current) return Promise.resolve(false);
+    return new Promise(resolve => {
+      identityResult.current = resolve;
+      setIdentityDialog({ mode: 'confirm', email: currentSession.current?.user?.email ?? '' });
+    });
+  }
+  function finishIdentity(confirmed: boolean) {
+    const resolve = identityResult.current; identityResult.current = null;
+    setIdentityDialog(null); resolve?.(confirmed);
+  }
+  async function confirmedIdentity(next: Session) {
+    if (identityDialog?.mode === 'login') {
+      finishIdentity(false);
+      await load(route.schoolId);
+      return;
     }
+    if (state.status !== 'ready') { finishIdentity(false); return; }
+    const scope = generation.current;
+    const access = await accessReader.current.read(state.membership.schoolId);
+    if (scope !== generation.current) return;
+    if (!access) throw new RequestFailure('API_UNAVAILABLE');
+    const retained = sameConsoleAccess(state, access);
+    if ('me' in access) acceptPerson(access.me);
+    if (!retained) generation.current++;
+    csrf.current = next.csrfToken; setSession(access.status === 'signin' ? null : next);
+    if (access.status === 'unavailable') setState({ status: 'error', message: readError(access.error) });
+    else setState(access);
+    finishIdentity(retained);
+  }
+  function login(options?: { reauthenticate?: boolean }) {
+    if (options?.reauthenticate) { void confirmIdentity(); return; }
+    if (!working.current) setIdentityDialog({ mode: 'login', email: currentSession.current?.user?.email ?? '' });
   }
 
   async function logout() {
@@ -196,6 +222,7 @@ export function ManagementConsole() {
       if (scope !== generation.current) return;
       const access = await accessReader.current.read(state.membership.schoolId);
       if (!access || scope !== generation.current) return;
+      if ('me' in access && acceptPerson(access.me)) generation.current++;
       if (access.status === 'unavailable') setState({ status: 'error', message: readError(access.error) });
       else setState(access);
       if (access.status === 'signin') setSession(null);
@@ -227,6 +254,7 @@ export function ManagementConsole() {
       });
     },
     login: options => { void login(options); },
+    confirmIdentity,
     };
   }, [state, route.query, route.section, drafts]);
 
@@ -266,12 +294,18 @@ export function ManagementConsole() {
 
         <main id="main" className="console-main" aria-busy={state.status === 'loading'}>
           {logoutError && <Notice tone="error" title="Déconnexion non confirmée"><p>{logoutError}</p></Notice>}
-          {loginError && <Notice tone="error" title="Connexion impossible"><p>{loginError}</p></Notice>}
           {state.status === 'loading' && <Loading label="Ouverture de la gestion de l’école…" />}
           {state.status === 'error' && <Notice tone="error" title="La gestion ne peut pas s’ouvrir"
             actions={<button type="button" className="button retry" onClick={() => void load(route.schoolId)}><Symbol kind="refresh" bare />Réessayer</button>}>
             <p>{state.message}</p></Notice>}
-          {state.status === 'signin' && <SignIn onLogin={() => void login()} busy={busy} pending={snapshot.entries.size > 0} />}
+          {state.status === 'signin' && <>
+            {snapshot.entries.size > 0 && <Notice tone="warning" title="Une demande reste à vérifier"><p>Après connexion, ouvrez la même école pour consulter son résultat.</p></Notice>}
+            <AccountEntry onSignedIn={kind => {
+              const destination = accountEntryDestination(kind);
+              if (destination) window.location.assign(destination);
+              else void load(route.schoolId);
+            }} />
+          </>}
           {state.status === 'choose' && <ChooseSchool schools={state.admin} onChoose={schoolId => { pushPath(`/app/gestion/${schoolId}`); setRoute({ schoolId, section: 'apercu', query: {} }); }} />}
           {state.status === 'denied' && <Denied membership={state.membership} />}
           {context && <ConsoleContext.Provider value={context}>
@@ -286,6 +320,8 @@ export function ManagementConsole() {
         onCancel={() => setDeparture(null)} onConfirm={() => { const next = departure; setDeparture(null); bypassGuard.current = true; try { next?.proceed(); } finally { bypassGuard.current = false; } }}>
         <p>Vos modifications ne sont pas enregistrées auprès de l’école.</p>
       </ConfirmDialog>
+      {identityDialog && <IdentityConfirmationDialog mode={identityDialog.mode} initialEmail={identityDialog.email}
+        onCancel={() => finishIdentity(false)} onConfirmed={confirmedIdentity} />}
     </div>
   );
 }
@@ -368,18 +404,6 @@ function Section({ section }: { section: SectionKey }): ReactNode {
     case 'absences': return <AvailabilitySection section="absences" />;
     case 'signalements': return <ObservationThemesSection />;
   }
-}
-
-function SignIn({ onLogin, busy, pending }: { onLogin: () => void; busy: boolean; pending: boolean }) {
-  return (
-    <section className="panel sign-in" aria-labelledby="console-signin">
-      <Symbol kind="lock" tile />
-      <h1 id="console-signin">Connectez-vous pour gérer votre école</h1>
-      <p className="secondary-text">La gestion est réservée à l’administration de l’école.</p>
-      {pending && <p className="caption">Une demande reste à vérifier : après connexion, ouvrez la même école pour consulter son résultat.</p>}
-      <button type="button" className="button primary" onClick={onLogin} disabled={busy}>Se connecter</button>
-    </section>
-  );
 }
 
 function ChooseSchool({ schools, onChoose }: { schools: Member[]; onChoose: (schoolId: string) => void }) {

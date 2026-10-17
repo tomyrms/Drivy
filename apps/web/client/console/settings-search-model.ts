@@ -9,6 +9,7 @@ export const settingsIndex: readonly SettingDestination[] = [
   { id: 'email', label: 'E-mail de l’école', group: 'École · Coordonnées', section: 'configuration', target: 'school-email', keywords: 'adresse contact courriel' },
   { id: 'phone', label: 'Téléphone de l’école', group: 'École · Coordonnées', section: 'configuration', target: 'school-phone', keywords: 'contact numéro mobile' },
   { id: 'privacy', label: 'Textes de confidentialité', group: 'École · Confidentialité', section: 'confidentialite', target: 'policy-title', keywords: 'notice information données personnelles protection consentement' },
+  { id: 'gps', label: 'Trajets GPS', group: 'École · Confidentialité', section: 'confidentialite', target: 'school-gps', keywords: 'activer désactiver enregistrement localisation carte capture moniteur leçon' },
   { id: 'retention', label: 'Conservation des données', group: 'École · Confidentialité', section: 'confidentialite', target: 'privacy-retention', keywords: 'durée rétention suppression texte' },
   { id: 'data-contact', label: 'Contact pour les données', group: 'École · Confidentialité', section: 'confidentialite', target: 'privacy-contact', keywords: 'email courriel demande données personnelles' },
   { id: 'fields', label: 'Informations demandées aux élèves', group: 'École · Informations élèves', section: 'champs-profil', target: 'fields-title', keywords: 'profil champs obligatoires facultatifs naissance adresse téléphone requis avant leçon finalité' },

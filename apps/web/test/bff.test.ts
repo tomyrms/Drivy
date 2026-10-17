@@ -10,6 +10,7 @@ import { SessionStore, type Tokens } from '../server/session.js';
 import { IdentityUnavailable, identityUnreachable, type IdentityProvider } from '../server/oidc.js';
 import type { ApiGateway } from '../server/upstream.js';
 import type { WebConfig } from '../server/config.js';
+import { previewSchema as clientPreviewSchema } from '../client/protocol.js';
 
 const config = {origin:'https://drivy.example',apiBaseURL:'https://drivy.example/refonte',issuer:'https://identity.example/realm',
   clientId:'drivy-web',clientSecret:randomBytes(32).toString('hex'),development:false,host:'127.0.0.1',port:3002};
@@ -271,6 +272,18 @@ describe('Entrée anonyme, limites et cache',()=>{
 });
 
 describe('Invitation web confirmée',()=>{
+  test.each([{firstName:'Élève Camille',lastName:'De la Tour-Roux'},{firstName:'𐐀'.repeat(100),lastName:'𐐁'.repeat(150)}])('l’identité structurée Unicode est présentée exactement et un changement exige une nouvelle relecture',async profileIdentity=>{
+    const base=sample();const preview={data:{...base.data,profileIdentity}};
+    const api=vi.fn<ApiGateway>(async()=>({status:200,body:structuredClone(preview)}));const h=await harness(api);
+    await h.start();await h.login();await h.post('/app/bff/invitation',{token:token()});
+    const first=(await h.post('/app/bff/invitation/preview')).json();
+    expect(first.data.profileIdentity).toEqual(preview.data.profileIdentity);
+    expect(clientPreviewSchema.parse(first).data.profileIdentity).toEqual(profileIdentity);
+    preview.data.profileIdentity.firstName='Camille';
+    const response=await h.post('/app/bff/invitation/accept',{invitationId:first.data.invitationId,confirmation:first.confirmation});
+    expect(response.statusCode).toBe(409);expect(response.json().code).toBe('INVITATION_PREVIEW_CHANGED');
+    expect(api.mock.calls.every(call=>call[0]!=='/v1/invitations/accept')).toBe(true);
+  });
   test('survit à OAuth uniquement côté serveur et GET ne consomme pas',async()=>{
     const preview=sample(),invite=token(); const api=vi.fn(async()=>({status:200,body:preview})); const h=await harness(api);
     await h.start();expect((await h.post('/app/bff/invitation',{token:invite})).statusCode).toBe(200);

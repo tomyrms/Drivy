@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { formatCents, parseCents } from '../command-core';
 import type { TariffType } from '../formation-api';
 import { Notice, SegmentField, SelectField, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
@@ -18,29 +18,37 @@ export function CompetenciesEditor({ items, onChange, disabled, showErrors }: {
 }) {
   const problems = competencyProblems(items);
   const list = useRef<HTMLOListElement>(null);
+  const pendingFocus = useRef<{ uid: string; move?: -1 | 1 } | 'add' | null>(null);
   const [announcement, setAnnouncement] = useState('');
-  const focusLater = (selector: string) => window.requestAnimationFrame(() => list.current?.querySelector<HTMLElement>(selector)?.focus());
+  // Appliquer le focus avec le DOM de la nouvelle liste, avant toute saisie suivante.
+  // Un callback d'animation différé pourrait le voler à un champ déjà choisi par la personne.
+  useLayoutEffect(() => {
+    const target = pendingFocus.current;
+    pendingFocus.current = null;
+    if (!target) return;
+    if (target === 'add') { list.current?.parentElement?.querySelector<HTMLElement>('[data-add-competency]')?.focus(); return; }
+    const row = list.current?.querySelector<HTMLElement>(`[data-uid="${target.uid}"]`);
+    if (target.move) {
+      const same = row?.querySelector<HTMLButtonElement>(`[data-move="${target.move}"]`);
+      (same && !same.disabled ? same : row?.querySelector<HTMLButtonElement>(`[data-move="${-target.move}"]`))?.focus();
+    } else row?.querySelector<HTMLElement>('input')?.focus();
+  }, [items]);
   const move = (index: number, delta: -1 | 1) => {
     const item = items[index]!;
+    pendingFocus.current = { uid: item.uid, move: delta };
     onChange(moveItem(items, index, delta));
     setAnnouncement(`${item.label.trim() || 'Compétence'} : position ${index + delta + 1} sur ${items.length}.`);
-    // Le focus suit l'élément déplacé : même sens s'il reste possible, sinon l'autre.
-    window.requestAnimationFrame(() => {
-      const row = list.current?.querySelector<HTMLElement>(`[data-uid="${item.uid}"]`);
-      const same = row?.querySelector<HTMLButtonElement>(`[data-move="${delta}"]`);
-      (same && !same.disabled ? same : row?.querySelector<HTMLButtonElement>(`[data-move="${-delta}"]`))?.focus();
-    });
   };
   const remove = (index: number) => {
     const item = items[index]!, next = items[index + 1] ?? items[index - 1];
+    pendingFocus.current = next ? { uid: next.uid } : 'add';
     onChange(items.filter(entry => entry.uid !== item.uid));
     setAnnouncement(`${item.label.trim() || 'Compétence'} retirée.`);
-    if (next) focusLater(`[data-uid="${next.uid}"] input`); else window.requestAnimationFrame(() => list.current?.parentElement?.querySelector<HTMLElement>('[data-add-competency]')?.focus());
   };
   const add = () => {
     const item = emptyCompetency();
+    pendingFocus.current = { uid: item.uid };
     onChange([...items, item]);
-    focusLater(`[data-uid="${item.uid}"] input`);
   };
   return <fieldset className="fieldset competency-editor" aria-invalid={showErrors && problems.list ? true : undefined}>
     <legend>Compétences enseignées</legend>

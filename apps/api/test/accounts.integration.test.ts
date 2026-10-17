@@ -52,6 +52,7 @@ test('un code se lit sans connexion : élève, ouverture d’école, ou refus id
   const preview=await call('POST','/v1/access-codes/preview',{code:learner.toLowerCase().replace('-','')});
   expect(preview.statusCode,preview.body).toBe(200);
   expect(preview.json().data).toMatchObject({kind:'LEARNER_INVITATION',roles:['LEARNER']});
+  for(const key of ['invitationId','schoolId','notice','profileIdentity']) expect(preview.json().data).not.toHaveProperty(key);
   const opening=await openingCode();
   const openingPreview=await call('POST','/v1/access-codes/preview',{code:opening});
   expect(openingPreview.json().data).toMatchObject({kind:'SCHOOL_OPENING'});

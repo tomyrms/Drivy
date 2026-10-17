@@ -1,6 +1,12 @@
 import * as oidc from 'openid-client';
 import type { WebConfig } from './config.js';
-import type { LoginTransaction, Tokens } from './session.js';
+import type { LoginTransaction, Principal, Tokens } from './session.js';
+
+/** Only the provider's verified auth_time counts. Issuance/refresh times cannot replace authentication. */
+export function recentAuthentication(principal: Principal, now: number, maxAgeSeconds: number): boolean {
+  const time = principal.authenticatedAt, seconds = Math.floor(now / 1000);
+  return typeof time === 'number' && Number.isSafeInteger(time) && time >= 0 && time <= seconds + 5 && seconds - time <= maxAgeSeconds;
+}
 
 /** The identity provider could not be reached: the session is not at fault and must survive the outage. */
 export class IdentityUnavailable extends Error { constructor() { super('IDENTITY_UNAVAILABLE'); } }
@@ -57,7 +63,8 @@ export async function createIdentityProvider(config: WebConfig): Promise<Identit
     }
     const principal = claims ? { subject: claims.sub,
       displayName: typeof claims.name === 'string' ? claims.name : typeof claims.preferred_username === 'string' ? claims.preferred_username : 'Mon compte',
-      ...(typeof claims.email === 'string' ? { email: claims.email } : {}), emailVerified: claims.email_verified === true }
+      ...(typeof claims.email === 'string' ? { email: claims.email } : {}), emailVerified: claims.email_verified === true,
+      ...(typeof claims.auth_time === 'number' && Number.isSafeInteger(claims.auth_time) && claims.auth_time >= 0 ? { authenticatedAt: claims.auth_time } : {}) }
       : previous!.principal;
     const refreshToken = response.refresh_token ?? previous?.refreshToken;
     return { accessToken: response.access_token, expiresAt: Date.now() + response.expires_in * 1000,
@@ -68,7 +75,7 @@ export async function createIdentityProvider(config: WebConfig): Promise<Identit
       const transaction = { state: oidc.randomState(), nonce: oidc.randomNonce(),
         verifier: oidc.randomPKCECodeVerifier(), expiresAt: Date.now() + 5 * 60_000 };
       const url = oidc.buildAuthorizationUrl(client, { redirect_uri: redirectUri,
-        scope: 'openid profile email', response_type: 'code', ...(options?.reauthenticate ? { prompt: 'login' } : {}), state: transaction.state, nonce: transaction.nonce,
+        scope: 'openid profile email', response_type: 'code', ...(options?.reauthenticate ? { prompt: 'login', max_age: '0' } : {}), state: transaction.state, nonce: transaction.nonce,
         code_challenge: await oidc.calculatePKCECodeChallenge(transaction.verifier), code_challenge_method: 'S256' });
       return { transaction, url: url.href };
     },

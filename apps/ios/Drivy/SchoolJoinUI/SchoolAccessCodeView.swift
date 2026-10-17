@@ -86,7 +86,9 @@ struct SchoolAccessCodeView: View {
                 .accessibilityLabel("Coller le code ou le lien")
                 .frame(minHeight: DrivyLayout.tapTarget)
             }
-            SchoolJoinTextLink(title: "J’ai déjà un compte", isBusy: model.isBusy) { dismiss() }
+            SchoolJoinTextLink(title: "J’ai déjà un compte", isBusy: model.isBusy) {
+                Task { await model.continueWithExistingAccount() }
+            }
                 .accessibilityIdentifier("access-code-sign-in")
         }
     }

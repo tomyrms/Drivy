@@ -116,6 +116,13 @@ final class SchoolProfileWorkspace: Identifiable {
         return checked.filter { field in !draft.isValid(allowed: [field], timeZone: zone) }
     }
     var canSaveProfile: Bool { canMutate && hasEdits && invalidFields.isEmpty }
+    /// Les champs JOIN déjà connus n’ont pas à être saisis une seconde fois dans l’accueil.
+    /// Les exigences d’une future leçon ne rendent pas cette première étape obligatoire.
+    var canSkipOnboardingInformation: Bool {
+        guard onboardingKind == .student, let profile, let onboarding,
+              SchoolProfileDraft(profile).isValid(allowed: [.firstName, .lastName], timeZone: school?.timeZone ?? "Europe/Zurich") else { return false }
+        return !onboarding.pendingActions.contains { $0.code == "PROFILE_ACTION_REQUIRED" }
+    }
     var canCreatePolicy: Bool { canMutate && roles.contains("ADMIN") && notice?.status == "APPROVED" && notice?.noticeVersionId != nil }
     var canRetryPending: Bool {
         guard let pending else { return false }

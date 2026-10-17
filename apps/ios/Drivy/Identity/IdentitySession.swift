@@ -9,6 +9,8 @@ final class IdentitySession: AccessTokenSource {
     private(set) var isAuthenticated = false
     private(set) var isWorking = false
     private(set) var errorMessage: String?
+    private var sessionDisplayName: String?
+    var suggestedDisplayName: String? { isAuthenticated ? sessionDisplayName : nil }
 
     @ObservationIgnored private let configuration: AppConfiguration?
     @ObservationIgnored private let vault: any IdentityVault
@@ -44,6 +46,8 @@ final class IdentitySession: AccessTokenSource {
             let restoredState = try StoredIdentity.decode(data, configuration: configuration)
             guard restoredState.isAuthorized else { throw IdentityFailure.reauthentication }
             state = restoredState
+            sessionDisplayName = IdentityDisplayName.suggestion(fromIDToken: restoredState.lastTokenResponse?.idToken,
+                                                               configuration: configuration)
             _ = try await accessToken()
         } catch {
             guard generation == expected else { return }
@@ -69,6 +73,7 @@ final class IdentitySession: AccessTokenSource {
         refreshTask = nil
         refreshID = nil
         state = nil
+        sessionDisplayName = nil
         let expected = generation
         isWorking = true
         errorMessage = nil
@@ -91,6 +96,8 @@ final class IdentitySession: AccessTokenSource {
             // La session n'est annoncée connectée qu'après écriture durable dans le Trousseau.
             try vault.write(StoredIdentity.encode(newState, configuration: configuration))
             state = newState
+            sessionDisplayName = IdentityDisplayName.suggestion(fromIDToken: newState.lastTokenResponse?.idToken,
+                                                               configuration: configuration)
             restored = true
             isAuthenticated = true
         } catch {
@@ -111,6 +118,7 @@ final class IdentitySession: AccessTokenSource {
         refreshTask = nil
         refreshID = nil
         state = nil
+        sessionDisplayName = nil
         let expected = generation
         isWorking = true
         errorMessage = nil
@@ -125,6 +133,8 @@ final class IdentitySession: AccessTokenSource {
                   newState.lastTokenResponse?.tokenType?.lowercased() == "bearer" else { throw IdentityFailure.reauthentication }
             try vault.write(StoredIdentity.encode(newState, configuration: configuration))
             state = newState
+            sessionDisplayName = IdentityDisplayName.suggestion(fromIDToken: newState.lastTokenResponse?.idToken,
+                                                               configuration: configuration)
             restored = true
             isAuthenticated = true
             return true
@@ -160,6 +170,9 @@ final class IdentitySession: AccessTokenSource {
                 try Task.checkCancellation()
                 guard generation == expected else { throw CancellationError() }
                 try vault.write(StoredIdentity.encode(state, configuration: configuration))
+                if let idToken = state.lastTokenResponse?.idToken {
+                    sessionDisplayName = IdentityDisplayName.suggestion(fromIDToken: idToken, configuration: configuration)
+                }
                 isAuthenticated = true
                 errorMessage = nil
                 return token
@@ -167,11 +180,13 @@ final class IdentitySession: AccessTokenSource {
                 guard generation == expected else { throw CancellationError() }
                 if !state.isAuthorized {
                     self.state = nil
+                    sessionDisplayName = nil
                     isAuthenticated = false
                     do { try vault.clear() } catch { errorMessage = IdentityFailure.storage.localizedDescription }
                 }
                 if let failure = error as? IdentityFailure, case .storage = failure {
                     self.state = nil
+                    sessionDisplayName = nil
                     isAuthenticated = false
                 }
                 if !(error is CancellationError) { errorMessage = message(for: error) }
@@ -227,6 +242,8 @@ final class IdentitySession: AccessTokenSource {
             guard person.personId == expectedPersonID else { throw IdentityFailure.differentAccount }
             try vault.write(StoredIdentity.encode(candidate, configuration: configuration))
             state = candidate
+            sessionDisplayName = IdentityDisplayName.suggestion(fromIDToken: candidate.lastTokenResponse?.idToken,
+                                                               configuration: configuration)
             restored = true
             isAuthenticated = true
             return true
@@ -245,6 +262,7 @@ final class IdentitySession: AccessTokenSource {
         refreshTask = nil
         refreshID = nil
         state = nil
+        sessionDisplayName = nil
         restored = true
         isAuthenticated = false
         isWorking = false

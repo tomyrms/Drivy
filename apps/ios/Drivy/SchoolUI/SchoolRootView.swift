@@ -39,6 +39,8 @@ struct SchoolRootView: View {
     /// « J’ai un code » avant connexion, puis ce qu’il reste à faire une fois connecté.
     @State private var accessWorkspace: SchoolAccessWorkspace?
     @State private var accessRoute: SchoolWorkspaceSheet<SchoolAccessWorkspace>?
+    /// La connexion conserve la priorité de son code jusqu’à l’ouverture de l’écran suivant.
+    @State private var isContinuingAccess = false
     @State private var openingWorkspace: SchoolOpeningWorkspace?
     @State private var openingRoute: SchoolWorkspaceSheet<SchoolOpeningWorkspace>?
     @State private var selectedHomeTab: SchoolHomeTab = .session
@@ -121,6 +123,12 @@ struct SchoolRootView: View {
         }
         .onChange(of: workspace?.person?.personId) { _, _ in
             if workspace?.isLoadingAccount != true { updateCaptureScope() }
+        }
+        .onChange(of: workspace?.person?.displayName) { _, name in
+            openingWorkspace?.prefillAccountDisplayName(name)
+        }
+        .onChange(of: identity.suggestedDisplayName) { _, name in
+            openingWorkspace?.prefillAccountDisplayName(workspace?.person?.displayName ?? name)
         }
         .onChange(of: workspace?.isLoadingAccount) { _, loading in
             if loading == false { verifyPresentedScopes() }
@@ -292,7 +300,7 @@ struct SchoolRootView: View {
         guard configuration != nil, identity.isAuthenticated, workspace?.school?.status == "ACTIVE",
               let membership = workspace?.membership else { return false }
         // L’élève comme le moniteur : un accueil laissé en route se reprend depuis Profil, sans attendre sept jours.
-        return (membership.roles.contains("INSTRUCTOR") || membership.roles.contains("LEARNER"))
+        return SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles)
             && onboardingToResume == membership.membershipId
     }
 
@@ -306,7 +314,8 @@ struct SchoolRootView: View {
     private var ownProfileLearner: SchoolLearner? {
         guard workspace?.school?.status == "ACTIVE", let person = workspace?.person,
               workspace?.membership?.roles.contains("LEARNER") == true else { return nil }
-        return workspace?.learners.first { $0.personId == person.personId }
+        guard let own = workspace?.ownLearner, own.personId == person.personId else { return nil }
+        return own
     }
 
     // MARK: Rejoindre une école
@@ -364,13 +373,17 @@ struct SchoolRootView: View {
     }
     /// Connecté avec le code gardé : rejoindre l’école (élève), ouvrir l’école (code d’ouverture), ou relire l’invitation reçue.
     private func continueAccess(_ outcome: SchoolAccessOutcome) {
+        isContinuingAccess = true
         Task {
+            defer { isContinuingAccess = false }
             guard await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
                   identity.isAuthenticated, !presentsSheet, let configuration else { return }
             switch (outcome.kind, outcome.input) {
             case (.schoolOpening, _):
                 let model = SchoolOpeningWorkspace(client: SchoolOpeningClient(configuration: configuration, tokenSource: identity),
-                                                   code: outcome.input.secret, displayName: outcome.displayName, email: outcome.email)
+                    code: outcome.input.secret,
+                    displayName: SchoolOpeningWorkspace.prefilledDisplayName(accountCreationName: outcome.displayName,
+                        knownPersonName: workspace?.person?.displayName, identityDisplayName: identity.suggestedDisplayName), email: outcome.email)
                 openingWorkspace = model; openingRoute = SchoolWorkspaceSheet(model: model)
             case (.learnerInvitation, .code(let code)):
                 openCodeJoin(code: code)
@@ -493,8 +506,10 @@ struct SchoolRootView: View {
     private var onboardingOfferKey: String {
         // La liste d’élèves ne compte que pour un compte élève (son dossier) : une recherche du moniteur qui la vide
         // ne relance pas la lecture de son accueil.
-        let ownDossier = workspace?.membership?.roles.contains("LEARNER") == true ? "\(workspace?.learners.isEmpty == false)" : ""
-        return "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0):\(workspace?.membership?.roles.joined(separator: ",") ?? ""):\(workspace?.school?.status ?? ""):\(ownDossier)"
+        let kind = SchoolEntryDestination.personalOnboardingKind(schoolStatus: workspace?.school?.status,
+            roles: workspace?.membership?.roles ?? [])
+        let ownDossier = kind == .student ? "\(ownProfileLearner?.id.uuidString ?? "")" : ""
+        return "\(workspace?.membership?.membershipId.uuidString ?? ""):\(workspace?.membership?.accessEpoch ?? 0):\(workspace?.membership?.roles.joined(separator: ",") ?? ""):\(workspace?.school?.status ?? ""):\(ownDossier):\(isContinuingAccess)"
     }
 
     /// First access: open the guided welcome once when the school says it is not finished.
@@ -503,20 +518,18 @@ struct SchoolRootView: View {
         // « Reprendre l’accueil » reste affiché pendant la relecture : il ne s’éteint que pour une autre adhésion,
         // ou quand l’école ne le dit plus à terminer.
         if onboardingToResume != workspace?.membership?.membershipId { onboardingToResume = nil }
-        guard identity.isAuthenticated, let configuration, let person = workspace?.person,
+        guard !isContinuingAccess, identity.isAuthenticated, let configuration, let person = workspace?.person,
               let membership = workspace?.membership,
-              SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles) else {
+              let kind = SchoolEntryDestination.personalOnboardingKind(schoolStatus: workspace?.school?.status, roles: membership.roles) else {
             onboardingToResume = nil
             return
         }
-        let isLearner = membership.roles.contains("LEARNER")
-        if isLearner && workspace?.learners.isEmpty != false { return }
-        let kind: SchoolOnboardingKind = isLearner ? .student : .staff
+        if kind == .student && ownProfileLearner == nil { return }
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         let api = SchoolProfileClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
         let state = await SchoolOnboardingPrompt.pendingState(api: api, scope: scope, kind: kind)
-        guard !Task.isCancelled, identity.isAuthenticated,
+        guard !Task.isCancelled, !isContinuingAccess, identity.isAuthenticated,
               SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles),
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
@@ -533,7 +546,7 @@ struct SchoolRootView: View {
         offeredOnboarding.insert(membership.membershipId)
         // Une feuille ouverte ailleurs (leçon, démarrage) ferait perdre celle-ci sans un mot : on attend qu’elle se ferme.
         guard await SchoolPresentationIdle.wait(isPresenting: { uikitIsPresenting }),
-              !Task.isCancelled, identity.isAuthenticated,
+              !Task.isCancelled, !isContinuingAccess, identity.isAuthenticated,
               SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status, roles: membership.roles),
               workspace?.person?.personId == person.personId,
               workspace?.membership?.membershipId == membership.membershipId,
@@ -562,13 +575,14 @@ struct SchoolRootView: View {
         let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId,
             membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: configuration.apiBaseURL.absoluteString)
         var targetLearner = learner
-        if targetLearner == nil, onboardingOnly, membership.roles.contains("LEARNER") {
-            targetLearner = workspace?.learners.first { $0.personId == person.personId }
+        let welcomeKind = SchoolEntryDestination.personalOnboardingKind(schoolStatus: workspace?.school?.status, roles: membership.roles)
+        if targetLearner == nil, onboardingOnly, welcomeKind == .student {
+            targetLearner = ownProfileLearner
         }
         let isOwn = targetLearner?.personId == person.personId && membership.roles.contains("LEARNER")
         let kind: SchoolOnboardingKind?
         if isOwn { kind = .student }
-        else if onboardingOnly { kind = membership.roles.contains("LEARNER") ? .student : .staff }
+        else if onboardingOnly { kind = welcomeKind }
         else { kind = nil }
         return SchoolProfileWorkspace(scope: scope, roles: membership.roles, learnerID: targetLearner?.id,
             isOwnProfile: isOwn, onboardingKind: kind,

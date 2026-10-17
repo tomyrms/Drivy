@@ -1,5 +1,5 @@
 /** Complete synthetic browser qualification. No token, identity credential, request trace or real account is an artifact. */
-import { randomBytes,randomUUID } from 'node:crypto';
+import { createHash,randomBytes,randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { readFile,mkdir,mkdtemp,writeFile,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,7 @@ import { resolve,sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { z } from 'zod';
+import { createRemoteJWKSet,jwtVerify } from 'jose';
 import { chromium,type Browser } from '../../infra/dev/browser.js';
 import type { Page } from '../../infra/dev/browser.js';
 import { migrate } from '../../apps/api/scripts/migrations.js';
@@ -20,6 +21,8 @@ import { SessionStore } from '../../apps/web/server/session.js';
 import { parseMetadata } from '../../apps/web/client/command-core.js';
 import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
 import { verifySchoolFormations } from './check-school-formations.js';
+import { verifyPersonalWelcome } from './check-personal-welcome.js';
+import { verifySchoolCodeEntry } from './check-school-code-entry.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -51,6 +54,20 @@ function mailLink(text:string,expectedOrigin:string,path:string) {
 }
 function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);}
 function docker(args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn('docker',args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('DOCKER_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('DOCKER_FAILED')));});}
+function runBuild(command:string,args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn(command,args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('IDENTITY_BUILD_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('IDENTITY_BUILD_FAILED')));});}
+async function buildIdentityProvider(temporary:string) {
+  const lock=z.object({keycloak:z.object({version:z.literal('26.7.4'),url:z.url(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})}).parse(
+    JSON.parse(await readFile(new URL('../../infra/deploy/runtime-lock.json',import.meta.url),'utf8'))).keycloak;
+  const download=await fetch(lock.url,{signal:AbortSignal.timeout(120_000)});
+  if(!download.ok)throw new Error('IDENTITY_DISTRIBUTION_UNAVAILABLE');
+  const archive=Buffer.from(await download.arrayBuffer());
+  if(createHash('sha256').update(archive).digest('hex')!==lock.sha256)throw new Error('IDENTITY_DISTRIBUTION_HASH_MISMATCH');
+  const archivePath=resolve(temporary,'keycloak.tar.gz'),provider=resolve(temporary,'drivy-direct-grant-auth-time.jar');
+  await writeFile(archivePath,archive);await runBuild('tar',['-xzf',archivePath,'-C',temporary]);
+  await runBuild(process.execPath,[fileURLToPath(new URL('../../infra/identity/build-provider.mjs',import.meta.url)),
+    '--distribution',resolve(temporary,`keycloak-${lock.version}`),'--output',provider]);
+  return provider;
+}
 async function waitFor(url:string) {
   for(let attempt=0;attempt<120;attempt++){try{const response=await fetch(url,{signal:AbortSignal.timeout(1000),redirect:'error'});if(response.ok)return;}catch{/* Local service is still starting. */}await new Promise(done=>setTimeout(done,1000));}
   throw new Error('SERVICE_START_TIMEOUT');
@@ -104,13 +121,18 @@ async function main() {
     stage='serveur OIDC éphémère';temporary=await mkdtemp(resolve(tmpdir(),'drivy-opening-e2e-'));
     const adminPassword=syntheticSecret(),operatorPassword=syntheticSecret(),consumerPassword=syntheticSecret(),clientSecret=syntheticSecret(),accountsSecret=syntheticSecret();
     const envPath=resolve(temporary,'keycloak.env');
+    stage='compilation du fournisseur d’identité contre la distribution verrouillée';
+    const identityProviderJar=await buildIdentityProvider(temporary);
     await writeFile(envPath,`KC_BOOTSTRAP_ADMIN_USERNAME=drivy-e2e-admin\nKC_BOOTSTRAP_ADMIN_PASSWORD=${adminPassword}\nKC_HOSTNAME=${keycloakOrigin}\nKC_HTTP_ENABLED=true\nKC_LOG_LEVEL=warn\n`,{mode:0o600});
-    await docker(['run','--detach','--rm','--name',containerName,'--env-file',envPath,'--publish','127.0.0.1:8081:8080','--add-host','host.docker.internal:host-gateway',keycloakImage,'start-dev']);containerStarted=true;
+    stage='serveur OIDC éphémère avec le fournisseur d’identité compilé';
+    await docker(['run','--detach','--rm','--name',containerName,'--env-file',envPath,'--publish','127.0.0.1:8081:8080','--add-host','host.docker.internal:host-gateway',
+      '--mount',`type=bind,source=${identityProviderJar},target=/opt/keycloak/providers/drivy-direct-grant-auth-time.jar,readonly`,keycloakImage,'start-dev']);containerStarted=true;
     await waitFor(`${keycloakOrigin}/realms/master/.well-known/openid-configuration`);
     const authentication=await fetch(`${keycloakOrigin}/realms/master/protocol/openid-connect/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({client_id:'admin-cli',grant_type:'password',username:'drivy-e2e-admin',password:adminPassword})});
     if(!authentication.ok)throw new Error('OIDC_ADMIN_UNAVAILABLE');const auth=await authentication.json() as {access_token?:string};if(!auth.access_token)throw new Error('OIDC_ADMIN_UNAVAILABLE');
     const realm=JSON.parse(await readFile(new URL('../../infra/dev/realm.json',import.meta.url),'utf8')) as Record<string,unknown>;
+    Object.assign(realm,JSON.parse(await readFile(new URL('../../infra/identity/direct-grant-flow.json',import.meta.url),'utf8')));
     // L'inscription libre est fermée : un compte ne se crée qu'avec un code ou un lien valable, par le client de service de l'API.
     realm.realm=realmName;realm.displayName='Drivy · Recette synthétique';realm.registrationAllowed=false;realm.verifyEmail=false;realm.resetPasswordAllowed=false;
     realm.smtpServer={host:'host.docker.internal',port:'1025',from:'identity@drivy.example.invalid',ssl:'false',starttls:'false',auth:'false'};
@@ -129,6 +151,38 @@ async function main() {
     const users=await fetch(`${keycloakOrigin}/admin/realms/${realmName}/users?username=operateur-recette&exact=true`,{headers:{Authorization:`Bearer ${auth.access_token}`}});
     if(!users.ok)throw new Error('OIDC_OPERATOR_FAILED');const operatorList=await users.json() as {id:string}[];if(operatorList.length!==1)throw new Error('OIDC_OPERATOR_FAILED');
     delete auth.access_token;
+    // JWTs stay in memory. Both proofs are signature/issuer/audience checked, never decoded as trusted data.
+    const identityKeys=createRemoteJWKSet(new URL(`${issuer}/protocol/openid-connect/certs`));
+    const grantSchema=z.object({access_token:z.string(),id_token:z.string(),refresh_token:z.string()});
+    async function passwordGrant(email:string,password:string) {
+      const response=await fetch(`${issuer}/protocol/openid-connect/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:new URLSearchParams({client_id:'drivy-web-e2e',client_secret:clientSecret,grant_type:'password',scope:'openid profile email',username:email,password})});
+      if(!response.ok)throw new Error('DIRECT_GRANT_REFUSED');return grantSchema.parse(await response.json());
+    }
+    async function authenticationTime(tokens:z.infer<typeof grantSchema>) {
+      const [access,id]=await Promise.all([
+        jwtVerify(tokens.access_token,identityKeys,{issuer,audience:'drivy-api',algorithms:['RS256']}),
+        jwtVerify(tokens.id_token,identityKeys,{issuer,audience:'drivy-web-e2e',algorithms:['RS256']})]);
+      const proof=z.object({auth_time:z.number().int().nonnegative(),sub:z.string()});
+      const a=proof.parse(access.payload),i=proof.parse(id.payload);
+      assert(a.auth_time===i.auth_time&&a.sub===i.sub,'Les jetons accès et identité signés portent la même preuve d’authentification');
+      return a.auth_time;
+    }
+    stage='preuve d’authentification du mot de passe et renouvellement réel';
+    const loginStarted=Math.floor(Date.now()/1000),initialGrant=await passwordGrant('operator@example.invalid',operatorPassword);
+    const initialAuthTime=await authenticationTime(initialGrant);
+    assert(initialAuthTime>=loginStarted&&initialAuthTime<=Math.floor(Date.now()/1000),'La connexion par mot de passe porte une heure d’authentification récente');
+    // Cross a second boundary so a mistaken refresh-time timestamp cannot pass equality by chance.
+    while(Math.floor(Date.now()/1000)<=initialAuthTime)await new Promise(done=>setTimeout(done,100));
+    const refreshedResponse=await fetch(`${issuer}/protocol/openid-connect/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({client_id:'drivy-web-e2e',client_secret:clientSecret,grant_type:'refresh_token',refresh_token:initialGrant.refresh_token})});
+    if(!refreshedResponse.ok)throw new Error('DIRECT_GRANT_REFRESH_REFUSED');
+    const refreshedGrant=grantSchema.parse(await refreshedResponse.json());
+    assert(await authenticationTime(refreshedGrant)===initialAuthTime,'Le renouvellement ne rajeunit pas la preuve d’authentification');
+    const nextLoginStarted=Math.floor(Date.now()/1000),nextGrant=await passwordGrant('operator@example.invalid',operatorPassword);
+    const nextAuthTime=await authenticationTime(nextGrant);
+    assert(nextAuthTime>initialAuthTime&&nextAuthTime>=nextLoginStarted&&nextAuthTime<=Math.floor(Date.now()/1000),
+      'Une nouvelle validation du mot de passe produit une nouvelle preuve récente');
     const config={origin,apiBaseURL:apiOrigin,issuer,clientId:'drivy-web-e2e',clientSecret,development:true,host:'127.0.0.1',port:3002};
     const invitationMail:InvitationMailConfig={webURL:`${origin}/app/invitation`,encryptionKey:randomBytes(32).toString('hex'),host:'127.0.0.1',port:1025,
       secure:false,requireTLS:false,from:'school@drivy.example.invalid'};
@@ -142,6 +196,13 @@ async function main() {
     stage='navigateur Chromium';browser=await chromium.launch({headless:true});
     const operatorContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
     let consumerContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
+    async function accessTokenFor(context=consumerContext) {
+      const identityResponse=await context.request.get(`${origin}/app/bff/me`);
+      if(!identityResponse.ok())throw new Error('PERSONAL_SESSION_IDENTITY_UNAVAILABLE');
+      const cookie=(await context.cookies(origin)).find(item=>item.name==='drivy-dev-session');
+      const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
+      if(!token)throw new Error('PERSONAL_SESSION_IDENTITY_UNAVAILABLE');return token;
+    }
     for(const context of [operatorContext,consumerContext])await context.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const operatorPage=await operatorContext.newPage();operatorPage.setDefaultTimeout(20_000);
     stage='connexion opérateur par le formulaire';await operatorPage.goto(`${origin}/app/operateur`);
@@ -159,7 +220,7 @@ async function main() {
     const registration=await fetch(`${issuer}/protocol/openid-connect/registrations?client_id=drivy-web-e2e&response_type=code&scope=openid&redirect_uri=${encodeURIComponent(`${origin}/app/bff/callback`)}`);
     assert(!(await registration.text()).includes('name="password-confirm"'),'Le fournisseur ne propose plus de formulaire d’inscription libre');
     stage='visite du lien et création du compte avec son code';await page.goto(openingLink);
-    await page.getByRole('heading',{name:'Ouvrir votre école',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Créer votre compte',exact:true}).waitFor();
     assert(new URL(page.url()).hash==='','Le secret du lien est retiré avant la connexion');
     await register(page,{firstName:'Responsable',lastName:'Synthétique',email:'school@example.invalid',password:consumerPassword});
     await page.getByLabel('Nom de l’auto-école',{exact:true}).waitFor();
@@ -167,8 +228,13 @@ async function main() {
     const openedSession=await consumerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true)}).safeParse(await openedSession.json()).success,'Le compte créé avec le code est aussitôt connecté');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.person')).rows[0].n===0,'Le nouveau compte OIDC n’est pas créé dans la base métier avant confirmation');
-    stage='création volontaire et perte de réponse navigateur';await page.getByLabel('Votre nom',{exact:true}).fill('Responsable de recette synthétique');
-    await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');await page.getByLabel('E-mail professionnel',{exact:true}).fill('school@example.invalid');
+    assert(await page.getByLabel('Nom affiché',{exact:true}).inputValue()==='Responsable Synthétique'
+      &&await page.getByLabel('E-mail de l’école',{exact:true}).inputValue()==='school@example.invalid',
+      'L’ouverture reprend le nom et l’adresse du compte sans nouvelle saisie');
+    assert(!(await page.getByLabel('Je donne aussi des leçons',{exact:true}).isChecked()),
+      'Le rôle moniteur reste un choix explicite à l’ouverture de l’école');
+    stage='création volontaire et perte de réponse navigateur';
+    await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');
     assert(await page.getByLabel('Nom de l’auto-école',{exact:true}).evaluate(element=>element.getBoundingClientRect().height>=40),
       'Les champs d’ouverture conservent une cible d’au moins 40 pixels sur ordinateur');
     await page.setViewportSize({width:390,height:844});
@@ -189,14 +255,14 @@ async function main() {
     stage='création volontaire et perte de réponse navigateur';
     await page.route('**/app/bff/opening/create',async route=>{await route.fetch();await route.abort('failed');},{times:1});
     await page.getByRole('button',{name:'Créer mon école',exact:true}).click();
-    await page.getByRole('heading',{name:'Votre école est créée',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
     const school=(await administration.query('SELECT id,status FROM drivy.school')).rows[0];assert(!!school && school.status==='DRAFT','La création confirmée est retrouvée après une réponse navigateur perdue');
     const membership=(await administration.query('SELECT roles,grants FROM drivy.membership WHERE school_id=$1',[school.id])).rows[0];
     assert(membership.roles.join(',')==='ADMIN,INSTRUCTOR' && membership.grants.join(',')==='CONFIGURE_CATALOG','L’administrateur et le rôle moniteur choisi sont durables');
-    await page.getByRole('link',{name:'Continuer la préparation',exact:true}).click();
-    await page.getByRole('heading',{name:'Votre école',exact:true}).waitFor();
-    stage='première sauvegarde du guide';await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
-    await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
+    assert(new URL(page.url()).pathname===`/app/gestion/${school.id}/apercu`
+      &&await page.getByRole('link',{name:'Continuer la préparation',exact:true}).count()===0,
+      'La création confirmée enchaîne sur la confidentialité sans écran intermédiaire ni formulaire d’identité répété');
+    stage='première sauvegarde du guide';
     const notice='Recette synthétique uniquement. Les leçons et observations partagées sont visibles par l’élève ; les notes privées restent privées. Aucun compte réel.';
     const retention='Texte de recette synthétique uniquement. Les données de cette base éphémère sont supprimées à la fin du test.';
     await page.getByLabel('Information des personnes',{exact:true}).fill(notice);await page.getByLabel('Conservation des données',{exact:true}).fill(retention);
@@ -394,7 +460,7 @@ async function main() {
     await staffContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const staffPage=await staffContext.newPage();await staffPage.goto(invitationURL);
     stage='création du compte moniteur avec le lien reçu';
-    await staffPage.getByRole('heading',{name:'Rejoindre votre école',exact:true}).waitFor();
+    await staffPage.getByRole('heading',{name:'Créer votre compte',exact:true}).waitFor();
     const otherAddress=await submitRegistration(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'someone-else@example.invalid',password:syntheticSecret()});
     assert(otherAddress.includes('l’adresse à laquelle'),'Le lien d’invitation ne crée pas de compte à une autre adresse');
     await register(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'instructor@example.invalid',password:syntheticSecret()});
@@ -408,19 +474,51 @@ async function main() {
     const staffMe=await staffContext.request.get(`${origin}/app/bff/me`);
     const staffMember=z.object({data:z.object({memberships:z.array(z.object({schoolId:z.string(),roles:z.array(z.string())}))})}).parse(await staffMe.json());
     assert(staffMe.ok()&&staffMember.data.memberships.length===1&&staffMember.data.memberships[0]!.schoolId===school.id&&JSON.stringify(staffMember.data.memberships[0]!.roles)==='["INSTRUCTOR"]','Le compte invité rejoint une seule école avec le seul rôle moniteur');
+    assert((await administration.query(`SELECT count(*)::int AS n FROM drivy.learner_profile l JOIN drivy.membership m
+      ON m.school_id=l.school_id AND m.person_id=l.person_id WHERE m.school_id=$1 AND m.invitation_email=$2`,[school.id,'instructor@example.invalid'])).rows[0].n===0,
+      'Rejoindre comme moniteur ne crée aucun dossier élève ni demande de noms scolaires');
+    await verifyPersonalWelcome({apiOrigin,schoolId:school.id,kind:'STAFF',getAccessToken:()=>accessTokenFor(staffContext),assert,setStage:value=>{stage=value;}});
     await staffPage.reload();await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
     await staffPage.screenshot({path:resolve(artifactDirectory,'06-equipe-invitation-acceptee-synthetic.png'),fullPage:true});await staffContext.close();
-    await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,realmName,administration,
+    await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,administration,
       ownMail,mailLink,deliverInvitation:()=>deliverOneInvitation(mailer!,invitationMail),
-      getAccessToken:async()=>{
-        const identityResponse=await consumerContext.request.get(`${origin}/app/bff/me`);
-        if(!identityResponse.ok())throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');
-        const cookie=(await consumerContext.cookies(origin)).find(item=>item.name==='drivy-dev-session');
-        const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
-        if(!token)throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');return token;
-      },assert,setStage:value=>{stage=value;},artifactDirectory});
+      getAccessToken:accessTokenFor,assert,setStage:value=>{stage=value;},artifactDirectory});
     // Formations et tarifs après une première leçon réelle : l'inscription et la réservation existantes doivent rester intactes.
     await verifySchoolFormations({page,consumerContext,schoolId:school.id,origin,administration,artifactDirectory,assert,setStage:value=>{stage=value;}});
+    await verifySchoolCodeEntry({browser,origin,apiOrigin,keycloakOrigin,schoolId:school.id,administration,getAccessToken:accessTokenFor,
+      existingEmail:'school@example.invalid',existingPassword:consumerPassword,assert,setStage:value=>{stage=value;},artifactDirectory});
+    stage='confirmation d’identité du même compte avant le réglage GPS';
+    const sessionProof=z.object({authenticated:z.literal(true),csrfToken:z.string(),reauthenticationRequired:z.boolean()});
+    const beforeReauth=sessionProof.parse(await (await consumerContext.request.get(`${origin}/app/bff/session`)).json());
+    const beforeCookie=(await consumerContext.cookies(origin)).find(item=>item.name==='drivy-dev-session')?.value;
+    const beforeSubject=sessionStore.get(beforeCookie)?.tokens?.principal.subject;
+    const refusedReauth=await consumerContext.request.post(`${origin}/app/bff/reauthenticate`,{
+      headers:{Origin:origin,'X-CSRF-Token':beforeReauth.csrfToken},data:{email:'school@example.invalid',password:syntheticSecret()}});
+    assert(refusedReauth.status()===401&&sessionStore.get(beforeCookie)?.tokens?.principal.subject===beforeSubject,
+      'Un mauvais mot de passe de confirmation conserve le compte et sa session');
+    const wrongAccount=await consumerContext.request.post(`${origin}/app/bff/reauthenticate`,{
+      headers:{Origin:origin,'X-CSRF-Token':beforeReauth.csrfToken},data:{email:'operator@example.invalid',password:operatorPassword}});
+    assert(wrongAccount.status()===409&&sessionStore.get(beforeCookie)?.tokens?.principal.subject===beforeSubject,
+      'La confirmation refuse un autre compte sans remplacer la session scolaire');
+    const freshReauth=await consumerContext.request.post(`${origin}/app/bff/reauthenticate`,{
+      headers:{Origin:origin,'X-CSRF-Token':beforeReauth.csrfToken},data:{email:'school@example.invalid',password:consumerPassword}});
+    const afterReauth=sessionProof.parse(await (await consumerContext.request.get(`${origin}/app/bff/session`)).json());
+    const afterCookie=(await consumerContext.cookies(origin)).find(item=>item.name==='drivy-dev-session')?.value;
+    assert(freshReauth.ok()&&!afterReauth.reauthenticationRequired&&afterCookie!==beforeCookie
+      &&afterReauth.csrfToken!==beforeReauth.csrfToken&&sessionStore.get(afterCookie)?.tokens?.principal.subject===beforeSubject,
+      'La confirmation réelle renouvelle la preuve, le cookie et le CSRF en conservant le même compte');
+    assert((await administration.query('SELECT modules FROM drivy.school WHERE id=$1',[school.id])).rows[0].modules.gpsEnabled===false,
+      'Confirmer son identité ne modifie pas le réglage GPS');
+    stage='activation GPS explicite avec authentification récente signée';
+    await page.goto(`${origin}/app/gestion/${school.id}/confidentialite?focus=gps-module`);
+    const gpsSection=page.getByRole('region',{name:'Trajets GPS',exact:true});
+    await gpsSection.getByRole('button',{name:'Activer les trajets GPS',exact:true}).click();
+    const gpsReview=page.getByRole('dialog',{name:'Activer les trajets GPS',exact:true});
+    await gpsReview.getByRole('button',{name:'Activer',exact:true}).click();await gpsReview.waitFor({state:'hidden'});
+    await gpsSection.getByRole('button',{name:'Désactiver les trajets GPS',exact:true}).waitFor();
+    assert((await administration.query('SELECT modules FROM drivy.school WHERE id=$1',[school.id])).rows[0].modules.gpsEnabled===true,
+      'Le réglage GPS est accepté et durable après confirmation explicite avec la preuve récente');
+    await page.screenshot({path:resolve(artifactDirectory,'13-gps-enabled-synthetic.png'),fullPage:true});
     await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
       scope:'Chromium desktop et viewport mobile, Keycloak réel à inscription fermée, création de compte par code et par lien d’invitation SMTP, connexion par formulaire, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);

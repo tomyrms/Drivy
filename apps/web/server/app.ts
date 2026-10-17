@@ -4,9 +4,9 @@ import cookie from '@fastify/cookie';
 import staticFiles from '@fastify/static';
 import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
-import { IdentityUnavailable, InvalidCredentials, type IdentityProvider } from './oidc.js';
+import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { RateLimiter } from './rate-limit.js';
-import { SessionStore, matchesSecret, type Session } from './session.js';
+import { SessionStore, matchesSecret, type Session, type Tokens } from './session.js';
 import { createAnonymousGateway, createGateway, createSchoolGateway, createOpeningGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
@@ -15,8 +15,11 @@ class WebError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
 }
 const empty = z.object({}).strict();
+const profileIdentityName = z.string().min(1).refine(value => [...value].length <= 150);
 const previewSchema = z.object({ data: z.object({ invitationId: z.uuid(), schoolId: z.uuid(), schoolName: z.string(),
-  roles: z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1), maskedEmail: z.string(), expiresAt: z.iso.datetime({offset:true}),
+  roles: z.array(z.enum(['ADMIN','INSTRUCTOR','LEARNER'])).min(1), maskedEmail: z.string().nullable(), expiresAt: z.iso.datetime({offset:true}),
+  delivery: z.enum(['EMAIL','CODE']).optional(),
+  profileIdentity: z.object({ firstName: profileIdentityName, lastName: profileIdentityName }).optional(),
   notice: z.object({version: z.number().int(), noticeText:z.string(),retentionText:z.string(),contactEmail:z.string()}) }) });
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 /** Only a management page of this origin can be a post-login destination. */
@@ -47,6 +50,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
+  const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
   const sessionMinutes = { idle: config.sessionIdleMinutes ?? 480, max: config.sessionMaxMinutes ?? 720 };
   const store = options.store ?? new SessionStore(now,10_000,{ idleMs: sessionMinutes.idle * 60_000, maxMs: sessionMinutes.max * 60_000 });
   // Only the two anonymous entry points (login, invitation link) can create a session: a bounded number per address.
@@ -174,7 +178,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (session.tokens) await accessToken(session);
     const user = session.tokens?.principal;
     return { authenticated:!!user, csrfToken:session.csrf, invitationPending:!!session.invitation && !session.invitation.accepted,
-      ...(user ? {user:{displayName:user.displayName,emailVerified:user.emailVerified,...(user.email ? {email:user.email} : {})}} : {}) };
+      ...(user ? {reauthenticationRequired:!recentAuthentication(user,now(),reauthMaxAge),
+        user:{displayName:user.displayName,emailVerified:user.emailVerified,...(user.email ? {email:user.email} : {})}} : {}) };
   });
   app.post('/app/bff/login',async (request,reply) => {
     const admitted = admit(request); const body = loginBody.parse(request.body);
@@ -182,9 +187,17 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     const reauthenticate = body.reauthenticate === true || request.cookies[reloginName] === '1';
     const result = await identity.begin(reauthenticate ? { reauthenticate: true } : undefined);
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
-    session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}) };
+    session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}),
+      ...(body.reauthenticate && session.tokens ? { reauthenticationSubject: session.tokens.principal.subject } : {}) };
     return {url:result.url};
   });
+  const rotateSession = (session: Session, tokens: Tokens) => {
+    if (session.tokens && session.tokens.principal.subject !== tokens.principal.subject && session.invitation) {
+      if (session.invitation.accepting || (session.invitation.submitted && !session.invitation.accepted)) throw new WebError(409,'INVITATION_IN_PROGRESS');
+      delete session.invitation.confirmation;
+    }
+    return store.rotate(session,tokens);
+  };
   /** Sign-in by the form of this origin. The session (and an opening code typed before) carries over to the signed-in session. */
   const passwordSignIn = async (reply: FastifyReply, session: Session, email: string, password: string): Promise<Session> => {
     let tokens;
@@ -195,7 +208,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       throw error;
     }
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
-    const next = store.rotate(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
+    const next = rotateSession(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
     return next;
   };
   const keepOpening = (session: Session, code: string) => {
@@ -203,10 +216,53 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (session.opening?.busy || (session.opening?.submitted && !session.opening.result)) throw new WebError(409,'OPENING_IN_PROGRESS');
     session.opening = { token: code, operationId: randomUUID() };
   };
+  const keepInvitation = (session: Session, token: string, delivery: 'EMAIL' | 'CODE') => {
+    const pending = session.invitation;
+    if (pending && (pending.token !== token || (pending.delivery ?? 'EMAIL') !== delivery) && (pending.accepting || (pending.submitted && !pending.accepted)))
+      throw new WebError(409,'INVITATION_IN_PROGRESS');
+    store.setInvitation(session,token,delivery);
+  };
+  const invitationPreview = async (session: Session) => {
+    const invitation = session.invitation!;
+    const byCode = invitation.delivery === 'CODE';
+    const result = await callApi(session,byCode?'/v1/invitations/code/preview':'/v1/invitations/preview',byCode?{code:invitation.token}:{token:invitation.token});
+    if (result.status >= 400) return result;
+    // Delivery is decided by the server-owned intention, never by a browser-supplied flag.
+    const parsed = previewSchema.parse({data:{...z.object({data:z.record(z.string(),z.unknown())}).parse(result.body).data,
+      delivery:byCode?'CODE':'EMAIL',...(byCode?{maskedEmail:null}:{})}});
+    return { ...result, body: parsed };
+  };
   app.post('/app/bff/password-login',async (request,reply) => {
     const admitted = admit(request); const body = z.object(credentials).strict().parse(request.body);
     await passwordSignIn(reply,open(reply,admitted),body.email,body.password);
     return {ok:true};
+  });
+  /** Confirm this session's account in Drivy, without changing the selected school or a reviewed command. */
+  app.post('/app/bff/reauthenticate',async (request,reply) => {
+    const session = protect(request);
+    if (!session.tokens) throw new WebError(401,'SESSION_EXPIRED');
+    if (!entryLimiter.allow(request.ip)) throw new WebError(429,'RATE_LIMITED');
+    const body = z.object(credentials).strict().parse(request.body);
+    if (session.reauthenticating) throw new WebError(409,'REAUTH_IN_PROGRESS');
+    session.reauthenticating = true;
+    let candidate: Tokens | undefined, accepted = false;
+    try {
+      try { candidate = await identity.password(body.email,body.password); }
+      catch (error) {
+        if (error instanceof InvalidCredentials) throw new WebError(401,'INVALID_CREDENTIALS');
+        if (error instanceof IdentityUnavailable) throw new WebError(503,'SERVICE_UNAVAILABLE');
+        throw error;
+      }
+      if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
+      if (candidate.principal.subject !== session.tokens.principal.subject) throw new WebError(409,'REAUTH_ACCOUNT_MISMATCH');
+      if (!recentAuthentication(candidate.principal,now(),reauthMaxAge)) throw new WebError(503,'REAUTH_PROOF_UNAVAILABLE');
+      const next = rotateSession(session,candidate); accepted = true;
+      setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
+      return {ok:true};
+    } finally {
+      delete session.reauthenticating;
+      if (candidate && !accepted) { try { await identity.revoke(candidate); } catch { /* No credentials or provider details leave this boundary. */ } }
+    }
   });
   /** « J'ai un code » : what the code opens. An opening code is kept in the session for the school form after sign-in. */
   app.post('/app/bff/access-code',async (request,reply) => {
@@ -215,6 +271,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (result.status >= 400) return sendApi(reply,result);
     const parsed = codeKind.parse(result.body).data;
     if (parsed.kind === 'SCHOOL_OPENING') keepOpening(open(reply,admitted),code);
+    else keepInvitation(open(reply,admitted),code,'CODE');
     return { kind: parsed.kind, ...(parsed.schoolName ? { schoolName: parsed.schoolName } : {}), expiresAt: parsed.expiresAt };
   });
   /** Account creation is only possible with a valid code; the person is then signed in with the password just chosen. */
@@ -225,11 +282,14 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     // Without a typed code, the invitation link opened in this browser names the invitation (it never leaves the server).
     const code = body.code ?? admitted?.invitation?.token;
     if (!code) throw new WebError(400,'INVALID_REQUEST');
+    const pending = admitted?.invitation;
+    if (pending && pending.token !== code && (pending.accepting || (pending.submitted && !pending.accepted))) throw new WebError(409,'INVITATION_IN_PROGRESS');
     const result = await anonymousGateway('/v1/accounts',{ ...body, code },request.ip);
     if (result.status >= 400) return sendApi(reply,result);
     const { kind } = z.object({ data: z.object({ kind: z.enum(['LEARNER_INVITATION','SCHOOL_OPENING','EMAIL_INVITATION']) }) }).parse(result.body).data;
     const session = await passwordSignIn(reply,open(reply,admitted),body.email,body.password);
     if (kind === 'SCHOOL_OPENING') keepOpening(session,code);
+    else keepInvitation(session,code,kind==='LEARNER_INVITATION'?'CODE':'EMAIL');
     return { kind };
   });
   app.get('/app/bff/callback',async (request,reply) => {
@@ -246,12 +306,17 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     delete session.login;
     try {
       const tokens = await identity.complete(url,transaction);
-      const next = store.rotate(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
+      if (transaction.reauthenticationSubject && (tokens.principal.subject !== transaction.reauthenticationSubject || !recentAuthentication(tokens.principal,now(),reauthMaxAge))) {
+        try { await identity.revoke(tokens); } catch { /* Keep the original session; never expose provider details. */ }
+        return reply.redirect('/app?auth=failed');
+      }
+      const next = rotateSession(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
       return reply.redirect(transaction.returnTo==='/app/ouvrir' || transaction.returnTo==='/app/operateur' ? transaction.returnTo : next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
     } catch { return reply.redirect('/app?auth=failed'); }
   });
   app.post('/app/bff/logout',async (request,reply) => {
     const session = protect(request); empty.parse(request.body); const tokens = session.tokens;
+    if (session.invitation?.accepting || (session.invitation?.submitted && !session.invitation.accepted)) throw new WebError(409,'INVITATION_IN_PROGRESS');
     store.destroy(session); reply.clearCookie(cookieName,cookieBase);
     reply.setCookie(reloginName,'1',{ ...cookieBase, maxAge: 30 * 24 * 3600 });
     if (tokens) { try { await identity.revoke(tokens); } catch { /* Local session already destroyed; no token exposed. */ } }
@@ -261,11 +326,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     const admitted = admit(request);
     const {token} = z.object({token:z.string().min(32).max(256).regex(/^[A-Za-z0-9_-]+$/)}).strict().parse(request.body);
     const session = open(reply,admitted);
-    const pending=session.invitation;
-    if (pending && pending.token!==token && (pending.accepting || (pending.submitted && !pending.accepted))) {
-      throw new WebError(409,'INVITATION_IN_PROGRESS');
-    }
-    store.setInvitation(session,token); return {ok:true};
+    keepInvitation(session,token,'EMAIL'); return {ok:true};
   });
   app.post('/app/bff/invitation/clear',async request => {
     const session = protect(request); empty.parse(request.body);
@@ -277,12 +338,17 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     const session = protect(request); empty.parse(request.body); const invitation = session.invitation;
     if (!invitation) throw new WebError(404,'INVITATION_NOT_FOUND');
     if (invitation.accepting) throw new WebError(409,'INVITATION_IN_PROGRESS');
-    const result = await callApi(session,'/v1/invitations/preview',{token:invitation.token});
+    // A consumed code no longer previews upstream. Recover the exact submitted intention;
+    // only the API's idempotent acceptance response can settle its result.
+    if (invitation.submitted && !invitation.accepted && invitation.confirmation) return {
+      ...previewSchema.parse({data:invitation.confirmation.data}),confirmation:invitation.confirmation.id,uncertain:true,
+    };
+    const result = await invitationPreview(session);
     if (result.status >= 400) return sendApi(reply,result);
     if (session.invitation !== invitation) throw new WebError(409,'INVITATION_PREVIEW_CHANGED');
     const parsed = previewSchema.parse(result.body);
     const id = randomBytes(32).toString('base64url');
-    invitation.confirmation = {id,invitationId:parsed.data.invitationId,digest:digest(parsed.data)};
+    invitation.confirmation = {id,invitationId:parsed.data.invitationId,digest:digest(parsed.data),data:parsed.data};
     return {...parsed,confirmation:id};
   });
   app.post('/app/bff/invitation/accept',async (request,reply) => {
@@ -296,7 +362,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     try {
       // The displayed notice and role must still match. A second tab cannot silently change the target.
       if (!invitation.submitted) {
-        const preview = await callApi(session,'/v1/invitations/preview',{token:invitation.token});
+        const preview = await invitationPreview(session);
         if (preview.status >= 400) return sendApi(reply,preview);
         if (digest(previewSchema.parse(preview.body).data) !== confirmation.digest || session.invitation !== invitation) {
           throw new WebError(409,'INVITATION_PREVIEW_CHANGED');
@@ -305,7 +371,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       // Keep the same intention even when an API commit loses its HTTP response.
       invitation.submitted = true;
       let result: ApiResult;
-      try { result = await callApi(session,'/v1/invitations/accept',{operationId:invitation.operationId,token:invitation.token}); }
+      try { result = await callApi(session,invitation.delivery==='CODE'?'/v1/invitations/code/accept':'/v1/invitations/accept',
+        {operationId:invitation.operationId,...(invitation.delivery==='CODE'?{code:invitation.token}:{token:invitation.token})}); }
       catch (error) { invitation.uncertain = true; throw error; }
       if (result.status >= 200 && result.status < 300) invitation.accepted = true;
       else if (result.status >= 500) invitation.uncertain = true;

@@ -7,6 +7,20 @@ struct SchoolJoinNotice: Codable, Equatable, Sendable {
     let retentionText: String
     let contactEmail: String
 }
+/// Noms structurés du compte relus par le serveur pour cet aperçu authentifié.
+/// Ils ne sont ni déduits du nom public, ni repris du dossier d’une autre école.
+struct SchoolJoinProfileIdentity: Codable, Equatable, Sendable {
+    let firstName: String
+    let lastName: String
+
+    var fullName: String { "\(firstName) \(lastName)" }
+    var isValid: Bool {
+        [firstName, lastName].allSatisfy {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.unicodeScalars.count <= 150
+                && !$0.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        }
+    }
+}
 struct SchoolJoinPreview: Codable, Equatable, Sendable {
     let invitationId: UUID
     let schoolId: UUID
@@ -15,6 +29,7 @@ struct SchoolJoinPreview: Codable, Equatable, Sendable {
     let maskedEmail: String
     let expiresAt: String
     let notice: SchoolJoinNotice
+    var profileIdentity: SchoolJoinProfileIdentity? = nil
 }
 struct SchoolJoinPrincipal: Codable, Equatable, Sendable {
     let apiBaseURL: String
@@ -29,13 +44,14 @@ struct SchoolJoinBody: Codable, Equatable, Sendable {
     let operationId: UUID
     let token: String
 }
-/// What a learner sees before joining with a code: no address, no notice, only the school.
+/// Aperçu authentifié avant de rejoindre avec un code : école, rôles et identité du compte si connue.
 struct SchoolCodePreview: Codable, Equatable, Sendable {
     let schoolName: String
     let roles: [String]
     let trainingCategoryCode: String?
     let expiresAt: String
     var trainingCategoryCodes: [String]? = nil
+    var profileIdentity: SchoolJoinProfileIdentity? = nil
 
     var categories: [String] { trainingCategoryCodes ?? trainingCategoryCode.map { [$0] } ?? [] }
 
@@ -45,6 +61,7 @@ struct SchoolCodePreview: Codable, Equatable, Sendable {
             && roles == ["LEARNER"]
             && (trainingCategoryCode.map { !$0.isEmpty && $0.unicodeScalars.count <= 20 } ?? true)
             && categories.count <= 16 && categories.allSatisfy({ !$0.isEmpty && $0.unicodeScalars.count <= 20 })
+            && (profileIdentity?.isValid ?? true)
             && SchoolLesson.date(expiresAt) != nil
     }
 }
@@ -167,7 +184,8 @@ enum SchoolJoinFailure: Error, LocalizedError, Equatable {
               !value.notice.retentionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               value.notice.noticeText.unicodeScalars.count <= 20_000, value.notice.retentionText.unicodeScalars.count <= 20_000,
               !value.notice.contactEmail.isEmpty, !value.roles.isEmpty, Set(value.roles).count == value.roles.count,
-              value.roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) }) else { throw SchoolJoinFailure.invalidResponse }
+              value.roles.allSatisfy({ ["ADMIN", "INSTRUCTOR", "LEARNER"].contains($0) }),
+              value.profileIdentity.map({ value.roles.contains("LEARNER") && $0.isValid }) ?? true else { throw SchoolJoinFailure.invalidResponse }
         return value
     }
     func accept(_ record: SchoolJoinRecord) async throws -> SchoolJoinAnswer {

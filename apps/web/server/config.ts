@@ -7,6 +7,7 @@ export type WebConfig = {
   trustProxy?: boolean;
   /** Signed-in session: sliding idle time and absolute maximum, in minutes (bounded by the identity provider's refresh). */
   sessionIdleMinutes?: number; sessionMaxMinutes?: number;
+  reauthMaxAgeSeconds?: number;
 };
 
 export function secureURL(value: string, development: boolean): URL {
@@ -26,6 +27,7 @@ export function readConfig(env: NodeJS.ProcessEnv): WebConfig {
     WEB_TRUST_PROXY: z.enum(['true','false']).default('false'),
     WEB_SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(1440).default(480),
     WEB_SESSION_MAX_MINUTES: z.coerce.number().int().min(30).max(1440).default(720),
+    REAUTH_MAX_AGE_SECONDS: z.coerce.number().int().min(30).max(900).default(300),
   }).refine(value => value.WEB_SESSION_IDLE_MINUTES <= value.WEB_SESSION_MAX_MINUTES).parse(env);
   const development = parsed.WEB_DEVELOPMENT === 'true';
   if (development && env.NODE_ENV === 'production') throw new Error('Développement interdit en production.');
@@ -37,5 +39,6 @@ export function readConfig(env: NodeJS.ProcessEnv): WebConfig {
     issuer: secureURL(parsed.OIDC_ISSUER, development).href.replace(/\/$/, ''),
     clientId: parsed.OIDC_WEB_CLIENT_ID, clientSecret: parsed.OIDC_WEB_CLIENT_SECRET, development,
     host: parsed.WEB_HOST, port: parsed.WEB_PORT, trustProxy: parsed.WEB_TRUST_PROXY === 'true',
-    sessionIdleMinutes: parsed.WEB_SESSION_IDLE_MINUTES, sessionMaxMinutes: parsed.WEB_SESSION_MAX_MINUTES };
+    sessionIdleMinutes: parsed.WEB_SESSION_IDLE_MINUTES, sessionMaxMinutes: parsed.WEB_SESSION_MAX_MINUTES,
+    reauthMaxAgeSeconds: parsed.REAUTH_MAX_AGE_SECONDS };
 }

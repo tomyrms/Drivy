@@ -4,17 +4,18 @@ import {resolve} from 'node:path';
 import type {Pool} from 'pg';
 import {z} from 'zod';
 import type {Browser} from '../../infra/dev/browser.js';
+import {verifyPersonalWelcome} from './check-personal-welcome.js';
 
 type BrowserContext=Awaited<ReturnType<Browser['newContext']>>;
 type Page=Awaited<ReturnType<BrowserContext['newPage']>>;
 export interface FirstLessonOptions {
   browser:Browser;page:Page;consumerContext:BrowserContext;schoolId:string;origin:string;apiOrigin:string;
-  keycloakOrigin:string;realmName:string;administration:Pool;artifactDirectory:string;
+  keycloakOrigin:string;administration:Pool;artifactDirectory:string;
   ownMail:(email:string)=>Promise<string>;
   mailLink:(text:string,expectedOrigin:string,path:string)=>string;
   deliverInvitation:()=>Promise<unknown>;
   /** Jeton issu de la connexion réelle, conservé en mémoire : aucun journal ni artefact ne le reçoit. */
-  getAccessToken:()=>Promise<string>;
+  getAccessToken:(context?:BrowserContext)=>Promise<string>;
   assert:(value:unknown,label:string)=>void;
   setStage:(value:string)=>void;
 }
@@ -31,7 +32,7 @@ const readinessSchema=z.object({learnerId:z.uuid(),ready:z.boolean(),blockers:z.
 const slotSchema=z.object({slot:z.object({plannedStart:z.iso.datetime({offset:true}),plannedEnd:z.iso.datetime({offset:true})}).nullable(),timeZone:z.string()});
 
 export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promise<void> {
-  const {browser,page,consumerContext,schoolId,origin,apiOrigin,keycloakOrigin,realmName,administration,artifactDirectory,
+  const {browser,page,consumerContext,schoolId,origin,apiOrigin,keycloakOrigin,administration,artifactDirectory,
     ownMail,mailLink,deliverInvitation,getAccessToken,assert,setStage}=options;
   const schoolPath=`${origin}/app/gestion/${schoolId}`,bff=`${origin}/app/bff/schools/${schoolId}`;
   async function read<T>(path:string,schema:z.ZodType<T>):Promise<T> {
@@ -83,6 +84,7 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   await agenda();await page.getByRole('link',{name:'Inviter votre premier élève',exact:true}).click();
   assert(new URL(page.url()).searchParams.get('audience')==='learners','L’action du planning ouvre les invitations destinées aux élèves');
   const learnerEmail='first-learner@example.invalid';
+  const firstName='Élève Camille',lastName='De la Tour-Roux',fullName=`${firstName} ${lastName}`;
   await page.getByRole('button',{name:'Inviter par e-mail',exact:true}).click();
   await page.getByLabel('Adresse e-mail',{exact:true}).fill(learnerEmail);
   await page.getByRole('button',{name:'Relire l’invitation',exact:true}).click();
@@ -101,33 +103,36 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
     await learnerContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const learnerPage=await learnerContext.newPage();await learnerPage.goto(invitationURL);
     // Le lien reçu par e-mail ouvre la création du compte, à l'adresse invitée seulement ; l'inscription libre du fournisseur est fermée.
-    await learnerPage.getByRole('heading',{name:'Rejoindre votre école',exact:true}).waitFor();
-    await learnerPage.getByLabel('Prénom',{exact:true}).fill('Élève');await learnerPage.getByLabel('Nom',{exact:true}).fill('Synthétique');
+    await learnerPage.getByRole('heading',{name:'Créer votre compte',exact:true}).waitFor();
+    await learnerPage.getByLabel('Prénom',{exact:true}).fill(firstName);await learnerPage.getByLabel('Nom',{exact:true}).fill(lastName);
     await learnerPage.getByLabel('E-mail',{exact:true}).fill(learnerEmail);await learnerPage.getByLabel('Mot de passe',{exact:true}).fill(randomBytes(36).toString('base64url'));
     await learnerPage.getByRole('button',{name:'Créer mon compte',exact:true}).click();
     await learnerPage.getByRole('heading',{name:school.name,exact:true}).waitFor();
     const session=await learnerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await session.json()).success,
       'Le lien reçu à son adresse vaut vérification : le premier élève peut accepter le rattachement');
+    assert(await learnerPage.locator('.invitation-facts').getByText(fullName,{exact:true}).isVisible(),
+      'L’acceptation présente à l’élève son identité exacte et l’école destinataire avant de créer son dossier');
     await learnerPage.getByRole('checkbox').check();await learnerPage.getByRole('button',{name:'Rejoindre cette école',exact:true}).click();
     await learnerPage.getByText(`Vous avez rejoint ${school.name}`,{exact:true}).waitFor();
+    await verifyPersonalWelcome({apiOrigin,schoolId,kind:'STUDENT',getAccessToken:()=>getAccessToken(learnerContext),assert,setStage});
   } finally {await learnerContext.close();}
 
-  setStage('première leçon : compléter le bon dossier puis ouvrir sa formation');
+  setStage('première leçon : retrouver les informations du compte sans seconde saisie');
   const learner=(await read('learners',learnersSchema)).items.find(item=>item.contactEmail===learnerEmail);
   if(!learner)throw new Error('FIRST_LESSON_LEARNER_MISSING');
-  const profileAction=await read('setup-draft/next-actions',nextSchema);
-  assert(profileAction.actions[0]?.code==='PROFILE_ACTION_REQUIRED'&&profileAction.actions[0]?.query?.selection===learner.id,
-    'Après acceptation, le guide désigne les informations réellement manquantes du bon élève');
-  await agenda();await page.getByRole('link',{name:'Compléter le dossier de l’élève',exact:true}).click();
-  assert(new URL(page.url()).searchParams.get('selection')===learner.id,'Le lien de préparation sélectionne le dossier de l’élève accepté');
-  const profile=page.locator('.profile-completion');
-  await profile.getByLabel('Prénom',{exact:true}).fill('Élève');await profile.getByLabel('Nom',{exact:true}).fill('Première leçon');
-  await profile.getByRole('button',{name:'Enregistrer le profil',exact:true}).click();await profile.waitFor({state:'hidden'});
+  const profile=await read(`learners/${learner.id}/administrative-profile`,z.object({id:z.uuid(),firstName:z.string().nullable(),lastName:z.string().nullable(),contactEmail:z.string().nullable()}));
+  assert(profile.firstName===firstName&&profile.lastName===lastName&&profile.contactEmail===learnerEmail&&learner.displayName===fullName,
+    'Le dossier et la liste reprennent les noms composés exacts du compte, sans les découper ni les ressaisir');
+  const profileWrites=(await administration.query("SELECT count(*)::int AS n FROM drivy.operation WHERE school_id=$1 AND resource_id=$2 AND command_type='UPDATE_ADMINISTRATIVE_PROFILE'",[schoolId,profile.id])).rows[0];
+  assert(profileWrites.n===0,'L’acceptation suffit à enregistrer les noms : aucune seconde commande de profil n’est émise');
   const withoutTraining=await read('setup-draft/next-actions',nextSchema);
-  assert(withoutTraining.actions[0]?.code==='TRAINING_NOT_ACTIVE'&&withoutTraining.actions[0]?.query?.selection===learner.id,
-    'Le dossier complété conduit à l’ouverture de sa formation, sans annoncer une leçon prête');
+  assert(withoutTraining.actions[0]?.code==='TRAINING_NOT_ACTIVE'&&withoutTraining.actions[0]?.query?.selection===learner.id
+    &&!withoutTraining.actions.some(action=>action.code==='PROFILE_ACTION_REQUIRED'),
+    'Après acceptation, le guide propose directement la formation du bon élève et ne redemande pas ses noms');
   await agenda();await page.getByRole('link',{name:'Ouvrir la formation de l’élève',exact:true}).click();
+  assert(new URL(page.url()).searchParams.get('selection')===learner.id&&await page.locator('.profile-completion').count()===0,
+    'Le guide ouvre le dossier accepté sans intercaler un formulaire de noms déjà connus');
   await page.getByText('Ouvrir une formation',{exact:true}).click();
   await page.getByLabel('Nouvelle formation',{exact:true}).click();
   await page.getByRole('option',{name:'Permis B',exact:true}).click();

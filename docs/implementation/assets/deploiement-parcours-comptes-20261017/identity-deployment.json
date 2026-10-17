@@ -1,0 +1,18 @@
+{
+  "commit": "9d6731ec2f710d612d78b9faa77457b6ea5e1e50",
+  "attempt": "20261017T144445Z-a4d5122b9d3f",
+  "stage": "completed",
+  "deploymentSucceeded": true,
+  "rollbackStatus": "not_required",
+  "databaseRestorePerformed": false,
+  "statePath": "/root/drivy-identity-auth-time-9d6731ec2f710d612d78b9faa77457b6ea5e1e50-20261017T144445Z-a4d5122b9d3f.json",
+  "backupVerified": true,
+  "apiWebPreserved": true,
+  "adminLogoutConfirmed": true,
+  "jarSHA256": "d7cb34188254e5a715857e38bb61d2730775c1c841806b10520dfc81d9e9dbce",
+  "finalBinding": "drivy-direct-grant",
+  "backupPaths": [
+    "/root/drivy_identity-before-identity-9d6731ec2f710d612d78b9faa77457b6ea5e1e50-20261017T144445Z-a4d5122b9d3f.dump",
+    "/root/drivy_refonte-before-identity-9d6731ec2f710d612d78b9faa77457b6ea5e1e50-20261017T144445Z-a4d5122b9d3f.dump"
+  ]
+}

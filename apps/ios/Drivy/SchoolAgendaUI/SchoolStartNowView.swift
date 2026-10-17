@@ -311,6 +311,8 @@ struct SchoolStartNowView: View {
         .sensoryFeedback(.start, trigger: launch.launches)
         .task { await launch.open() }
         .onChange(of: launch.closesSheet) { _, closes in if closes { dismiss() } }
+        .onChange(of: launch.workspace.school?.modules.gpsEnabled) { _, _ in launch.refreshGPSAvailability() }
+        .onChange(of: launch.controller?.canPrepareCapture) { _, _ in launch.refreshGPSAvailability() }
         .onDisappear { launch.sheetClosed() }
     }
 
@@ -367,7 +369,12 @@ struct SchoolStartNowView: View {
                 identity
                 if form.learnerID != nil {
                     fields
-                    if let gps = launch.gps { gpsSection(gps) }
+                    if let reason = launch.gpsUnavailableReason {
+                        SchoolGPSUnavailableNotice(reason: reason, workspace: launch.workspace,
+                            managementURL: AppConfiguration.fromBundle()?.gpsManagementURL(schoolID: form.scope.schoolID))
+                    } else if let gps = launch.gps {
+                        gpsSection(gps)
+                    }
                 }
             }
             .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
@@ -525,13 +532,13 @@ struct SchoolStartNowView: View {
                 .accessibilityIdentifier("start-now-plan-later")
         } else {
             Button { launch.launch() } label: {
-                DrivyBusyLabel(title: "Démarrer maintenant",
+                DrivyBusyLabel(title: launch.startTitle,
                     busyTitle: launch.phase == .requestingPermission ? "Autorisation de localisation…" : "Démarrage…",
                     isBusy: launch.isBusy)
             }
             .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
             // L’accord de l’élève se lit encore : un départ maintenant partirait sans GPS sans l’avoir voulu.
-            .disabled(!form.canStart || launch.phase != .editing || launch.gps?.isReading == true)
+            .disabled(!launch.canLaunch)
             .accessibilityIdentifier("start-now-confirm")
         }
     }

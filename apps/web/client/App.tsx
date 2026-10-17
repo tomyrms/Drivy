@@ -10,6 +10,7 @@ import { CheckField, StatusBadge, Symbol } from './ui';
 import { BrandSymbol } from './BrandSymbol';
 import { AccountMenu } from './preferences';
 import { AccountEntry, type AccessKind } from './account-entry';
+import { accountEntryDestination } from './account-entry-route';
 
 type Preview = { data: InvitationPreview; confirmation: string };
 type Page = 'account' | 'invitation';
@@ -84,6 +85,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       const result = await request('invitation/preview', previewSchema, { csrf: next.csrfToken, body: {} });
       if (current !== generation.current) return;
       setPreview(result);
+      setUncertain(result.uncertain === true);
     }
   }
 
@@ -147,7 +149,10 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
   /** An opening code continues to the school form; otherwise the account page is read again. */
   function signedIn(kind: AccessKind | null) {
-    if (kind === 'SCHOOL_OPENING') { window.location.assign('/app/ouvrir'); return; }
+    setEnteringCode(false);
+    const destination = accountEntryDestination(kind);
+    if (destination === '/app/ouvrir') { window.location.assign(destination); return; }
+    if (destination === '/app/invitation') navigate('invitation');
     setLinkMustReopen(false);
     void perform('Ouverture de votre espace…', refresh);
   }
@@ -159,6 +164,8 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
       if (current !== generation.current) return;
       setMe(null); setPreview(null); setSession(null); setAccepted(null); setReviewed(false);
       if (pageRef.current === 'invitation') setLinkMustReopen(true);
+      setEnteringCode(false);
+      navigate('account');
       await refresh(current);
     });
   }
@@ -180,7 +187,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   async function acceptInvitation() {
     const shown = preview;
     const csrf = session?.csrfToken;
-    if (!shown || !csrf || !reviewed || session?.user?.emailVerified !== true) return;
+    if (!shown || !csrf || !reviewed || (shown.data.delivery !== 'CODE' && session?.user?.emailVerified !== true)) return;
     await perform('Confirmation par votre école…', async current => {
       try {
         const result = await request('invitation/accept', acceptedSchema, {
@@ -209,7 +216,8 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
   const isBusy = busy !== null;
   const personName = me?.displayName || session?.user?.displayName || 'Votre compte';
   const emailVerified = session?.user?.emailVerified === true;
-  const acceptanceHint = !reviewed && emailVerified;
+  const emailVerificationRequired = !!preview && preview.data.delivery !== 'CODE' && !emailVerified;
+  const acceptanceHint = !reviewed && !emailVerificationRequired;
 
   return (
     <div className={`app-shell ${session?.authenticated ? 'account-shell' : 'entry-shell'}`}>
@@ -248,7 +256,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
           <Symbol kind="alert" />
           <div className="notice-body">
             <strong>Reprendre votre invitation</strong>
-            <p>Connectez-vous avec le compte invité, puis rouvrez le lien envoyé par votre école. La déconnexion ferme aussi l’invitation préparée dans ce navigateur.</p>
+            <p>Connectez-vous avec le compte invité, puis reprenez le code ou le lien envoyé par votre école.</p>
           </div>
         </div>}
 
@@ -266,12 +274,11 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
                 <h2 id="identity-title" className="section-title">Compte utilisé</h2>
                 <strong className="row-title">{personName}</strong>
                 {session.user?.email && <span className="row-meta">{session.user.email}</span>}
-                {!emailVerified && <StatusBadge tone="warning" symbol="alert">Adresse à vérifier</StatusBadge>}
+                {emailVerificationRequired && <StatusBadge tone="warning" symbol="alert">Adresse à vérifier</StatusBadge>}
               </div>
-              <button type="button" className="button quiet" onClick={() => void logout()} disabled={isBusy}>Changer de compte</button>
+              <button type="button" className="button quiet" onClick={() => void logout()} disabled={isBusy || uncertain}>Changer de compte</button>
             </div>
-            <p className="caption">Pour changer de compte, déconnectez-vous puis rouvrez votre lien d’invitation une fois connecté.</p>
-            {!emailVerified && <div className="notice warning">
+            {emailVerificationRequired && <div className="notice warning">
               <Symbol kind="alert" />
               <div className="notice-body">
                 <strong>Adresse à vérifier</strong>
@@ -287,9 +294,10 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
               </div>
             </div>
             <dl className="invitation-facts">
+              {preview.data.profileIdentity && <div><dt>Identité du compte</dt><dd>{preview.data.profileIdentity.firstName} {preview.data.profileIdentity.lastName}</dd></div>}
               <div><dt>Votre rôle</dt><dd>{preview.data.roles.map(roleLabel).join(' · ')}</dd></div>
-              <div><dt>Invitation envoyée à</dt><dd>{preview.data.maskedEmail}</dd></div>
-              <div><dt>Lien valable jusqu’au</dt><dd><time dateTime={preview.data.expiresAt}>{formatDate(preview.data.expiresAt)}</time></dd></div>
+              {preview.data.maskedEmail && <div><dt>Invitation envoyée à</dt><dd>{preview.data.maskedEmail}</dd></div>}
+              <div><dt>Invitation valable jusqu’au</dt><dd><time dateTime={preview.data.expiresAt}>{formatDate(preview.data.expiresAt)}</time></dd></div>
             </dl>
             <div className="policy">
               <h3>Vos données dans cette école</h3>
@@ -303,12 +311,12 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
                 label={<>Je confirme rejoindre <strong>{preview.data.schoolName}</strong> avec le compte indiqué ci-dessus.</>} />
               <p className="caption">Ce rattachement ne réserve aucune leçon et n’autorise aucun enregistrement GPS.</p>
               {acceptanceHint && <p className="caption" id="acceptance-hint">Cochez la confirmation pour rejoindre l’école.</p>}
-              {!emailVerified && <p className="caption">Vérifiez d’abord votre adresse pour rejoindre l’école.</p>}
+              {emailVerificationRequired && <p className="caption">Vérifiez d’abord votre adresse pour rejoindre l’école.</p>}
               <div className="button-row">
-                <button type="button" className="button primary" aria-describedby={acceptanceHint ? 'acceptance-hint' : undefined} disabled={isBusy || !reviewed || !emailVerified} onClick={() => void acceptInvitation()}>{uncertain ? 'Vérifier et réessayer' : 'Rejoindre cette école'}</button>
+                <button type="button" className="button primary" aria-describedby={acceptanceHint ? 'acceptance-hint' : undefined} disabled={isBusy || !reviewed || emailVerificationRequired} onClick={() => void acceptInvitation()}>{uncertain ? 'Vérifier et réessayer' : 'Rejoindre cette école'}</button>
                 <button type="button" className="button secondary" disabled={isBusy || uncertain} onClick={() => void clearInvitation()}>Pas maintenant</button>
               </div>
-              <p className="caption">{uncertain ? 'Vérifiez d’abord le résultat de la demande déjà envoyée avant de fermer cette invitation.' : '« Pas maintenant » laisse le lien utilisable jusqu’à son expiration.'}</p>
+              {uncertain && <p className="caption">Vérifiez d’abord le résultat de la demande déjà envoyée avant de fermer cette invitation.</p>}
             </div>
           </section>}
 
@@ -327,6 +335,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
             <Symbol kind="check" />
             <div className="notice-body">
               <strong>Vous avez rejoint {accepted.schoolName}</strong>
+              {!accepted.roles.includes('ADMIN') && <p>Retrouvez votre école dans l’app Drivy en vous connectant avec ce compte.</p>}
             </div>
           </div>}
 
@@ -341,10 +350,14 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
           <section className="section" aria-labelledby="schools-title">
             <div className="section-heading">
               <h2 id="schools-title" className="section-title">{me?.memberships.length === 1 ? 'Une école liée' : `${me?.memberships.length ?? 0} écoles liées`}</h2>
-              <button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>
-                <Symbol kind="refresh" bare />Actualiser
-              </button>
+              <div className="button-row">
+                {!enteringCode && <button className="button secondary" disabled={isBusy} type="button" onClick={() => setEnteringCode(true)}>J’ai un code</button>}
+                <button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>
+                  <Symbol kind="refresh" bare />Actualiser
+                </button>
+              </div>
             </div>
+            {enteringCode && <AccountEntry signedIn onSignedIn={signedIn} onCancel={() => setEnteringCode(false)} />}
             {me && me.memberships.length > 0
               ? <ul className="row-list">{me.memberships.map(member => <li key={member.membershipId}>
                   <Symbol kind="school" />
@@ -352,14 +365,11 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
                   {member.roles.includes('ADMIN') && <a className="button secondary compact" href={`/app/gestion/${member.schoolId}`} aria-label={`Ouvrir l’école ${member.schoolName}`}>Ouvrir l’école</a>}
                 </li>)}</ul>
               : !isBusy && !error
-                ? enteringCode
-                  ? <AccountEntry signedIn onSignedIn={signedIn} />
-                  : <div className="empty-state">
+                ? !enteringCode && <div className="empty-state">
                     <Symbol kind="school" />
                     <div className="row-text">
                       <h3 className="row-title">Votre école n’apparaît pas encore</h3>
                       <p className="row-meta">Saisissez le code reçu, ou ouvrez le lien envoyé par votre école.</p>
-                      <button className="button secondary" type="button" onClick={() => setEnteringCode(true)}>J’ai un code</button>
                     </div>
                   </div>
                 : isBusy
