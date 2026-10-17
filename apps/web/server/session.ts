@@ -5,7 +5,7 @@ export type Principal = { subject: string; displayName: string; email?: string; 
 export type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number; principal: Principal };
 export type LoginTransaction = { state: string; nonce: string; verifier: string; expiresAt: number; returnTo?: string };
 export type InvitationState = {
-  token: string; operationId: string; confirmation?: { id: string; invitationId: string; digest: string };
+  token: string; delivery?: 'EMAIL' | 'CODE'; operationId: string; confirmation?: { id: string; invitationId: string; digest: string; data: unknown };
   accepting?: boolean; submitted?: boolean; uncertain?: boolean; accepted?: boolean;
 };
 export type Session = {
@@ -66,9 +66,9 @@ export class SessionStore {
     if (operatorOpening) next.operatorOpening = operatorOpening;
     return next;
   }
-  setInvitation(session: Session, token: string): void {
-    if (session.invitation?.token === token) return;
-    session.invitation = { token, operationId: randomUUID() };
+  setInvitation(session: Session, token: string, delivery: 'EMAIL' | 'CODE' = 'EMAIL'): void {
+    if (session.invitation?.token === token && (session.invitation.delivery ?? 'EMAIL') === delivery) return;
+    session.invitation = { token, delivery, operationId: randomUUID() };
   }
   destroy(session: Session): void {
     this.sessions.delete(session.id);

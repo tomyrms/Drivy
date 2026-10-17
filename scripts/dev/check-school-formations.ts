@@ -32,7 +32,9 @@ async function run(options:FormationsOptions):Promise<void> {
     (SELECT count(*)::int FROM drivy.offering_version WHERE school_id=$1) AS offerings,(SELECT count(*)::int FROM drivy.curriculum_version WHERE school_id=$1) AS curricula,
     (SELECT count(*)::int FROM drivy.school_policy_version WHERE school_id=$1) AS policies,(SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1) AS products,
     (SELECT count(*)::int FROM drivy.school_data_policy WHERE school_id=$1) AS notices,(SELECT count(*)::int FROM drivy.profile_field_policy WHERE school_id=$1) AS profiles,
-    (SELECT status FROM drivy.school WHERE id=$1) AS status`,[schoolId])).rows[0] as Record<string,number|string>;
+    (SELECT status FROM drivy.school WHERE id=$1) AS status`,[schoolId])).rows[0] as {
+      offerings:number;curricula:number;policies:number;products:number;notices:number;profiles:number;status:string;
+    };
   const existing=(await administration.query(`SELECT t.id AS training,t.offering_id,l.id AS lesson,l.price_cents_snapshot,l.commercial_selection,l.policy_version_id
     FROM drivy.training t JOIN drivy.lesson l ON l.training_id=t.id WHERE t.school_id=$1 AND l.status='PLANNED' ORDER BY l.created_at LIMIT 1`,[schoolId])).rows[0];
   if(!existing)throw new Error('FORMATIONS_FIRST_LESSON_MISSING');

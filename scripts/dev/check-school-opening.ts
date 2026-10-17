@@ -20,6 +20,8 @@ import { SessionStore } from '../../apps/web/server/session.js';
 import { parseMetadata } from '../../apps/web/client/command-core.js';
 import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
 import { verifySchoolFormations } from './check-school-formations.js';
+import { verifyPersonalWelcome } from './check-personal-welcome.js';
+import { verifySchoolCodeEntry } from './check-school-code-entry.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -142,6 +144,13 @@ async function main() {
     stage='navigateur Chromium';browser=await chromium.launch({headless:true});
     const operatorContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
     let consumerContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
+    async function accessTokenFor(context=consumerContext) {
+      const identityResponse=await context.request.get(`${origin}/app/bff/me`);
+      if(!identityResponse.ok())throw new Error('PERSONAL_SESSION_IDENTITY_UNAVAILABLE');
+      const cookie=(await context.cookies(origin)).find(item=>item.name==='drivy-dev-session');
+      const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
+      if(!token)throw new Error('PERSONAL_SESSION_IDENTITY_UNAVAILABLE');return token;
+    }
     for(const context of [operatorContext,consumerContext])await context.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const operatorPage=await operatorContext.newPage();operatorPage.setDefaultTimeout(20_000);
     stage='connexion opérateur par le formulaire';await operatorPage.goto(`${origin}/app/operateur`);
@@ -159,7 +168,7 @@ async function main() {
     const registration=await fetch(`${issuer}/protocol/openid-connect/registrations?client_id=drivy-web-e2e&response_type=code&scope=openid&redirect_uri=${encodeURIComponent(`${origin}/app/bff/callback`)}`);
     assert(!(await registration.text()).includes('name="password-confirm"'),'Le fournisseur ne propose plus de formulaire d’inscription libre');
     stage='visite du lien et création du compte avec son code';await page.goto(openingLink);
-    await page.getByRole('heading',{name:'Ouvrir votre école',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Créer votre compte',exact:true}).waitFor();
     assert(new URL(page.url()).hash==='','Le secret du lien est retiré avant la connexion');
     await register(page,{firstName:'Responsable',lastName:'Synthétique',email:'school@example.invalid',password:consumerPassword});
     await page.getByLabel('Nom de l’auto-école',{exact:true}).waitFor();
@@ -167,8 +176,13 @@ async function main() {
     const openedSession=await consumerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true)}).safeParse(await openedSession.json()).success,'Le compte créé avec le code est aussitôt connecté');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.person')).rows[0].n===0,'Le nouveau compte OIDC n’est pas créé dans la base métier avant confirmation');
-    stage='création volontaire et perte de réponse navigateur';await page.getByLabel('Votre nom',{exact:true}).fill('Responsable de recette synthétique');
-    await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');await page.getByLabel('E-mail professionnel',{exact:true}).fill('school@example.invalid');
+    assert(await page.getByLabel('Nom affiché',{exact:true}).inputValue()==='Responsable Synthétique'
+      &&await page.getByLabel('E-mail de l’école',{exact:true}).inputValue()==='school@example.invalid',
+      'L’ouverture reprend le nom et l’adresse du compte sans nouvelle saisie');
+    assert(!(await page.getByLabel('Je donne aussi des leçons',{exact:true}).isChecked()),
+      'Le rôle moniteur reste un choix explicite à l’ouverture de l’école');
+    stage='création volontaire et perte de réponse navigateur';
+    await page.getByLabel('Nom de l’auto-école',{exact:true}).fill('Auto-école Recette · synthétique');
     assert(await page.getByLabel('Nom de l’auto-école',{exact:true}).evaluate(element=>element.getBoundingClientRect().height>=40),
       'Les champs d’ouverture conservent une cible d’au moins 40 pixels sur ordinateur');
     await page.setViewportSize({width:390,height:844});
@@ -189,14 +203,14 @@ async function main() {
     stage='création volontaire et perte de réponse navigateur';
     await page.route('**/app/bff/opening/create',async route=>{await route.fetch();await route.abort('failed');},{times:1});
     await page.getByRole('button',{name:'Créer mon école',exact:true}).click();
-    await page.getByRole('heading',{name:'Votre école est créée',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
     const school=(await administration.query('SELECT id,status FROM drivy.school')).rows[0];assert(!!school && school.status==='DRAFT','La création confirmée est retrouvée après une réponse navigateur perdue');
     const membership=(await administration.query('SELECT roles,grants FROM drivy.membership WHERE school_id=$1',[school.id])).rows[0];
     assert(membership.roles.join(',')==='ADMIN,INSTRUCTOR' && membership.grants.join(',')==='CONFIGURE_CATALOG','L’administrateur et le rôle moniteur choisi sont durables');
-    await page.getByRole('link',{name:'Continuer la préparation',exact:true}).click();
-    await page.getByRole('heading',{name:'Votre école',exact:true}).waitFor();
-    stage='première sauvegarde du guide';await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
-    await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
+    assert(new URL(page.url()).pathname===`/app/gestion/${school.id}/apercu`
+      &&await page.getByRole('link',{name:'Continuer la préparation',exact:true}).count()===0,
+      'La création confirmée enchaîne sur la confidentialité sans écran intermédiaire ni formulaire d’identité répété');
+    stage='première sauvegarde du guide';
     const notice='Recette synthétique uniquement. Les leçons et observations partagées sont visibles par l’élève ; les notes privées restent privées. Aucun compte réel.';
     const retention='Texte de recette synthétique uniquement. Les données de cette base éphémère sont supprimées à la fin du test.';
     await page.getByLabel('Information des personnes',{exact:true}).fill(notice);await page.getByLabel('Conservation des données',{exact:true}).fill(retention);
@@ -394,7 +408,7 @@ async function main() {
     await staffContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
     const staffPage=await staffContext.newPage();await staffPage.goto(invitationURL);
     stage='création du compte moniteur avec le lien reçu';
-    await staffPage.getByRole('heading',{name:'Rejoindre votre école',exact:true}).waitFor();
+    await staffPage.getByRole('heading',{name:'Créer votre compte',exact:true}).waitFor();
     const otherAddress=await submitRegistration(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'someone-else@example.invalid',password:syntheticSecret()});
     assert(otherAddress.includes('l’adresse à laquelle'),'Le lien d’invitation ne crée pas de compte à une autre adresse');
     await register(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'instructor@example.invalid',password:syntheticSecret()});
@@ -408,19 +422,19 @@ async function main() {
     const staffMe=await staffContext.request.get(`${origin}/app/bff/me`);
     const staffMember=z.object({data:z.object({memberships:z.array(z.object({schoolId:z.string(),roles:z.array(z.string())}))})}).parse(await staffMe.json());
     assert(staffMe.ok()&&staffMember.data.memberships.length===1&&staffMember.data.memberships[0]!.schoolId===school.id&&JSON.stringify(staffMember.data.memberships[0]!.roles)==='["INSTRUCTOR"]','Le compte invité rejoint une seule école avec le seul rôle moniteur');
+    assert((await administration.query(`SELECT count(*)::int AS n FROM drivy.learner_profile l JOIN drivy.membership m
+      ON m.school_id=l.school_id AND m.person_id=l.person_id WHERE m.school_id=$1 AND m.invitation_email=$2`,[school.id,'instructor@example.invalid'])).rows[0].n===0,
+      'Rejoindre comme moniteur ne crée aucun dossier élève ni demande de noms scolaires');
+    await verifyPersonalWelcome({apiOrigin,schoolId:school.id,kind:'STAFF',getAccessToken:()=>accessTokenFor(staffContext),assert,setStage:value=>{stage=value;}});
     await staffPage.reload();await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
     await staffPage.screenshot({path:resolve(artifactDirectory,'06-equipe-invitation-acceptee-synthetic.png'),fullPage:true});await staffContext.close();
-    await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,realmName,administration,
+    await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,administration,
       ownMail,mailLink,deliverInvitation:()=>deliverOneInvitation(mailer!,invitationMail),
-      getAccessToken:async()=>{
-        const identityResponse=await consumerContext.request.get(`${origin}/app/bff/me`);
-        if(!identityResponse.ok())throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');
-        const cookie=(await consumerContext.cookies(origin)).find(item=>item.name==='drivy-dev-session');
-        const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
-        if(!token)throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');return token;
-      },assert,setStage:value=>{stage=value;},artifactDirectory});
+      getAccessToken:accessTokenFor,assert,setStage:value=>{stage=value;},artifactDirectory});
     // Formations et tarifs après une première leçon réelle : l'inscription et la réservation existantes doivent rester intactes.
     await verifySchoolFormations({page,consumerContext,schoolId:school.id,origin,administration,artifactDirectory,assert,setStage:value=>{stage=value;}});
+    await verifySchoolCodeEntry({browser,origin,apiOrigin,keycloakOrigin,schoolId:school.id,administration,getAccessToken:accessTokenFor,
+      existingEmail:'school@example.invalid',existingPassword:consumerPassword,assert,setStage:value=>{stage=value;}});
     await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
       scope:'Chromium desktop et viewport mobile, Keycloak réel à inscription fermée, création de compte par code et par lien d’invitation SMTP, connexion par formulaire, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);

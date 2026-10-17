@@ -7,7 +7,7 @@ import { RequestFailure } from '../protocol';
 import { setupStepState } from '../setup-progress';
 import { CheckField, ConfirmDialog, Facts, Notice, SegmentField, SelectField, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
 import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
-  setupStepLabels, setupSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
+  setupStepLabels, initialSetupStep, setupNavigationSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { ProfileFieldsPreview } from './profile-fields-preview';
@@ -77,7 +77,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     if (draft.schoolId !== schoolId || draft.id !== schoolId) throw new RequestFailure('INVALID_RESPONSE');
     return { draft, templates, offerings: offerings.items.filter(item => item.enabled) };
   }, [schoolId, snapshot.revision]);
-  const steps: readonly SetupStep[] = catalogueOnly ? ['FORMATIONS', 'PRICING', 'REVIEW'] : setupSteps;
+  const steps = setupNavigationSteps(content, catalogueOnly);
   const blocked = saving || runner.busy || !!runner.pending || reviewing || needsAdoption.current;
   const key = `setup-draft:${catalogueOnly ? 'catalogue' : 'initial'}`;
 
@@ -104,7 +104,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     if (document && !needsAdoption.current) return;
     const saved = loaded.data.draft;
     const remembered = needsAdoption.current ? undefined : drafts?.get(key) as StoredDraft | undefined;
-    let next = clone(saved.content), nextStep = saved.currentStep, nextDirty = false;
+    let next = clone(saved.content), nextStep = catalogueOnly ? saved.currentStep : initialSetupStep(saved, school.status), nextDirty = false;
     if (remembered && remembered.version === saved.version && setupContentSchema.safeParse(remembered.content).success) {
       next = remembered.content; nextStep = remembered.step; nextDirty = remembered.dirty;
     } else if (catalogueOnly && (saved.status === 'APPLIED' || saved.content.selectedSections.length === 0)) {
@@ -116,8 +116,10 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
       nextDirty ||= next.selectedSections.length !== 1 || next.selectedSections[0] !== 'CATALOGUE';
       next = catalogueSetupContent(next);
     }
+    const availableSteps = setupNavigationSteps(next, catalogueOnly);
+    if (nextStep === 'PRICING' && !availableSteps.includes('PRICING')) nextStep = 'REVIEW';
     needsAdoption.current = false;
-    setDocument(saved); setContent(next); setStep(steps.includes(nextStep) ? nextStep : steps[0]!); setDirty(nextDirty);
+    setDocument(saved); setContent(next); setStep(availableSteps.includes(nextStep) ? nextStep : availableSteps[0]!); setDirty(nextDirty);
     setEditorRevision(revision => revision + 1);
     setPreview(null); setReviewIssues([]); setReviewContent(null); setAcknowledged(false); setReadFailure(null);
   }, [loaded.data, loaded.status]);

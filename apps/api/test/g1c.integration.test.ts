@@ -393,7 +393,7 @@ describe('Invitation par code · sans e-mail',()=>{
   it('le code reprend les noms signés à l’acceptation, sans inventer un contact ni écraser le dossier existant',async()=>{
     const invitation=await issue(),subject=fresh(),claims={given_name:'Élève Camille',family_name:'De la Tour-Roux',name:'Nom public',email:'non-verifie@example.invalid',email_verified:false};
     const shown=await preview(invitation.code,subject,claims);
-    expect(shown.statusCode,shown.body).toBe(200);expect(shown.json().data.profileIdentity).toEqual({firstName:'Élève Camille',lastName:'De la Tour-Roux'});
+    expect(shown.statusCode,shown.body).toBe(200);conforms('Preview',shown.json());expect(shown.json().data.profileIdentity).toEqual({firstName:'Élève Camille',lastName:'De la Tour-Roux'});
     expect(shown.json().data).toMatchObject({invitationId:invitation.id,schoolId:id.schoolA,delivery:'CODE',maskedEmail:null,
       notice:{version:2,noticeText:'Notice synthétique F02 : finalités, destinataires et contact.'}});
     expect(await personOf(subject)).toBeUndefined();
@@ -482,7 +482,8 @@ describe('Invitation par code · sans e-mail',()=>{
   it('aperçu : toute identité connectée, même sans compte ni adresse vérifiée ; rien n’est créé',async()=>{
     const invitation=await issue();const before=await counts();const subject=fresh();
     const shown=await preview(invitation.code,subject);expect(shown.statusCode,shown.body).toBe(200);
-    expect(Object.keys(shown.json().data).sort()).toEqual(['expiresAt','roles','schoolName','trainingCategoryCode','trainingCategoryCodes']);
+    conforms('Preview',shown.json());
+    expect(Object.keys(shown.json().data).sort()).toEqual(['delivery','expiresAt','invitationId','maskedEmail','notice','roles','schoolId','schoolName','trainingCategoryCode','trainingCategoryCodes']);
     expect(shown.json().data).toMatchObject({schoolName:'Auto-école Horizon · Démonstration',roles:['LEARNER'],trainingCategoryCode:'B'});
     expect(Date.parse(shown.json().data.expiresAt)).toBeGreaterThan(Date.now());
     // Saisie tolérante : minuscules, sans tiret, espaces.

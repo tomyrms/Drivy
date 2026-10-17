@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const identifier = z.string().uuid();
 const text = z.string().min(1).max(20_000);
+const profileIdentityName = z.string().min(1).refine(value => [...value].length <= 150);
 export const roleSchema = z.enum(['ADMIN', 'INSTRUCTOR', 'LEARNER']);
 const roles = z.array(roleSchema).min(1).max(3);
 export const sessionSchema = z.object({
@@ -28,13 +29,15 @@ export const meSchema = z.object({ data: z.object({
   version: z.number().int().positive(),
   memberships: z.array(memberSchema).max(500),
 }) });
-export const previewSchema = z.object({ confirmation: z.string().min(1).max(512), data: z.object({
+export const previewSchema = z.object({ confirmation: z.string().min(1).max(512), uncertain: z.boolean().optional(), data: z.object({
   invitationId: identifier,
   schoolId: identifier,
   schoolName: text,
   roles,
-  maskedEmail: text,
+  maskedEmail: text.nullable(),
+  delivery: z.enum(['EMAIL', 'CODE']).optional(),
   expiresAt: z.string().datetime({ offset: true }),
+  profileIdentity: z.object({ firstName: profileIdentityName, lastName: profileIdentityName }).optional(),
   notice: z.object({
     version: z.number().int().positive(),
     noticeText: text,

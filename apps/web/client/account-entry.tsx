@@ -7,7 +7,7 @@ import { Notice, TextField } from './ui';
 export type AccessKind = 'LEARNER_INVITATION' | 'SCHOOL_OPENING' | 'EMAIL_INVITATION';
 const codeSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING']), schoolName: z.string().max(200).optional(), expiresAt: z.string() });
 const accountSchema = z.object({ kind: z.enum(['LEARNER_INVITATION', 'SCHOOL_OPENING', 'EMAIL_INVITATION']) });
-type Step = 'login' | 'code' | 'register' | 'learner-ready';
+type Step = 'login' | 'code' | 'register';
 
 /**
  * A pasted link keeps only its code: `…/ouvrir#token=…` (opening) or the typed `XXXX-XXXX`.
@@ -36,8 +36,8 @@ const failure = (cause: unknown) => cause instanceof RequestFailure && messages[
  * Sign-in and account creation of the web, the same as in the app: « Se connecter », or « J'ai un code ».
  * Only a valid code (or opening link) can create an account; the password goes to the identity service and is never kept here.
  */
-export function AccountEntry({ initialCode, invitation = false, signedIn = false, onSignedIn }: {
-  initialCode?: string; invitation?: boolean; signedIn?: boolean; onSignedIn: (kind: AccessKind | null) => void;
+export function AccountEntry({ initialCode, invitation = false, signedIn = false, onSignedIn, onCancel }: {
+  initialCode?: string; invitation?: boolean; signedIn?: boolean; onSignedIn: (kind: AccessKind | null) => void; onCancel?: () => void;
 }) {
   const [step, setStep] = useState<Step>(signedIn ? 'code' : initialCode || invitation ? 'register' : 'login');
   const [code, setCode] = useState(initialCode ?? '');
@@ -63,15 +63,19 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
   async function inspect(value: string, csrf: string) {
     const result = await request('access-code', codeSchema, { csrf, body: { code: codeFromInput(value) } });
     setKind(result.kind); setSchoolName(result.schoolName ?? null);
-    // Already signed in: an opening code goes straight to the school form, a learner code to the app.
-    if (signedIn) { if (result.kind === 'SCHOOL_OPENING') onSignedIn('SCHOOL_OPENING'); else setStep('learner-ready'); return; }
+    if (signedIn) { onSignedIn(result.kind); return; }
     setStep('register');
   }
   function go(next: Step) { setError(null); setPassword(''); setStep(next); }
+  function existingAccount() {
+    if (!code.trim()) { go('login'); return; }
+    void run(async csrf => { await inspect(code, csrf); go('login'); });
+  }
 
   const signIn = (event: FormEvent) => { event.preventDefault(); void run(async csrf => {
     await request('password-login', okSchema, { csrf, body: { email, password } });
-    setPassword(''); onSignedIn(kind);
+    setPassword('');
+    onSignedIn(kind);
   }); };
   const submitCode = (event: FormEvent) => { event.preventDefault(); void run(csrf => inspect(code, csrf)); };
   const register = (event: FormEvent) => { event.preventDefault(); void run(async csrf => {
@@ -84,14 +88,14 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
       throw cause;
     }
     setPassword('');
-    if (result.kind === 'LEARNER_INVITATION') { setStep('learner-ready'); return; }
     onSignedIn(result.kind);
   }); };
 
   const title = step === 'login' ? 'Se connecter à Drivy' : step === 'code' ? 'J’ai un code'
-    : step === 'learner-ready' ? 'Votre compte est prêt' : kind === 'SCHOOL_OPENING' ? 'Ouvrir votre école' : kind === 'EMAIL_INVITATION' ? 'Rejoindre votre école' : schoolName ? `Rejoindre ${schoolName}` : 'Créer votre compte';
+    : 'Créer votre compte';
 
   return <section className="sign-in account-entry" aria-labelledby="account-entry-title">
+    {step === 'register' && schoolName && <p className="context">{schoolName}</p>}
     {signedIn
       ? <h2 id="account-entry-title" className="section-title" ref={heading} tabIndex={-1}>{title}</h2>
       : <h1 id="account-entry-title" ref={heading} tabIndex={-1}>{title}</h1>}
@@ -108,7 +112,8 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
     {step === 'code' && <form className="form-grid" noValidate onSubmit={submitCode}>
       <TextField name="code" label="Code ou lien reçu" value={code} onChange={setCode} placeholder="XXXX-XXXX" autoComplete="one-time-code" maxLength={300} required disabled={busy} />
       <button className="button primary" type="submit" disabled={busy || !code.trim()}>{busy ? 'Vérification…' : 'Continuer'}</button>
-      {!signedIn && <button className="button quiet" type="button" disabled={busy} onClick={() => go('login')}>J’ai déjà un compte</button>}
+      {!signedIn && <button className="button quiet" type="button" disabled={busy} onClick={existingAccount}>J’ai déjà un compte</button>}
+      {signedIn && onCancel && <button className="button quiet" type="button" disabled={busy} onClick={onCancel}>Annuler</button>}
     </form>}
 
     {step === 'register' && <form className="form-grid" noValidate onSubmit={register}>
@@ -123,9 +128,5 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
       <button className="button quiet" type="button" disabled={busy} onClick={() => go('login')}>J’ai déjà un compte</button>
     </form>}
 
-    {step === 'learner-ready' && <div className="form-grid">
-      <p>{signedIn ? 'Ouvrez l’app Drivy avec ce compte' : `Ouvrez l’app Drivy, connectez-vous avec ${email}`}, puis saisissez votre code pour rejoindre {schoolName ?? 'votre école'}.</p>
-      <button className="button primary" type="button" onClick={() => onSignedIn('LEARNER_INVITATION')}>Continuer</button>
-    </div>}
   </section>;
 }

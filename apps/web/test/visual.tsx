@@ -50,7 +50,7 @@ const setupTemplates: SetupTemplates = {
 const setupReady = parameters.get('setup') === 'ready';
 const requestedStep = parameters.get('step');
 const setupDraft: SetupDraft = { id: schoolId, schoolId, version: 1, status: 'DRAFT',
-  currentStep: setupSteps.find(step => step === requestedStep) ?? 'IDENTITY', updatedAt: stamp, updatedByMembershipId: marieId, appliedAt: null,
+  currentStep: setupSteps.find(step => step === requestedStep) ?? 'IDENTITY', updatedAt: parameters.has('fresh') ? null : stamp, updatedByMembershipId: marieId, appliedAt: null,
   content: { selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE', ...(setupReady ? ['CATALOGUE' as const] : [])],
     identity: { name: 'École Synthétique', timeZone: 'Europe/Zurich', contactEmail: 'ecole@example.test', contactPhone: null },
     privacy: { noticeText: setupReady ? 'L’école utilise Drivy pour gérer les dossiers et le suivi pédagogique. Seuls les membres autorisés consultent les informations utiles à la formation.' : '',
@@ -236,7 +236,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
       : db[path.replace('availability-rules', 'availability').replace('closures', 'closures')] ?? [];
     return reply(200, envelope({ items: list, nextCursor: null }), url.href);
   }
-  if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
+  if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], profileIdentity: { firstName: 'Élève Camille', lastName: 'De la Tour-Roux' }, maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
   if (url.pathname.endsWith('/bff/opening/preview')) return reply(200, { data: { status: 'AVAILABLE', expiresAt: '2026-10-20T08:00:00.000Z' } }, url.href);
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
   if (method === 'PATCH' && path === '') {
