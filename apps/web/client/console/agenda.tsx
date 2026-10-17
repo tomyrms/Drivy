@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, weekStart, weekWindow } from '../agenda-model';
+import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, searchForLessons, weekStart, weekWindow } from '../agenda-model';
 import { useCommandSnapshot } from '../command-store';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
@@ -56,7 +56,7 @@ export function AgendaSection() {
   }, [reloadLessons, reloadDirectory]);
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
-  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], search), school.timeZone),
+  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchForLessons(search, directory.data !== undefined)), school.timeZone),
     [data, directory.data, search, school.timeZone]);
   const lessonCount = days.reduce((total, day) => total + day.items.length, 0);
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';

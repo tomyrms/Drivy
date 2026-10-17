@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 17 octobre 2026 — essaim de recherche de bugs
+
+Vingt agents ont audité API, base, web et iOS ; 15 lots de corrections sont fusionnés sur `claude/essaim-bugs-20261017` : arrêt de trajet après finalisation qui effaçait des points reçus, tolérance d’horloge du téléphone, réauthentification pour inviter un ADMIN ou un moniteur, motifs de retrait cachés à l’élève dans la base (migration 034), limiteur d’entrée du BFF, leçon en attente qui disparaissait d’Aujourd’hui, bilan vidé après une relecture ratée, et plusieurs défauts d’agenda, de formations et d’accessibilité web. **Exécuté** : typage, 138 tests API sans base, 260 tests web, build web. **À qualifier par la CI** : tests PostgreSQL ajoutés et tests Swift. Aucun déploiement. Dix questions produit et les constats différés sont listés dans le [compte rendu](essaim-bugs-20261017.md).
+
 ## 14 octobre 2026 — Formations et tarifs : une fiche par permis, déployé
 
 À la demande explicite du porteur, version **`0f76da1` publiée vers 12:55 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/) (API et portail). Sauvegarde `drivy_refonte` vérifiée avant bascule (`pg_restore --list`), migration 033 appliquée, 33 empreintes de migration contrôlées ; le drop-in qui figeait le web sur `web-releases/2b4ca81` est retiré, API et web tournent sur la même release. Une première tentative (`8801aee`) s’est arrêtée avant toute migration : la compilation API dépassait les 256 Mo de l’installeur ; typage allégé et limite portée à 512 Mo. Complément publié à la demande du porteur : release **`061f846`** (nouvelle sauvegarde vérifiée), la liste des permis affiche en colonnes durée habituelle, prix des leçons, compétences, tarifs et élèves en formation. Vérifié après bascule : portail 200 servant la nouvelle interface, routes Formations protégées (401 sans session), `/health/ready` 200, services actifs, aucune erreur journalisée, aucun parcours existant renommé.

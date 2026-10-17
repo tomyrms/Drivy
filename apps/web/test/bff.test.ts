@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildWebApp } from '../server/app.js';
 import { readConfig } from '../server/config.js';
-import { RateLimiter } from '../server/rate-limit.js';
+import { clientKey, RateLimiter } from '../server/rate-limit.js';
 import { SessionStore, type Tokens } from '../server/session.js';
 import { IdentityUnavailable, identityUnreachable, type IdentityProvider } from '../server/oidc.js';
 import type { ApiGateway } from '../server/upstream.js';
@@ -184,6 +184,51 @@ describe('Entrée anonyme, limites et cache',()=>{
     let now=0;const limiter=new RateLimiter(1,1000,()=>now,2);
     expect(limiter.allow('a')).toBe(true);expect(limiter.allow('b')).toBe(true);expect(limiter.allow('c')).toBe(false);
     now=1001;expect(limiter.allow('c')).toBe(true);
+  });
+
+  test('clé du limiteur : un /64 IPv6 est une seule clé, une IPv4 mappée reste IPv4, IPv4 inchangée',()=>{
+    expect(clientKey('2001:db8:1:2::1')).toBe(clientKey('2001:db8:1:2:ffff::9'));
+    expect(clientKey('2001:db8:1:2::1')).not.toBe(clientKey('2001:db8:1:3::1'));
+    expect(clientKey('2001:DB8:1:2::1%eth0')).toBe(clientKey('2001:db8:1:2::1'));
+    expect(clientKey('::ffff:203.0.113.5')).toBe('203.0.113.5');
+    expect(clientKey('::ffff:cb00:7105')).toBe('203.0.113.5');
+    expect(clientKey('203.0.113.5')).toBe('203.0.113.5');
+  });
+
+  test('un /64 IPv6 partage un seul compteur ; une IPv4 mappée partage celui de son IPv4',async()=>{
+    const h=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});
+    const value=(await h.app.inject({url:'/app/bff/session'})).json().csrfToken;
+    const call=(remoteAddress:string)=>h.app.inject({method:'POST',url:'/app/bff/login',payload:{},remoteAddress,
+      headers:{origin:config.origin,'x-csrf-token':value}});
+    expect((await call('2001:db8:1:2::1')).statusCode).toBe(200);
+    expect((await call('2001:db8:1:2:ffff::9')).statusCode).toBe(429);
+    expect((await call('2001:db8:1:3::1')).statusCode).toBe(200);
+    expect((await call('::ffff:198.51.100.4')).statusCode).toBe(200);
+    expect((await call('198.51.100.4')).statusCode).toBe(429);
+  });
+
+  test('un POST d’entrée sans jeton CSRF renvoie 403 et ne consomme pas le quota',async()=>{
+    const h=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});
+    const value=(await h.app.inject({url:'/app/bff/session'})).json().csrfToken;
+    for(let index=0;index<3;index++) expect((await enter(h,'/app/bff/login',{origin:config.origin})).statusCode).toBe(403);
+    expect((await enter(h,'/app/bff/login',{origin:config.origin,'x-csrf-token':value})).statusCode).toBe(200);
+  });
+
+  test('un visiteur qui a déjà une session n’est pas compté par le limiteur d’entrée',async()=>{
+    const h=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});
+    await h.start();
+    for(let index=0;index<3;index++) expect((await h.post('/app/bff/login')).statusCode).toBe(200);
+    expect((await h.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers:{cookie:h.cookie(),origin:config.origin,'x-csrf-token':h.csrf()}})).statusCode).toBe(200);
+    // Sans session, le même visiteur anonyme n’a pas de quota restant : la première demande a déjà été comptée par start().
+    const anonymous=await h.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers:{origin:config.origin,'x-csrf-token':(await h.app.inject({url:'/app/bff/session'})).json().csrfToken}});
+    expect(anonymous.statusCode).toBe(429);
+  });
+
+  test('HSTS hors développement seulement',async()=>{
+    const production=await harness();
+    expect((await production.app.inject({url:'/app/bff/session'})).headers['strict-transport-security']).toBe('max-age=31536000');
+    const development=await harness(undefined,{config:{development:true}});
+    expect((await development.app.inject({url:'/app/bff/session'})).headers['strict-transport-security']).toBeUndefined();
   });
 
   test('l’adresse du client vient de X-Forwarded-For seulement derrière un proxy déclaré',async()=>{

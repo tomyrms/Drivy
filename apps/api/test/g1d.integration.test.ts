@@ -29,7 +29,7 @@ beforeAll(async()=>{
 beforeEach(async()=>{await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);});
 afterAll(async()=>{await app?.close();await pool.end();});
 async function call(method:'GET'|'PUT'|'POST'|'PATCH',path:string,body?:Record<string,unknown>,version?:number,subject='demo-admin',claims:Record<string,unknown>={}) {
-  const jwt=await new SignJWT(claims).setProtectedHeader({alg:'RS256',kid:'g1d'}).setSubject(subject).setIssuer(issuer).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+  const jwt=await new SignJWT({auth_time:Math.floor(Date.now()/1000),...claims}).setProtectedHeader({alg:'RS256',kid:'g1d'}).setSubject(subject).setIssuer(issuer).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
   return app.inject({method,url:path,headers:{authorization:`Bearer ${jwt}`,...(body?{'idempotency-key':String(body.operationId)}:{}),...(version?{'if-match':`"${version}"`}:{})},...(body?{payload:body}:{})});
 }
 function conforms(name:string,value:unknown) {const validate=validators.get(name)!;expect(validate(value),JSON.stringify(validate.errors)).toBe(true);}

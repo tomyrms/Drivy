@@ -1,8 +1,17 @@
 import { describe, expect, test } from 'vitest';
-import { catalogueSetupContent, issueStep, setupFormation, setupPrice, setupContentSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples } from '../client/setup-model.js';
+import { catalogueSetupContent, issueStep, setupFormation, setupPrice, setupContentSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples, templateAlreadyAdded } from '../client/setup-model.js';
 import { matchSchoolRoute } from '../server/school-routes.js';
 import { commandSpecs, createCommand, receiptMatches } from '../client/command-core.js';
 import { randomUUID } from 'node:crypto';
+
+describe('Préparation : un permis ne se prépare qu’une fois', () => {
+  test('un modèle dont le permis est déjà dans le brouillon est signalé', () => {
+    const formations = [{ categoryCode: 'B' }, { categoryCode: 'A1' }];
+    expect(templateAlreadyAdded(formations, 'B')).toBe(true);
+    expect(templateAlreadyAdded(formations, 'BE')).toBe(false);
+    expect(templateAlreadyAdded([], 'B')).toBe(false);
+  });
+});
 
 describe('Préparation : préserver les choix avant adoption', () => {
   test('un tarif vide, invalide ou négatif ne devient pas gratuit', () => {

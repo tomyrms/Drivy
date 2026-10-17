@@ -918,7 +918,8 @@ enum SchoolLearnerLessonMoment {
         if lesson.hasStarted { return nil }
         guard let start = lesson.startsAt, let zone = TimeZone(identifier: lesson.timeZone) else { return nil }
         let minutes = Int(ceil(start.timeIntervalSince(now) / 60))
-        guard minutes > 0 else { return "Maintenant" }
+        // Horaire passé sans départ confirmé : le moniteur n’a pas commencé, rien n’est dit « en cours ».
+        guard minutes > 0 else { return "En attente" }
         if minutes < 60 { return "Dans \(minutes) min" }
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = zone
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: start)).day ?? 0
