@@ -434,7 +434,7 @@ async function main() {
     // Formations et tarifs après une première leçon réelle : l'inscription et la réservation existantes doivent rester intactes.
     await verifySchoolFormations({page,consumerContext,schoolId:school.id,origin,administration,artifactDirectory,assert,setStage:value=>{stage=value;}});
     await verifySchoolCodeEntry({browser,origin,apiOrigin,keycloakOrigin,schoolId:school.id,administration,getAccessToken:accessTokenFor,
-      existingEmail:'school@example.invalid',existingPassword:consumerPassword,assert,setStage:value=>{stage=value;}});
+      existingEmail:'school@example.invalid',existingPassword:consumerPassword,assert,setStage:value=>{stage=value;},artifactDirectory});
     await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
       scope:'Chromium desktop et viewport mobile, Keycloak réel à inscription fermée, création de compte par code et par lien d’invitation SMTP, connexion par formulaire, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);
