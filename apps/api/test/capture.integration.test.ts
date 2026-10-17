@@ -78,6 +78,10 @@ try{
  assert.equal((await call('GET',`/captures/${capture.id}`,undefined,undefined,'demo-alice')).statusCode,404);
  const adminRead=await call('GET',`/captures/${capture.id}`,undefined,undefined,'demo-admin');assert.equal(adminRead.statusCode,200,JSON.stringify(adminRead.json()));assert.equal(adminRead.json().data.id,capture.id);
  const manifest=[{segmentId:segment,segmentIndex:0,expectedChunkIndices:[0,1],expectedPointCount:3,lastSequence:2,endReason:'STOP'}];
+ // Horloge du téléphone en avance : un arrêt à +2 s est accepté, à +60 s refusé (sans changer l'état de la capture).
+ const ahead=(ms:number)=>new Date(Date.now()+ms).toISOString();
+ const tooFar=await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:ahead(60_000),reason:'USER_STOP',segments:manifest,localCollectorStopped:true});assert.equal(tooFar.statusCode,422);assert.equal(tooFar.json().code,'CAPTURE_STOP_INVALID');
+ assert.equal((await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:ahead(2_000),reason:'USER_STOP',segments:manifest,localCollectorStopped:true})).statusCode,200);
  const stop=await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:new Date().toISOString(),reason:'USER_STOP',segments:manifest,localCollectorStopped:true});assert.equal(stop.statusCode,200,JSON.stringify(stop.json()));
  const finalized=await call('POST',`/captures/${capture.id}/finalize`,{operationId:randomUUID(),segments:manifest,allowPartial:false},stop.json().data.version);assert.equal(finalized.statusCode,200,JSON.stringify(finalized.json()));assert.equal(finalized.json().data.syncState,'SYNCED');
  const page=await call('GET',`/captures/${capture.id}/replay?limit=2`);assert.equal(page.statusCode,200);assert.equal(page.json().data.segments[0].points.length,2);assert.equal(page.json().data.segments[0].continuesOnNextPage,true);
@@ -102,8 +106,10 @@ try{
  }finally{await pool.query("UPDATE drivy.lesson SET status='PLANNED',actual_start=$2,actual_end=NULL WHERE id=$1",[lesson,startedLesson.actualStart]);}
  const proof=await call('GET',`/operations/${startBody.operationId}`);assert.equal(proof.statusCode,200,JSON.stringify(proof.json()));assert.equal(proof.json().data.resourceType,'CaptureSession');
  const stored=(await pool.query('SELECT response_data FROM drivy.operation WHERE operation_id=$1',[startBody.operationId])).rows[0];assert(!JSON.stringify(stored).includes('signedCaptureAuthorization'));
- // Une borne resserrée purge le lot entier touché, sans réactiver ni dupliquer son identité.
- const earlier=await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:points[2]!.capturedAt,reason:'USER_STOP',segments:manifest,localCollectorStopped:true});assert.equal(earlier.statusCode,200);assert.equal(earlier.json().data.syncState,'PARTIAL');assert.equal((await pool.query('SELECT encrypted_points FROM drivy.capture_chunk WHERE capture_id=$1 AND chunk_index=1',[capture.id])).rows[0].encrypted_points,null);
+ // Finalisée : un arrêt rejoué avec une borne plus tôt est refusé, et aucun lot n'est effacé.
+ const earlier=await call('POST',`/captures/${capture.id}/stop`,{operationId:randomUUID(),stoppedAt:points[0]!.capturedAt,reason:'USER_STOP',segments:manifest,localCollectorStopped:true});assert.equal(earlier.statusCode,409,JSON.stringify(earlier.json()));assert.equal(earlier.json().code,'CAPTURE_FINALIZED');
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM drivy.capture_chunk WHERE capture_id=$1 AND encrypted_points IS NULL',[capture.id])).rows[0].n,0);
+ assert.equal((await call('GET',`/captures/${capture.id}`)).json().data.syncState,'SYNCED');
  // Un départ explicite demeure valide même si l'ancien créneau est dépassé (reprise GPS).
  await pool.query("UPDATE drivy.lesson SET planned_start=now()-interval '3 hours',planned_end=now()-interval '2 hours' WHERE id=$1",[lesson]);
  const nextCapture=await call('POST',`/lessons/${lesson}/captures`,{...startBody,operationId:randomUUID()},2);assert.equal(nextCapture.statusCode,201,JSON.stringify(nextCapture.json()));
