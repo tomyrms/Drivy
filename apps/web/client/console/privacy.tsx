@@ -8,7 +8,7 @@ import {
 import { ConfirmDialog, Facts, Loading, Notice, SegmentField, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
 import { useCommandRunner, useConsole, useDraft, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
-import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, type Choice, type FieldDraft } from './privacy-model';
+import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, sameProfileRules, type Choice, type FieldDraft } from './privacy-model';
 import { ProfileFieldsPreview } from './profile-fields-preview';
 import './settings-studio.css';
 
@@ -130,7 +130,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
   const shown = drafts ?? initialDrafts(current, proposals);
   const rules = rulesOf(shown);
   const problem = profilePolicyProblem(rules);
-  const changed = !current || JSON.stringify(rules) !== JSON.stringify(current.fields);
+  const changed = !current || !sameProfileRules(rules, current.fields);
   useUnsavedChanges(drafts !== null && changed);
   const mayEdit = !!noticeVersionId && !runner.pending && !runner.busy;
   const update = (field: ProfileField, change: Partial<FieldDraft>) => setDrafts({ ...shown, [field]: { ...shown[field], ...change } });
@@ -164,7 +164,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
                 <div className="settings-profile-control">
                   <SegmentField label={`Demande · ${fieldLabels[field]}`} value={draft.choice} disabled={!mayEdit}
                     options={options.map(value => ({ value, label: choiceLabels[value] }))} onChange={choice => update(field, { choice: choice as Choice })} />
-                  {draft.choice !== 'none' && <TextArea label="Pourquoi" rows={2} maxLength={1000} value={draft.explanation} disabled={!mayEdit}
+                  {draft.choice !== 'none' && <TextArea label={`Pourquoi · ${fieldLabels[field]}`} rows={2} maxLength={1000} value={draft.explanation} disabled={!mayEdit}
                     onChange={explanation => update(field, { explanation })} error={filled(draft.explanation, 1000) ? null : 'Expliquez pourquoi.'} />}
                 </div>
               </div>;

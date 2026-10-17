@@ -60,3 +60,16 @@ export function gpsConsentLabel(choice: RecordingChoice | undefined): { text: st
   const text = choice.status === 'ALLOWED' ? 'Avec GPS' : 'Sans GPS';
   return { text: choice.lessonScoped ? `${text} · pour une leçon` : text, renew: false };
 }
+
+/** Deux listes de règles désignent la même politique : même ensemble de champs, mêmes valeurs, quel que soit l'ordre des clés ou des règles. `null` et absent sont équivalents. */
+export function sameProfileRules(a: readonly RuleLike[], b: readonly RuleLike[]): boolean {
+  if (a.length !== b.length) return false;
+  const byField = (rules: readonly RuleLike[]) => [...rules].sort((x, y) => (x.field < y.field ? -1 : x.field > y.field ? 1 : 0));
+  const sortedB = byField(b);
+  return byField(a).every((rule, index) => {
+    const other = sortedB[index]!;
+    return rule.field === other.field && (rule.requirement ?? null) === (other.requirement ?? null) && (rule.stage ?? null) === (other.stage ?? null)
+      && (rule.purposeCode ?? null) === (other.purposeCode ?? null) && (rule.explanation ?? null) === (other.explanation ?? null);
+  });
+}
+type RuleLike = { field: string; requirement?: string | null; stage?: string | null; purposeCode?: string | null; explanation?: string | null };
