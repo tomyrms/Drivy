@@ -2,8 +2,31 @@ import Foundation
 
 /// Une étape de la rédaction du bilan en largeur compacte.
 enum SchoolReportStep: String, CaseIterable, Identifiable, Sendable {
-    case trip, competencies, report
+    case report, competencies, review
     var id: String { rawValue }
+}
+
+enum SchoolReportReviewVisibility: Equatable, Sendable {
+    case shared, forMe, unknown
+}
+
+struct SchoolReportReview: Equatable, Sendable {
+    struct TextItem: Equatable, Sendable {
+        let label: String
+        let value: String
+    }
+
+    struct Competency: Equatable, Sendable {
+        let label: String
+        let level: String
+        let context: String
+    }
+
+    let texts: [TextItem]
+    let competencies: [Competency]
+    let visibility: SchoolReportReviewVisibility
+    let hasTrip: Bool
+    let lessonObservationCount: Int
 }
 
 /// Ce qui ouvre la rédaction du bilan. Il n’existe aucune autre origine : ouvrir une leçon ne rédige jamais rien.
@@ -44,27 +67,48 @@ struct SchoolReportCompetencyGroups: Equatable {
 /// Règles de la rédaction du bilan : étapes, ordre, repères. Aucune n’écrit ni n’envoie quoi que ce soit.
 enum SchoolReportFlowRules {
     /// Ordre du parcours. C’est le seul endroit où il se décide : l’inverser se fait ici.
-    static let order: [SchoolReportStep] = [.trip, .competencies, .report]
+    static let order: [SchoolReportStep] = [.report, .competencies, .review]
 
-    /// Pas d’étape vide : sans trajet ni observation, pas de revue du trajet ; sans référentiel, pas de compétences.
-    /// Le texte du bilan est toujours proposé.
-    static func steps(hasTrip: Bool, observationCount: Int, competencyCount: Int) -> [SchoolReportStep] {
+    /// Le bilan ouvre toujours le parcours, le récapitulatif le ferme toujours. Sans référentiel, l’étape des
+    /// compétences disparaît. Le trajet et les observations se lisent dans le récapitulatif sans créer d’étape vide.
+    static func steps(hasTrip _: Bool, observationCount _: Int, competencyCount: Int) -> [SchoolReportStep] {
         order.filter { step in
             switch step {
-            case .trip: hasTrip || observationCount > 0
             case .competencies: competencyCount > 0
-            case .report: true
+            case .report, .review: true
             }
         }
     }
 
-    /// Sans trajet, l’étape ne montre que les observations et porte leur nom.
-    static func title(of step: SchoolReportStep, hasTrip: Bool) -> String {
+    static func title(of step: SchoolReportStep, hasTrip _: Bool) -> String {
         switch step {
-        case .trip: hasTrip ? "Trajet" : "Observations"
-        case .competencies: "Compétences"
         case .report: "Bilan"
+        case .competencies: "Compétences"
+        case .review: "Récapitulatif"
         }
+    }
+
+    static func review(workedOn: String, observationText: String, nextStep: String,
+                       observations: [SchoolReportObservation], competencies: [SchoolCatalogCompetency],
+                       shared: Bool?, hasTrip: Bool, lessonObservationCount: Int) -> SchoolReportReview {
+        let textValues = [("Travail réalisé", workedOn), ("À retenir", observationText), ("Prochaine étape", nextStep)]
+        let texts = textValues.compactMap { label, value -> SchoolReportReview.TextItem? in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : .init(label: label, value: value)
+        }
+        var labels: [UUID: String] = [:]
+        for competency in competencies { labels[competency.id] = competency.displayLabel }
+        let reviewed = observations.map { observation in
+            SchoolReportReview.Competency(label: labels[observation.competencyId] ?? "Compétence à vérifier",
+                level: observation.levelLabel, context: observation.context)
+        }
+        let visibility: SchoolReportReviewVisibility = switch shared {
+        case true: .shared
+        case false: .forMe
+        case nil: .unknown
+        }
+        return SchoolReportReview(texts: texts, competencies: reviewed, visibility: visibility,
+            hasTrip: hasTrip, lessonObservationCount: lessonObservationCount)
     }
 
     /// « 2 sur 3 » ; rien quand le parcours tient en une étape.

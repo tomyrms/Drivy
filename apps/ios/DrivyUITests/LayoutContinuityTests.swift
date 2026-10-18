@@ -25,13 +25,11 @@ import UIKit
         edit.tap()
         let save = app.buttons["lesson-save-report"]
         let next = app.buttons["lesson-report-next"]
-        for _ in 0..<3 where !save.waitForExistence(timeout: 5) { if next.exists { next.tap() } }
-        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.navigationBars["Bilan"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(save.exists)
 
         let field = reportField(in: app)
-        // Sur une petite fenêtre, la carte précède le formulaire dans le même défilement.
-        // Chercher aussi les cellules pas encore créées par Form ; le bord droit évite
-        // d’envoyer le geste à MapKit au centre de la carte.
+        // Chercher aussi les cellules pas encore créées par Form.
         for _ in 0..<6 {
             if field.exists && field.isHittable { break }
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.85))
@@ -65,19 +63,52 @@ import UIKit
             capture(name: "lesson-unsaved-landscape")
 
             closeKeyboard.tap()
-            XCTAssertTrue(waitUntil { !app.keyboards.firstMatch.exists && save.exists && save.isHittable }, app.debugDescription)
+            XCTAssertTrue(waitUntil { !app.keyboards.firstMatch.exists && next.exists && next.isHittable && !save.exists }, app.debugDescription)
             XCTAssertEqual(reportField(in: app).value as? String, expected)
             capture(name: "lesson-unsaved-landscape-keyboard-closed")
         } else {
-            XCTAssertTrue(save.exists)
+            XCTAssertFalse(save.exists)
             capture(name: "lesson-unsaved-landscape")
         }
 
         rotate(app, to: .portrait)
         XCTAssertTrue(reportField(in: app).waitForExistence(timeout: 5))
         XCTAssertEqual(reportField(in: app).value as? String, expected)
-        XCTAssertTrue(save.exists)
+        XCTAssertFalse(save.exists)
         capture(name: "lesson-unsaved-portrait")
+
+        // La sauvegarde n’apparaît qu’au récapitulatif, qui montre exactement la valeur encore non enregistrée.
+        XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
+        next.tap()
+        let hasCompetencies = app.navigationBars["Compétences"].waitForExistence(timeout: 5)
+        if hasCompetencies {
+            XCTAssertFalse(save.exists)
+            XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
+            next.tap()
+        }
+        XCTAssertTrue(app.navigationBars["Récapitulatif"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts[expected].exists, app.debugDescription)
+        XCTAssertTrue(save.exists && save.isEnabled)
+
+        // Retour au texte, correction, puis nouvel aperçu : le modèle reste le même et le récap se met à jour.
+        back(in: app, title: "Récapitulatif")
+        if hasCompetencies { back(in: app, title: "Compétences") }
+        XCTAssertTrue(app.navigationBars["Bilan"].waitForExistence(timeout: 5), app.debugDescription)
+        let correctedField = reportField(in: app)
+        XCTAssertEqual(correctedField.value as? String, expected)
+        correctedField.tap()
+        correctedField.typeText(" Corrigé")
+        expected = try XCTUnwrap(correctedField.value as? String)
+        app.buttons["lesson-report-dismiss-keyboard"].tapIfExists()
+        XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
+        next.tap()
+        if hasCompetencies {
+            XCTAssertTrue(app.navigationBars["Compétences"].waitForExistence(timeout: 5), app.debugDescription)
+            next.tap()
+        }
+        XCTAssertTrue(app.navigationBars["Récapitulatif"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts[expected].exists, app.debugDescription)
+        XCTAssertTrue(save.exists && save.isEnabled)
         // La sauvegarde n’est jamais appelée : on vérifie la saisie, pas une relecture serveur.
         app.terminate()
     }
@@ -109,6 +140,12 @@ import UIKit
         return condition()
     }
 
+    private func back(in app: XCUIApplication, title: String) {
+        let button = app.navigationBars[title].buttons.firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 5), app.debugDescription)
+        button.tap()
+    }
+
     private func rotate(_ app: XCUIApplication, to orientation: UIDeviceOrientation) {
         XCUIDevice.shared.orientation = orientation
         let landscape = orientation.isLandscape
@@ -127,5 +164,11 @@ import UIKit
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+}
+
+private extension XCUIElement {
+    func tapIfExists() {
+        if waitForExistence(timeout: 2), isHittable { tap() }
     }
 }

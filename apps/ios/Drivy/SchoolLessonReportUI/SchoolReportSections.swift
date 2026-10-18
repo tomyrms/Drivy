@@ -506,9 +506,126 @@ private struct SchoolReportCompetencyRow: View {
     }
 }
 
+/// Aperçu fidèle de ce qui sera enregistré. Il lit les valeurs éditées du modèle, jamais une révision déjà publiée.
+/// Le trajet et les observations n’apparaissent que lorsqu’ils existent réellement.
+struct SchoolReportReviewSection: View {
+    let model: SchoolLessonReportWorkspace
+    let router: SchoolReportRouter
+    let context: SchoolReportContext
+    var showsHeading = false
+
+    private var hasTrip: Bool { !model.track.isEmpty || !model.replayableCaptures.isEmpty }
+    private var review: SchoolReportReview {
+        SchoolReportFlowRules.review(workedOn: model.workedOn, observationText: model.observationText,
+            nextStep: model.nextStep, observations: model.observations, competencies: model.competencies,
+            shared: model.sharing.map { _ in model.reportShared }, hasTrip: hasTrip,
+            lessonObservationCount: model.lessonObservations.count)
+    }
+
+    var body: some View {
+        if showsHeading {
+            Section {
+                Text("Récapitulatif")
+                    .font(.drivySection)
+                    .foregroundStyle(DrivyTheme.text)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .drivyClearRow()
+            .accessibilityIdentifier("lesson-report-review-heading")
+        }
+        report
+        competencies
+        visibility
+        if review.hasTrip {
+            SchoolReportTripSection(model: model, router: router, context: context,
+                mapHeight: SchoolReportLayout.evidenceMapHeight, editable: false)
+        }
+        if review.lessonObservationCount > 0 {
+            SchoolReportObservationsSection(model: model, router: router, context: context, editable: false)
+        }
+    }
+
+    private var report: some View {
+        Section {
+            if review.texts.isEmpty {
+                Text("Aucun texte ajouté.").foregroundStyle(DrivyTheme.muted)
+            } else {
+                ForEach(review.texts, id: \.label) { item in
+                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                        Text(item.label).font(.caption).foregroundStyle(DrivyTheme.muted)
+                        Text(item.value).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        } header: { Text("Bilan").drivyFormSectionHeader() }
+            .drivyFormRows()
+            .accessibilityIdentifier("lesson-report-review-text")
+    }
+
+    @ViewBuilder private var competencies: some View {
+        if !model.competencies.isEmpty {
+            Section {
+                if review.competencies.isEmpty {
+                    Text("Aucune compétence évaluée.").foregroundStyle(DrivyTheme.muted)
+                } else {
+                    ForEach(Array(review.competencies.enumerated()), id: \.offset) { _, competency in
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            Text(competency.label).font(.subheadline.weight(.medium))
+                            Text(competency.level).font(.caption).foregroundStyle(DrivyTheme.muted)
+                            if !competency.context.isEmpty {
+                                Text(competency.context).font(.caption).foregroundStyle(DrivyTheme.muted)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            } header: { Text("Compétences").drivyFormSectionHeader() }
+                .drivyFormRows()
+                .accessibilityIdentifier("lesson-report-review-competencies")
+        }
+    }
+
+    private var visibility: some View {
+        Section {
+            switch review.visibility {
+            case .shared:
+                Label("Visible par l’élève", systemImage: "person.2")
+            case .forMe:
+                Label("Pour moi", systemImage: "lock")
+            case .unknown:
+                Label("Visibilité à vérifier", systemImage: "exclamationmark.circle")
+                    .foregroundStyle(DrivyTheme.muted)
+            }
+        } header: { Text("Partage").drivyFormSectionHeader() }
+            .drivyFormRows()
+            .accessibilityIdentifier("lesson-report-review-visibility")
+    }
+}
+
+/// En fenêtre large, l’action durable se trouve après le récapitulatif, jamais dès l’entrée dans la rédaction.
+struct SchoolReportSaveSection: View {
+    @Bindable var model: SchoolLessonReportWorkspace
+
+    var body: some View {
+        Section {
+            SchoolReportSaveControl(model: model)
+        }
+        .drivyFormRows()
+    }
+}
+
 /// La leçon est déjà terminée : ce bouton enregistre le bilan, puis ferme la fiche. L’école en fait aussitôt
 /// la version lue par l’élève, sauf bilan gardé pour soi ; le libellé le dit avant le geste.
 struct SchoolReportSaveBar: View {
+    @Bindable var model: SchoolLessonReportWorkspace
+
+    var body: some View {
+        DrivyStickyActionBar { SchoolReportSaveControl(model: model) }
+    }
+}
+
+private struct SchoolReportSaveControl: View {
     @Bindable var model: SchoolLessonReportWorkspace
 
     private var title: String {
@@ -517,7 +634,7 @@ struct SchoolReportSaveBar: View {
     private var isSending: Bool { model.isBusy && model.pending?.kind == .saveReportDraft }
 
     var body: some View {
-        DrivyStickyActionBar {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             if !model.validTexts { DrivyActionNote(text: "Un texte dépasse 4 000 caractères.", isError: true) }
             else if !model.observationsValid { DrivyActionNote(text: "Vérifie les niveaux et limite chaque situation à 500 caractères.", isError: true) }
             Button { Task { await model.saveDraft() } } label: {
@@ -527,6 +644,7 @@ struct SchoolReportSaveBar: View {
             .disabled(!model.acceptsInput || !model.validTexts || !model.observationsValid)
             .accessibilityIdentifier("lesson-save-report")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

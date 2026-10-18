@@ -96,7 +96,7 @@ import Testing
 
         #expect(review.texts.map(\.value) == ["Créneaux", "Regarder loin", "Giratoires"])
         #expect(review.competencies == [.init(label: "Compétence 1", level: "Avec accompagnement", context: "Centre-ville")])
-        #expect(review.visibility == .private)
+        #expect(review.visibility == .forMe)
         #expect(!review.hasTrip && review.lessonObservationCount == 0)
     }
 
@@ -106,6 +106,19 @@ import Testing
         #expect(review.texts.isEmpty && review.competencies.isEmpty)
         #expect(review.visibility == .shared)
         #expect(!review.hasTrip && review.lessonObservationCount == 2)
+    }
+
+    @Test func missingSharingDataStaysUnknownInsteadOfInventingASavedStatus() {
+        let review = SchoolReportFlowRules.review(workedOn: "", observationText: "", nextStep: "", observations: [],
+            competencies: [], shared: nil, hasTrip: false, lessonObservationCount: 0)
+        #expect(review.visibility == .unknown)
+    }
+
+    @Test func anEditedCompetencyIsNotDroppedWhenItsCatalogLabelIsUnavailable() {
+        let observation = SchoolReportObservation(competencyId: UUID(), level: "INDEPENDENT", context: "Route cantonale")
+        let review = SchoolReportFlowRules.review(workedOn: "", observationText: "", nextStep: "",
+            observations: [observation], competencies: [], shared: true, hasTrip: false, lessonObservationCount: 0)
+        #expect(review.competencies == [.init(label: "Compétence à vérifier", level: "En autonomie", context: "Route cantonale")])
     }
 
     @Test func aLongListFoldsAndASingleExtraItemStaysVisible() {

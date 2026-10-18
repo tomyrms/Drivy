@@ -395,6 +395,8 @@ private struct SchoolLessonReportContent: View {
                 Form {
                     SchoolReportTextSection(model: model)
                     SchoolReportCompetenciesSection(model: model)
+                    SchoolReportReviewSection(model: model, router: router, context: reportContext, showsHeading: true)
+                    SchoolReportSaveSection(model: model)
                 }
                     .scrollContentBackground(.hidden)
                     .scrollDismissesKeyboard(.interactively)
@@ -458,13 +460,13 @@ private struct SchoolLessonReportContent: View {
         if isPlanned, model.isAuthor { SchoolReportObservationsSection(model: model, router: router, context: reportContext) }
     }
 
-    /// Barre basse : les gestes d’une leçon planifiée ; pour une leçon terminée, l’enregistrement du bilan quand
-    /// il se rédige sur place, sinon l’entrée dans sa rédaction quand elle a sa place en bas.
+    /// Barre basse : les gestes d’une leçon planifiée, ou l’entrée dans la rédaction d’une leçon terminée. En fenêtre
+    /// large, l’enregistrement reste après le récapitulatif dans le formulaire, jamais visible dès l’entrée.
     @ViewBuilder private func bottomBar(_ bar: PlannedBar?, presentation: SchoolReportPresentation) -> some View {
         if let bar {
             plannedBarView(bar)
-        } else if editsReport {
-            if presentation == .sideBySide { SchoolReportSaveBar(model: model) } else { reportEntryBar }
+        } else if editsReport, presentation != .sideBySide {
+            reportEntryBar
         }
     }
 
