@@ -11,6 +11,7 @@ struct SchoolProfileView: View {
     @State private var focusApplied = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsGuidedWelcome = false
     @State private var confirmsDiscard = false
     @State private var attemptedSave = false
@@ -54,7 +55,7 @@ struct SchoolProfileView: View {
         if focus == .postalAddress && !model.draft.hasAddress { model.draft.hasAddress = true }
         try? await Task.sleep(for: .milliseconds(350))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(focus, anchor: .center) }
+        withAnimation(DrivyMotion.context(reduceMotion)) { proxy.scrollTo(focus, anchor: .center) }
         focusedField = focus
     }
 
@@ -264,7 +265,7 @@ struct SchoolProfileView: View {
             if isMissing(field) { DrivyActionDot().transition(.opacity) }
             Text(title).drivyFormSectionHeader()
         }
-        .animation(.easeOut(duration: 0.2), value: isMissing(field))
+        .animation(DrivyMotion.feedback(reduceMotion), value: isMissing(field))
         .accessibilityElement(children: .combine)
         .accessibilityValue(isMissing(field) ? "À renseigner" : "")
     }
