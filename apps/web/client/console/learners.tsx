@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
+import { learnerFilterContext } from '../console-filter-model';
 import {
   assignmentIsOpen, availableTrainingOfferings, createCommand, filled, isCivilDate, matchesSearch, latestPermit, permitBody, permitProblem, transitionProblem, trainingTransitions,
   type PermitDraft, type TrainingTransition,
@@ -22,16 +23,6 @@ import { GpsConsentLine } from './gps-consent';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
-export function learnerFilterContext({ search, statusFilter, readinessFilter }: {
-  search: string; statusFilter: 'active' | 'archived' | 'all'; readinessFilter: 'all' | 'incomplete';
-}): string | null {
-  const criteria = [
-    search.trim() ? `Recherche « ${search.trim()} »` : null,
-    statusFilter === 'archived' ? 'dossiers archivés' : statusFilter === 'all' ? 'tous les dossiers' : null,
-    readinessFilter === 'incomplete' ? 'profil à compléter' : null,
-  ].filter((value): value is string => value !== null);
-  return criteria.length ? criteria.join(' · ') : null;
-}
 const emptyPermit = (): PermitDraft => ({ physicalSeen: false, validUntil: '', decision: 'APPROVED', reason: '' });
 
 type Dialog =

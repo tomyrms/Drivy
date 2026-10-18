@@ -5,7 +5,8 @@ import { isCivilDate } from '../command-core';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
 import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
-import { useConsole, useLoad, type Loaded } from './context';
+import { useConsole, useLoad } from './context';
+import { agendaSearchQuery } from '../console-filter-model';
 import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
@@ -19,10 +20,6 @@ const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: strin
   started: { label: 'En cours', tone: 'accent', symbol: 'clock' },
   'to-finish': { label: 'À terminer', tone: 'warning', symbol: 'clock' },
 };
-
-export function agendaSearchQuery(directory: Pick<Loaded<unknown>, 'status' | 'data'>, search: string): string {
-  return directory.data !== undefined && search.trim() ? search : '';
-}
 
 /** Agenda de l'école en lecture seule : la planification des leçons se fait dans l'app. */
 export function AgendaSection() {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { agendaSearchQuery } from '../client/console/agenda.js';
-import { learnerFilterContext } from '../client/console/learners.js';
+import { agendaSearchQuery, learnerFilterContext } from '../client/console-filter-model.js';
 
 describe('recherche agenda et disponibilité du répertoire', () => {
   const search = 'Mina';
