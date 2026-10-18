@@ -8,6 +8,14 @@ enum SchoolReportStep: String, CaseIterable, Identifiable, Sendable {
 
 enum SchoolReportReviewVisibility: Equatable, Sendable {
     case shared, forMe, unknown
+
+    var pendingLabel: String {
+        switch self {
+        case .shared: "Après enregistrement, visible par l’élève"
+        case .forMe: "Après enregistrement, pour moi"
+        case .unknown: "Visibilité à vérifier"
+        }
+    }
 }
 
 struct SchoolReportReview: Equatable, Sendable {
@@ -27,6 +35,8 @@ struct SchoolReportReview: Equatable, Sendable {
     let visibility: SchoolReportReviewVisibility
     let hasTrip: Bool
     let lessonObservationCount: Int
+
+    var showsCompetencies: Bool { !competencies.isEmpty }
 }
 
 /// Ce qui ouvre la rédaction du bilan. Il n’existe aucune autre origine : ouvrir une leçon ne rédige jamais rien.
@@ -110,6 +120,8 @@ enum SchoolReportFlowRules {
         return SchoolReportReview(texts: texts, competencies: reviewed, visibility: visibility,
             hasTrip: hasTrip, lessonObservationCount: lessonObservationCount)
     }
+
+    static func showsEvidenceInReview(isWide: Bool) -> Bool { !isWide }
 
     /// « 2 sur 3 » ; rien quand le parcours tient en une étape.
     static func position(of index: Int, count: Int) -> String? {

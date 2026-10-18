@@ -395,7 +395,8 @@ private struct SchoolLessonReportContent: View {
                 Form {
                     SchoolReportTextSection(model: model)
                     SchoolReportCompetenciesSection(model: model)
-                    SchoolReportReviewSection(model: model, router: router, context: reportContext, showsHeading: true)
+                    SchoolReportReviewSection(model: model, router: router, context: reportContext, showsHeading: true,
+                        showsEvidence: SchoolReportFlowRules.showsEvidenceInReview(isWide: true))
                     SchoolReportSaveSection(model: model)
                 }
                     .scrollContentBackground(.hidden)

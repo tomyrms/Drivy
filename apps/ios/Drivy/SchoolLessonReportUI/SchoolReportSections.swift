@@ -513,6 +513,7 @@ struct SchoolReportReviewSection: View {
     let router: SchoolReportRouter
     let context: SchoolReportContext
     var showsHeading = false
+    var showsEvidence = true
 
     private var hasTrip: Bool { !model.track.isEmpty || !model.replayableCaptures.isEmpty }
     private var review: SchoolReportReview {
@@ -536,12 +537,12 @@ struct SchoolReportReviewSection: View {
         report
         competencies
         visibility
-        if review.hasTrip {
+        if showsEvidence, review.hasTrip {
             SchoolReportTripSection(model: model, router: router, context: context,
-                mapHeight: SchoolReportLayout.evidenceMapHeight, editable: false)
+                mapHeight: SchoolReportLayout.evidenceMapHeight, editable: true)
         }
-        if review.lessonObservationCount > 0 {
-            SchoolReportObservationsSection(model: model, router: router, context: context, editable: false)
+        if showsEvidence, review.lessonObservationCount > 0 {
+            SchoolReportObservationsSection(model: model, router: router, context: context, editable: true)
         }
     }
 
@@ -564,7 +565,7 @@ struct SchoolReportReviewSection: View {
     }
 
     @ViewBuilder private var competencies: some View {
-        if !model.competencies.isEmpty {
+        if !model.competencies.isEmpty || review.showsCompetencies {
             Section {
                 if review.competencies.isEmpty {
                     Text("Aucune compétence évaluée.").foregroundStyle(DrivyTheme.muted)
@@ -590,11 +591,11 @@ struct SchoolReportReviewSection: View {
         Section {
             switch review.visibility {
             case .shared:
-                Label("Visible par l’élève", systemImage: "person.2")
+                Label(review.visibility.pendingLabel, systemImage: "person.2")
             case .forMe:
-                Label("Pour moi", systemImage: "lock")
+                Label(review.visibility.pendingLabel, systemImage: "lock")
             case .unknown:
-                Label("Visibilité à vérifier", systemImage: "exclamationmark.circle")
+                Label(review.visibility.pendingLabel, systemImage: "exclamationmark.circle")
                     .foregroundStyle(DrivyTheme.muted)
             }
         } header: { Text("Partage").drivyFormSectionHeader() }

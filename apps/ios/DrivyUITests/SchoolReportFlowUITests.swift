@@ -16,7 +16,8 @@ import XCTest
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5), app.debugDescription)
         confirmation.tap()
 
-        XCTAssertTrue(app.navigationBars["Bilan"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(stepTitle(in: app).waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(stepTitle(in: app).label.hasPrefix("Bilan"), app.debugDescription)
         XCTAssertFalse(app.buttons["lesson-save-report"].exists)
         let workedOn = reportField("Travail réalisé", in: app)
         XCTAssertTrue(workedOn.waitForExistence(timeout: 5), app.debugDescription)
@@ -27,17 +28,28 @@ import XCTest
         let next = app.buttons["lesson-report-next"]
         XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
         next.tap()
-        if app.navigationBars["Compétences"].waitForExistence(timeout: 5) {
+        XCTAssertTrue(waitUntil { !stepTitle(in: app).label.hasPrefix("Bilan") }, app.debugDescription)
+        if stepTitle(in: app).label.hasPrefix("Compétences") {
             XCTAssertFalse(app.buttons["lesson-save-report"].exists)
             XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
             next.tap()
         }
 
-        XCTAssertTrue(app.navigationBars["Récapitulatif"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(waitUntil(timeout: 10) { stepTitle(in: app).label.hasPrefix("Récapitulatif") }, app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["lesson-report-review-text"].exists)
         XCTAssertTrue(app.staticTexts["Créneaux et contrôles"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["lesson-report-review-visibility"].exists)
         XCTAssertTrue(app.buttons["lesson-save-report"].exists)
+    }
+
+    private func stepTitle(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)["lesson-report-step"]
+    }
+
+    private func waitUntil(timeout: TimeInterval = 5, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
+        return condition()
     }
 
     private func launch(_ screen: String) -> XCUIApplication {

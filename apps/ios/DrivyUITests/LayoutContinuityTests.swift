@@ -25,7 +25,8 @@ import UIKit
         edit.tap()
         let save = app.buttons["lesson-save-report"]
         let next = app.buttons["lesson-report-next"]
-        XCTAssertTrue(app.navigationBars["Bilan"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(stepTitle(in: app).waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(stepTitle(in: app).label.hasPrefix("Bilan"), app.debugDescription)
         XCTAssertFalse(save.exists)
 
         let field = reportField(in: app)
@@ -80,20 +81,21 @@ import UIKit
         // La sauvegarde n’apparaît qu’au récapitulatif, qui montre exactement la valeur encore non enregistrée.
         XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
         next.tap()
-        let hasCompetencies = app.navigationBars["Compétences"].waitForExistence(timeout: 5)
+        XCTAssertTrue(waitUntil { !stepTitle(in: app).label.hasPrefix("Bilan") }, app.debugDescription)
+        let hasCompetencies = stepTitle(in: app).label.hasPrefix("Compétences")
         if hasCompetencies {
             XCTAssertFalse(save.exists)
             XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
             next.tap()
         }
-        XCTAssertTrue(app.navigationBars["Récapitulatif"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(waitUntil(timeout: 10) { stepTitle(in: app).label.hasPrefix("Récapitulatif") }, app.debugDescription)
         XCTAssertTrue(app.staticTexts[expected].exists, app.debugDescription)
         XCTAssertTrue(save.exists && save.isEnabled)
 
         // Retour au texte, correction, puis nouvel aperçu : le modèle reste le même et le récap se met à jour.
-        back(in: app, title: "Récapitulatif")
-        if hasCompetencies { back(in: app, title: "Compétences") }
-        XCTAssertTrue(app.navigationBars["Bilan"].waitForExistence(timeout: 5), app.debugDescription)
+        back(in: app)
+        if hasCompetencies { back(in: app) }
+        XCTAssertTrue(waitUntil { stepTitle(in: app).label.hasPrefix("Bilan") }, app.debugDescription)
         let correctedField = reportField(in: app)
         XCTAssertEqual(correctedField.value as? String, expected)
         correctedField.tap()
@@ -103,14 +105,18 @@ import UIKit
         XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
         next.tap()
         if hasCompetencies {
-            XCTAssertTrue(app.navigationBars["Compétences"].waitForExistence(timeout: 5), app.debugDescription)
+            XCTAssertTrue(waitUntil { stepTitle(in: app).label.hasPrefix("Compétences") }, app.debugDescription)
             next.tap()
         }
-        XCTAssertTrue(app.navigationBars["Récapitulatif"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(waitUntil(timeout: 10) { stepTitle(in: app).label.hasPrefix("Récapitulatif") }, app.debugDescription)
         XCTAssertTrue(app.staticTexts[expected].exists, app.debugDescription)
         XCTAssertTrue(save.exists && save.isEnabled)
         // La sauvegarde n’est jamais appelée : on vérifie la saisie, pas une relecture serveur.
         app.terminate()
+    }
+
+    private func stepTitle(in app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any)["lesson-report-step"]
     }
 
     private func reportField(in app: XCUIApplication) -> XCUIElement {
@@ -140,8 +146,8 @@ import UIKit
         return condition()
     }
 
-    private func back(in app: XCUIApplication, title: String) {
-        let button = app.navigationBars[title].buttons.firstMatch
+    private func back(in app: XCUIApplication) {
+        let button = app.navigationBars.firstMatch.buttons.firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 5), app.debugDescription)
         button.tap()
     }

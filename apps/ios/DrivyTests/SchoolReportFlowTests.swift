@@ -119,6 +119,18 @@ import Testing
         let review = SchoolReportFlowRules.review(workedOn: "", observationText: "", nextStep: "",
             observations: [observation], competencies: [], shared: true, hasTrip: false, lessonObservationCount: 0)
         #expect(review.competencies == [.init(label: "Compétence à vérifier", level: "En autonomie", context: "Route cantonale")])
+        #expect(review.showsCompetencies)
+    }
+
+    @Test func pendingVisibilityLabelsDescribeTheEffectOfTheFinalSave() {
+        #expect(SchoolReportReviewVisibility.shared.pendingLabel == "Après enregistrement, visible par l’élève")
+        #expect(SchoolReportReviewVisibility.forMe.pendingLabel == "Après enregistrement, pour moi")
+        #expect(SchoolReportReviewVisibility.unknown.pendingLabel == "Visibilité à vérifier")
+    }
+
+    @Test func evidenceStaysEditableWithoutBeingDuplicatedInTheWideReviewColumn() {
+        #expect(SchoolReportFlowRules.showsEvidenceInReview(isWide: false))
+        #expect(!SchoolReportFlowRules.showsEvidenceInReview(isWide: true))
     }
 
     @Test func aLongListFoldsAndASingleExtraItemStaysVisible() {
