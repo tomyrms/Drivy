@@ -149,7 +149,7 @@ export async function runMeasurement(){
   for(const limit of sizes){const measured=await measure(call,counter,limit);measurements.push(measured.measurement);roleDrivyApp=roleDrivyApp&&measured.roleDrivyApp;}
   assert(roleDrivyApp,'MEASURE_ROLE_FAILED');
   const run:Run={phase,createdAt:new Date().toISOString(),node:process.version,fixture:{curricula:100,competenciesPerCurriculum},warmups,samples,checks:{...baseChecks,roleDrivyApp},measurements};
-  const output=await save(outputPath,run);process.stdout.write(`${JSON.stringify({phase,runs:output.runs.length,comparison:Boolean(output.comparison)})}\n`);
+  const output=await save(outputPath,run);process.stdout.write(`${JSON.stringify({phase,runs:output.runs.length,comparison:Boolean(output.comparison)})}\n`);return output;
  }finally{await app.close();await pool.end();}
 }
 
