@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, weekStart, weekWindow } from '../agenda-model';
 import { useCommandSnapshot } from '../command-store';
+import { isCivilDate } from '../command-core';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
-import { EmptyState, Notice, SelectField, StatusBadge, Symbol, type Tone } from '../ui';
+import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
@@ -29,6 +30,8 @@ export function AgendaSection() {
   const [localInstructor, setLocalInstructor] = useState('');
   const [search, setSearch] = useListState('agenda/search', '');
   const monday = routeQuery ? weekStart(routeQuery.week ?? civilDateIn(school.timeZone)) : localMonday;
+  const [jumpDate, setJumpDate] = useState(monday);
+  useEffect(() => setJumpDate(monday), [monday]);
   const instructor = routeQuery ? routeQuery.instructor ?? '' : localInstructor;
   const setMonday = (week: string) => { setLocalMonday(week); setRouteQuery?.({ ...routeQuery, week }); };
   const setInstructor = (id: string) => { setLocalInstructor(id); setRouteQuery?.({ ...routeQuery, instructor: id || undefined }); };
@@ -78,6 +81,15 @@ export function AgendaSection() {
           </div>
           {monday !== thisWeek && <button type="button" className="button quiet" onClick={() => { setMonday(thisWeek); window.requestAnimationFrame(() => weekLabel.current?.focus()); }}>Aujourd’hui</button>}
         </div>
+        <form className="agenda-date-jump" onSubmit={event => {
+          event.preventDefault();
+          if (!isCivilDate(jumpDate)) return;
+          setMonday(weekStart(jumpDate));
+          window.requestAnimationFrame(() => weekLabel.current?.focus());
+        }}>
+          <TextField label="Aller à une date" type="date" required value={jumpDate} onChange={setJumpDate} />
+          <button type="submit" className="button secondary">Afficher la semaine</button>
+        </form>
         <div className="agenda-studio-filters">
           {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor} search appearance="filter"
             options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName })),
