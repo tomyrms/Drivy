@@ -1,6 +1,6 @@
 # Audit à quatre agents — 18 octobre 2026
 
-Branche d’intégration : `claude/audit-4agents-20261018`, partie de `claude/essaim-bugs-20261017` (qui contient `origin/master`). Une branche par agent, aucun fichier partagé entre agents, aucun push, aucune fusion sur `master`, aucun déploiement.
+Branche d’intégration : `claude/audit-4agents-20261018`, partie de `claude/essaim-bugs-20261017` (qui contient `origin/master`). Une branche par agent, aucun fichier partagé entre agents, aucun push, aucune fusion sur `master`. Déploiement homelab fait ensuite à la demande du porteur.
 
 | Agent | Modèle | Branche | Résultat |
 |---|---|---|---|
@@ -20,7 +20,7 @@ Branche d’intégration : `claude/audit-4agents-20261018`, partie de `claude/es
 
 Corrigés : confirmation avant déconnexion avec une demande à vérifier, saisies conservées au retour par le cache de navigation, avis « Liste partielle » au-delà de 1 000 invitations, horaire de disponibilité chevauchant refusé dans la console, renouvellement du jeton sur 401 dans dix clients iOS, rappel « à terminer » sur cinq pages, agenda prévenu d’un démarrage sans rendez-vous, deux occurrences d’une heure répétée dans `next-slot`.
 
-Non corrigés : carte iOS recréée au changement de disposition (simulateur nécessaire), troncature à 80 lots (décision de contrat), refus serveur des chevauchements (suite logique, 409), constats exigeant un appareil, SQLCipher ou une décision produit.
+Non corrigés : carte iOS recréée au changement de disposition (simulateur nécessaire), troncature à 80 lots (décision de contrat), refus serveur des chevauchements (décision produit : quatorze tests d’intégration empilent volontairement des plages d’un même moniteur ; essai abandonné, le homelab n’en contient aucun), constats exigeant un appareil, SQLCipher ou une décision produit.
 
 ## Architecture
 
@@ -28,4 +28,4 @@ Aucun export, module ou fonction Swift sans référence. `formatDate` (App.tsx) 
 
 ## Exécuté
 
-Sur la branche d’intégration : typage web (deux passes) et API, 264 tests web (référence 260) et 132 tests API sans base (référence 130), tous verts. **À qualifier par la CI** : tous les changements Swift (relus, non compilés), tests PostgreSQL. Aucun résultat d’appareil.
+Sur la branche d’intégration : typage web (deux passes) et API, 264 tests web (référence 260) et 132 tests API sans base (référence 130), tous verts. Ensuite, sur `3893b7c` (avec la branche déployée `d97dfa9` intégrée) : CI verte, tests PostgreSQL, parcours navigateur, IPA et 660 tests Swift ; une régression iOS de `ecdc144` (enregistrement permis après une relecture ratée) corrigée. Déployé sur le homelab le 18 octobre après sauvegarde vérifiée (voir STATUS.md). Aucun résultat d’appareil.
