@@ -22,6 +22,16 @@ describe('Vérification OIDC cryptographique', () => {
   it.each(['issuer','audience'] as const)('refuse un %s différent', async claim => {
     await expect(verify(`Bearer ${await token({ [claim]: 'https://other.example.invalid' })}`)).rejects.toMatchObject({ status: 401 });
   });
+  it.each([
+    ['nombre', 42], ['booléen', true], ['objet', { id: 'test-person' }],
+    ['tableau', ['test-person']], ['tableau vide', []], ['nul', null], ['chaîne vide', ''],
+  ])('refuse un sujet non textuel ou vide : %s', async (_label, subject) => {
+    // The cast deliberately bypasses the producer's types to exercise untrusted JWT claims.
+    const invalid = await new SignJWT({ sub: subject as string })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test-key' }).setIssuer(config.OIDC_ISSUER)
+      .setAudience(config.OIDC_AUDIENCE).setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+    await expect(verify(`Bearer ${invalid}`)).rejects.toMatchObject({ status: 401, code: 'INVALID_SESSION' });
+  });
   it('refuse un jeton expiré', async () => {
     await expect(verify(`Bearer ${await token({ expiration: 1 })}`)).rejects.toMatchObject({ status: 401 });
   });

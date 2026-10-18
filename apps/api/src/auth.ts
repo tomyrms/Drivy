@@ -29,7 +29,7 @@ export function createTokenVerifier(config: Pick<Config, 'OIDC_ISSUER' | 'OIDC_A
         issuer: config.OIDC_ISSUER, audience: config.OIDC_AUDIENCE,
         algorithms: ['RS256', 'ES256'], requiredClaims: ['sub', 'iat', 'exp'], clockTolerance: 5
       });
-      if (!payload.sub || !payload.iss) throw new Error('Identité incomplète');
+      if (typeof payload.sub !== 'string' || !payload.sub || !payload.iss) throw new Error('Identité incomplète');
       const email = typeof payload.email === 'string' ? payload.email.trim().normalize('NFC').toLowerCase() : undefined;
       const verifiedEmail = payload.email_verified === true && email && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
       const displayName = typeof payload.name === 'string' && payload.name.trim() && [...payload.name.trim()].length <= 200 ? payload.name.trim() : undefined;
