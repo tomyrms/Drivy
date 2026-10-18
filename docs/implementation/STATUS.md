@@ -6,7 +6,7 @@ Branche `audit/intelligent-v2-20261018`, basée sur V1 `7c117cd`. Vingt explorat
 
 **Validation exécutée : 447 tests API avec PostgreSQL/SMTP, 236 tests web, 51 scénarios navigateur à transport synthétique et 82 contrôles réels Edge/Keycloak/BFF/API/PostgreSQL/SMTP réussis.** Types, builds et intégrité des 556 fichiers canoniques passent. Le blocage Docker de V1 a été levé localement. Récupération de compte explicitement exclue, aucun mot de passe réinitialisé. Node 26 local au lieu du 24 requis, Apple/Safari/VoiceOver/GPS terrain non qualifiés. Aucun push, fusion, déploiement ou changement de production. Validation humaine avant intégration.
 
-[Rapport V2 : décisions, preuves, fichiers et commits](audit-v2-20261018.md) · [Plan et bilan](audit-v2-20261018-plan.md).
+[Rapport V2 : décisions, preuves, fichiers et commits](audit-v2-20261018.md) · [Plan et bilan](audit-v2-20261018-plan.md) · [Matrice de clôture et observations](audit-v2-20261018-acceptance.md). Rejeu complet du lot committé réussi à 17:23:47 UTC, avec preuve nominative de chaque sortie modifiée et des frontières d’intégration, sans nouveau changement produit.
 
 ## 18 octobre 2026 : audit multi-agents local, non déployé
 
