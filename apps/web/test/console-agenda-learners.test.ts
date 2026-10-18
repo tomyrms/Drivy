@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'vitest';
-import { lessonsOfLearners } from '../client/agenda-model.js';
+import { agendaSearchQuery } from '../client/console/agenda.js';
 import { learnerFilterContext } from '../client/console/learners.js';
 
-describe('répertoire partiel de l’agenda', () => {
-  test('une recherche suspendue garde les leçons quand aucun nom n’est résolu', () => {
-    const lessons = [{ learnerId: 'learner-1' }, { learnerId: 'learner-2' }];
-    expect(lessonsOfLearners(lessons, [], '')).toEqual(lessons);
+describe('recherche agenda et disponibilité du répertoire', () => {
+  const search = 'Mina';
+  test.each([
+    ['ready avec données', { status: 'ready', data: { learners: [] } }, search],
+    ['loading avec dernière lecture', { status: 'loading', data: { learners: [] } }, search],
+    ['error avec dernière lecture', { status: 'error', data: { learners: [] } }, search],
+    ['loading sans données', { status: 'loading', data: undefined }, ''],
+    ['error sans données', { status: 'error', data: undefined }, ''],
+  ] as const)('%s applique la règle de recherche', (_label, directory, expected) => {
+    expect(agendaSearchQuery(directory, search)).toBe(expected);
   });
 });
 
