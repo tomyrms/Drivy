@@ -40,6 +40,7 @@ export function ManagementConsole() {
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutWarning, setLogoutWarning] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationButton = useRef<HTMLButtonElement>(null);
@@ -170,6 +171,12 @@ export function ManagementConsole() {
     }
   }
 
+  /** Signing out forgets the followed requests: with one still unsettled, ask first. */
+  function requestLogout() {
+    if (working.current || !session) return;
+    if (commandStore.getSnapshot().entries.size > 0) setLogoutWarning(true); else void logout();
+  }
+
   async function logout() {
     if (working.current || !session) return;
     working.current = true;
@@ -256,7 +263,7 @@ export function ManagementConsole() {
           : <span className="school-name">{state.school.name}</span>)}
         <div className="bar-end">
           <AccountMenu name={personName ?? 'Mon compte'} authenticated={!!session?.authenticated} busy={busy}
-            beforeNavigate={proceed => proceedNavigation(() => { unsaved.current.clear(); proceed(); })} onLogout={() => proceedNavigation(() => void logout())} />
+            beforeNavigate={proceed => proceedNavigation(() => { unsaved.current.clear(); proceed(); })} onLogout={() => proceedNavigation(requestLogout)} />
         </div>
       </header>
 
@@ -282,6 +289,10 @@ export function ManagementConsole() {
           </ConsoleContext.Provider>}
         </main>
       </div>
+      <ConfirmDialog open={logoutWarning} title="Se déconnecter avec une demande à vérifier ?" confirmLabel="Se déconnecter" busy={busy}
+        onCancel={() => setLogoutWarning(false)} onConfirm={() => { setLogoutWarning(false); void logout(); }}>
+        <p>Une demande envoyée à l’école n’a pas encore de résultat connu. Se déconnecter arrête son suivi : vérifiez-la d’abord pour connaître son résultat.</p>
+      </ConfirmDialog>
       <ConfirmDialog open={departure !== null} title="Quitter sans enregistrer ?" confirmLabel="Quitter la page" busy={false}
         onCancel={() => setDeparture(null)} onConfirm={() => { const next = departure; setDeparture(null); bypassGuard.current = true; try { next?.proceed(); } finally { bypassGuard.current = false; } }}>
         <p>Vos modifications ne sont pas enregistrées auprès de l’école.</p>
