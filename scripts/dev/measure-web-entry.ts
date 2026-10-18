@@ -62,7 +62,7 @@ async function main() {
     browser = await chromium.launch({ channel: process.env.DRIVY_BROWSER_CHANNEL ?? 'msedge', headless: true });
     const results = [];
     for (const route of routes) {
-      const samples = [];
+      const samples: Awaited<ReturnType<typeof measure>> = [];
       for (let run = 0; run < runs; run++) samples.push(...await measure(browser, origin, route));
       results.push({ route, samples, medians: ['cold-context', 'warm-reload'].map(cache => {
         const values = samples.filter(s => s.cache === cache);
