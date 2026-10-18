@@ -17,6 +17,7 @@ import { createIdentityProvider } from '../../apps/web/server/oidc.js';
 import { SessionStore } from '../../apps/web/server/session.js';
 import { parseMetadata } from '../../apps/web/client/command-core.js';
 import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
+import { verifyAuditV2 } from './check-audit-v2-acceptance.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -25,6 +26,7 @@ const keycloakImage='quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab
 const artifactDirectory=fileURLToPath(new URL('../../artifacts/onboarding-web-synthetic/',import.meta.url));
 const containerName=`drivy-opening-e2e-${randomUUID()}`;
 const checks:string[]=[];let stage='initialisation de la recette';
+const skipAccountRecovery=process.argv.includes('--skip-account-recovery');
 const inspectedMessages=new Set<string>();
 const messageSchema=z.object({ID:z.string().regex(/^[a-zA-Z0-9-]+$/),MessageID:z.string(),To:z.array(z.object({Address:z.string()}))});
 async function ownMail(email:string,matches:(message:z.infer<typeof messageSchema>)=>boolean=()=>true) {
@@ -107,7 +109,7 @@ async function main() {
     web=await buildWebApp({config,identity:await createIdentityProvider(config),store:sessionStore,staticRoot:fileURLToPath(new URL('../../apps/web/dist/client/',import.meta.url))});
     await api.listen({host:'127.0.0.1',port:3001});await web.listen({host:'127.0.0.1',port:3002});
     await mkdir(artifactDirectory,{recursive:true});
-    stage='navigateur Chromium';browser=await chromium.launch({headless:true});
+    stage='navigateur Chromium';browser=await chromium.launch({headless:true,...(process.env.DRIVY_BROWSER_CHANNEL?{channel:z.enum(['msedge','chrome']).parse(process.env.DRIVY_BROWSER_CHANNEL)}:{})});
     const operatorContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
     let consumerContext=await browser.newContext({viewport:{width:1440,height:1100},locale:'fr-CH'});
     for(const context of [operatorContext,consumerContext])await context.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
@@ -457,6 +459,9 @@ async function main() {
         const token=sessionStore.get(cookie?.value)?.tokens?.accessToken;
         if(!token)throw new Error('FIRST_LESSON_IDENTITY_UNAVAILABLE');return token;
       },assert,setStage:value=>{stage=value;},artifactDirectory});
+    if(process.argv.includes('--audit-v2')) await verifyAuditV2({page,context:consumerContext,origin,keycloakOrigin,schoolId:school.id,
+      operatorPassword,consumerPassword,assert,setStage:value=>{stage=value;}});
+    if(!skipAccountRecovery) {
     stage='récupération du compte OIDC par courrier';
     const recoveryContext=await browser.newContext({locale:'fr-CH'});recoveryContext.setDefaultTimeout(20_000);
     await recoveryContext.route('**/*',route=>[origin,keycloakOrigin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());
@@ -480,8 +485,9 @@ async function main() {
     const recoveredData=z.object({data:z.object({memberships:z.array(z.object({schoolId:z.string(),roles:z.array(z.string())}))})}).parse(await recoveredMe.json());
     assert(recoveredMe.ok()&&recoveredData.data.memberships.some(member=>member.schoolId===school.id&&member.roles.includes('ADMIN')),'Le mot de passe récupéré reconnecte la même identité et retrouve son école');
     await recoveredContext.close();
-    await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
-      scope:'Chromium desktop et viewport mobile, Keycloak réel, vérification e-mail, invitation équipe et récupération du compte par SMTP, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
+    }
+    await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,skipped:skipAccountRecovery?['account-recovery']:[],
+      scope:`Chromium desktop et viewport mobile, Keycloak réel, vérification e-mail, invitation équipe par SMTP${skipAccountRecovery?' ; récupération du compte exclue':', récupération du compte'}, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.`},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);
   } finally {
     await browser?.close();await web?.close();await api?.close();await runtime?.end();await mailer?.end();await administration.end();
