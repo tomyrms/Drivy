@@ -1,5 +1,9 @@
 # État de la réalisation
 
+## 18 octobre 2026 — audit à quatre agents (UI/UX, bugs, architecture, QA)
+
+Intégré sur `claude/audit-4agents-20261018` : confirmation avant déconnexion avec une demande à vérifier, saisies conservées au retour par le cache de navigation, avis au-delà de 1 000 invitations, chevauchement d’horaires refusé dans la console, renouvellement du jeton sur 401 dans dix clients iOS, rappel « à terminer » sur cinq pages, agenda prévenu d’un démarrage sans rendez-vous, heure répétée du passage à l’heure d’hiver dans `next-slot`, ombres de menu et Réduire les animations alignés sur DESIGN.md. Architecture : rien de mort ni de dupliqué à retirer sans risque. **Exécuté** : typage web et API, 264 tests web, 132 tests API sans base. **À qualifier par la CI** : changements Swift (non compilés ici), tests PostgreSQL. Aucun déploiement. [Compte rendu](audit-4agents-20261018.md).
+
 ## 17 octobre 2026 — essaim de recherche de bugs
 
 Vingt agents ont audité API, base, web et iOS ; 15 lots de corrections sont fusionnés sur `claude/essaim-bugs-20261017` : arrêt de trajet après finalisation qui effaçait des points reçus, tolérance d’horloge du téléphone, réauthentification pour inviter un ADMIN ou un moniteur, motifs de retrait cachés à l’élève dans la base (migration 034), limiteur d’entrée du BFF, leçon en attente qui disparaissait d’Aujourd’hui, bilan vidé après une relecture ratée, et plusieurs défauts d’agenda, de formations et d’accessibilité web. **Exécuté** : typage, 138 tests API sans base, 260 tests web, build web. **À qualifier par la CI** : tests PostgreSQL ajoutés et tests Swift. Aucun déploiement. Dix questions produit et les constats différés sont listés dans le [compte rendu](essaim-bugs-20261017.md).
