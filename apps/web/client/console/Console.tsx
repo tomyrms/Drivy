@@ -122,6 +122,12 @@ export function ManagementConsole() {
     const onBeforeUnload = (event: BeforeUnloadEvent) => { if (unsaved.current.size) { event.preventDefault(); event.returnValue = ''; } };
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
+      // Restored while a console with unsent forms was left idle (not mid sign-in): reloading would unmount them and lose the typed content.
+      // Only the anti-forgery value is renewed: a lapsed session shows up as a 401 on the next write.
+      if (unsaved.current.size > 0 && !working.current && readyRef.current) {
+        void request('session', sessionSchema).then(next => { csrf.current = next.csrfToken; setSession(next); }).catch(() => undefined);
+        return;
+      }
       // Back from the identity provider: the page is restored as it was left, mid sign-in. Start again from the server's answer.
       working.current = false; setBusy(false); setLoginError(null);
       void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId);
