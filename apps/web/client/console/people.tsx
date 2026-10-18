@@ -242,7 +242,7 @@ export function InvitationsSection() {
     const [invitations, offerings, members, options] = await Promise.all([
       readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema),
       readSchool(schoolId, 'invitation-options', invitationOptionsSchema)]);
-    return { invitations: invitations.items, offerings: offerings.items, members: members.items, options };
+    return { invitations: invitations.items, truncated: invitations.truncated, offerings: offerings.items, members: members.items, options };
   }, [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [creating, setCreating] = useState<CreateMode | null>(null);
@@ -373,6 +373,7 @@ export function InvitationsSection() {
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
           <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'invitation' : 'invitations'}{visible.length !== items.length ? ` sur ${items.length}` : ''}</p>
+          {data?.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>Seules les 1 000 premières invitations sont chargées : la recherche et les comptes portent sur celles-ci.</p></Notice>}
           {visible.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation trouvée" message="" />
           : <ul className="directory-list" aria-label="Invitations de l’école, les plus récentes d’abord">
             {visible.map(item => <DirectoryRow key={item.id} title={label(item)} selected={item.id === selected && !creating}
