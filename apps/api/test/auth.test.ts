@@ -32,6 +32,10 @@ describe('Vérification OIDC cryptographique', () => {
       .setAudience(config.OIDC_AUDIENCE).setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
     await expect(verify(`Bearer ${invalid}`)).rejects.toMatchObject({ status: 401, code: 'INVALID_SESSION' });
   });
+  it('préserve exactement un sujet textuel opaque sans normalisation', async () => {
+    const subject = '  fédération:Élève/東京  ';
+    await expect(verify(`Bearer ${await token({ sub: subject })}`)).resolves.toEqual({ issuer: config.OIDC_ISSUER, subject });
+  });
   it('refuse un jeton expiré', async () => {
     await expect(verify(`Bearer ${await token({ expiration: 1 })}`)).rejects.toMatchObject({ status: 401 });
   });
