@@ -12,6 +12,7 @@ struct SchoolLearnerTripsView: View {
     /// Portée du modèle en place : la page qui réapparaît (replay refermé, retour d’onglet) ne le recrée pas.
     @State private var preparedKey: String?
     @State private var replay: SchoolTripReplayRoute?
+    @State private var filterState = SchoolLearnerTripsFilterState(scopeKey: "")
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -96,20 +97,64 @@ struct SchoolLearnerTripsView: View {
         if let message = model.errorMessage {
             SchoolErrorNotice(message: message, retry: model.accessRevoked ? nil : { Task { await model.load() } })
         }
-        if model.trips.isEmpty {
+        filterControl(model)
+        let visibleTrips = model.trips(matching: filterState.filter)
+        if visibleTrips.isEmpty {
             if model.isEmpty {
                 DrivyEmptyState(title: "Aucun trajet", symbol: "point.topleft.down.to.point.bottomright.curvepath")
+            } else if model.errorMessage == nil && model.nextCursor == nil {
+                DrivyEmptyState(title: filterState.filter == .all ? "Aucun trajet" : "Aucun trajet pour ce filtre",
+                    symbol: filterState.filter == .all ? "point.topleft.down.to.point.bottomright.curvepath" : "line.3.horizontal.decrease.circle",
+                    actionTitle: filterState.filter == .all ? nil : "Afficher tous les trajets",
+                    action: filterState.filter == .all ? nil : { filterState.filter = .all })
             } else if model.errorMessage == nil {
                 skeleton
             }
         } else {
-            ForEach(model.days()) { day in
+            ForEach(model.days(filter: filterState.filter)) { day in
                 DrivyRowGroup(title: day.title) {
                     ForEach(day.trips) { trip in row(trip) }
                 }
             }
-            more(model)
         }
+        more(model)
+    }
+
+    @ViewBuilder private func filterControl(_ model: SchoolTripsWorkspace) -> some View {
+        let options = filterOptions(model)
+        if options.count > 1 {
+            Menu {
+                ForEach(options) { option in
+                    Button { filterState.filter = option.filter } label: {
+                        Label(option.title, systemImage: option.filter == filterState.filter ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                Label(filterTitle(model), systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityIdentifier("learner-trips-filter")
+            .accessibilityLabel("Filtrer les trajets")
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func filterTitle(_ model: SchoolTripsWorkspace) -> String {
+        switch filterState.filter {
+        case .all: "Tous les trajets"
+        case .mine: "Mes trajets"
+        case .instructor(let id): model.otherInstructors().first(where: { $0.id == id })?.name ?? "Moniteur"
+        }
+    }
+
+    private func filterOptions(_ model: SchoolTripsWorkspace) -> [SchoolLearnerTripsFilterOption] {
+        var options = [SchoolLearnerTripsFilterOption(filter: .all, title: "Tous les trajets")]
+        let roles = Set(workspace.membership?.roles ?? [])
+        if roles.contains("INSTRUCTOR") { options.append(.init(filter: .mine, title: "Mes trajets")) }
+        if roles.contains("ADMIN") {
+            options.append(contentsOf: model.otherInstructors().map { .init(filter: .instructor($0.id), title: $0.name) })
+        }
+        return options
     }
 
     /// Un trajet reconstruit est un bouton qui ouvre son replay. Les autres ne sont pas un contrôle : ils reculent
@@ -152,6 +197,7 @@ struct SchoolLearnerTripsView: View {
             await rereadIfStale()
             return
         }
+        filterState.updateScope(key)
         preparedKey = nil
         model?.invalidate()
         replay?.model.invalidate()
@@ -191,7 +237,29 @@ struct SchoolLearnerTripsView: View {
     }
 }
 
-/// Une ligne de trajet, sur l’anatomie des listes de leçons : l’heure de la leçon, le moniteur, la durée enregistrée.
+struct SchoolLearnerTripsFilterState {
+    private(set) var scopeKey: String
+    var filter: SchoolTripFilter = .all
+
+    mutating func updateScope(_ newScopeKey: String) {
+        guard scopeKey != newScopeKey else { return }
+        scopeKey = newScopeKey
+        filter = .all
+    }
+}
+
+struct SchoolLearnerTripsFilterOption: Identifiable {
+    let filter: SchoolTripFilter
+    let title: String
+    var id: String {
+        switch filter {
+        case .all: "all"
+        case .mine: "mine"
+        case .instructor(let id): "instructor-\(id.uuidString)"
+        }
+    }
+}
+
 /// Un état inhabituel (partiel, interrompu, retiré) tient en un mot, jamais en pastille.
 private struct SchoolLearnerTripRow: View {
     let trip: SchoolCaptureTrip
