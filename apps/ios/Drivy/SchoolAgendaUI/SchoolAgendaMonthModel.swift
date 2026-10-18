@@ -65,7 +65,8 @@ struct SchoolAgendaFreshness: Equatable, Sendable {
         guard hasError, let success, success.scope == displayedScope else { return nil }
         return success.date
     }
-    func retainedSuccessMessage(hasError: Bool, displayedScope: SchoolAgendaScope?, timeZone: String) -> String? {
+    /// Formatée par `SchoolDateFormat`, isolé sur le main actor comme ses appelants (vue et tests).
+    @MainActor func retainedSuccessMessage(hasError: Bool, displayedScope: SchoolAgendaScope?, timeZone: String) -> String? {
         guard let date = retainedSuccessDate(hasError: hasError, displayedScope: displayedScope) else { return nil }
         return "Dernière lecture réussie le \(SchoolDateFormat.template("dMMMMyHHmm", date, zone: timeZone))."
     }
