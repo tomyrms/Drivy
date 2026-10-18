@@ -5,6 +5,7 @@ import type {Pool} from 'pg';
 import {z} from 'zod';
 import type {Browser} from '../../infra/dev/browser.js';
 import {verifyV3Agenda} from './check-v3-agenda-acceptance.js';
+import {verifyV4Web} from './check-v4-web-acceptance.js';
 
 type BrowserContext=Awaited<ReturnType<Browser['newContext']>>;
 type Page=Awaited<ReturnType<BrowserContext['newPage']>>;
@@ -202,6 +203,7 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
     'L’Agenda relit la première leçon durable et les actions de première utilisation sont terminées');
   await page.screenshot({path:resolve(artifactDirectory,'08-premiere-lecon-planifiee-synthetic.png'),fullPage:true});
   if(process.argv.includes('--v3'))await verifyV3Agenda({page,schoolPath,bff,civilDay,instructorId:founder.id,instructorName:founder.displayName,artifactDirectory,assert,setStage});
+  if(process.argv.includes('--v4'))await verifyV4Web({page,schoolPath,bff,artifactDirectory,assert,setStage});
   await page.locator('.agenda-lesson').click();
   assert(new URL(page.url()).searchParams.get('selection')===learner.id,'La leçon de l’Agenda ouvre toujours le dossier du bon élève');
 }
