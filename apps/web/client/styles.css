@@ -464,7 +464,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .detail-head { display: flex; align-items: center; gap: var(--space-m); padding-block-end: var(--space-l); border-block-end: 1px solid var(--border); }
 .detail-head h2 { font: var(--type-title); letter-spacing: -.02em; }
 .detail-head :is(h1,h2):focus { outline: none; }
-.detail-head :is(h1,h2):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.detail-head :is(h1,h2):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: .25rem; }
 .detail-body { display: grid; gap: var(--space-l); min-width: 0; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: var(--space-s); padding-top: var(--space-m); border-top: 1px solid var(--border); }
 .detail-placeholder { display: flex; gap: var(--space-s); align-items: flex-start; min-height: 10rem; padding: var(--space-l); border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface-inset); }
