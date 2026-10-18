@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 18 octobre 2026 : audit multi-agents local, non déployé
+
+Branche isolée `audit/intelligent-20261018`, base `5482dd8`. Dix audits spécialisés terminés avec sept GPT-5.6 Luna et trois GPT-5.6 Sol, puis contre-revue ciblée Astra. **13 signaux arbitrés, 2 défauts confirmés corrigés : un P1 et un P2, aucun P0.** Le formulaire d’accès équipe conserve son brouillon lors d’une relecture concurrente et exige une résolution explicite avant écriture. Le vérificateur OIDC refuse les sujets non textuels sans transformer les identifiants opaques valides. Pas de refonte visuelle ni nouvelle dépendance.
+
+**Exécuté localement :** 135 tests unitaires API, 233 tests web, types et builds, cinq scénarios de régression Edge, 41 interactions existantes, 30 captures ciblées et contrôle de reflow. L’intégrité des 556 fichiers canoniques est préservée. Les scénarios navigateur utilisent un BFF synthétique, pas le backend de production. PostgreSQL isolée indisponible : suite API complète tentée mais bloquée. Node 26 local au lieu de 24 requis. iOS, Safari et VoiceOver non exécutés. Aucun push, fusion, déploiement ou modification de données de production. Validation utilisateur et qualification CI requises avant intégration.
+
+[Rapport complet, arbitrages, preuves et limites](audit-intelligent-20261018.md) · [Plan réalisé](audit-intelligent-20261018-plan.md).
+
 ## 14 octobre 2026 — Studio, portail inspiré de Mercury, déployé
 
 Version **`2b4ca81` publiée à 01:01 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/), depuis `codex/portail-studio-20261014`, à la demande explicite du porteur. Sauvegarde de la base vérifiée avant bascule, 32 migrations existantes contrôlées, aucune migration exécutée ; seul le web redémarre. **19 contrôles HTTPS réussis** et page publique inspectée sans erreur console. [Version et retour arrière](web-studio-deployment-20261014.md).
