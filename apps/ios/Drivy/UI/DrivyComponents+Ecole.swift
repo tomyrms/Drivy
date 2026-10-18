@@ -293,6 +293,7 @@ struct DrivyFormField: View {
     var isMissing = false
     var focus: FocusState<SchoolProfileField?>.Binding? = nil
     var focusValue: SchoolProfileField? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
@@ -307,7 +308,7 @@ struct DrivyFormField: View {
                 .accessibilityIdentifier(identifier ?? "")
         }
         .padding(.vertical, DrivySpacing.xxs)
-        .animation(.easeOut(duration: 0.2), value: isMissing)
+        .animation(DrivyMotion.feedback(reduceMotion), value: isMissing)
     }
 
     @ViewBuilder private var field: some View {
