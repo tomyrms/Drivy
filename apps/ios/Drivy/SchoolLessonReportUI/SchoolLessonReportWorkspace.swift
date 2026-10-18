@@ -491,7 +491,7 @@ import Observation
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
                          observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
-            isLoading = false; needsReload = conflict; awaitsRereadAfterWrite = false
+            isLoading = false; needsReload = conflict || draftUnread || preparationUnread; awaitsRereadAfterWrite = false
             if conflict {
                 errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
             }
