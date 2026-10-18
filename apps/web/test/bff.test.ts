@@ -223,6 +223,35 @@ describe('Entrée anonyme, limites et cache',()=>{
     expect(String(callback.headers['set-cookie'])).toContain('__Host-drivy-relogin=;');
   });
 
+  test('une réauthentification refuse un autre compte sans remplacer la session initiale',async()=>{
+    const h=await harness();await h.start();await h.login();
+    const original=h.store.get(h.cookie().split('=')[1])!;
+    await h.post('/app/bff/login',{reauthenticate:true});
+    const state=original.login!.state;
+    vi.mocked(h.identity.complete).mockResolvedValueOnce({...h.tokens,principal:{...h.tokens.principal,subject:randomUUID()}});
+    const callback=await h.get(`/app/bff/callback?code=step-up&state=${state}`);
+    expect(callback.headers.location).toBe('/app?auth=failed');
+    expect(callback.headers['set-cookie']).toBeUndefined();
+    expect(h.store.get(original.id)).toBe(original);
+    expect(original.tokens?.principal.subject).toBe(h.tokens.principal.subject);
+    expect(original.login).toBeUndefined();
+  });
+  test.each([true,false])('la réauthentification=%s conserve le parcours autorisé et la rotation',async reauthenticate=>{
+    const h=await harness();await h.start();await h.login();
+    const original=h.store.get(h.cookie().split('=')[1])!;
+    const subject=reauthenticate?h.tokens.principal.subject:randomUUID();
+    await h.post('/app/bff/login',reauthenticate?{reauthenticate:true}:{});
+    vi.mocked(h.identity.complete).mockResolvedValueOnce({...h.tokens,principal:{...h.tokens.principal,subject}});
+    const callback=await h.get(`/app/bff/callback?code=next&state=${original.login!.state}`);
+    expect(callback.headers.location).toBe('/app');
+    const cookies=callback.headers['set-cookie'];
+    const nextCookie=(Array.isArray(cookies)?cookies:[String(cookies)]).find(value=>value.startsWith('__Host-drivy-session='))!;
+    const next=h.store.get(nextCookie.split(';')[0]!.split('=')[1])!;
+    expect(next.tokens?.principal.subject).toBe(subject);
+    expect(next.id).not.toBe(original.id);
+    expect(h.store.get(original.id)).toBeUndefined();
+  });
+
   test('un chemin inconnu ou une session absente est refusé avant de lire le corps',async()=>{
     const h=await harness();
     const oversize=JSON.stringify({operationId:randomUUID(),filler:'x'.repeat(2_000_000)});

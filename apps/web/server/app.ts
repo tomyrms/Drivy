@@ -168,9 +168,10 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     const admitted = admit(request); const body = loginBody.parse(request.body);
     const session = open(reply,admitted); const { returnTo } = body;
     const reauthenticate = body.reauthenticate === true || request.cookies[reloginName] === '1';
+    const expectedSubject = reauthenticate ? session.tokens?.principal.subject : undefined;
     const result = await identity.begin(reauthenticate ? { reauthenticate: true } : undefined);
     if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
-    session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}) };
+    session.login = { ...result.transaction, ...(returnTo ? { returnTo } : {}), ...(expectedSubject !== undefined ? { expectedSubject } : {}) };
     return {url:result.url};
   });
   app.get('/app/bff/callback',async (request,reply) => {
@@ -187,6 +188,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     delete session.login;
     try {
       const tokens = await identity.complete(url,transaction);
+      // A step-up confirms the current person's action, not an account switch.
+      if (transaction.expectedSubject !== undefined && tokens.principal.subject !== transaction.expectedSubject) throw new Error('IDENTITY_CHANGED');
       const next = store.rotate(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
       return reply.redirect(transaction.returnTo==='/app/ouvrir' || transaction.returnTo==='/app/operateur' ? transaction.returnTo : next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
     } catch { return reply.redirect('/app?auth=failed'); }
