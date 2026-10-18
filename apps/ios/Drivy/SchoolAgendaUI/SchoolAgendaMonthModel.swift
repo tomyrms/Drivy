@@ -47,6 +47,45 @@ enum SchoolAgendaDayMark: Equatable, Sendable {
     case more
 }
 
+/// Contrat de l'état vide : l'action de planification reste dans l'en-tête et le jour suivant reste accessible.
+struct SchoolAgendaEmptyPresentation: Equatable, Sendable {
+    let mayPlan: Bool
+    var showsPlanInHeading: Bool { mayPlan }
+    var nextDayActionTitle: String { "Voir le jour suivant" }
+}
+
+/// Date de la dernière lecture réussie pour la projection actuellement retenue. Elle n'est exposée qu'après
+/// une erreur et seulement si la portée affichée est exactement celle qui a réussi.
+struct SchoolAgendaFreshness: Equatable, Sendable {
+    private var success: (scope: SchoolAgendaScope, date: Date)?
+
+    mutating func recordSuccess(scope: SchoolAgendaScope, at date: Date) { success = (scope, date) }
+    mutating func reset() { success = nil }
+    func retainedSuccessDate(hasError: Bool, displayedScope: SchoolAgendaScope?) -> Date? {
+        guard hasError, let success, success.scope == displayedScope else { return nil }
+        return success.date
+    }
+    func retainedSuccessMessage(hasError: Bool, displayedScope: SchoolAgendaScope?, timeZone: String) -> String? {
+        guard let date = retainedSuccessDate(hasError: hasError, displayedScope: displayedScope) else { return nil }
+        return "Dernière lecture réussie le \(SchoolDateFormat.template("dMMMMyHHmm", date, zone: timeZone))."
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.success?.scope == rhs.success?.scope && lhs.success?.date == rhs.success?.date
+    }
+}
+
+/// Passage en deux temps entre les deux feuilles : le callback mémorise la leçon, la fermeture du planning la consomme.
+struct SchoolAgendaPlanningReturn: Equatable, Sendable {
+    private var confirmedLesson: SchoolLesson?
+
+    mutating func receive(_ lesson: SchoolLesson) { confirmedLesson = lesson }
+    mutating func takeConfirmedLesson() -> SchoolLesson? {
+        defer { confirmedLesson = nil }
+        return confirmedLesson
+    }
+}
+
 /// Calcul pur du mois et de la semaine : grille lundi d’abord, navigation, leçons par jour.
 /// Tout passe par le calendrier de l’école (fuseau, `fr_CH`, lundi premier jour) : aucune
 /// date n’est construite par addition de secondes, les passages à l’heure d’été restent justes.

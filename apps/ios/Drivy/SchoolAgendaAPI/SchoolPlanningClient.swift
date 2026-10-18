@@ -219,11 +219,11 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         }
         return result
     }
-    func send(_ command: PendingSchoolCommand) async throws {
+    @discardableResult func send(_ command: PendingSchoolCommand) async throws -> SchoolOperationReceipt? {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
-        if command.kind == .startLessonNow { _ = try await startNow(command); return }
+        if command.kind == .startLessonNow { _ = try await startNow(command); return nil }
         var path: [String]
         switch command.kind {
         case .savePlanningDefaults: path = ["planning-defaults"]
@@ -247,7 +247,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         // AP72 confirms both the operation and its target; a bare HTTP success is insufficient.
         // Once the write answered 200/201, a missing or unreadable proof is an uncertainty to verify,
         // never a fresh refusal: the command stays queued instead of being dropped as « rien n’a été enregistré ».
-        do { _ = try await receipt(for: command) }
+        do { return try await receipt(for: command) }
         catch is CancellationError { throw CancellationError() }
         catch let failure as SchoolPlanningFailure where failure == .unauthorized || failure == .forbidden { throw failure }
         catch { throw SchoolPlanningFailure.unavailable }

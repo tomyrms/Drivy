@@ -24,6 +24,8 @@ struct SchoolPlanningInstructor: Identifiable {
     var readsForCancellation = false
     /// A durable command receipt closes the live capture even if the following read fails.
     private(set) var confirmedCancellationLessonID: UUID?
+    /// Leçon relue après le reçu durable d'une création ou d'un déplacement. Jamais remplie par une demande incertaine.
+    private(set) var confirmedLesson: SchoolLesson?
     private(set) var roles: [String] = []
     private(set) var grants: [String] = []
     private(set) var school: SchoolDetails?
@@ -82,6 +84,7 @@ struct SchoolPlanningInstructor: Identifiable {
     @ObservationIgnored private var slotGeneration = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAvailable = false
+    @ObservationIgnored private var confirmedLessonReference: (id: UUID, version: Int)?
     var learnerID: UUID?
     var trainingID: UUID?
     var instructorID: UUID? {
@@ -268,6 +271,7 @@ struct SchoolPlanningInstructor: Identifiable {
         school = nil; defaults = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
         instructors = []; assignments = []; clearAvailability(); clearSlot(); clearSuggestion(); pending = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
+        confirmedLesson = nil; confirmedLessonReference = nil
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
@@ -278,6 +282,7 @@ struct SchoolPlanningInstructor: Identifiable {
         // A changed instructor or revoked access still clears it immediately.
         isLoadingAvailability = false; availabilityError = nil
         isLoading = true; needsReload = true; errorMessage = nil; storageAvailable = false; writeConfirmed = false
+        confirmedLesson = nil; confirmedLessonReference = nil
         defer { if request == generation { isLoading = false } }
         var storageError: String?
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
@@ -628,12 +633,21 @@ struct SchoolPlanningInstructor: Identifiable {
         guard !invalidated, !isBusy, let command = pending, command.scope.belongsToWorkspace(scope) else { return }
         isBusy = true; let request = generation
         do {
-            _ = try await client.receipt(for: command); try outbox.remove(command)
-            guard request == generation else { return }; pending = nil; isBusy = false; pendingRequiresReview = false
-            if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
+            let receipt = try await client.receipt(for: command); try outbox.remove(command)
+            guard request == generation else { return }
+            pending = nil; isBusy = false; pendingRequiresReview = false
+            if command.kind == .cancelLesson {
+                confirmedCancellationLessonID = command.resourceID; writeConfirmed = true
+            }
+            if command.kind == .createLesson || command.kind == .moveLesson {
+                writeConfirmed = true
+                confirmedLessonReference = (receipt.resourceId, receipt.resourceVersion)
+                await reloadConfirmedLesson()
+            } else if command.kind != .cancelLesson {
+                await load()
+            }
             successMessage = "Enregistrement confirmé par l’école."
             NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
-            await load()
         } catch SchoolPlanningFailure.notFound {
             // Le reçu absent ne dit rien des accès : l’école n’a simplement pas enregistré cette opération.
             guard request == generation else { return }
@@ -652,7 +666,9 @@ struct SchoolPlanningInstructor: Identifiable {
         guard canRetry, let command = pending else { return false }
         let request = generation; isBusy = true; errorMessage = nil; successMessage = nil
         do {
-            try outbox.save(command); try await client.send(command); try outbox.remove(command)
+            try outbox.save(command)
+            guard let receipt = try await client.send(command) else { throw SchoolPlanningFailure.invalidResponse }
+            try outbox.remove(command)
             guard request == generation else { return true }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
@@ -660,6 +676,10 @@ struct SchoolPlanningInstructor: Identifiable {
             // fermeture et changer le formulaire sous les yeux. Une nouvelle saisie exigerait une relecture.
             writeConfirmed = true
             NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+            if command.kind == .createLesson || command.kind == .moveLesson {
+                confirmedLessonReference = (receipt.resourceId, receipt.resourceVersion)
+                return await reloadConfirmedLesson()
+            }
             return true
         } catch {
             guard request == generation else { return false }
@@ -672,6 +692,33 @@ struct SchoolPlanningInstructor: Identifiable {
                 } else { pendingRequiresReview = true }
             }
             isBusy = false; fail(error); return false
+        }
+    }
+
+    /// Relit la ressource désignée par le reçu. Une panne ici ne rend pas l'écriture incertaine et ne renvoie jamais
+    /// la commande : l'utilisateur peut seulement reprendre la lecture de la fiche confirmée.
+    @discardableResult func reloadConfirmedLesson() async -> Bool {
+        guard !invalidated, let reference = confirmedLessonReference else { return false }
+        let request = generation
+        isBusy = true; errorMessage = nil
+        defer { isBusy = false }
+        do {
+            let lesson = try await client.lesson(schoolID: scope.schoolID, id: reference.id)
+            guard request == generation, !invalidated, !accessRevoked, confirmedLessonReference?.id == reference.id,
+                  confirmedLessonReference?.version == reference.version else { return false }
+            guard lesson.version >= reference.version else { throw SchoolPlanningFailure.invalidResponse }
+            confirmedLesson = lesson
+            return true
+        } catch {
+            guard request == generation, !invalidated else { return false }
+            confirmedLesson = nil
+            if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized
+                || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .unauthorized {
+                fail(error)
+            } else {
+                errorMessage = "La leçon est enregistrée, mais sa fiche n’a pas pu être chargée. Réessaie."
+            }
+            return false
         }
     }
     private func fail(_ error: Error) {

@@ -23,6 +23,46 @@ struct SchoolAgendaMonthTests {
         return [value.year ?? 0, value.month ?? 0, value.day ?? 0]
     }
 
+    @Test func emptyAgendaAlwaysOffersTheNextDayWithoutDuplicatingPlan() {
+        let planner = SchoolAgendaEmptyPresentation(mayPlan: true)
+        #expect(planner.showsPlanInHeading)
+        #expect(planner.nextDayActionTitle == "Voir le jour suivant")
+
+        let reader = SchoolAgendaEmptyPresentation(mayPlan: false)
+        #expect(!reader.showsPlanInHeading)
+        #expect(reader.nextDayActionTitle == "Voir le jour suivant")
+    }
+
+    @Test func freshnessAppearsOnlyForRetainedContentAfterAnErrorInTheSameScope() {
+        let first = SchoolAgendaScope(prefix: "person:membership:1:school:mine",
+            range: SchoolAgendaRange(start: date(2026, 10, 12), end: date(2026, 10, 19)))
+        let second = SchoolAgendaScope(prefix: "person:membership:2:school:mine", range: first.range)
+        let instant = date(2026, 10, 18, 20, 4)
+        var freshness = SchoolAgendaFreshness()
+
+        freshness.recordSuccess(scope: first, at: instant)
+        #expect(freshness.retainedSuccessDate(hasError: false, displayedScope: first) == nil)
+        #expect(freshness.retainedSuccessDate(hasError: true, displayedScope: first) == instant)
+        #expect(freshness.retainedSuccessDate(hasError: true, displayedScope: second) == nil)
+        let message = freshness.retainedSuccessMessage(hasError: true, displayedScope: first, timeZone: "Europe/Zurich")
+        #expect(message?.contains("18") == true)
+        #expect(message?.contains("2026") == true)
+        #expect(message?.contains("20:04") == true)
+
+        freshness.reset()
+        #expect(freshness.retainedSuccessDate(hasError: true, displayedScope: first) == nil)
+    }
+
+    @Test func confirmedLessonIsConsumedOnlyWhenThePlanningSheetReturns() {
+        let lesson = HubFixture.lesson()
+        var modalReturn = SchoolAgendaPlanningReturn()
+        #expect(modalReturn.takeConfirmedLesson() == nil)
+
+        modalReturn.receive(lesson)
+        #expect(modalReturn.takeConfirmedLesson() == lesson)
+        #expect(modalReturn.takeConfirmedLesson() == nil)
+    }
+
     @Test func gridStartsOnMondayAndAlwaysHoldsSixWeeks() {
         // 1er octobre 2026 : un jeudi. La grille part du lundi 28 septembre.
         let days = SchoolAgendaMonth.gridDays(for: date(2026, 10, 14), calendar: calendar)
