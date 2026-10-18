@@ -7,7 +7,7 @@ export function readOpeningLink(location:Pick<Location,'pathname'|'search'|'hash
   const hash=location.hash;if(!hash)return {token:null,error:false};
   replace(location.pathname+location.search);
   const values=new URLSearchParams(hash.slice(1)),token=values.get('token');
-  if(location.pathname!=='/app/ouvrir' || [...values.keys()].length!==1 || !token || !/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/.test(token))return {token:null,error:true};
+  if(location.pathname!=='/app/ouvrir' || [...values.keys()].length!==1 || !token || !/^(?:[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]|[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4})$/.test(token))return {token:null,error:true};
   return {token,error:false};
 }
 export const openingReceipt=z.object({schoolId:z.uuid(),schoolName:z.string(),status:z.enum(['DRAFT','ACTIVE','ARCHIVED']),membershipId:z.uuid(),
@@ -37,7 +37,7 @@ export const openingPreview=z.object({data:z.discriminatedUnion('status',[
   z.object({status:z.literal('AVAILABLE'),expiresAt:z.string()}),z.object({status:z.literal('USED'),school:openingReceipt})])});
 export const openingLinkSchema=z.object({id:z.uuid(),status:z.enum(['AVAILABLE','USED','EXPIRED','REVOKED']),createdAt:z.string(),expiresAt:z.string(),usedAt:z.string().nullable(),revokedAt:z.string().nullable()});
 export const openingLinks=z.object({data:z.object({items:z.array(openingLinkSchema)}),pendingOperationId:z.uuid().optional()});
-export const createdOpeningLink=z.object({data:openingLinkSchema,link:z.string().url()});
+export const createdOpeningLink=z.object({data:openingLinkSchema,link:z.string().url(),code:z.string().regex(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/)});
 export function openingFailure(error:unknown):string {
   const code=error instanceof RequestFailure?error.code:'';
   const messages:Record<string,string>={

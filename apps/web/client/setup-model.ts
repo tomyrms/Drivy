@@ -49,6 +49,19 @@ export type SetupFormation = z.infer<typeof setupFormationSchema>;
 export type SetupTemplates = z.infer<typeof setupTemplatesSchema>;
 export type SetupPreview = z.infer<typeof setupPreviewSchema>;
 export type SetupSection = SetupContent['selectedSections'][number];
+/** Opening has already stored the school's identity. Only untouched drafts bypass its editor. */
+export function initialSetupStep(draft: SetupDraft, schoolStatus: string): SetupStep {
+  if (schoolStatus !== 'DRAFT' || draft.status !== 'DRAFT' || draft.updatedAt !== null || draft.currentStep !== 'IDENTITY') return draft.currentStep;
+  const identity = draft.content.identity;
+  if (!identity.name.trim() || !z.email().safeParse(identity.contactEmail).success || !identity.timeZone || /^[+-]/.test(identity.timeZone)) return 'IDENTITY';
+  try { new Intl.DateTimeFormat('fr', { timeZone: identity.timeZone }); } catch { return 'IDENTITY'; }
+  return 'PRIVACY';
+}
+/** A price editor is useful only when there is a formation to price. */
+export function setupNavigationSteps(content: SetupContent | null, catalogueOnly = false): readonly SetupStep[] {
+  const steps: readonly SetupStep[] = catalogueOnly ? ['FORMATIONS', 'PRICING', 'REVIEW'] : setupSteps;
+  return content && content.formations.length === 0 ? steps.filter(step => step !== 'PRICING') : steps;
+}
 export function setupExampleText(text: string, content: SetupContent): string {
   return text.replaceAll('[Nom de l’école]', content.identity.name).replaceAll('[contact données]', content.privacy.contactEmail || content.identity.contactEmail);
 }

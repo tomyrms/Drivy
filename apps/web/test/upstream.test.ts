@@ -3,10 +3,10 @@ import { randomBytes,randomUUID } from 'node:crypto';
 import { expect,test } from 'vitest';
 import { createGateway } from '../server/upstream.js';
 
-test('échange HTTP réel vers AP04 : Bearer et Idempotency-Key correspondent exactement à la commande',async()=>{
+test.each(['/v1/invitations/accept','/v1/invitations/code/accept'])('échange HTTP réel vers %s : Bearer et Idempotency-Key correspondent exactement à la commande',async path=>{
   const api=Fastify({logger:false});const access=randomBytes(32).toString('base64url');const operationId=randomUUID();
   let seen=false;
-  api.post('/refonte/v1/invitations/accept',async (request,reply)=>{
+  api.post(`/refonte${path}`,async (request,reply)=>{
     const body=request.body as {operationId:string;token:string};
     expect(request.headers.authorization).toBe(`Bearer ${access}`);
     expect(request.headers['idempotency-key']).toBe(operationId);expect(body.operationId).toBe(operationId);
@@ -15,7 +15,7 @@ test('échange HTTP réel vers AP04 : Bearer et Idempotency-Key correspondent ex
   });
   try {
     const origin=await api.listen({host:'127.0.0.1',port:0});
-    expect((await createGateway(origin+'/refonte')('/v1/invitations/accept',access,{operationId,token:randomBytes(32).toString('base64url')})).status).toBe(201);
+    expect((await createGateway(origin+'/refonte')(path,access,{operationId,...(path.includes('/code/')?{code:'WXYZ-2345'}:{token:randomBytes(32).toString('base64url')})})).status).toBe(201);
     expect(seen).toBe(true);
   } finally {await api.close();}
 });

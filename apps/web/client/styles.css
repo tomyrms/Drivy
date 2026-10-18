@@ -218,6 +218,13 @@ h3 { font: var(--type-headline); }
 .sign-in { display: grid; gap: var(--space-s); justify-items: start; }
 .sign-in h2 { margin-top: var(--space-xs); }
 .sign-in > .button { margin-block: var(--space-s) var(--space-xxs); min-width: min(100%, 16rem); }
+/* Connexion et création de compte : le formulaire occupe toute la carte, comme dans l'app. */
+.account-entry { justify-items: stretch; }
+.account-entry > .form-grid { gap: var(--space-s); }
+.account-entry .field input { inline-size: 100%; }
+.account-entry .form-grid > .button { inline-size: 100%; }
+.account-entry .form-grid > .button.primary { margin-block-start: var(--space-xs); }
+.account-entry .button-row > .field { flex: 1 1 10rem; min-inline-size: 0; }
 
 /* ---------- Invitation ---------- */
 .identity-row { display: flex; align-items: center; gap: var(--space-s); padding-block: var(--space-s); border-block: 1px solid var(--border); }

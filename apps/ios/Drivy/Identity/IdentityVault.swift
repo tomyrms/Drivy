@@ -3,7 +3,7 @@ import Security
 @preconcurrency import AppAuth
 
 enum IdentityFailure: Error, LocalizedError {
-    case notConfigured, unavailable, invalidProvider, reauthentication, storage, invalidArchive, differentAccount
+    case notConfigured, unavailable, invalidProvider, reauthentication, storage, invalidArchive, differentAccount, invalidCredentials
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +14,7 @@ enum IdentityFailure: Error, LocalizedError {
         case .storage: "Le Trousseau de cet appareil est inaccessible. Déverrouille l’appareil puis réessaie."
         case .invalidArchive: "La session enregistrée est illisible. Connecte-toi à nouveau."
         case .differentAccount: "La confirmation doit être faite avec le même compte. Ta session actuelle est conservée."
+        case .invalidCredentials: "E-mail ou mot de passe incorrect."
         }
     }
 }

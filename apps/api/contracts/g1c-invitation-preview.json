@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:g1c-invitation-preview:1",
+  "$comment": "Aperçu authentifié e-mail ou code. Extension 17 octobre 2026 : identité structurée du compte, notice et école du code ; l'aperçu anonyme de compte reste minimal.",
   "type": "object",
   "additionalProperties": false,
   "required": ["data", "requestId", "serverTime"],
@@ -15,8 +16,15 @@
         "schoolId":{"type":"string","format":"uuid"},
         "schoolName":{"type":"string","minLength":1},
         "roles":{"type":"array","items":{"enum":["ADMIN","INSTRUCTOR","LEARNER"]},"minItems":1,"maxItems":3,"uniqueItems":true},
-        "maskedEmail":{"type":"string","minLength":1},
+        "maskedEmail":{"type":["string","null"],"minLength":1},
+        "delivery":{"enum":["EMAIL","CODE"]},
+        "trainingCategoryCode":{"type":["string","null"]},
+        "trainingCategoryCodes":{"type":"array","items":{"type":"string"},"uniqueItems":true},
         "expiresAt":{"type":"string","format":"date-time"},
+        "profileIdentity": {
+          "type":"object","additionalProperties":false,"required":["firstName","lastName"],
+          "properties": {"firstName":{"type":"string","minLength":1,"maxLength":150},"lastName":{"type":"string","minLength":1,"maxLength":150}}
+        },
         "notice": {
           "type":"object","additionalProperties":false,
           "required":["version","noticeText","retentionText","contactEmail"],

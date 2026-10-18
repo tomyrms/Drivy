@@ -13,7 +13,8 @@ type Store = {
   resend(schoolId: string, csrf: string): Promise<{ status: string; code?: string; message?: string }>;
   release(schoolId: string): void;
   get(schoolId: string): { phase: string; notRecorded: boolean; unverifiable: boolean; message: string; command: unknown } | undefined;
-  getSnapshot(): { revision: number };
+  getSnapshot(): { revision: number; confirmed: unknown };
+  scopeToPerson(personId: string): boolean;
   clear(): void;
 };
 type Actions = (entry: { command: unknown; phase: string; notRecorded: boolean; unverifiable: boolean }) => { resend: boolean; release: boolean };
@@ -50,6 +51,110 @@ beforeEach(() => {
   vi.stubGlobal('window', { location: { origin: 'https://drivy.example' }, sessionStorage: session, localStorage: local });
 });
 afterEach(() => { vi.unstubAllGlobals(); });
+
+describe('Activation GPS : confirmation durable et reprise', () => {
+  const change = (gpsEnabled: boolean) => createCommand({ schoolId, kind: 'updateModules', path: 'modules',
+    ifMatch: 4, resourceVersion: 4, body: { gpsEnabled } });
+
+  test('le réglage est confirmé seulement après une réponse scolaire versionnée', async () => {
+    const store = await loadStore(), command = change(true);
+    const fetch = answer(200, envelope({ id: schoolId, schoolId, version: 5 }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await store.submit(command, 'csrf')).toMatchObject({ status: 'confirmed', via: 'response' });
+    expect(store.get(schoolId)).toBeUndefined();
+    const request = vi.mocked(globalThis.fetch).mock.calls[0]!;
+    expect(String(request[0])).toContain(`/schools/${schoolId}/modules`);
+    expect(request[1]).toMatchObject({ method: 'PUT', headers: { 'If-Match': '"4"', 'Idempotency-Key': command.operationId } });
+    expect(JSON.parse(String(request[1]?.body))).toEqual({ operationId: command.operationId, gpsEnabled: true });
+  });
+
+  test('une réponse perdue attend le reçu de la même opération, sans seconde activation', async () => {
+    const store = await loadStore(), command = change(true);
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    expect((await store.submit(command, 'csrf')).status).toBe('pending');
+    expect(store.getSnapshot().revision).toBe(0);
+    const read = answer(200, envelope({ operationId: command.operationId, commandType: 'UPDATE_SCHOOL_MODULES',
+      resourceType: 'School', resourceId: schoolId, resourceVersion: 5, committedAt: '2026-10-17T08:00:00.000Z' }));
+    vi.stubGlobal('fetch', read);
+    expect((await store.verify(schoolId)).status).toBe('confirmed');
+    expect(store.get(schoolId)).toBeUndefined();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[0]![0])).toContain(`/operations/${command.operationId}`);
+  });
+
+  test('réauthentification et conflit ne confirment ni activation ni désactivation', async () => {
+    for (const [status, code] of [[401, 'REAUTH_REQUIRED'], [412, 'VERSION_CONFLICT']] as const) {
+      const store = await loadStore();
+      vi.stubGlobal('fetch', answer(status, { code }));
+      expect(await store.submit(change(false), 'csrf')).toMatchObject({ status: 'rejected', code, needsLogin: code === 'REAUTH_REQUIRED' });
+      expect(store.getSnapshot().revision).toBe(0);
+      expect(store.get(schoolId)).toBeUndefined();
+    }
+  });
+});
+
+describe('Changement de personne : aucune commande du compte précédent', () => {
+  const change = (gpsEnabled: boolean) => createCommand({ schoolId, kind: 'updateModules', path: 'modules',
+    ifMatch: 4, resourceVersion: 4, body: { gpsEnabled } });
+
+  test('le même compte conserve sa demande ; un autre compte de la même école ne peut pas la renvoyer', async () => {
+    const store = await loadStore(), person = randomUUID(), command = change(true);
+    expect(store.scopeToPerson(person)).toBe(false);
+    const fetch = answer(503, { code: 'SERVICE_UNAVAILABLE' });
+    vi.stubGlobal('fetch', fetch);
+    await store.submit(command, 'csrf');
+    expect(store.scopeToPerson(person)).toBe(false);
+    expect(store.get(schoolId)?.command).toEqual(command);
+    expect(store.scopeToPerson(randomUUID())).toBe(true);
+    expect(store.get(schoolId)).toBeUndefined();
+    expect(session.snapshot()).toEqual([]);
+    expect((await store.resend(schoolId, 'new-csrf')).status).toBe('pending');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([200, 503])('une réponse tardive %i ne confirme ni ne réintroduit la commande précédente', async status => {
+    const store = await loadStore(), oldCommand = change(true), nextCommand = change(false);
+    store.scopeToPerson(randomUUID());
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (input: URL | string) => {
+      await gate;
+      return answer(status, status === 200 ? envelope({ id: schoolId, schoolId, version: 5 }) : { code: 'SERVICE_UNAVAILABLE' })(input);
+    }));
+    const late = store.submit(oldCommand, 'old-csrf');
+    store.scopeToPerson(randomUUID());
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    await store.submit(nextCommand, 'new-csrf');
+    release();
+    expect((await late).status).toBe('pending');
+    expect(store.get(schoolId)?.command).toEqual(nextCommand);
+    expect(store.getSnapshot()).toMatchObject({ revision: 0, confirmed: null });
+    expect(session.snapshot().join('')).not.toContain(oldCommand.operationId);
+  });
+
+  test.each([200, 403])('un reçu tardif %i ne modifie pas le suivi du nouveau compte', async status => {
+    const store = await loadStore(), oldCommand = change(true), nextCommand = change(false);
+    store.scopeToPerson(randomUUID());
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    await store.submit(oldCommand, 'old-csrf');
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (input: URL | string) => {
+      await gate;
+      return answer(status, status === 200 ? envelope({ operationId: oldCommand.operationId, commandType: 'UPDATE_SCHOOL_MODULES',
+        resourceType: 'School', resourceId: schoolId, resourceVersion: 5, committedAt: '2026-10-17T08:00:00.000Z' }) : { code: 'FORBIDDEN' })(input);
+    }));
+    const late = store.verify(schoolId);
+    store.scopeToPerson(randomUUID());
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    await store.submit(nextCommand, 'new-csrf');
+    release();
+    expect((await late).status).toBe('pending');
+    expect(store.get(schoolId)?.command).toEqual(nextCommand);
+    expect(store.getSnapshot()).toMatchObject({ revision: 0, confirmed: null });
+    expect(session.snapshot().join('')).not.toContain(oldCommand.operationId);
+  });
+});
 
 describe('Journal des demandes : le code à usage unique n’est jamais conservé', () => {
   const offeringId = randomUUID(), instructorMembershipId = randomUUID();

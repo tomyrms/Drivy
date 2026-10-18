@@ -50,6 +50,8 @@ type Snapshot = { entries: ReadonlyMap<string, PendingEntry>; revision: number; 
 class CommandStore {
   private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null };
   private readonly listeners = new Set<() => void>();
+  private personId: string | null = null;
+  private generation = 0;
 
   constructor() {
     try {
@@ -79,6 +81,14 @@ class CommandStore {
 
   get(schoolId: string): PendingEntry | undefined { return this.snapshot.entries.get(schoolId); }
 
+  /** Same-account reconnection keeps its requests; another person must never reuse their content. */
+  scopeToPerson(personId: string): boolean {
+    const changed = this.personId !== null && this.personId !== personId;
+    if (changed) this.clear();
+    this.personId = personId;
+    return changed;
+  }
+
   async submit(command: SchoolCommand, csrf: string): Promise<SubmitResult> {
     if (this.get(command.schoolId)) return { status: 'pending', message: 'Une demande attend encore sa vérification. Traitez-la avant une autre modification.' };
     this.update(command.schoolId, { meta: toMetadata(command), command, phase: 'sending', message: '', needsLogin: false, notRecorded: false,
@@ -93,6 +103,7 @@ class CommandStore {
   }
 
   private async emit(command: SchoolCommand, csrf: string): Promise<SubmitResult> {
+    const generation = this.generation;
     const previous = this.get(command.schoolId);
     const attempts = previous?.attempts ?? 0;
     const maybeReceived = previous?.maybeReceived ?? false;
@@ -101,6 +112,7 @@ class CommandStore {
     this.update(command.schoolId, { ...base, command, phase: 'sending', message: '', needsLogin: false, attempts: attempts + 1 });
     const spec = commandSpecs[command.kind];
     const response = await schoolFetch(command.schoolId, command.path, { method: spec.method, headers: commandHeaders(command, csrf), body: command.body });
+    if (generation !== this.generation) return { status: 'pending', message: '' };
     if (response.status === spec.expectedStatus) {
       const data = confirmedData(response.body);
       const valid = data !== null && (data.schoolId === undefined || data.schoolId.toLowerCase() === command.schoolId.toLowerCase())
@@ -133,16 +145,19 @@ class CommandStore {
 
   /** AP72: ask the school whether this operation was committed, without sending it again. */
   async verify(schoolId: string): Promise<SubmitResult> {
+    const generation = this.generation;
     const entry = this.get(schoolId);
     if (!entry || entry.phase === 'sending' || entry.phase === 'verifying') return { status: 'pending', message: entry?.message ?? '' };
     const restore = entry.phase;
     this.update(schoolId, { ...entry, phase: 'verifying' });
     try {
       const receipt = await readSchool(schoolId, `operations/${entry.meta.operationId}`, receiptSchema);
+      if (generation !== this.generation) return { status: 'pending', message: '' };
       if (!receiptMatches(entry.meta, receipt)) throw new RequestFailure('INVALID_RESPONSE');
       this.update(schoolId, null, entry.meta);
       return { status: 'confirmed', body: null, via: 'receipt' };
     } catch (error) {
+      if (generation !== this.generation) return { status: 'pending', message: '' };
       const current = this.get(schoolId);
       if (current?.meta.operationId !== entry.meta.operationId) return { status: 'pending', message: '' };
       const failure = error instanceof RequestFailure ? error : new RequestFailure('INVALID_RESPONSE');
@@ -170,6 +185,7 @@ class CommandStore {
   }
 
   clear() {
+    this.generation++;
     this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null };
     try { window.sessionStorage.removeItem(storageKey); } catch { /* nothing stored */ }
     for (const listener of this.listeners) listener();

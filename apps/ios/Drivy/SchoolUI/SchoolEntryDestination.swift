@@ -19,6 +19,16 @@ enum SchoolEntryDestination: Equatable {
     }
 
     static func allowsPersonalOnboarding(schoolStatus: String?, roles: [String]) -> Bool {
-        schoolStatus == "ACTIVE" && (roles.contains("INSTRUCTOR") || roles.contains("LEARNER"))
+        personalOnboardingKind(schoolStatus: schoolStatus, roles: roles) != nil
+    }
+
+    /// L’accueil suit l’usage ouvert par les onglets, y compris avec plusieurs rôles.
+    /// Le moniteur n’a pas besoin de retrouver son propre dossier dans l’annuaire des élèves.
+    static func personalOnboardingKind(schoolStatus: String?, roles: [String]) -> SchoolOnboardingKind? {
+        switch resolve(schoolStatus: schoolStatus, roles: roles) {
+        case .instructor: .staff
+        case .learner: .student
+        default: nil
+        }
     }
 }
