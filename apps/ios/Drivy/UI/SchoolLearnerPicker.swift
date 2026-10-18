@@ -64,18 +64,9 @@ struct SchoolLearnerPicker: View {
         }
     }
 
-    struct SearchState: Equatable {
-        var text: String
-        var isFocused: Bool
-
-        mutating func clear() {
-            text = ""
-            isFocused = true
-        }
-    }
-
-    static func emptyState(learnersAreEmpty: Bool, search: String) -> EmptyState? {
+    static func emptyState(learnersAreEmpty: Bool, hasResults: Bool, search: String) -> EmptyState? {
         if learnersAreEmpty { return .baseEmpty }
+        guard !hasResults else { return nil }
         return search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : .filteredEmpty
     }
 
@@ -118,7 +109,7 @@ struct SchoolLearnerPicker: View {
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.immediately)
         .overlay {
-            if let emptyState = Self.emptyState(learnersAreEmpty: learners.isEmpty, search: search) {
+            if let emptyState = Self.emptyState(learnersAreEmpty: learners.isEmpty, hasResults: !shown.isEmpty, search: search) {
                 DrivyEmptyState(title: emptyState.title, symbol: emptyState.symbol)
             }
         }

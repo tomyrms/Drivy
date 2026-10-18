@@ -102,6 +102,9 @@ struct SchoolLearnerTripsView: View {
         if visibleTrips.isEmpty {
             if model.isEmpty {
                 DrivyEmptyState(title: "Aucun trajet", symbol: "point.topleft.down.to.point.bottomright.curvepath")
+            } else if model.errorMessage == nil && model.nextCursor != nil && filterState.filter != .all {
+                DrivyEmptyState(title: "Aucun trajet parmi ceux chargés", symbol: "line.3.horizontal.decrease.circle",
+                    actionTitle: "Charger d’autres trajets", action: { Task { await model.loadMore() } })
             } else if model.errorMessage == nil && model.nextCursor == nil {
                 DrivyEmptyState(title: filterState.filter == .all ? "Aucun trajet" : "Aucun trajet pour ce filtre",
                     symbol: filterState.filter == .all ? "point.topleft.down.to.point.bottomright.curvepath" : "line.3.horizontal.decrease.circle",
@@ -117,7 +120,9 @@ struct SchoolLearnerTripsView: View {
                 }
             }
         }
-        more(model)
+        if !(visibleTrips.isEmpty && filterState.filter != .all && model.nextCursor != nil) {
+            more(model)
+        }
     }
 
     @ViewBuilder private func filterControl(_ model: SchoolTripsWorkspace) -> some View {
@@ -126,7 +131,11 @@ struct SchoolLearnerTripsView: View {
             Menu {
                 ForEach(options) { option in
                     Button { filterState.filter = option.filter } label: {
-                        Label(option.title, systemImage: option.filter == filterState.filter ? "checkmark" : "")
+                        if option.filter == filterState.filter {
+                            Label(option.title, systemImage: "checkmark")
+                        } else {
+                            Text(option.title)
+                        }
                     }
                 }
             } label: {
@@ -135,7 +144,8 @@ struct SchoolLearnerTripsView: View {
             }
             .accessibilityIdentifier("learner-trips-filter")
             .accessibilityLabel("Filtrer les trajets")
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityValue(filterTitle(model))
+            .frame(minHeight: DrivyLayout.tapTarget, maxWidth: .infinity, alignment: .leading)
         }
     }
 
