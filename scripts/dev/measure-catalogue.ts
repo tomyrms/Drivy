@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {performance} from 'node:perf_hooks';
 import {dirname,resolve} from 'node:path';
@@ -15,9 +16,9 @@ const normalizedLabel='Anticipation';
 
 type Size=typeof sizes[number];
 type Counters={total:number;children:number;roleSelections:number};
-type Measurement={limit:Size;medianMs:number;p95Ms:number;minimumMs:number;maximumMs:number;medianSql:number;medianChildSql:number;responseBytes:number};
+type Measurement={limit:Size;medianMs:number;p95Ms:number;minimumMs:number;maximumMs:number;medianSql:number;medianChildSql:number;responseBytes:number;itemsHash:string};
 type CheckResults={pagination:boolean;curriculumOrder:boolean;competencyOrder:boolean;rls:boolean;labelNormalization:boolean;roleDrivyApp:boolean};
-type Run={phase:string;createdAt:string;node:string;fixture:{curricula:number;competenciesPerCurriculum:number};warmups:number;samples:number;checks:CheckResults;measurements:Measurement[]};
+type Run={phase:string;createdAt:string;node:string;fixture:{curricula:number;competenciesPerCurriculum:number};warmups:number;samples:number;checks:CheckResults & {emptyPage:boolean};measurements:Measurement[]};
 type Output={schemaVersion:1;runs:Run[];comparison?:{baselinePhase:string;afterPhase:string;measurements:Array<{limit:Size;medianMsDelta:number;p95MsDelta:number;medianChildSqlDelta:number}>}};
 
 type CatalogueCompetency={id:string;curriculumVersionId:string;label:string;sortOrder:number};
@@ -43,10 +44,8 @@ export function validateMeasurementDatabase(raw:string|undefined):URL {
 
 function instrument(pool:Pool){
  let active:Counters|null=null;
- const originalConnect=pool.connect.bind(pool);
  const wrapped=new WeakSet<PoolClient>();
- pool.connect=(async()=>{
-  const client=await originalConnect();
+ pool.on('acquire',(client:PoolClient)=>{
   if(!wrapped.has(client)){
    wrapped.add(client);
    const originalQuery=client.query.bind(client) as PoolClient['query'];
@@ -56,8 +55,7 @@ function instrument(pool:Pool){
     return (originalQuery as (...queryArgs:unknown[])=>Promise<QueryResult>)(...args);
    }) as PoolClient['query'];
   }
-  return client;
- }) as Pool['connect'];
+ });
  return {
   start(){active={total:0,children:0,roleSelections:0};},
   stop(){const result=active;active=null;assert(result,'MEASURE_COUNTER_NOT_STARTED');return result;}
@@ -117,18 +115,20 @@ async function checks(call:Awaited<ReturnType<typeof harness>>['call'],expected:
 
 async function measure(call:Awaited<ReturnType<typeof harness>>['call'],counter:ReturnType<typeof instrument>,limit:Size):Promise<{measurement:Measurement;roleDrivyApp:boolean}>{
  for(let index=0;index<warmups;index++){const warm=await call('GET',`/curricula?limit=${limit}`,undefined,null,'demo-admin');assert(warm.statusCode===200,'MEASURE_WARMUP_FAILED');}
- const timings:number[]=[];const totals:number[]=[];const children:number[]=[];let bytes=0;let roleDrivyApp=true;
+ const timings:number[]=[];const totals:number[]=[];const children:number[]=[];let bytes=0;let itemsHash='';let roleDrivyApp=true;
  for(let index=0;index<samples;index++){
   counter.start();const started=performance.now();const response=await call('GET',`/curricula?limit=${limit}`,undefined,null,'demo-admin');const elapsed=performance.now()-started;const sql=counter.stop();
   assert(response.statusCode===200,'MEASURE_REQUEST_FAILED');const page=response.json() as CataloguePage;assert(page.data.items.length===limit,'MEASURE_LIMIT_FAILED');
+  const hash=createHash('sha256').update(JSON.stringify(page.data.items)).digest('hex');
+  assert(!itemsHash||itemsHash===hash,'MEASURE_ITEMS_UNSTABLE');itemsHash=hash;
   timings.push(elapsed);totals.push(sql.total);children.push(sql.children);bytes=responseBytes(response.body);roleDrivyApp=roleDrivyApp&&sql.roleSelections===1;
  }
- return {measurement:{limit,medianMs:fixed(median(timings)),p95Ms:fixed(quantile(timings,0.95)),minimumMs:fixed(Math.min(...timings)),maximumMs:fixed(Math.max(...timings)),medianSql:median(totals),medianChildSql:median(children),responseBytes:bytes},roleDrivyApp};
+ return {measurement:{limit,medianMs:fixed(median(timings)),p95Ms:fixed(quantile(timings,0.95)),minimumMs:fixed(Math.min(...timings)),maximumMs:fixed(Math.max(...timings)),medianSql:median(totals),medianChildSql:median(children),responseBytes:bytes,itemsHash},roleDrivyApp};
 }
 
 function compare(runs:Run[]):Output['comparison']|undefined{
  if(runs.length<2)return undefined;const baseline=runs[0]!,after=runs[runs.length-1]!;
- return {baselinePhase:baseline.phase,afterPhase:after.phase,measurements:sizes.map(limit=>{const before=baseline.measurements.find(value=>value.limit===limit)!;const current=after.measurements.find(value=>value.limit===limit)!;return {limit,medianMsDelta:fixed(current.medianMs-before.medianMs),p95MsDelta:fixed(current.p95Ms-before.p95Ms),medianChildSqlDelta:current.medianChildSql-before.medianChildSql};})};
+ return {baselinePhase:baseline.phase,afterPhase:after.phase,measurements:sizes.map(limit=>{const before=baseline.measurements.find(value=>value.limit===limit)!;const current=after.measurements.find(value=>value.limit===limit)!;assert(before.itemsHash===current.itemsHash,'MEASURE_RESPONSE_CHANGED');return {limit,medianMsDelta:fixed(current.medianMs-before.medianMs),p95MsDelta:fixed(current.p95Ms-before.p95Ms),medianChildSqlDelta:current.medianChildSql-before.medianChildSql};})};
 }
 
 async function save(outputPath:string,run:Run){
@@ -145,10 +145,12 @@ export async function runMeasurement(){
  const outputPath=resolve(process.env.OUTPUT??'artifacts/catalogue-measurement.json');const phase=(process.env.MEASURE_PHASE??'baseline').trim();assert(phase,'MEASURE_PHASE_EMPTY');
  const pool=await freshDatabase();const counter=instrument(pool);const {app,call}=await harness(pool);
  try{
+  counter.start();const empty=await call('GET','/curricula?limit=100',undefined,null,'demo-admin');const emptyQueries=counter.stop();
+  assert(empty.statusCode===200&&empty.json().data.items.length===0&&empty.json().data.nextCursor===null&&emptyQueries.children===0,'MEASURE_EMPTY_FAILED');
   const expected=await seed(pool);const baseChecks=await checks(call,expected);const measurements:Measurement[]=[];let roleDrivyApp=true;
   for(const limit of sizes){const measured=await measure(call,counter,limit);measurements.push(measured.measurement);roleDrivyApp=roleDrivyApp&&measured.roleDrivyApp;}
   assert(roleDrivyApp,'MEASURE_ROLE_FAILED');
-  const run:Run={phase,createdAt:new Date().toISOString(),node:process.version,fixture:{curricula:100,competenciesPerCurriculum},warmups,samples,checks:{...baseChecks,roleDrivyApp},measurements};
+  const run:Run={phase,createdAt:new Date().toISOString(),node:process.version,fixture:{curricula:100,competenciesPerCurriculum},warmups,samples,checks:{...baseChecks,roleDrivyApp,emptyPage:true},measurements};
   const output=await save(outputPath,run);process.stdout.write(`${JSON.stringify({phase,runs:output.runs.length,comparison:Boolean(output.comparison)})}\n`);return output;
  }finally{await app.close();await pool.end();}
 }

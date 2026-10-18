@@ -31,11 +31,12 @@ it('mesure la route curricula réelle et vérifie ses invariants',async()=>{
  const run=output.runs[0]!;
  expect(run.fixture).toEqual({curricula:100,competenciesPerCurriculum:20});
  expect(run.warmups).toBe(5);expect(run.samples).toBe(30);
- expect(run.checks).toEqual({pagination:true,curriculumOrder:true,competencyOrder:true,rls:true,labelNormalization:true,roleDrivyApp:true});
+ expect(run.checks).toEqual({pagination:true,curriculumOrder:true,competencyOrder:true,rls:true,labelNormalization:true,roleDrivyApp:true,emptyPage:true});
  expect(run.measurements.map(value=>value.limit)).toEqual([1,10,50,100]);
  for(const value of run.measurements){
   expect(value.medianMs).toBeGreaterThanOrEqual(0);expect(value.p95Ms).toBeGreaterThanOrEqual(value.medianMs);
   expect(value.responseBytes).toBeGreaterThan(0);expect(value.medianSql).toBeGreaterThan(0);
-  expect(value.medianChildSql).toBeGreaterThan(0);expect(value.medianChildSql).toBeLessThanOrEqual(value.limit);
+  expect(value.medianChildSql).toBe(1);
+  expect(value.itemsHash).toMatch(/^[a-f0-9]{64}$/);
  }
 },180_000);
