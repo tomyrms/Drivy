@@ -120,7 +120,8 @@ struct SchoolLearnerTripsView: View {
                 }
             }
         }
-        if !(visibleTrips.isEmpty && filterState.filter != .all && model.nextCursor != nil) {
+        if !(visibleTrips.isEmpty && filterState.filter != .all && model.nextCursor != nil
+            && model.errorMessage == nil && !model.isLoadingMore) {
             more(model)
         }
     }
@@ -145,7 +146,7 @@ struct SchoolLearnerTripsView: View {
             .accessibilityIdentifier("learner-trips-filter")
             .accessibilityLabel("Filtrer les trajets")
             .accessibilityValue(filterTitle(model))
-            .frame(minHeight: DrivyLayout.tapTarget, maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
         }
     }
 
