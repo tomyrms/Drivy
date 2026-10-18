@@ -6,6 +6,8 @@ Branche isolée `audit/intelligent-20261018`, base `5482dd8`. Dix audits spécia
 
 **Exécuté localement :** 135 tests unitaires API, 233 tests web, types et builds, cinq scénarios de régression Edge, 41 interactions existantes, 30 captures ciblées et contrôle de reflow. L’intégrité des 556 fichiers canoniques est préservée. Les scénarios navigateur utilisent un BFF synthétique, pas le backend de production. PostgreSQL isolée indisponible : suite API complète tentée mais bloquée. Node 26 local au lieu de 24 requis. iOS, Safari et VoiceOver non exécutés. Aucun push, fusion, déploiement ou modification de données de production. Validation utilisateur et qualification CI requises avant intégration.
 
+**Complément à 18:03 +02:00 :** recette officielle `check-school-opening.ts` réellement tentée sur PostgreSQL loopback réservée. Exit 1 avant le premier contrôle, étape base vierge, aucun service local requis disponible et daemon Docker absent. Aucun succès d’acceptation de bout en bout revendiqué. Les preuves avant/après établissent seulement les améliorations dans les tests contrôlés.
+
 [Rapport complet, arbitrages, preuves et limites](audit-intelligent-20261018.md) · [Plan réalisé](audit-intelligent-20261018-plan.md).
 
 ## 14 octobre 2026 — Studio, portail inspiré de Mercury, déployé

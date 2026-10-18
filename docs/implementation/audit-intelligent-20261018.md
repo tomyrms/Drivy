@@ -80,6 +80,22 @@ node scripts/dev/check-audit-regressions.mjs
 node scripts/dev/check-web-redesign.mjs --checks-only
 ```
 
+## Complément de qualification réelle, 18 octobre à 18:03 +02:00
+
+Le contrôle de clôture a demandé une preuve plus directe que le seul harnais synthétique. La recette existante de la CI, `scripts/dev/check-school-opening.ts`, a donc été réellement lancée sur la base locale réservée `drivy_onboarding_e2e`, avec `ONBOARDING_E2E_DATABASE_URL` explicitement limité à `127.0.0.1:5432`. Aucun service n’écoutait sur les ports requis 5432, 8081, 8025 et 1025. `docker info` a également échoué : pipe `dockerDesktopLinuxEngine` absent.
+
+**Observation réelle : exit 1 à la première étape « base vierge et migrations non privilégiées », zéro contrôle accepté.** Résultat horodaté `2026-10-18T16:03:15.473Z` dans `artifacts/onboarding-web-synthetic/result.json`, journal dans `artifacts/audit-20261018/acceptance-real.log`. Malgré son nom historique « synthetic », cette recette utilise normalement les vrais services OIDC, BFF, API et PostgreSQL avec des données de test. Ici, elle s’arrête avant migration, création de compte, démarrage des services ou navigateur. Aucun mot de passe réinitialisé ni donnée existante modifiée.
+
+La boucle d’acceptation de bout en bout reste donc **bloquée par l’environnement**, et n’est pas remplacée par les 46 parcours synthétiques. Aucun succès d’intégration ni bénéfice mesuré auprès d’une école réelle n’est revendiqué.
+
+| Exigence ciblée | Observation avant | Observation après | Ce qui reste non établi |
+| --- | --- | --- | --- |
+| Ne pas perdre un brouillon d’accès lors d’un conflit | Échec Edge sur la conservation du rôle après renvoi refusé (`red/results.json`) | Rôle, autorisation retirée et motif conservés. Écritures bloquées jusqu’au reset explicite, nouvelle émission avec version actuelle, cinq scénarios verts | Même parcours avec comptes, concurrence et PostgreSQL réels |
+| Refuser un sujet OIDC mal typé | Cinq JWT signés non textuels acceptés par le vérificateur | Sept valeurs invalides rejetées, chaîne opaque conservée, suite API 135/135 | Parcours fournisseur réel puis HTTP/BFF et base de données |
+| Préserver les usages existants | Baseline web 233 tests | 233 tests et 41 interactions existantes toujours verts | Qualification Node 24, Apple et recette complète avec une école |
+
+La preuve démontre une amélioration sur ces cas contrôlés, pas une acceptation utilisateur générale. Prochaine étape technique : rejouer sur le runner isolé Node 24 avec PostgreSQL et services locaux disponibles. Aucun contournement des gardes de production ni faux backend ajouté pour faire passer cette recette.
+
 ## Limites et suites humaines
 
 - Node local **26.8.1**, alors que le dépôt exige **24.x**. Rejouer en CI supportée avant intégration.
@@ -104,8 +120,9 @@ Commits réalisés :
 - `f37f44a` : `fix(api): reject non-string OIDC subjects`
 - `0dcdac0` : `test(api): preserve opaque OIDC subject identifiers`
 - `35a7aa5` : `fix(web): preserve access drafts across concurrent refreshes`
-- Le commit documentaire contenant ce rapport porte le titre `docs(audit): record findings decisions and validation limits`, identifiable par `git log -1 -- docs/implementation/audit-intelligent-20261018.md`.
+- `1284ddd` : `docs(audit): record findings decisions and validation limits`.
+- Le complément de qualification réelle est committé sous `docs(audit): record blocked end-to-end acceptance`, identifiable par `git log -1 -- docs/implementation/audit-intelligent-20261018.md`.
 
-L’état Git final est conservé dans `artifacts/audit-20261018/git-final.txt` : branche, statut court, quatre commits et fichiers du delta. Les artefacts ignorés ne sont pas supprimés.
+L’état Git final est conservé dans `artifacts/audit-20261018/git-final.txt` : branche, statut court, commits et fichiers du delta. Les artefacts ignorés ne sont pas supprimés.
 
 Branche dédiée uniquement. **Aucune fusion sur main/master, aucun push, déploiement ou changement de données de production.** Le checkout principal est préservé. La validation finale de l’utilisateur reste requise avant intégration.
