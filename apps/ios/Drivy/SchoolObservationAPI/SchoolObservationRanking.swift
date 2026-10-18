@@ -118,12 +118,30 @@ enum SchoolObservationRankingOrder {
         }
         var target = baseURL
         for part in ["v1", "schools", scope.schoolID.uuidString, "observation-ranking"] { target.appendPathComponent(part) }
+        let token = try await accessToken()
+        do { return try await perform(scope, target, version: version, body: body, token: token) }
+        catch SchoolObservationThemeFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai, même opération et même clé d’idempotence.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolObservationThemeFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolObservationThemeFailure.unauthorized }
+            return try await perform(scope, target, version: version, body: body, token: renewed)
+        }
+    }
+
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolObservationThemeFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolObservationThemeFailure.unauthorized }
         catch { throw error.unlessCancelled(SchoolObservationThemeFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolObservationThemeFailure.unauthorized }
+        return token
+    }
+
+    private func perform(_ scope: SchoolCommandScope, _ target: URL, version: Int?, body: SchoolObservationRankingBody?,
+                         token: String) async throws -> SchoolObservationRanking {
         var request = URLRequest(url: target)
         request.httpMethod = body == nil ? "GET" : "PUT"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

@@ -492,13 +492,23 @@ struct SchoolTodayView: View {
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
             SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
-            // Lecture discrète : la page la plus récente des leçons passées du moniteur suffit à retrouver celles
-            // restées sans fin. Une panne garde le rappel déjà affiché et ne dit rien : la journée reste lisible.
+            // Lecture discrète : les pages les plus récentes des leçons passées du moniteur suffisent à retrouver celles
+            // restées sans fin (cinq pages au plus, soit 500 leçons). Une panne garde le rappel déjà affiché et ne dit
+            // rien : la journée reste lisible. Une panne après la première page garde ce qui a déjà été lu.
             guard let instructor = instructorFilter else { unfinished = []; return }
-            guard let earlier = try? await agendaClient.lessonHistory(schoolID: membership.schoolId, before: dayStart,
-                instructorMembershipID: instructor, cursor: nil) else { return }
-            guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
-            unfinished = SchoolTodayPresentation.unfinishedLessons(earlier.items, before: dayStart)
+            var earlier: [SchoolLesson] = [], historyCursor: String?, historySeen = Set<String>()
+            for page in 0..<SchoolTodayPresentation.historyPages {
+                guard let read = try? await agendaClient.lessonHistory(schoolID: membership.schoolId, before: dayStart,
+                    instructorMembershipID: instructor, cursor: historyCursor) else {
+                    if page == 0 { return }
+                    break
+                }
+                guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
+                earlier.append(contentsOf: read.items)
+                guard let next = read.nextCursor, historySeen.insert(next).inserted else { break }
+                historyCursor = next
+            }
+            unfinished = SchoolTodayPresentation.unfinishedLessons(earlier, before: dayStart)
             SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
         } catch {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
@@ -519,6 +529,9 @@ struct SchoolTodayView: View {
 }
 
 enum SchoolTodayPresentation {
+    /// Pages d’historique (100 leçons chacune, les plus récentes d’abord) lues pour retrouver les leçons restées à terminer.
+    static let historyPages = 5
+
     /// Tous les rendez-vous encore ouverts restent accessibles, y compris ceux en attente après leur horaire.
     static func upcomingLessons(_ lessons: [SchoolLesson], now: Date, excluding: Set<UUID> = []) -> [SchoolLesson] {
         lessons.filter { lesson in

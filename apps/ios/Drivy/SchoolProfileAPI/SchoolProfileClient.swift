@@ -114,12 +114,30 @@ final class SchoolProfileClient: SchoolProfileAPI {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw SchoolProfileFailure.invalidResponse }
         if !query.isEmpty { components.queryItems = query }
         guard let target = components.url else { throw SchoolProfileFailure.invalidResponse }
+        let token = try await accessToken()
+        do { return try await perform(target, path: path, method: method, command: command, token: token) }
+        catch SchoolProfileFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai, même opération et même clé d’idempotence.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolProfileFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolProfileFailure.unauthorized }
+            return try await perform(target, path: path, method: method, command: command, token: renewed)
+        }
+    }
+
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolProfileFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolProfileFailure.unauthorized }
         catch { throw error.unlessCancelled(SchoolProfileFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolProfileFailure.unauthorized }
+        return token
+    }
+
+    private func perform<Value: Decodable & Sendable>(_ target: URL, path: [String], method: String,
+                                                      command: PendingSchoolCommand?, token: String) async throws -> Value {
         try Task.checkCancellation()
         var request = URLRequest(url: target)
         request.httpMethod = method

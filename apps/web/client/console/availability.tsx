@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
+import { overlappingHours } from '../availability-model';
 import { createCommand, isCivilDate, schoolTimeToInstant } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { availabilitySchema, closureSchema, memberSchema, readAll, type Availability, type Closure } from '../school-api';
@@ -66,13 +67,14 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
   const absences = (loaded.data?.closures ?? []).filter(item => item.instructorMembershipId === instructor && Date.parse(item.endsAt) > Date.now())
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const ruleValid = weekdays.length > 0 && /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end) && end > start && isCivilDate(from);
+  const overlap = ruleValid ? overlappingHours(rules, { weekdays, localStart: start, localEnd: end, validFrom: from, validUntil: null }) : null;
   const absenceFrom = absenceStart ? schoolTimeToInstant(absenceStart, school.timeZone) : null;
   const absenceUntil = absenceEnd ? schoolTimeToInstant(absenceEnd, school.timeZone) : null;
   const absenceValid = absenceFrom !== null && absenceUntil !== null && Date.parse(absenceUntil) > Date.parse(absenceFrom);
 
   async function addRule() {
     setRuleSubmitted(true);
-    if (!ruleValid || !canWrite) return;
+    if (!ruleValid || overlap || !canWrite) return;
     addition.current = 'rule';
     const result = await runner.run(createCommand({ schoolId, kind: 'createAvailabilityRule', path: 'availability-rules', resourceVersion: 0,
       body: { instructorMembershipId: instructor, weekdays: [...weekdays].sort(), localStart: start, localEnd: end, validFrom: from, validUntil: null } }),
@@ -131,6 +133,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                   onChange={checked => setWeekdays(current => checked ? [...current, index + 1] : current.filter(day => day !== index + 1))} />)}</div>
                 {ruleSubmitted && weekdays.length === 0 && <p id="weekly-days-error" className="field-error" role="alert">Choisissez au moins un jour.</p>}
               </fieldset>
+              {ruleSubmitted && overlap && <p className="field-error" role="alert">Cet horaire chevauche {dayRange(overlap.weekdays)}, {overlap.localStart}–{overlap.localEnd}. Retirez l’autre horaire ou choisissez d’autres jours ou heures.</p>}
               <div className="form-row">
                 <TextField label="De" type="time" required value={start} disabled={!canWrite} onChange={setStart} />
                 <TextField label="À" type="time" required value={end} disabled={!canWrite} onChange={setEnd} error={ruleSubmitted && end <= start ? 'Choisissez une fin après le début.' : null} />

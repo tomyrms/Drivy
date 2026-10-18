@@ -221,6 +221,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
                 return nil
             }
             started = lesson
+            announceStarted(lesson)
             return lesson
         } catch SchoolPlanningFailure.notFound {
             guard request == generation else { return nil }
@@ -246,6 +247,12 @@ struct SchoolStartNowBody: Encodable, Sendable {
         pending = nil; started = nil; isBusy = false; isLoading = false; contextValid = false; storageAvailable = false; meetingPoint = ""
     }
 
+    /// Émis après confirmation durable seulement, sans contenu pédagogique ni position.
+    private func announceStarted(_ lesson: SchoolLesson) {
+        NotificationCenter.default.post(name: .drivyLessonsDidChange, object: SchoolLessonChange(
+            schoolID: scope.schoolID, trainingID: lesson.trainingId, lessonID: lesson.id, kind: .startLessonNow))
+    }
+
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async -> SchoolLesson? {
         let request = generation
         isBusy = true; errorMessage = nil; conflicted = false
@@ -255,6 +262,8 @@ struct SchoolStartNowBody: Encodable, Sendable {
             if !fresh { try outbox.save(command) }
             let lesson = try await client.startNow(command)
             try outbox.remove(command)
+            // L’école a créé la leçon : l’agenda et la liste des formations se relisent, même si cet écran est déjà refermé.
+            announceStarted(lesson)
             guard request == generation else { return lesson }
             pending = nil; started = lesson
             return lesson

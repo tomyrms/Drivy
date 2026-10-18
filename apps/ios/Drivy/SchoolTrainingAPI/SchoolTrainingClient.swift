@@ -76,6 +76,19 @@ import Foundation
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw SchoolAPIError.invalidConfiguration }
         if !query.isEmpty { components.queryItems = query }
         guard let target = components.url else { throw SchoolAPIError.invalidConfiguration }
+        let token = try await accessToken()
+        do { return try await perform(target, token: token) }
+        catch SchoolAPIError.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai avant de conclure à une session expirée.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolAPIError.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolAPIError.unauthorized }
+            return try await perform(target, token: renewed)
+        }
+    }
+
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolAPIError.unauthorized }
@@ -84,6 +97,10 @@ import Foundation
         // Fournisseur d’identité injoignable : une panne à réessayer, dite comme les autres lectures de l’école.
         catch { throw SchoolAPIError.unavailable }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolAPIError.unauthorized }
+        return token
+    }
+
+    private func perform<Value: Decodable>(_ target: URL, token: String) async throws -> Value {
         try Task.checkCancellation()
         var request = URLRequest(url: target)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

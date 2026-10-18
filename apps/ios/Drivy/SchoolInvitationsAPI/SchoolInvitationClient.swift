@@ -129,12 +129,30 @@ final class SchoolInvitationClient: SchoolInvitationAPI {
         }
         if !query.isEmpty { components.queryItems = query }
         guard let target = components.url else { throw SchoolInvitationFailure.invalidResponse }
+        let token = try await accessToken()
+        do { return try await perform(target, path: path, command: command, token: token) }
+        catch SchoolInvitationFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai, même opération et même clé d’idempotence.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolInvitationFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolInvitationFailure.unauthorized }
+            return try await perform(target, path: path, command: command, token: renewed)
+        }
+    }
+
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolInvitationFailure.unauthorized }
         catch SchoolAPIError.unauthorized { throw SchoolInvitationFailure.unauthorized }
         catch { throw error.unlessCancelled(SchoolInvitationFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolInvitationFailure.unauthorized }
+        return token
+    }
+
+    private func perform<Value: Decodable & Sendable>(_ target: URL, path: [String], command: PendingSchoolCommand?,
+                                                      token: String) async throws -> Value {
         try Task.checkCancellation()
         var request = URLRequest(url: target)
         request.httpMethod = command == nil ? "GET" : "POST"
