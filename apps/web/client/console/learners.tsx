@@ -22,6 +22,16 @@ import { GpsConsentLine } from './gps-consent';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
+export function learnerFilterContext({ search, statusFilter, readinessFilter }: {
+  search: string; statusFilter: 'active' | 'archived' | 'all'; readinessFilter: 'all' | 'incomplete';
+}): string | null {
+  const criteria = [
+    search.trim() ? `Recherche « ${search.trim()} »` : null,
+    statusFilter === 'archived' ? 'dossiers archivés' : statusFilter === 'all' ? 'tous les dossiers' : null,
+    readinessFilter === 'incomplete' ? 'profil à compléter' : null,
+  ].filter((value): value is string => value !== null);
+  return criteria.length ? criteria.join(' · ') : null;
+}
 const emptyPermit = (): PermitDraft => ({ physicalSeen: false, validUntil: '', decision: 'APPROVED', reason: '' });
 
 type Dialog =
@@ -98,6 +108,7 @@ export function LearnersSection() {
     .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * (a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)));
   const pageSize = 25;
   const currentPage = Math.max(1, Math.min(page, Math.ceil(visible.length / pageSize) || 1));
+  const filterContext = learnerFilterContext({ search, statusFilter, readinessFilter });
   const pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   useEffect(() => { if (loaded.status === 'ready' && page !== currentPage) setPage(currentPage); }, [loaded.status, page, currentPage, setPage]);
   // Seule la dernière version active de chaque offre ouvre une formation (règle partagée avec les invitations par code).
@@ -190,7 +201,9 @@ export function LearnersSection() {
             </div>
           </div>
           {listTrainings.status === 'error' && <Notice tone="error" title="Formations indisponibles" live={false} actions={<ReadRetry loaded={listTrainings} />}><p>{listTrainings.error}</p></Notice>}
-          {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length ? '' : 'Créez un code pour inviter un élève.'} />
+          {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length
+            ? filterContext ? `Critères actifs : ${filterContext}.` : ''
+            : 'Créez un code pour inviter un élève.'} />
             : <div className="directory-table-wrap"><table className="data-table record-table people-table"><caption className="visually-hidden">Dossiers élèves</caption>
               <thead><tr><th scope="col" aria-sort={sort === 'name-asc' ? 'ascending' : 'descending'}><button type="button" className="table-sort"
                 aria-label={`Élève, trier par nom ${sort === 'name-asc' ? 'décroissant' : 'croissant'}`} onClick={() => { setSort(sort === 'name-asc' ? 'name-desc' : 'name-asc'); setPage(1); }}>

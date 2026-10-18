@@ -5,7 +5,7 @@ import { isCivilDate } from '../command-core';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
 import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
-import { useConsole, useLoad } from './context';
+import { useConsole, useLoad, type Loaded } from './context';
 import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
@@ -19,6 +19,10 @@ const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: strin
   started: { label: 'En cours', tone: 'accent', symbol: 'clock' },
   'to-finish': { label: 'À terminer', tone: 'warning', symbol: 'clock' },
 };
+
+export function agendaSearchQuery(directory: Pick<Loaded<unknown>, 'status' | 'data'>, search: string): string {
+  return directory.data !== undefined && search.trim() ? search : '';
+}
 
 /** Agenda de l'école en lecture seule : la planification des leçons se fait dans l'app. */
 export function AgendaSection() {
@@ -59,8 +63,9 @@ export function AgendaSection() {
   }, [reloadLessons, reloadDirectory]);
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
-  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], search), school.timeZone),
-    [data, directory.data, search, school.timeZone]);
+  const searchQuery = agendaSearchQuery(directory, search);
+  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchQuery), school.timeZone),
+    [data, directory.data, searchQuery, school.timeZone]);
   const lessonCount = days.reduce((total, day) => total + day.items.length, 0);
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
@@ -101,7 +106,9 @@ export function AgendaSection() {
       <LoadState loaded={directory} label="Lecture des élèves et moniteurs…">{() => null}</LoadState>
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
-        <p className="list-summary" role="status">{lessonCount} {lessonCount === 1 ? 'leçon' : 'leçons'}{search ? lessonCount === 1 ? ' trouvée' : ' trouvées' : ' cette semaine'}</p>
+        <p className="list-summary" role="status">{search.trim() && !directory.data
+          ? 'Recherche suspendue : le répertoire des élèves est en cours de lecture ou indisponible.'
+          : `${lessonCount} ${lessonCount === 1 ? 'leçon' : 'leçons'}${searchQuery ? lessonCount === 1 ? ' trouvée' : ' trouvées' : ' cette semaine'}`}</p>
         {days.length === 0 ? <EmptyState symbol="clock" title={search && value.lessons.length ? 'Aucune leçon trouvée' : 'Aucune leçon cette semaine'} message="" />
           : <div className="agenda-week-list">{days.map(day => {
             const [weekday, ...date] = formatDayHeading(day.day).split(' ');
