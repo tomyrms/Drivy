@@ -27,8 +27,8 @@ struct SchoolTripLaunchScreen: View {
                 .frame(width: markSize, height: markSize)
                 .scaleEffect(reduceMotion ? 1 : (isLeaving ? 1.1 : (entered ? 1 : 0.92)))
                 .opacity(isLeaving || !entered ? 0 : 1)
-                .animation(isLeaving ? .easeIn(duration: 0.24) : .easeOut(duration: 0.3), value: isLeaving)
-                .animation(.easeOut(duration: 0.3), value: entered)
+                .animation(DrivyMotion.reveal(reduceMotion), value: isLeaving)
+                .animation(DrivyMotion.reveal(reduceMotion), value: entered)
             if let progress {
                 // Une ligne fine sous le symbole, sans chiffre ni texte : l’étape se lit avec VoiceOver.
                 Capsule().fill(DrivyTheme.surfaceMuted)
@@ -36,12 +36,12 @@ struct SchoolTripLaunchScreen: View {
                     .overlay(alignment: .leading) {
                         Capsule().fill(DrivyTheme.accent)
                             .frame(width: barWidth * min(1, max(0, progress)), height: 3)
-                            .animation(.easeOut(duration: progressDuration), value: progress)
+                            .animation(DrivyMotion.progress(reduceMotion, duration: progressDuration), value: progress)
                     }
                     .offset(y: markSize / 2 + 40)
                     .opacity(isLeaving || !entered ? 0 : 1)
-                    .animation(isLeaving ? .easeIn(duration: 0.24) : .easeOut(duration: 0.3), value: isLeaving)
-                    .animation(.easeOut(duration: 0.3), value: entered)
+                    .animation(DrivyMotion.reveal(reduceMotion), value: isLeaving)
+                    .animation(DrivyMotion.reveal(reduceMotion), value: entered)
                     .accessibilityHidden(true)
             }
         }
