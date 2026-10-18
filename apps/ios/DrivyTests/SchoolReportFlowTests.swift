@@ -10,22 +10,23 @@ import Testing
     // MARK: Étapes
 
     @Test(arguments: [
-        SchoolReportStepCase(hasTrip: true, observations: 2, competencies: 9, expected: [.trip, .competencies, .report]),
-        SchoolReportStepCase(hasTrip: false, observations: 0, competencies: 9, expected: [.competencies, .report]),
-        SchoolReportStepCase(hasTrip: false, observations: 3, competencies: 9, expected: [.trip, .competencies, .report]),
-        SchoolReportStepCase(hasTrip: true, observations: 0, competencies: 0, expected: [.trip, .report]),
-        SchoolReportStepCase(hasTrip: false, observations: 0, competencies: 0, expected: [.report])
+        SchoolReportStepCase(hasTrip: true, observations: 2, competencies: 9, expected: [.report, .competencies, .review]),
+        SchoolReportStepCase(hasTrip: false, observations: 0, competencies: 9, expected: [.report, .competencies, .review]),
+        SchoolReportStepCase(hasTrip: false, observations: 3, competencies: 9, expected: [.report, .competencies, .review]),
+        SchoolReportStepCase(hasTrip: true, observations: 0, competencies: 0, expected: [.report, .review]),
+        SchoolReportStepCase(hasTrip: false, observations: 0, competencies: 0, expected: [.report, .review])
     ])
     func noStepIsEverEmpty(_ value: SchoolReportStepCase) {
         #expect(SchoolReportFlowRules.steps(hasTrip: value.hasTrip, observationCount: value.observations,
             competencyCount: value.competencies) == value.expected)
     }
 
-    @Test func theOrderIsDecidedInOnePlaceAndTheReportComesLast() {
-        #expect(SchoolReportFlowRules.order == [.trip, .competencies, .report])
+    @Test func theOrderIsDecidedInOnePlaceAndTheReviewComesLast() {
+        #expect(SchoolReportFlowRules.order == [.report, .competencies, .review])
         #expect(Set(SchoolReportFlowRules.order) == Set(SchoolReportStep.allCases))
         let all = SchoolReportFlowRules.steps(hasTrip: true, observationCount: 1, competencyCount: 1)
         #expect(all == SchoolReportFlowRules.order)
+        #expect(all.first == .report && all.last == .review)
     }
 
     @Test func positionIsSilentForASingleStep() {
@@ -34,9 +35,9 @@ import Testing
         #expect(SchoolReportFlowRules.position(of: 3, count: 3) == nil)
     }
 
-    @Test func aStepWithoutTripIsNamedAfterItsObservations() {
-        #expect(SchoolReportFlowRules.title(of: .trip, hasTrip: true) == "Trajet")
-        #expect(SchoolReportFlowRules.title(of: .trip, hasTrip: false) == "Observations")
+    @Test func theReviewIsAlwaysNamedTheSameWithOrWithoutATrip() {
+        #expect(SchoolReportFlowRules.title(of: .review, hasTrip: true) == "Récapitulatif")
+        #expect(SchoolReportFlowRules.title(of: .review, hasTrip: false) == "Récapitulatif")
         #expect(SchoolReportFlowRules.title(of: .report, hasTrip: false) == "Bilan")
     }
 
@@ -85,6 +86,27 @@ import Testing
     }
 
     // MARK: Récapitulatif
+
+    @Test func theReviewUsesEditedValuesAndTheRealSharingStateWithoutInventingATrip() {
+        let competency = Self.competency(1)
+        let review = SchoolReportFlowRules.review(workedOn: "Créneaux", observationText: "Regarder loin",
+            nextStep: "Giratoires", observations: [SchoolReportObservation(competencyId: competency.id,
+                level: "GUIDED", context: "Centre-ville")], competencies: [competency], shared: false,
+            hasTrip: false, lessonObservationCount: 0)
+
+        #expect(review.texts.map(\.value) == ["Créneaux", "Regarder loin", "Giratoires"])
+        #expect(review.competencies == [.init(label: "Compétence 1", level: "Avec accompagnement", context: "Centre-ville")])
+        #expect(review.visibility == .private)
+        #expect(!review.hasTrip && review.lessonObservationCount == 0)
+    }
+
+    @Test func anEmptyReviewStillExistsAndOnlyNamesWhatIsReal() {
+        let review = SchoolReportFlowRules.review(workedOn: "", observationText: "", nextStep: "", observations: [],
+            competencies: [], shared: true, hasTrip: false, lessonObservationCount: 2)
+        #expect(review.texts.isEmpty && review.competencies.isEmpty)
+        #expect(review.visibility == .shared)
+        #expect(!review.hasTrip && review.lessonObservationCount == 2)
+    }
 
     @Test func aLongListFoldsAndASingleExtraItemStaysVisible() {
         let short = SchoolReportFlowRules.fold(Array(1...5), limit: 5)
