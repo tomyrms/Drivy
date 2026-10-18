@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 18 octobre 2026 : audit V2, 20 agents et recette réelle locale
+
+Branche `audit/intelligent-v2-20261018`, basée sur V1 `7c117cd`. Vingt explorateurs réellement exécutés : 16 GPT-5.6 Luna et 4 GPT-5.6 Sol. **26 signaux initiaux arbitrés, deux bugs confirmés corrigés : un P1 et un P2, aucun P0.** La réauthentification reste liée au compte initial. Le dossier élève distingue chargement, erreur et reprise de l’accord GPS, sans révéler un statut refusé en 403. Aucun défaut V1 résiduel ni régression démontré dans les parcours vérifiés.
+
+**Validation exécutée : 447 tests API avec PostgreSQL/SMTP, 236 tests web, 51 scénarios navigateur à transport synthétique et 82 contrôles réels Edge/Keycloak/BFF/API/PostgreSQL/SMTP réussis.** Types, builds et intégrité des 556 fichiers canoniques passent. Le blocage Docker de V1 a été levé localement. Récupération de compte explicitement exclue, aucun mot de passe réinitialisé. Node 26 local au lieu du 24 requis, Apple/Safari/VoiceOver/GPS terrain non qualifiés. Aucun push, fusion, déploiement ou changement de production. Validation humaine avant intégration.
+
+[Rapport V2 : décisions, preuves, fichiers et commits](audit-v2-20261018.md) · [Plan et bilan](audit-v2-20261018-plan.md).
+
 ## 18 octobre 2026 : audit multi-agents local, non déployé
 
 Branche isolée `audit/intelligent-20261018`, base `5482dd8`. Dix audits spécialisés terminés avec sept GPT-5.6 Luna et trois GPT-5.6 Sol, puis contre-revue ciblée Astra. **13 signaux arbitrés, 2 défauts confirmés corrigés : un P1 et un P2, aucun P0.** Le formulaire d’accès équipe conserve son brouillon lors d’une relecture concurrente et exige une résolution explicite avant écriture. Le vérificateur OIDC refuse les sujets non textuels sans transformer les identifiants opaques valides. Pas de refonte visuelle ni nouvelle dépendance.
