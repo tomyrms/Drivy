@@ -643,9 +643,13 @@ struct SchoolPlanningInstructor: Identifiable {
                 writeConfirmed = true
                 confirmedLessonReference = (receipt.resourceId, receipt.resourceVersion)
                 await reloadConfirmedLesson()
-            } else if command.kind != .cancelLesson {
-                await load()
+                // Changement de compte ou accès retiré pendant la relecture : rien n'est annoncé dans l'ancienne portée.
+                guard request == generation, !invalidated, !accessRevoked else { return }
+                successMessage = "Enregistrement confirmé par l’école."
+                NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+                return
             }
+            if command.kind != .cancelLesson { await load() }
             successMessage = "Enregistrement confirmé par l’école."
             NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
         } catch SchoolPlanningFailure.notFound {
@@ -701,7 +705,7 @@ struct SchoolPlanningInstructor: Identifiable {
         guard !invalidated, let reference = confirmedLessonReference else { return false }
         let request = generation
         isBusy = true; errorMessage = nil
-        defer { isBusy = false }
+        defer { if request == generation { isBusy = false } }
         do {
             let lesson = try await client.lesson(schoolID: scope.schoolID, id: reference.id)
             guard request == generation, !invalidated, !accessRevoked, confirmedLessonReference?.id == reference.id,

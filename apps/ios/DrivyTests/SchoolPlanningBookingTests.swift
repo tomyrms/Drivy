@@ -70,6 +70,32 @@ import Testing
         #expect(model.confirmedLesson == nil)
     }
 
+    @Test func invalidatingVerificationDuringConfirmedReadPublishesNeitherSuccessNorNotification() async throws {
+        let server = PlanningBookingServer(receiptAvailable: false, lessonReadDelayMilliseconds: 100)
+        let model = workspace(server)
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+        #expect(await model.saveBooking() == false)
+        await server.enableReceipt()
+        let notifications = PlanningNotificationCounter()
+        let token = NotificationCenter.default.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) { _ in
+            notifications.increment()
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        let verifying = Task { await model.verify() }
+        var attempts = 0
+        while attempts < 100, !(await server.didStartLessonRead()) {
+            try await Task.sleep(for: .milliseconds(5)); attempts += 1
+        }
+        #expect(await server.didStartLessonRead())
+        model.invalidate()
+        await verifying.value
+
+        #expect(model.confirmedLesson == nil)
+        #expect(model.successMessage == nil)
+        #expect(notifications.value == 0)
+    }
+
     @Test func rereadAcceptsANewerCurrentVersionButRejectsAnOlderOne() async throws {
         let newer = workspace(PlanningBookingServer(lessonVersionDelta: 1))
         await newer.load(); await newer.selectLearner(HubFixture.learnerID); await newer.validateSlot()
@@ -289,6 +315,13 @@ import Testing
             tokenSource: HubToken(), transport: server)
         return SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client, date: date, lesson: lesson, outbox: outbox ?? ConfigurationOutboxStub())
     }
+}
+
+private final class PlanningNotificationCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func increment() { lock.lock(); count += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
 }
 
 /// Transport synthétique : vérifie la commande client, sans prétendre qualifier les transactions PostgreSQL.
