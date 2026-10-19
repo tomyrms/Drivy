@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 19 octobre 2026 : V4 intégrée à la production et déployée
+
+PR #36 fusionnée dans `master` en `d9a67c0`, à la demande du porteur. La branche réunit la refonte V4 (`design/ui-ux-v4-20261018`, `a93969f`) et la production `claude/audit-4agents-20261018` (`3893b7c`) : connexion native, création de compte par code, formations et tarifs, migration 034, confirmation d’identité et GPS. Sept conflits résolus : agenda web, BFF, session, test UI iOS, recette d’ouverture, `STATUS.md`. La recherche d’agenda V4 est conservée ; la réauthentification garde la vérification de fraîcheur de la production.
+
+**Exécuté localement** : typage API et web, 488 tests API avec PostgreSQL 17, 316 tests web, 148 tests unitaires API, builds API et web. **CI `master` verte** : vérifications, parcours navigateur d’ouverture d’école avec Keycloak/PostgreSQL, GitGuardian, IPA d’essai.
+
+**Déployé le 19 octobre 2026** : release `d9a67c0` sur le homelab, sauvegarde vérifiée `/root/drivy_refonte-before-d9a67c0a4d312d51b5074f82d017e012360e4f3f-20261019T145938Z-9900a00f3e76.dump` sur CT113, 34 migrations aux empreintes conformes, API/web/identité actifs, `/app/` 200 avec le bundle V4, `/app/bff/session` anonyme 200, `/refonte/v1/me` 401 sans jeton, aucune alerte dans les journaux. Aucune autre donnée de production modifiée.
+
+**À qualifier sur appareil** : VoiceOver, grandes tailles de texte et GPS réel. Le test iPhone des thèmes de signalement reste en échec, défaut antérieur à la V4, à corriger séparément. La campagne iOS complète sur `release/v4-20261019` est en cours.
+
 ## 18 octobre 2026 : audit V2, 20 agents et recette réelle locale
 
 Branche `audit/intelligent-v2-20261018`, basée sur V1 `7c117cd`. Vingt explorateurs réellement exécutés : 16 GPT-5.6 Luna et 4 GPT-5.6 Sol. **26 signaux initiaux arbitrés, deux bugs confirmés corrigés : un P1 et un P2, aucun P0.** La réauthentification reste liée au compte initial. Le dossier élève distingue chargement, erreur et reprise de l’accord GPS, sans révéler un statut refusé en 403. Aucun défaut V1 résiduel ni régression démontré dans les parcours vérifiés.
