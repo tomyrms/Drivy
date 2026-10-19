@@ -6,9 +6,10 @@ import { confirmedData, readSchool, offeringSchema, readAll, type Offering } fro
 import { RequestFailure } from '../protocol';
 import { setupStepState } from '../setup-progress';
 import { CheckField, ConfirmDialog, Facts, Notice, SegmentField, SelectField, Symbol, TextArea, TextField, formatCivilDate } from '../ui';
-import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice,
-  setupStepLabels, setupSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
+import { catalogueSetupContent, issueStep, selectSetupSection, setupContentSchema, setupDraftSchema, setupFormation, setupPreviewSchema, setupPrice, templateAlreadyAdded,
+  setupStepLabels, initialSetupStep, setupNavigationSteps, setupTemplatesSchema, setupExampleText, refreshSetupExamples, type SetupContent, type SetupDraft, type SetupFormation, type SetupPreview, type SetupStep, type SetupTemplates } from '../setup-model';
 import { readError, useCommandRunner, useConsole, useLoad } from './context';
+import { priceAmountProblem } from './formation-model';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { ProfileFieldsPreview } from './profile-fields-preview';
 import './school-setup.css';
@@ -77,7 +78,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     if (draft.schoolId !== schoolId || draft.id !== schoolId) throw new RequestFailure('INVALID_RESPONSE');
     return { draft, templates, offerings: offerings.items.filter(item => item.enabled) };
   }, [schoolId, snapshot.revision]);
-  const steps: readonly SetupStep[] = catalogueOnly ? ['FORMATIONS', 'PRICING', 'REVIEW'] : setupSteps;
+  const steps = setupNavigationSteps(content, catalogueOnly);
   const blocked = saving || runner.busy || !!runner.pending || reviewing || needsAdoption.current;
   const key = `setup-draft:${catalogueOnly ? 'catalogue' : 'initial'}`;
 
@@ -104,7 +105,7 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
     if (document && !needsAdoption.current) return;
     const saved = loaded.data.draft;
     const remembered = needsAdoption.current ? undefined : drafts?.get(key) as StoredDraft | undefined;
-    let next = clone(saved.content), nextStep = saved.currentStep, nextDirty = false;
+    let next = clone(saved.content), nextStep = catalogueOnly ? saved.currentStep : initialSetupStep(saved, school.status), nextDirty = false;
     if (remembered && remembered.version === saved.version && setupContentSchema.safeParse(remembered.content).success) {
       next = remembered.content; nextStep = remembered.step; nextDirty = remembered.dirty;
     } else if (catalogueOnly && (saved.status === 'APPLIED' || saved.content.selectedSections.length === 0)) {
@@ -116,8 +117,10 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
       nextDirty ||= next.selectedSections.length !== 1 || next.selectedSections[0] !== 'CATALOGUE';
       next = catalogueSetupContent(next);
     }
+    const availableSteps = setupNavigationSteps(next, catalogueOnly);
+    if (nextStep === 'PRICING' && !availableSteps.includes('PRICING')) nextStep = 'REVIEW';
     needsAdoption.current = false;
-    setDocument(saved); setContent(next); setStep(steps.includes(nextStep) ? nextStep : steps[0]!); setDirty(nextDirty);
+    setDocument(saved); setContent(next); setStep(availableSteps.includes(nextStep) ? nextStep : availableSteps[0]!); setDirty(nextDirty);
     setEditorRevision(revision => revision + 1);
     setPreview(null); setReviewIssues([]); setReviewContent(null); setAcknowledged(false); setReadFailure(null);
   }, [loaded.data, loaded.status]);
@@ -324,19 +327,19 @@ function FormationStep({ content, templates, offerings, initialOfferingId, today
   const [chosen, setChosen] = useState(offerings.some(item => item.id === initialOfferingId) ? initialOfferingId! : '');
   if (!canWrite) return <Notice tone="warning" title="Accès aux tarifs requis"><p>Un administrateur doit vous donner l’autorisation de configurer le catalogue.</p></Notice>;
   return <div className="section-stack">
-    <div className="setup-permits">{templates.formations.map(template => <button type="button" className="button secondary" key={template.id} disabled={content.formations.length >= 12} onClick={() => add(setupFormation(template, today))}><Symbol kind="plus" bare />{template.label}</button>)}
+    <div className="setup-permits">{templates.formations.map(template => <button type="button" className="button secondary" key={template.id} disabled={content.formations.length >= 12 || templateAlreadyAdded(content.formations, template.categoryCode)} onClick={() => add(setupFormation(template, today))}><Symbol kind="plus" bare />{template.label}</button>)}
       <button type="button" className="button quiet" disabled={content.formations.length >= 12} onClick={() => add(setupFormation(null, today))}>Autre formation</button></div>
     {offerings.length > 0 && <details className="disclosure" open={!!initialOfferingId}><summary>Ajouter un tarif à une formation existante</summary><SelectField label="Formation" value={chosen} onChange={setChosen} search options={[{ value: '', label: 'Choisir une formation' }, ...offerings.map(offer => ({ value: offer.id, label: `Permis ${offer.categoryCode} · ${offer.defaultDurationMinutes} min` }))]} />
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 12} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
-      <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>
+      <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" aria-label={`Retirer du brouillon · ${formation.label || `Formation ${index + 1}`}`} onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>
       <div className="form-grid"><TextField name={`formations.${index}.categoryCode`} error={errorFor(`formations.${index}.categoryCode`)} label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
         <TextField name={`formations.${index}.label`} error={errorFor(`formations.${index}.label`)} label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div>
       {!formation.existingOfferingId && <>
         <details className="disclosure"><summary>Programme · {formation.competencies.length} compétences</summary><div className="section-stack">{formation.competencies.map((competence, position) => <div className="setup-competency" key={competence.key}>
           <TextField name={`formations.${index}.competencies.${position}.label`} error={errorFor(`formations.${index}.competencies.${position}.label`)} label={`Compétence ${position + 1}`} value={competence.label} onChange={label => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, label } : item) })} />
           <TextArea name={`formations.${index}.competencies.${position}.description`} error={errorFor(`formations.${index}.competencies.${position}.description`)} label="Description" value={competence.description} rows={2} onChange={description => update({ ...formation, competencies: formation.competencies.map((item, i) => i === position ? { ...item, description } : item) })} />
-          <button type="button" className="button quiet" onClick={() => update({ ...formation, competencies: formation.competencies.filter((_, i) => i !== position).map((item, sortOrder) => ({ ...item, sortOrder })) })}>Retirer cette compétence</button>
+          <button type="button" className="button quiet" aria-label={`Retirer cette compétence · ${competence.label || `Compétence ${position + 1}`}`} onClick={() => update({ ...formation, competencies: formation.competencies.filter((_, i) => i !== position).map((item, sortOrder) => ({ ...item, sortOrder })) })}>Retirer cette compétence</button>
         </div>)}<button type="button" className="button secondary" disabled={formation.competencies.length >= 200} onClick={() => update({ ...formation, competencies: [...formation.competencies, { key: crypto.randomUUID(), label: '', description: '', sortOrder: formation.competencies.length }] })}>Ajouter une compétence</button></div></details>
         <details className="disclosure"><summary>Déroulement de la formation</summary><TextArea name={`formations.${index}.procedureText`} error={errorFor(`formations.${index}.procedureText`)} label="Déroulement" value={formation.procedureText} rows={5} maxLength={4000} onChange={procedureText => update({ ...formation, procedureText })} /></details>
       </>}
@@ -358,8 +361,8 @@ function PricingStep({ content, templates, onChange, canWrite, errorFor }: StepP
       {!formation.existingOfferingId ? <TextArea name={`formations.${index}.cancellationPolicyText`} error={errorFor(`formations.${index}.cancellationPolicyText`)} label="Conditions d’annulation" value={formation.cancellationPolicyText} rows={3} maxLength={4000} onChange={cancellationPolicyText => update({ ...formation, cancellationPolicyText })} />
         : formation.cancellationPolicyText.trim() ? <Notice tone="warning" title="Annulation déjà définie" actions={<button type="button" className="button secondary" onClick={() => update({ ...formation, cancellationPolicyText: '' })}>Conserver l’annulation de la formation</button>}><p>Ce tarif utilise les conditions de sa formation. Le texte ajouté à ce brouillon ne peut pas les remplacer.</p></Notice> : <p>Le déroulement et les conditions d’annulation de la formation sont conservés.</p>}
       <TextArea name={`formations.${index}.termsText`} error={errorFor(`formations.${index}.termsText`)} label="Conditions du tarif" value={formation.termsText} rows={4} maxLength={20000} onChange={termsText => update({ ...formation, termsText })} />
-      {templates.commercial && <button type="button" className="button secondary" onClick={() => setExampleFor(formation.id)}>Insérer un exemple de conditions</button>}
-      {index === 0 && content.formations.length > 1 && <button type="button" className="button secondary" onClick={() => setCopyFrom(formation.id)}>Utiliser ces conditions pour les autres formations</button>}
+      {templates.commercial && <button type="button" className="button secondary" aria-label={`Insérer un exemple de conditions · ${formation.label || `Permis ${formation.categoryCode}`}`} onClick={() => setExampleFor(formation.id)}>Insérer un exemple de conditions</button>}
+      {index === 0 && content.formations.length > 1 && <button type="button" className="button secondary" aria-label={`Utiliser ces conditions pour les autres formations · ${formation.label || `Permis ${formation.categoryCode}`}`} onClick={() => setCopyFrom(formation.id)}>Utiliser ces conditions pour les autres formations</button>}
       <CheckField label="Proposer cette formation et ce tarif après confirmation" checked={formation.apply} onChange={apply => update({ ...formation, apply })} />
     </fieldset>
   </section>)}
@@ -373,7 +376,7 @@ function PricingStep({ content, templates, onChange, canWrite, errorFor }: StepP
 }
 function PriceField({ formation, onChange, name, error }: { formation: SetupFormation; onChange: (value: SetupFormation) => void; name: string; error: string | null }) {
   const [raw, setRaw] = useState(formation.priceCents === null ? '' : String(formation.priceCents / 100));
-  return <TextField name={name} label="Prix (CHF)" value={raw} inputMode="decimal" error={raw && setupPrice(raw) === null ? 'Indiquez un montant avec deux décimales au maximum.' : error}
+  return <TextField name={name} label="Prix (CHF)" value={raw} inputMode="decimal" error={raw && setupPrice(raw) === null ? priceAmountProblem : error}
     onChange={value => { setRaw(value); onChange({ ...formation, priceCents: setupPrice(value) }); }} />;
 }
 export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit: (step: SetupStep, field?: string) => void }) {

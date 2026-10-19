@@ -68,7 +68,7 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     await migrate(migration);
     expect(await snapshot()).toEqual(before);
     expect((await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations WHERE name=ANY($1::text[]) ORDER BY name',[oldNames])).rows).toEqual(history);
-    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql']);
+    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql','034_withdrawal_reason_staff_only.sql']);
     // 033 ajoute seulement le nom facultatif d'un parcours : aucune ligne existante ne reçoit de nom déduit.
     expect((await pool.query('SELECT count(*)::int AS named FROM drivy.offering_version WHERE label IS NOT NULL')).rows[0].named).toBe(0);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_opening_link')).rows[0].n).toBe(0);

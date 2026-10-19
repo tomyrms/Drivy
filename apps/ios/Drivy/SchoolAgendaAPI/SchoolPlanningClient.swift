@@ -219,11 +219,11 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         }
         return result
     }
-    func send(_ command: PendingSchoolCommand) async throws {
+    @discardableResult func send(_ command: PendingSchoolCommand) async throws -> SchoolOperationReceipt? {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
-        if command.kind == .startLessonNow { _ = try await startNow(command); return }
+        if command.kind == .startLessonNow { _ = try await startNow(command); return nil }
         var path: [String]
         switch command.kind {
         case .savePlanningDefaults: path = ["planning-defaults"]
@@ -247,7 +247,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         // AP72 confirms both the operation and its target; a bare HTTP success is insufficient.
         // Once the write answered 200/201, a missing or unreadable proof is an uncertainty to verify,
         // never a fresh refusal: the command stays queued instead of being dropped as « rien n’a été enregistré ».
-        do { _ = try await receipt(for: command) }
+        do { return try await receipt(for: command) }
         catch is CancellationError { throw CancellationError() }
         catch let failure as SchoolPlanningFailure where failure == .unauthorized || failure == .forbidden { throw failure }
         catch { throw SchoolPlanningFailure.unavailable }
@@ -287,11 +287,26 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw SchoolPlanningFailure.invalidResponse }
         if !query.isEmpty { components.queryItems = query }
         guard let target = components.url else { throw SchoolPlanningFailure.invalidResponse }
+        let token = try await accessToken()
+        do { return try await perform(target, command: command, statuses: statuses, token: token) }
+        catch SchoolPlanningFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai, même opération et même clé d’idempotence (le 401 précède tout traitement).
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolPlanningFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolPlanningFailure.unauthorized }
+            return try await perform(target, command: command, statuses: statuses, token: renewed)
+        }
+    }
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() }
         catch IdentityFailure.reauthentication { throw SchoolPlanningFailure.unauthorized }
         catch { throw error.unlessCancelled(SchoolPlanningFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolPlanningFailure.unauthorized }
+        return token
+    }
+    private func perform<Value: Decodable>(_ target: URL, command: PendingSchoolCommand?, statuses: Set<Int>?, token: String) async throws -> Value {
         if let command {
             let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
             guard person.personId == command.scope.personID, person.memberships.contains(where: {

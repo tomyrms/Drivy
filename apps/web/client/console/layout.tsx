@@ -100,10 +100,11 @@ export function ListPagination({ page, pageSize, total, onPageChange, label = 'P
   const pages = Math.max(1, Math.ceil(total / pageSize)), current = Math.min(Math.max(1, page), pages);
   return <nav className="record-footer" aria-label={label}>
     <p className="caption" role="status">{total ? `${(current - 1) * pageSize + 1}–${Math.min(current * pageSize, total)} sur ${total}` : 'Aucun résultat'}</p>
-    {pages > 1 && <div className="pagination-controls"><button type="button" className="button secondary compact" disabled={current === 1}
-      onClick={() => onPageChange(current - 1)}><Symbol kind="back" bare />Précédent</button>
-      <span className="caption">Page {current} sur {pages}</span><button type="button" className="button secondary compact" disabled={current === pages}
-        onClick={() => onPageChange(current + 1)}>Suivant<span className="flip"><Symbol kind="back" bare /></span></button></div>}
+    {/* aria-disabled et non disabled : un bouton désactivé perd le focus, le clavier doit rester sur la pagination. */}
+    {pages > 1 && <div className="pagination-controls"><button type="button" className="button secondary compact" aria-disabled={current === 1}
+      onClick={() => { if (current > 1) onPageChange(current - 1); }}><Symbol kind="back" bare />Précédent</button>
+      <span className="caption">Page {current} sur {pages}</span><button type="button" className="button secondary compact" aria-disabled={current === pages}
+        onClick={() => { if (current < pages) onPageChange(current + 1); }}>Suivant<span className="flip"><Symbol kind="back" bare /></span></button></div>}
   </nav>;
 }
 

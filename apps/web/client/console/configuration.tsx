@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createCommand, filled, isEmail, characters } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { readSchool, readinessSchema } from '../school-api';
@@ -21,6 +21,12 @@ export function ConfigurationSection() {
   const [editing, setEditing] = useState(() => !!routeQuery?.focus?.startsWith('school-'));
   const editButton = useRef<HTMLButtonElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  const focusOnEdit = useRef(false);
+  useLayoutEffect(() => {
+    if (!editing || !focusOnEdit.current) return;
+    focusOnEdit.current = false;
+    form.current?.querySelector<HTMLInputElement>('input')?.focus();
+  }, [editing]);
   useEffect(() => { if (routeQuery?.focus?.startsWith('school-')) setEditing(true); }, [routeQuery?.focus]);
   const mayEdit = loaded.data !== undefined && !runner.pending && !runner.busy;
   const value = identity.draft;
@@ -50,7 +56,7 @@ export function ConfigurationSection() {
       <section className="settings-section" aria-labelledby="identity-title">
         <div className="settings-section-heading"><h2 id="identity-title" className="section-title">Coordonnées</h2>
           {!editing && <button type="button" className="button secondary" ref={editButton} disabled={!mayEdit}
-            onClick={() => { setEditing(true); requestAnimationFrame(() => form.current?.querySelector<HTMLInputElement>('input')?.focus()); }}>
+            onClick={() => { focusOnEdit.current = true; setEditing(true); }}>
             <Symbol kind="edit" bare />Modifier les coordonnées</button>}
         </div>
         <div className="settings-section-body">

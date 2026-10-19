@@ -1,10 +1,40 @@
 import { describe, expect, test } from 'vitest';
-import { catalogueSetupContent, issueStep, setupFormation, setupPrice, setupContentSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples } from '../client/setup-model.js';
+import { catalogueSetupContent, initialSetupStep, setupNavigationSteps, issueStep, setupFormation, setupPrice, setupContentSchema, setupDraftSchema, setupProfileRequirement, setupExampleText, refreshSetupExamples, templateAlreadyAdded } from '../client/setup-model.js';
 import { matchSchoolRoute } from '../server/school-routes.js';
 import { commandSpecs, createCommand, receiptMatches } from '../client/command-core.js';
 import { randomUUID } from 'node:crypto';
 
+describe('Préparation : un permis ne se prépare qu’une fois', () => {
+  test('un modèle dont le permis est déjà dans le brouillon est signalé', () => {
+    const formations = [{ categoryCode: 'B' }, { categoryCode: 'A1' }];
+    expect(templateAlreadyAdded(formations, 'B')).toBe(true);
+    expect(templateAlreadyAdded(formations, 'BE')).toBe(false);
+    expect(templateAlreadyAdded([], 'B')).toBe(false);
+  });
+});
+
 describe('Préparation : préserver les choix avant adoption', () => {
+  test('la première préparation reprend après les coordonnées déjà enregistrées, sans ignorer une saisie sauvegardée', () => {
+    const id = randomUUID();
+    const draft = setupDraftSchema.parse({ id, schoolId: id, version: 1, status: 'DRAFT', currentStep: 'IDENTITY', updatedAt: null, updatedByMembershipId: null, appliedAt: null,
+      content: { selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE'], identity: { name: 'École de recette', timeZone: 'Europe/Zurich', contactEmail: 'ecole@example.test', contactPhone: null },
+        privacy: { noticeText: '', retentionText: '', contactEmail: 'ecole@example.test', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [] } });
+    expect(initialSetupStep(draft, 'DRAFT')).toBe('PRIVACY');
+    expect(initialSetupStep({ ...draft, updatedAt: '2026-10-17T08:00:00.000Z' }, 'DRAFT')).toBe('IDENTITY');
+    expect(initialSetupStep({ ...draft, currentStep: 'PROFILE' }, 'DRAFT')).toBe('PROFILE');
+    expect(initialSetupStep(draft, 'ACTIVE')).toBe('IDENTITY');
+    for (const invalid of [{ name: ' ' }, { contactEmail: '' }, { timeZone: 'Zurich' }]) {
+      expect(initialSetupStep({ ...draft, content: { ...draft.content, identity: { ...draft.content.identity, ...invalid } } }, 'DRAFT')).toBe('IDENTITY');
+    }
+    expect(draft.currentStep).toBe('IDENTITY');
+  });
+  test('sans formation le parcours continue directement à la revue ; ajouter une formation remet les tarifs', () => {
+    const content = setupContentSchema.parse({ selectedSections: [], identity: { name: '', timeZone: '', contactEmail: '', contactPhone: null },
+      privacy: { noticeText: '', retentionText: '', contactEmail: '', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [] });
+    expect(setupNavigationSteps(content)).toEqual(['IDENTITY', 'PRIVACY', 'PROFILE', 'FORMATIONS', 'REVIEW']);
+    expect(setupNavigationSteps(content, true)).toEqual(['FORMATIONS', 'REVIEW']);
+    expect(setupNavigationSteps({ ...content, formations: [setupFormation(null, '2026-10-17')] }, true)).toEqual(['FORMATIONS', 'PRICING', 'REVIEW']);
+  });
   test('un tarif vide, invalide ou négatif ne devient pas gratuit', () => {
     for (const price of ['', ' ', '-4', 'NaN', '1e2', '12.345', '100 CHF']) expect(setupPrice(price)).toBeNull();
     expect(setupPrice('95,50')).toBe(9550);

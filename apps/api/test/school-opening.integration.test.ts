@@ -14,7 +14,7 @@ const schoolOpening={operators:[{issuer,subject:operator}],validityDays:7};
 beforeAll(async()=>{
   pool=await freshDatabase();
   app=buildApp({pool,verifyToken,cursorSecret:'opening-synthetic-test-secret-32-characters',schoolOpening});
-  if(!app.hasRoute({method:'GET',url:base}))registerSchoolOpening(app,{pool,verifyToken,schoolOpening});
+  if(!app.hasRoute({method:'GET',url:base}))registerSchoolOpening(app,{pool,verifyToken,cursorSecret:'opening-synthetic-test-secret-32-characters',schoolOpening});
 });
 beforeEach(async()=>{await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);});
 afterAll(async()=>{await app?.close();await pool?.end();});
@@ -30,7 +30,7 @@ test('opérateur explicite, fermé sans liste ; ADMIN scolaire insuffisant et id
   expect((await call('POST',base,{operationId:randomUUID(),token:randomBytes(32).toString('base64url')},'demo-admin')).statusCode).toBe(403);
   expect((await app.inject({url:base})).statusCode).toBe(401);
   const closed=buildApp({pool,verifyToken,cursorSecret:'opening-test-default-closed-secret-32'});
-  if(!closed.hasRoute({method:'GET',url:base}))registerSchoolOpening(closed,{pool,verifyToken});
+  if(!closed.hasRoute({method:'GET',url:base}))registerSchoolOpening(closed,{pool,verifyToken,cursorSecret:'opening-test-default-closed-secret-32'});
   expect((await closed.inject({url:base,headers:{authorization:`Bearer ${operator}`}})).statusCode).toBe(403);await closed.close();
   const created=await issue();expect(created.link.status).toBe('AVAILABLE');
   expect((await pool.query('SELECT 1 FROM drivy.identity_link WHERE subject=$1',[operator])).rowCount).toBe(0);

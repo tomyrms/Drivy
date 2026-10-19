@@ -234,6 +234,18 @@ import Foundation
         if !query.isEmpty { parts.queryItems = query }
         guard let target = parts.url else { throw SchoolObservationFailure.invalidResponse }
         let token = try await accessToken()
+        do { return try await perform(scope, target, method: method, command: command, validateContinuation: validateContinuation, token: token) }
+        catch SchoolObservationFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai, même opération et même clé d’idempotence.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolObservationFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolObservationFailure.unauthorized }
+            return try await perform(scope, target, method: method, command: command, validateContinuation: validateContinuation, token: renewed)
+        }
+    }
+    private func perform<Value: Decodable>(_ scope: SchoolCommandScope, _ target: URL, method: String, command: PendingSchoolCommand?,
+                                          validateContinuation: (@MainActor () throws -> Void)?, token: String) async throws -> Value {
         // Le même jeton sert à vérifier /me puis à envoyer ; aucun changement de compte entre les deux appels.
         try await verify(scope, token: token)
         try Task.checkCancellation()

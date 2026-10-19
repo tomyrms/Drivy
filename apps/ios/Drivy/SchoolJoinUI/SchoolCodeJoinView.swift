@@ -6,6 +6,8 @@ struct SchoolCodeJoinView: View {
     let openSchool: (SchoolMembership) -> Void
     /// An e-mail invitation link is still accepted, on its own screen.
     var useLink: (() -> Void)? = nil
+    /// The code opens a school: the root presents the opening form.
+    var openSchoolWithCode: ((String) -> Void)? = nil
     var loadsOnAppear = true
     @Environment(\.dismiss) private var dismiss
     @FocusState private var fieldFocused: Bool
@@ -40,9 +42,12 @@ struct SchoolCodeJoinView: View {
         .task {
             guard loadsOnAppear else { return }
             await model.load()
-            if model.isReady && model.preview == nil && !model.isPending { fieldFocused = true }
+            // Un code déjà saisi avant la connexion se lit aussitôt ; sinon le champ attend la saisie.
+            if model.canPreview { await model.inspect() }
+            else if model.isReady && model.preview == nil && !model.isPending { fieldFocused = true }
         }
         .accessibilityIdentifier("join-school-code")
+        .onChange(of: model.openingCode) { _, code in if let code { openSchoolWithCode?(code) } }
     }
 
     // La première lecture (vérification du compte) n’écrit rien : la feuille se ferme pendant elle. Seul un envoi
@@ -117,6 +122,7 @@ struct SchoolCodeJoinView: View {
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
             SchoolJoinSchoolHeader(name: preview.schoolName, facts: facts, isConfirmed: model.isConfirmed)
             if !model.isConfirmed && !model.isPending {
+                if let identity = preview.profileIdentity { SchoolJoinAccountIdentity(identity: identity) }
                 secondaryLink("Saisir un autre code") { model.anotherCode() }
             }
         }

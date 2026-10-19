@@ -9,7 +9,7 @@
 .choice-chevron, .choice-check { inline-size: 1.125rem; block-size: 1.125rem; flex: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .choice-chevron { color: var(--muted); }
 .choice-positioner { z-index: 40; max-inline-size: calc(100vw - 1.5rem); }
-.choice-popup { min-inline-size: var(--anchor-width); inline-size: max-content; max-inline-size: min(28rem, calc(100vw - 1.5rem)); max-block-size: var(--available-height); overflow: hidden; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: .5rem; box-shadow: 0 4px 10px rgb(0 0 0 / .06), 0 12px 30px rgb(0 0 0 / .08); transform-origin: var(--transform-origin); }
+.choice-popup { min-inline-size: var(--anchor-width); inline-size: max-content; max-inline-size: min(28rem, calc(100vw - 1.5rem)); max-block-size: var(--available-height); overflow: hidden; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: .5rem; box-shadow: var(--shadow-menu); transform-origin: var(--transform-origin); }
 .choice-list { padding: .375rem; overflow-y: auto; overscroll-behavior: contain; max-block-size: min(19rem, calc(var(--available-height) - 4.5rem)); scrollbar-width: thin; }
 .choice-option { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; min-block-size: 2.625rem; padding: .5rem .625rem; border-radius: .3125rem; font: var(--type-subheadline); cursor: default; outline: none; overflow-wrap: anywhere; }
 .choice-option[data-highlighted] { color: var(--text); background: var(--surface-muted); }

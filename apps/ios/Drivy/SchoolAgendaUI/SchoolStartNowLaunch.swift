@@ -134,6 +134,7 @@ import UIKit
     @ObservationIgnored let agenda: SchoolAgendaClient
     @ObservationIgnored let workspace: SchoolWorkspace
     @ObservationIgnored let controller: SchoolCaptureSessionController?
+    @ObservationIgnored private let makeLocationSource: @MainActor () -> any SchoolCaptureLocationProviding
     /// Fin du geste, une seule fois : l’écran d’origine se relit.
     @ObservationIgnored var onFinished: @MainActor () -> Void = {}
     @ObservationIgnored private var preparation: SchoolCapturePreparationWorkspace?
@@ -141,17 +142,30 @@ import UIKit
     @ObservationIgnored private var completed = false
 
     init(form: SchoolStartNowWorkspace, agenda: SchoolAgendaClient, workspace: SchoolWorkspace,
-         controller: SchoolCaptureSessionController?) {
+         controller: SchoolCaptureSessionController?,
+         makeLocationSource: @escaping @MainActor () -> any SchoolCaptureLocationProviding = { SchoolCaptureLocationSource() }) {
         self.form = form
         self.agenda = agenda
         self.workspace = workspace
         self.controller = controller
+        self.makeLocationSource = makeLocationSource
         // Élève imposé par sa fiche : le récapitulatif d’emblée, sans liste.
         step = form.presetLearnerID == nil ? .learner : .summary
     }
 
     /// Une étape du départ est en cours : la feuille ne se ferme pas et rien ne se modifie.
     var isBusy: Bool { (phase != .editing && phase != .done) || form.isBusy }
+    /// Le libellé annonce le parcours qui partira : une question sans réponse ou un GPS indisponible
+    /// ne doivent jamais se cacher derrière « Démarrer maintenant ».
+    var startTitle: String {
+        if gps?.isReading == true { return "Démarrer la leçon" }
+        return gps?.wantsTrip == true ? "Démarrer avec GPS" : "Démarrer sans GPS"
+    }
+    var canLaunch: Bool { phase == .editing && !invalidated && form.canStart && gps?.isReading != true }
+    var gpsUnavailableReason: SchoolGPSUnavailableReason? {
+        SchoolLessonHubRules.capturePreparationUnavailableReason(school: workspace.school,
+            hasController: controller != nil, controllerCanPrepare: controller?.canPrepareCapture == true)
+    }
     /// Le départ du trajet est en cours ou abouti : la chaîne se termine elle-même, l’écran d’origine ayant
     /// laissé place à la carte.
     var finishesItself: Bool { phase == .startingTrip || phase == .waitingForPosition || (phase == .done && closesSheet) }
@@ -206,7 +220,7 @@ import UIKit
 
     func launch() {
         // Garde synchrone : un second appui, même avant le prochain rendu, ne lance rien.
-        guard phase == .editing, !invalidated, form.canStart else { return }
+        guard canLaunch else { return }
         phase = .creating
         launches += 1
         tripIssue = nil
@@ -319,6 +333,9 @@ import UIKit
     }
 
     private func prepareGPS(for learnerID: UUID) {
+        // Après activation du module sur le web, la même feuille peut préparer le GPS. Une désactivation
+        // retire aussi le choix local avant le départ ; aucun collecteur n'est lancé par une relecture.
+        guard tripAvailable else { gps?.close(); gps = nil; return }
         guard gps?.learnerID != learnerID else { return }
         gps?.close(); gps = nil
         guard tripAvailable, let controller else { return }
@@ -326,9 +343,14 @@ import UIKit
             client: agenda.captureClient, reader: agenda.reader, agenda: agenda,
             onRefusalConfirmed: { learner, lesson in controller.learnerRefused(learnerID: learner, lessonID: lesson) },
             journalProvider: { try await controller.journal() })
-        let value = SchoolStartNowGPS(learnerID: learnerID, consent: consent, source: SchoolCaptureLocationSource(), scope: form.scope)
+        let value = SchoolStartNowGPS(learnerID: learnerID, consent: consent, source: makeLocationSource(), scope: form.scope)
         gps = value
         Task { await value.load() }
+    }
+
+    func refreshGPSAvailability() {
+        guard phase == .editing, !invalidated, let learnerID = form.learnerID else { return }
+        prepareGPS(for: learnerID)
     }
 
     private func mayStart(_ lesson: SchoolLesson) -> Bool {

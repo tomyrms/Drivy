@@ -10,6 +10,9 @@ final class SchoolWorkspace {
     private(set) var membership: SchoolMembership?
     private(set) var school: SchoolDetails?
     private(set) var learners: [SchoolLearner] = []
+    /// Le dossier du compte connecté reste distinct de l’annuaire et de ses recherches.
+    private(set) var ownLearner: SchoolLearner?
+    private(set) var ownLearnerError: String?
     /// Les dossiers actifs de toute l’école auxquels manque une information requise, pour l’administration ;
     /// `nil` tant que rien n’a été lu. Le point de l’onglet Élèves s’y lit, quelles que soient la recherche et les
     /// pages affichées.
@@ -50,6 +53,7 @@ final class SchoolWorkspace {
     @ObservationIgnored private var accountRefresh = UUID()
     @ObservationIgnored private var schoolScope = UUID()
     @ObservationIgnored private var searchRequest = UUID()
+    @ObservationIgnored private var ownLearnerRequest = UUID()
     @ObservationIgnored private var learnerRequest = UUID()
     @ObservationIgnored private var trainingsRequest = UUID()
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
@@ -57,6 +61,7 @@ final class SchoolWorkspace {
     @ObservationIgnored private var trainingCursors: Set<String> = []
     @ObservationIgnored private var accountReadAt: Date?
     @ObservationIgnored private var learnersReadAt: Date?
+    @ObservationIgnored private var ownLearnerReadAt: Date?
     @ObservationIgnored private var awaitsManagementReturn = false
 
     init(api: any SchoolAPI) { self.api = api }
@@ -168,6 +173,7 @@ final class SchoolWorkspace {
         } else {
             await refreshAccount()
             await refreshLearners()
+            if entryDestination == .instructor { await refreshOwnLearner() }
         }
     }
 
@@ -219,7 +225,10 @@ final class SchoolWorkspace {
             isLoadingSchool = false
             if result.status == "ACTIVE" {
                 await searchLearners("")
+                if scope == schoolScope, entryDestination == .instructor { await refreshOwnLearner(minimumInterval: 0) }
                 await refreshLearnersToComplete()
+            } else {
+                ownLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
             }
             if resumesLearner, scope == schoolScope, selectedLearnerID != nil, !isLoadingLearner {
                 await loadSelectedLearner()
@@ -279,6 +288,9 @@ final class SchoolWorkspace {
             else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
+            if entryDestination == .learner && query.isEmpty {
+                ownLearner = page.items.first { $0.personId == person?.personId }
+            }
             var fresh: [SchoolLearner] = []
             Self.merge(page.items, into: &fresh)
             noteProfiles(page.items)
@@ -294,6 +306,33 @@ final class SchoolWorkspace {
         } catch {
             guard scope == schoolScope, request == searchRequest else { return }
             if !invalidateAccess(for: error) { learnersReadAt = previousReadAt }
+        }
+    }
+
+    /// Un compte moniteur et élève garde son dossier même s’il est absent de la page de l’annuaire.
+    /// La réponse relue reste limitée à ce compte, cette école et les droits courants.
+    func refreshOwnLearner(minimumInterval: TimeInterval = 60, now: Date = Date()) async {
+        guard let membership, membership.roles.contains("LEARNER"), let personID = person?.personId,
+              school?.status == "ACTIVE" else { return }
+        if let ownLearnerReadAt, now.timeIntervalSince(ownLearnerReadAt) < minimumInterval { return }
+        let scope = schoolScope, previousReadAt = ownLearnerReadAt
+        ownLearnerRequest = UUID()
+        let request = ownLearnerRequest
+        ownLearnerReadAt = now; ownLearnerError = nil
+        do {
+            let page = try await api.ownLearners(schoolID: membership.schoolId)
+            guard scope == schoolScope, request == ownLearnerRequest else { return }
+            guard page.nextCursor == nil, page.items.count <= 1,
+                  page.items.allSatisfy({ $0.schoolId == membership.schoolId && $0.personId == personID }) else {
+                throw SchoolAPIError.invalidResponse
+            }
+            ownLearner = page.items.first
+        } catch {
+            guard scope == schoolScope, request == ownLearnerRequest else { return }
+            if !invalidateAccess(for: error) {
+                ownLearnerReadAt = previousReadAt
+                ownLearnerError = message(for: error)
+            }
         }
     }
 
@@ -316,6 +355,10 @@ final class SchoolWorkspace {
     /// Un élève relu ici (dossier, liste) corrige aussitôt l’ensemble des dossiers à compléter : une correction
     /// enregistrée éteint son point sans attendre la prochaine lecture de l’école.
     private func noteProfiles(_ items: [SchoolLearner]) {
+        if membership?.roles.contains("LEARNER") == true,
+           let own = items.first(where: { $0.personId == person?.personId && $0.schoolId == membership?.schoolId }) {
+            ownLearner = own
+        }
         guard var pending = learnersToComplete else { return }
         for item in items {
             if SchoolRequiredActionRules.profileIsIncomplete(item) { pending.insert(item.id) } else { pending.remove(item.id) }
@@ -486,6 +529,9 @@ final class SchoolWorkspace {
             else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
+            if entryDestination == .learner && query.isEmpty {
+                ownLearner = page.items.first { $0.personId == person?.personId }
+            }
             learners = []
             Self.merge(page.items, into: &learners)
             noteProfiles(page.items)
@@ -506,6 +552,7 @@ final class SchoolWorkspace {
         schoolError = nil
         isLoadingSchool = false
         learnersReadAt = nil
+        ownLearnerRequest = UUID(); ownLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
         learnersToComplete = nil
         beginSearch("")
     }

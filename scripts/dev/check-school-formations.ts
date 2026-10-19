@@ -1,5 +1,6 @@
 /** Suite de la recette synthétique : Formations et tarifs dans le build réel (OIDC, BFF, API, PostgreSQL isolés). */
 import {randomUUID} from 'node:crypto';
+import {writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import type {Pool} from 'pg';
 import {z} from 'zod';
@@ -15,11 +16,42 @@ const sheetSchema=z.object({categoryCode:z.string(),programmes:z.array(z.object(
   curriculum:z.object({id:z.uuid(),competencies:z.array(z.object({key:z.string(),label:z.string()}))}).nullable()})),
   tariffs:z.array(z.object({productKey:z.string(),head:z.object({id:z.uuid(),label:z.string(),unitPriceCents:z.number(),durationMinutes:z.number().nullable(),type:z.string()})}))});
 
+/** Reproduit un rendu retardé : la personne peut choisir le champ suivant avant un callback d'animation. */
+async function deferAnimationCallbacks(page:Page):Promise<()=>Promise<void>> {
+  const pending=await page.evaluateHandle(()=>{
+    const request=window.requestAnimationFrame.bind(window),cancel=window.cancelAnimationFrame.bind(window);
+    let next=0;const callbacks=new Map<number,FrameRequestCallback>();
+    window.requestAnimationFrame=callback=>{callbacks.set(++next,callback);return next;};
+    window.cancelAnimationFrame=id=>{callbacks.delete(id);};
+    return ()=>{window.requestAnimationFrame=request;window.cancelAnimationFrame=cancel;
+      for(const callback of callbacks.values())callback(performance.now());};
+  });
+  let released=false;
+  return async()=>{if(released)return;released=true;try{await pending.evaluate(release=>release());}finally{await pending.dispose();}};
+}
+
 export async function verifySchoolFormations(options:FormationsOptions):Promise<void> {
-  try {await run(options);}
+  let stage='formations : préparation';
+  const setStage=(value:string)=>{stage=value;options.setStage(value);};
+  try {await run({...options,setStage});}
   catch(error) {
-    // Diagnostic local explicite : capture de la page synthétique au moment de l'échec, jamais en CI.
-    if(process.env.DRIVY_E2E_DEBUG==='1'&&!process.env.CI)await options.page.screenshot({path:resolve(options.artifactDirectory,'99-formations-echec-synthetic.png'),fullPage:true}).catch(()=>undefined);
+    // Liste fermée : aucun message d'exception, URL, identifiant, texte saisi ou journal réseau dans l'artefact.
+    const failure=error instanceof z.ZodError?'INVALID_RESPONSE_SCHEMA':error instanceof Error&&error.name==='TimeoutError'?'UI_WAIT_TIMEOUT'
+      :error instanceof Error&&error.message.includes('strict mode violation')?'UI_SELECTOR_NOT_UNIQUE'
+      :error instanceof Error&&['FORMATIONS_READ_FAILED','FORMATIONS_FIRST_LESSON_MISSING'].includes(error.message)?error.message:'CHECK_OR_BROWSER_FAILED';
+    const ui=await options.page.evaluate(()=>({
+      formationVisible:!!document.querySelector('.formation-studio'),
+      competencyRows:document.querySelectorAll('.competency-row').length,
+      competencyInputs:document.querySelectorAll('.competency-row input').length,
+      competencyDescriptions:document.querySelectorAll('.competency-row textarea').length,
+      invalidFields:document.querySelectorAll('[aria-invalid="true"]').length,
+      alerts:document.querySelectorAll('[role="alert"]').length,
+      newCompetencyHasFocus:document.activeElement?.getAttribute('aria-label')?.includes('Conduite de nuit')??false,
+    })).catch(()=>null);
+    await writeFile(resolve(options.artifactDirectory,'99-formations-diagnostic.json'),JSON.stringify({stage,failure,ui},null,2)).catch(()=>undefined);
+    // Cette recette utilise seulement une école synthétique. Cadrer la fiche exclut compte, navigation et secrets de connexion.
+    const sheet=options.page.locator('.formation-studio');
+    if(await sheet.count().catch(()=>0)===1)await sheet.screenshot({path:resolve(options.artifactDirectory,'99-formations-echec-synthetic.png')}).catch(()=>undefined);
     throw error;
   }
 }
@@ -32,7 +64,9 @@ async function run(options:FormationsOptions):Promise<void> {
     (SELECT count(*)::int FROM drivy.offering_version WHERE school_id=$1) AS offerings,(SELECT count(*)::int FROM drivy.curriculum_version WHERE school_id=$1) AS curricula,
     (SELECT count(*)::int FROM drivy.school_policy_version WHERE school_id=$1) AS policies,(SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1) AS products,
     (SELECT count(*)::int FROM drivy.school_data_policy WHERE school_id=$1) AS notices,(SELECT count(*)::int FROM drivy.profile_field_policy WHERE school_id=$1) AS profiles,
-    (SELECT status FROM drivy.school WHERE id=$1) AS status`,[schoolId])).rows[0] as Record<string,number|string>;
+    (SELECT status FROM drivy.school WHERE id=$1) AS status`,[schoolId])).rows[0] as {
+      offerings:number;curricula:number;policies:number;products:number;notices:number;profiles:number;status:string;
+    };
   const existing=(await administration.query(`SELECT t.id AS training,t.offering_id,l.id AS lesson,l.price_cents_snapshot,l.commercial_selection,l.policy_version_id
     FROM drivy.training t JOIN drivy.lesson l ON l.training_id=t.id WHERE t.school_id=$1 AND l.status='PLANNED' ORDER BY l.created_at LIMIT 1`,[schoolId])).rows[0];
   if(!existing)throw new Error('FORMATIONS_FIRST_LESSON_MISSING');
@@ -49,17 +83,36 @@ async function run(options:FormationsOptions):Promise<void> {
   assert(true,'La fiche présente Général, Compétences, Déroulement et annulation et Tarifs');
   await page.screenshot({path:resolve(artifactDirectory,'09-formation-fiche-synthetic.png'),fullPage:true});
 
-  setStage('formations : modification des compétences sur place, clavier compris');
-  const before=await counts(),initial=await sheet('B');
+  setStage('formations : comptage des versions avant modification');
+  const before=await counts();
+  setStage('formations : lecture serveur du programme avant modification');
+  const initial=await sheet('B');
+  setStage('formations : ouverture de la rubrique Compétences');
   await tabs.getByRole('link',{name:'Compétences',exact:true}).click();
+  setStage('formations : affichage du titre Compétences');
   await page.getByRole('heading',{name:'Compétences',exact:true}).waitFor();
+  setStage('formations : ouverture de l’éditeur de compétences');
   await page.getByRole('button',{name:'Modifier les compétences',exact:true}).click();
-  await page.getByRole('button',{name:'Ajouter une compétence',exact:true}).click();
+  setStage('formations : ajout d’une ligne de compétence');
   const count=initial.programmes[0]!.curriculum!.competencies.length;
   const added=page.locator('.competency-row').nth(count);
-  await added.getByLabel(`Compétence ${count+1}`,{exact:true}).fill('Conduite de nuit');
-  await added.locator('textarea').fill('Adapter sa conduite à l’obscurité et à l’éblouissement.');
+  const releaseFrames=await deferAnimationCallbacks(page);
+  try {
+    await page.getByRole('button',{name:'Ajouter une compétence',exact:true}).click();
+    setStage('formations : saisie du nom de la nouvelle compétence');
+    await added.getByLabel(`Compétence ${count+1}`,{exact:true}).fill('Conduite de nuit');
+    setStage('formations : saisie de la description après un rendu retardé');
+    await added.locator('textarea').focus();
+    await releaseFrames();
+    await page.keyboard.insertText('Adapter sa conduite à l’obscurité et à l’éblouissement.');
+  } finally {await releaseFrames();}
+  assert(await added.getByLabel(`Compétence ${count+1}`,{exact:true}).inputValue()==='Conduite de nuit'
+    &&await added.locator('textarea').inputValue()==='Adapter sa conduite à l’obscurité et à l’éblouissement.'
+    &&await added.locator('textarea').evaluate(element=>document.activeElement===element),
+    'L’ajout conserve chaque saisie dans son champ, sans déplacement de focus tardif');
+  setStage('formations : déplacement de la compétence au clavier');
   const up=page.getByRole('button',{name:'Monter Conduite de nuit',exact:true});await up.focus();await page.keyboard.press('Enter');
+  setStage('formations : ordre et focus après le déplacement clavier');
   assert(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')?.includes('Conduite de nuit')),'Le déplacement au clavier garde le focus sur la compétence déplacée');
   setStage('formations : changer de rubrique conserve la saisie en cours');
   await tabs.getByRole('link',{name:'Tarifs',exact:true}).click();await page.getByRole('heading',{name:'Tarifs',exact:true}).waitFor();
@@ -110,8 +163,18 @@ async function run(options:FormationsOptions):Promise<void> {
 
   setStage('formations : modification du prix concurrente puis conflit explicite');
   const lessonTariff=(await sheet('B')).tariffs.find(item=>item.head.unitPriceCents===9500&&item.head.durationMinutes===50)!;
-  await page.getByRole('button',{name:`Modifier ${lessonTariff.head.label}`,exact:true}).click();
-  await page.getByLabel('Prix (CHF)',{exact:true}).fill('99');
+  const releaseTariffFrames=await deferAnimationCallbacks(page);
+  const priceInput=page.getByLabel('Prix (CHF)',{exact:true});
+  try {
+    await page.getByRole('button',{name:`Modifier ${lessonTariff.head.label}`,exact:true}).click();
+    await priceInput.focus();await page.keyboard.press('ControlOrMeta+A');
+    await releaseTariffFrames();
+    await page.keyboard.insertText('99');
+  } finally {await releaseTariffFrames();}
+  assert(await priceInput.inputValue()==='99'
+    &&await page.getByLabel('Nom du tarif',{exact:true}).inputValue()===lessonTariff.head.label
+    &&await priceInput.evaluate(element=>document.activeElement===element),
+    'L’ouverture du tarif conserve la saisie et le focus dans le prix malgré un rendu retardé');
   const concurrent=await page.evaluate(async({path,body})=>{
     const session=await (await fetch('/app/bff/session',{credentials:'same-origin'})).json() as {csrfToken:string};
     const response=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken,'Idempotency-Key':body.operationId},body:JSON.stringify(body)});

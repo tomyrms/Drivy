@@ -45,6 +45,15 @@ struct AppConfiguration: Codable, Equatable, Sendable {
         return parts.url
     }
 
+    /// Le bloc GPS du portail : aucune donnée de leçon ou d'élève n'est ajoutée au lien.
+    func gpsManagementURL(schoolID: UUID) -> URL? {
+        guard let base = managementURL(schoolID: schoolID),
+              var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        parts.path += "/confidentialite"
+        parts.queryItems = [URLQueryItem(name: "focus", value: "school-gps")]
+        return parts.url
+    }
+
     func acceptsIdentityEndpoint(_ url: URL) -> Bool {
         Self.isSecureEndpoint(url) && url.host == issuer.host && (url.port ?? 443) == (issuer.port ?? 443)
     }

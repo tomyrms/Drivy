@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildWebApp } from '../server/app.js';
 import { readConfig } from '../server/config.js';
-import { RateLimiter } from '../server/rate-limit.js';
+import { clientKey, RateLimiter } from '../server/rate-limit.js';
 import { SessionStore, type Tokens } from '../server/session.js';
 import { IdentityUnavailable, identityUnreachable, type IdentityProvider } from '../server/oidc.js';
 import type { ApiGateway } from '../server/upstream.js';
 import type { WebConfig } from '../server/config.js';
+import { previewSchema as clientPreviewSchema } from '../client/protocol.js';
 
 const config = {origin:'https://drivy.example',apiBaseURL:'https://drivy.example/refonte',issuer:'https://identity.example/realm',
   clientId:'drivy-web',clientSecret:randomBytes(32).toString('hex'),development:false,host:'127.0.0.1',port:3002};
@@ -23,10 +24,10 @@ afterEach(async () => { await Promise.all(apps.splice(0).map(app=>app.close()));
 async function harness(gateway?: ApiGateway, extra: { entryLimiter?: RateLimiter; staticRoot?: string; config?: Partial<WebConfig> } = {}) {
   let now = Date.now();
   const tokens: Tokens = {accessToken:token(),refreshToken:token(),expiresAt:now+300_000,
-    principal:{subject:randomUUID(),displayName:'Test local',email:'test@example.test',emailVerified:true}};
+    principal:{subject:randomUUID(),displayName:'Test local',email:'test@example.test',emailVerified:true,authenticatedAt:Math.floor(now/1000)}};
   const identity: IdentityProvider = {
     begin: vi.fn(async () => ({transaction:{state:token(),nonce:token(),verifier:token(),expiresAt:now+300_000},url:'https://identity.example/auth'})),
-    complete:vi.fn(async ()=>tokens), refresh:vi.fn(async()=>({...tokens,expiresAt:now+300_000})),revoke:vi.fn(async()=>{})
+    complete:vi.fn(async ()=>tokens), password:vi.fn(async ()=>tokens), refresh:vi.fn(async()=>({...tokens,expiresAt:now+300_000})),revoke:vi.fn(async()=>{})
   };
   const store = new SessionStore(()=>now);
   const app = await buildWebApp({config:{...config,...extra.config},identity,store,now:()=>now,gateway:gateway ?? vi.fn(async()=>({status:200,body:{data:{memberships:[]}}})),
@@ -186,6 +187,51 @@ describe('Entrée anonyme, limites et cache',()=>{
     now=1001;expect(limiter.allow('c')).toBe(true);
   });
 
+  test('clé du limiteur : un /64 IPv6 est une seule clé, une IPv4 mappée reste IPv4, IPv4 inchangée',()=>{
+    expect(clientKey('2001:db8:1:2::1')).toBe(clientKey('2001:db8:1:2:ffff::9'));
+    expect(clientKey('2001:db8:1:2::1')).not.toBe(clientKey('2001:db8:1:3::1'));
+    expect(clientKey('2001:DB8:1:2::1%eth0')).toBe(clientKey('2001:db8:1:2::1'));
+    expect(clientKey('::ffff:203.0.113.5')).toBe('203.0.113.5');
+    expect(clientKey('::ffff:cb00:7105')).toBe('203.0.113.5');
+    expect(clientKey('203.0.113.5')).toBe('203.0.113.5');
+  });
+
+  test('un /64 IPv6 partage un seul compteur ; une IPv4 mappée partage celui de son IPv4',async()=>{
+    const h=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});
+    const value=(await h.app.inject({url:'/app/bff/session'})).json().csrfToken;
+    const call=(remoteAddress:string)=>h.app.inject({method:'POST',url:'/app/bff/login',payload:{},remoteAddress,
+      headers:{origin:config.origin,'x-csrf-token':value}});
+    expect((await call('2001:db8:1:2::1')).statusCode).toBe(200);
+    expect((await call('2001:db8:1:2:ffff::9')).statusCode).toBe(429);
+    expect((await call('2001:db8:1:3::1')).statusCode).toBe(200);
+    expect((await call('::ffff:198.51.100.4')).statusCode).toBe(200);
+    expect((await call('198.51.100.4')).statusCode).toBe(429);
+  });
+
+  test('un POST d’entrée sans jeton CSRF renvoie 403 et ne consomme pas le quota',async()=>{
+    const h=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});
+    const value=(await h.app.inject({url:'/app/bff/session'})).json().csrfToken;
+    for(let index=0;index<3;index++) expect((await enter(h,'/app/bff/login',{origin:config.origin})).statusCode).toBe(403);
+    expect((await enter(h,'/app/bff/login',{origin:config.origin,'x-csrf-token':value})).statusCode).toBe(200);
+  });
+
+  test('un visiteur qui a déjà une session n’est pas compté par le limiteur d’entrée',async()=>{
+    const h=await harness(undefined,{entryLimiter:new RateLimiter(1,60_000)});
+    await h.start();
+    for(let index=0;index<3;index++) expect((await h.post('/app/bff/login')).statusCode).toBe(200);
+    expect((await h.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers:{cookie:h.cookie(),origin:config.origin,'x-csrf-token':h.csrf()}})).statusCode).toBe(200);
+    // Sans session, le même visiteur anonyme n’a pas de quota restant : la première demande a déjà été comptée par start().
+    const anonymous=await h.app.inject({method:'POST',url:'/app/bff/login',payload:{},headers:{origin:config.origin,'x-csrf-token':(await h.app.inject({url:'/app/bff/session'})).json().csrfToken}});
+    expect(anonymous.statusCode).toBe(429);
+  });
+
+  test('HSTS hors développement seulement',async()=>{
+    const production=await harness();
+    expect((await production.app.inject({url:'/app/bff/session'})).headers['strict-transport-security']).toBe('max-age=31536000');
+    const development=await harness(undefined,{config:{development:true}});
+    expect((await development.app.inject({url:'/app/bff/session'})).headers['strict-transport-security']).toBeUndefined();
+  });
+
   test('l’adresse du client vient de X-Forwarded-For seulement derrière un proxy déclaré',async()=>{
     const limiter=new RateLimiter(1,60_000);const behind=await harness(undefined,{entryLimiter:limiter,config:{trustProxy:true}});
     const value=await anonymousValue(behind);const call=(address:string)=>behind.app.inject({method:'POST',url:'/app/bff/login',payload:{},
@@ -221,6 +267,35 @@ describe('Entrée anonyme, limites et cache',()=>{
     const state=h.store.get(cookie.split('=')[1])!.login!.state;
     const callback=await h.app.inject({url:`/app/bff/callback?code=one&state=${state}`,headers:{cookie}});
     expect(String(callback.headers['set-cookie'])).toContain('__Host-drivy-relogin=;');
+  });
+
+  test('une réauthentification refuse un autre compte sans remplacer la session initiale',async()=>{
+    const h=await harness();await h.start();await h.login();
+    const original=h.store.get(h.cookie().split('=')[1])!;
+    await h.post('/app/bff/login',{reauthenticate:true});
+    const state=original.login!.state;
+    vi.mocked(h.identity.complete).mockResolvedValueOnce({...h.tokens,principal:{...h.tokens.principal,subject:randomUUID()}});
+    const callback=await h.get(`/app/bff/callback?code=step-up&state=${state}`);
+    expect(callback.headers.location).toBe('/app?auth=failed');
+    expect(callback.headers['set-cookie']).toBeUndefined();
+    expect(h.store.get(original.id)).toBe(original);
+    expect(original.tokens?.principal.subject).toBe(h.tokens.principal.subject);
+    expect(original.login).toBeUndefined();
+  });
+  test.each([true,false])('la réauthentification=%s conserve le parcours autorisé et la rotation',async reauthenticate=>{
+    const h=await harness();await h.start();await h.login();
+    const original=h.store.get(h.cookie().split('=')[1])!;
+    const subject=reauthenticate?h.tokens.principal.subject:randomUUID();
+    await h.post('/app/bff/login',reauthenticate?{reauthenticate:true}:{});
+    vi.mocked(h.identity.complete).mockResolvedValueOnce({...h.tokens,principal:{...h.tokens.principal,subject}});
+    const callback=await h.get(`/app/bff/callback?code=next&state=${original.login!.state}`);
+    expect(callback.headers.location).toBe('/app');
+    const cookies=callback.headers['set-cookie'];
+    const nextCookie=(Array.isArray(cookies)?cookies:[String(cookies)]).find(value=>value.startsWith('__Host-drivy-session='))!;
+    const next=h.store.get(nextCookie.split(';')[0]!.split('=')[1])!;
+    expect(next.tokens?.principal.subject).toBe(subject);
+    expect(next.id).not.toBe(original.id);
+    expect(h.store.get(original.id)).toBeUndefined();
   });
 
   test('un chemin inconnu ou une session absente est refusé avant de lire le corps',async()=>{
@@ -271,6 +346,18 @@ describe('Entrée anonyme, limites et cache',()=>{
 });
 
 describe('Invitation web confirmée',()=>{
+  test.each([{firstName:'Élève Camille',lastName:'De la Tour-Roux'},{firstName:'𐐀'.repeat(100),lastName:'𐐁'.repeat(150)}])('l’identité structurée Unicode est présentée exactement et un changement exige une nouvelle relecture',async profileIdentity=>{
+    const base=sample();const preview={data:{...base.data,profileIdentity}};
+    const api=vi.fn<ApiGateway>(async()=>({status:200,body:structuredClone(preview)}));const h=await harness(api);
+    await h.start();await h.login();await h.post('/app/bff/invitation',{token:token()});
+    const first=(await h.post('/app/bff/invitation/preview')).json();
+    expect(first.data.profileIdentity).toEqual(preview.data.profileIdentity);
+    expect(clientPreviewSchema.parse(first).data.profileIdentity).toEqual(profileIdentity);
+    preview.data.profileIdentity.firstName='Camille';
+    const response=await h.post('/app/bff/invitation/accept',{invitationId:first.data.invitationId,confirmation:first.confirmation});
+    expect(response.statusCode).toBe(409);expect(response.json().code).toBe('INVITATION_PREVIEW_CHANGED');
+    expect(api.mock.calls.every(call=>call[0]!=='/v1/invitations/accept')).toBe(true);
+  });
   test('survit à OAuth uniquement côté serveur et GET ne consomme pas',async()=>{
     const preview=sample(),invite=token(); const api=vi.fn(async()=>({status:200,body:preview})); const h=await harness(api);
     await h.start();expect((await h.post('/app/bff/invitation',{token:invite})).statusCode).toBe(200);

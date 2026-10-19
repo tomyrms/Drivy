@@ -2,8 +2,13 @@ import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from 'jos
 import type { Config } from './config.js';
 import { ApiError } from './errors.js';
 
-export interface Identity { issuer: string; subject: string; verifiedEmail?: string; displayName?: string; authenticatedAt?: number }
+export interface Identity { issuer: string; subject: string; verifiedEmail?: string; displayName?: string; firstName?: string; lastName?: string; authenticatedAt?: number }
 export type TokenVerifier = (authorization: string | undefined) => Promise<Identity>;
+
+// Les noms administratifs viennent exclusivement des revendications structurées signées.
+// Un nom public ne permet pas de déduire où se séparent prénom et nom.
+const identityName = (value: unknown): string | undefined => typeof value === 'string' && value.trim()
+  && [...value.trim()].length <= 150 && !/[\u0000-\u001f\u007f]/u.test(value) ? value.trim() : undefined;
 
 /**
  * Les clés publiques du fournisseur d'identité n'ont pas pu être lues (délai, réseau, réponse HTTP non 200) : le jeton n'est pas en cause.
@@ -29,12 +34,14 @@ export function createTokenVerifier(config: Pick<Config, 'OIDC_ISSUER' | 'OIDC_A
         issuer: config.OIDC_ISSUER, audience: config.OIDC_AUDIENCE,
         algorithms: ['RS256', 'ES256'], requiredClaims: ['sub', 'iat', 'exp'], clockTolerance: 5
       });
-      if (!payload.sub || !payload.iss) throw new Error('Identité incomplète');
+      if (typeof payload.sub !== 'string' || !payload.sub || !payload.iss) throw new Error('Identité incomplète');
       const email = typeof payload.email === 'string' ? payload.email.trim().normalize('NFC').toLowerCase() : undefined;
       const verifiedEmail = payload.email_verified === true && email && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
       const displayName = typeof payload.name === 'string' && payload.name.trim() && [...payload.name.trim()].length <= 200 ? payload.name.trim() : undefined;
+      const firstName = identityName(payload.given_name), lastName = identityName(payload.family_name);
       const authenticatedAt=typeof payload.auth_time==='number' && Number.isSafeInteger(payload.auth_time) && payload.auth_time>=0 && payload.auth_time<=Math.floor(Date.now()/1000)+5?payload.auth_time:undefined;
-      return { issuer: payload.iss, subject: payload.sub, ...(verifiedEmail ? {verifiedEmail} : {}), ...(displayName ? {displayName} : {}),...(authenticatedAt!==undefined?{authenticatedAt}:{}) };
+      return { issuer: payload.iss, subject: payload.sub, ...(verifiedEmail ? {verifiedEmail} : {}), ...(displayName ? {displayName} : {}),
+        ...(firstName ? {firstName} : {}), ...(lastName ? {lastName} : {}), ...(authenticatedAt!==undefined?{authenticatedAt}:{}) };
     } catch (error) {
       if (identityProviderUnreachable(error)) throw new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
       throw new ApiError(401, 'INVALID_SESSION', 'Session invalide ou expirée.');

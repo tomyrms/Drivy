@@ -8,8 +8,9 @@ import {
 import { ConfirmDialog, Facts, Loading, Notice, SegmentField, StatusBadge, Symbol, TextArea, TextField, formatDateTime } from '../ui';
 import { useCommandRunner, useConsole, useDraft, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
-import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, type Choice, type FieldDraft } from './privacy-model';
+import { choiceLabels, choiceOf, editableFields, impactSentences, initialDrafts, rulesOf, sameProfileRules, type Choice, type FieldDraft } from './privacy-model';
 import { ProfileFieldsPreview } from './profile-fields-preview';
+import { GPSSettings } from './gps-settings';
 import './settings-studio.css';
 
 /* ------------------------------------------------------------ Textes de confidentialité */
@@ -130,7 +131,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
   const shown = drafts ?? initialDrafts(current, proposals);
   const rules = rulesOf(shown);
   const problem = profilePolicyProblem(rules);
-  const changed = !current || JSON.stringify(rules) !== JSON.stringify(current.fields);
+  const changed = !current || !sameProfileRules(rules, current.fields);
   useUnsavedChanges(drafts !== null && changed);
   const mayEdit = !!noticeVersionId && !runner.pending && !runner.busy;
   const update = (field: ProfileField, change: Partial<FieldDraft>) => setDrafts({ ...shown, [field]: { ...shown[field], ...change } });
@@ -164,7 +165,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
                 <div className="settings-profile-control">
                   <SegmentField label={`Demande · ${fieldLabels[field]}`} value={draft.choice} disabled={!mayEdit}
                     options={options.map(value => ({ value, label: choiceLabels[value] }))} onChange={choice => update(field, { choice: choice as Choice })} />
-                  {draft.choice !== 'none' && <TextArea label="Pourquoi" rows={2} maxLength={1000} value={draft.explanation} disabled={!mayEdit}
+                  {draft.choice !== 'none' && <TextArea label={`Pourquoi · ${fieldLabels[field]}`} rows={2} maxLength={1000} value={draft.explanation} disabled={!mayEdit}
                     onChange={explanation => update(field, { explanation })} error={filled(draft.explanation, 1000) ? null : 'Expliquez pourquoi.'} />}
                 </div>
               </div>;
@@ -236,6 +237,7 @@ export function PrivacySection({ section = 'privacy' }: { section?: 'privacy' | 
   return <div className={`section-stack settings-studio settings-${section}`}>
     <SectionHeading title={section === 'fields' ? 'Informations des élèves' : 'Confidentialité'} symbol={section === 'fields' ? 'users' : 'shield'} />
     <div className="config-sections">
+      {section === 'privacy' && <GPSSettings />}
       {section === 'privacy' && <PolicyTexts proposals={proposals.data ?? null} fieldsPublished={!!context.data?.fields.some(item => item.status === 'PUBLISHED')} onAdopted={context.reload} />}
       {section === 'fields' && <LoadState loaded={context} label="Lecture des informations demandées…">{data => <RequestedFields proposals={proposals.data ?? null} policies={data.fields} noticeVersionId={notice} />}</LoadState>}
       {section === 'privacy' && <details className="disclosure"><summary>Conditions de l’école</summary><Conditions /></details>}

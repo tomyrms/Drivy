@@ -216,6 +216,21 @@ import Testing
         #expect(await server.requests().filter { $0.httpMethod == "PUT" }.count == 1)
     }
 
+    @Test func aFailedRereadNeverErasesTheReportAlreadyShown() async {
+        let server = LessonFinishServer(draftWorkedOn: "Travail réalisé"), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        #expect(model.draft?.workedOn == "Travail réalisé" && model.workedOn == "Travail réalisé")
+        await server.setDraftsFailing(true)
+        await model.load()
+        // Relecture en échec : le bilan affiché et son brouillon restent en place, seul le message de relecture s’ajoute.
+        #expect(model.draft != nil && model.workedOn == "Travail réalisé")
+        #expect(model.information != nil)
+        await server.setDraftsFailing(false)
+        await model.load()
+        #expect(model.draft?.workedOn == "Travail réalisé")
+    }
+
     private func workspace(_ server: LessonFinishServer, outbox: ConfigurationOutboxStub, roles: [String] = ["INSTRUCTOR"]) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: roles, grants: ["permit_review"], accessEpoch: 1)
@@ -246,11 +261,13 @@ actor LessonFinishServer: SchoolHTTPTransport {
     private var sharingWaiters: [CheckedContinuation<Void, Never>] = []
     private var sharingVersion = 1, reportPrivate = false, captureHidden = false
     private var sharingOperation: UUID?
+    private let draftWorkedOn: String
+    private var draftsFailing = false
     /// `sharing` : l’école expose le réglage de partage de la leçon (absent par défaut, comme un serveur plus ancien).
     init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false, progressLevel: String? = nil, progressStatus: Int = 200,
-         sharing: Bool = false) {
+         sharing: Bool = false, draftWorkedOn: String = "") {
         self.roles = roles; self.emptyContext = emptyContext; self.progressLevel = progressLevel; self.progressStatus = progressStatus
-        sharingEnabled = sharing
+        sharingEnabled = sharing; self.draftWorkedOn = draftWorkedOn
     }
     /// Retient la dernière lecture d’une relecture (les niveaux actuels), juste avant son application.
     func holdProgress() { heldProgress = true }
@@ -262,6 +279,7 @@ actor LessonFinishServer: SchoolHTTPTransport {
     func isHoldingSharing() -> Bool { holdingSharing }
     func sharingWrites() -> [URLRequest] { recorded.filter { $0.httpMethod == "PUT" && $0.url?.path.hasSuffix("/sharing") == true } }
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
+    func setDraftsFailing(_ value: Bool) { draftsFailing = value }
     func setRejectSave(_ value: Bool) { rejectSave = value }
     func setConfirmedOperation(_ id: UUID, resourceID: UUID) { operation = id; receiptResourceID = resourceID }
     func requests() -> [URLRequest] { recorded }
@@ -325,10 +343,11 @@ actor LessonFinishServer: SchoolHTTPTransport {
             return try ok(["operationId": sharingOperation.uuidString, "commandType": "UPDATE_LESSON_SHARING", "resourceType": "LessonSharing",
                 "resourceId": HubFixture.lessonID.uuidString, "committedAt": "2026-09-28T13:30:00Z", "resourceVersion": sharingVersion])
         }
+        if parts.last == "report-drafts", draftsFailing { return problem(503, "UNAVAILABLE") }
         if parts.last == "report-drafts" {
             let draft = SchoolReportDraft(id: draftID, schoolId: HubFixture.schoolID, lessonId: HubFixture.lessonID,
                 authorMembershipId: ConfigurationFixture.membershipID, version: 1, basePublicationVersion: 0,
-                workedOn: "", observationText: "", nextStep: "",
+                workedOn: draftWorkedOn, observationText: "", nextStep: "",
                 observations: emptyContext ? [SchoolReportObservation(competencyId: UUID(), level: "GUIDED", context: "")] : [],
                 attachmentIds: [], geoObservationIds: [])
             let item = try JSONSerialization.jsonObject(with: JSONEncoder().encode(draft))

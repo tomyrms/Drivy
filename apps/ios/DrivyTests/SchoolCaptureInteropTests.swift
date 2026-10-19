@@ -58,6 +58,24 @@ struct SchoolCaptureInteropTests {
         #expect(track.pointsByAnchor["\(segmentID.uuidString.lowercased()):1"] == nil)
         #expect(track.pointsByAnchor["\(segmentID.uuidString.lowercased()):2"] == points[2])
     }
+
+    @Test @MainActor func anInterruptedCaptureRequestIsNeverReportedAsAnOutage() async throws {
+        let client = SchoolCaptureClient(baseURL: URL(string: "https://example.invalid")!, tokenSource: HubToken(),
+                                         transport: CancelledCaptureTransport())
+        do {
+            _ = try await client.captures(schoolID: UUID())
+            Issue.record("Une requête interrompue doit lever CancellationError, pas une panne réseau.")
+        } catch {
+            #expect(error is CancellationError)
+        }
+    }
+}
+
+/// Transport qui échoue comme URLSession quand la tâche est annulée (l’écran s’est fermé).
+private actor CancelledCaptureTransport: SchoolHTTPTransport {
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        throw URLError(.cancelled)
+    }
 }
 
 private actor DisplayReplayTransport: SchoolHTTPTransport {

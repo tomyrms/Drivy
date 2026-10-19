@@ -52,6 +52,16 @@ export function fromWallClock(date:string,minutes:number,timeZone:string):Date|n
  }
  return null;
 }
+/** Tous les instants d'une heure murale : aucun si elle est sautée, deux si elle est répétée (retour à l'heure d'hiver), triés. */
+export function wallClockInstants(date:string,minutes:number,timeZone:string):Date[]{
+ const [y,m,d]=date.split('-').map(Number) as [number,number,number],guess=Date.UTC(y,m-1,d,0,minutes),found=new Set<number>();
+ // Les décalages de la veille et du lendemain encadrent un changement d'heure survenu le jour même.
+ for(const probe of [guess-86_400_000,guess+86_400_000]){
+  const value=guess-offsetMs(probe,timeZone),wall=wallClock(new Date(value),timeZone);
+  if(wall.date===date&&wall.minutes===minutes&&wall.seconds===0)found.add(value);
+ }
+ return [...found].sort((a,b)=>a-b).map(value=>new Date(value));
+}
 /** Jour civil suivant « AAAA-MM-JJ », sans fuseau. */
 export function nextCivilDay(date:string){
  const [y,m,d]=date.split('-').map(Number) as [number,number,number];
@@ -76,15 +86,17 @@ export function dayCandidates(date:string,search:SlotSearch):Candidate[]{
   const opens=clock(rule.localStart),closes=clock(rule.localEnd);
   // Grille alignée sur l'ouverture : 9:00, 9:15, … ; jamais au-delà de la fermeture.
   for(let minute=opens;minute+search.durationMinutes<=closes;minute+=search.stepMinutes){
-   const start=fromWallClock(date,minute,search.timeZone);if(!start)continue;
-   const end=new Date(start.getTime()+duration),endWall=wallClock(end,search.timeZone);
-   // Un changement d'heure dans la leçon déplace sa fin murale : l'écriture relit l'heure murale, la recherche aussi.
-   if(endWall.date!==date||endWall.minutes>closes||endWall.seconds!==0)continue;
-   if(start.getTime()<search.notBefore.getTime())continue;
-   if(search.closures.some(closure=>overlaps({start,end},closure)))continue;
-   if(!search.assignments.some(a=>a.validFrom.getTime()<=search.now.getTime()&&a.validFrom.getTime()<=start.getTime()
-    &&(a.validUntil===null||(a.validUntil.getTime()>search.now.getTime()&&a.validUntil.getTime()>=end.getTime()))))continue;
-   seen.set(start.getTime(),{start,end});
+   // Une heure répétée au retour à l'heure d'hiver s'offre deux fois : l'écriture accepte les deux occurrences.
+   for(const start of wallClockInstants(date,minute,search.timeZone)){
+    const end=new Date(start.getTime()+duration),endWall=wallClock(end,search.timeZone);
+    // Un changement d'heure dans la leçon déplace sa fin murale : l'écriture relit l'heure murale, la recherche aussi.
+    if(endWall.date!==date||endWall.minutes>closes||endWall.seconds!==0)continue;
+    if(start.getTime()<search.notBefore.getTime())continue;
+    if(search.closures.some(closure=>overlaps({start,end},closure)))continue;
+    if(!search.assignments.some(a=>a.validFrom.getTime()<=search.now.getTime()&&a.validFrom.getTime()<=start.getTime()
+     &&(a.validUntil===null||(a.validUntil.getTime()>search.now.getTime()&&a.validUntil.getTime()>=end.getTime()))))continue;
+    seen.set(start.getTime(),{start,end});
+   }
   }
  }
  return [...seen.values()].sort((a,b)=>a.start.getTime()-b.start.getTime());
