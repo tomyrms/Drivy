@@ -26,7 +26,7 @@ import XCTest
         app.buttons["lesson-report-dismiss-keyboard"].tapIfExists()
 
         let next = app.buttons["lesson-report-next"]
-        XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(waitUntil { !app.keyboards.firstMatch.exists && next.exists && next.isHittable }, app.debugDescription)
         next.tap()
         XCTAssertTrue(waitUntil { !stepTitle(in: app).label.hasPrefix("Bilan") }, app.debugDescription)
         if stepTitle(in: app).label.hasPrefix("Compétences") {
@@ -45,7 +45,11 @@ import XCTest
     }
 
     private func stepTitle(in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any)["lesson-report-step"]
+        // Pendant la transition entre deux étapes, l'ancienne et la nouvelle coexistent un instant.
+        // On lit l'étape affichée à l'écran plutôt que d'exiger un élément unique.
+        let steps = app.descendants(matching: .any).matching(identifier: "lesson-report-step")
+        let shown = steps.allElementsBoundByIndex.last { $0.exists && $0.isHittable }
+        return shown ?? steps.firstMatch
     }
 
     private func completionConfirmation(in app: XCUIApplication) -> XCUIElement {
