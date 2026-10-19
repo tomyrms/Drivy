@@ -541,7 +541,8 @@ struct SchoolReportReviewSection: View {
             SchoolReportTripSection(model: model, router: router, context: context,
                 mapHeight: SchoolReportLayout.evidenceMapHeight, editable: true)
         }
-        if showsEvidence, review.lessonObservationCount > 0 {
+        // Avec un trajet, la section reste présente même vide : elle porte l'ajout d'une observation.
+        if showsEvidence, review.hasTrip || review.lessonObservationCount > 0 {
             SchoolReportObservationsSection(model: model, router: router, context: context, editable: true)
         }
     }

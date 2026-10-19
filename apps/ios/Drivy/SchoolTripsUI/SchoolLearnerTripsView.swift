@@ -102,9 +102,11 @@ struct SchoolLearnerTripsView: View {
         if visibleTrips.isEmpty {
             if model.isEmpty {
                 DrivyEmptyState(title: "Aucun trajet", symbol: "point.topleft.down.to.point.bottomright.curvepath")
-            } else if model.errorMessage == nil && model.nextCursor != nil && filterState.filter != .all {
+            } else if model.errorMessage == nil && model.moreErrorMessage == nil && model.nextCursor != nil && filterState.filter != .all {
+                // Un seul contrôle de chargement : pendant la lecture ou après son échec, `more(model)` prend le relais.
                 DrivyEmptyState(title: "Aucun trajet parmi ceux chargés", symbol: "line.3.horizontal.decrease.circle",
-                    actionTitle: "Charger d’autres trajets", action: { Task { await model.loadMore() } })
+                    actionTitle: model.isLoadingMore ? nil : "Charger d’autres trajets",
+                    action: model.isLoadingMore ? nil : { Task { await model.loadMore() } })
             } else if model.errorMessage == nil && model.nextCursor == nil {
                 DrivyEmptyState(title: filterState.filter == .all ? "Aucun trajet" : "Aucun trajet pour ce filtre",
                     symbol: filterState.filter == .all ? "point.topleft.down.to.point.bottomright.curvepath" : "line.3.horizontal.decrease.circle",
@@ -121,7 +123,7 @@ struct SchoolLearnerTripsView: View {
             }
         }
         if !(visibleTrips.isEmpty && filterState.filter != .all && model.nextCursor != nil
-            && model.errorMessage == nil && !model.isLoadingMore) {
+            && model.errorMessage == nil && model.moreErrorMessage == nil && !model.isLoadingMore) {
             more(model)
         }
     }

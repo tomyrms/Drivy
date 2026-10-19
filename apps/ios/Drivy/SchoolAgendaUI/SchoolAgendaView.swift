@@ -131,9 +131,9 @@ struct SchoolAgendaView: View {
             .environment(captureController)
         }
         .sheet(item: $planningModel, onDismiss: {
-            if let lesson = planningReturn.takeConfirmedLesson() {
-                selectedLesson = lesson
-            } else { Task { await loadAgenda(keepingCurrent: true) } }
+            // La fiche confirmée s'ouvre, et l'agenda derrière elle est relu pour afficher la nouvelle leçon.
+            if let lesson = planningReturn.takeConfirmedLesson() { selectedLesson = lesson }
+            Task { await loadAgenda(keepingCurrent: true) }
         }) { model in
             SchoolPlanningView(model: model, onConfirmedLesson: { planningReturn.receive($0) })
         }

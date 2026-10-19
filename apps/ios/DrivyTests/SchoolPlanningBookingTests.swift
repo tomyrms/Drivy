@@ -118,6 +118,25 @@ import Testing
         #expect(model.confirmedLesson == nil)
     }
 
+    /// Un « Lancer maintenant » en attente peut être renvoyé depuis la feuille de planification, qui partage le coffre.
+    /// Sa réponse ne porte pas de reçu AP72 : la commande doit quand même quitter le coffre une fois l'école d'accord.
+    @Test func pendingStartNowRetriedFromThePlanningSheetLeavesTheOutbox() async throws {
+        let operation = UUID()
+        let pending = PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .startLessonNow,
+            resourceVersion: 0, createdAt: HubFixture.date("2026-09-28T12:00:00Z"),
+            body: try JSONEncoder().encode(SchoolStartNowBody(operationId: operation, trainingId: HubFixture.trainingID, meetingPoint: nil)),
+            routeResourceID: HubFixture.trainingID)
+        let server = PlanningBookingServer(), outbox = ConfigurationOutboxStub(value: pending)
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        try #require(model.pending == pending && model.canRetry)
+
+        #expect(await model.retry())
+        #expect(outbox.value == nil && outbox.removals == [pending])
+        #expect(model.pending == nil && model.errorMessage == nil && model.confirmedLesson == nil)
+        #expect(await server.startNowPosts == 1)
+    }
+
     @Test func bookingConfirmsCurrentVersionsOnlyOnSaveAndRetainsThemForRetry() async throws {
         let server = PlanningBookingServer(receiptAvailable: false), outbox = ConfigurationOutboxStub()
         let model = workspace(server, outbox: outbox)
@@ -339,6 +358,7 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
     private var operationID: String?
     private var operationType = "CREATE_LESSON"
     private var lessonReadStarted = false
+    private(set) var startNowPosts = 0
     private var recorded: [URLRequest] = []
 
     init(receiptAvailable: Bool = true, restriction: String? = nil, deadline: String? = nil, rejection: String? = nil,
@@ -391,6 +411,10 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
         func reply(_ value: Any, status: Int = 200) throws -> SchoolHTTPResponse {
             SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString,
                 "serverTime": ISO8601DateFormatter().string(from: Date())]), status: status, url: url, contentType: "application/json")
+        }
+        if request.httpMethod == "POST", url.lastPathComponent == "start-now", url.deletingLastPathComponent().lastPathComponent == "lessons" {
+            startNowPosts += 1
+            return try reply(try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())))
         }
         if request.httpMethod == "POST", ["lessons", "move"].contains(url.lastPathComponent) {
             if let rejection {

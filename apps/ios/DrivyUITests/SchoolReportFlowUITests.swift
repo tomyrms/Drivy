@@ -12,7 +12,7 @@ import XCTest
         let finish = app.buttons["lesson-complete"]
         XCTAssertTrue(finish.waitForExistence(timeout: 20), app.debugDescription)
         finish.tap()
-        let confirmation = app.buttons["lesson-confirm-completion"]
+        let confirmation = completionConfirmation(in: app)
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5), app.debugDescription)
         confirmation.tap()
 
@@ -37,13 +37,21 @@ import XCTest
 
         XCTAssertTrue(waitUntil(timeout: 10) { stepTitle(in: app).label.hasPrefix("Récapitulatif") }, app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["lesson-report-review-text"].exists)
-        XCTAssertTrue(app.staticTexts["Créneaux et contrôles"].exists)
+        // Chaque ligne du récapitulatif combine libellé et valeur pour VoiceOver : on cherche la valeur dans l'élément fusionné.
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Créneaux et contrôles"))
+            .firstMatch.exists, app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["lesson-report-review-visibility"].exists)
         XCTAssertTrue(app.buttons["lesson-save-report"].exists)
     }
 
     private func stepTitle(in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any)["lesson-report-step"]
+    }
+
+    private func completionConfirmation(in app: XCUIApplication) -> XCUIElement {
+        // iOS 26 n'expose pas toujours l'identifiant d'une action de confirmationDialog : même règle que FieldFlowTests.
+        app.buttons.matching(NSPredicate(format: "identifier == %@ OR label == %@",
+            "lesson-confirm-completion", "Terminer")).firstMatch
     }
 
     private func waitUntil(timeout: TimeInterval = 5, _ condition: () -> Bool) -> Bool {

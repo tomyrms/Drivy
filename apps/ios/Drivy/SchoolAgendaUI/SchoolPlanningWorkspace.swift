@@ -671,7 +671,12 @@ struct SchoolPlanningInstructor: Identifiable {
         let request = generation; isBusy = true; errorMessage = nil; successMessage = nil
         do {
             try outbox.save(command)
-            guard let receipt = try await client.send(command) else { throw SchoolPlanningFailure.invalidResponse }
+            let receipt = try await client.send(command)
+            // Création et déplacement ouvrent la fiche relue : sans reçu AP72, l'écriture reste à vérifier, jamais refusée.
+            // « Lancer maintenant » confirme par sa propre réponse et ne doit jamais rester bloqué dans le coffre.
+            if (command.kind == .createLesson || command.kind == .moveLesson) && receipt == nil {
+                throw SchoolPlanningFailure.unavailable
+            }
             try outbox.remove(command)
             guard request == generation else { return true }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
@@ -680,7 +685,7 @@ struct SchoolPlanningInstructor: Identifiable {
             // fermeture et changer le formulaire sous les yeux. Une nouvelle saisie exigerait une relecture.
             writeConfirmed = true
             NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
-            if command.kind == .createLesson || command.kind == .moveLesson {
+            if command.kind == .createLesson || command.kind == .moveLesson, let receipt {
                 confirmedLessonReference = (receipt.resourceId, receipt.resourceVersion)
                 return await reloadConfirmedLesson()
             }
