@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import {dayCandidates,findNextSlot,fromWallClock,isoWeekday,nextCivilDay,wallClock,type Candidate,type Interval,type OpeningRule,type SlotSearch} from '../src/next-slot.js';
+import {dayCandidates,findNextSlot,fromWallClock,isoWeekday,nextCivilDay,wallClock,wallClockInstants,type Candidate,type Interval,type OpeningRule,type SlotSearch} from '../src/next-slot.js';
 
 // Horaires synthétiques ; aucune personne, aucune position. Europe/Zurich : UTC+2 en octobre avant le 25, UTC+1 ensuite.
 const zone='Europe/Zurich';
@@ -37,6 +37,18 @@ describe('calendrier civil',()=>{
  it('l’heure sautée au passage à l’heure d’été n’existe pas',()=>{
   expect(fromWallClock('2026-03-29',2*60+30,zone)).toBeNull();
   expect(fromWallClock('2026-03-29',3*60,zone)!.toISOString()).toBe('2026-03-29T01:00:00.000Z');
+ });
+ it('l’heure répétée au retour à l’heure d’hiver a deux occurrences, la sautée aucune',()=>{
+  expect(wallClockInstants('2026-10-25',2*60+30,zone).map(value=>value.toISOString())).toEqual(['2026-10-25T00:30:00.000Z','2026-10-25T01:30:00.000Z']);
+  expect(wallClockInstants('2026-03-29',2*60+30,zone)).toEqual([]);
+  expect(wallClockInstants('2026-10-13',9*60,zone).map(value=>value.toISOString())).toEqual(['2026-10-13T07:00:00.000Z']);
+  expect(wallClockInstants('2026-10-25',3*60,zone).map(value=>value.toISOString())).toEqual(['2026-10-25T02:00:00.000Z']);
+ });
+ it('un créneau tombant dans l’heure répétée est proposé aux deux occurrences',()=>{
+  const night:OpeningRule={weekdays:[7],localStart:'02:00',localEnd:'04:00',validFrom:'2026-01-01',validUntil:null};
+  const starts=dayCandidates('2026-10-25',search('2026-10-24T00:00:00Z',{rules:[night],durationMinutes:30,stepMinutes:30})).map(value=>value.start.toISOString());
+  expect(starts).toContain('2026-10-25T00:30:00.000Z');
+  expect(starts).toContain('2026-10-25T01:30:00.000Z');
  });
 });
 

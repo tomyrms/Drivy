@@ -30,6 +30,7 @@ const reviewWindow = window as unknown as { __reviewBoot?: { parameters: string;
 const parameters = new URLSearchParams(reviewWindow.__reviewBoot?.parameters ?? location.search);
 const page = parameters.get('page');
 const reviewState = parameters.get('state');
+let gpsIdentityConfirmed = false, gpsIdentityRequested = false;
 let fixtureSequence = 0;
 const uuid = () => `11111111-1111-4111-8111-${String(++fixtureSequence).padStart(12, '0')}`;
 const schoolId = uuid(), meId = uuid(), lucId = uuid(), marieId = uuid(), offerB = uuid(), offerBOld = uuid(), offerA = uuid();
@@ -50,7 +51,7 @@ const setupTemplates: SetupTemplates = {
 const setupReady = parameters.get('setup') === 'ready';
 const requestedStep = parameters.get('step');
 const setupDraft: SetupDraft = { id: schoolId, schoolId, version: 1, status: 'DRAFT',
-  currentStep: setupSteps.find(step => step === requestedStep) ?? 'IDENTITY', updatedAt: stamp, updatedByMembershipId: marieId, appliedAt: null,
+  currentStep: setupSteps.find(step => step === requestedStep) ?? 'IDENTITY', updatedAt: parameters.has('fresh') ? null : stamp, updatedByMembershipId: marieId, appliedAt: null,
   content: { selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE', ...(setupReady ? ['CATALOGUE' as const] : [])],
     identity: { name: 'École Synthétique', timeZone: 'Europe/Zurich', contactEmail: 'ecole@example.test', contactPhone: null },
     privacy: { noticeText: setupReady ? 'L’école utilise Drivy pour gérer les dossiers et le suivi pédagogique. Seuls les membres autorisés consultent les informations utiles à la formation.' : '',
@@ -184,7 +185,9 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   await new Promise(resolve => setTimeout(resolve, reviewState === 'slow' && path === 'lessons' ? 1500 : 120));
   if (method === 'GET') {
     reads.push(path);
-    if (url.pathname.endsWith('/bff/session')) return reply(200, { authenticated: page !== 'signin', csrfToken: 'synthetic-review', invitationPending: page === 'invitation', user: { displayName: 'Luc Martin', email: 'luc@example.test', emailVerified: true } }, url.href);
+    if (url.pathname.endsWith('/bff/session')) return reply(200, { authenticated: page !== 'signin', csrfToken: gpsIdentityConfirmed ? 'synthetic-confirmed' : 'synthetic-review', invitationPending: page === 'invitation',
+      reauthenticationRequired: (reviewState === 'gps-reauth' || gpsIdentityRequested) && !gpsIdentityConfirmed,
+      user: { displayName: 'Luc Martin', email: 'luc@example.test', emailVerified: true } }, url.href);
     if (url.pathname.endsWith('/bff/opening')) return reply(200, { pending: true, uncertain: false }, url.href);
     if (url.pathname.endsWith('/bff/operator/school-opening-links')) return reply(200, { data: { items: [{ id: uuid(), status: 'AVAILABLE', createdAt: stamp, expiresAt: '2026-10-20T08:00:00.000Z', usedAt: null, revokedAt: null }] } }, url.href);
     if (url.pathname.endsWith('/bff/me')) return reply(200, { data: { ...value.me, memberships: [value.membership] } }, url.href);
@@ -236,8 +239,14 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
       : db[path.replace('availability-rules', 'availability').replace('closures', 'closures')] ?? [];
     return reply(200, envelope({ items: list, nextCursor: null }), url.href);
   }
-  if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
+  if (url.pathname.endsWith('/bff/invitation/preview')) return reply(200, { confirmation: 'synthetic-confirmation', data: { invitationId: uuid(), schoolId, schoolName: value.school.name, roles: ['LEARNER'], profileIdentity: { firstName: 'Élève Camille', lastName: 'De la Tour-Roux' }, maskedEmail: 'l***@example.test', expiresAt: '2026-10-06T08:00:00.000Z', notice: { version: 1, noticeText: 'Les informations de votre profil servent au suivi de votre formation.', retentionText: 'L’école conserve les informations nécessaires au suivi pédagogique.', contactEmail: 'ecole@example.test' } } }, url.href);
   if (url.pathname.endsWith('/bff/opening/preview')) return reply(200, { data: { status: 'AVAILABLE', expiresAt: '2026-10-20T08:00:00.000Z' } }, url.href);
+  // Credential fixtures are handled before the command log; even synthetic passwords are never recorded.
+  if (url.pathname.endsWith('/bff/reauthenticate')) {
+    if (body.password !== 'synthetic-confirmation') return reply(401, { code: 'INVALID_CREDENTIALS' }, url.href);
+    if (body.email !== 'luc@example.test') return reply(409, { code: 'REAUTH_ACCOUNT_MISMATCH' }, url.href);
+    gpsIdentityConfirmed = true; return reply(200, { ok: true }, url.href);
+  }
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
   if (method === 'PATCH' && path === '') {
     if (schoolConflictOnce) { schoolConflictOnce = false; value.school.version++; value.school.contactPhone = '+41 21 555 00 00'; return reply(412, { code: 'VERSION_CONFLICT' }, url.href); }
@@ -319,7 +328,15 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
   if (path.endsWith('/end')) { db.assignments[0].version++; db.assignments[0].validUntil = stamp; return reply(200, envelope(db.assignments[0]), url.href); }
   if (path.endsWith('/archive')) { const l = db.learners.find((item: any) => path.includes(item.id)); l.version++; l.archivedAt = stamp; return reply(200, envelope(l), url.href); }
   if (path.endsWith('/permit-checks')) { const permit = { id: uuid(), schoolId, version: 1, trainingId: trainingA, documentId: null, physicalSeen: body.physicalSeen, categoryCode: body.categoryCode, validUntil: body.validUntil, decision: body.decision, reviewerMembershipId: marieId, reviewedAt: stamp, reason: body.reason, isExpired: false }; db.permits.push(permit); db.trainings[0].version++; return reply(200, envelope(permit), url.href); }
-  if (path === 'modules') { value.school.version++; value.school.modules.gpsEnabled = body.gpsEnabled; return reply(200, envelope(value.school), url.href); }
+  if (method === 'PUT' && path === 'modules') {
+    if (['gps-reauth', 'gps-reauth-race'].includes(reviewState ?? '') && !gpsIdentityConfirmed) {
+      gpsIdentityRequested = true; return reply(401, { code: 'REAUTH_REQUIRED' }, url.href);
+    }
+    if (reviewState === 'gps-conflict' || (init?.headers as Record<string, string>)?.['If-Match'] !== `"${value.school.version}"`)
+      return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    value.school.version++; value.school.configurationVersion++; value.school.modules.gpsEnabled = body.gpsEnabled;
+    return reply(200, envelope(value.school), url.href);
+  }
   return reply(404, { code: 'NOT_FOUND' }, url.href);
 }) as typeof fetch;
 
@@ -327,7 +344,7 @@ const value: ConsoleContextValue = {
   schoolId, me: { personId: meId, displayName: 'Luc Martin', version: 1, memberships: [] },
   membership: { membershipId: lucId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: reviewState === 'readonly' ? [] : ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'], accessEpoch: 1 },
   school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: parameters.get('status') === 'draft' ? 'DRAFT' : 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
-    modules: { gpsEnabled: true, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
+    modules: { gpsEnabled: parameters.get('gps') !== 'off', packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
   canConfigureCatalog: reviewState !== 'readonly', reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),
 };
 if (parameters.get('stress') === '1') {

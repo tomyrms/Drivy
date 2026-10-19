@@ -39,7 +39,8 @@ const isStaff = (member: { roles: readonly Role[] }) => member.roles.includes('A
 
 export function TeamSection() {
   const { schoolId, school, membership, navigate, routeQuery } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const { revision, confirmed } = useCommandSnapshot();
+  const submittedOperation = useRef<string | null>(null);
   const runner = useCommandRunner();
   const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
   const [filter, setFilter] = useListState('team/search', '');
@@ -55,6 +56,8 @@ export function TeamSection() {
   const [dialog, setDialog] = useState<'access' | 'deactivate' | null>(null);
   const [deactivateReason, setDeactivateReason] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  const [accessConflict, setAccessConflict] = useState(false);
+  const draftBase = useRef<{ id: string; version: number; roles: Role[]; grants: string[] } | null>(null);
   const members = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)), [loaded.data]);
   const audience = members.filter(item => showLearners || isStaff(item));
   const visible = audience.filter(item => (statusFilter === 'all' || (statusFilter === 'active') === (item.status === 'ACTIVE')) && matchesSearch([item.displayName], filter))
@@ -64,16 +67,39 @@ export function TeamSection() {
   const pageRows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   useEffect(() => { if (loaded.status === 'ready' && page !== currentPage) setPage(currentPage); }, [loaded.status, page, currentPage, setPage]);
   const current = members.find(item => item.id === selected) ?? null;
-  useEffect(() => {
+  function resetAccessDraft() {
     if (!current) return;
-    setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setDeactivateReason(''); setShowErrors(false); setDialog(null);
-  }, [current?.id, current?.version]);
+    draftBase.current = { id: current.id, version: current.version, roles: [...current.roles], grants: [...current.grants] };
+    submittedOperation.current = null;
+    setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setDeactivateReason('');
+    setShowErrors(false); setDialog(null); setAccessConflict(false);
+  }
+  useEffect(() => {
+    // Leaving the selection explicitly abandons its draft. A temporary absence
+    // of loaded member data must not be treated as that navigation.
+    if (!selected) {
+      draftBase.current = null; submittedOperation.current = null; setAccessConflict(false);
+      return;
+    }
+    if (!current) return;
+    const base = draftBase.current;
+    const ownWriteConfirmed = submittedOperation.current !== null && confirmed?.operationId === submittedOperation.current;
+    const edited = base && (!sameSet(base.roles, draftRoles) || !sameSet(base.grants, draftGrants) || !!reason || !!deactivateReason);
+    // A rejected retry re-reads members too. Never discard that draft or silently
+    // rebase its permissions onto a newer version written by another administrator.
+    if (base?.id === current.id && base.version !== current.version && edited && !ownWriteConfirmed) {
+      setAccessConflict(true); setDialog(null);
+      return;
+    }
+    resetAccessDraft();
+  }, [selected, current?.id, current?.version]);
   const self = current?.id === membership.membershipId;
   const changed = !!current && (!sameSet(current.roles, draftRoles) || !sameSet(current.grants, draftGrants));
   useUnsavedChanges(!!current && !runner.busy && !runner.pending && (changed || !!reason || !!deactivateReason));
   const loseAdmin = self && current?.roles.includes('ADMIN') && !draftRoles.includes('ADMIN');
   const problem = !changed ? null : draftRoles.length === 0 ? 'Gardez au moins un rôle.' : !filled(reason, 1000) ? 'Indiquez le motif du changement (1 000 caractères au plus).' : null;
-  const canWrite = school.status === 'ACTIVE' && current?.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy;
+  const canWrite = school.status === 'ACTIVE' && current?.status === 'ACTIVE' && loaded.status === 'ready' && !runner.pending && !runner.busy
+    && !accessConflict && draftBase.current?.id === current.id && draftBase.current?.version === current.version;
   const deactivateProblem = filled(deactivateReason, 1000) ? null : 'Indiquez le motif du retrait (1 000 caractères au plus).';
 
   async function confirm() {
@@ -82,10 +108,12 @@ export function TeamSection() {
     if (dialog === 'access' && !problem && changed) {
       const command = createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id,
         resourceVersion: current.version, body: { roles: roles.map(item => item.value).filter(value => draftRoles.includes(value)), grants: grants.map(item => item.value).filter(value => draftGrants.includes(value)), reason: reason.trim() } });
+      submittedOperation.current = command.operationId;
       result = await runner.run(command, `Les accès de ${current.displayName} sont modifiés.`);
     } else if (dialog === 'deactivate' && !deactivateProblem && !self) {
       const command = createCommand({ schoolId, kind: 'deactivateMember', path: `members/${current.id}/deactivate`, ifMatch: current.version, resourceId: current.id,
         resourceVersion: current.version, body: { reason: deactivateReason.trim() } });
+      submittedOperation.current = command.operationId;
       result = await runner.run(command, `${current.displayName} n’a plus accès à l’école.`);
     }
     if (result && result.status !== 'rejected') setDialog(null);
@@ -140,6 +168,9 @@ export function TeamSection() {
               <button type="button" className="button quiet" onClick={() => navigate('disponibilites', { instructor: current.id, from: 'equipe' })}>Disponibilités</button>
               <button type="button" className="button quiet" onClick={() => navigate('absences', { instructor: current.id, from: 'equipe' })}>Absences</button>
             </div>}
+            {accessConflict && <Notice tone="warning" title="Les accès ont changé" actions={
+              <button type="button" className="button secondary" disabled={runner.busy || !!runner.pending || loaded.status !== 'ready'} onClick={resetAccessDraft}>Annuler les modifications</button>
+            }><p>Votre saisie est conservée. Annulez les modifications pour repartir des accès actuels.</p></Notice>}
             <form className="form-grid" onSubmit={event => event.preventDefault()}>
               <fieldset className="fieldset">
                 <legend>Rôles dans cette école</legend>
@@ -157,7 +188,7 @@ export function TeamSection() {
               {loseAdmin && <Notice tone="warning" title="Vous retirez votre propre rôle Administration" live={false}><p>Vous ne pourrez plus administrer cette école après la confirmation.</p></Notice>}
               {changed && <div className="form-actions">
                 <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!problem) { runner.clearOutcome(); setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
-                <button type="button" className="button quiet" disabled={runner.busy} onClick={() => { setDraftRoles([...current.roles]); setDraftGrants([...current.grants]); setReason(''); setShowErrors(false); }}>Annuler les modifications</button>
+                {!accessConflict && <button type="button" className="button quiet" disabled={runner.busy} onClick={resetAccessDraft}>Annuler les modifications</button>}
               </div>}
             </form>
             {current.status === 'ACTIVE' && !self && <div className="form-actions"><button type="button" className="button quiet danger" disabled={!canWrite}
@@ -242,7 +273,7 @@ export function InvitationsSection() {
     const [invitations, offerings, members, options] = await Promise.all([
       readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema),
       readSchool(schoolId, 'invitation-options', invitationOptionsSchema)]);
-    return { invitations: invitations.items, offerings: offerings.items, members: members.items, options };
+    return { invitations: invitations.items, truncated: invitations.truncated, offerings: offerings.items, members: members.items, options };
   }, [schoolId, revision]);
   const [selected, setSelected] = useRouteSelection();
   const [creating, setCreating] = useState<CreateMode | null>(null);
@@ -373,6 +404,7 @@ export function InvitationsSection() {
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
           <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'invitation' : 'invitations'}{visible.length !== items.length ? ` sur ${items.length}` : ''}</p>
+          {data?.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>Seules les 1 000 premières invitations sont chargées : la recherche et les comptes portent sur celles-ci.</p></Notice>}
           {visible.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation trouvée" message="" />
           : <ul className="directory-list" aria-label="Invitations de l’école, les plus récentes d’abord">
             {visible.map(item => <DirectoryRow key={item.id} title={label(item)} selected={item.id === selected && !creating}

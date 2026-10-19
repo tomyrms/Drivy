@@ -197,3 +197,23 @@ describe('simulations',()=>{
   expect((performance.now()-start)/20).toBeLessThan(50);
  });
 });
+
+describe('ordre des lignes d’usage',()=>{
+ // Contrainte documentée : le moteur ne compte qu'une fois une leçon pour le poids décroissant, avec le poids de la première
+ // ligne rencontrée. La requête (observation-ranking.ts, ORDER BY lesson_id, day DESC) met donc le jour le plus récent en tête.
+ const keys=themeKeys(18),w=2**(-1/rankingParameters.halfLifeActiveDays);
+ const rows:ThemeUsage[]=[
+  {themeKey:'t01',lessonId:'A',day:dayName(10),uses:1,position:1},
+  {themeKey:'t01',lessonId:'A',day:dayName(9),uses:1,position:1},
+  {themeKey:'t01',lessonId:'B',day:dayName(9),uses:1,position:1}
+ ];
+ // La preuve brute ne dépend pas de l'ordre : 1 + w + w. Le score publié vaut E·D/(D+2) ; on en retrouve D, le poids décroissant.
+ const rawEvidence=1+2*w;
+ const decayedOf=(evidence:number)=>2*evidence/(rawEvidence-evidence);
+ it('dans l’ordre de la requête, la leçon à cheval sur deux jours compte au jour le plus récent',()=>{
+  expect(decayedOf(scoreThemes(keys,rows).get('t01')!.evidence)).toBeCloseTo(1+w,9);
+ });
+ it('en ordre inverse, le poids change : ce test fixe la contrainte d’ordre',()=>{
+  expect(decayedOf(scoreThemes(keys,[...rows].reverse()).get('t01')!.evidence)).toBeCloseTo(2*w,9);
+ });
+});

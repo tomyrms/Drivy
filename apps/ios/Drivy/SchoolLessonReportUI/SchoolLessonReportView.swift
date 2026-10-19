@@ -395,6 +395,9 @@ private struct SchoolLessonReportContent: View {
                 Form {
                     SchoolReportTextSection(model: model)
                     SchoolReportCompetenciesSection(model: model)
+                    SchoolReportReviewSection(model: model, router: router, context: reportContext, showsHeading: true,
+                        showsEvidence: SchoolReportFlowRules.showsEvidenceInReview(isWide: true))
+                    SchoolReportSaveSection(model: model)
                 }
                     .scrollContentBackground(.hidden)
                     .scrollDismissesKeyboard(.interactively)
@@ -410,6 +413,7 @@ private struct SchoolLessonReportContent: View {
             Form {
                 headerSection
                 lessonNotices
+                captureUnavailableNotice
                 // Leçon restée à terminer : son trajet déjà reçu par l’école se revoit d’ici, sans réglage.
                 if showsPlannedTrip {
                     SchoolReportTripSection(model: model, router: router, context: reportContext, editable: false)
@@ -445,6 +449,23 @@ private struct SchoolLessonReportContent: View {
             replayableCount: model.replayableCaptures.count, noteCount: 0, isPlanned: true)
     }
 
+    @ViewBuilder private var captureUnavailableNotice: some View {
+        if let lesson = model.lesson,
+           let reason = SchoolLessonHubRules.captureUnavailableReason(lesson: lesson, isAuthor: model.isAuthor,
+               school: schoolWorkspace.school, capture: captureStatus,
+               controllerCanPrepare: capture?.canPrepareCapture == true, now: Date()) {
+            Section {
+                SchoolGPSUnavailableNotice(reason: reason, workspace: schoolWorkspace,
+                    managementURL: AppConfiguration.fromBundle()?.gpsManagementURL(schoolID: model.scope.schoolID),
+                    openCapture: {
+                        guard capture?.lessonID == model.lessonID, captureStatus == .stopped else { return }
+                        showsLive = true
+                    })
+            }
+            .drivyFormRows()
+        }
+    }
+
     @ViewBuilder private func plannedSections(bar: PlannedBar?) -> some View {
         Group {
             if let wish = model.wish, showsWish(wish) { wishSection(wish) }
@@ -458,13 +479,13 @@ private struct SchoolLessonReportContent: View {
         if isPlanned, model.isAuthor { SchoolReportObservationsSection(model: model, router: router, context: reportContext) }
     }
 
-    /// Barre basse : les gestes d’une leçon planifiée ; pour une leçon terminée, l’enregistrement du bilan quand
-    /// il se rédige sur place, sinon l’entrée dans sa rédaction quand elle a sa place en bas.
+    /// Barre basse : les gestes d’une leçon planifiée, ou l’entrée dans la rédaction d’une leçon terminée. En fenêtre
+    /// large, l’enregistrement reste après le récapitulatif dans le formulaire, jamais visible dès l’entrée.
     @ViewBuilder private func bottomBar(_ bar: PlannedBar?, presentation: SchoolReportPresentation) -> some View {
         if let bar {
             plannedBarView(bar)
-        } else if editsReport {
-            if presentation == .sideBySide { SchoolReportSaveBar(model: model) } else { reportEntryBar }
+        } else if editsReport, presentation != .sideBySide {
+            reportEntryBar
         }
     }
 

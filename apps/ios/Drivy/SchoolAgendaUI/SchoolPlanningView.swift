@@ -5,6 +5,7 @@ struct SchoolPlanningView: View {
     @Bindable var model: SchoolPlanningWorkspace
     var cancelling = false
     var beforeCancellation: (@MainActor () async -> Bool)? = nil
+    var onConfirmedLesson: @MainActor (SchoolLesson) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var confirmsCancellation = false
@@ -78,7 +79,7 @@ struct SchoolPlanningView: View {
                             return
                         }
                         isPreparingCancellation = false
-                        if await model.cancel() { dismiss() }
+                        _ = await model.cancel()
                     }
                 }
                 Button("Conserver", role: .cancel) { }
@@ -89,6 +90,14 @@ struct SchoolPlanningView: View {
                 guard let message else { return }
                 scroll.scrollTo(SchoolPlanningFeedback.errorAnchor, anchor: .top)
                 UIAccessibility.post(notification: .announcement, argument: message)
+            }
+            .onChange(of: model.confirmedLesson) { _, lesson in
+                guard let lesson else { return }
+                onConfirmedLesson(lesson)
+                dismiss()
+            }
+            .onChange(of: model.confirmedCancellationLessonID) { _, lessonID in
+                if lessonID != nil { dismiss() }
             }
             }
         }
@@ -396,7 +405,7 @@ struct SchoolPlanningView: View {
             DrivyActionNote(text: "Indique le motif du changement.", isError: true)
         }
         Button {
-            Task { if await model.saveBooking() { dismiss() } }
+            Task { _ = await model.saveBooking() }
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 if model.isBusy || model.isCheckingSlot { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
@@ -501,7 +510,10 @@ struct SchoolPlanningFeedback: View {
         if let error = model.errorMessage {
             // Même présentation d’erreur que les pages : notice, puis « Réessayer ».
             Section {
-                SchoolErrorNotice(message: error, retry: model.accessRevoked ? nil : { Task { await model.load() } })
+                SchoolErrorNotice(message: error, retry: model.accessRevoked ? nil : { Task {
+                    if model.writeConfirmed { await model.reloadConfirmedLesson() }
+                    else { await model.load() }
+                } })
                     .disabled(model.isBusy || model.isLoading)
                     .id(Self.errorAnchor)
             }
@@ -519,7 +531,7 @@ struct SchoolPlanningFeedback: View {
                     notes: !model.canRetry && command.scope != model.scope ? ["Tes accès ont changé. La demande initiale reste conservée."] : [],
                     reference: command.id,
                     verify: model.pendingAbsent ? nil : { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
-                    retry: model.canRetry ? { Task { if await model.retry() { dismiss() } } } : nil,
+                    retry: model.canRetry ? { Task { _ = await model.retry() } } : nil,
                     abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil,
                     canAbandon: !(model.isBusy || model.isLoading))
             }

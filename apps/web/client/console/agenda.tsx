@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { civilDateIn, addDays, formatDayHeading, formatTimeRange, formatWeek, groupByDay, lessonPhase, lessonsOfLearners, weekStart, weekWindow } from '../agenda-model';
 import { useCommandSnapshot } from '../command-store';
+import { isCivilDate } from '../command-core';
 import { activeInstructors } from '../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll } from '../school-api';
-import { EmptyState, Notice, SelectField, StatusBadge, Symbol, type Tone } from '../ui';
+import { EmptyState, Notice, SelectField, StatusBadge, Symbol, TextField, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
+import { agendaSearchQuery } from '../console-filter-model';
 import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
@@ -29,6 +31,8 @@ export function AgendaSection() {
   const [localInstructor, setLocalInstructor] = useState('');
   const [search, setSearch] = useListState('agenda/search', '');
   const monday = routeQuery ? weekStart(routeQuery.week ?? civilDateIn(school.timeZone)) : localMonday;
+  const [jumpDate, setJumpDate] = useState(monday);
+  useEffect(() => setJumpDate(monday), [monday]);
   const instructor = routeQuery ? routeQuery.instructor ?? '' : localInstructor;
   const setMonday = (week: string) => { setLocalMonday(week); setRouteQuery?.({ ...routeQuery, week }); };
   const setInstructor = (id: string) => { setLocalInstructor(id); setRouteQuery?.({ ...routeQuery, instructor: id || undefined }); };
@@ -56,8 +60,9 @@ export function AgendaSection() {
   }, [reloadLessons, reloadDirectory]);
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
-  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], search), school.timeZone),
-    [data, directory.data, search, school.timeZone]);
+  const searchQuery = agendaSearchQuery(directory, search);
+  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchQuery), school.timeZone),
+    [data, directory.data, searchQuery, school.timeZone]);
   const lessonCount = days.reduce((total, day) => total + day.items.length, 0);
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
@@ -78,6 +83,15 @@ export function AgendaSection() {
           </div>
           {monday !== thisWeek && <button type="button" className="button quiet" onClick={() => { setMonday(thisWeek); window.requestAnimationFrame(() => weekLabel.current?.focus()); }}>Aujourd’hui</button>}
         </div>
+        <form className="agenda-date-jump" onSubmit={event => {
+          event.preventDefault();
+          if (!isCivilDate(jumpDate)) return;
+          setMonday(weekStart(jumpDate));
+          window.requestAnimationFrame(() => weekLabel.current?.focus());
+        }}>
+          <TextField label="Aller à une date" type="date" required value={jumpDate} onChange={setJumpDate} />
+          <button type="submit" className="button secondary">Afficher la semaine</button>
+        </form>
         <div className="agenda-studio-filters">
           {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor} search appearance="filter"
             options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName })),
@@ -89,7 +103,9 @@ export function AgendaSection() {
       <LoadState loaded={directory} label="Lecture des élèves et moniteurs…">{() => null}</LoadState>
       <LoadState loaded={loaded} label="Lecture de l’agenda…">{value => <>
         {value.truncated && <Notice tone="warning" title="Semaine partielle" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
-        <p className="list-summary" role="status">{lessonCount} {lessonCount === 1 ? 'leçon' : 'leçons'}{search ? lessonCount === 1 ? ' trouvée' : ' trouvées' : ' cette semaine'}</p>
+        <p className="list-summary" role="status">{search.trim() && !directory.data
+          ? 'Recherche suspendue : le répertoire des élèves est en cours de lecture ou indisponible.'
+          : `${lessonCount} ${lessonCount === 1 ? 'leçon' : 'leçons'}${searchQuery ? lessonCount === 1 ? ' trouvée' : ' trouvées' : ' cette semaine'}`}</p>
         {days.length === 0 ? <EmptyState symbol="clock" title={search && value.lessons.length ? 'Aucune leçon trouvée' : 'Aucune leçon cette semaine'} message="" />
           : <div className="agenda-week-list">{days.map(day => {
             const [weekday, ...date] = formatDayHeading(day.day).split(' ');

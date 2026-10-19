@@ -63,8 +63,11 @@ export function createMapMatcher(config: MapMatchingConfig, fetcher: typeof fetc
     if (!reply.ok || body.code !== 'Ok') throw new MapMatchingError('PROVIDER_REFUSED');
     const tracepoints = body.tracepoints ?? [];
     if (tracepoints.length !== points.length) throw new MapMatchingError('INVALID_RESPONSE');
+    const matchings = (body.matchings ?? []).map(matching => ({ confidence: matching.confidence, geometry: decodePolyline(matching.geometry) }));
+    // Une géométrie illisible n'est pas une absence de route : elle ne doit jamais devenir un résultat « aucune route ».
+    if (matchings.some(matching => matching.geometry.length < 2)) throw new MapMatchingError('INVALID_RESPONSE');
     return {
-      matchings: (body.matchings ?? []).map(matching => ({ confidence: matching.confidence, geometry: decodePolyline(matching.geometry) })),
+      matchings,
       tracepoints: tracepoints.map(trace => trace ? { matchingIndex: trace.matchings_index, latitude: trace.location[1], longitude: trace.location[0] } : null)
     };
   };

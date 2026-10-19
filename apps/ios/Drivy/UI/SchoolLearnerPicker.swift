@@ -6,6 +6,7 @@ struct DrivySearchField: View {
     @Binding var text: String
     let prompt: String
     var focus: FocusState<Bool>.Binding
+    var onClear: (() -> Void)? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -20,7 +21,9 @@ struct DrivySearchField: View {
                 .submitLabel(.search)
                 .accessibilityAddTraits(.isSearchField)
             if !text.isEmpty {
-                Button { text = "" } label: {
+                Button {
+                    if let onClear { onClear() } else { text = "" }
+                } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(DrivyTheme.muted)
                         .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
@@ -42,6 +45,31 @@ struct DrivySearchField: View {
 /// Choix d’un élève : recherche en tête, liste à hauteur stable, un toucher choisit. Dans la feuille de démarrage,
 /// rien n’est poussé ni redimensionné ; dans le planning, la même liste se pousse (`SchoolLearnerSearchList`).
 struct SchoolLearnerPicker: View {
+    enum EmptyState: Equatable {
+        case baseEmpty
+        case filteredEmpty
+
+        var title: String {
+            switch self {
+            case .baseEmpty: "Aucun élève"
+            case .filteredEmpty: "Aucun élève trouvé"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .baseEmpty: "person.2"
+            case .filteredEmpty: "magnifyingglass"
+            }
+        }
+    }
+
+    static func emptyState(learnersAreEmpty: Bool, hasResults: Bool, search: String) -> EmptyState? {
+        if learnersAreEmpty { return .baseEmpty }
+        guard !hasResults else { return nil }
+        return search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : .filteredEmpty
+    }
+
     let learners: [SchoolLearner]
     let selectedID: UUID?
     let choose: (UUID) -> Void
@@ -81,10 +109,13 @@ struct SchoolLearnerPicker: View {
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.immediately)
         .overlay {
-            if shown.isEmpty { DrivyEmptyState(title: "Aucun élève trouvé", symbol: "magnifyingglass") }
+            if let emptyState = Self.emptyState(learnersAreEmpty: learners.isEmpty, hasResults: !shown.isEmpty, search: search) {
+                DrivyEmptyState(title: emptyState.title, symbol: emptyState.symbol)
+            }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            DrivySearchField(text: $search, prompt: "Rechercher un élève", focus: $searching)
+            DrivySearchField(text: $search, prompt: "Rechercher un élève", focus: $searching,
+                onClear: { search = ""; searching = true })
                 .padding(.horizontal, DrivySpacing.m)
                 .padding(.vertical, DrivySpacing.s)
                 .background(DrivyTheme.canvas)

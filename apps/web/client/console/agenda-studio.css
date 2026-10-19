@@ -3,6 +3,9 @@
 .agenda-period { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; min-inline-size: 0; }
 .agenda-period-label { font: 600 1rem / 1.5 var(--font); color: var(--text); }
 .agenda-period-controls { display: flex; gap: .25rem; }
+.agenda-date-jump { display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
+.agenda-date-jump > .field { margin: 0; flex: 1 1 10rem; }
+.agenda-date-jump > .button { min-block-size: 2.625rem; }
 .agenda-period-controls > .button { min-inline-size: 2.625rem; min-block-size: 2.625rem; padding: .5rem; }
 .agenda-studio-filters { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
 .agenda-studio-filters > .choice-field { inline-size: 12rem; }
@@ -32,6 +35,7 @@
 @container (max-width: 44rem) {
   .agenda-studio-toolbar { align-items: stretch; }
   .agenda-period { inline-size: 100%; }
+  .agenda-date-jump { inline-size: 100%; }
   .agenda-period-label { flex: 1; }
   .agenda-studio-filters { flex: 1; }
   .agenda-studio-filters > .choice-field, .agenda-studio-filters > .record-search { flex: 1 1 12rem; inline-size: auto; }

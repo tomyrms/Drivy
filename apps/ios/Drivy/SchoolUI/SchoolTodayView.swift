@@ -248,9 +248,10 @@ struct SchoolTodayView: View {
     /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.
     @ViewBuilder private func card(now: Date, floating: Bool) -> some View {
         let active = planned.first { $0.hasStarted }
-        // Un rendez-vous manqué ne reste pas en tête toute la journée : il se lit « En attente » dans la liste.
         let next = planned.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
-        let featured = active ?? next
+        // Un rendez-vous manqué ne passe devant un autre qu’à défaut : il reste à l’écran, « En attente », tant que
+        // rien d’autre n’est prévu, comme dans l’agenda.
+        let featured = SchoolTodayPresentation.featured(in: planned, now: now)
         DrivyMapDock(floating: floating) {
             if let lesson = featured {
                 // Une leçon commencée se lit « En cours » sur sa ligne, pas seulement dans le libellé du bouton.
@@ -322,7 +323,9 @@ struct SchoolTodayView: View {
     @ViewBuilder private func following(now: Date, featured: SchoolLesson, next: SchoolLesson?) -> some View {
         let rest = SchoolTodayPresentation.upcomingLessons(lessons, now: now,
             excluding: Set([featured.id, next?.id].compactMap { $0 }))
+        // Une leçon manquée reste lisible ici (« En attente ») quand aucune autre n’est prévue après elle.
         let upcoming = next ?? rest.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
+            ?? rest.first { !$0.hasStarted }
         if let upcoming {
             Divider().overlay(DrivyTheme.border)
             nextLine(upcoming, extra: rest.filter { $0.id != upcoming.id }.count, now: now)
@@ -489,13 +492,23 @@ struct SchoolTodayView: View {
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
             SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
-            // Lecture discrète : la page la plus récente des leçons passées du moniteur suffit à retrouver celles
-            // restées sans fin. Une panne garde le rappel déjà affiché et ne dit rien : la journée reste lisible.
+            // Lecture discrète : les pages les plus récentes des leçons passées du moniteur suffisent à retrouver celles
+            // restées sans fin (cinq pages au plus, soit 500 leçons). Une panne garde le rappel déjà affiché et ne dit
+            // rien : la journée reste lisible. Une panne après la première page garde ce qui a déjà été lu.
             guard let instructor = instructorFilter else { unfinished = []; return }
-            guard let earlier = try? await agendaClient.lessonHistory(schoolID: membership.schoolId, before: dayStart,
-                instructorMembershipID: instructor, cursor: nil) else { return }
-            guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
-            unfinished = SchoolTodayPresentation.unfinishedLessons(earlier.items, before: dayStart)
+            var earlier: [SchoolLesson] = [], historyCursor: String?, historySeen = Set<String>()
+            for page in 0..<SchoolTodayPresentation.historyPages {
+                guard let read = try? await agendaClient.lessonHistory(schoolID: membership.schoolId, before: dayStart,
+                    instructorMembershipID: instructor, cursor: historyCursor) else {
+                    if page == 0 { return }
+                    break
+                }
+                guard key == dayKey(Date()), requestID == request, !Task.isCancelled else { return }
+                earlier.append(contentsOf: read.items)
+                guard let next = read.nextCursor, historySeen.insert(next).inserted else { break }
+                historyCursor = next
+            }
+            unfinished = SchoolTodayPresentation.unfinishedLessons(earlier, before: dayStart)
             SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
         } catch {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }
@@ -516,11 +529,22 @@ struct SchoolTodayView: View {
 }
 
 enum SchoolTodayPresentation {
+    /// Pages d’historique (100 leçons chacune, les plus récentes d’abord) lues pour retrouver les leçons restées à terminer.
+    static let historyPages = 5
+
     /// Tous les rendez-vous encore ouverts restent accessibles, y compris ceux en attente après leur horaire.
     static func upcomingLessons(_ lessons: [SchoolLesson], now: Date, excluding: Set<UUID> = []) -> [SchoolLesson] {
         lessons.filter { lesson in
             lesson.status == "PLANNED" && !excluding.contains(lesson.id)
         }.sorted { $0.plannedStart < $1.plannedStart }
+    }
+
+    /// La leçon en tête de la carte : celle qui se déroule, sinon la prochaine, sinon la première manquée restée
+    /// sans départ. `planned` est trié par heure de début ; `nil` seulement quand il est vide.
+    static func featured(in planned: [SchoolLesson], now: Date) -> SchoolLesson? {
+        planned.first { $0.hasStarted }
+            ?? planned.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
+            ?? planned.first { !$0.hasStarted }
     }
 
     /// Leçons commencées avant aujourd’hui et restées sans résultat, la plus ancienne d’abord. Seul un départ

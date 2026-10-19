@@ -1,5 +1,44 @@
 # État de la réalisation
 
+## 18 octobre 2026 : audit V2, 20 agents et recette réelle locale
+
+Branche `audit/intelligent-v2-20261018`, basée sur V1 `7c117cd`. Vingt explorateurs réellement exécutés : 16 GPT-5.6 Luna et 4 GPT-5.6 Sol. **26 signaux initiaux arbitrés, deux bugs confirmés corrigés : un P1 et un P2, aucun P0.** La réauthentification reste liée au compte initial. Le dossier élève distingue chargement, erreur et reprise de l’accord GPS, sans révéler un statut refusé en 403. Aucun défaut V1 résiduel ni régression démontré dans les parcours vérifiés.
+
+**Validation exécutée : 447 tests API avec PostgreSQL/SMTP, 236 tests web, 51 scénarios navigateur à transport synthétique et 82 contrôles réels Edge/Keycloak/BFF/API/PostgreSQL/SMTP réussis.** Types, builds et intégrité des 556 fichiers canoniques passent. Le blocage Docker de V1 a été levé localement. Récupération de compte explicitement exclue, aucun mot de passe réinitialisé. Node 26 local au lieu du 24 requis, Apple/Safari/VoiceOver/GPS terrain non qualifiés. Aucun push, fusion, déploiement ou changement de production. Validation humaine avant intégration.
+
+[Rapport V2 : décisions, preuves, fichiers et commits](audit-v2-20261018.md) · [Plan et bilan](audit-v2-20261018-plan.md) · [Matrice de clôture et observations](audit-v2-20261018-acceptance.md). Rejeu complet du lot committé réussi à 17:23:47 UTC, avec preuve nominative de chaque sortie modifiée et des frontières d’intégration, sans nouveau changement produit.
+
+## 18 octobre 2026 : audit multi-agents local, non déployé
+
+Branche isolée `audit/intelligent-20261018`, base `5482dd8`. Dix audits spécialisés terminés avec sept GPT-5.6 Luna et trois GPT-5.6 Sol, puis contre-revue ciblée Astra. **13 signaux arbitrés, 2 défauts confirmés corrigés : un P1 et un P2, aucun P0.** Le formulaire d’accès équipe conserve son brouillon lors d’une relecture concurrente et exige une résolution explicite avant écriture. Le vérificateur OIDC refuse les sujets non textuels sans transformer les identifiants opaques valides. Pas de refonte visuelle ni nouvelle dépendance.
+
+**Exécuté localement :** 135 tests unitaires API, 233 tests web, types et builds, cinq scénarios de régression Edge, 41 interactions existantes, 30 captures ciblées et contrôle de reflow. L’intégrité des 556 fichiers canoniques est préservée. Les scénarios navigateur utilisent un BFF synthétique, pas le backend de production. PostgreSQL isolée indisponible : suite API complète tentée mais bloquée. Node 26 local au lieu de 24 requis. iOS, Safari et VoiceOver non exécutés. Aucun push, fusion, déploiement ou modification de données de production. Validation utilisateur et qualification CI requises avant intégration.
+
+**Complément à 18:03 +02:00 :** recette officielle `check-school-opening.ts` réellement tentée sur PostgreSQL loopback réservée. Exit 1 avant le premier contrôle, étape base vierge, aucun service local requis disponible et daemon Docker absent. Aucun succès d’acceptation de bout en bout revendiqué. Les preuves avant/après établissent seulement les améliorations dans les tests contrôlés.
+
+[Rapport complet, arbitrages, preuves et limites](audit-intelligent-20261018.md) · [Plan réalisé](audit-intelligent-20261018-plan.md).
+
+## 18 octobre 2026 — audit à quatre agents (UI/UX, bugs, architecture, QA)
+
+Intégré sur `claude/audit-4agents-20261018` : confirmation avant déconnexion avec une demande à vérifier, saisies conservées au retour par le cache de navigation, avis au-delà de 1 000 invitations, chevauchement d’horaires refusé dans la console, renouvellement du jeton sur 401 dans dix clients iOS, rappel « à terminer » sur cinq pages, agenda prévenu d’un démarrage sans rendez-vous, heure répétée du passage à l’heure d’hiver dans `next-slot`, ombres de menu et Réduire les animations alignés sur DESIGN.md. Architecture : rien de mort ni de dupliqué à retirer sans risque. **Exécuté** : typage web et API, 264 tests web, 132 tests API sans base. **À qualifier par la CI** : changements Swift (non compilés ici), tests PostgreSQL. Aucun déploiement. [Compte rendu](audit-4agents-20261018.md).
+
+**Suite, même jour.** La branche intègre aussi `codex/lesson-gps-start-20261017` (`d97dfa9`, déjà en service : connexion native, GPS d’école), pour ne pas retirer du homelab ce qui y tournait. CI verte sur `3893b7c` : vérifications avec PostgreSQL, parcours navigateur d’ouverture d’école, IPA, **660 tests Swift**. Deux corrections issues de la CI : le test de reprise des migrations attend la 034 ; la relecture ratée d’un bilan (`ecdc144`) laissait enregistrer, elle bloque de nouveau l’écriture jusqu’à une relecture réussie. Le refus serveur des horaires qui se chevauchent est écarté : quatorze tests d’intégration empilent volontairement des plages pour un même moniteur ; c’est une décision produit (le homelab n’en a aucun). **Déployé le 18 octobre 2026** à la demande du porteur : release `3893b7c` sur le homelab, sauvegarde vérifiée `/root/drivy_refonte-before-3893b7c…-20261018T133933Z-a16f4abadaaa.dump` sur CT113, 34 migrations aux empreintes conformes (034 : politique RLS seule), API/web/identité actifs, `/health/ready` 200, `/app/` 200, `/refonte/v1/me` 401 sans jeton. L’app correspondante est à installer depuis l’IPA de la CI.
+
+## 17 octobre 2026 — essaim de recherche de bugs
+
+Vingt agents ont audité API, base, web et iOS ; 15 lots de corrections sont fusionnés sur `claude/essaim-bugs-20261017` : arrêt de trajet après finalisation qui effaçait des points reçus, tolérance d’horloge du téléphone, réauthentification pour inviter un ADMIN ou un moniteur, motifs de retrait cachés à l’élève dans la base (migration 034), limiteur d’entrée du BFF, leçon en attente qui disparaissait d’Aujourd’hui, bilan vidé après une relecture ratée, et plusieurs défauts d’agenda, de formations et d’accessibilité web. **Exécuté** : typage, 138 tests API sans base, 260 tests web, build web. **À qualifier par la CI** : tests PostgreSQL ajoutés et tests Swift. Aucun déploiement. Dix questions produit et les constats différés sont listés dans le [compte rendu](essaim-bugs-20261017.md).
+
+## 17 octobre 2026 — démarrage d’une leçon et GPS inaccessible
+
+Cause reproduite dans le code : une nouvelle école garde le GPS désactivé, aucun écran web ne permettait son activation, et l’app ouvrait une leçon commencée avec seulement « Terminer » sans expliquer le trajet absent. Correction : réglage explicite **Trajets GPS** dans la confidentialité du portail, motif et relecture dans l’app, départ libellé **avec GPS / sans GPS**. La connexion native est conservée ; la relecture d’un réglage ne démarre jamais une capture. [Décisions et vérification](demarrage-lecon-gps-20261017.md).
+
+**En cours de vérification** : tests web, Swift, parcours UI et IPA sur runner Apple. **Non qualifiés** : GPS physique, batterie, VoiceOver et fluidité ressentie sur appareil. Aucun réglage d’école réelle ni déploiement n’a été effectué à ce stade.
+
+## 15 octobre 2026 — connexion native, inscription réservée aux codes
+
+- Exécuté : routes `access-codes/preview` et `accounts` (tests unitaires et PostgreSQL), BFF et écrans web « Se connecter » / « J’ai un code » (251 tests web), recette navigateur complète avec Keycloak réel à inscription fermée (compte responsable par code d’ouverture, moniteur et élève par lien d’invitation SMTP), écrans iOS natifs (connexion, code, création de compte, ouverture d’école).
+- À qualifier : rendu iOS sur appareil, connexion Face ID après une connexion par mot de passe, parcours complet élève dans l’app. Détails : [connexion-native-20261015.md](connexion-native-20261015.md).
+
 ## 14 octobre 2026 — Formations et tarifs : une fiche par permis, déployé
 
 À la demande explicite du porteur, version **`0f76da1` publiée vers 12:55 Europe/Zurich** sur [Drivy](https://drivy.shulker.ch/app/) (API et portail). Sauvegarde `drivy_refonte` vérifiée avant bascule (`pg_restore --list`), migration 033 appliquée, 33 empreintes de migration contrôlées ; le drop-in qui figeait le web sur `web-releases/2b4ca81` est retiré, API et web tournent sur la même release. Une première tentative (`8801aee`) s’est arrêtée avant toute migration : la compilation API dépassait les 256 Mo de l’installeur ; typage allégé et limite portée à 512 Mo. Complément publié à la demande du porteur : release **`061f846`** (nouvelle sauvegarde vérifiée), la liste des permis affiche en colonnes durée habituelle, prix des leçons, compétences, tarifs et élèves en formation. Vérifié après bascule : portail 200 servant la nouvelle interface, routes Formations protégées (401 sans session), `/health/ready` 200, services actifs, aucune erreur journalisée, aucun parcours existant renommé.

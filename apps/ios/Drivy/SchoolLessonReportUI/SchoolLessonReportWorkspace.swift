@@ -449,22 +449,25 @@ import Observation
             let sharingRead = try await sharingTask.value
             let progressRead = try await progressTask.value
             guard request == generation, !invalidated else { return }
-            let draftPolicy = SchoolLessonRefreshPolicy.decide(previous: draft.map(DraftContent.init),
+            // Une lecture échouée (message présent) ne remplace jamais ce qui est affiché : bilan, saisie et objectifs restent en place.
+            let draftUnread = draftsRead.message != nil, preparationUnread = preparationRead.message != nil
+            let draftPolicy = draftUnread ? SchoolLessonRefreshPolicy.keepEdits : SchoolLessonRefreshPolicy.decide(previous: draft.map(DraftContent.init),
                 edited: DraftContent(id: draft?.id ?? UUID(), workedOn: workedOn, observationText: observationText,
                     nextStep: nextStep, observations: observations), received: draftsRead.value?.first.map(DraftContent.init),
                 discardingEdits: discardingEdits || !author)
-            let preparationPolicy = SchoolLessonRefreshPolicy.decide(previous: preparation.map(PreparationContent.init),
+            let preparationPolicy = preparationUnread ? SchoolLessonRefreshPolicy.keepEdits : SchoolLessonRefreshPolicy.decide(previous: preparation.map(PreparationContent.init),
                 edited: PreparationContent(goals: goals, note: administrativeNote), received: preparationRead.value.map(PreparationContent.init),
                 discardingEdits: discardingEdits || !author)
             let wishPolicy = SchoolLessonRefreshPolicy.decide(previous: wish?.text, edited: wishText,
                 received: wishRead.value?.text, discardingEdits: discardingEdits || !isOwn)
             var conflict = draftPolicy == .conflict || preparationPolicy == .conflict || wishPolicy == .conflict
             self.lesson = lesson
-            if preparationPolicy != .conflict { preparation = preparationRead.value }
+            if preparationPolicy != .conflict, !preparationUnread { preparation = preparationRead.value }
             if wishPolicy != .conflict { wish = wishRead.value }
-            revisions = revisionsRead.value ?? []; revisionsError = revisionsRead.message
-            sharedReportWasRead = revisionsRead.value != nil
-            if draftPolicy != .conflict { draft = draftsRead.value?.first }
+            // Relecture des bilans partagés en échec : ceux déjà affichés restent, seul le message change.
+            if revisionsRead.message == nil { revisions = revisionsRead.value ?? []; sharedReportWasRead = revisionsRead.value != nil }
+            revisionsError = revisionsRead.message
+            if draftPolicy != .conflict, !draftUnread { draft = draftsRead.value?.first }
             isOwnLearner = isOwn
             training = trainingRead.value
             account = accountRead.value
@@ -478,7 +481,7 @@ import Observation
             }
             competencies = curriculumRead.value ?? []
             currentLevels = Dictionary((progressRead.value?.items ?? []).map { ($0.competencyId, $0) }, uniquingKeysWith: { first, _ in first })
-            lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") }
+            if observationsRead.message == nil { lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") } }
             // Le réglage voulu reste affiché jusqu’à la fin de son propre envoi (`updateSharing`).
             sharing = sharingRead.value
             track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
@@ -488,7 +491,7 @@ import Observation
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
                          observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
-            isLoading = false; needsReload = conflict; awaitsRereadAfterWrite = false
+            isLoading = false; needsReload = conflict || draftUnread || preparationUnread; awaitsRereadAfterWrite = false
             if conflict {
                 errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
             }

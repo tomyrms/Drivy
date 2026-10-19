@@ -35,14 +35,28 @@ async function readJSON(response: Response, limit: number): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
 }
 
+/** Routes of the API open without sign-in: reading a code and creating an account with it. */
+export type AnonymousPath = '/v1/access-codes/preview' | '/v1/accounts';
+export type AnonymousGateway = (path: AnonymousPath, body: unknown, clientAddress: string) => Promise<ApiResult>;
+export function createAnonymousGateway(baseURL: string): AnonymousGateway {
+  return async (path, body, clientAddress) => {
+    if (!['/v1/access-codes/preview','/v1/accounts'].includes(path)) throw new Error('Route API non autorisée.');
+    // The API limits these routes per address: it receives the visitor's address, never a forwarded chain it could not check.
+    const response = await fetch(baseURL + path, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Forwarded-For': clientAddress },
+      body: JSON.stringify(body) });
+    return { status: response.status, body: await readJSON(response, 64 * 1024) };
+  };
+}
+
 export function createGateway(baseURL: string): ApiGateway {
   return async (path, accessToken, body) => {
-    if (!['/v1/me','/v1/invitations/preview','/v1/invitations/accept'].includes(path)) throw new Error('Route API non autorisée.');
+    if (!['/v1/me','/v1/invitations/preview','/v1/invitations/accept','/v1/invitations/code/preview','/v1/invitations/code/accept'].includes(path)) throw new Error('Route API non autorisée.');
     const response = await fetch(baseURL + path, {
       method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000),
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(path === '/v1/invitations/accept' && typeof body === 'object' && body !== null && 'operationId' in body
+        ...((path === '/v1/invitations/accept' || path === '/v1/invitations/code/accept') && typeof body === 'object' && body !== null && 'operationId' in body
           ? { 'Idempotency-Key': String(body.operationId) } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });

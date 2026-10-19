@@ -38,6 +38,19 @@ struct SchoolEntryDestinationTests {
         #expect(SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: "ACTIVE", roles: ["LEARNER"]))
     }
 
+    @Test func personalWelcomeFollowsTheRoleOfTheHomeTabs() {
+        for roles in [["INSTRUCTOR"], ["ADMIN", "INSTRUCTOR"], ["LEARNER", "INSTRUCTOR"], ["ADMIN", "LEARNER", "INSTRUCTOR"]] {
+            #expect(SchoolEntryDestination.personalOnboardingKind(schoolStatus: "ACTIVE", roles: roles) == .staff)
+        }
+        for roles in [["LEARNER"], ["ADMIN", "LEARNER"]] {
+            #expect(SchoolEntryDestination.personalOnboardingKind(schoolStatus: "ACTIVE", roles: roles) == .student)
+        }
+        for status in [nil, "DRAFT", "ARCHIVED", "UNKNOWN"] as [String?] {
+            #expect(SchoolEntryDestination.personalOnboardingKind(schoolStatus: status, roles: ["INSTRUCTOR", "LEARNER"]) == nil)
+        }
+        #expect(SchoolEntryDestination.personalOnboardingKind(schoolStatus: "ACTIVE", roles: ["ADMIN"]) == nil)
+    }
+
     @Test func webPreparationUsesTheConfiguredOriginAndOnlyTheSchoolIdentifier() {
         let school = UUID(uuidString: "AAAAAAAA-1111-4111-8111-111111111111")!
         let configuration = AppConfiguration(apiBaseURL: URL(string: "https://drivy.example.test:8443/refonte")!,
@@ -46,5 +59,16 @@ struct SchoolEntryDestinationTests {
         #expect(configuration.managementURL(schoolID: school, preparation: true)?.absoluteString == "https://drivy.example.test:8443/app/gestion/aaaaaaaa-1111-4111-8111-111111111111/apercu")
         #expect(configuration.managementURL(schoolID: school, preparation: true)?.query == nil)
         #expect(configuration.managementURL(schoolID: school, preparation: true)?.fragment == nil)
+    }
+
+    @Test func GPSManagementOpensTheSchoolSettingDirectly() throws {
+        let school = UUID(uuidString: "AAAAAAAA-1111-4111-8111-111111111111")!
+        let configuration = AppConfiguration(apiBaseURL: URL(string: "https://drivy.example.test:8443/refonte")!,
+            issuer: URL(string: "https://identity.example.test")!, clientID: "drivy-apple", redirectURL: AppConfiguration.callback)
+        let url = try #require(configuration.gpsManagementURL(schoolID: school))
+        #expect(url.absoluteString == "https://drivy.example.test:8443/app/gestion/aaaaaaaa-1111-4111-8111-111111111111/confidentialite?focus=school-gps")
+        let parts = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(parts.queryItems == [URLQueryItem(name: "focus", value: "school-gps")])
+        #expect(parts.fragment == nil && parts.user == nil && parts.password == nil)
     }
 }

@@ -30,8 +30,9 @@ export interface ConsoleContextValue {
   setRouteQuery?: (query: NavigationQuery, replace?: boolean, keepForms?: boolean) => void;
   /** Unsent catalogue drafts, memory only, renewed with the authenticated school/access scope. */
   drafts?: Map<string, unknown>;
-  /** Sign in again with the same account; `reauthenticate` forces the identity provider to ask for the password. */
+  /** Sign in within Drivy; step-up preserves the same account and any reviewed form. */
   login: (options?: { reauthenticate?: boolean }) => void;
+  confirmIdentity?: () => Promise<boolean>;
 }
 
 export const ConsoleContext = createContext<ConsoleContextValue | null>(null);

@@ -172,9 +172,24 @@ enum SchoolReportFailure: Error, LocalizedError, Equatable {
         guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { throw SchoolReportFailure.invalidResponse }
         if !query.isEmpty { parts.queryItems = query }
         guard let target = parts.url else { throw SchoolReportFailure.invalidResponse }
+        let token = try await accessToken()
+        do { return try await perform(target, method: method, command: command, token: token) }
+        catch SchoolReportFailure.unauthorized {
+            // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
+            // et un seul nouvel essai, même opération et même clé d’idempotence.
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolReportFailure.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolReportFailure.unauthorized }
+            return try await perform(target, method: method, command: command, token: renewed)
+        }
+    }
+    private func accessToken() async throws -> String {
         let token: String
         do { token = try await tokenSource.accessToken() } catch IdentityFailure.reauthentication { throw SchoolReportFailure.unauthorized } catch { throw error.unlessCancelled(SchoolReportFailure.unavailable) }
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolReportFailure.unauthorized }
+        return token
+    }
+    private func perform<Value: Decodable>(_ target: URL, method: String, command: PendingSchoolCommand?, token: String) async throws -> Value {
         if let command {
             let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
             guard person.personId == command.scope.personID, person.memberships.contains(where: {

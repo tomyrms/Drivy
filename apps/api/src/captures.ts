@@ -13,6 +13,8 @@ import {geoObservationProjection,type GeoObservationRow} from './capture-contrac
 import {anchorObservations} from './capture-observations.js';
 
 const empty=z.object({}).strict();
+// Horloge du téléphone en avance de quelques secondes : une mesure ou un arrêt légèrement futurs ne sont pas refusés.
+const CLOCK_SKEW_MS=10_000;
 const error=(code:string,message:string,status=409)=>new ApiError(status,code,message);
 type Target={learnerId:string}|{lessonId:string}|{captureId:string}|{deviceId:string};
 type TripRow=CaptureRow&{learner_name:string;instructor_name:string;lesson_planned_start:Date;lesson_time_zone:string;_createdAt:string};
@@ -49,10 +51,10 @@ function assessmentBlockers(config:CaptureConfig|undefined,input:AssessmentInput
 function validatePoints(body:ChunkInput,row:CaptureRow){
  if(trackContentHash(body)!==body.contentHash)throw error('CHUNK_HASH_MISMATCH','Le hash ne correspond pas au contenu du lot.',422);
  const start=Date.parse(body.segmentStartedAt),cutoff=Math.min(row.expires_at.getTime(),row.cutoff_at?.getTime()??Infinity),now=Date.now();
- if(start<row.authorized_at.getTime()||start>=cutoff||start>now||(body.segmentIndex===0)!==(body.segmentStartReason==='START'))throw error('SEGMENT_INTERVAL_INVALID','Le début du segment sort de l’intervalle autorisé.',422);
+ if(start<row.authorized_at.getTime()||start>=cutoff||start>now+CLOCK_SKEW_MS||(body.segmentIndex===0)!==(body.segmentStartReason==='START'))throw error('SEGMENT_INTERVAL_INVALID','Le début du segment sort de l’intervalle autorisé.',422);
  let previous:TrackPoint|undefined;
  for(const point of body.points){const measured=Date.parse(point.capturedAt);
-  if(measured<start||measured>=cutoff||measured>now||Math.abs(measured-start-point.elapsedMs)>1)throw error('POINT_OUTSIDE_CAPTURE','Une mesure sort du segment ou de la borne de collecte.',422);
+  if(measured<start||measured>=cutoff||measured>now+CLOCK_SKEW_MS||Math.abs(measured-start-point.elapsedMs)>1)throw error('POINT_OUTSIDE_CAPTURE','Une mesure sort du segment ou de la borne de collecte.',422);
   if(previous&&(point.sequence<=previous.sequence||point.elapsedMs<=previous.elapsedMs||measured<=Date.parse(previous.capturedAt)))throw error('POINT_ORDER_INVALID','Les séquences et les temps doivent être strictement croissants.',422);previous=point;
  }
 }
@@ -228,9 +230,12 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   const body=stopCommand.parse(r.body),captureId=param(r,'captureId'),bound={...body,captureId};
   const value=await command(r,'STOP_CAPTURE',bound,null,{captureId},async(db,_actor,school)=>{
    const row=await getCapture(db,school.id,captureId,true),stopped=Date.parse(body.stoppedAt);
-   if(stopped<row.authorized_at.getTime()||stopped>Date.now())throw error('CAPTURE_STOP_INVALID','L’arrêt doit être postérieur à l’autorisation et déjà survenu.',422);
+   if(row.publication_state==='DELETED'||row.publication_state==='WITHDRAWN')throw error('CAPTURE_UNAVAILABLE','Cette capture n’accepte plus de données.');
+   if(stopped<row.authorized_at.getTime()||stopped>Date.now()+CLOCK_SKEW_MS)throw error('CAPTURE_STOP_INVALID','L’arrêt doit être postérieur à l’autorisation et déjà survenu.',422);
    if(row.manifest&&canonicalCaptureJSON(row.manifest)!==canonicalCaptureJSON(body.segments))throw error('CAPTURE_MANIFEST_MISMATCH','Le manifeste arrêté est immuable.');
-   const cutoff=new Date(Math.min(stopped,row.expires_at.getTime(),row.cutoff_at?.getTime()??Infinity));
+   const cutoffAt=Math.min(stopped,row.expires_at.getTime(),row.cutoff_at?.getTime()??Infinity),cutoff=new Date(cutoffAt);
+   // Après finalisation, un arrêt ne peut plus resserrer la borne : le déclencheur effacerait des lots déjà reconstruits.
+   if(row.finalized_at&&row.cutoff_at&&cutoffAt<row.cutoff_at.getTime())throw error('CAPTURE_FINALIZED','La reconstruction est finalisée ; la borne ne peut plus être resserrée.');
    const changed=(await db.query<CaptureRow>(`UPDATE drivy.capture_session SET capture_state=CASE WHEN capture_state='AUTHORIZED' THEN 'STOPPED' ELSE capture_state END,version=version+1,stopped_at=least(coalesce(stopped_at,$2),$2),cutoff_at=$3,manifest=coalesce(manifest,$4::jsonb) WHERE id=$1 RETURNING *`,[row.id,new Date(stopped),cutoff,JSON.stringify(body.segments)])).rows[0]!;
    return {data:captureProjection(changed),action:'CaptureStopped',resourceType:'CaptureSession',resourceId:row.id,changedFields:['stoppedAt','cutoffAt','manifest']};
   },false,{replay:async db=>captureProjection(await getCapture(db,schoolID(r),captureId))});reply.header('ETag',`"${value.version}"`);return envelope(value,r);

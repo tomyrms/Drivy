@@ -3,6 +3,140 @@ import Testing
 @testable import Drivy
 
 @MainActor struct SchoolPlanningBookingTests {
+    @Test func confirmedCreateExposesTheServerLessonOnlyAfterItsReceiptAndRead() async throws {
+        let server = PlanningBookingServer(), model = workspace(server)
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        await model.validateSlot()
+        try #require(model.validBooking)
+
+        #expect(model.confirmedLesson == nil)
+        #expect(await model.saveBooking())
+        let confirmed = try #require(model.confirmedLesson)
+        #expect(confirmed.id == HubFixture.lessonID)
+        #expect(confirmed.version == 2)
+        #expect(abs((confirmed.startsAt?.timeIntervalSince1970 ?? 0) - model.startsAt.timeIntervalSince1970) < 1)
+        #expect(!confirmed.hasStarted)
+        #expect(await server.operationReads() == 1)
+    }
+
+    @Test func confirmedMoveExposesTheRereadServerVersionAndNeverAutoStarts() async throws {
+        let server = PlanningBookingServer(), model = workspace(server, lesson: HubFixture.lesson())
+        await model.load()
+        model.startsAt = Date().addingTimeInterval(86_400)
+        model.agreementConfirmed = true
+        await model.validateSlot()
+        try #require(model.validBooking)
+
+        #expect(await model.saveBooking())
+        let confirmed = try #require(model.confirmedLesson)
+        #expect(confirmed.id == HubFixture.lessonID)
+        #expect(confirmed.version == 3)
+        #expect(abs((confirmed.startsAt?.timeIntervalSince1970 ?? 0) - model.startsAt.timeIntervalSince1970) < 1)
+        #expect(!confirmed.hasStarted)
+    }
+
+    @Test func unknownOrRejectedBookingNeverExposesALesson() async throws {
+        let uncertain = workspace(PlanningBookingServer(receiptAvailable: false))
+        await uncertain.load()
+        await uncertain.selectLearner(HubFixture.learnerID)
+        await uncertain.validateSlot()
+        #expect(await uncertain.saveBooking() == false)
+        #expect(uncertain.pending != nil && uncertain.confirmedLesson == nil)
+
+        let rejected = workspace(PlanningBookingServer(rejection: "SLOT_CONFLICT"))
+        await rejected.load()
+        await rejected.selectLearner(HubFixture.learnerID)
+        await rejected.validateSlot()
+        #expect(await rejected.saveBooking() == false)
+        #expect(rejected.confirmedLesson == nil)
+    }
+
+    @Test func invalidatingWhileTheConfirmedLessonIsReadDropsTheOldScopeResult() async throws {
+        let server = PlanningBookingServer(lessonReadDelayMilliseconds: 100), model = workspace(server)
+        await model.load()
+        await model.selectLearner(HubFixture.learnerID)
+        await model.validateSlot()
+        let saving = Task { await model.saveBooking() }
+        var attempts = 0
+        while attempts < 100, !(await server.didStartLessonRead()) {
+            try await Task.sleep(for: .milliseconds(5))
+            attempts += 1
+        }
+        #expect(await server.didStartLessonRead())
+        model.invalidate()
+
+        #expect(await saving.value == false)
+        #expect(model.confirmedLesson == nil)
+    }
+
+    @Test func invalidatingVerificationDuringConfirmedReadPublishesNeitherSuccessNorNotification() async throws {
+        let server = PlanningBookingServer(receiptAvailable: false, lessonReadDelayMilliseconds: 100)
+        let model = workspace(server)
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+        #expect(await model.saveBooking() == false)
+        await server.enableReceipt()
+        let notifications = PlanningNotificationCounter()
+        let token = NotificationCenter.default.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) { _ in
+            notifications.increment()
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        let verifying = Task { await model.verify() }
+        var attempts = 0
+        while attempts < 100, !(await server.didStartLessonRead()) {
+            try await Task.sleep(for: .milliseconds(5)); attempts += 1
+        }
+        #expect(await server.didStartLessonRead())
+        model.invalidate()
+        await verifying.value
+
+        #expect(model.confirmedLesson == nil)
+        #expect(model.successMessage == nil)
+        #expect(notifications.value == 0)
+    }
+
+    @Test func rereadAcceptsANewerCurrentVersionButRejectsAnOlderOne() async throws {
+        let newer = workspace(PlanningBookingServer(lessonVersionDelta: 1))
+        await newer.load(); await newer.selectLearner(HubFixture.learnerID); await newer.validateSlot()
+        #expect(await newer.saveBooking())
+        #expect(newer.confirmedLesson?.version == 3)
+
+        let older = workspace(PlanningBookingServer(lessonVersionDelta: -1))
+        await older.load(); await older.selectLearner(HubFixture.learnerID); await older.validateSlot()
+        #expect(await older.saveBooking() == false)
+        #expect(older.confirmedLesson == nil)
+        #expect(older.errorMessage != nil)
+    }
+
+    @Test func forbiddenConfirmedLessonReadRevokesTheWorkspaceInsteadOfOfferingGenericRetry() async throws {
+        let model = workspace(PlanningBookingServer(lessonReadStatus: 403))
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+
+        #expect(await model.saveBooking() == false)
+        #expect(model.accessRevoked)
+        #expect(model.confirmedLesson == nil)
+    }
+
+    /// Un « Lancer maintenant » en attente peut être renvoyé depuis la feuille de planification, qui partage le coffre.
+    /// Sa réponse ne porte pas de reçu AP72 : la commande doit quand même quitter le coffre une fois l'école d'accord.
+    @Test func pendingStartNowRetriedFromThePlanningSheetLeavesTheOutbox() async throws {
+        let operation = UUID()
+        let pending = PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .startLessonNow,
+            resourceVersion: 0, createdAt: HubFixture.date("2026-09-28T12:00:00Z"),
+            body: try JSONEncoder().encode(SchoolStartNowBody(operationId: operation, trainingId: HubFixture.trainingID, meetingPoint: nil)),
+            routeResourceID: HubFixture.trainingID)
+        let server = PlanningBookingServer(), outbox = ConfigurationOutboxStub(value: pending)
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        try #require(model.pending == pending && model.canRetry)
+
+        #expect(await model.retry())
+        #expect(outbox.value == nil && outbox.removals == [pending])
+        #expect(model.pending == nil && model.errorMessage == nil && model.confirmedLesson == nil)
+        #expect(await server.startNowPosts == 1)
+    }
+
     @Test func bookingConfirmsCurrentVersionsOnlyOnSaveAndRetainsThemForRetry() async throws {
         let server = PlanningBookingServer(receiptAvailable: false), outbox = ConfigurationOutboxStub()
         let model = workspace(server, outbox: outbox)
@@ -202,6 +336,13 @@ import Testing
     }
 }
 
+private final class PlanningNotificationCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func increment() { lock.lock(); count += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+}
+
 /// Transport synthétique : vérifie la commande client, sans prétendre qualifier les transactions PostgreSQL.
 private actor PlanningBookingServer: SchoolHTTPTransport {
     static let secondProductID = UUID(uuidString: "76000000-0000-4000-8000-000000000011")!
@@ -210,18 +351,59 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
     private let restriction: String?
     private let deadline: String?
     private let rejection: String?
+    private let lessonReadDelayMilliseconds: Int
+    private let lessonVersionDelta: Int
+    private let lessonReadStatus: Int?
     private var receiptAvailable: Bool
     private var operationID: String?
     private var operationType = "CREATE_LESSON"
+    private var lessonReadStarted = false
+    private(set) var startNowPosts = 0
     private var recorded: [URLRequest] = []
 
-    init(receiptAvailable: Bool = true, restriction: String? = nil, deadline: String? = nil, rejection: String? = nil) {
+    init(receiptAvailable: Bool = true, restriction: String? = nil, deadline: String? = nil, rejection: String? = nil,
+         lessonReadDelayMilliseconds: Int = 0, lessonVersionDelta: Int = 0, lessonReadStatus: Int? = nil) {
         self.receiptAvailable = receiptAvailable; self.restriction = restriction; self.deadline = deadline; self.rejection = rejection
+        self.lessonReadDelayMilliseconds = lessonReadDelayMilliseconds; self.lessonVersionDelta = lessonVersionDelta
+        self.lessonReadStatus = lessonReadStatus
     }
     func writes() -> [URLRequest] { recorded.filter { $0.httpMethod != "GET" } }
     /// Dernier segment de chaque lecture reçue.
     func reads() -> [String] { recorded.filter { $0.httpMethod == "GET" }.compactMap { $0.url?.lastPathComponent } }
+    func operationReads() -> Int {
+        recorded.filter { $0.httpMethod == "GET" && $0.url?.deletingLastPathComponent().lastPathComponent == "operations" }.count
+    }
+    func didStartLessonRead() -> Bool { lessonReadStarted }
     func enableReceipt() { receiptAvailable = true }
+
+    private var confirmedLessonVersion: Int {
+        operationType == "MOVE_LESSON" ? 3 : 2
+    }
+
+    private func confirmedLesson() -> [String: Any] {
+        let start: Date
+        if let write = recorded.last(where: { $0.httpMethod == "POST" }),
+           let data = write.httpBody,
+           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let value = body["plannedStart"] as? String,
+           let parsed = ISO8601DateFormatter().date(from: value) { start = parsed }
+        else { start = HubFixture.lesson().startsAt! }
+        let end: Date
+        if let write = recorded.last(where: { $0.httpMethod == "POST" }),
+           let data = write.httpBody,
+           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let value = body["plannedEnd"] as? String,
+           let parsed = ISO8601DateFormatter().date(from: value) { end = parsed }
+        else { end = start.addingTimeInterval(3_000) }
+        let iso = ISO8601DateFormatter()
+        return ["id": HubFixture.lessonID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
+            "version": confirmedLessonVersion + lessonVersionDelta, "trainingId": HubFixture.trainingID.uuidString,
+            "learnerId": HubFixture.learnerID.uuidString, "instructorMembershipId": ConfigurationFixture.membershipID.uuidString,
+            "plannedStart": iso.string(from: start), "plannedEnd": iso.string(from: end), "timeZone": "Europe/Zurich",
+            "meetingPoint": "Gare", "status": "PLANNED", "priceCentsSnapshot": 10_000,
+            "bufferMinutesSnapshot": 10, "actualStart": NSNull(), "actualEnd": NSNull(), "permitWarning": false,
+            "publicationVersion": 0, "currentPublishedRevisionId": NSNull(), "commercialRevisionVersion": 1]
+    }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         recorded.append(request)
@@ -229,6 +411,10 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
         func reply(_ value: Any, status: Int = 200) throws -> SchoolHTTPResponse {
             SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString,
                 "serverTime": ISO8601DateFormatter().string(from: Date())]), status: status, url: url, contentType: "application/json")
+        }
+        if request.httpMethod == "POST", url.lastPathComponent == "start-now", url.deletingLastPathComponent().lastPathComponent == "lessons" {
+            startNowPosts += 1
+            return try reply(try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())))
         }
         if request.httpMethod == "POST", ["lessons", "move"].contains(url.lastPathComponent) {
             if let rejection {
@@ -240,11 +426,21 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
             operationType = url.lastPathComponent == "move" ? "MOVE_LESSON" : "CREATE_LESSON"
             return try reply([:], status: operationType == "CREATE_LESSON" ? 201 : 200)
         }
+        if request.httpMethod == "GET", url.lastPathComponent == HubFixture.lessonID.uuidString,
+           url.deletingLastPathComponent().lastPathComponent == "lessons", operationID != nil {
+            lessonReadStarted = true
+            if lessonReadDelayMilliseconds > 0 { try await Task.sleep(for: .milliseconds(lessonReadDelayMilliseconds)) }
+            if let lessonReadStatus {
+                return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["code": lessonReadStatus == 403 ? "FORBIDDEN" : "UNAUTHORIZED"]),
+                    status: lessonReadStatus, url: url, contentType: "application/problem+json")
+            }
+            return try reply(confirmedLesson())
+        }
         if url.deletingLastPathComponent().lastPathComponent == "operations", let operationID {
             guard receiptAvailable else { throw URLError(.notConnectedToInternet) }
             return try reply(["operationId": operationID, "commandType": operationType, "resourceType": "Lesson",
                 // Un déplacement fait passer la leçon de la version 2 de la fixture à la version 3 : le reçu la porte.
-                "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": operationType == "MOVE_LESSON" ? 3 : 2,
+                "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": confirmedLessonVersion,
                 "committedAt": ISO8601DateFormatter().string(from: Date())])
         }
         let response = try await fallback.send(request)

@@ -7,6 +7,8 @@ import { chromium } from '../../infra/dev/node_modules/playwright-core/index.mjs
 const origin = process.env.DRIVY_REVIEW_ORIGIN ?? 'http://127.0.0.1:5173';
 if (!['127.0.0.1', 'localhost'].includes(new URL(origin).hostname)) throw new Error('LOOPBACK_REVIEW_REQUIRED');
 const directory = resolve(process.env.DRIVY_REVIEW_DIRECTORY ?? 'artifacts/web-redesign-20261013/after');
+const captureWidths = process.env.DRIVY_CAPTURE_WIDTHS?.split(',').map(value => Number(value.trim())) ?? [320, 390, 768, 1024, 1440];
+assert(captureWidths.length > 0 && captureWidths.every(width => Number.isInteger(width) && width >= 240 && width <= 3840), 'DRIVY_CAPTURE_WIDTHS must contain integer widths between 240 and 3840.');
 await mkdir(directory, { recursive: true });
 const response = await fetch(`${origin}/app/test/visual.html`);
 assert(response.ok, 'Vite must be running locally.');
@@ -483,7 +485,7 @@ try {
     const pages = process.env.DRIVY_CAPTURE_TARGETS?.split(',') ?? ['learners', 'learner-detail', 'config', 'config-form', 'agenda', 'trips', 'privacy', 'preferences', 'team', 'team-detail', 'availability', 'absences', 'themes', 'formations', 'formation', 'formation-competences', 'formation-competences-form', 'formation-rules', 'formation-tariffs', 'formation-tariff-form', 'formation-history', 'formation-new', 'uncategorized', 'conditions', 'overview', 'profile', 'invitations', 'invitations-team', 'signin', 'account', 'invitation', 'opening', 'operator', 'setup-identity', 'setup-privacy', 'setup-profile', 'setup-formations', 'setup-pricing', 'setup-review', 'controls', 'choices', 'choice-menu', 'choice-search', 'choice-dialog'];
     for (const theme of ['light', 'dark']) for (const target of pages) {
       stage = `capture ${target} ${theme}`;
-      const widths = [1440, 1024, 390];
+      const widths = [...new Set(captureWidths)];
       const parameters = target.startsWith('setup-') ? `page=overview&status=draft&step=${target.slice(6).toUpperCase()}&setup=ready`
         : target.startsWith('formation-') && target !== 'formation-new' ? `page=formation&view=${{ 'formation-competences': 'competences', 'formation-competences-form': 'competences', 'formation-rules': 'deroulement', 'formation-tariffs': 'tarifs', 'formation-tariff-form': 'tarifs', 'formation-history': 'historique' }[target]}`
         : target === 'config-form' ? 'page=config'
@@ -502,7 +504,7 @@ try {
         if (target === 'team-detail') { await h.page.getByRole('link', { name: /Marie-Christine/ }).first().click(); await settle(h.page); }
         if (target === 'learner-detail' || target === 'team-detail') assert.equal(await h.page.getByRole('heading', { level: 1 }).count(), 1);
         for (const width of widths) {
-          await h.page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); await settle(h.page);
+          await h.page.setViewportSize({ width, height: width <= 390 ? 844 : 1000 }); await settle(h.page);
           if (target.startsWith('choice-')) {
             if (target === 'choice-dialog') await h.page.getByRole('button', { name: 'Ouvrir le dialogue de test', exact: true }).click();
             await h.page.getByLabel(target === 'choice-menu' ? 'Permis de test' : target === 'choice-search' ? 'Personne de test' : 'Permis du dialogue', { exact: true }).click();
@@ -511,6 +513,7 @@ try {
           }
           const file = `${target}-${width}-${theme}-synthetic.png`; await h.page.screenshot({ path: resolve(directory, file), fullPage: true });
           const overflow = !(await noOverflow(h.page)); captures.push({ target, theme, width, file, horizontalOverflow: overflow, pageErrors: h.errors });
+          console.log(`JCODE_PROGRESS ${JSON.stringify({ message: `${target} ${width}px ${theme}`, current: captures.length, total: pages.length * 2 * widths.length, unit: 'captures' })}`);
           if (overflow || h.errors.length) failures.push({ scenario: `${target} ${width}px ${theme}`, error: overflow ? 'Horizontal document overflow' : 'JavaScript error' });
           if (process.argv.includes('--axe') && width !== 1024) {
             await h.page.addScriptTag({ path: resolve('.local/a11y/node_modules/axe-core/axe.min.js') });

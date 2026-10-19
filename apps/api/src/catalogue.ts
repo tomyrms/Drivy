@@ -33,6 +33,18 @@ type Row=Record<string,unknown>&{id:string;version:number};
 function currentSchool(school:SchoolRow){if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','Cette école doit être active.');}
 export async function member(db:PoolClient,schoolId:string,memberId:string){const row=(await db.query<Row>(`SELECT ${memberColumns} FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id WHERE m.school_id=$1 AND m.id=$2`,[schoolId,memberId])).rows[0];if(!row)throw notFound();return row;}
 async function curriculum(db:PoolClient,row:Row){return {...row,competencies:(await db.query(`SELECT id,school_id AS "schoolId",version,curriculum_version_id AS "curriculumVersionId",stable_key AS key,label,description,sort_order AS "sortOrder" FROM drivy.competency_definition WHERE curriculum_version_id=$1 ORDER BY sort_order,id`,[row.id])).rows.map(c=>({...c,label:competencyLabel(c.label)}))};}
+async function curricula(db:PoolClient,rows:Row[]){
+ if(!rows.length)return [];
+ const competencies=(await db.query(`SELECT id,school_id AS "schoolId",version,curriculum_version_id AS "curriculumVersionId",stable_key AS key,label,description,sort_order AS "sortOrder"
+  FROM drivy.competency_definition WHERE curriculum_version_id=ANY($1::uuid[]) ORDER BY curriculum_version_id,sort_order,id`,[rows.map(row=>row.id)])).rows;
+ const grouped=new Map<string,Record<string,unknown>[]>();
+ for(const competency of competencies){
+  const parent=competency.curriculumVersionId as string;
+  const items=grouped.get(parent)??[];
+  items.push({...competency,label:competencyLabel(competency.label)});grouped.set(parent,items);
+ }
+ return rows.map(row=>({...row,competencies:grouped.get(row.id)??[]}));
+}
 const offering=(row:Row)=>({...row,defaultPriceCents:Number(row.defaultPriceCents)});
 async function configurationChanged(db:PoolClient,schoolId:string,memberId:string){const school=(await db.query<SchoolRow>(`UPDATE drivy.school SET version=version+1,configuration_version=configuration_version+1 WHERE id=$1 RETURNING ${schoolColumns}`,[schoolId])).rows[0]!;await recordSettings(db,school,memberId);}
 async function learnerTarget(db:PoolClient,schoolId:string,learnerId:string){
@@ -60,8 +72,9 @@ export function registerCatalogue(app:FastifyInstance,options:{pool:Pool;verifyT
     const extra=kind==='offerings'?' AND curriculum_version_id IS NOT NULL AND policy_version_id IS NOT NULL AND default_price_cents IS NOT NULL AND default_duration_minutes IS NOT NULL':kind==='assignments'?' AND training_id=$5':'';
     const rows=(await db.query<Row&{_createdAt:string}>(`SELECT ${columns},to_char(${alias}created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "_createdAt" FROM drivy.${table}${join}
      WHERE ${alias}school_id=$1 AND ($2::timestamptz IS NULL OR (${alias}created_at,${alias}id)>($2,$3::uuid))${extra} ORDER BY ${alias}created_at,${alias}id LIMIT $4`,[schoolId,position?.createdAt ?? null,position?.id ?? null,query.limit+1,...(kind==='assignments'?[trainingId]:[])])).rows;
-    const last=rows.length>query.limit?rows[query.limit-1]:undefined;const items=[];
-    for(const {_createdAt:ignored,...row} of rows.slice(0,query.limit))items.push(kind==='curricula'?await curriculum(db,row):kind==='offerings'?offering(row):row);
+    const last=rows.length>query.limit?rows[query.limit-1]:undefined;
+    const page=rows.slice(0,query.limit).map(({_createdAt:ignored,...row})=>row);
+    const items=kind==='curricula'?await curricula(db,page):kind==='offerings'?page.map(offering):page;
     return {items,nextCursor:last?cursors.encode(scope,{id:last.id,createdAt:last._createdAt}):null};
    });return envelope(data,request);
   });

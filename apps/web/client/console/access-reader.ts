@@ -7,6 +7,14 @@ export type AccessRead =
   | { status: 'signin' }
   | { status: 'unavailable'; error: RequestFailure };
 
+/** Reauthentication may preserve a reviewed form only within the identity and access that opened it. */
+export function sameConsoleAccess(previous: { me: Me; membership: Member }, current: AccessRead | null): boolean {
+  return current?.status === 'ready' && current.me.personId === previous.me.personId
+    && current.membership.schoolId === previous.membership.schoolId
+    && current.membership.membershipId === previous.membership.membershipId
+    && current.membership.accessEpoch === previous.membership.accessEpoch;
+}
+
 /** Only the latest authority check can restore a console, including after an explicit denial. */
 export class ConsoleAccessReader {
   private generation = 0;

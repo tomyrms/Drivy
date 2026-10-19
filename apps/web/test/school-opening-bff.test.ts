@@ -15,7 +15,7 @@ const receipt=(operationId:string)=>({schoolId:randomUUID(),schoolName:fields.sc
 async function harness(openingGateway:OpeningGateway) {
   const now=Date.now(),store=new SessionStore();let subject='new-oidc-account';
   const tokens=():Tokens=>({accessToken:secret(),expiresAt:now+300_000,principal:{subject,displayName:'Responsable synthétique',email:'school@example.invalid',emailVerified:true}});
-  const identity:IdentityProvider={begin:vi.fn(async()=>({transaction:{state:secret(),nonce:secret(),verifier:secret(),expiresAt:now+300_000},url:'https://identity.example.invalid/auth'})),complete:vi.fn(async()=>tokens()),refresh:vi.fn(async()=>tokens()),revoke:vi.fn(async()=>{})};
+  const identity:IdentityProvider={begin:vi.fn(async()=>({transaction:{state:secret(),nonce:secret(),verifier:secret(),expiresAt:now+300_000},url:'https://identity.example.invalid/auth'})),complete:vi.fn(async()=>tokens()),password:vi.fn(async()=>tokens()),refresh:vi.fn(async()=>tokens()),revoke:vi.fn(async()=>{})};
   const gateway=vi.fn(async()=>({status:403,body:{code:'IDENTITY_NOT_LINKED'}}));
   const app=await buildWebApp({config,identity,store,openingGateway,gateway});apps.push(app);
   let cookie='',csrf=(await app.inject({url:'/app/bff/session'})).json().csrfToken;

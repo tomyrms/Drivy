@@ -18,8 +18,11 @@ struct SchoolAgendaView: View {
     @State private var requestID = UUID()
     /// Compte, filtre et fenêtre des leçons affichées ; `nil` tant que rien de sûr n’est lu.
     @State private var loaded: SchoolAgendaScope?
+    @State private var freshness = SchoolAgendaFreshness()
     @State private var selectedLesson: SchoolLesson?
     @State private var planningModel: SchoolPlanningWorkspace?
+    /// Résultat durable de la feuille de planification, ouvert seulement après la fermeture de celle-ci.
+    @State private var planningReturn = SchoolAgendaPlanningReturn()
     /// Leçons de la fenêtre lue (semaine ou grille du mois) rangées par jour, calculées une fois par lecture.
     @State private var dayIndex: [Date: [SchoolLesson]] = [:]
     /// Administration qui enseigne aussi : ses leçons par défaut, toute l’école sur demande.
@@ -70,6 +73,7 @@ struct SchoolAgendaView: View {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
         return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
     }
+    private var emptyPresentation: SchoolAgendaEmptyPresentation { SchoolAgendaEmptyPresentation(mayPlan: mayPlan) }
 
     var body: some View {
         GeometryReader { geometry in
@@ -126,9 +130,16 @@ struct SchoolAgendaView: View {
             .tint(DrivyTheme.accent)
             .environment(captureController)
         }
-        .sheet(item: $planningModel, onDismiss: { Task { await loadAgenda(keepingCurrent: true) } }) { model in SchoolPlanningView(model: model) }
+        .sheet(item: $planningModel, onDismiss: {
+            // La fiche confirmée s'ouvre, et l'agenda derrière elle est relu pour afficher la nouvelle leçon.
+            if let lesson = planningReturn.takeConfirmedLesson() { selectedLesson = lesson }
+            Task { await loadAgenda(keepingCurrent: true) }
+        }) { model in
+            SchoolPlanningView(model: model, onConfirmedLesson: { planningReturn.receive($0) })
+        }
         .onChange(of: identityScope) { _, _ in
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
+            planningReturn = SchoolAgendaPlanningReturn(); freshness.reset()
         }
         // Retour au premier plan : la période se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
         // relira déjà l’agenda à sa fermeture.
@@ -172,13 +183,20 @@ struct SchoolAgendaView: View {
         } else {
             if let error {
                 SchoolErrorNotice(message: error, retry: { Task { await loadAgenda(keepingCurrent: true) } })
+                if let message = freshness.retainedSuccessMessage(hasError: true, displayedScope: currentScope,
+                                                                  timeZone: calendar.timeZone.identifier) {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .accessibilityIdentifier("agenda-retained-read-date")
+                }
             }
             if !isLoaded(selectedDate) && error == nil {
                 DrivySkeletonRows(count: 3, leading: .time).drivySkeleton("Chargement de l’agenda…")
             } else if isLoaded(selectedDate) && dailyLessons.isEmpty {
                 // Qui planifie a déjà « Planifier une leçon » dans l’en-tête du jour : pas de second bouton identique.
                 DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
-                    symbol: "calendar", actionTitle: mayPlan ? nil : "Voir le jour suivant") {
+                    symbol: "calendar", actionTitle: emptyPresentation.nextDayActionTitle) {
                     if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { select(next) }
                 }
             } else if isLoaded(selectedDate) {
@@ -295,11 +313,11 @@ struct SchoolAgendaView: View {
                 Text(dateTitle).font(.drivySection).foregroundStyle(DrivyTheme.text).fixedSize()
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: DrivySpacing.s)
-                if mayPlan { planButton }
+                if emptyPresentation.showsPlanInHeading { planButton }
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 Text(dateTitle).font(.drivySection).foregroundStyle(DrivyTheme.text).accessibilityAddTraits(.isHeader)
-                if mayPlan { planButton }
+                if emptyPresentation.showsPlanInHeading { planButton }
             }
         }
     }
@@ -426,6 +444,7 @@ struct SchoolAgendaView: View {
     private func recall(_ wanted: SchoolAgendaScope) {
         guard loaded != wanted, let remembered = SchoolAgendaMemory.lessons(prefix: wanted.prefix, range: wanted.range) else { return }
         show(remembered.lessons, scope: wanted)
+        freshness.recordSuccess(scope: wanted, at: remembered.readAt)
     }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
         guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }
@@ -448,12 +467,15 @@ struct SchoolAgendaView: View {
         if let remembered = SchoolAgendaMemory.lessons(prefix: wanted.prefix, range: wanted.range) {
             // Fenêtre déjà lue pour ce compte, ce filtre et ces dates : elle s’affiche aussitôt, sans squelette,
             // et la relecture qui suit la remplace sans rien effacer.
-            if !keeps { show(remembered.lessons, scope: wanted); error = nil; keeps = true }
+            if !keeps {
+                show(remembered.lessons, scope: wanted); freshness.recordSuccess(scope: wanted, at: remembered.readAt)
+                error = nil; keeps = true
+            }
             fresh = remembered.isFresh
         } else if !keeps {
             // Même compte, même filtre : ce qui est déjà lu reste juste pour ses propres jours (la semaine pendant
             // que son mois arrive). Un autre compte, une autre école ou un autre filtre repart de zéro.
-            if loaded?.prefix != wanted.prefix { lessons = []; dayIndex = [:]; loaded = nil }
+            if loaded?.prefix != wanted.prefix { lessons = []; dayIndex = [:]; loaded = nil; freshness.reset() }
             error = nil
         }
         guard let schoolID = workspace.membership?.schoolId else { isLoading = false; return }
@@ -467,15 +489,16 @@ struct SchoolAgendaView: View {
         do {
             guard let all = try await fetchLessons(schoolID: schoolID, range: wanted.range, filter: filter,
                 stillWanted: { requestID == id && currentScope == wanted }) else { return }
-            show(all, scope: wanted); error = nil
-            SchoolAgendaMemory.remember(all, prefix: wanted.prefix, range: wanted.range)
+            let readAt = Date()
+            show(all, scope: wanted); freshness.recordSuccess(scope: wanted, at: readAt); error = nil
+            SchoolAgendaMemory.remember(all, prefix: wanted.prefix, range: wanted.range, now: readAt)
             if navigating && mode == .month { await prefetchNeighbours(of: anchor, prefix: wanted.prefix, schoolID: schoolID, filter: filter, id: id) }
         } catch {
             guard !Task.isCancelled, requestID == id, currentScope == wanted else { return }
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
                 SchoolAgendaMemory.forget()
-                lessons = []; dayIndex = [:]; loaded = nil; selectedLesson = nil
+                lessons = []; dayIndex = [:]; loaded = nil; selectedLesson = nil; freshness.reset()
                 self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
                 // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
                 // relu. Refusé, il ouvre la reconnexion ; modifié, il recharge l’école ; inchangé, rien ne bouge.
@@ -548,14 +571,14 @@ struct SchoolAgendaScope: Hashable, Sendable {
     /// Tirer pour actualiser, revenir au premier plan ou modifier une leçon relisent toujours.
     static let freshness: TimeInterval = 30
 
-    static func lessons(prefix: String, range: SchoolAgendaRange, now: Date = Date()) -> (lessons: [SchoolLesson], isFresh: Bool)? {
+    static func lessons(prefix: String, range: SchoolAgendaRange, now: Date = Date()) -> (lessons: [SchoolLesson], isFresh: Bool, readAt: Date)? {
         // La plus récente d’abord : la même fenêtre, ou une qui la contient (la semaine dans son mois).
         guard let entry = entries.last(where: { $0.prefix == prefix && $0.range.contains(range) }) else { return nil }
         let lessons = entry.range == range ? entry.lessons : entry.lessons.filter { lesson in
             guard let start = lesson.startsAt, let end = lesson.endsAt else { return false }
             return range.overlaps(start: start, end: end)
         }
-        return (lessons, now.timeIntervalSince(entry.readAt) < freshness)
+        return (lessons, now.timeIntervalSince(entry.readAt) < freshness, entry.readAt)
     }
 
     static func remember(_ lessons: [SchoolLesson], prefix: String, range: SchoolAgendaRange, now: Date = Date()) {

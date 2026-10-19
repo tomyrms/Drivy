@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { profilePolicyProblem, type ProfileRule } from '../client/command-core.js';
 import { matchSchoolRoute } from '../server/school-routes.js';
-import { gpsConsentLabel, impactSentences, initialDrafts, rulesOf } from '../client/console/privacy-model.js';
+import { gpsConsentLabel, impactSentences, initialDrafts, rulesOf, sameProfileRules } from '../client/console/privacy-model.js';
 import type { ProfilePolicy, TextProposals } from '../client/school-api.js';
 
 const school = '10000000-0000-4000-8000-000000000001';
@@ -61,5 +61,28 @@ describe('Effet d’une nouvelle version et routes relayées', () => {
       expect(matchSchoolRoute('GET', `/schools/${school}/${path}`, '')).toBeDefined();
       expect(matchSchoolRoute('POST', `/schools/${school}/${path}`, '')).toBeUndefined();
     }
+  });
+});
+
+describe('sameProfileRules', () => {
+  const birth: ProfileRule = { field: 'birthDate', requirement: 'REQUIRED', stage: 'BEFORE_LESSON', purposeCode: 'CERTIFICATE', explanation: 'Pour vos attestations.' };
+  const first: ProfileRule = { field: 'firstName', requirement: 'REQUIRED', stage: 'JOIN', purposeCode: 'IDENTIFICATION', explanation: 'Pour vous reconnaître.' };
+  it('des clés dans un autre ordre (ce que renvoie jsonb) donnent la même politique', () => {
+    const stored = [{ field: 'firstName', stage: 'JOIN', explanation: 'Pour vous reconnaître.', purposeCode: 'IDENTIFICATION', requirement: 'REQUIRED' }] as ProfileRule[];
+    expect(sameProfileRules([first], stored)).toBe(true);
+  });
+  it('l’ordre des règles ne compte pas', () => {
+    expect(sameProfileRules([first, birth], [birth, first])).toBe(true);
+  });
+  it('une explication modifiée est un changement', () => {
+    expect(sameProfileRules([first], [{ ...first, explanation: 'Autre texte.' }])).toBe(false);
+  });
+  it('un champ ajouté ou retiré est un changement', () => {
+    expect(sameProfileRules([first, birth], [first])).toBe(false);
+  });
+  it('null et undefined sont équivalents', () => {
+    const withNull = { ...first, explanation: null } as unknown as ProfileRule;
+    const withoutValue = { field: 'firstName', requirement: 'REQUIRED', stage: 'JOIN', purposeCode: 'IDENTIFICATION' } as unknown as ProfileRule;
+    expect(sameProfileRules([withNull], [withoutValue])).toBe(true);
   });
 });

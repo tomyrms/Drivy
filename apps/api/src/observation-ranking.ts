@@ -39,8 +39,9 @@ async function localDay(db:PoolClient,timeZone:string):Promise<string>{
  * réseau n'a jamais créé de seconde ligne.
  */
 async function usage(db:PoolClient,schoolId:string,timeZone:string):Promise<ThemeUsage[]>{
+ // Ordre déterministe : pour une leçon qui traverse deux jours, la première ligne rencontrée par le moteur est celle du jour le plus récent.
  return (await db.query<ThemeUsage>(`SELECT theme_key AS "themeKey",lesson_id AS "lessonId",to_char(day,'YYYY-MM-DD') AS day,uses,palette_position AS position
-  FROM drivy.observation_theme_usage($1,$2)`,[schoolId,timeZone])).rows;
+  FROM drivy.observation_theme_usage($1,$2) ORDER BY lesson_id,day DESC,theme_key`,[schoolId,timeZone])).rows;
 }
 const elapsedDays=(from:string|null,to:string)=>from?Math.max(1,Math.round((Date.parse(to)-Date.parse(from))/86_400_000)):1;
 /** Une seule opération par moniteur et par passage d'un jour au suivant : la lecture d'un second appareil rejoue la première au lieu de reclasser. */
@@ -84,7 +85,13 @@ export function registerObservationRanking(app:FastifyInstance,options:{pool:Poo
      }
      return {data:await current(db,school.id,actor.membershipId),action:'ObservationRankingRefreshed',resourceType:'ObservationRanking',resourceId:actor.membershipId,changedFields:changed?['order']:[]};
     },staff,{replay:(db,actor)=>current(db,schoolId,actor.membershipId)});
-   }catch(error){if(!(error instanceof ApiError&&error.code==='SCHOOL_ARCHIVED'))throw error;}
+   }catch(error){
+    // Une erreur de rafraîchissement ne fait jamais échouer la lecture : on garde le dernier classement lu. Seul un code est journalisé.
+    if(!(error instanceof ApiError&&error.code==='SCHOOL_ARCHIVED')){
+     const code=(error as {code?:unknown})?.code;
+     r.log.warn({requestId:r.id,errorCode:typeof code==='string'&&/^[A-Za-z0-9_]{1,40}$/.test(code)?code:'UNKNOWN'},'Rafraîchissement du classement ignoré');
+    }
+   }
   }
   reply.header('ETag',`"${data.version}"`);return {data,requestId:r.id,serverTime:new Date().toISOString()};
  });

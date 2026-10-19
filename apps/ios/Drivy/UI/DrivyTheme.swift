@@ -198,6 +198,15 @@ enum DrivyMotion {
     static func press(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .spring(duration: 0.18, bounce: 0) }
     /// System-initiated feedback (state change): short ease-out.
     static func feedback(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .easeOut(duration: 0.12) }
+    /// Progress feedback preserves the caller's duration; Reduce Motion makes width updates immediate.
+    static func progressDuration(_ reduceMotion: Bool, duration: Double) -> Double? {
+        reduceMotion ? nil : duration
+    }
+
+    static func progress(_ reduceMotion: Bool, duration: Double) -> Animation? {
+        guard let duration = progressDuration(reduceMotion, duration: duration) else { return nil }
+        return .easeOut(duration: duration)
+    }
     static func context(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : .snappy(duration: 0.18) }
     /// Passage d’une étape à la suivante dans une même feuille : ressort court, à peine rebondi. Sous Réduire
     /// les animations, un fondu bref seulement (les transitions d’étape deviennent elles aussi des fondus).

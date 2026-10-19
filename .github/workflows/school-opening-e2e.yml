@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   push:
     branches: [master, 'codex/**', 'claude/**']
-    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
+    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', 'infra/identity/**', 'infra/deploy/runtime-lock.json', '.github/workflows/school-opening-e2e.yml']
   pull_request:
     branches: [master]
-    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', '.github/workflows/school-opening-e2e.yml']
+    paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', 'infra/identity/**', 'infra/deploy/runtime-lock.json', '.github/workflows/school-opening-e2e.yml']
 permissions:
   contents: read
 concurrency:
@@ -47,6 +47,15 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix apps/web --ignore-scripts
       - run: npm ci --prefix infra/dev --ignore-scripts
+      - name: Choisir le JDK 21 du runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${JAVA_HOME_21_X64:-}"
+          test -x "$JAVA_HOME_21_X64/bin/javac"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          "$JAVA_HOME_21_X64/bin/javac" -version
       - run: node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium
       - run: npm run build --prefix apps/web
       - name: Parcours complet sur données synthétiques

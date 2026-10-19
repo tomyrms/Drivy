@@ -73,15 +73,12 @@ struct SchoolReportStepView: View {
 
     @ViewBuilder private var content: some View {
         switch step {
-        case .trip:
-            if hasTrip {
-                SchoolReportTripSection(model: model, router: router, context: context, mapHeight: SchoolReportLayout.evidenceMapHeight)
-            }
-            SchoolReportObservationsSection(model: model, router: router, context: context)
-        case .competencies:
-            SchoolReportCompetenciesSection(model: model)
         case .report:
             SchoolReportTextSection(model: model, focusedField: $focusedReportField)
+        case .competencies:
+            SchoolReportCompetenciesSection(model: model)
+        case .review:
+            SchoolReportReviewSection(model: model, router: router, context: context)
         }
     }
 

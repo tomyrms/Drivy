@@ -28,6 +28,9 @@ struct SchoolAccountActions {
             DrivyNavigationRow(title: "Mes informations", action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
         }
+        if let workspace, let error = workspace.ownLearnerError {
+            SchoolErrorNotice(message: error, retry: { Task { await workspace.refreshOwnLearner(minimumInterval: 0) } })
+        }
         if let resumeOnboarding {
             // Ce qui attend le compte se lit sur sa ligne, en bleu : le point de l’onglet y mène.
             DrivyNavigationRow(title: "Reprendre l’accueil", badge: DrivyStatusBadge(title: "À terminer", tone: .accent), action: resumeOnboarding)

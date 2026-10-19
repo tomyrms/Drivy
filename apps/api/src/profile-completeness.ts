@@ -14,7 +14,7 @@ export interface ProfileValues {
 
 const valueOf=(row:ProfileValues,field:string):unknown=>({
   firstName:row.first_name,lastName:row.last_name,birthDate:row.birthDate ?? row.birth_date,postalAddress:row.postal_address,
-  contactEmail:row.contact_email,contactPhone:row.contact_phone,
+  contactEmail:row.contact_email,contactPhone:row.contact_phone===null?null:row.contact_phone.trim(),
 } as Record<string,unknown>)[field];
 
 /** Les règles exigées aux étapes données dont le champ est absent ou vide, dans l’ordre de la politique. */
@@ -44,7 +44,7 @@ export const missingProfileFieldsLateral=(alias:string)=>`LEFT JOIN LATERAL (
     AND CASE r.rule->>'field'
       WHEN 'firstName' THEN nullif(${alias}.first_name,'') IS NULL WHEN 'lastName' THEN nullif(${alias}.last_name,'') IS NULL
       WHEN 'birthDate' THEN ${alias}.birth_date IS NULL WHEN 'postalAddress' THEN ${alias}.postal_address IS NULL
-      WHEN 'contactEmail' THEN nullif(${alias}.contact_email,'') IS NULL WHEN 'contactPhone' THEN nullif(${alias}.contact_phone,'') IS NULL
+      WHEN 'contactEmail' THEN nullif(${alias}.contact_email,'') IS NULL WHEN 'contactPhone' THEN nullif(trim(${alias}.contact_phone),'') IS NULL
       ELSE false END
 ) mp ON true`;
 

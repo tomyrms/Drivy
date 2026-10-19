@@ -40,7 +40,7 @@ beforeEach(async()=>{
 });
 afterAll(async()=>{await app?.close();await pool.end();});
 async function call(method:'GET'|'POST'|'PUT',route:string,body?:Record<string,unknown>,version?:number,subject='demo-admin',claims:Record<string,unknown>={}) {
-  const jwt=await new SignJWT(claims).setProtectedHeader({alg:'RS256',kid:'g1c'}).setSubject(subject).setIssuer(issuer).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
+  const jwt=await new SignJWT({auth_time:Math.floor(Date.now()/1000),...claims}).setProtectedHeader({alg:'RS256',kid:'g1c'}).setSubject(subject).setIssuer(issuer).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(keys.privateKey);
   return app.inject({method,url:route,headers:{authorization:`Bearer ${jwt}`,...(body?.operationId?{'idempotency-key':String(body.operationId)}:{}),...(version?{'if-match':`"${version}"`}:{})},...(body?{payload:body}:{})});
 }
 function conforms(name:string,value:unknown) {const v=validators.get(name)!;expect(v(value),JSON.stringify(v.errors)).toBe(true);}
@@ -64,6 +64,34 @@ async function counts() {return (await pool.query(`SELECT (SELECT count(*)::int 
   (SELECT count(*)::int FROM drivy.operation) operations,(SELECT count(*)::int FROM drivy.audit_event) audits`)).rows[0];}
 
 describe('F02 · contrat et entrée explicite',()=>{
+  it('conserve les noms du compte dans le nouveau dossier après acceptation, sans seconde saisie ni écrasement au rejeu',async()=>{
+    const invitation=await invite(),claims={...verified(),given_name:'Élève Camille',family_name:'De la Tour-Roux',name:'Nom public distinct'};
+    const before=await counts();
+    const shown=await call('POST','/v1/invitations/preview',{token:invitation.token},undefined,'new-person',claims);
+    expect(shown.statusCode,shown.body).toBe(200);conforms('Preview',shown.json());
+    expect(shown.json().data.profileIdentity).toEqual({firstName:'Élève Camille',lastName:'De la Tour-Roux'});
+    expect(await counts()).toEqual(before);
+    const body={operationId:randomUUID(),token:invitation.token};
+    const response=await call('POST','/v1/invitations/accept',body,undefined,'new-person',claims);
+    expect(response.statusCode,response.body).toBe(201);
+    const profile=async()=>(await pool.query(`SELECT l.first_name,l.last_name,l.display_name,l.contact_email,l.entry_source,l.entered_by_membership_id
+      FROM drivy.learner_profile l JOIN drivy.identity_link i ON i.person_id=l.person_id WHERE i.issuer=$1 AND i.subject='new-person'`,[issuer])).rows[0];
+    const saved=await profile();expect(saved).toEqual({first_name:'Élève Camille',last_name:'De la Tour-Roux',display_name:'Élève Camille De la Tour-Roux',
+      contact_email:'new@example.invalid',entry_source:'SELF',entered_by_membership_id:response.json().data.membershipId});
+    const replay=await call('POST','/v1/invitations/accept',body,undefined,'new-person',{...claims,given_name:'Autre',family_name:'Identité'});
+    expect(replay.statusCode,replay.body).toBe(201);expect(await profile()).toEqual(saved);
+  });
+  it('un nom public seul ne fabrique pas de prénom/nom et le personnel ne reçoit pas de dossier élève',async()=>{
+    const invitation=await invite();const claims={...verified(),name:'Nom Public Composé'};
+    const shown=await call('POST','/v1/invitations/preview',{token:invitation.token},undefined,'new-person',claims);
+    expect(shown.json().data.profileIdentity).toBeUndefined();
+    expect((await call('POST','/v1/invitations/accept',{operationId:randomUUID(),token:invitation.token},undefined,'new-person',claims)).statusCode).toBe(201);
+    expect((await pool.query(`SELECT first_name,last_name FROM drivy.learner_profile WHERE contact_email='new@example.invalid'`)).rows[0])
+      .toEqual({first_name:null,last_name:null});
+    const staff=await invite('staff@example.invalid',['INSTRUCTOR']);
+    const staffPreview=await call('POST','/v1/invitations/preview',{token:staff.token},undefined,'staff-person',{...verified('staff@example.invalid'),given_name:'Moniteur',family_name:'Exemple'});
+    expect(staffPreview.json().data.profileIdentity).toBeUndefined();
+  });
   it('T005 : preview sans effet puis identité, adhésion et élève atomiques sans formation',async()=>{
     const invitation=await invite();const before=await counts();
     const shown=await call('POST','/v1/invitations/preview',{token:invitation.token},undefined,'new-person',verified());
@@ -362,6 +390,23 @@ describe('Invitation par code · sans e-mail',()=>{
     JOIN drivy.instructor_assignment a ON a.training_id=t.id WHERE l.person_id=$1 ORDER BY t.created_at`,[await personOf(subject)])).rows;
   const wrong=(n:number)=>Array.from({length:n},(_,i)=>`AAA${i}-BBB${i}`);
 
+  it('le code reprend les noms signés à l’acceptation, sans inventer un contact ni écraser le dossier existant',async()=>{
+    const invitation=await issue(),subject=fresh(),claims={given_name:'Élève Camille',family_name:'De la Tour-Roux',name:'Nom public',email:'non-verifie@example.invalid',email_verified:false};
+    const shown=await preview(invitation.code,subject,claims);
+    expect(shown.statusCode,shown.body).toBe(200);conforms('Preview',shown.json());expect(shown.json().data.profileIdentity).toEqual({firstName:'Élève Camille',lastName:'De la Tour-Roux'});
+    expect(shown.json().data).toMatchObject({invitationId:invitation.id,schoolId:id.schoolA,delivery:'CODE',maskedEmail:null,
+      notice:{version:2,noticeText:'Notice synthétique F02 : finalités, destinataires et contact.'}});
+    expect(await personOf(subject)).toBeUndefined();
+    const response=await acceptCode(invitation.code,subject,randomUUID(),claims);expect(response.statusCode,response.body).toBe(201);
+    const personId=await personOf(subject);
+    const profile=async()=>(await pool.query('SELECT first_name,last_name,display_name,contact_email,contact_phone,version FROM drivy.learner_profile WHERE person_id=$1 AND school_id=$2',[personId,id.schoolA])).rows[0];
+    expect(await profile()).toMatchObject({first_name:'Élève Camille',last_name:'De la Tour-Roux',display_name:'Élève Camille De la Tour-Roux',contact_email:null});
+    await pool.query("UPDATE drivy.learner_profile SET first_name='Prénom du dossier',last_name='Nom du dossier',contact_email='ecole@example.invalid',contact_phone='+41 21 000 00 00' WHERE person_id=$1",[personId]);
+    const saved=await profile(),second=await issue();
+    const joined=await acceptCode(second.code,subject,randomUUID(),{...claims,given_name:'Compte modifié'});
+    expect(joined.statusCode,joined.body).toBe(201);expect(await profile()).toEqual(saved);
+  });
+
   it('création par le moniteur : formation portée, code présent une seule fois, aucun e-mail ni secret conservé',async()=>{
     const before=await counts();
     const {response,body}=await create();expect(response.statusCode,response.body).toBe(201);conforms('InvitationEnvelope',response.json());
@@ -437,7 +482,8 @@ describe('Invitation par code · sans e-mail',()=>{
   it('aperçu : toute identité connectée, même sans compte ni adresse vérifiée ; rien n’est créé',async()=>{
     const invitation=await issue();const before=await counts();const subject=fresh();
     const shown=await preview(invitation.code,subject);expect(shown.statusCode,shown.body).toBe(200);
-    expect(Object.keys(shown.json().data).sort()).toEqual(['expiresAt','roles','schoolName','trainingCategoryCode','trainingCategoryCodes']);
+    conforms('Preview',shown.json());
+    expect(Object.keys(shown.json().data).sort()).toEqual(['delivery','expiresAt','invitationId','maskedEmail','notice','roles','schoolId','schoolName','trainingCategoryCode','trainingCategoryCodes']);
     expect(shown.json().data).toMatchObject({schoolName:'Auto-école Horizon · Démonstration',roles:['LEARNER'],trainingCategoryCode:'B'});
     expect(Date.parse(shown.json().data.expiresAt)).toBeGreaterThan(Date.now());
     // Saisie tolérante : minuscules, sans tiret, espaces.
@@ -682,5 +728,18 @@ describe('Invitation avec formation · offre republiée depuis l’envoi',()=>{
     void next;
     const response=await acceptInvitation('demo-alice');expect(response.statusCode,response.body).toBe(201);expect('trainingOpened' in response.json().data).toBe(false);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.training WHERE learner_id=$1',[id.aliceLearner])).rows[0].n).toBe(1);
+  });
+});
+
+describe('réauthentification des invitations qui accordent un rôle',()=>{
+  it('un jeton ancien ne crée ni moniteur ni administrateur ; une invitation élève reste possible',async()=>{
+    const stale=Math.floor(Date.now()/1000)-3600;
+    const countInvitations=async()=>(await pool.query('SELECT count(*)::int n FROM drivy.invitation WHERE school_id=$1',[id.schoolA])).rows[0].n as number;
+    const before=await countInvitations();
+    const refused=await call('POST',path,{operationId:randomUUID(),email:'stale@example.invalid',roles:['INSTRUCTOR']},undefined,'demo-admin',{auth_time:stale});
+    expect(refused.statusCode,refused.body).toBe(401);expect(refused.json().code).toBe('REAUTH_REQUIRED');
+    expect(await countInvitations()).toBe(before);
+    const learner=await call('POST',path,{operationId:randomUUID(),email:'stale-learner@example.invalid',roles:['LEARNER']},undefined,'demo-admin',{auth_time:stale});
+    expect(learner.statusCode,learner.body).toBe(201);
   });
 });

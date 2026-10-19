@@ -97,7 +97,8 @@ import Testing
         #expect(moment("2026-10-25T08:00:00Z") == nil)
         let started = Self.lesson(1, status: "PLANNED", start: "2026-10-11T07:30:00Z", actual: ("2026-10-11T07:35:00Z", nil))
         #expect(SchoolLearnerLessonMoment.text(for: started, now: now) == nil)
-        #expect(moment("2026-10-11T07:55:00Z") == "Maintenant")
+        // Horaire passé, départ jamais confirmé : « En attente », comme Aujourd’hui, jamais « Maintenant ».
+        #expect(moment("2026-10-11T07:55:00Z") == "En attente")
     }
 
     @Test func theLessonOfTheHourStaysFirstUntilItsSlotEnds() {

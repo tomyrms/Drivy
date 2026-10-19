@@ -7,6 +7,7 @@ import { readCaptureConfig } from './capture-crypto.js';
 import { guardPool } from './database.js';
 import { createMapMatcher, readMapMatchingConfig } from './map-matching-client.js';
 import { readSchoolOpeningConfig } from './school-opening.js';
+import { createKeycloakProvisioner, readAccountProvisioningConfig } from './account-provisioning.js';
 
 const config = readConfig();
 const pool = guardPool(new Pool({ connectionString: config.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000, statement_timeout: 5000 }));
@@ -22,7 +23,8 @@ try {
   const invitationMail=invitationMailConfig();
   const capture=readCaptureConfig();
   const mapMatching=readMapMatchingConfig();
-  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, schoolOpening:readSchoolOpeningConfig(), reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(config.INVITATION_CODE_SECRET?{invitationCodeSecret:config.INVITATION_CODE_SECRET}:{}),...(invitationMail?{invitationMail}:{}),...(capture?{capture}:{}),...(mapMatching?{mapMatching,mapMatcher:createMapMatcher(mapMatching)}:{}) });
+  const accounts=readAccountProvisioningConfig();
+  const app = buildApp({ pool, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, schoolOpening:readSchoolOpeningConfig(), reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(config.INVITATION_CODE_SECRET?{invitationCodeSecret:config.INVITATION_CODE_SECRET}:{}),...(invitationMail?{invitationMail}:{}),...(capture?{capture}:{}),...(mapMatching?{mapMatching,mapMatcher:createMapMatcher(mapMatching)}:{}),...(accounts?{provisionAccount:createKeycloakProvisioner(accounts)}:{}),...(config.TRUST_PROXY?{trustProxy:config.TRUST_PROXY}:{}) });
   const shutdown = async () => { await app.close(); await pool.end(); };
   process.once('SIGINT', () => { void shutdown(); });
   process.once('SIGTERM', () => { void shutdown(); });

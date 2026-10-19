@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { civilDateIn } from '../agenda-model';
+import { overlappingHours } from '../availability-model';
 import { createCommand, isCivilDate, schoolTimeToInstant } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { availabilitySchema, closureSchema, memberSchema, readAll, type Availability, type Closure } from '../school-api';
@@ -66,13 +67,14 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
   const absences = (loaded.data?.closures ?? []).filter(item => item.instructorMembershipId === instructor && Date.parse(item.endsAt) > Date.now())
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const ruleValid = weekdays.length > 0 && /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end) && end > start && isCivilDate(from);
+  const overlap = ruleValid ? overlappingHours(rules, { weekdays, localStart: start, localEnd: end, validFrom: from, validUntil: null }) : null;
   const absenceFrom = absenceStart ? schoolTimeToInstant(absenceStart, school.timeZone) : null;
   const absenceUntil = absenceEnd ? schoolTimeToInstant(absenceEnd, school.timeZone) : null;
   const absenceValid = absenceFrom !== null && absenceUntil !== null && Date.parse(absenceUntil) > Date.parse(absenceFrom);
 
   async function addRule() {
     setRuleSubmitted(true);
-    if (!ruleValid || !canWrite) return;
+    if (!ruleValid || overlap || !canWrite) return;
     addition.current = 'rule';
     const result = await runner.run(createCommand({ schoolId, kind: 'createAvailabilityRule', path: 'availability-rules', resourceVersion: 0,
       body: { instructorMembershipId: instructor, weekdays: [...weekdays].sort(), localStart: start, localEnd: end, validFrom: from, validUntil: null } }),
@@ -121,7 +123,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                   <h3 className="row-title">{dayRange(rule.weekdays)} <span className="schedule-period">{rule.localStart}–{rule.localEnd}</span></h3>
                   <p className="row-meta">Dès le {formatCivilDate(rule.validFrom)}{rule.validUntil ? ` jusqu’au ${formatCivilDate(rule.validUntil)}` : ''}</p>
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => { if (removing === rule.id) { setRemoving(null); void removeRule(rule); } else setRemoving(rule.id); }} onBlur={() => setRemoving(null)}>{removing === rule.id ? 'Confirmer le retrait' : 'Retirer'}</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={removing === rule.id ? `Confirmer le retrait de l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}` : `Retirer l’horaire ${dayRange(rule.weekdays)}, ${rule.localStart}–${rule.localEnd}`} onClick={() => { if (removing === rule.id) { setRemoving(null); void removeRule(rule); } else setRemoving(rule.id); }} onBlur={() => setRemoving(null)}>{removing === rule.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={ruleOpen} onToggle={event => setRuleOpen(event.currentTarget.open)}><summary>Ajouter un horaire</summary>
             <form className="form-grid" onChangeCapture={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void addRule(); }}>
@@ -131,6 +133,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                   onChange={checked => setWeekdays(current => checked ? [...current, index + 1] : current.filter(day => day !== index + 1))} />)}</div>
                 {ruleSubmitted && weekdays.length === 0 && <p id="weekly-days-error" className="field-error" role="alert">Choisissez au moins un jour.</p>}
               </fieldset>
+              {ruleSubmitted && overlap && <p className="field-error" role="alert">Cet horaire chevauche {dayRange(overlap.weekdays)}, {overlap.localStart}–{overlap.localEnd}. Retirez l’autre horaire ou choisissez d’autres jours ou heures.</p>}
               <div className="form-row">
                 <TextField label="De" type="time" required value={start} disabled={!canWrite} onChange={setStart} />
                 <TextField label="À" type="time" required value={end} disabled={!canWrite} onChange={setEnd} error={ruleSubmitted && end <= start ? 'Choisissez une fin après le début.' : null} />
@@ -148,7 +151,7 @@ export function AvailabilitySection({ section = 'availability' }: { section?: 'a
                   <h3 className="row-title schedule-period"><time dateTime={item.startsAt}>{formatDateTime(item.startsAt, school.timeZone)}</time><span aria-hidden="true"> → </span><span className="visually-hidden"> au </span><time dateTime={item.endsAt}>{formatDateTime(item.endsAt, school.timeZone)}</time></h3>
                   {item.reason && <p className="row-meta">{item.reason}</p>}
                 </div>
-                <button type="button" className="button quiet" disabled={!canWrite} aria-label={`Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => { if (removing === item.id) { setRemoving(null); void removeAbsence(item); } else setRemoving(item.id); }} onBlur={() => setRemoving(null)}>{removing === item.id ? 'Confirmer le retrait' : 'Retirer'}</button>
+                <button type="button" className="button quiet" disabled={!canWrite} aria-label={removing === item.id ? `Confirmer le retrait de l’absence du ${formatDateTime(item.startsAt, school.timeZone)}` : `Retirer l’absence du ${formatDateTime(item.startsAt, school.timeZone)}`} onClick={() => { if (removing === item.id) { setRemoving(null); void removeAbsence(item); } else setRemoving(item.id); }} onBlur={() => setRemoving(null)}>{removing === item.id ? 'Confirmer le retrait' : 'Retirer'}</button>
               </li>)}</ul>}
             <details className="disclosure schedule-add" open={absenceOpen} onToggle={event => setAbsenceOpen(event.currentTarget.open)}><summary>Ajouter une absence</summary>
             <form className="form-grid" onChangeCapture={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void addAbsence(); }}>

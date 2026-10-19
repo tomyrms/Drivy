@@ -13,6 +13,9 @@ import { registerSchoolOnboarding } from './school-onboarding.js';
 import { registerSchoolOpening } from './school-opening.js';
 import type { SchoolOpeningConfig } from './school-opening-model.js';
 import { registerInvitations } from './invitations.js';
+import { registerAccounts } from './accounts.js';
+import type { AccountProvisioner } from './account-provisioning.js';
+import type { AttemptLimiter } from './attempt-limiter.js';
 import { registerProfiles } from './profiles.js';
 import { registerCatalogue } from './catalogue.js';
 import { registerFormations } from './formation-catalogue.js';
@@ -88,8 +91,9 @@ export function clientError(error: unknown): ApiError | undefined {
   return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher }) {
-  const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384 });
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
+  // Derrière le proxy public, l'adresse du client sert de clé aux freins des routes sans connexion (codes, création de compte).
+  const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384, ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}) });
   const cursors = new Cursors(options.cursorSecret);
   app.addHook('onRequest', async (_request, reply) => { reply.header('Cache-Control', 'no-store'); reply.header('X-Content-Type-Options','nosniff'); });
   // Un UUID se lit sans tenir compte de la casse (RFC 9562) : l'app iOS écrit en majuscules, PostgreSQL rend des minuscules.
@@ -192,6 +196,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerSchoolOnboarding(app,options);
   registerSchoolOpening(app,options);
   registerInvitations(app,options);
+  registerAccounts(app,options);
   registerProfiles(app,options);
   registerCatalogue(app,options);
   registerFormations(app,options);

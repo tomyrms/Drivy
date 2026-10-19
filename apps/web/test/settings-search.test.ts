@@ -9,6 +9,8 @@ describe('Recherche des paramètres par intention', () => {
     expect(searchSettings('PRIX CHF')).toEqual([expect.objectContaining({ section: 'prestations' })]);
     expect(searchSettings('thème sombre')).toEqual([expect.objectContaining({ id: 'appearance' })]);
     expect(searchSettings('thème sombre')[0]?.section).toBeUndefined();
+    expect(searchSettings('activer GPS')).toEqual([expect.objectContaining({ section: 'confidentialite', target: 'school-gps' })]);
+    expect(searchSettings('enregistrement trajet')).toEqual([expect.objectContaining({ id: 'gps' })]);
   });
   test('les mots combinés et accents ne dépendent pas de la casse', () => {
     expect(searchSettings('téléphone école').map(item => item.id)).toEqual(['phone', 'fields']);
