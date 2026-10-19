@@ -8,7 +8,7 @@ PR #36 fusionnée dans `master` en `d9a67c0`, à la demande du porteur. La branc
 
 **Déployé le 19 octobre 2026** : release `d9a67c0` sur le homelab, sauvegarde vérifiée `/root/drivy_refonte-before-d9a67c0a4d312d51b5074f82d017e012360e4f3f-20261019T145938Z-9900a00f3e76.dump` sur CT113, 34 migrations aux empreintes conformes, API/web/identité actifs, `/app/` 200 avec le bundle V4, `/app/bff/session` anonyme 200, `/refonte/v1/me` 401 sans jeton, aucune alerte dans les journaux. Aucune autre donnée de production modifiée.
 
-**À qualifier sur appareil** : VoiceOver, grandes tailles de texte et GPS réel. Le test iPhone des thèmes de signalement reste en échec, défaut antérieur à la V4, à corriger séparément. La campagne iOS complète sur `release/v4-20261019` est en cours.
+**À qualifier sur appareil** : VoiceOver, grandes tailles de texte et GPS réel. Le test iPhone des thèmes de signalement reste en échec, défaut antérieur à la V4, à corriger séparément. Campagne iOS sur `release/v4-20261019` : compilation réussie, iPhone 29 tests exécutés dont 2 échecs du même test connu des thèmes, iPad partiel sans échec avant la limite de temps du workflow. La campagne complète iPad reste à rejouer.
 
 ## 18 octobre 2026 : audit V2, 20 agents et recette réelle locale
 
