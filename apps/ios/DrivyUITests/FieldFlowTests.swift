@@ -9,8 +9,9 @@ import XCTest
         XCTAssertFalse(app.buttons["capture-cancel-lesson"].exists)
         XCTAssertFalse(app.buttons["Revenir à la leçon"].exists)
         app.buttons["capture-more"].tap()
-        XCTAssertTrue(app.buttons["Annuler la leçon"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.buttons["Voir la leçon"].exists)
+        // Une leçon commencée ne s'annule plus (API 409 LESSON_STARTED, depuis cdb0f82) : le menu ne propose que de la voir.
+        XCTAssertTrue(app.buttons["Voir la leçon"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["Annuler la leçon"].exists)
         // Dismiss the menu outside its actions, then leave through the actual tab bar.
         nativeTab("Agenda", in: app).tap()
         if signal.exists { nativeTab("Agenda", in: app).tap() }

@@ -16,8 +16,7 @@ import XCTest
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5), app.debugDescription)
         confirmation.tap()
 
-        XCTAssertTrue(stepTitle(in: app).waitForExistence(timeout: 20), app.debugDescription)
-        XCTAssertTrue(stepTitle(in: app).label.hasPrefix("Bilan"), app.debugDescription)
+        XCTAssertTrue(waitUntil(timeout: 20) { stepShown("Bilan", in: app) }, app.debugDescription)
         XCTAssertFalse(app.buttons["lesson-save-report"].exists)
         let workedOn = reportField("Travail réalisé", in: app)
         XCTAssertTrue(workedOn.waitForExistence(timeout: 5), app.debugDescription)
@@ -26,16 +25,18 @@ import XCTest
         app.buttons["lesson-report-dismiss-keyboard"].tapIfExists()
 
         let next = app.buttons["lesson-report-next"]
-        XCTAssertTrue(waitUntil { !app.keyboards.firstMatch.exists && next.exists && next.isHittable }, app.debugDescription)
+        // En portrait, le clavier reste ouvert sous le bouton : seul compte que « Continuer » soit touchable.
+        XCTAssertTrue(waitUntil { next.exists && next.isHittable }, app.debugDescription)
         next.tap()
-        XCTAssertTrue(waitUntil { !stepTitle(in: app).label.hasPrefix("Bilan") }, app.debugDescription)
-        if stepTitle(in: app).label.hasPrefix("Compétences") {
+        // Pendant la transition, ancienne et nouvelle étape coexistent : on attend que « Bilan » ait disparu.
+        XCTAssertTrue(waitUntil { !stepShown("Bilan", in: app) }, app.debugDescription)
+        if stepShown("Compétences", in: app) {
             XCTAssertFalse(app.buttons["lesson-save-report"].exists)
-            XCTAssertTrue(next.waitForExistence(timeout: 5), app.debugDescription)
+            XCTAssertTrue(waitUntil { next.exists && next.isHittable }, app.debugDescription)
             next.tap()
         }
 
-        XCTAssertTrue(waitUntil(timeout: 10) { stepTitle(in: app).label.hasPrefix("Récapitulatif") }, app.debugDescription)
+        XCTAssertTrue(waitUntil(timeout: 10) { stepShown("Récapitulatif", in: app) }, app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["lesson-report-review-text"].exists)
         // Chaque ligne du récapitulatif combine libellé et valeur pour VoiceOver : on cherche la valeur dans l'élément fusionné.
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Créneaux et contrôles"))
@@ -44,12 +45,10 @@ import XCTest
         XCTAssertTrue(app.buttons["lesson-save-report"].exists)
     }
 
-    private func stepTitle(in app: XCUIApplication) -> XCUIElement {
-        // Pendant la transition entre deux étapes, l'ancienne et la nouvelle coexistent un instant.
-        // On lit l'étape affichée à l'écran plutôt que d'exiger un élément unique.
-        let steps = app.descendants(matching: .any).matching(identifier: "lesson-report-step")
-        let shown = steps.allElementsBoundByIndex.last { $0.exists && $0.isHittable }
-        return shown ?? steps.firstMatch
+    /// Vrai si une étape portant ce titre est à l'écran, même si une autre est encore en train de sortir.
+    private func stepShown(_ prefix: String, in app: XCUIApplication) -> Bool {
+        app.descendants(matching: .any).matching(identifier: "lesson-report-step")
+            .matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).count > 0
     }
 
     private func completionConfirmation(in app: XCUIApplication) -> XCUIElement {
