@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "version": "v26.10.0",
+  "image": "ghcr.io/project-osrm/osrm-backend@sha256:55dbfd47d984c2cacd64e32901b4321c86b5ec761438e69aa053dc78698a786f",
+  "platform": "linux/amd64",
+  "algorithm": "mld",
+  "profile": "/opt/car.lua",
+  "threads": 8,
+  "source": {
+    "provider": "Geofabrik / OpenStreetMap",
+    "downloadURL": "https://download.geofabrik.de/europe/switzerland-latest.osm.pbf",
+    "filename": "switzerland-latest.osm.pbf",
+    "osmTimestamp": "2026-10-19T20:21:11Z",
+    "sha256": "59a6be5f1d7967b133dcbe5cdae7ae0b53fd49dfd2607fe37f935183ef277fed"
+  }
+}

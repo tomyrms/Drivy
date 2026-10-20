@@ -1,0 +1,27 @@
+#!/usr/sbin/nft -f
+# Exclusivement CT117 dedie. Remplace tout son ruleset, jamais celui de Proxmox/API.
+# Parametres a relire avec l'IP de drivy-osrm.service avant toute application autorisee.
+define api_ip = 192.168.1.153
+define host_ip = 192.168.1.106
+define admin_lan = 192.168.1.0/24
+
+flush ruleset
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+        iif lo accept
+        ct state established,related accept
+        ip saddr $api_ip tcp dport 5000 accept
+        ip saddr $host_ip tcp dport 5000 accept
+        ip saddr $admin_lan tcp dport 22 accept
+        ip protocol icmp accept
+    }
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+    }
+    chain output {
+        type filter hook output priority 0; policy drop;
+        oif lo accept
+        ct state established,related accept
+    }
+}

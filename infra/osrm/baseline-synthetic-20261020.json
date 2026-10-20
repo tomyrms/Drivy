@@ -1,0 +1,43 @@
+{
+  "observedAt": "2026-10-20T20:59:06Z",
+  "environment": "Windows x86_64, Docker local, Node v26.8.1, OSRM linux/amd64, 2 threads, port publie uniquement sur 127.0.0.1:15000",
+  "runtimeLock": "runtime-lock.json",
+  "thirdPartyMatchingCalls": 0,
+  "qualification": "synthetic-consistency-only-not-independent-ground-truth",
+  "result": {
+    "schemaVersion": 1,
+    "synthetic": true,
+    "engine": "osrm",
+    "referenceEngine": "osrm",
+    "independentGroundTruth": false,
+    "matchingAlgorithmVersion": 1,
+    "referencePolylineSha256": "ea96302c8b40482138e42664c027a74113c68adfaae1f58f9e5ec8c90f702633",
+    "seed": 7,
+    "noiseSigmaMeters": 4,
+    "nominalSpeedMetersPerSecond": 11,
+    "samplePeriodMs": 1000,
+    "stoppedSeconds": 20,
+    "referenceLengthMeters": 8442.86,
+    "points": 789,
+    "spans": 4,
+    "coveredPoints": 774,
+    "coveredShare": 0.981,
+    "coverageDefinition": "unique-existing-segment-sequence-in-span-ranges",
+    "confidence": [0.909, 0.892, 0.977, 0.884],
+    "calls": 4,
+    "totalMs": 66.391,
+    "callMsMedian": 11.636,
+    "callMsP95": 15.149,
+    "offsetDefinition": "matched-vertices-to-reference-polyline-local-projection-meters",
+    "offsetMedianMeters": 0,
+    "offsetP95Meters": 0.043,
+    "offsetMaxMeters": 5.756
+  },
+  "repeat": {
+    "observedAt": "2026-10-20T20:59:48Z",
+    "sameNonTimingResults": true,
+    "totalMs": 53.685,
+    "callMsMedian": 12.228,
+    "callMsP95": 14.69
+  }
+}
