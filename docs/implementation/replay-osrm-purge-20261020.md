@@ -1,6 +1,6 @@
 # Replay OSRM : purge et protection des calculs en cours
 
-20 octobre 2026. Lot local sur `claude/recalage-suisse-osrm-20261020`. Aucun déploiement de ce lot.
+20 octobre 2026. Lot sur `claude/recalage-suisse-osrm-20261020`. Cette tâche couvre le code et la recette locale, sans exécuter de déploiement. Les opérations coordonnées sont suivies dans `STATUS.md`.
 
 ## Défaut reproduit
 
@@ -35,12 +35,22 @@ Environnement isolé coordonné avec l’agent API : PostgreSQL **17.11**, conte
 | Réexécution du migrateur | Registre stable, nouveau résultat OSRM conservé, chunks et notices identiques. |
 | Droits et erreurs | Tests existants d’isolation, partage élève, panne moteur, reprise de bail, borne resserrée, retrait et replay brut. |
 
-Les **55 tests ciblés réussissent** : 19 replay, 2 migrations, 6 notices et 28 tests de géométrie. Typage et build API réussis à 21:05:36 UTC. Premier passage de toute la suite : **546/550 réussis**, avec quatre échecs hors lot : les deux tests SMTP « Mailpit accepte le message » et « deux workers concurrents » faute de serveur Mailpit local, puis les deux tests live « leçon a changé d’auteur » et « author perdu » dans une fixture en cours de correction par l’agent API. Un serveur Mailpit synthétique isolé est préparé pour rejouer la suite complète. Le défaut de typage `speed` du premier passage a été corrigé par cet agent avant la vérification finale.
+Les **55 tests ciblés réussissent** : 19 replay, 2 migrations, 6 notices et 28 tests de géométrie. **Recette complète finale terminée le 20 octobre à 21:15:39 UTC : 552/552 tests API, 43/43 fichiers, typage et build API réussis**, code de sortie 0. Passage démarré après stabilisation du correctif live `cf0f316`, avec PostgreSQL 17.11 et Mailpit 1.31.2 locaux. SMTP synthétique sur 11035, API Mailpit sur 18035.
+
+Les passages intermédiaires ne sont pas présentés comme des succès complets :
+
+- Premier passage : 546/550 réussis. Échecs des deux tests SMTP « Mailpit accepte le message » et « deux workers concurrents » sans serveur Mailpit local, puis des deux tests live « leçon a changé d’auteur » et « author perdu » dans les fixtures corrigées ensuite par l’agent API.
+- Deuxième passage avec SMTP : 550/552 réussis. Les deux nouvelles régressions live « refuse 1/3 déplacement(s) récent(s) inversé(s) » ont été chargées rouges pendant la correction concurrente. Elles passent toutes deux au dernier passage stabilisé.
+- Le défaut de typage `speed` observé au premier contrôle a été corrigé par l’agent API avant les vérifications finales.
+
+Le lot fonctionnel est committé en `a0f8417`. Le client `map-matching-client.ts`, les chunks et les notices adoptées ne sont pas modifiés par ce lot.
 
 Commandes de recette, avec `TEST_DATABASE_URL` pointant exclusivement vers la base synthétique locale :
 
 ```cmd
 npm --prefix apps/api test -- test/matched-route.integration.test.ts test/school-onboarding-migration.integration.test.ts test/text-proposals.test.ts test/track-matching.test.ts < nul
+set "TEST_SMTP_PORT=11035"
+set "TEST_MAILPIT_URL=http://127.0.0.1:18035"
 npm --prefix apps/api test < nul
 npm --prefix apps/api run typecheck < nul
 npm --prefix apps/api run build < nul
