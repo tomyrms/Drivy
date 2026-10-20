@@ -79,13 +79,18 @@ export function registerMatchedRoutes(app: FastifyInstance, options: { pool: Poo
   app.get('/v1/schools/:schoolId/captures/:captureId/matched-route', async r => {
     z.object({}).strict().parse(r.query);
     const schoolId = param(r, 'schoolId'), captureId = param(r, 'captureId');
-    const enabled = !!(options.capture && options.mapMatching && options.mapMatcher);
+    // Mapbox reste un client de comparaison synthétique, jamais un moteur de trajet réel.
+    const enabled = !!(options.capture && options.mapMatching?.provider === 'osrm' && options.mapMatcher);
     const read = await withActor(options.pool, await options.verifyToken(r.headers.authorization), schoolId, async db => {
       const row = (await db.query<CaptureRow>('SELECT * FROM drivy.capture_session WHERE school_id=$1 AND id=$2', [schoolId, captureId])).rows[0];
       // Mêmes droits que le replay privé : sans accès au trajet, ni la couche ni son état n'existent.
       if (!row || row.publication_state !== 'PRIVATE') throw notFound();
       const route = (await db.query<RouteRow>('SELECT * FROM drivy.capture_matched_route WHERE capture_id=$1', [row.id])).rows[0];
-      const current = route && route.reconstruction_version === row.reconstruction_version && route.algorithm_version === TRACK_MATCHING_ALGORITHM_VERSION ? route : undefined;
+      // Le fournisseur fait partie de l'identité du calcul, y compris EMPTY, FAILED et PROCESSING.
+      // Sans moteur actif, aucun ancien cache n'est servi. Un ancien bail sans provider n'est pas repris.
+      const current = enabled && route && route.provider === options.mapMatching?.provider
+        && route.reconstruction_version === row.reconstruction_version
+        && route.algorithm_version === TRACK_MATCHING_ALGORITHM_VERSION ? route : undefined;
       if (current?.status === 'READY' && options.capture && current.encrypted_route && current.key_id) {
         const spans = decryptRoute(options.capture, current.encrypted_route, current.key_id, routeAAD(row, TRACK_MATCHING_ALGORITHM_VERSION));
         if (spans) return { row, status: 'READY' as const, provider: current.provider, spans };
@@ -106,7 +111,7 @@ export function registerMatchedRoutes(app: FastifyInstance, options: { pool: Poo
     });
     let status: 'READY' | 'PENDING' | 'UNAVAILABLE' = read.status === 'START' ? 'UNAVAILABLE' : read.status;
     if (read.status === 'START') {
-      const lease = await system(async query => (await query<{ lease: string | null }>('SELECT drivy.claim_matched_route($1,$2,$3,$4) AS lease', [read.row.id, read.row.reconstruction_version, TRACK_MATCHING_ALGORITHM_VERSION, LEASE_SECONDS])).rows[0]?.lease ?? null);
+      const lease = await system(async query => (await query<{ lease: string | null }>('SELECT drivy.claim_matched_route($1,$2,$3,$4,$5) AS lease', [read.row.id, read.row.reconstruction_version, TRACK_MATCHING_ALGORITHM_VERSION, LEASE_SECONDS, options.mapMatching!.provider])).rows[0]?.lease ?? null);
       // Sans bail, un autre appel calcule déjà ou vient de finir : le client relira.
       status = 'PENDING';
       if (lease) {

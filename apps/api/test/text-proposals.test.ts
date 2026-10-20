@@ -21,6 +21,14 @@ describe('Textes proposés par Drivy', () => {
   it('ne promettent aucune durée de conservation chiffrée tant qu’aucune suppression automatique ne l’applique', () => {
     expect(proposedDataPolicy(context).retentionText).not.toMatch(/\d+\s*(jours?|mois|ans?)/);
   });
+  it('décrit le recalage OSRM dans l’hébergement Drivy sans envoi des positions à un tiers', () => {
+    const notice = proposedDataPolicy({ ...context, mapMatchingProvider: 'osrm' }).noticeText;
+    expect(notice).toContain('dans l’hébergement de Drivy');
+    expect(notice).toContain('sans envoyer vos positions à un service tiers');
+    expect(notice).toContain('Apple Plans');
+    expect(notice).not.toContain('Mapbox');
+    expect(proposedDataPolicy(context).noticeText).not.toContain('Pour caler le trajet');
+  });
   it('ne demandent que le prénom et le nom, sans rien qui bloque la planification', () => {
     const required = proposedProfileFields.filter(rule => rule.requirement === 'REQUIRED').map(rule => rule.field);
     expect(required).toEqual(['firstName', 'lastName']);

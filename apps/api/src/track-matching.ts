@@ -9,7 +9,8 @@ import type { TrackPoint } from './capture-contracts.js';
  * mesure que l'app affiche. Le tronçon recalé (`MatchedSpan`) dit seulement « entre ces deux mesures, le
  * véhicule a très probablement suivi cette géométrie ». L'interpolation d'affichage reste dans l'app.
  */
-export const TRACK_MATCHING_ALGORITHM_VERSION = 1;
+// Version 2 : cache et bail liés au moteur OSRM, sans réutilisation des dérivés de la bascule.
+export const TRACK_MATCHING_ALGORITHM_VERSION = 2;
 
 export const selection = { maximumAccuracyMeters: 30, maximumSpeedMetersPerSecond: 50, maximumGapMs: 15_000, maximumJumpSlackMeters: 20, bridgeMs: 4_000 } as const;
 /** Limite documentée de l'API Map Matching ; OSRM accepte la même taille. */

@@ -15,7 +15,9 @@ export interface ProposedFieldRule {
 export function proposedDataPolicy(context: ProposalContext) {
   const routing = context.mapMatchingProvider === 'mapbox'
     ? ' Pour caler le trajet sur les routes, ses positions sont envoyées à Mapbox, un service établi aux États-Unis, qui ne reçoit ni votre nom ni vos coordonnées.'
-    : '';
+    : context.mapMatchingProvider === 'osrm'
+      ? ' Pour caler le trajet sur les routes, ses positions sont traitées dans l’hébergement de Drivy, sans envoyer vos positions à un service tiers.'
+      : '';
   const noticeText = [
     `${context.schoolName} utilise Drivy pour organiser votre formation à la conduite : leçons, suivi de votre progression, bilans et, si vous l’acceptez, enregistrement du trajet pendant les leçons.`,
     'Les données traitées sont votre nom et vos coordonnées, vos leçons, les observations et bilans de vos moniteurs, et le trajet GPS des leçons pour lesquelles vous avez donné votre accord. Le GPS n’enregistre que pendant une leçon, depuis l’appareil du moniteur.',
