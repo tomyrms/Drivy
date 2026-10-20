@@ -108,7 +108,14 @@ final class SchoolCaptureSessionController {
     /// Passage bref entre deux états stables : mise en pause, reprise, nouveau segment après une perte de signal.
     enum Transition: Equatable { case pausing, resuming, recoveringSignal }
     private(set) var state: State = .idle {
-        didSet { if state != .recording { liveMatch.stop() } }
+        didSet {
+            if state != .recording {
+                liveMatch.stop()
+                liveAccessCheck?.cancel()
+                liveAccessCheck = nil
+                liveAccessCheckID = nil
+            }
+        }
     }
     let liveMatch = SchoolLiveMatchCoordinator()
     /// Renseigné pendant le seul passage en cours ; un arrêt définitif ou un autre trajet l’efface.
@@ -141,6 +148,8 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var deferredScope: SchoolCommandScope?
     @ObservationIgnored private var context: Context?
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var liveAccessCheck: Task<Void, Never>?
+    @ObservationIgnored private var liveAccessCheckID: UUID?
     @ObservationIgnored private var scopeGeneration = UUID()
     @ObservationIgnored private var beginning: ContinuousClock.Instant?
     @ObservationIgnored private var endedAt: ContinuousClock.Instant?
@@ -432,11 +441,17 @@ final class SchoolCaptureSessionController {
            scope.sharesMembership(with: current), scope.accessEpoch > current.accessEpoch {
             deferredScope = scope
             liveMatch.stop()
+            liveAccessCheck?.cancel()
+            liveAccessCheck = nil
+            liveAccessCheckID = nil
             return
         }
         deferredScope = nil
         guard permittedScope != scope else { return }
         liveMatch.stop()
+        liveAccessCheck?.cancel()
+        liveAccessCheck = nil
+        liveAccessCheckID = nil
         scopeGeneration = UUID()
         if scope == nil { networkMonitor?.cancel(); networkMonitor = nil; networkAvailable = nil }
         for active in backgroundTransfers.values {
@@ -856,9 +871,30 @@ final class SchoolCaptureSessionController {
             return self.context === active && self.generation == request && self.state == .recording
                 && self.permittedScope == active.scope && self.deferredScope == nil
                 && active.handle == handle && !active.terminalRequested && active.lease.permitsCollection()
+        }, onAccessFailure: { [weak self, weak active] in
+            guard let self, let active else { return }
+            self.confirmLiveMatchAccess(active, request: request)
         }, send: { [client = active.transfer.client, scope = active.scope, captureID = active.session.id] body in
             try await client.liveMatch(scope: scope, captureID: captureID, request: body)
         })
+    }
+
+    /// A missing optional endpoint or a newer membership epoch is not itself a revocation.
+    /// The canonical capture read tolerates a newer epoch retaining the instructor role.
+    /// Its existing transfer invalidation closes the source and admission synchronously on refusal.
+    private func confirmLiveMatchAccess(_ active: Context, request: UUID) {
+        guard generation == request, context === active, state == .recording,
+              permittedScope == active.scope, deferredScope == nil, !active.terminalRequested,
+              liveAccessCheck == nil else { return }
+        let checkID = UUID()
+        liveAccessCheckID = checkID
+        liveAccessCheck = Task { [weak self] in
+            _ = try? await active.transfer.refresh(captureID: active.session.id)
+            guard let self, self.generation == request, self.context === active,
+                  self.liveAccessCheckID == checkID else { return }
+            self.liveAccessCheck = nil
+            self.liveAccessCheckID = nil
+        }
     }
 
     private func receive(_ event: SchoolCaptureLocationEvent, request: UUID) {

@@ -339,10 +339,12 @@ struct SchoolTrackDisplayTests {
     // MARK: Road-matched layer
 
     private func matchedRoute(segment: UUID, capture: UUID = UUID(), first: Int, last: Int, north: Double,
-                              fromEast: Double, toEast: Double, anchors: [[Double]]) -> SchoolMatchedRoute {
+                              fromEast: Double, toEast: Double, anchors: [[Double]],
+                              provider: String? = "osrm", algorithmVersion: Int? = 2) -> SchoolMatchedRoute {
         // Road 3 m north of the measured fixes. Encoded with the same algorithm the server uses.
         let geometry = Self.encode([(north * Self.metre, fromEast * Self.metre), (north * Self.metre, toEast * Self.metre)])
-        return SchoolMatchedRoute(captureId: capture, status: "READY", spans: [.init(segmentId: segment, firstSequence: first,
+        return SchoolMatchedRoute(captureId: capture, status: "READY", provider: provider, algorithmVersion: algorithmVersion,
+            spans: [.init(segmentId: segment, firstSequence: first,
             lastSequence: last, confidence: 0.9, geometry: geometry, anchors: anchors)])
     }
 
@@ -407,14 +409,33 @@ struct SchoolTrackDisplayTests {
         #expect(timeline.gaps.isEmpty)
     }
 
+    @Test func oldOrUnknownMatchedRouteProvenanceFallsBackToRealMeasurements() throws {
+        let segment = UUID()
+        let points = (0...20).map { fix($0, second: Double($0), east: Double($0) * 10) }
+        let rejected: [(String?, Int?)] = [("mapbox", 1), ("mapbox", 2), ("osrm", 1), (nil, nil)]
+        for (provider, version) in rejected {
+            let old = matchedRoute(segment: segment, first: 0, last: 20, north: 3, fromEast: 0, toEast: 200,
+                anchors: [[0, 0], [20, 200]], provider: provider, algorithmVersion: version)
+            #expect(!old.isUsable)
+            let timeline = replay(points, segmentID: segment, matched: old)
+            #expect(!timeline.usesMatchedRoute)
+            #expect(timeline.position(at: 7)?.latitude == 0)
+        }
+        // Unknown/missing metadata decodes only to an unusable layer, never a legacy fallback.
+        let missing = try JSONDecoder().decode(SchoolMatchedRoute.self,
+            from: Data("{\"captureId\":\"\(UUID())\",\"status\":\"READY\",\"spans\":[]}".utf8))
+        #expect(!missing.isUsable)
+    }
+
     @Test func anIncoherentMatchedRouteIsIgnoredAndTheMeasuredReplayStillWorks() {
         let segment = UUID()
         let points = (0...20).map { fix($0, second: Double($0), east: Double($0) * 10) }
         let unknownFix = matchedRoute(segment: segment, first: 0, last: 20, north: 3, fromEast: 0, toEast: 200,
                                       anchors: [[0, 0], [15, 150], [99, 200]])
         let acrossAGap = matchedRoute(segment: segment, first: 0, last: 400, north: 3, fromEast: 0, toEast: 200, anchors: [[0, 0], [400, 200]])
-        let pending = SchoolMatchedRoute(captureId: UUID(), status: "PENDING", spans: [])
-        let broken = SchoolMatchedRoute(captureId: UUID(), status: "READY", spans: [.init(segmentId: segment, firstSequence: 0,
+        let pending = SchoolMatchedRoute(captureId: UUID(), status: "PENDING", provider: nil, algorithmVersion: 2, spans: [])
+        let broken = SchoolMatchedRoute(captureId: UUID(), status: "READY", provider: "osrm", algorithmVersion: 2,
+            spans: [.init(segmentId: segment, firstSequence: 0,
             lastSequence: 20, confidence: 0.9, geometry: "\u{01}", anchors: [[0, 0], [20, 200]])])
         for matched in [unknownFix, acrossAGap, pending, broken] {
             let timeline = replay(points, segmentID: segment, matched: matched)

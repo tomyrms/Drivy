@@ -17,13 +17,17 @@ struct SchoolMatchedRoute: Decodable, Sendable, Equatable {
     }
     let captureId: UUID
     let status: String
+    /// Only the self-hosted OSRM generation is displayable. Missing metadata is legacy, not a fallback.
+    let provider: String?
+    let algorithmVersion: Int?
     let spans: [Span]
 
     /// The school is computing it: worth asking again shortly.
-    var isPending: Bool { status == "PENDING" && spans.isEmpty }
+    var isPending: Bool { status == "PENDING" && algorithmVersion == 2 && spans.isEmpty }
 
     var isUsable: Bool {
-        status == "READY" && spans.count <= 2_000 && spans.allSatisfy { span in
+        status == "READY" && provider == "osrm" && algorithmVersion == 2
+            && spans.count <= 2_000 && spans.allSatisfy { span in
             span.firstSequence >= 0 && span.lastSequence > span.firstSequence && span.confidence.isFinite
                 && span.geometry.utf8.count <= 400_000 && span.anchors.count >= 2 && span.anchors.count <= 20_000
                 && span.anchors.allSatisfy { $0.count == 2 && $0[0].isFinite && $0[1].isFinite && $0[1] >= 0 }

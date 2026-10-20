@@ -204,6 +204,36 @@ struct SchoolLiveMatchTransportTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func aSuspendedSharedTokenDoesNotBlockTimeoutOrCancellation(_ cancel: Bool) async throws {
+        let token = SuspendedLiveMatchToken()
+        let transport = LiveMatchTransport(scope: scope)
+        let client = SchoolCaptureClient(baseURL: base, tokenSource: token, transport: transport)
+        var starts = token.starts.makeAsyncIterator()
+        // A broken implementation eventually exits too, so the test fails instead of hanging CI.
+        let rescue = Task { try? await Task.sleep(for: .seconds(5)); token.release() }
+        defer { rescue.cancel(); token.release() }
+        let began = ContinuousClock.now
+        let operation = Task { try await client.liveMatch(scope: scope, captureID: UUID(), request: request) }
+        _ = await starts.next()
+        if cancel { operation.cancel() }
+        do {
+            _ = try await operation.value
+            Issue.record("A suspended identity must not complete live matching")
+        } catch {
+            if cancel { #expect(error is CancellationError) }
+            else { #expect(error as? SchoolCaptureFailure == .unavailable) }
+        }
+        #expect(began.duration(to: .now) < .seconds(cancel ? 1 : 3))
+        #expect(!token.wasReleased)
+        #expect(token.calls == 1)
+        #expect(await transport.requests.isEmpty)
+        token.release()
+        var completions = token.completions.makeAsyncIterator()
+        _ = await completions.next()
+        #expect(!token.refreshWasCancelled)
+    }
+
     @Test func slowResponseIsCancelledAtTheTotalDeadline() async throws {
         let transport = LiveMatchTransport(scope: scope, slow: true)
         let client = SchoolCaptureClient(baseURL: base, tokenSource: LiveMatchToken(), transport: transport)
@@ -218,6 +248,28 @@ struct SchoolLiveMatchTransportTests {
 
 @MainActor
 struct SchoolLiveMatchLifecycleTests {
+    @Test(arguments: [SchoolCaptureFailure.unauthorized, .forbidden, .notFound, .expired, .unavailable, .invalidResponse])
+    func onlyAccessFailuresAskForCanonicalRevalidation(_ failure: SchoolCaptureFailure) async {
+        let coordinator = SchoolLiveMatchCoordinator(now: { 0 })
+        let segment = UUID()
+        let (completion, continuation) = AsyncStream<Void>.makeStream()
+        var iterator = completion.makeAsyncIterator()
+        var accessChecks = 0
+        coordinator.start(segmentID: segment, permits: { true }, onAccessFailure: { accessChecks += 1 }, send: { _ in
+            defer { continuation.finish() }
+            throw failure
+        })
+        let measurements = (0...2).map { index in
+            SchoolCaptureMeasurement(capturedAt: "2026-10-20T20:00:0\(index)Z", elapsedMs: index * 1_000,
+                latitude: 0, longitude: Double(index) * 0.0001, accuracyMeters: 8, speedMetersPerSecond: 10)
+        }
+        coordinator.appendDurable(measurements, startingAt: 0, segmentID: segment)
+        _ = await iterator.next()
+        #expect(accessChecks == ([.unauthorized, .forbidden, .notFound, .expired].contains(failure) ? 1 : 0))
+        #expect(coordinator.result == nil)
+        coordinator.stop()
+    }
+
     @Test(arguments: ["pause", "context", "newerFix"])
     func lifecycleChangesCancelAnInFlightRequest(_ change: String) async throws {
         let segment = UUID()
@@ -257,6 +309,33 @@ struct SchoolLiveMatchLifecycleTests {
         continuation.finish()
     }
 
+    @Test func aLateResponseGetsOnlyTheRemainingDisplayLifetime() async throws {
+        var now = 10.0
+        let (waits, continuation) = AsyncStream<TimeInterval>.makeStream()
+        var iterator = waits.makeAsyncIterator()
+        let coordinator = SchoolLiveMatchCoordinator(now: { now }, sleep: { duration in
+            continuation.yield(duration)
+            try await Task.sleep(for: .seconds(30))
+        })
+        let segment = UUID()
+        coordinator.start(segmentID: segment, permits: { true }, send: { request in
+            now = 11.9
+            let last = request.points.last!
+            return .init(status: .matched, segmentId: request.segmentId, sequence: last.sequence, elapsedMs: last.elapsedMs,
+                position: .init(latitude: last.latitude, longitude: last.longitude), confidence: 0.9, distanceMeters: 0)
+        })
+        let measurements = (0...2).map { index in
+            SchoolCaptureMeasurement(capturedAt: "2026-10-20T20:00:0\(index)Z", elapsedMs: index * 1_000,
+                latitude: 0, longitude: Double(index) * 0.0001, accuracyMeters: 8, speedMetersPerSecond: 10)
+        }
+        coordinator.appendDurable(measurements, startingAt: 0, segmentID: segment)
+        let remaining = try #require(await iterator.next())
+        #expect(abs(remaining - 0.1) < 0.000_001)
+        #expect(coordinator.result != nil)
+        coordinator.stop()
+        continuation.finish()
+    }
+
     @Test func attributionContainsNoCaptureOrLocationContext() {
         let url = SchoolMapAttributionSection.copyrightURL
         #expect(url.scheme == "https")
@@ -276,6 +355,39 @@ struct SchoolLiveMatchLifecycleTests {
             latitude: 0, longitude: 0, accuracyMeters: 8)
         coordinator.appendDurable([measurement], startingAt: 0, segmentID: segment)
         #expect(coordinator.result == nil)
+    }
+}
+
+@MainActor private final class SuspendedLiveMatchToken: AccessTokenSource {
+    let starts: AsyncStream<Void>
+    let completions: AsyncStream<Void>
+    private let started: AsyncStream<Void>.Continuation
+    private let completed: AsyncStream<Void>.Continuation
+    private var pending: CheckedContinuation<String, Error>?
+    private(set) var calls = 0
+    private(set) var wasReleased = false
+    private(set) var refreshWasCancelled = false
+
+    init() {
+        let startStream = AsyncStream<Void>.makeStream()
+        starts = startStream.stream
+        started = startStream.continuation
+        let completionStream = AsyncStream<Void>.makeStream()
+        completions = completionStream.stream
+        completed = completionStream.continuation
+    }
+    func accessToken() async throws -> String {
+        calls += 1
+        started.yield(())
+        let token = try await withCheckedThrowingContinuation { pending = $0 }
+        refreshWasCancelled = Task.isCancelled
+        completed.yield(())
+        return token
+    }
+    func release() {
+        wasReleased = true
+        pending?.resume(returning: "synthetic-live-token")
+        pending = nil
     }
 }
 

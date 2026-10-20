@@ -33,11 +33,13 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
     let baseURL: URL
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
+    private let liveTokenBroker: SchoolLiveMatchTokenBroker
 
     init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL
         self.tokenSource = tokenSource
         self.transport = transport
+        self.liveTokenBroker = SchoolLiveMatchTokenBroker(source: tokenSource)
     }
 
     /// Best-effort display request, deliberately separate from durable mutations. No retry,
@@ -64,11 +66,14 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
 
     private func performLiveMatch(scope: SchoolCommandScope, captureID: UUID,
                                   body: SchoolLiveMatchRequest) async throws -> SchoolLiveMatchResponse {
-        let token = try await accessToken()
+        let token = try await liveTokenBroker.value()
         let person: SchoolPerson
         do {
             person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
-        } catch { throw error.unlessCancelled(SchoolCaptureFailure.unavailable) }
+        } catch SchoolAPIError.unauthorized { throw SchoolCaptureFailure.unauthorized }
+        catch SchoolAPIError.forbidden { throw SchoolCaptureFailure.forbidden }
+        catch SchoolAPIError.identityNotLinked { throw SchoolCaptureFailure.forbidden }
+        catch { throw error.unlessCancelled(SchoolCaptureFailure.unavailable) }
         guard person.personId == scope.personID, person.memberships.contains(where: {
             $0.schoolId == scope.schoolID && $0.membershipId == scope.membershipID
                 && $0.accessEpoch == scope.accessEpoch && $0.roles.contains("INSTRUCTOR")

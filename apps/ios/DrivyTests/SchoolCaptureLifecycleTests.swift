@@ -4,6 +4,56 @@ import Testing
 @testable import Drivy
 
 @MainActor struct SchoolCaptureLifecycleTests {
+    @Test(arguments: ["accessRevoked", "consentRevoked", "missingRoute"])
+    func aLiveRefusalRechecksCanonicalAccessBeforeStopping(_ scenario: String) async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        await fixture.server.holdLiveMatch()
+        for _ in 0..<3 { try await fixture.recordPoint() }
+        for _ in 0..<300 {
+            if await fixture.server.isWaitingForLiveMatch() { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let waiting = await fixture.server.isWaitingForLiveMatch()
+        // Always release the transport, including a failed assertion path.
+        await fixture.server.releaseLiveMatch(scenario: scenario)
+        try #require(waiting)
+        for _ in 0..<300 {
+            if await fixture.server.canonicalReadsAfterLiveRefusal() > 0 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await fixture.server.canonicalReadsAfterLiveRefusal() > 0)
+        if scenario != "missingRoute" {
+            for _ in 0..<300 {
+                if !fixture.source.isRunning { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect(!fixture.source.isRunning && fixture.controller.state != .recording)
+            let admitted = fixture.controller.pointCount
+            #expect(fixture.source.emitPoint() == nil)
+            #expect(fixture.controller.pointCount == admitted)
+        } else {
+            // An older API without this optional route is not a capture revocation.
+            #expect(fixture.source.isRunning && fixture.controller.state == .recording)
+            #expect(await fixture.controller.stopAndSynchronize())
+            await fixture.waitUntilSettled()
+        }
+    }
+
+    @Test func aNewerEpochWithInstructorRightsDoesNotStopCaptureAfterLiveRefusal() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        await fixture.server.setMembership(epoch: fixture.scope.accessEpoch + 1)
+        for _ in 0..<3 { try await fixture.recordPoint() }
+        let capture = fixture.capture.id.uuidString.lowercased()
+        for _ in 0..<300 {
+            if await fixture.server.requests().contains(where: { $0.httpMethod == "GET" && $0.url?.lastPathComponent.lowercased() == capture }) { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await fixture.server.requests().contains { $0.httpMethod == "GET" && $0.url?.lastPathComponent.lowercased() == capture })
+        #expect(fixture.source.isRunning && fixture.controller.state == .recording)
+        #expect(await fixture.controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
     @Test func closingPreparationDuringTransferredAdoptionKeepsTheFinalRightsCheck() async throws {
         let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
         let model = fixture.preparation(holdAdoption: true)
@@ -639,6 +689,11 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     private var epoch: Int
     private var roles = ["INSTRUCTOR"]
     private var offline = false
+    private var liveHeld = false
+    private var liveWaiters: [CheckedContinuation<Void, Never>] = []
+    private var liveRefused = false
+    private var captureAccessRefused = false
+    private var readsAfterLiveRefusal = 0
     init(scope: SchoolCommandScope, capture: SchoolCaptureSession, authorization: SchoolCaptureAuthorization, keys: SchoolCapturePublicKeys) {
         self.scope = scope; self.capture = capture; self.authorization = authorization; self.keys = keys
         epoch = scope.accessEpoch
@@ -646,6 +701,26 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
     /// L’administration change l’adhésion : époque avancée, rôles éventuellement retirés.
     func setMembership(epoch: Int, roles: [String] = ["INSTRUCTOR"]) { self.epoch = epoch; self.roles = roles }
     func setOffline(_ value: Bool) { offline = value }
+    func holdLiveMatch() { liveHeld = true }
+    func isWaitingForLiveMatch() -> Bool { !liveWaiters.isEmpty }
+    func canonicalReadsAfterLiveRefusal() -> Int { readsAfterLiveRefusal }
+    func releaseLiveMatch(scenario: String) {
+        liveHeld = false
+        liveRefused = true
+        captureAccessRefused = scenario == "accessRevoked"
+        if scenario == "consentRevoked" {
+            let cutoff = SchoolCaptureLocationTime.timestamp(Date())
+            capture = SchoolCaptureSession(id: capture.id, schoolId: capture.schoolId, version: capture.version + 1,
+                lessonId: capture.lessonId, learnerId: capture.learnerId, instructorMembershipId: capture.instructorMembershipId,
+                deviceId: capture.deviceId, choiceId: capture.choiceId, authorizedAt: capture.authorizedAt,
+                expiresAt: capture.expiresAt, stoppedAt: nil, cutoffAt: cutoff, uploadDeadline: capture.uploadDeadline,
+                captureState: .revoked, syncState: capture.syncState, publicationState: .privateCapture,
+                deviceAssessmentId: capture.deviceAssessmentId)
+        }
+        let pending = liveWaiters
+        liveWaiters.removeAll()
+        for waiter in pending { waiter.resume() }
+    }
     func isHoldingTransfers() -> Bool { !waiters.isEmpty }
     func requests() -> [URLRequest] { recorded }
     func holdScopeReads() { scopeHeld = true }
@@ -685,6 +760,24 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
         }
         if held { await withCheckedContinuation { waiters.append($0) } }
         let leaf = url.lastPathComponent.lowercased()
+        if leaf == "live-match" {
+            if liveHeld { await withCheckedContinuation { liveWaiters.append($0) } }
+            if !liveRefused {
+                let body = try JSONDecoder().decode(SchoolLiveMatchRequest.self, from: request.httpBody!)
+                let latest = body.points.last!
+                return try json(["status": "UNAVAILABLE", "segmentId": body.segmentId.uuidString,
+                    "sequence": latest.sequence, "elapsedMs": latest.elapsedMs])
+            }
+            return SchoolHTTPResponse(data: Data("{\"code\":\"NOT_FOUND\"}".utf8), status: 404,
+                url: url, contentType: "application/problem+json")
+        }
+        if leaf == capture.id.uuidString.lowercased(), request.httpMethod == "GET", liveRefused {
+            readsAfterLiveRefusal += 1
+            if captureAccessRefused {
+                return SchoolHTTPResponse(data: Data("{\"code\":\"NOT_FOUND\"}".utf8), status: 404,
+                    url: url, contentType: "application/problem+json")
+            }
+        }
         if leaf == "capture-keys" {
             return try json(["keys": keys.keys.map { ["kty": $0.kty, "crv": $0.crv, "x": $0.x,
                 "kid": $0.kid, "alg": $0.alg, "use": $0.use] }])

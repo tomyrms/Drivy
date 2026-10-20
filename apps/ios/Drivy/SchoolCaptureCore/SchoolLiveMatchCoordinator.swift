@@ -10,24 +10,34 @@ final class SchoolLiveMatchCoordinator {
     @ObservationIgnored private var window: SchoolLiveMatchWindow?
     @ObservationIgnored private var latestAcquiredElapsedMs: Int?
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var contextGeneration = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var expiry: Task<Void, Never>?
     @ObservationIgnored private var send: (@MainActor (SchoolLiveMatchRequest) async throws -> SchoolLiveMatchResponse)?
     @ObservationIgnored private var permits: (@MainActor () -> Bool)?
+    @ObservationIgnored private var onAccessFailure: (@MainActor () -> Void)?
     @ObservationIgnored private let now: @MainActor () -> TimeInterval
+    @ObservationIgnored private let sleep: @MainActor (TimeInterval) async throws -> Void
 
-    init(now: @escaping @MainActor () -> TimeInterval = { CACurrentMediaTime() }) { self.now = now }
+    init(now: @escaping @MainActor () -> TimeInterval = { CACurrentMediaTime() },
+         sleep: @escaping @MainActor (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) {
+        self.now = now
+        self.sleep = sleep
+    }
 
     func start(segmentID: UUID, permits: @escaping @MainActor () -> Bool,
+               onAccessFailure: @escaping @MainActor () -> Void = {},
                send: @escaping @MainActor (SchoolLiveMatchRequest) async throws -> SchoolLiveMatchResponse) {
         stop()
         window = SchoolLiveMatchWindow(segmentID: segmentID)
         self.permits = permits
+        self.onAccessFailure = onAccessFailure
         self.send = send
     }
 
     func stop() {
         generation = UUID()
+        contextGeneration = UUID()
         task?.cancel()
         task = nil
         expiry?.cancel()
@@ -37,6 +47,7 @@ final class SchoolLiveMatchCoordinator {
         latestAcquiredElapsedMs = nil
         send = nil
         permits = nil
+        onAccessFailure = nil
     }
 
     /// Called at acquisition, before the durable append completes. An older network response
@@ -63,6 +74,7 @@ final class SchoolLiveMatchCoordinator {
         guard measurements.last!.elapsedMs >= (latestAcquiredElapsedMs ?? 0),
               task == nil, let request = window?.request(at: sentAt), let send else { return }
         let generation = self.generation
+        let contextGeneration = self.contextGeneration
         task = Task { [weak self] in
             do {
                 try Task.checkCancellation()
@@ -72,18 +84,25 @@ final class SchoolLiveMatchCoordinator {
                 guard !Task.isCancelled, self.permits?() == true,
                       self.window?.accepts(response, for: request, sentAt: sentAt, now: self.now()) == true else { return }
                 self.result = response
-                // No new fix must leave an indefinitely snapped marker after signal loss.
+                // The total display budget starts at emission, not reception.
+                let remaining = max(0, sentAt + SchoolLiveMatchWindow.responseLifetime - self.now())
+                let sleep = self.sleep
                 self.expiry = Task { [weak self] in
-                    do { try await Task.sleep(for: .seconds(SchoolLiveMatchWindow.responseLifetime)) }
+                    do { try await sleep(remaining) }
                     catch { return }
                     guard let self, self.generation == generation else { return }
                     self.result = nil
                     self.expiry = nil
                 }
             } catch {
-                guard let self, self.generation == generation else { return }
-                self.task = nil
-                // Best effort: network/authorization errors leave the local prediction alone.
+                guard let self, self.contextGeneration == contextGeneration else { return }
+                if self.generation == generation { self.task = nil }
+                // A newer fix invalidates geometry, not a known access refusal for this capture.
+                if let failure = error as? SchoolCaptureFailure,
+                   [.unauthorized, .forbidden, .notFound, .expired].contains(failure) {
+                    self.onAccessFailure?()
+                }
+                // Transport/matcher failures leave the local prediction alone.
             }
         }
     }
