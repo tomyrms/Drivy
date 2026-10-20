@@ -104,6 +104,7 @@ Inchangé et déjà conforme à la demande : l’enregistrement se fait dans le 
 | Leçon réelle, avant/après (homelab, lecture seule, statistiques seulement) | Voir le tableau du replay |
 | Scénarios des nouveaux tests rejoués en JavaScript avec le vrai `selectTrack` de l’API | Passent, ainsi que les scénarios des tests existants (déplacement continu, arrêt au feu, arrêt puis départ, trajet de 6 000 points) |
 | Tests Swift (CI Apple) | Run `39482372052` vert : 685 tests Swift Testing dans 63 suites. Premier passage (`39479415879`) : un échec du nouveau test de la flèche, fenêtre mal recentrée au bord d’un tronçon, corrigé. |
-| IPA d’essai | `fc7c4c3`, run `39482372250` |
+| Dernier commit de code `bce961c` | Tests Swift `39485169131` vert (685), vérifications `39485168849` vert |
+| IPA d’essai | `bce961c`, run `39485169031` |
 
 **Non vérifié** : rien n’a été vu tourner sur un appareil. La fluidité perçue, le comportement de la prédiction sur route (virage serré, rond-point, freinage brusque) et le 120 Hz réel restent à qualifier par le porteur sur iPhone.
