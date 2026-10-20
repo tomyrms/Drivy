@@ -49,12 +49,12 @@ import SwiftUI
         moving = (speed ?? 0) >= SchoolMapPredictor.movingSpeed
         course = moving ? (latest?.courseDegrees ?? position.course) : position.course
         let now = CACurrentMediaTime()
-        // Age of the fix when it reaches the map (storage round trip): the prediction catches it up.
-        let age = latest.flatMap { SchoolLesson.date($0.capturedAt) }.map { Date().timeIntervalSince($0) }
+        // No clock-to-clock age: `capturedAt` is on the school's clock, and a device clock a few
+        // seconds off would throw the marker far ahead. The fix is drawn from when it reaches the map.
         predictor.receive(latitude: latest?.latitude ?? position.point.latitude,
                           longitude: latest?.longitude ?? position.point.longitude,
                           speed: reduceMotion ? nil : speed, course: latest?.courseDegrees,
-                          at: now, measuredAt: age.flatMap { $0.isFinite && $0 >= 0 ? now - $0 : nil }, instant: instant)
+                          at: now, instant: instant)
         wake?()
     }
 

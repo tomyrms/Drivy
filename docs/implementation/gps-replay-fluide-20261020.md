@@ -52,8 +52,30 @@ Trajet court du 19 octobre (`fe28ac17…`, 116 mesures, en mouvement continu) : 
 
 - `SchoolCaptureMeasurement` porte la vitesse et le cap Doppler d’iOS, quand iOS les juge fiables (`speedAccuracy`, `courseAccuracy`). Ils ne sont ni stockés ni envoyés : le schéma du coffre, les lots et le contrat ne changent pas.
 - `SchoolCaptureMapSegment.liveFix` : la dernière mesure admise (précision ≤ 30 m), avant le filtre d’affichage. Le marqueur la suit à chaque mesure.
-- `SchoolMapPredictor` : position = mesure + vitesse × temps écoulé (au plus 1,6 s), plus une correction qui s’efface en 0,45 s. Une nouvelle mesure ne fait jamais sauter le marqueur : il part d’où il est dessiné. En dessous de 0,6 m/s, le véhicule est tenu pour arrêté et le bruit ne fait pas ramper le marqueur. Au-delà de 80 m d’écart, il est posé. L’âge de la mesure à son arrivée sur la carte (écriture dans le coffre) est rattrapé par la prédiction.
+- `SchoolMapPredictor` : position = mesure + vitesse × temps écoulé (au plus 1,6 s), plus une correction qui s’efface en 0,45 s. Une nouvelle mesure ne fait jamais sauter le marqueur : il part d’où il est dessiné. En dessous de 0,6 m/s, le véhicule est tenu pour arrêté et le bruit ne fait pas ramper le marqueur. Au-delà de 80 m d’écart, il est posé. Le délai d’écriture dans le coffre (quelques dizaines de millisecondes) n’est pas rattrapé : l’heure d’une mesure est sur l’horloge de l’école, et la comparer à l’horloge du téléphone projetterait le marqueur trop loin dès que les deux divergent.
 - Réduire les animations : pas de prédiction, le marqueur se pose sur chaque mesure.
+
+Rejeu sur les leçons réelles, image par image à 60 Hz, chaque mesure livrée à la carte 0,1 s après sa prise. La vitesse Doppler n’étant pas conservée, elle est estimée à partir des deux mesures précédentes, plus bruitée que celle d’iOS. Référence : la position interpolée entre mesures brutes.
+
+| | Ancien marqueur | Nouveau marqueur |
+|---|---|---|
+| Leçon du 20 octobre : écart à la position, médiane / 99e centile | 2,6 m / 7,5 m | 0,25 m / 1,3 m |
+| Leçon du 20 octobre : arrêts de plus d’une seconde | 146 | 14 |
+| Trajet du 19 octobre : écart, médiane / 99e centile | 3,1 m / 5,7 m | 0,34 m / 1,5 m |
+| Trajet du 19 octobre : arrêts de plus d’une seconde | 24 | 1 |
+
+## Exigences et preuves
+
+| Demande | Vérification | Résultat observé |
+|---|---|---|
+| Replay sans saccade | Rejeu image par image sur la leçon réelle ; test `aSlowVehicleRollsSteadily…` | Arrêts > 1 s : 147 → 17 (arrêts réels) ; aucun recul |
+| Vitesse continue, mesures respectées | Test `theSpeedChangesSmoothly…` ; rejeu réel | Écart de vitesse au point < 1 m/s ; écart curseur/mesure médian 1,7 → 0,4 m |
+| Suivre la direction en ×5/×10 | Test `theArrowLooksAhead…` (zigzag, bords compris) | Flèche à 3,5° au plus de la route au lieu de 18° ; lissage caméra non mesuré en image |
+| Direct en avance, sans saut | Tests `theLiveMarkerRollsOn…`, `aNewFixCorrects…` ; rejeu réel | Voir tableau ci-dessus |
+| Comportements existants (arrêt au feu, lacune, recalage routier, 6 000 points) | Tests existants inchangés | Passent (CI) |
+| Hors connexion | Aucun changement du stockage ni de l’envoi | Non retesté : comportement antérieur |
+| Collage à la route en direct | — | Non fait, décision du porteur |
+| Fluidité réelle sur iPhone, 120 Hz | — | Non vérifiable ici : essai du porteur avec l’IPA |
 
 ## Carte
 
