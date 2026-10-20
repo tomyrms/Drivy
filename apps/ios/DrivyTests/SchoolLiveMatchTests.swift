@@ -216,6 +216,14 @@ struct SchoolLiveMatchLifecycleTests {
         continuation.finish()
     }
 
+    @Test func attributionContainsNoCaptureOrLocationContext() {
+        let url = SchoolMapAttributionSection.copyrightURL
+        #expect(url.scheme == "https")
+        #expect(url.host == "www.openstreetmap.org")
+        #expect(url.path == "/copyright")
+        #expect(url.query == nil && url.fragment == nil && url.user == nil && url.password == nil)
+    }
+
     @Test func anExpiredLeaseNeverSendsMeasurements() async {
         let coordinator = SchoolLiveMatchCoordinator()
         let segment = UUID()

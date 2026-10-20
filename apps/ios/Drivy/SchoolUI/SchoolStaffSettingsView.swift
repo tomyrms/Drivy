@@ -60,6 +60,7 @@ struct SchoolStaffSettingsView: View {
                 .drivyFormRows()
             }
             DrivyAppearanceSection()
+            SchoolMapAttributionSection()
             if let account {
                 if appLock?.biometryName != nil {
                     Section {

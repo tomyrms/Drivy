@@ -49,6 +49,7 @@ struct SchoolLearnerSettingsView: View {
                 .drivyFormRows()
             }
             DrivyAppearanceSection()
+            SchoolMapAttributionSection()
             if appLock?.biometryName != nil {
                 Section {
                     account.lockRow()
