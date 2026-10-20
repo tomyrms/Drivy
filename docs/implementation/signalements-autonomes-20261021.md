@@ -68,8 +68,8 @@ Avant ce changement, l'app gardait un thème seulement si l'une de ses `competen
 | Création, relecture, modification sans compétence ; thème conservé quand `themeKey` est omis | API, vraie PostgreSQL | Réussi |
 | Thème inconnu, statut absent, ni thème ni compétence : refusés | API (400) et SQL direct (contraintes nommées) | Réussi |
 | Progression et compétences intactes après signalement | API : `GET /trainings/{id}/progress` identique avant/après | Réussi |
-| Palette identique quel que soit le référentiel | Swift : `tiles(for:)` n'accepte plus de compétences ; 18 tuiles si tout est affiché | Écrit, à exécuter sur runner Apple |
-| Validateurs iOS aller/retour | Swift : corps et lecture autonomes valides, sans thème ni compétence refusés | Écrit, à exécuter sur runner Apple |
-| Masquage, ordre, instantané, école ancienne | Tests Swift existants adaptés | Écrit, à exécuter sur runner Apple |
+| Palette identique quel que soit le référentiel | Swift : `tiles(for:)` n'accepte plus de compétences ; 18 tuiles si tout est affiché | Écrit, non exécuté (campagne annulée) |
+| Validateurs iOS aller/retour | Swift : corps et lecture autonomes valides, sans thème ni compétence refusés | Écrit, non exécuté (campagne annulée) |
+| Masquage, ordre, instantané, école ancienne | Tests Swift existants adaptés | Écrit, non exécuté (campagne annulée) |
 | Suite serveur et web complète | `npm test` API (vraie PostgreSQL, Mailpit) et web | 557 API, 316 web |
 | Palette sur iPhone/iPad, VoiceOver | Recette sur appareil (#55) | Non exécutée |

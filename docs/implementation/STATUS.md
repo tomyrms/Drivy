@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 21 octobre 2026 : signalements autonomes (#56), non déployé
+
+Branche `claude/signalements-autonomes-20261021`, commit `2e23999`, non fusionnée, non déployée. Décision et détail : [signalements-autonomes-20261021.md](signalements-autonomes-20261021.md). La palette « Signaler » ne dépend plus du référentiel de la formation : un signalement se qualifie par son thème et son statut, la compétence devient facultative. Migration `036_autonomous_signals.sql` (remplace deux contraintes de 009/026 sans les réécrire).
+
+**Exécuté** : 557 tests API sur vraie PostgreSQL et Mailpit en local, 316 tests web ; CI vérifications `39517398912`, parcours navigateur `39517398907` et IPA d’essai `39517398901` verts (l’IPA prouve que l’app compile, pas que ses tests passent).
+
+**Pas exécuté** : les tests Swift modifiés et ajoutés. La campagne `39517398394` a été annulée à la demande du porteur avant résultat. Recette iPhone/iPad (18 tuiles, VoiceOver) non faite. Ordre de déploiement : service (036) avant l’app.
+
 ## 20 octobre 2026 : recalage suisse OSRM déployé, tests Apple réussis
 
 Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous. Intégration dans `master` autorisée par le porteur à 22:12 UTC, avec les 25 commits des deux branches du 20 octobre. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés après redémarrage du conteneur à 22:59 Europe/Zurich : accès depuis CT 114 réussi, accès depuis le PC refusé, connexions sortantes nouvelles toujours bloquées, aucun redémarrage spontané du moteur.
