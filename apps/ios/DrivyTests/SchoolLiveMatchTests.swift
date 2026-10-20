@@ -24,17 +24,23 @@ struct SchoolLiveMatchTests {
     @Test func realWindowIsBoundedAndRequestsNeverOutrunCadence() throws {
         var window = SchoolLiveMatchWindow(segmentID: segment)
         window.append([point(0), point(1)])
-        #expect(window.request(at: 0) == nil)
+        let tooShort = window.request(at: 0)
+        #expect(tooShort == nil)
         window.append([point(2)])
-        let first = try #require(window.request(at: 0))
+        let firstRequest = window.request(at: 0)
+        let first = try #require(firstRequest)
         #expect(first.points == [point(0), point(1), point(2)])
         window.append([point(3)])
-        #expect(window.request(at: 2.49) == nil)
-        #expect(window.request(at: 2.5)?.points.last == point(3))
+        let tooEarly = window.request(at: 2.49)
+        #expect(tooEarly == nil)
+        let nextRequest = window.request(at: 2.5)
+        #expect(nextRequest?.points.last == point(3))
         window.append((4...100).map { point($0) })
-        let bounded = try #require(window.request(at: 5))
+        let boundedRequest = window.request(at: 5)
+        let bounded = try #require(boundedRequest)
         #expect(bounded.points == (81...100).map { point($0) })
-        #expect(window.request(at: 8) == nil) // Never resend the same fix.
+        let duplicate = window.request(at: 8)
+        #expect(duplicate == nil) // Never resend the same fix.
     }
 
     @Test func requestRejectsClockDriftAndContractBoundsBeforeSending() {
@@ -51,15 +57,18 @@ struct SchoolLiveMatchTests {
     @Test func noWindowCrossesSilenceOrAcceptsDisorderedMeasurements() throws {
         var window = SchoolLiveMatchWindow(segmentID: segment)
         window.append([point(0), point(1), point(2), point(1)])
-        #expect(window.request(at: 0)?.points.map(\.sequence) == [0, 1, 2])
+        let orderedRequest = window.request(at: 0)
+        #expect(orderedRequest?.points.map(\.sequence) == [0, 1, 2])
         window.append([point(40)])
-        #expect(window.request(at: 3) == nil)
+        let afterSilence = window.request(at: 3)
+        #expect(afterSilence == nil)
     }
 
     @Test func onlyTheExactCurrentFixCanBeCorrectedWithinTheResponseDeadline() throws {
         var window = SchoolLiveMatchWindow(segmentID: segment)
         window.append([point(0), point(1), point(2)])
-        let request = try #require(window.request(at: 10))
+        let candidate = window.request(at: 10)
+        let request = try #require(candidate)
         let response = matched(request)
         #expect(window.accepts(response, for: request, sentAt: 10, now: 10.2))
         #expect(!window.accepts(response, for: request, sentAt: 10, now: 12.01))
@@ -80,14 +89,16 @@ struct SchoolLiveMatchTests {
     @Test func parkingLowConfidenceAndExcessDistanceNeverForceTheMarker() throws {
         var window = SchoolLiveMatchWindow(segmentID: segment)
         window.append([point(0), point(1), point(2)])
-        let request = try #require(window.request(at: 0))
+        let candidate = window.request(at: 0)
+        let request = try #require(candidate)
         #expect(!window.accepts(matched(request, confidence: 0.79), for: request, sentAt: 0, now: 0.1))
         #expect(!window.accepts(matched(request, distance: 30), for: request, sentAt: 0, now: 0.1))
         // Do not trust only the server's distance field.
         #expect(!window.accepts(matched(request, north: 40), for: request, sentAt: 0, now: 0.1))
         var parking = SchoolLiveMatchWindow(segmentID: segment)
         parking.append([point(0), point(1), point(2, speed: 0.5)])
-        #expect(parking.request(at: 0) == nil)
+        let parkedRequest = parking.request(at: 0)
+        #expect(parkedRequest == nil)
         let unavailable = SchoolLiveMatchResponse(status: .unavailable, segmentId: segment, sequence: 2, elapsedMs: 2_000,
             position: nil, confidence: nil, distanceMeters: nil)
         #expect(!window.accepts(unavailable, for: request, sentAt: 0, now: 0.1))
@@ -126,7 +137,8 @@ struct SchoolLiveMatchTests {
         var predictor = SchoolMapPredictor()
         predictor.receive(latitude: 0, longitude: 0, speed: 10, course: 90, at: 0, instant: true)
         let before = try #require(predictor.position(at: 0.2))
-        #expect(predictor.correctRoadPosition(latitude: 4 * metre, longitude: 0, at: 0.2))
+        let corrected = predictor.correctRoadPosition(latitude: 4 * metre, longitude: 0, at: 0.2)
+        #expect(corrected)
         let after = try #require(predictor.position(at: 0.2))
         #expect(abs(after.latitude - before.latitude) < 1e-12)
         #expect(abs(after.longitude - before.longitude) < 1e-12)
@@ -139,9 +151,11 @@ struct SchoolLiveMatchTests {
         predictor.receive(latitude: 0, longitude: 30 * metre, speed: 10, course: 90, at: 3)
         #expect(abs(try #require(predictor.position(at: 3)).latitude - priorToFix.latitude) < 1e-12)
         #expect(abs(try #require(predictor.position(at: 6)).latitude / metre) < 0.02)
-        #expect(!predictor.correctRoadPosition(latitude: 1, longitude: 1, at: 6))
+        let excessiveCorrection = predictor.correctRoadPosition(latitude: 1, longitude: 1, at: 6)
+        #expect(!excessiveCorrection)
         predictor.reset()
-        #expect(!predictor.correctRoadPosition(latitude: 0, longitude: 0, at: 7))
+        let correctionWithoutFix = predictor.correctRoadPosition(latitude: 0, longitude: 0, at: 7)
+        #expect(!correctionWithoutFix)
     }
 }
 
@@ -329,7 +343,8 @@ struct SchoolLiveMatchLifecycleTests {
                 latitude: 0, longitude: Double(index) * 0.0001, accuracyMeters: 8, speedMetersPerSecond: 10)
         }
         coordinator.appendDurable(measurements, startingAt: 0, segmentID: segment)
-        let remaining = try #require(await iterator.next())
+        let nextWait = await iterator.next()
+        let remaining = try #require(nextWait)
         #expect(abs(remaining - 0.1) < 0.000_001)
         #expect(coordinator.result != nil)
         coordinator.stop()
