@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 20 octobre 2026 : recalage suisse OSRM, chantier en cours
+
+Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous, non fusionnée. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés, redémarrage du conteneur testé avant le dernier durcissement.
+
+**Bascule API exécutée à 22:56 Europe/Zurich** : `MAP_MATCHING_PROVIDER=osrm`, anciennes variables Mapbox commentées, service actif et readiness 200. Sauvegarde privée préalable vérifiée par lecture du catalogue et de tous les blocs (`pg_restore --file=/dev/null`), sans restauration d'essai. **Écart de procédure** : la création et l'installation initiales du CT 117 avaient été effectuées sans sauvegarde préalable. La sauvegarde faite ensuite ne corrige pas rétroactivement cet écart. Bascule API et durcissement ultérieur ont chacun leur sauvegarde vérifiée.
+
+**Mesures exécutées en lecture seule** : trajet court 116/116 mesures couvertes (confiance 0,679, 43 ms), trajet lent 228/1 058 (0,960, 23 ms), mêmes couvertures que les résultats Mapbox déjà stockés. Aucun nouvel envoi de ces positions à Mapbox. RSS du moteur environ 650 Mio ; le compteur cgroup inclut aussi le cache de fichiers, sans OOM observé. Ces couvertures ne mesurent pas la justesse terrain.
+
+**Reste à exécuter** : purge testée des deux caches Mapbox encore présents, route directe et intégration iOS, tests PostgreSQL et Apple, rejeu direct avant/après, IPA. Le recalage des nouveaux calculs n'est plus confié à un tiers ; les fonds de carte restent Apple Plans. Notices déjà adoptées non modifiées automatiquement. GPS, batterie, VoiceOver et fluidité physique restent à qualifier sur iPhone.
+
 ## 20 octobre 2026 : GPS en direct et replay fluides
 
 Branche `claude/gps-replay-fluide-20261020`, non fusionnée, non déployée. Détail : [gps-replay-fluide-20261020.md](gps-replay-fluide-20261020.md).
