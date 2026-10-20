@@ -62,10 +62,17 @@ import SwiftUI
     /// Results are checked again at the rendering boundary, against the current real fix.
     /// Clearing a suggestion glides back to prediction rather than jumping off the road.
     func showRoadMatch(_ response: SchoolLiveMatchResponse?, segment: SchoolCaptureMapSegment?) {
-        guard !reduceMotion, let response, let segment, let last = segment.lastPoint,
+        guard !reduceMotion, let response, response.status == .matched,
+              let segment, let last = segment.lastPoint,
               response.segmentId == segment.id, response.sequence == last.sequence,
               response.elapsedMs == last.elapsedMs, target?.segmentID == segment.id,
-              target?.elapsedMs == last.elapsedMs, let position = response.position else {
+              target?.elapsedMs == last.elapsedMs, let position = response.position, position.isValid,
+              let confidence = response.confidence, confidence.isFinite, (0.8...1).contains(confidence),
+              let distance = response.distanceMeters, distance.isFinite,
+              (0...min(20, max(5, last.accuracyMeters))).contains(distance),
+              segment.liveFix?.speedMetersPerSecond.map({ $0 >= 2 }) ?? true,
+              SchoolTrackGeometry.meters(latitude1: last.latitude, longitude1: last.longitude,
+                  latitude2: position.latitude, longitude2: position.longitude) <= min(20, max(5, last.accuracyMeters)) else {
             if roadMatch != nil {
                 roadMatch = nil
                 predictor.clearRoadCorrection(at: CACurrentMediaTime())

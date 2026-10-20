@@ -28,11 +28,11 @@ struct SchoolLiveMatchPoint: Codable, Sendable, Equatable {
     }
 
     var isValid: Bool {
-        sequence >= 0 && elapsedMs >= 0 && SchoolLesson.date(capturedAt) != nil
+        (0...2_147_483_646).contains(sequence) && (0...10_800_000).contains(elapsedMs) && SchoolLesson.date(capturedAt) != nil
             && latitude.isFinite && (-90...90).contains(latitude)
             && longitude.isFinite && (-180...180).contains(longitude)
             && accuracyMeters.isFinite && accuracyMeters >= 0 && accuracyMeters <= 30
-            && (speed == nil || (speed!.isFinite && speed! >= 0 && speed! <= 100))
+            && (speed.map { $0.isFinite && (0...100).contains($0) } ?? true)
     }
 }
 
@@ -44,9 +44,13 @@ struct SchoolLiveMatchRequest: Codable, Sendable, Equatable {
         guard (3...20).contains(points.count), points.allSatisfy(\.isValid),
               let first = points.first, let last = points.last,
               last.elapsedMs - first.elapsedMs <= 30_000 else { return false }
-        return zip(points, points.dropFirst()).allSatisfy { previous, next in
-            next.sequence > previous.sequence && next.elapsedMs > previous.elapsedMs
-                && SchoolLesson.date(next.capturedAt)! > SchoolLesson.date(previous.capturedAt)!
+        let dates = points.compactMap { SchoolLesson.date($0.capturedAt) }
+        guard dates.count == points.count, dates.last!.timeIntervalSince(dates.first!) <= 30 else { return false }
+        return points.indices.dropFirst().allSatisfy { index in
+            let previous = points[index - 1], next = points[index]
+            let wallMs = dates[index].timeIntervalSince(dates[index - 1]) * 1_000
+            return next.sequence > previous.sequence && next.elapsedMs > previous.elapsedMs && wallMs > 0
+                && abs(Double(next.elapsedMs - previous.elapsedMs) - wallMs) <= 1_000
         }
     }
 }

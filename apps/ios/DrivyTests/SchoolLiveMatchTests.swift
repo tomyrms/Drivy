@@ -37,6 +37,17 @@ struct SchoolLiveMatchTests {
         #expect(window.request(at: 8) == nil) // Never resend the same fix.
     }
 
+    @Test func requestRejectsClockDriftAndContractBoundsBeforeSending() {
+        let first = point(0), second = point(1), last = point(2)
+        let drifted = SchoolLiveMatchPoint(sequence: last.sequence, elapsedMs: last.elapsedMs,
+            capturedAt: point(8).capturedAt, latitude: last.latitude, longitude: last.longitude,
+            accuracyMeters: last.accuracyMeters, speed: last.speed)
+        #expect(!SchoolLiveMatchRequest(segmentId: segment, points: [first, second, drifted]).isValid)
+        let tooLong = SchoolLiveMatchPoint(sequence: 2, elapsedMs: 10_800_001, capturedAt: last.capturedAt,
+            latitude: 0, longitude: 0, accuracyMeters: 8, speed: nil)
+        #expect(!tooLong.isValid)
+    }
+
     @Test func noWindowCrossesSilenceOrAcceptsDisorderedMeasurements() throws {
         var window = SchoolLiveMatchWindow(segmentID: segment)
         window.append([point(0), point(1), point(2), point(1)])
@@ -80,6 +91,35 @@ struct SchoolLiveMatchTests {
         let unavailable = SchoolLiveMatchResponse(status: .unavailable, segmentId: segment, sequence: 2, elapsedMs: 2_000,
             position: nil, confidence: nil, distanceMeters: nil)
         #expect(!window.accepts(unavailable, for: request, sentAt: 0, now: 0.1))
+    }
+
+    @Test @MainActor func roadDisplayNeverChangesTheTraceOrObservationAnchor() throws {
+        let measurements = (0...2).map { index in
+            SchoolCaptureMeasurement(capturedAt: "2026-10-20T20:00:0\(index)Z", elapsedMs: index * 1_000,
+                latitude: 0, longitude: Double(index) * 10 * metre, accuracyMeters: 8,
+                speedMetersPerSecond: 10, courseDegrees: 90)
+        }
+        let mapSegment = SchoolCaptureMapSegment(id: segment, measurements: measurements)
+        let trace = SchoolLiveTrace()
+        trace.update([mapSegment])
+        let before = try #require(trace.coordinate(segmentID: segment, sequence: 2))
+        let motion = SchoolLiveMapMotion()
+        motion.show(trace.position, fix: mapSegment.liveFix)
+        let request = SchoolLiveMatchRequest(segmentId: segment, points: (0...2).map { point($0) })
+        motion.showRoadMatch(matched(request, confidence: 0.1), segment: mapSegment)
+        #expect(try #require(motion.pose(at: 1e12)).latitude == 0)
+        motion.showRoadMatch(matched(request, north: 40), segment: mapSegment)
+        #expect(try #require(motion.pose(at: 1e12)).latitude == 0)
+        motion.showRoadMatch(matched(request), segment: mapSegment)
+        #expect(try #require(motion.pose(at: 1e12)).latitude > 0)
+        let after = try #require(trace.coordinate(segmentID: segment, sequence: 2))
+        #expect(after.latitude == before.latitude && after.longitude == before.longitude)
+        #expect(mapSegment.lastPoint?.latitude == 0)
+        #expect(mapSegment.lastPoint?.longitude == measurements.last?.longitude)
+        #expect(mapSegment.measurementCount == 3)
+        #expect(trace.position?.point == mapSegment.lastPoint)
+        motion.showRoadMatch(nil, segment: mapSegment)
+        #expect(trace.coordinate(segmentID: segment, sequence: 2)?.latitude == 0)
     }
 
     @Test func aRoadCorrectionPreservesPredictionClockAndNeverJumpsOrChangesTheFix() throws {
@@ -185,6 +225,7 @@ struct SchoolLiveMatchLifecycleTests {
         let (events, continuation) = AsyncStream<Void>.makeStream()
         var eventsIterator = events.makeAsyncIterator()
         coordinator.start(segmentID: segment, permits: { true }, send: { request in
+            defer { continuation.finish() }
             continuation.yield(())
             do { try await Task.sleep(for: .seconds(30)) }
             catch {
