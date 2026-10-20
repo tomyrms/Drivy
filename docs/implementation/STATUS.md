@@ -2,7 +2,7 @@
 
 ## 20 octobre 2026 : recalage suisse OSRM déployé, tests Apple réussis
 
-Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous, non fusionnée. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés après redémarrage du conteneur à 22:59 Europe/Zurich : accès depuis CT 114 réussi, accès depuis le PC refusé, connexions sortantes nouvelles toujours bloquées, aucun redémarrage spontané du moteur.
+Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous. Intégration dans `master` autorisée par le porteur à 22:12 UTC, avec les 25 commits des deux branches du 20 octobre. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés après redémarrage du conteneur à 22:59 Europe/Zurich : accès depuis CT 114 réussi, accès depuis le PC refusé, connexions sortantes nouvelles toujours bloquées, aucun redémarrage spontané du moteur.
 
 **Bascule API exécutée à 22:56 Europe/Zurich** : `MAP_MATCHING_PROVIDER=osrm`, anciennes variables Mapbox commentées, service actif et readiness 200. Sauvegarde privée préalable vérifiée par lecture du catalogue et de tous les blocs (`pg_restore --file=/dev/null`), sans restauration d'essai. **Écart de procédure** : la création et l'installation initiales du CT 117 avaient été effectuées sans sauvegarde préalable. La sauvegarde faite ensuite ne corrige pas rétroactivement cet écart. Bascule API et durcissement ultérieur ont chacun leur sauvegarde vérifiée.
 
@@ -14,7 +14,7 @@ Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-desso
 
 **Vérifications Apple** : campagne `39501661059` réussie, 705 tests Swift Testing dans 66 suites et 6 XCTest. Les égalités flottantes du test ont été corrigées dans `1bc5b7f`, sans changement du code produit. IPA build 288 verte (`39498733858`), téléchargée et empreinte vérifiée. Le recalage n'est plus confié à un tiers ; les fonds de carte restent Apple Plans. Notices déjà adoptées non modifiées automatiquement. GPS, batterie, VoiceOver et fluidité physique restent à qualifier sur iPhone.
 
-**Workflow ciblé** : à la demande du porteur, `unit_only=true` sélectionne désormais dix suites GPS par défaut ; `unit_test_scope=all` conserve la régression native complète. Quatorze tests locaux d'orchestration réussis. Campagne GPS Apple `39503905801` en cours. Détails : [workflow-ios-cible-20261020.md](workflow-ios-cible-20261020.md).
+**Workflow ciblé** : à la demande du porteur, `unit_only=true` sélectionne désormais dix suites GPS par défaut ; `unit_test_scope=all` conserve la régression native complète. Quatorze tests locaux d'orchestration réussis. Campagne GPS Apple `39503905801` réussie : 108 tests dans dix suites. Détails : [workflow-ios-cible-20261020.md](workflow-ios-cible-20261020.md).
 
 | Exigence | Vérification | Résultat observé |
 |---|---|---|

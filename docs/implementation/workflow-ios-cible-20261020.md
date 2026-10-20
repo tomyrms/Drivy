@@ -45,6 +45,6 @@ La sélection `only-testing` réduit les tests exécutés mais ne garantit pas q
 |---|---|---|
 | Sélection GPS sans perte de transport ou droits | Dix noms de suites dans huit fichiers, validation des noms | 14 tests locaux réussis sur le commit `4770294`, noms des dix suites comparés aux sources Swift |
 | Même sélection à la compilation et à l'exécution | Helper unique, tests des arguments | Arguments identiques contrôlés par doubles locaux pour `gps` et `all` |
-| Pas de parcours UI/iPad/IPA dans le mode GPS | Conditions du workflow et script, exécution Apple | À vérifier |
+| Pas de parcours UI/iPad/IPA dans le mode GPS | Conditions du workflow et script, exécution Apple | Run `39503905801` réussi : dix suites GPS, aucune suite UI ni iPad, étapes visuelles/IPA ignorées |
 | Suite complète encore accessible | Cas `all` dans les tests locaux | Sélecteur `-only-testing:DrivyTests` conservé et testé |
-| Parcours GPS réellement exécuté | Workflow Apple ciblé, nombre de tests et conclusion observés | Campagne `39503905801` en cours |
+| Parcours GPS réellement exécuté | Workflow Apple ciblé, nombre de tests et conclusion observés | `39503905801` réussi : 108 tests Swift Testing dans dix suites, 10,768 s d'exécution des tests |
