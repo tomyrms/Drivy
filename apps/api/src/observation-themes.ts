@@ -7,9 +7,11 @@ import {checkIdempotency,checkVersion,requireVersion,schoolCommand} from './comm
 import {ApiError,forbidden} from './errors.js';
 
 /**
- * Catalogue des signalements : dix-huit thèmes à clés stables, chacun rattaché à une compétence du référentiel par la clé stable de
- * celle-ci (la première de `competencyKeys` fait foi, les suivantes sont d'anciennes clés). L'ordre du tableau est l'ordre d'origine.
- * La clé est aussi le nom du pictogramme dans l'app et sur le web. Contrat : docs/implementation/signalements-configurables-20261012.md.
+ * Catalogue des signalements : dix-huit thèmes à clés stables. L'ordre du tableau est l'ordre d'origine. La clé est aussi le nom du
+ * pictogramme dans l'app et sur le web. Un thème existe seul : il ne dépend d'aucune compétence de formation (#56).
+ * `competencyKeys` est déprécié : plus aucune règle ne le lit, mais il reste publié tel quel parce que les apps antérieures au
+ * 21 octobre 2026 refusent une configuration qui ne le porte pas. Il ne sert qu'à un pictogramme d'observation ancienne sans clé.
+ * Contrats : docs/implementation/signalements-configurables-20261012.md et signalements-autonomes-20261021.md.
  */
 export const observationThemes=[
  {key:'vehicle',title:'Maîtrise du véhicule',competencyKeys:['vehicule'],defaultVisible:true},
@@ -34,10 +36,6 @@ export const observationThemes=[
 export type ObservationThemeKey=typeof observationThemes[number]['key'];
 const keys=observationThemes.map(theme=>theme.key) as [ObservationThemeKey,...ObservationThemeKey[]];
 export const observationThemeKey=z.enum(keys);
-/** Compétences (clés stables) auxquelles un thème peut être rattaché. */
-export function observationThemeCompetencies(key:ObservationThemeKey):readonly string[]{
- return observationThemes.find(theme=>theme.key===key)!.competencyKeys;
-}
 
 const command=z.object({operationId:z.uuid(),themes:z.array(z.object({key:observationThemeKey,visible:z.boolean()}).strict()).length(keys.length)
  .refine(themes=>new Set(themes.map(theme=>theme.key)).size===themes.length).refine(themes=>themes.some(theme=>theme.visible))}).strict();

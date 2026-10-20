@@ -574,7 +574,6 @@ private actor RankingLessonTransport: SchoolHTTPTransport {
         await ranking.refresh()
         let orders = SchoolLessonSignalOrderMemoryStore()
         let model = recorder(themes: themes, ranking: ranking, orders: orders)
-        await model.loadCompetencies()
         model.openPalette()
         #expect(model.signalOrder == nil && orders.order(for: HubFixture.lessonID) == nil)
         #expect(model.themes.compactMap(\.key) == Self.manual)
@@ -585,7 +584,6 @@ private actor RankingLessonTransport: SchoolHTTPTransport {
         let (school, themes, ranking) = await smartSchool()
         let orders = SchoolLessonSignalOrderMemoryStore()
         let model = recorder(themes: themes, ranking: ranking, orders: orders)
-        await model.loadCompetencies()
         // Rien n’est figé avant la première ouverture de « Signaler ».
         #expect(orders.order(for: HubFixture.lessonID) == nil)
         model.openPalette()
@@ -609,7 +607,6 @@ private actor RankingLessonTransport: SchoolHTTPTransport {
         // Leçon interrompue puis reprise : un autre enregistreur, la même leçon, le même ordre dès sa création.
         let resumed = recorder(themes: themes, ranking: ranking, orders: orders)
         #expect(resumed.signalOrder == Self.first)
-        await resumed.loadCompetencies()
         resumed.openPalette()
         #expect(resumed.signalOrder == Self.first && resumed.themes.compactMap(\.key) == Self.first)
         resumed.stop()
@@ -652,7 +649,6 @@ private actor RankingLessonTransport: SchoolHTTPTransport {
         let (school, themes, ranking) = await smartSchool()
         let orders = SchoolLessonSignalOrderMemoryStore()
         let model = recorder(themes: themes, ranking: ranking, orders: orders)
-        await model.loadCompetencies()
         model.openPalette()
         #expect(model.themes.compactMap(\.key) == Self.first)
         // Geste volontaire du moniteur, dans les Paramètres, pendant la leçon.
@@ -678,7 +674,6 @@ private actor RankingLessonTransport: SchoolHTTPTransport {
         let (school, themes, ranking) = await smartSchool()
         let orders = SchoolLessonSignalOrderMemoryStore()
         let model = recorder(themes: themes, ranking: ranking, orders: orders)
-        await model.loadCompetencies()
         model.openPalette()
         let speed = try #require(model.themes.first { $0.key == "speed" })
         // L’écran de réglage, en ordre automatique : la liste montrée n’est pas celle qui part.

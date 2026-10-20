@@ -84,42 +84,35 @@ import Testing
     @Test func qualificationKeepsTheChosenThemeStatusAndOriginalInstant() async throws {
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox: outbox)
-        await model.loadCompetencies()
         let theme = try #require(model.themes.first)
         let instant = HubFixture.date("2026-09-28T12:11:00Z")
         #expect(model.record(theme: theme, status: .attention, at: instant))
         let command = try #require(outbox.value)
         let body = try JSONDecoder().decode(SchoolObservationBody.self, from: command.body)
-        #expect(body.competencyId == theme.competency.id && body.eventKind == "QUALIFIED")
-        #expect(body.eventStatus == "ATTENTION" && body.text == "Priorité à droite")
+        // #56 : le thème qualifie seul ; aucune compétence n’est jointe.
+        #expect(body.competencyId == nil && body.themeKey == theme.key && body.eventKind == "QUALIFIED")
+        #expect(body.eventStatus == "ATTENTION" && body.text == theme.title)
         #expect(body.observedAt.flatMap(SchoolLesson.date) == instant)
         #expect(body.captureId == nil && body.isValid)
         #expect(!model.record(theme: theme, status: .positive, at: instant))
         model.stop()
     }
 
-    @Test func aThemeNotReadFromTheTrainingCannotBeRecorded() {
+    @Test func aThemeOutsideTheSchoolCatalogueCannotBeRecorded() {
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox: outbox)
-        let unread = SchoolLiveObservationTheme(competency: LiveObservationTransport.competency, title: "Priorité à droite")
+        let unread = SchoolLiveObservationTheme(key: "tunnel", title: "Tunnels")
         #expect(!model.record(theme: unread, status: .attention, at: Date()))
         #expect(outbox.value == nil && model.pending == nil)
         model.stop()
     }
 
-    @Test func preciseThemesOnlyExpandADocumentedSchoolCompetency() {
-        let c = LiveObservationTransport.competency
-        let priorities = SchoolCatalogCompetency(id: c.id, schoolId: c.schoolId, version: c.version,
-            curriculumVersionId: c.curriculumVersionId, key: "priorites", label: "Priorités",
-            description: "Priorité de droite, signalisation et céder le passage.", sortOrder: 1)
-        let catalog = SchoolObservationThemeCatalog.embedded
-        let themes = SchoolLiveObservationTheme.tiles(for: catalog, competencies: [priorities])
-        #expect(themes.map(\.title) == ["Priorité à droite", "Signalisation", "Céder le passage"])
-        #expect(themes.map(\.key) == ["right-priority", "signage", "give-way"])
-        #expect(themes.allSatisfy { $0.competency.id == priorities.id })
-        // Une compétence qu’aucun thème ne désigne garde une seule tuile, à son nom, sans clé.
-        let generic = SchoolLiveObservationTheme.tiles(for: catalog, competencies: [c])
-        #expect(generic.count == 1 && generic[0].key == nil && generic[0].title == c.label)
+    /// #56 : la palette est prête sans aucune lecture du référentiel de la formation.
+    @Test func thePaletteNeedsNoReferentialRead() {
+        let model = recorder(outbox: ConfigurationOutboxStub())
+        #expect(model.themes.map(\.key) == SchoolObservationThemeCatalog.embedded.filter(\.visible).map(\.key))
+        #expect(model.expectedTileCount == model.themes.count)
+        model.stop()
     }
 
     @Test func replayNamesThePreciseObservationAndKeepsItsStatusSeparate() {

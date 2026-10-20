@@ -145,7 +145,8 @@ export const reportSchema = z.object({
  * Le catalogue appartient au serveur : le client ne fixe ni le nombre ni les clés, il exige seulement une liste cohérente.
  */
 export const observationThemeSchema = z.object({
-  key: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/), title: z.string().min(1).max(120), competencyKeys: z.array(z.string()).max(10),
+  // `competencyKeys` est déprécié (#56) : la console ne le lit pas et ne l'exige plus.
+  key: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/), title: z.string().min(1).max(120), competencyKeys: z.array(z.string()).max(10).optional(),
   visible: z.boolean(), defaultVisible: z.boolean(), defaultPosition: z.number().int().min(0).max(99),
 });
 export const observationThemesSchema = z.object({

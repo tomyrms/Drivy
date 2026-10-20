@@ -19,6 +19,11 @@ struct SchoolObservationEditor: Identifiable {
     private(set) var learnerName = ""
     private(set) var observations: [SchoolObservation] = []
     private(set) var competencies: [SchoolCatalogCompetency] = []
+    /// Thèmes de « Signaler » que l’école liste, masqués compris : un signalement se qualifie par l’un d’eux (#56).
+    var themes: [SchoolObservationTheme] {
+        let configuration = themeStore.configuration
+        return configuration.themes.filter { !configuration.unlisted.contains($0.key) }
+    }
     private(set) var draft: SchoolReportDraft?
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
@@ -37,10 +42,12 @@ struct SchoolObservationEditor: Identifiable {
     @ObservationIgnored private var storageAccessible = false
     /// Enregistreur du dernier « Signaler » ouvert depuis cet écran.
     @ObservationIgnored private var live: SchoolLiveObservationRecorder?
+    @ObservationIgnored private let themeStore: SchoolObservationThemeStore
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
+        themeStore = SchoolObservationThemeStores.store(for: scope, client: client.themeClient)
     }
 
     var canMutate: Bool {
@@ -83,9 +90,10 @@ struct SchoolObservationEditor: Identifiable {
         if pending.kind == .removeObservation,
            let body = try? JSONDecoder().decode(SchoolRemoveObservationBody.self, from: pending.body) { return "Retrait demandé\n\nMotif : \(body.reason)" }
         guard let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: pending.body) else { return "Demande conservée. Son résultat reste à vérifier." }
-        let kind = body.origin == "REVIEW" ? "Note de relecture" : (body.eventKind == "MARKER" ? "Repère" : "Observation de compétence")
+        let kind = body.origin == "REVIEW" ? "Note de relecture" : (body.eventKind == "MARKER" ? "Repère" : "Signalement")
         var details = [kind]
         if let time = timeLabel(body.observedAt) { details.append(time) }
+        if let title = themeTitle(body.themeKey) { details.append(title) }
         if let label = competencyLabel(body.competencyId) { details.append(label) }
         if let status = body.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:)) { details.append(status.label) }
         details.append(body.captureId == nil ? "Sans position GPS" : "Position déjà enregistrée, conservée sans modification")
@@ -113,6 +121,10 @@ struct SchoolObservationEditor: Identifiable {
     func competencyLabel(_ id: UUID?) -> String? {
         guard let id else { return nil }
         return competencies.first(where: { $0.id == id })?.displayLabel ?? "Compétence du référentiel"
+    }
+    func themeTitle(_ key: String?) -> String? {
+        guard let key else { return nil }
+        return SchoolObservationThemeCatalog.embedded.first { $0.key == key }?.title
     }
     func liveRecorder() -> SchoolLiveObservationRecorder? {
         guard acceptsAdd, !isBusy, lesson?.status == "PLANNED" else { return nil }
@@ -158,6 +170,8 @@ struct SchoolObservationEditor: Identifiable {
             let values = try await client.observations(scope: scope, lessonID: lessonID, trainingID: current.trainingId)
             guard valid(request) else { return }
             lesson = current; learnerName = learner.displayName; observations = values
+            // Le catalogue des signalements se relit à part : son échec garde la dernière copie confirmée.
+            Task { await themeStore.refresh() }
             // Le référentiel et le brouillon ne conditionnent pas la lecture de la liste privée.
             do {
                 let values = try await client.competencies(scope: scope, trainingID: current.trainingId)
@@ -167,7 +181,7 @@ struct SchoolObservationEditor: Identifiable {
             catch {
                 guard valid(request) else { return }
                 if isRevoked(error) { throw error }
-                competencies = []; competenciesMessage = "Le référentiel est indisponible. Les repères simples restent possibles sans choisir de compétence."
+                competencies = []; competenciesMessage = current.status == "COMPLETED" ? "Le référentiel est indisponible. La note reste possible sans compétence." : nil
             }
             guard valid(request) else { return }
             // Le brouillon connu reste en place pendant sa relecture : la barre d’action ne disparaît pas entre-temps.
@@ -195,15 +209,20 @@ struct SchoolObservationEditor: Identifiable {
         }
     }
 
-    func save(_ editor: SchoolObservationEditor, text: String, marker: Bool, competencyID: UUID?, status: SchoolObservationStatus?) async -> Bool {
+    /// `themeKey` qualifie un signalement pendant la leçon ; `competencyID` n’est choisi que pour une note de relecture. Une
+    /// compétence déjà portée par un ancien signalement est conservée telle quelle, jamais attribuée par supposition.
+    func save(_ editor: SchoolObservationEditor, text: String, marker: Bool, competencyID: UUID?, themeKey: String? = nil,
+              status: SchoolObservationStatus?) async -> Bool {
         guard canMutate else { return false }
         if editor.original == nil, !canAdd { return false }
         let competency = marker ? nil : competencyID
-        // Une compétence inconnue peut être conservée telle quelle, jamais attribuée par supposition.
         if let competency, !competencies.contains(where: { $0.id == competency }), competency != editor.original?.competencyId { return false }
+        let theme = marker ? nil : themeKey
+        if let theme, !themes.contains(where: { $0.key == theme }), theme != editor.original?.themeKey { return false }
         let savedText: String
         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { savedText = text }
         else if editor.origin == "LIVE", marker { savedText = "Moment à revoir" }
+        else if editor.origin == "LIVE", let title = themeTitle(theme) { savedText = title }
         else if editor.origin == "LIVE", let label = competencies.first(where: { $0.id == competency })?.label { savedText = label }
         else { return false }
         let operation = UUID()
@@ -212,7 +231,7 @@ struct SchoolObservationEditor: Identifiable {
             pointSequence: editor.original?.pointSequence, competencyId: competency, text: savedText,
             origin: editor.origin, observedAt: editor.observedAt,
             eventKind: editor.origin == "LIVE" ? (marker ? "MARKER" : "QUALIFIED") : editor.original?.eventKind,
-            eventStatus: marker ? nil : status?.rawValue)
+            eventStatus: marker ? nil : status?.rawValue, themeKey: theme)
         guard body.isValid else { return false }
         return await submit(body, operation: operation, kind: editor.original == nil ? .createObservation : .updateObservation,
                             resourceID: editor.original?.id, version: editor.original?.version ?? 0)

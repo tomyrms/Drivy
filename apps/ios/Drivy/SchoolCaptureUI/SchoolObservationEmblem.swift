@@ -25,9 +25,9 @@ struct SchoolObservationEmblem: View {
 }
 
 extension SchoolLiveObservationTheme {
-    /// La clé du thème désigne son dessin ; une tuile générique le retrouve par sa compétence, puis son titre.
+    /// La clé du thème désigne son dessin.
     var glyph: DrivyObservationGlyph {
-        (SchoolObservationPictogram(themeKey: key, title: title, competencyKey: competency.key) ?? .vehicle).glyph
+        (SchoolObservationPictogram(themeKey: key, title: title) ?? .vehicle).glyph
     }
 }
 

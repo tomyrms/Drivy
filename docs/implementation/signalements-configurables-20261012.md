@@ -59,6 +59,8 @@ Ce sont les remarques les plus fréquentes d'une leçon que les onze thèmes obl
 
 ### Tuiles d'une leçon
 
+> **Remplacé le 21 octobre 2026 (#56)** : les tuiles ne dépendent plus du référentiel de la formation. « Signaler » montre tous les thèmes affichés par l’école, sans tuile générique. Voir [signalements-autonomes-20261021.md](signalements-autonomes-20261021.md). Règle d’origine conservée ci-dessous pour l’historique.
+
 Pour une formation donnée, « Signaler » montre, dans l'ordre configuré, les thèmes **affichés** dont la compétence existe dans le référentiel de cette formation (première clé de `competencyKeys` trouvée). Une compétence du référentiel qu'aucun thème du catalogue ne désigne (référentiel moto, remorque, ou propre à l'école) garde sa tuile générique, placée après les thèmes configurés : rien ne disparaît pour ces formations, et ces tuiles ne sont pas réglables.
 
 ## Permission
@@ -105,6 +107,8 @@ Pour une formation donnée, « Signaler » montre, dans l'ordre configuré, les 
 - Commande `SAVE_OBSERVATION_THEMES`, ressource `ObservationThemeSettings` (identifiant : celui de l'école), audit `ObservationThemesSaved`, rejouable avec le même `operationId` et consultable par `GET /operations/{operationId}`.
 
 ### Observations
+
+> **Remplacé le 21 octobre 2026 (#56)** : `themeKey` suffit à qualifier un signalement, sans compétence ; `OBSERVATION_THEME_MISMATCH` n’est plus émis et `competencyKeys` est déprécié. Voir [signalements-autonomes-20261021.md](signalements-autonomes-20261021.md).
 
 `POST /lessons/{lessonId}/geo-observations` et `PUT /geo-observations/{observationId}` acceptent un champ facultatif `themeKey` (une des dix-huit clés, ou `null`). Il exige `competencyId`, et la clé stable de cette compétence doit figurer dans `competencyKeys` du thème, sinon 422 `OBSERVATION_THEME_MISMATCH`. Les réponses portent `themeKey` (`null` si absent).
 

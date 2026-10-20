@@ -23,32 +23,19 @@ struct SchoolLiveObservationReceipt: Identifiable, Equatable {
 /// `refused` : l’école a refusé définitivement le signalement dès son premier envoi ; rien n’a été enregistré.
 enum SchoolLiveObservationUndoState: Equatable { case none, pending, confirmed, refused }
 
-/// Une tuile de « Signaler ». Les thèmes du catalogue précisent une compétence existante, sans créer de
-/// référentiel parallèle ; `key` vaut `nil` pour la tuile générique d’une compétence qu’aucun thème ne désigne.
+/// Une tuile de « Signaler » : un thème du catalogue, tel que l’école l’affiche. Il ne dépend d’aucune compétence de la
+/// formation (#56) : le référentiel sert à l’évaluation, jamais à décider quels signalements existent. L’identité est la clé.
 struct SchoolLiveObservationTheme: Identifiable, Equatable {
-    let competency: SchoolCatalogCompetency
+    let key: String
     let title: String
-    var key: String? = nil
-    var id: String { "\(competency.id.uuidString):\(title)" }
+    var id: String { key }
 
-    /// Tuiles d’une formation : les thèmes affichés, dans l’ordre de l’école, dont la compétence existe dans le
-    /// référentiel (première clé de `competencyKeys` trouvée) ; puis une tuile générique pour chaque compétence
-    /// qu’aucun thème du catalogue, affiché ou masqué, n’a prise. `includingHidden` sert au contrôle d’un
-    /// signalement : masquer un thème ne le rend jamais inacceptable.
-    static func tiles(for themes: [SchoolObservationTheme], competencies: [SchoolCatalogCompetency],
+    /// Tuiles d’une leçon : les thèmes affichés, dans l’ordre donné. Un thème que l’école ne liste pas n’a pas de tuile : elle le
+    /// refuserait. `includingHidden` sert au contrôle d’un signalement : masquer un thème ne le rend jamais inacceptable.
+    static func tiles(for themes: [SchoolObservationTheme], unlisted: Set<String> = [],
                       includingHidden: Bool = false) -> [Self] {
-        var result: [Self] = []
-        var claimed = Set<UUID>()
-        for theme in themes {
-            guard let key = theme.competencyKeys.first(where: { key in competencies.contains { $0.key == key } }),
-                  let competency = competencies.first(where: { $0.key == key }) else { continue }
-            claimed.insert(competency.id)
-            if theme.visible || includingHidden { result.append(.init(competency: competency, title: theme.title, key: theme.key)) }
-        }
-        for competency in competencies where !claimed.contains(competency.id) {
-            result.append(.init(competency: competency, title: competency.displayLabel))
-        }
-        return result
+        themes.filter { theme in (theme.visible || includingHidden) && !unlisted.contains(theme.key) }
+            .map { theme in Self(key: theme.key, title: theme.title) }
     }
 }
 
@@ -57,9 +44,6 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
 @MainActor @Observable final class SchoolLiveObservationRecorder {
     let scope: SchoolCommandScope
     let lessonID: UUID
-    private(set) var competencies: [SchoolCatalogCompetency] = []
-    private(set) var isLoadingCompetencies = false
-    private(set) var competenciesMessage: String?
     private(set) var confirmed = 0
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
@@ -77,16 +61,15 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     /// Ordre automatique appliqué aux tuiles : celui que la leçon a pris à sa première ouverture de « Signaler »,
     /// figé jusqu’à sa fin. `nil` en mode manuel : l’ordre de l’école, tel que la configuration le donne.
     private(set) var signalOrder: [String]?
-    /// Les thèmes affichés dans l’ordre figé, puis ceux que l’école a affichés depuis, puis les tuiles génériques.
+    /// Les thèmes affichés dans l’ordre figé, puis ceux que l’école a affichés depuis. Aucune lecture du référentiel :
+    /// la palette est prête dès l’ouverture, avec ou sans réseau.
     var themes: [SchoolLiveObservationTheme] {
         SchoolLiveObservationTheme.tiles(
             for: SchoolObservationRankingOrder.arranged(themeConfiguration.themes, order: signalOrder),
-            competencies: competencies)
+            unlisted: themeConfiguration.unlisted)
     }
-    /// Nombre de tuiles attendu avant la lecture du référentiel, pour donner d’emblée sa hauteur à la palette.
-    var expectedTileCount: Int {
-        competencies.isEmpty && competenciesMessage == nil ? themeConfiguration.visibleCount : themes.count
-    }
+    /// Hauteur de la palette dès l’ouverture : les tuiles ne dépendent d’aucune lecture.
+    var expectedTileCount: Int { themes.count }
     var canRecord: Bool { !stopped && !isSending && pending == nil }
     /// Rien de durable n’empêche d’ouvrir un signalement : ni arrêt, ni demande à vérifier ou à renvoyer.
     /// L’écriture elle-même reste gardée par `canRecord`, une demande à la fois.
@@ -154,25 +137,6 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         }
     }
 
-    func loadCompetencies() async {
-        guard !stopped, !isLoadingCompetencies, competencies.isEmpty else { return }
-        isLoadingCompetencies = true
-        defer { isLoadingCompetencies = false }
-        do {
-            let lesson = try await client.agenda.lesson(schoolID: scope.schoolID, id: lessonID)
-            let values = try await client.competencies(scope: scope, trainingID: lesson.trainingId)
-            guard !stopped else { return }
-            competencies = values
-            competenciesMessage = values.isEmpty ? "Aucune compétence n’est disponible pour cette formation." : nil
-        } catch {
-            // Feuille fermée pendant la lecture : la requête annulée n’est pas un échec à afficher à la
-            // réouverture, qui relance elle-même la lecture.
-            guard !stopped, !Task.isCancelled, (error as? URLError)?.code != .cancelled,
-                  !(error is CancellationError) else { return }
-            competenciesMessage = "Les thèmes n’ont pas pu être chargés. Réessaie pour choisir une observation précise."
-        }
-    }
-
     /// Ouverture de « Signaler » : la palette prend la dernière configuration confirmée, puis demande une
     /// relecture dont le résultat ne servira qu’à l’ouverture suivante. L’ordre automatique, lui, n’est pris
     /// qu’une fois par leçon ; la relecture du classement ne sert qu’à une leçon suivante.
@@ -199,11 +163,11 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         return order
     }
 
-    /// Le thème vient du référentiel reçu, le statut est un choix explicite. Un thème masqué depuis l’ouverture
+    /// Le thème vient du catalogue de l’école, le statut est un choix explicite. Un thème masqué depuis l’ouverture
     /// reste recevable : masquer n’est qu’un réglage d’affichage.
     @discardableResult func record(theme: SchoolLiveObservationTheme, status: SchoolObservationStatus,
                                    at instant: Date, anchor: SchoolLiveObservationAnchor? = nil) -> Bool {
-        guard SchoolLiveObservationTheme.tiles(for: themeConfiguration.themes, competencies: competencies,
+        guard SchoolLiveObservationTheme.tiles(for: themeConfiguration.themes, unlisted: themeConfiguration.unlisted,
                                                includingHidden: true).contains(theme) else { return false }
         return save(theme: theme, status: status, at: instant, anchor: anchor)
     }
@@ -222,12 +186,12 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let operation = UUID()
         let value = SchoolObservationBody(operationId: operation, draftId: nil, captureId: anchor?.captureID,
-            segmentId: anchor?.segmentID, pointSequence: anchor?.pointSequence, competencyId: theme?.competency.id,
+            segmentId: anchor?.segmentID, pointSequence: anchor?.pointSequence, competencyId: nil,
             text: theme?.title ?? "Moment à revoir", origin: "LIVE", observedAt: formatter.string(from: instant),
             eventKind: theme == nil ? "MARKER" : "QUALIFIED", eventStatus: status?.rawValue,
-            // Une école qui n’a jamais répondu ne connaît peut-être pas ce champ, et une école plus ancienne ne
-            // connaît pas tous les thèmes : la clé ne part qu’avec sa configuration, pour un thème qu’elle liste.
-            themeKey: themeConfiguration.sendsThemeKey(theme?.key) ? theme?.key : nil)
+            // Le thème qualifie seul le signalement (#56) : aucune compétence n’est jointe ni déduite. Le service doit
+            // porter la migration 036 avant cette version de l’app (docs/implementation/signalements-autonomes-20261021.md).
+            themeKey: theme?.key)
         do {
             let command = PendingSchoolCommand(id: operation, scope: scope, kind: .createObservation, resourceVersion: 0,
                 createdAt: instant, body: try JSONEncoder().encode(value), routeResourceID: lessonID)

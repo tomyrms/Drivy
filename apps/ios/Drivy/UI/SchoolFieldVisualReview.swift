@@ -61,7 +61,6 @@ struct SchoolFieldVisualReview: View {
                 models = loaded
                 // Lue avant l’ouverture : la palette de contrôle montre la configuration de l’école fictive.
                 await loaded.themes.refresh()
-                await loaded.recorder.loadCompetencies()
                 if screen == "gps-choice" { route = .choice }
                 if isSignal { route = .signal }
             } catch { self.error = error.localizedDescription }

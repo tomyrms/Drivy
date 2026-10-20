@@ -139,15 +139,20 @@ describe('observations et thèmes',()=>{
   await pool.query(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
    VALUES($1,$2,$3,$4,$5,$6,now()-interval '1 minute',now()+interval '45 minutes','Europe/Zurich','Recette synthétique',1000,0,$7,'{"mode":"UNIT_PRICE"}')`,[lesson,id.schoolA,id.aliceTraining,id.aliceLearner,id.alice,id.instructorMember,school.policy]);
  });
- it('garde la clé du thème, refuse un thème d’une autre compétence, reste compatible sans clé',async()=>{
+ it('garde la clé du thème, accepte toute compétence fournie, reste compatible sans clé',async()=>{
   const created=await call('POST',route,live({themeKey:'indicators'}));expect(created.statusCode,created.body).toBe(201);
   expect(created.json().data).toMatchObject({themeKey:'indicators',competencyId:look,text:'Clignotants',eventStatus:'TO_REWORK'});
-  const mismatch=await call('POST',route,live({themeKey:'braking'}));expect(mismatch.statusCode,mismatch.body).toBe(422);expect(mismatch.json().code).toBe('OBSERVATION_THEME_MISMATCH');
+  // #56 : un client antérieur peut encore joindre une compétence ; elle ne contrôle plus le thème.
+  const unrelated=await call('POST',route,live({themeKey:'braking',text:'Freinage'}));expect(unrelated.statusCode,unrelated.body).toBe(201);
+  expect(unrelated.json().data).toMatchObject({themeKey:'braking',competencyId:look});
   expect((await call('POST',route,live({themeKey:'unknown'}))).statusCode).toBe(400);
   // Un repère n'a ni compétence ni thème.
   expect((await call('POST',route,live({competencyId:null,eventKind:'MARKER',eventStatus:null,themeKey:'indicators',text:'Moment à revoir'}))).statusCode).toBe(400);
   // Un client antérieur au catalogue n'envoie pas le champ.
   const legacy=await call('POST',route,live({text:'Observation et contrôles'}));expect(legacy.statusCode,legacy.body).toBe(201);expect(legacy.json().data.themeKey).toBeNull();
+  // Les deux anciennes lignes de test sont retirées pour garder la suite des scénarios suivants.
+  const removed=await call('POST',`/geo-observations/${unrelated.json().data.id}/remove`,{operationId:randomUUID(),reason:'Recette'},unrelated.json().data.version);
+  expect(removed.statusCode,removed.body).toBe(200);
  });
  it('masquer un thème ne retire aucune observation et n’empêche pas un envoi resté en file',async()=>{
   const current=(await call('GET',path,undefined,null,'demo-admin')).json().data;
@@ -166,5 +171,65 @@ describe('observations et thèmes',()=>{
    WHERE c.school_id=o.school_id AND c.id=o.competency_id AND c.stable_key=x.competency_key AND o.text=x.title AND o.event_kind='QUALIFIED' AND o.removed_at IS NULL AND o.theme_key IS NULL`);
   const list=(await call('GET',route)).json().data.items as {themeKey:string|null}[];
   expect(list.map(item=>item.themeKey)).toEqual(['indicators','observation','indicators']);
+ });
+});
+
+describe('signalements autonomes (#56)',()=>{
+ let lesson:string,route:string;
+ const signal=(extra:Record<string,unknown>={})=>({operationId:randomUUID(),draftId:null,captureId:null,segmentId:null,pointSequence:null,competencyId:null,text:'Virages',origin:'LIVE',
+  observedAt:new Date().toISOString(),eventKind:'QUALIFIED',eventStatus:'ATTENTION',themeKey:'bends',...extra});
+ beforeAll(async()=>{
+  lesson=randomUUID();route=`/lessons/${lesson}/geo-observations`;
+  await pool.query(`INSERT INTO drivy.lesson(id,school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
+   VALUES($1,$2,$3,$4,$5,$6,now()-interval '1 minute',now()+interval '45 minutes','Europe/Zurich','Recette synthétique',1000,0,$7,'{"mode":"UNIT_PRICE"}')`,[lesson,id.schoolA,id.aliceTraining,id.aliceLearner,id.alice,id.instructorMember,school.policy]);
+ });
+ it('un thème sans compétence dans la formation est enregistré, relu et modifié sans compétence',async()=>{
+  // Le référentiel de la formation (look, lane) ne contient aucune clé de « Virages » : la palette ne dépend plus de lui.
+  const progressBefore=(await call('GET',`/trainings/${id.aliceTraining}/progress`)).json();
+  const created=await call('POST',route,signal());expect(created.statusCode,created.body).toBe(201);
+  const data=created.json().data;
+  expect(data).toMatchObject({themeKey:'bends',competencyId:null,eventKind:'QUALIFIED',eventStatus:'ATTENTION',text:'Virages',origin:'LIVE'});
+  expect((await call('GET',route)).json().data.items).toEqual([expect.objectContaining({id:data.id,themeKey:'bends',competencyId:null})]);
+  // Un ancien écran qui réécrit le texte sans envoyer `themeKey` ne requalifie pas le signalement.
+  const {operationId:_o,themeKey:_k,...rest}=signal();void _o;void _k;
+  const edited=await call('PUT',`/geo-observations/${data.id}`,{...rest,operationId:randomUUID(),observedAt:data.observedAt,text:'Virage serré à gauche',eventStatus:'POSITIVE'},data.version);
+  expect(edited.statusCode,edited.body).toBe(200);
+  expect(edited.json().data).toMatchObject({themeKey:'bends',competencyId:null,text:'Virage serré à gauche',eventStatus:'POSITIVE',version:data.version+1});
+  // Le signalement ne touche ni la progression ni les compétences.
+  expect((await call('GET',`/trainings/${id.aliceTraining}/progress`)).json().data.items).toEqual(progressBefore.data.items);
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.competency_definition WHERE school_id=$1',[id.schoolA])).rows[0].n).toBeGreaterThan(0);
+ });
+ it('les dix-huit thèmes sont enregistrables sans compétence, avec chacun leur clé',async()=>{
+  for(const theme of observationThemes){
+   const response=await call('POST',route,signal({themeKey:theme.key,text:theme.title,eventStatus:'POSITIVE'}));
+   expect(response.statusCode,`${theme.key} ${response.body}`).toBe(201);expect(response.json().data.themeKey).toBe(theme.key);
+  }
+ });
+ it('refuse toujours un statut absent, un thème inconnu et un signalement sans thème ni compétence',async()=>{
+  for(const body of [signal({eventStatus:null}),signal({themeKey:'unknown'}),signal({themeKey:null}),signal({themeKey:undefined})]){
+   const response=await call('POST',route,body);expect(response.statusCode,response.body).toBe(400);
+  }
+ });
+ it('la base refuse elle-même un signalement qualifié sans thème ni compétence, ou un repère à thème',async()=>{
+  const values=[id.schoolA,lesson,id.aliceTraining,id.instructorMember];
+  const insert=(competency:string|null,kind:string,status:string|null,theme:string|null)=>pool.query(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,competency_id,text,origin,observed_at,event_kind,event_status,theme_key)
+   VALUES($1,$2,$3,$4,$5,'Recette','LIVE',now(),$6,$7,$8)`,[...values,competency,kind,status,theme]);
+  await expect(insert(null,'QUALIFIED','ATTENTION',null)).rejects.toThrow(/geo_observation_live_qualified/);
+  await expect(insert(null,'QUALIFIED',null,'bends')).rejects.toThrow(/geo_observation_live_qualified/);
+  await expect(insert(null,'MARKER',null,'bends')).rejects.toThrow(/geo_observation_theme_key/);
+  await expect(insert(null,'QUALIFIED','ATTENTION','Bends')).rejects.toThrow(/geo_observation_theme_key/);
+  await insert(null,'QUALIFIED','ATTENTION','bends');
+  await insert(school.competency,'QUALIFIED','ATTENTION',null);
+ });
+ it('un repère précisé en signalement prend un thème ; redevenu repère, il le perd',async()=>{
+  const marker=await call('POST',route,signal({eventKind:'MARKER',eventStatus:null,themeKey:undefined,text:'Moment à revoir'}));
+  expect(marker.statusCode,marker.body).toBe(201);const created=marker.json().data;
+  // Sans thème enregistré ni envoyé, ni compétence : la modification ne peut pas qualifier le repère.
+  const {themeKey:_t,...unnamed}=signal({observedAt:created.observedAt});void _t;
+  const refused=await call('PUT',`/geo-observations/${created.id}`,unnamed,created.version);expect(refused.statusCode,refused.body).toBe(400);
+  const qualified=await call('PUT',`/geo-observations/${created.id}`,signal({observedAt:created.observedAt,themeKey:'give-way',text:'Céder le passage'}),created.version);
+  expect(qualified.statusCode,qualified.body).toBe(200);expect(qualified.json().data).toMatchObject({themeKey:'give-way',competencyId:null,eventKind:'QUALIFIED'});
+  const back=await call('PUT',`/geo-observations/${created.id}`,{...signal({observedAt:created.observedAt,eventKind:'MARKER',eventStatus:null,text:'Moment à revoir'}),themeKey:undefined},created.version+1);
+  expect(back.statusCode,back.body).toBe(200);expect(back.json().data).toMatchObject({themeKey:null,eventKind:'MARKER',eventStatus:null});
  });
 });

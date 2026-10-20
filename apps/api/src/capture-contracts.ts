@@ -4,21 +4,30 @@ import { observationThemeKey } from './observation-themes.js';
 export const uuid=z.uuid().transform(value=>value.toLowerCase());
 export const instant=z.iso.datetime({offset:true});
 /** Les anciens corps sans origin restent REVIEW ; aucune qualification n'est déduite. */
-export const geoObservationCommand=z.object({operationId:uuid,draftId:uuid.nullable(),captureId:uuid.nullable(),segmentId:uuid.nullable(),
+const geoObservationFields=z.object({operationId:uuid,draftId:uuid.nullable(),captureId:uuid.nullable(),segmentId:uuid.nullable(),
  pointSequence:z.number().int().min(0).max(2_147_483_646).nullable(),competencyId:uuid.nullable(),
  text:z.string().refine(v=>v.trim().length>0&&[...v].length<=4000),origin:z.enum(['LIVE','REVIEW']).optional(),observedAt:instant.optional(),
  eventKind:z.enum(['MARKER','QUALIFIED']).optional(),eventStatus:z.enum(['ATTENTION','TO_REWORK','POSITIVE']).nullable().optional(),
- // Thème de « Signaler » : facultatif, pour les clients antérieurs au catalogue.
+ // Thème de « Signaler » : il suffit à qualifier un signalement (#56). Facultatif pour les clients antérieurs au catalogue,
+ // qui qualifient encore par une compétence.
  themeKey:observationThemeKey.nullable().optional()
-}).strict().superRefine((v,ctx)=>{
+}).strict();
+type GeoObservationFields=z.infer<typeof geoObservationFields>;
+/**
+ * `storedTheme` : à la modification, un corps sans `themeKey` garde le thème enregistré, qui suffit alors à qualifier. Le service
+ * relit donc cette règle après avoir résolu le thème (et la base la porte aussi).
+ */
+const geoObservationRules=(storedTheme:boolean)=>(v:GeoObservationFields,ctx:z.RefinementCtx)=>{
  const invalid=(message:string)=>ctx.addIssue({code:'custom',message});
  if(!([v.captureId,v.segmentId,v.pointSequence].every(x=>x===null)||[v.captureId,v.segmentId,v.pointSequence].every(x=>x!==null)))invalid('L’ancre doit être complète ou absente.');
  if((v.origin??'REVIEW')==='REVIEW'&&v.draftId===null)invalid('La revue exige un brouillon.');
  if(v.origin==='LIVE'&&(!v.observedAt||!v.eventKind||v.eventStatus===undefined))invalid('L’observation live exige instant, type et statut explicites.');
  if(v.eventKind==='MARKER'&&(v.origin!=='LIVE'||v.competencyId!==null||v.eventStatus!==null))invalid('Un repère reste LIVE, sans compétence ni statut.');
- if(v.origin==='LIVE'&&v.eventKind==='QUALIFIED'&&(v.competencyId===null||v.eventStatus===null))invalid('Choisissez une compétence et un statut.');
- if(v.themeKey&&v.competencyId===null)invalid('Un thème précise une compétence.');
-});
+ if(v.origin==='LIVE'&&v.eventKind==='QUALIFIED'&&(v.eventStatus===null||(v.competencyId===null&&!v.themeKey&&!(storedTheme&&v.themeKey===undefined))))invalid('Choisissez un thème et un statut.');
+ if(v.themeKey&&v.eventKind==='MARKER')invalid('Un repère n’a pas de thème.');
+};
+export const geoObservationCommand=geoObservationFields.superRefine(geoObservationRules(false));
+export const geoObservationUpdateCommand=geoObservationFields.superRefine(geoObservationRules(true));
 export type GeoObservationInput=z.infer<typeof geoObservationCommand>;
 export interface GeoObservationRow {id:string;school_id:string;version:number;lesson_id:string;training_id:string;author_membership_id:string;
  draft_id:string|null;capture_id:string|null;segment_id:string|null;point_sequence:number|null;competency_id:string|null;text:string|null;

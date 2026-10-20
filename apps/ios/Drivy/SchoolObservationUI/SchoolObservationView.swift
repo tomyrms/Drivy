@@ -253,6 +253,7 @@ struct SchoolObservationComposer: View {
     @State private var text: String
     @State private var marker: Bool
     @State private var competencyID: UUID?
+    @State private var themeKey: String?
     @State private var status: SchoolObservationStatus?
     @State private var confirmsDiscard = false
 
@@ -261,20 +262,25 @@ struct SchoolObservationComposer: View {
         _text = State(initialValue: editor.original?.text ?? "")
         _marker = State(initialValue: editor.marker)
         _competencyID = State(initialValue: editor.original?.competencyId)
+        _themeKey = State(initialValue: editor.original?.themeKey)
         _status = State(initialValue: editor.original?.eventStatus.flatMap(SchoolObservationStatus.init(rawValue:)))
     }
+    /// Un signalement pendant la leçon se qualifie par son thème (#56). Un ancien signalement qualifié par sa seule
+    /// compétence reste valide tel quel.
+    private var qualifies: Bool { themeKey != nil || (competencyID != nil && competencyID == editor.original?.competencyId) }
     private var valid: Bool {
         (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || emptyNoteLabel != nil) && text.unicodeScalars.count <= 4_000
-            && (editor.origin != "LIVE" || marker || (competencyID != nil && status != nil))
+            && (editor.origin != "LIVE" || marker || (qualifies && status != nil))
     }
     private var emptyNoteLabel: String? {
         guard editor.origin == "LIVE" else { return nil }
         if marker { return "Moment à revoir" }
+        if let title = model.themeTitle(themeKey) { return title }
         return model.competencies.first(where: { $0.id == competencyID })?.displayLabel
     }
     private var changed: Bool {
         text != (editor.original?.text ?? "") || marker != editor.marker || competencyID != editor.original?.competencyId
-            || status?.rawValue != editor.original?.eventStatus
+            || themeKey != editor.original?.themeKey || status?.rawValue != editor.original?.eventStatus
     }
     var body: some View {
         NavigationStack {
@@ -322,7 +328,7 @@ struct SchoolObservationComposer: View {
                     if let message = model.errorMessage { DrivyActionNote(text: message, isError: true) }
                     else if let hint = saveHint { DrivyActionNote(text: hint) }
                     Button {
-                        Task { if await model.save(editor, text: text, marker: marker, competencyID: competencyID, status: status) { dismiss() } }
+                        Task { if await model.save(editor, text: text, marker: marker, competencyID: competencyID, themeKey: themeKey, status: status) { dismiss() } }
                     } label: {
                         DrivyBusyLabel(title: "Enregistrer l’observation", isBusy: model.isBusy)
                     }
@@ -359,18 +365,31 @@ struct SchoolObservationComposer: View {
     private var saveHint: String? {
         if model.isBusy || model.isLoading || valid && model.canMutate { return nil }
         if text.unicodeScalars.count > 4_000 { return "Le texte est limité à 4 000 caractères." }
-        if editor.origin == "LIVE" && !marker && competencyID == nil { return "Choisis une compétence, ou garde un repère simple." }
-        if editor.origin == "LIVE" && !marker && status == nil { return "Choisis une appréciation pour cette compétence." }
+        if editor.origin == "LIVE" && !marker && !qualifies { return "Choisis un thème, ou garde un repère simple." }
+        if editor.origin == "LIVE" && !marker && status == nil { return "Choisis une appréciation pour ce signalement." }
         if !valid { return "Écris ce que tu souhaites retenir." }
         return "Enregistrement indisponible pour l’instant. Vérifie les observations."
     }
     private var qualification: some View {
         Section {
-            Picker("Compétence", selection: $competencyID) {
-                Text(editor.origin == "LIVE" ? "Choisir une compétence" : "Sans compétence associée").tag(Optional<UUID>.none)
-                ForEach(model.competencies) { value in Text(value.displayLabel).tag(Optional(value.id)) }
-                if let id = editor.original?.competencyId, !model.competencies.contains(where: { $0.id == id }) {
-                    Text("Compétence déjà associée").tag(Optional(id))
+            if editor.origin == "LIVE" {
+                // Le thème de « Signaler », sans lien avec le référentiel de la formation. Une compétence déjà portée par un ancien
+                // signalement est conservée telle quelle et n’est pas proposée au choix.
+                Picker("Thème", selection: $themeKey) {
+                    Text("Choisir un thème").tag(Optional<String>.none)
+                    ForEach(model.themes) { value in Text(value.title).tag(Optional(value.key)) }
+                    if let key = editor.original?.themeKey, !model.themes.contains(where: { $0.key == key }) {
+                        Text(model.themeTitle(key) ?? "Thème déjà associé").tag(Optional(key))
+                    }
+                }
+                .accessibilityIdentifier("school-observation-theme")
+            } else {
+                Picker("Compétence", selection: $competencyID) {
+                    Text("Sans compétence associée").tag(Optional<UUID>.none)
+                    ForEach(model.competencies) { value in Text(value.displayLabel).tag(Optional(value.id)) }
+                    if let id = editor.original?.competencyId, !model.competencies.contains(where: { $0.id == id }) {
+                        Text("Compétence déjà associée").tag(Optional(id))
+                    }
                 }
             }
             if editor.origin == "LIVE" {
@@ -391,7 +410,7 @@ struct SchoolObservationComposer: View {
                     }.buttonStyle(.plain).accessibilityAddTraits(status == value ? [.isSelected] : [])
                 }
             }
-        } header: { Text("Compétence et appréciation").drivyFormSectionHeader() }
+        } header: { Text(editor.origin == "LIVE" ? "Thème et appréciation" : "Compétence").drivyFormSectionHeader() }
             .drivyFormRows()
     }
 }

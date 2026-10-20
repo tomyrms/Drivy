@@ -90,16 +90,14 @@ struct SchoolLiveObservationPalette: View {
         .sensoryFeedback(.selection, trigger: selected?.id)
         // Avant la première image : les tuiles de cette ouverture ne changent plus ensuite.
         .onAppear { recorder.openPalette() }
-        .task { await recorder.loadCompetencies() }
     }
 
     /// Hauteur de l’en-tête, de la grille et des appréciations. Jusqu’à neuf tuiles, toute la grille ; au-delà,
     /// sa fenêtre (`SchoolSignalGridLayout.windowHeight`), le reste s’atteignant en défilant.
-    /// Pendant la lecture du référentiel, la grille n’a pas encore sa taille : le conteneur garde son estimation.
     /// Un message passager (erreur, envoi précédent) n’entre pas dans le compte : il ne redimensionne pas le
     /// volet sous le doigt, la grille défile pour lui faire place.
     private func idealHeight(width: CGFloat, bottomInset: CGFloat) -> CGFloat? {
-        guard !recorder.isLoadingCompetencies, headerHeight > 0, contentHeight > 0, barHeight > 0 else { return nil }
+        guard headerHeight > 0, contentHeight > 0, barHeight > 0 else { return nil }
         let layout = SchoolSignalGridLayout(tileCount: recorder.themes.count, width: width, textSize: dynamicTypeSize)
         let grid: CGFloat
         if layout.overflows {
@@ -245,9 +243,6 @@ struct SchoolLiveObservationPalette: View {
         let tiles = recorder.themes
         let layout = SchoolSignalGridLayout(tileCount: tiles.count, width: width, textSize: dynamicTypeSize)
         return VStack(spacing: DrivySpacing.m) {
-            if recorder.isLoadingCompetencies {
-                DrivySkeletonRows(count: 3).drivySkeleton("Chargement des thèmes…")
-            }
             LazyVGrid(columns: layout.gridItems, spacing: SchoolSignalGridLayout.spacing) {
                 ForEach(tiles) { theme in
                     themeButton(theme)
@@ -255,13 +250,6 @@ struct SchoolLiveObservationPalette: View {
                             if theme.id == tiles.first?.id { tileHeight = height }
                         }
                 }
-            }
-            if let message = recorder.competenciesMessage, !recorder.isLoadingCompetencies {
-                // Le marqueur de l’en-tête reste disponible même sans référentiel. Pendant un nouvel essai,
-                // seul le chargement se montre : ni l’échec précédent ni un second « Réessayer ».
-                DrivyInlineMessage(text: message, tone: .warning)
-                Button("Réessayer", systemImage: "arrow.clockwise") { Task { await recorder.loadCompetencies() } }
-                    .buttonStyle(DrivySecondaryButtonStyle())
             }
         }
     }

@@ -160,7 +160,6 @@ struct SchoolCaptureLiveView: View {
         screenWithFeedback
         .task(id: controller.captureID) {
             if let observationClient { controller.prepareLiveObservations(client: observationClient) }
-            await controller.liveObservations?.loadCompetencies()
         }
         .task(id: controller.transition) {
             slowTransition = nil

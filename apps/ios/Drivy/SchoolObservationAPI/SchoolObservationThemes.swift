@@ -6,12 +6,24 @@ import Foundation
 struct SchoolObservationTheme: Codable, Sendable, Equatable, Identifiable {
     let key: String
     let title: String
-    /// Clés stables des compétences que le thème précise ; la première trouvée dans le référentiel fait foi.
+    /// Déprécié (#56) : plus aucune règle ne le lit. Relu s’il est présent, vide sinon, pour qu’un service qui cessera de
+    /// le publier ne rende pas la configuration illisible.
     let competencyKeys: [String]
     var visible: Bool
     let defaultVisible: Bool
     let defaultPosition: Int
     var id: String { key }
+}
+
+extension SchoolObservationTheme {
+    private enum CodingKeys: String, CodingKey { case key, title, competencyKeys, visible, defaultVisible, defaultPosition }
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(key: try c.decode(String.self, forKey: .key), title: try c.decode(String.self, forKey: .title),
+                  competencyKeys: try c.decodeIfPresent([String].self, forKey: .competencyKeys) ?? [],
+                  visible: try c.decode(Bool.self, forKey: .visible), defaultVisible: try c.decode(Bool.self, forKey: .defaultVisible),
+                  defaultPosition: try c.decode(Int.self, forKey: .defaultPosition))
+    }
 }
 
 /// Copie embarquée du catalogue : le repli tant que l’école n’a jamais répondu, et la liste des clés que
@@ -143,7 +155,7 @@ struct SchoolObservationThemeSettings: Codable, Sendable, Equatable {
         for theme in themes {
             guard !theme.key.isEmpty, theme.key.utf8.count <= 40, theme.title.unicodeScalars.count <= 200,
                   !theme.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  (1...8).contains(theme.competencyKeys.count), (0...63).contains(theme.defaultPosition) else { return false }
+                  (0...8).contains(theme.competencyKeys.count), (0...63).contains(theme.defaultPosition) else { return false }
             guard theme.competencyKeys.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 100 }) else { return false }
         }
         return true

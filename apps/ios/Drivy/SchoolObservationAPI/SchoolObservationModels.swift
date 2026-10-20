@@ -47,8 +47,10 @@ extension SchoolPrivateGeoObservation {
         if eventKind == "MARKER", origin != "LIVE" || competencyId != nil || eventStatus != nil { return false }
         if origin == "LIVE" {
             guard authorMembershipId != nil, observedDate != nil, eventKind != nil else { return false }
-            if eventKind == "QUALIFIED", competencyId == nil || eventStatus == nil { return false }
+            // Un signalement se qualifie par son thème (#56) ; les plus anciens, par leur compétence.
+            if eventKind == "QUALIFIED", eventStatus == nil || (competencyId == nil && themeKey == nil) { return false }
         }
+        if themeKey != nil, eventKind == "MARKER" { return false }
         return true
     }
 }
@@ -65,14 +67,14 @@ struct SchoolObservationBody: Codable, Sendable, Equatable {
     let observedAt: String?
     let eventKind: String?
     let eventStatus: String?
-    /// Clé du thème de « Signaler », envoyée seulement quand la configuration utilisée vient de l’école.
+    /// Clé du thème de « Signaler » : elle qualifie seule le signalement, sans compétence (#56).
     /// Absente d’une demande écrite avant les signalements configurables : elle se relit et se renvoie telle quelle.
     var themeKey: String? = nil
 
     var isValid: Bool {
         if let themeKey {
-            // Un thème précise une compétence : jamais sur un repère ni sur une note sans compétence.
-            guard competencyId != nil, eventKind != "MARKER", !themeKey.isEmpty, themeKey.utf8.count <= 40 else { return false }
+            // Un thème qualifie un signalement : jamais un repère.
+            guard eventKind != "MARKER", !themeKey.isEmpty, themeKey.utf8.count <= 40 else { return false }
         }
         guard ["LIVE", "REVIEW"].contains(origin),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.unicodeScalars.count <= 4000,
@@ -85,7 +87,7 @@ struct SchoolObservationBody: Codable, Sendable, Equatable {
         if eventKind == "MARKER", origin != "LIVE" || competencyId != nil || eventStatus != nil { return false }
         if origin == "LIVE" {
             guard observedAt != nil, eventKind != nil else { return false }
-            if eventKind == "QUALIFIED", competencyId == nil || eventStatus == nil { return false }
+            if eventKind == "QUALIFIED", eventStatus == nil || (competencyId == nil && themeKey == nil) { return false }
         }
         return true
     }

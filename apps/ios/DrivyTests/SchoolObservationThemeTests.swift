@@ -67,64 +67,56 @@ struct SchoolObservationThemeCatalogTests {
     }
 }
 
+/// #56 : la palette vient des thèmes affichés par l’école. Le référentiel de la formation n’y entre jamais.
 struct SchoolLiveObservationTileTests {
-    private static func competency(_ key: String, _ label: String, _ order: Int) -> SchoolCatalogCompetency {
-        SchoolCatalogCompetency(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, curriculumVersionId: UUID(),
-                                key: key, label: label, description: "", sortOrder: order)
+    private static var allVisible: [SchoolObservationTheme] {
+        SchoolObservationThemeCatalog.embedded.map { theme in
+            var value = theme
+            value.visible = true
+            return value
+        }
     }
 
-    /// Le référentiel fourni aux écoles : neuf compétences.
-    private static let standard: [SchoolCatalogCompetency] = [
-        competency("vehicule", "Maîtrise du véhicule", 1), competency("observation", "Observation et contrôles", 2),
-        competency("priorites", "Priorités", 3), competency("intersections", "Intersections et giratoires", 4),
-        competency("vitesse", "Adaptation de la vitesse", 5), competency("placement", "Placement sur la chaussée", 6),
-        competency("manoeuvres", "Manœuvres", 7), competency("autoroute", "Autoroute", 8),
-        competency("anticipation", "Anticipation et partage de la route", 9),
-    ]
-
-    @Test func theOriginalConfigurationKeepsTheElevenTitlesInTheirOrderThenAddsIndicators() {
-        let tiles = SchoolLiveObservationTheme.tiles(for: SchoolObservationThemeCatalog.embedded, competencies: Self.standard)
-        // « Vitesse » et « Anticipation » restent les titres courts, pas le libellé de la compétence.
+    @Test func theOriginalConfigurationShowsTheTwelveDisplayedThemesInTheirOrder() {
+        let tiles = SchoolLiveObservationTheme.tiles(for: SchoolObservationThemeCatalog.embedded)
         #expect(tiles.map(\.title) == ["Maîtrise du véhicule", "Observation et contrôles", "Priorité à droite", "Signalisation",
             "Céder le passage", "Intersections et giratoires", "Vitesse", "Placement sur la chaussée", "Manœuvres", "Autoroute",
             "Anticipation", "Clignotants"])
-        #expect(tiles.allSatisfy { $0.key != nil })
-        #expect(Set(tiles.map(\.id)).count == tiles.count)
-        #expect(tiles.first { $0.key == "indicators" }?.competency.key == "observation")
+        #expect(tiles.map(\.id) == tiles.map(\.key) && Set(tiles.map(\.id)).count == tiles.count)
     }
 
-    @Test func tilesFollowTheConfiguredOrderAndLeaveOutHiddenThemes() {
+    /// Le cas du porteur : une formation à six compétences, tous les signalements activés.
+    @Test func everyDisplayedThemeHasATileWhateverTheTrainingReferential() {
+        let tiles = SchoolLiveObservationTheme.tiles(for: Self.allVisible)
+        #expect(tiles.count == 18)
+        #expect(tiles.map(\.key) == SchoolObservationThemeCatalog.embedded.map(\.key))
+    }
+
+    @Test func tilesFollowTheConfiguredOrderAndLeaveOutHiddenThemesOnly() {
         var themes = SchoolObservationThemeCatalog.embedded
         themes.swapAt(0, 11) // « Clignotants » en tête
         themes[6].visible = false // « Vitesse » masqué
         themes[12].visible = true // « Distance de sécurité » affiché
-        let tiles = SchoolLiveObservationTheme.tiles(for: themes, competencies: Self.standard)
+        let tiles = SchoolLiveObservationTheme.tiles(for: themes)
         #expect(tiles.first?.title == "Clignotants")
-        #expect(!tiles.contains { $0.key == "speed" })
-        #expect(tiles.first { $0.key == "following-distance" }?.competency.key == "vitesse")
-        // La compétence « vitesse » reste désignée par un thème masqué : aucune tuile générique ne la remplace.
-        #expect(!tiles.contains { $0.key == nil })
+        #expect(!tiles.contains { $0.key == "speed" } && tiles.contains { $0.key == "following-distance" })
+        #expect(tiles.count == 12)
         // Le contrôle d’un signalement accepte aussi les thèmes masqués.
-        let all = SchoolLiveObservationTheme.tiles(for: themes, competencies: Self.standard, includingHidden: true)
+        let all = SchoolLiveObservationTheme.tiles(for: themes, includingHidden: true)
         #expect(all.contains { $0.key == "speed" } && all.count == themes.count)
     }
 
-    @Test func aThemeWhoseCompetencyIsAbsentIsLeftOutAndUnclaimedCompetenciesKeepAGenericTile() {
-        let trailer = Self.competency("attelage", "Attelage et dételage", 2)
-        let motorway = Self.competency("motorway", "Autoroute", 3)
-        let tiles = SchoolLiveObservationTheme.tiles(for: SchoolObservationThemeCatalog.embedded,
-            competencies: [Self.standard[0], trailer, motorway])
-        // Thèmes configurés d’abord (ancienne clé « motorway » reconnue), tuile générique ensuite.
-        #expect(tiles.map(\.title) == ["Maîtrise du véhicule", "Autoroute", "Attelage et dételage"])
-        #expect(tiles.map(\.key) == ["vehicle", "motorway", nil])
-        #expect(tiles.last?.competency.id == trailer.id)
+    @Test func aThemeTheSchoolDoesNotListHasNoTile() {
+        let tiles = SchoolLiveObservationTheme.tiles(for: Self.allVisible, unlisted: ["bends", "eco-driving"])
+        #expect(tiles.count == 16 && !tiles.contains { $0.key == "bends" || $0.key == "eco-driving" })
     }
 
-    @Test func aReferentialWithBothTheOldAndTheNewKeyLosesNoCompetency() {
-        let manoeuvres = Self.competency("manoeuvres", "Manœuvres", 1), parking = Self.competency("parking", "Stationnement", 2)
-        let tiles = SchoolLiveObservationTheme.tiles(for: SchoolObservationThemeCatalog.embedded, competencies: [manoeuvres, parking])
-        #expect(tiles.map(\.title) == ["Manœuvres", "Stationnement"])
-        #expect(tiles[0].competency.id == manoeuvres.id && tiles[1].key == nil && tiles[1].competency.id == parking.id)
+    /// Les compétences ne figurent même plus dans la signature : renommer, ajouter, retirer ou réordonner une compétence
+    /// ne peut pas changer la palette. La tuile n’a plus d’identité fondée sur un UUID de compétence ni sur son titre.
+    @Test func aTileIsIdentifiedByItsKeyAlone() {
+        let theme = SchoolLiveObservationTheme(key: "bends", title: "Virages")
+        #expect(theme.id == "bends" && theme == SchoolLiveObservationTheme(key: "bends", title: "Virages"))
+        #expect(theme.glyph == SchoolObservationPictogram.bends.glyph)
     }
 }
 
@@ -146,11 +138,23 @@ struct SchoolObservationThemeBodyTests {
         #expect(body(themeKey: "indicators").isValid && body(themeKey: nil).isValid)
     }
 
-    @Test func aThemeKeyNeedsACompetencyAndNeverQualifiesAMarker() {
+    @Test func aThemeKeyAloneQualifiesASignalButNeverAMarker() {
         let marker = SchoolObservationBody(operationId: UUID(), draftId: nil, captureId: nil, segmentId: nil, pointSequence: nil,
             competencyId: nil, text: "Moment à revoir", origin: "LIVE", observedAt: "2026-10-12T08:00:00Z",
             eventKind: "MARKER", eventStatus: nil, themeKey: "indicators")
         #expect(!marker.isValid)
+        func signal(themeKey: String?, status: String?) -> SchoolObservationBody {
+            SchoolObservationBody(operationId: UUID(), draftId: nil, captureId: nil, segmentId: nil, pointSequence: nil,
+                competencyId: nil, text: "Virages", origin: "LIVE", observedAt: "2026-10-12T08:00:00Z",
+                eventKind: "QUALIFIED", eventStatus: status, themeKey: themeKey)
+        }
+        // #56 : thème + statut suffisent ; sans thème ni compétence, ou sans statut, le signalement reste refusé.
+        #expect(signal(themeKey: "bends", status: "ATTENTION").isValid)
+        #expect(!signal(themeKey: nil, status: "ATTENTION").isValid)
+        #expect(!signal(themeKey: "bends", status: nil).isValid)
+        let bytes = try? JSONEncoder().encode(signal(themeKey: "bends", status: "POSITIVE"))
+        let object = bytes.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        #expect(object?["competencyId"] is NSNull && object?["themeKey"] as? String == "bends")
     }
 
     @Test func aRequestQueuedBeforeConfigurableThemesStillDecodesAndKeepsItsBytes() throws {
@@ -184,6 +188,24 @@ struct SchoolObservationThemeBodyTests {
         #expect(try observation("").themeKey == nil)
         // Le dessin suit la clé, même après une relecture du texte et sans référentiel sous la main.
         #expect(try observation(#","themeKey":"braking""#).glyph() == SchoolObservationPictogram.braking.glyph)
+        #expect(try observation(#","themeKey":"braking""#).hasValidObservation)
+    }
+
+    /// #56 : un signalement sans compétence, relu de l’école, reste lisible ; sans thème ni compétence, il est refusé.
+    @Test func anAutonomousSignalReadFromTheSchoolIsValid() throws {
+        func observation(_ theme: String) throws -> SchoolObservation {
+            try JSONDecoder().decode(SchoolObservation.self, from: Data("""
+            {"id":"\(UUID().uuidString)","schoolId":"\(HubFixture.schoolID.uuidString)","version":1,\
+            "lessonId":"\(HubFixture.lessonID.uuidString)","trainingId":"\(HubFixture.trainingID.uuidString)","draftId":null,\
+            "captureId":null,"segmentId":null,"pointSequence":null,"competencyId":null,\
+            "text":"Virages","origin":"LIVE","observedAt":"2026-10-12T08:00:00Z","eventKind":"QUALIFIED",\
+            "eventStatus":"ATTENTION","authorMembershipId":"\(ConfigurationFixture.membershipID.uuidString)","themeKey":\(theme)}
+            """.utf8))
+        }
+        let autonomous = try observation(#""bends""#)
+        #expect(autonomous.hasValidObservation && autonomous.competencyId == nil && autonomous.themeKey == "bends")
+        #expect(autonomous.glyph() == SchoolObservationPictogram.bends.glyph)
+        #expect(try !observation("null").hasValidObservation)
     }
 
     @Test func theSavedConfigurationNamesEveryKeyOnceWithItsDisplay() throws {
@@ -733,10 +755,10 @@ private actor ThemeLessonTransport: SchoolHTTPTransport {
         let store = themeStore(server)
         await store.refresh()
         let model = recorder(ConfigurationOutboxStub(), themes: store)
-        await model.loadCompetencies()
         model.openPalette()
         let opened = model.themes
-        #expect(opened.map(\.title) == ["Maîtrise du véhicule", "Observation et contrôles", "Vitesse", "Clignotants", "Attelage et dételage"])
+        // Toutes les tuiles affichées par l’école, sans tuile générique tirée du référentiel de la formation.
+        #expect(opened.map(\.key) == SchoolObservationThemeCatalog.embedded.filter(\.visible).map(\.key))
         // Quelqu’un déplace « Clignotants » en tête ; la lecture lancée à l’ouverture, ou une autre, le rapporte.
         await server.changeElsewhere()
         try await HubFixture.wait {
@@ -752,80 +774,70 @@ private actor ThemeLessonTransport: SchoolHTTPTransport {
         model.stop()
     }
 
-    @Test func theThemeKeyLeavesOnlyWithAConfigurationReadFromTheSchool() async throws {
+    @Test func aSignalCarriesItsThemeKeyAndNoCompetency() async throws {
         let server = ThemeServer()
         let store = themeStore(server)
         await store.refresh()
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox, themes: store)
-        await model.loadCompetencies()
         model.openPalette()
         let indicators = try #require(model.themes.first { $0.key == "indicators" })
         #expect(model.record(theme: indicators, status: .attention, at: HubFixture.date("2026-10-12T08:00:00Z")))
         let body = try JSONDecoder().decode(SchoolObservationBody.self, from: try #require(outbox.value).body)
-        // Le texte reste le titre de la tuile ; la clé dit le thème, la compétence reste celle du référentiel.
+        // Le texte reste le titre de la tuile ; la clé dit le thème, aucune compétence n’est jointe (#56).
         #expect(body.themeKey == "indicators" && body.text == "Clignotants" && body.isValid)
-        #expect(body.competencyId == ThemeLessonTransport.competencies[1].id && body.eventKind == "QUALIFIED")
+        #expect(body.competencyId == nil && body.eventKind == "QUALIFIED")
         model.stop()
     }
 
-    /// École plus ancienne que l’app : un thème qu’elle ne liste pas s’enregistre sans clé, pour ne pas être refusé.
-    @Test func aThemeTheSchoolDoesNotListIsRecordedWithoutItsKey() async throws {
+    /// École plus ancienne que l’app : un thème qu’elle ne liste pas n’a pas de tuile et n’est pas recevable.
+    @Test func aThemeTheSchoolDoesNotListIsNeitherShownNorRecorded() async throws {
         let store = themeStore(ThemeServer(themes: Array(SchoolObservationThemeCatalog.embedded.prefix(15))))
         await store.refresh()
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox, themes: store)
-        await model.loadCompetencies()
         model.openPalette()
         #expect(model.themeConfiguration.isFromServer && model.themeConfiguration.unlisted.contains("moving-off"))
-        let movingOff = SchoolLiveObservationTheme(competency: ThemeLessonTransport.competencies[0], title: "Démarrage", key: "moving-off")
-        #expect(model.record(theme: movingOff, status: .attention, at: Date()))
-        let bytes = try #require(outbox.value).body
-        let object = try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
-        #expect(object["themeKey"] == nil && object["text"] as? String == "Démarrage")
+        let movingOff = SchoolLiveObservationTheme(key: "moving-off", title: "Démarrage")
+        #expect(!model.themes.contains(movingOff))
+        #expect(!model.record(theme: movingOff, status: .attention, at: Date()) && outbox.value == nil)
         model.stop()
     }
 
-    @Test func withoutAnAnswerFromTheSchoolNoThemeKeyIsSent() async throws {
+    /// Sans réponse de l’école, la palette garde le catalogue embarqué ; le signalement porte sa clé, qui le qualifie.
+    @Test func withoutAnAnswerFromTheSchoolTheEmbeddedPaletteStillRecordsItsTheme() async throws {
         for store in [nil, themeStore(ThemeServer())] as [SchoolObservationThemeStore?] {
             let outbox = ConfigurationOutboxStub()
             let model = recorder(outbox, themes: store)
-            await model.loadCompetencies()
             #expect(!model.themeConfiguration.isFromServer)
             let indicators = try #require(model.themes.first { $0.key == "indicators" })
             #expect(model.record(theme: indicators, status: .positive, at: Date()))
             let bytes = try #require(outbox.value).body
             let object = try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
-            #expect(object["themeKey"] == nil && object["text"] as? String == "Clignotants")
+            #expect(object["themeKey"] as? String == "indicators" && object["competencyId"] is NSNull)
+            #expect(object["text"] as? String == "Clignotants")
             model.stop()
         }
     }
 
-    @Test func aGenericTileSendsNoKeyAndAHiddenThemeIsStillAccepted() async throws {
+    @Test func noGenericTileExistsAndAHiddenThemeIsStillAccepted() async throws {
         let server = ThemeServer()
         let store = themeStore(server)
         await store.refresh()
         let outbox = ConfigurationOutboxStub()
         let model = recorder(outbox, themes: store)
-        await model.loadCompetencies()
         model.openPalette()
         // « Distance de sécurité » est masqué à l’origine : pas de tuile, mais le signalement reste recevable.
         #expect(!model.themes.contains { $0.key == "following-distance" })
-        let hidden = SchoolLiveObservationTheme(competency: ThemeLessonTransport.competencies[2], title: "Distance de sécurité",
-                                                key: "following-distance")
-        // Un thème rattaché à une compétence qui n’est pas la sienne n’est pas recevable.
-        let mismatched = SchoolLiveObservationTheme(competency: ThemeLessonTransport.competencies[0], title: "Distance de sécurité",
-                                                    key: "following-distance")
-        #expect(!model.record(theme: mismatched, status: .attention, at: Date()) && outbox.value == nil)
-        let generic = try #require(model.themes.last)
-        #expect(generic.key == nil && generic.title == "Attelage et dételage")
-        #expect(model.record(theme: generic, status: .attention, at: Date()))
-        let body = try JSONDecoder().decode(SchoolObservationBody.self, from: try #require(outbox.value).body)
-        #expect(body.themeKey == nil && body.text == "Attelage et dételage")
+        let hidden = SchoolLiveObservationTheme(key: "following-distance", title: "Distance de sécurité")
+        // Le référentiel de la leçon compte une compétence « Attelage et dételage » : elle ne crée aucune tuile.
+        #expect(!model.themes.contains { $0.title == "Attelage et dételage" })
+        // Une tuile qui n’existe pas dans le catalogue de l’école n’est pas recevable.
+        let unknown = SchoolLiveObservationTheme(key: "tunnel", title: "Tunnels")
+        #expect(!model.record(theme: unknown, status: .attention, at: Date()) && outbox.value == nil)
         model.stop()
         let second = ConfigurationOutboxStub()
         let other = recorder(second, themes: store)
-        await other.loadCompetencies()
         other.openPalette()
         #expect(other.record(theme: hidden, status: .toWorkOn, at: Date()))
         let kept = try JSONDecoder().decode(SchoolObservationBody.self, from: try #require(second.value).body)

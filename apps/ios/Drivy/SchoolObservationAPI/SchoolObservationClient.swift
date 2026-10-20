@@ -282,8 +282,9 @@ import Foundation
         let messages = [
             "ANCHOR_INVALID": "Cette position n’est plus admissible. Relis et confirme explicitement une observation sans position.",
             "LESSON_STATE_CONFLICT": "Cette leçon est annulée ou non réalisée. L’observation ne peut pas y être ajoutée.",
-            "CURRICULUM_VERSION_MISMATCH": "Choisis un thème du référentiel actuel de cette formation.",
-            "OBSERVATION_THEME_MISMATCH": "Ce thème ne correspond plus à la compétence choisie. Ferme puis rouvre Signaler.",
+            "CURRICULUM_VERSION_MISMATCH": "Choisis une compétence du référentiel actuel de cette formation.",
+            // Ancienne école seulement : le service courant ne lie plus un thème à une compétence (#56).
+            "OBSERVATION_THEME_MISMATCH": "L’école doit être mise à jour pour accepter ce signalement. Il reste conservé sur cet appareil.",
             "OBSERVATION_LIMIT_REACHED": "Cette leçon contient déjà 100 observations privées. Relis-les avant un nouvel ajout.",
             "OBSERVATION_TIME_CHANGED": "La qualification conserve l’instant du signalement. Corrige l’heure explicitement en revue.",
             "OBSERVATION_TIME_INVALID": "Relis l’heure du signalement avant de confirmer.",
