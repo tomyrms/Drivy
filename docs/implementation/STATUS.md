@@ -1,6 +1,6 @@
 # État de la réalisation
 
-## 20 octobre 2026 : recalage suisse OSRM déployé, qualification iOS en cours
+## 20 octobre 2026 : recalage suisse OSRM déployé, tests Apple réussis
 
 Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous, non fusionnée. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés après redémarrage du conteneur à 22:59 Europe/Zurich : accès depuis CT 114 réussi, accès depuis le PC refusé, connexions sortantes nouvelles toujours bloquées, aucun redémarrage spontané du moteur.
 
@@ -12,7 +12,9 @@ Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-desso
 
 **Vérifications serveur** : CI `39498076583` verte sur Node 24 avec vraie PostgreSQL et SMTP, 552 tests API et 316 web, types/builds ; parcours navigateur `39498076715` vert. Rejeu du direct exécuté en lecture seule : les deux captures restent sous 2 m/s avec vitesse estimée, donc aucune correction routière appliquée, avant/après identiques. Comparaison Mapbox/OSRM effectuée seulement sur une trace synthétique identique. Détails et limites dans [recalage-suisse-20261020.md](recalage-suisse-20261020.md).
 
-**Reste à qualifier** : campagne Apple `39499618964` et IPA de la version iOS finale en cours. Le premier build a échoué sur un initialiseur Swift privé, corrigé ; la revue a aussi fait corriger expiration, annulation OIDC et arrêt après refus de droit confirmé. Le recalage n'est plus confié à un tiers ; les fonds de carte restent Apple Plans. Notices déjà adoptées non modifiées automatiquement. GPS, batterie, VoiceOver et fluidité physique restent à qualifier sur iPhone.
+**Vérifications Apple** : campagne `39501661059` réussie, 705 tests Swift Testing dans 66 suites et 6 XCTest. Les égalités flottantes du test ont été corrigées dans `1bc5b7f`, sans changement du code produit. IPA build 288 verte (`39498733858`), téléchargée et empreinte vérifiée. Le recalage n'est plus confié à un tiers ; les fonds de carte restent Apple Plans. Notices déjà adoptées non modifiées automatiquement. GPS, batterie, VoiceOver et fluidité physique restent à qualifier sur iPhone.
+
+**Workflow ciblé** : à la demande du porteur, `unit_only=true` sélectionne désormais dix suites GPS par défaut ; `unit_test_scope=all` conserve la régression native complète. Quatorze tests locaux d'orchestration réussis. Campagne GPS Apple `39503905801` en cours. Détails : [workflow-ios-cible-20261020.md](workflow-ios-cible-20261020.md).
 
 | Exigence | Vérification | Résultat observé |
 |---|---|---|
@@ -21,7 +23,7 @@ Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-desso
 | Droits, panne, retard et confidentialité | Tests API sur vraie PostgreSQL en CI | 552 tests API réussis, dont 52 tests directs unitaires/intégration |
 | Comparaison des moteurs | Même trace synthétique via le client applicatif | 98,1 % OSRM / 93,4 % Mapbox, référence biaisée OSRM, aucune donnée réelle envoyée |
 | Direct sur leçons réelles | Rejeu privé avant/après et diagnostic moteur séparé | Aucun collage à faible vitesse, métriques identiques, aucune qualification terrain déduite |
-| Swift et IPA | Runner Apple, version iOS corrigée | En cours : `39499618964` et `39498733858` |
+| Swift et IPA | Runner Apple, version iOS corrigée | 705 Swift et 6 XCTest réussis : `39501661059` ; IPA build 288 réussie : `39498733858` |
 | GPS, batterie, VoiceOver et fluidité physique | Recette sur iPhone | Non exécutée, à faire par le porteur |
 
 ## 20 octobre 2026 : GPS en direct et replay fluides

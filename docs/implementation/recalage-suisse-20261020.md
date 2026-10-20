@@ -142,6 +142,7 @@ Les refus sont conservateurs : vitesse inférieure à 2 m/s, précision insuffis
 
 - Première campagne Apple `39496894028` et IPA `39496894877` : compilation en échec, initialiseur de `SchoolLiveMatchWindow` rendu privé par son état interne. Initialiseur explicite ajouté dans `98c2ba7`. Une relance doit confirmer la compilation et les tests, pas seulement la lecture du correctif.
 - Deuxième campagne Apple `39498734817` : compilation des tests en échec, appels `mutating` inclus dans les macros Swift Testing. Les quinze appels concernés sont évalués avant les assertions dans `f730cc1`, sans modification du code produit. Nouvelle campagne `39499618964` lancée et suivie.
+- Troisième campagne Apple `39499618964` : compilation réussie, 705 tests exécutés, un seul test en échec avec deux assertions exactes à zéro. Le résidu de latitude `8,81e-21°` vient de `cos(π/2)` dans la prédiction. `1bc5b7f` compare les refus à la pose de référence avec une tolérance de `1e-12°` et exige une correction admise proche de 4 m, supérieure à 3 m. Aucun code produit changé. Suite complète relancée dans `39501661059`.
 - Revue indépendante : durée de vie initialement comptée depuis la réception au lieu de l'émission, attente OIDC partagée non interrompue par l'annulation du groupe de tâches, et refus de droit live ignoré par le coordinateur. Corrections et tests ajoutés dans `75361b5`, puis contre-revue sans autre défaut concret.
 - Invalidation replay iOS : aucun cache disque de route recalée, mais le DTO ignorait la provenance et la version. La garde doit désormais exiger OSRM et l'algorithme 2, sinon conserver les mesures réelles comme affichage de repli.
 
@@ -208,9 +209,15 @@ Le lot direct compte 26 tests unitaires et 26 tests PostgreSQL. La régression d
 | Cadence, panne et réponse tardive | Tests du limiteur, HTTP natif interrompu, moteur en panne et délai dépassé | 26 tests unitaires directs réussis, budget moteur 750 ms, pas de persistance ni repli tiers |
 | Aucune position dans les journaux | Tests de logs API et erreurs, sorties OSRM nulles, contrôle agrégé après release | Tests réussis ; zéro message d'échec API observé, aucun journal de coordonnées exporté |
 | Ne pas forcer parking/manœuvre | Tests confiance/distance/ambiguïté/vitesse et demi-tour récent | Refus conservateurs, dont régression de fenêtre longue corrigée ; limites physiques à vérifier sur appareil |
-| Réponse périmée ignorée, correction continue, ancres intactes | Tests Swift ajoutés, contre-revue, rejeu numérique | Campagne Apple finale en cours ; aucun gain terrain revendiqué par le port JS |
+| Réponse périmée ignorée, correction continue, ancres intactes | Tests Swift ajoutés, contre-revue, rejeu numérique | 705 tests Swift Testing et 6 XCTest réussis sur Apple (`39501661059`) ; aucun gain terrain revendiqué par le port JS |
 | Rejeu réel avant/après | Déchiffrement CT114 en mémoire, lecture seule CT113, statistiques seulement | Deux captures, zéro correction admise avec vitesse estimée ; diagnostic séparé sans application au marqueur |
-| Build et tests Swift Apple | Workflow `39499618964` sur le code iOS corrigé | En cours ; première compilation échouée puis corrigée, pas encore de succès final revendiqué |
-| IPA d'essai | Workflow `39498733858` déclenché par push | En cours ; aucune signature, installation, fusion ou publication de l'app effectuée |
+| Build et tests Swift Apple | Workflow `39501661059` sur le code iOS inchangé et les assertions renforcées | Réussi : 705 tests dans 66 suites Swift Testing en 23,806 s, plus 6 XCTest sans échec |
+| IPA d'essai | Workflow `39498733858`, archive téléchargée et SHA256 comparé | Réussi : build 288 non signé, code produit identique à `4770294` ; aucune installation, fusion ou publication de l'app |
 | Notice et attribution | Proposition de notice OSRM, lien OpenStreetMap fixe dans les réglages | Notices adoptées non modifiées, MapKit conservé, aucun SDK Mapbox ajouté |
 | GPS/batterie/VoiceOver/fluidité | Nécessite un iPhone physique et une conduite autorisée | Non exécuté depuis Windows ou simulateur, reste à qualifier |
+
+## Livraison et campagne ciblée
+
+IPA d'essai locale : `.local/osrm/ipa-fa3bd58/Drivy.ipa`, build 288, version 0.7.0, non signée. SHA256 comparé aux métadonnées de l'artefact : `e1b2505e538789b889e1c5a3872aac359ca2075bc6ca688807d172b6bcc641f4`. Le diff du code produit iOS et du script de construction est vide entre `fa3bd58` et `4770294`. Les correctifs ultérieurs portent sur les tests et le workflow, pas sur le binaire livré.
+
+À la demande du porteur, le workflow propose désormais `unit_test_scope=gps` par défaut avec `unit_only=true`, et conserve `all` explicitement. [Décision et vérification du ciblage](workflow-ios-cible-20261020.md). La régression complète `39501661059` est réussie ; la campagne ciblée `39503905801` est en cours de qualification. Aucun changement de déploiement supplémentaire n'est nécessaire pour ce nettoyage.
