@@ -44,6 +44,11 @@ function distance(a:Position,b:Position):number {
  return 6_371_000*2*Math.asin(Math.sqrt(Math.min(1,h)));
 }
 const maximumCorrection=(p:LivePoint)=>Math.min(20,Math.max(5,p.accuracyMeters));
+function direction(a:Position,b:Position):readonly[number,number] {
+ const longitude=((b.longitude-a.longitude+540)%360)-180;
+ return [longitude*Math.cos((a.latitude+b.latitude)*Math.PI/360),b.latitude-a.latitude];
+}
+const opposed=(a:readonly[number,number],b:readonly[number,number])=>a[0]*b[0]+a[1]*b[1]<0;
 function suitable(points:LivePoint[],now:number):boolean {
  const first=points[0]!,last=points.at(-1)!;
  if(now-Date.parse(last.capturedAt)>10_000||Date.parse(last.capturedAt)>now+10_000||now-Date.parse(first.capturedAt)>40_000)return false;
@@ -56,6 +61,12 @@ function suitable(points:LivePoint[],now:number):boolean {
   length+=meters;
  }
  const net=distance(first,last);
+ // Une longue progression ne doit pas masquer les premiers mètres d'un demi-tour.
+ // Les quatre dernières transitions et la direction avant la dernière mesure sont relues séparément.
+ for(let i=Math.max(2,points.length-4);i<points.length;i++){
+  if(opposed(direction(points[i-2]!,points[i-1]!),direction(points[i-1]!,points[i]!)))return false;
+ }
+ if(opposed(direction(first,points.at(-2)!),direction(points.at(-2)!,last)))return false;
  // Un stationnement, un retour sur ses pas ou une manœuvre restent des mesures, jamais un collage routier.
  return net>=10&&net/length>=.75;
 }

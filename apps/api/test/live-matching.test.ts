@@ -53,6 +53,12 @@ describe('recalage conservateur de la dernière mesure uniquement',()=>{
   if(mode==='stale')for(const p of b.points)p.capturedAt=new Date(Date.now()-60000+p.elapsedMs).toISOString();
   let calls=0;expect((await matchLive(b,async()=>{calls++;return response(b);})).status).toBe('UNAVAILABLE');expect(calls).toBe(0);
  });
+ it.each([1,3])('refuse %i déplacement(s) récent(s) inversé(s) masqué(s) par une longue progression',async backwards=>{
+  const b=input(),now=Date.now(),turn=19-backwards;
+  b.points=Array.from({length:20},(_,i)=>({...b.points[0]!,sequence:i,elapsedMs:i*1000,capturedAt:new Date(now-(19-i)*1000).toISOString(),latitude:46+(i<=turn?i*5:turn*5-(i-turn)*2.5)/111320,speed:i<=turn?5:2.5}));
+  let calls=0;const result=await matchLive(b,async()=>{calls++;return response(b);});
+  expect(result.status).toBe('UNAVAILABLE');expect(calls).toBe(0);
+ });
  it('absorbe erreurs contaminées et coupe tout le calcul à 750ms',async()=>{
   const b=input();expect((await matchLive(b,async()=>{throw new Error('sensitive upstream URL');})).status).toBe('UNAVAILABLE');
   vi.useFakeTimers();let signal:AbortSignal|undefined;
