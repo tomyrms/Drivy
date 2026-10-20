@@ -359,18 +359,19 @@ enum DrivyMapFollowMode: Equatable {
         switch self {
         case .free: "Carte libre"
         case .position: "Suivi de position, nord en haut"
-        case .heading: "Suivi de position et orientation du téléphone"
+        case .heading: "Suivi dans le sens du trajet"
         }
     }
     var nextActionLabel: String {
         switch self {
         case .free: "Recentrer sur la position"
-        case .position: "Suivre l’orientation du téléphone"
+        case .position: "Suivre dans le sens du trajet"
         case .heading: "Arrêter le suivi"
         }
     }
 
-    /// Nil leaves the existing camera orientation alone; it never invents a device heading.
+    /// Nil leaves the existing camera orientation alone; it never invents a heading. `heading` is
+    /// the direction of travel (the device compass only when stopped).
     func cameraHeading(deviceHeading: Double?) -> Double? {
         switch self {
         case .free: return nil

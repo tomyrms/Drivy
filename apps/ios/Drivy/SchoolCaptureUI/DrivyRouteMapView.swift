@@ -153,7 +153,8 @@ struct DrivyRouteMapView: UIViewRepresentable {
             let proxy = DisplayLinkProxy()
             proxy.owner = self
             let link = CADisplayLink(target: proxy, selector: #selector(DisplayLinkProxy.tick(_:)))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+            // Up to 120 Hz on ProMotion screens: the marker and the camera move every refresh.
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 120, preferred: 120)
             link.add(to: .main, forMode: .common)
             self.link = link; linkProxy = proxy
         }

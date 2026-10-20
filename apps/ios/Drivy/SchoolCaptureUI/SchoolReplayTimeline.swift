@@ -183,6 +183,14 @@ struct SchoolReplayTimeline {
                     }
                     coordinateByKey["\(fragment.segmentID.uuidString):\(point.sequence)"] = matchedCoordinates[point.sequence] ?? coordinate
                 }
+                // Every measured fix of this stretch gives the timetable, not only the kept vertices.
+                var fixes: [SchoolReplayPath.Fix] = []
+                fixes.reserveCapacity(max(0, upper - lower + 1))
+                for point in fragment.points where point.sequence > lower && point.sequence < upper
+                    && point.accuracyMeters.isFinite && point.accuracyMeters <= SchoolCaptureDisplayRoute.maximumAccuracyMeters {
+                    fixes.append(.init(offset: offset(point.elapsedMs), latitude: point.latitude, longitude: point.longitude))
+                }
+                path.refineTimetable(with: fixes)
                 let coordinates = zip(path.latitudes, path.longitudes).map { CLLocationCoordinate2D(latitude: $0, longitude: $1) }
                 built.append(Fragment(id: "\(fragment.id):\(part)", coordinates: coordinates))
                 paths.append(path)
@@ -322,10 +330,25 @@ struct SchoolReplayTimeline {
 
     /// Display position at an instant, moving continuously along the drawn line between
     /// two measured instants. Nil exactly where `sample(at:)` is nil: a gap stays empty.
-    func position(at offset: TimeInterval) -> SchoolReplayPath.Place? {
+    /// Its heading looks a few metres ahead along the line, so the arrow turns with the road
+    /// instead of with every short edge of it.
+    func position(at offset: TimeInterval, lookAhead: Double = SchoolReplayTimeline.arrowLookAhead) -> SchoolReplayPath.Place? {
         guard let sample = sample(at: offset), paths.indices.contains(sample.fragmentIndex) else { return nil }
-        return paths[sample.fragmentIndex].place(at: offset)
+        let path = paths[sample.fragmentIndex]
+        guard let meters = path.meters(at: offset), let place = path.place(atMeters: meters) else { return nil }
+        return SchoolReplayPath.Place(latitude: place.latitude, longitude: place.longitude,
+            heading: path.heading(atMeters: meters, ahead: lookAhead) ?? place.heading)
     }
+
+    /// Direction of travel at an instant, seen from further ahead: what the camera turns to.
+    func heading(at offset: TimeInterval, lookAhead: Double) -> Double? {
+        guard let sample = sample(at: offset), paths.indices.contains(sample.fragmentIndex) else { return nil }
+        let path = paths[sample.fragmentIndex]
+        return path.meters(at: offset).flatMap { path.heading(atMeters: $0, ahead: lookAhead) }
+    }
+
+    /// Metres ahead that orient the arrow.
+    static let arrowLookAhead = 8.0
 
     /// The same without movement between fixes (Reduce Motion): the playhead steps from fix to fix.
     func steppedPosition(at offset: TimeInterval) -> SchoolReplayPath.Place? {

@@ -396,7 +396,9 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             guard measuredAt <= now, measuredAt < segment.lease.collectionDeadline else { discard(1); continue }
             let captured = segment.mappedStartedAt.addingTimeInterval(Double(elapsedMs) / 1000)
             admitted.append(SchoolCaptureMeasurement(capturedAt: SchoolCaptureLocationTime.timestamp(captured), elapsedMs: elapsedMs,
-                latitude: location.coordinate.latitude, longitude: location.coordinate.longitude, accuracyMeters: location.horizontalAccuracy))
+                latitude: location.coordinate.latitude, longitude: location.coordinate.longitude, accuracyMeters: location.horizontalAccuracy,
+                speedMetersPerSecond: location.speedAccuracy >= 0 && location.speed >= 0 ? location.speed : nil,
+                courseDegrees: location.courseAccuracy >= 0 && location.course >= 0 && location.course < 360 ? location.course : nil))
             lastElapsedMs = elapsedMs; lastMappedMeasurement = captured; lastMeasurementInstant = measuredAt
             recordDiagnostic(location, wall: wall, now: now)
         }

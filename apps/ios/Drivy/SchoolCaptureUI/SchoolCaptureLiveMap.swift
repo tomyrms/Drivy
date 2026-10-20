@@ -2,8 +2,11 @@ import MapKit
 import QuartzCore
 import SwiftUI
 
-/// Moving part of the live map: the marker glides to each recorded fix and turns
-/// smoothly; the camera heading follows the chosen mode. Display only.
+/// Moving part of the live map, drawn like a navigation app: between two fixes the marker keeps
+/// rolling at the speed and course iOS measured, and every fix (not only the vertices kept for
+/// the line) corrects it smoothly. While the car moves, the heading mode turns the map with the
+/// course of the road; the compass, disturbed inside a car, only orients it when stopped.
+/// Display only.
 @MainActor final class SchoolLiveMapMotion: DrivyRouteMapMotion {
     var wake: (() -> Void)?
     var followMode: DrivyMapFollowMode = .free
@@ -11,47 +14,65 @@ import SwiftUI
     /// Ephemeral compass value, never a route point.
     var deviceHeading: Double? { didSet { if deviceHeading != oldValue { wake?() } } }
 
-    private var glide = SchoolMapGlide()
+    private var predictor = SchoolMapPredictor()
     private var arrow = SchoolMapHeadingSmoother()
-    private var cameraTurn = SchoolMapHeadingSmoother(timeConstant: 0.35)
+    private var cameraTurn = SchoolMapHeadingSmoother(timeConstant: 0.5)
+    /// Direction of the measured movement: Doppler course while rolling, else the line's.
     private var course: Double?
-    private var target: (segmentID: UUID, sequence: Int)?
+    private var moving = false
+    private var target: (segmentID: UUID, elapsedMs: Int)?
 
     var positionLabel: String {
-        if deviceHeading != nil { return "Dernière position enregistrée et orientation de l’appareil" }
-        return course == nil ? "Dernière position enregistrée" : "Dernière position et direction du déplacement"
+        if course != nil { return "Position et direction du déplacement" }
+        if deviceHeading != nil { return "Position et orientation de l’appareil" }
+        return "Position enregistrée"
     }
 
-    /// The latest recorded position. The same fix given twice changes nothing.
-    func show(_ position: SchoolLiveTrace.Position?) {
+    /// The heading the arrow and the heading mode follow: the road while rolling, the compass when stopped.
+    private var travelHeading: Double? { moving ? course : (deviceHeading ?? course) }
+
+    /// The latest admitted fix. The same fix given twice changes nothing.
+    func show(_ position: SchoolLiveTrace.Position?, fix: SchoolCaptureMeasurement?) {
         guard let position else {
-            if target != nil { target = nil; course = nil; glide.reset(); arrow.reset(); wake?() }
+            if target != nil { target = nil; course = nil; moving = false; predictor.reset(); arrow.reset(); wake?() }
             return
         }
-        course = position.course
-        if let target, target.segmentID == position.segmentID, target.sequence == position.point.sequence { return }
+        // The freshest fix of the live segment; the last drawn vertex when none is newer.
+        let latest = fix.flatMap { $0.elapsedMs >= position.point.elapsedMs ? $0 : nil }
+        let elapsedMs = latest?.elapsedMs ?? position.point.elapsedMs
+        if let target, target.segmentID == position.segmentID, target.elapsedMs == elapsedMs { return }
         // A new fragment is not a continuous movement: the marker is placed there, not dragged across the gap.
-        let instant = reduceMotion || position.startsFragment || target?.segmentID != position.segmentID
-        target = (position.segmentID, position.point.sequence)
-        glide.move(toLatitude: position.point.latitude, longitude: position.point.longitude, at: CACurrentMediaTime(), instant: instant)
+        let instant = reduceMotion || target?.segmentID != position.segmentID
+            || (position.startsFragment && position.point.elapsedMs == elapsedMs)
+        target = (position.segmentID, elapsedMs)
+        let speed = latest?.speedMetersPerSecond
+        moving = (speed ?? 0) >= SchoolMapPredictor.movingSpeed
+        course = moving ? (latest?.courseDegrees ?? position.course) : position.course
+        let now = CACurrentMediaTime()
+        // Age of the fix when it reaches the map (storage round trip): the prediction catches it up.
+        let age = latest.flatMap { SchoolLesson.date($0.capturedAt) }.map { Date().timeIntervalSince($0) }
+        predictor.receive(latitude: latest?.latitude ?? position.point.latitude,
+                          longitude: latest?.longitude ?? position.point.longitude,
+                          speed: reduceMotion ? nil : speed, course: latest?.courseDegrees,
+                          at: now, measuredAt: age.flatMap { $0.isFinite && $0 >= 0 ? now - $0 : nil }, instant: instant)
         wake?()
     }
 
     func pose(at now: TimeInterval) -> SchoolMapPose? {
-        guard let place = glide.position(at: now) else { return nil }
+        guard let place = predictor.position(at: now) else { return nil }
         return SchoolMapPose(latitude: place.latitude, longitude: place.longitude,
-                             heading: arrow.advance(towards: deviceHeading ?? course, at: now, instant: reduceMotion))
+                             heading: arrow.advance(towards: travelHeading, at: now, instant: reduceMotion))
     }
 
     func cameraHeading(at now: TimeInterval) -> Double? {
-        guard let wanted = followMode.cameraHeading(deviceHeading: deviceHeading) else { return nil }
+        guard let wanted = followMode.cameraHeading(deviceHeading: travelHeading) else { return nil }
         return cameraTurn.advance(towards: wanted, at: now, instant: reduceMotion)
     }
 
     func isAnimating(at now: TimeInterval) -> Bool {
-        if !glide.isSettled(at: now) { return true }
-        if glide.hasTarget, !arrow.isSettled(on: deviceHeading ?? course) { return true }
-        if let wanted = followMode.cameraHeading(deviceHeading: deviceHeading), !cameraTurn.isSettled(on: wanted) { return true }
+        if !predictor.isSettled(at: now) { return true }
+        if predictor.hasFix, !arrow.isSettled(on: travelHeading) { return true }
+        if let wanted = followMode.cameraHeading(deviceHeading: travelHeading), !cameraTurn.isSettled(on: wanted) { return true }
         return false
     }
 }
@@ -96,16 +117,20 @@ struct SchoolCaptureLiveMap: View {
         .onChange(of: compassIsActive) { _, active in compass.setActive(active) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Carte du trajet enregistré")
-        .accessibilityValue((followMode == .heading && !compass.isAvailable
-            ? "Suivi de position, orientation du téléphone indisponible" : followMode.label)
-            + (trace.hasGaps ? ", portions sans mesure indiquées en pointillé" : ""))
+        .accessibilityValue(followMode.label + (trace.hasGaps ? ", portions sans mesure indiquées en pointillé" : ""))
     }
 
     private func synchronize() {
         trace.update(priorSegments + segments, liveFrom: priorSegments.count)
         motion.followMode = followMode
         motion.reduceMotion = reduceMotion
-        motion.show(trace.position)
+        motion.show(trace.position, fix: liveSegment?.liveFix)
+    }
+
+    /// Segment being recorded, whose freshest fix moves the marker.
+    private var liveSegment: SchoolCaptureMapSegment? {
+        guard let id = trace.position?.segmentID else { return nil }
+        return segments.last { $0.id == id }
     }
 
     private var pins: [DrivyRouteMapPin] {

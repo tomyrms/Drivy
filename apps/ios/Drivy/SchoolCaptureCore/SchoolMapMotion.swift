@@ -69,6 +69,95 @@ struct SchoolMapGlide {
     }
 }
 
+/// Live marker the way navigation apps draw it: between two fixes the vehicle keeps moving at
+/// the speed and course iOS measured (dead reckoning), and each new fix corrects the drawn
+/// position smoothly instead of teleporting it. The marker is therefore where the car most
+/// likely is now, not where it was a second ago. Display only: a predicted pose is never
+/// stored, sent, nor used as an anchor; the recorded line stays made of measured fixes.
+struct SchoolMapPredictor {
+    /// The prediction runs this long past the last fix, then waits: a lost signal does not send
+    /// the marker down the road on its own.
+    static let maximumExtrapolation: TimeInterval = 1.6
+    /// Below this the vehicle is treated as stopped: GPS speed noise does not crawl the marker.
+    static let movingSpeed = 0.6
+    /// Beyond this correction the marker is placed, not dragged across the map.
+    static let maximumCorrectionMeters = 80.0
+    /// Time for a correction to fade to about a third.
+    var correctionTimeConstant: TimeInterval = 0.45
+
+    private var fix: (latitude: Double, longitude: Double, at: TimeInterval)?
+    /// Metres per second eastward and northward.
+    private var velocity: (east: Double, north: Double) = (0, 0)
+    /// Drawn minus predicted when the last fix arrived, in metres; fades away.
+    private var correction: (east: Double, north: Double, at: TimeInterval) = (0, 0, 0)
+    private(set) var course: Double?
+
+    var hasFix: Bool { fix != nil }
+
+    /// `instant` places the marker on the fix: first fix, new fragment, Reduce Motion.
+    /// `measuredAt` is when the fix was taken, on the same clock as `now`: the time spent in
+    /// storage before the fix reaches the map is caught up by the prediction, not shown as lag.
+    mutating func receive(latitude: Double, longitude: Double, speed: Double?, course: Double?, at now: TimeInterval,
+                          measuredAt: TimeInterval? = nil, instant: Bool = false) {
+        let drawn = position(at: now)
+        let moving = (speed ?? 0) >= Self.movingSpeed
+        if let course, course.isFinite, moving { self.course = SchoolTrackGeometry.normalizedHeading(course) }
+        if let speed, let course, speed.isFinite, course.isFinite, moving {
+            let radians = course * .pi / 180
+            velocity = (speed * sin(radians), speed * cos(radians))
+        } else {
+            velocity = (0, 0)
+        }
+        let taken = min(now, max(now - Self.maximumExtrapolation, measuredAt ?? now))
+        fix = (latitude, longitude, taken)
+        correction = (0, 0, now)
+        guard !instant, let drawn, let predicted = position(at: now) else { return }
+        let offset = Self.offset(from: predicted, to: drawn)
+        if (offset.east * offset.east + offset.north * offset.north).squareRoot() <= Self.maximumCorrectionMeters {
+            correction = (offset.east, offset.north, now)
+        }
+    }
+
+    mutating func reset() {
+        fix = nil; velocity = (0, 0); correction = (0, 0, 0); course = nil
+    }
+
+    func position(at now: TimeInterval) -> (latitude: Double, longitude: Double)? {
+        guard let fix else { return nil }
+        let ahead = min(Self.maximumExtrapolation, max(0, now - fix.at))
+        let fade = correctionTimeConstant > 0 ? exp(-max(0, now - correction.at) / correctionTimeConstant) : 0
+        let east = velocity.east * ahead + correction.east * fade
+        let north = velocity.north * ahead + correction.north * fade
+        return Self.move((fix.latitude, fix.longitude), east: east, north: north)
+    }
+
+    /// Nothing moves any more until the next fix: the frame clock may rest.
+    func isSettled(at now: TimeInterval) -> Bool {
+        guard let fix else { return true }
+        let predicting = (velocity.east != 0 || velocity.north != 0) && now - fix.at < Self.maximumExtrapolation
+        let residual = (correction.east * correction.east + correction.north * correction.north).squareRoot()
+            * exp(-max(0, now - correction.at) / max(0.001, correctionTimeConstant))
+        return !predicting && residual < 0.05
+    }
+
+    private static func offset(from origin: (latitude: Double, longitude: Double),
+                               to point: (latitude: Double, longitude: Double)) -> (east: Double, north: Double) {
+        let metresPerDegree = SchoolTrackGeometry.earthRadiusMeters * .pi / 180
+        let east = SchoolTrackGeometry.longitudeDelta(from: origin.longitude, to: point.longitude)
+            * metresPerDegree * cos(origin.latitude * .pi / 180)
+        return (east, (point.latitude - origin.latitude) * metresPerDegree)
+    }
+
+    private static func move(_ origin: (latitude: Double, longitude: Double), east: Double,
+                             north: Double) -> (latitude: Double, longitude: Double) {
+        let metresPerDegree = SchoolTrackGeometry.earthRadiusMeters * .pi / 180
+        let cosine = max(0.01, cos(origin.latitude * .pi / 180))
+        var longitude = origin.longitude + east / (metresPerDegree * cosine)
+        if longitude > 180 { longitude -= 360 } else if longitude < -180 { longitude += 360 }
+        return (min(90, max(-90, origin.latitude + north / metresPerDegree)), longitude)
+    }
+}
+
 /// Turns towards a target heading along the shortest arc, at a pace independent of
 /// the frame rate. 359° to 1° is a 2° turn, never a full spin.
 struct SchoolMapHeadingSmoother {

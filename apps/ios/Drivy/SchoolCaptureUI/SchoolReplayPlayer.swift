@@ -25,6 +25,7 @@ final class SchoolReplayPlayer: DrivyRouteMapMotion {
     @ObservationIgnored private var arrow = SchoolMapHeadingSmoother()
     @ObservationIgnored private var cameraTurn = SchoolMapHeadingSmoother(timeConstant: 0.6)
     @ObservationIgnored private var routeHeading: Double?
+    @ObservationIgnored private var cameraTarget: Double?
     @ObservationIgnored private var cameraAskedAt: TimeInterval = -.infinity
     /// After a seek the marker and the camera are placed, not swept across the route.
     @ObservationIgnored private var placesArrow = true
@@ -112,22 +113,30 @@ final class SchoolReplayPlayer: DrivyRouteMapMotion {
         let instant = time(at: now)
         guard let place = reduceMotion ? timeline.steppedPosition(at: instant) : timeline.position(at: instant) else {
             routeHeading = nil
+            cameraTarget = nil
             arrow.reset()
             placesArrow = true
             return nil
         }
         routeHeading = place.heading
-        arrow.timeConstant = 0.28 / Double(speed)
+        // The arrow keeps a steady pace whatever the speed: at ×10 a bend still reads as a turn,
+        // not as a snap. The look-ahead already smooths what the line itself would make jerky.
+        arrow.timeConstant = 0.22 / Double(speed).squareRoot()
         let heading = arrow.advance(towards: place.heading, at: now, instant: reduceMotion || placesArrow)
         placesArrow = false
+        // The camera turns towards the road further ahead, more so when the replay runs faster.
+        cameraTarget = timeline.heading(at: instant, lookAhead: Self.cameraLookAhead * Double(speed).squareRoot()) ?? place.heading
         return SchoolMapPose(latitude: place.latitude, longitude: place.longitude, heading: heading)
     }
 
+    /// Metres ahead along the route that orient the camera at real speed.
+    static let cameraLookAhead = 22.0
+
     func cameraHeading(at now: TimeInterval) -> Double? {
         cameraAskedAt = now
-        guard let routeHeading else { return nil }
-        cameraTurn.timeConstant = 0.6 / Double(speed)
-        let heading = cameraTurn.advance(towards: routeHeading, at: now, instant: reduceMotion || placesCamera)
+        guard let cameraTarget else { return nil }
+        cameraTurn.timeConstant = max(0.3, 0.7 / Double(speed).squareRoot())
+        let heading = cameraTurn.advance(towards: cameraTarget, at: now, instant: reduceMotion || placesCamera)
         placesCamera = false
         return heading
     }
@@ -135,6 +144,6 @@ final class SchoolReplayPlayer: DrivyRouteMapMotion {
     func isAnimating(at now: TimeInterval) -> Bool {
         if isPlaying || owesFrame { return true }
         if !arrow.isSettled(on: routeHeading) { return true }
-        return now - cameraAskedAt < 0.25 && !cameraTurn.isSettled(on: routeHeading)
+        return now - cameraAskedAt < 0.25 && !cameraTurn.isSettled(on: cameraTarget)
     }
 }

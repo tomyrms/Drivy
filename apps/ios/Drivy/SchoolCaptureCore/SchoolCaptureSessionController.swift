@@ -13,6 +13,9 @@ struct SchoolCaptureMapSegment: Identifiable {
     private(set) var lastPoint: SchoolCapturePoint?
     /// Changes each time the displayed samples do: the map redraws only then.
     private(set) var displayRevision = 0
+    /// Latest admitted fix with its Doppler motion, before the display filter: the live marker
+    /// follows every fix, not only the vertices kept for the line. Display only.
+    private(set) var liveFix: SchoolCaptureMeasurement?
     private var selector = SchoolCaptureDisplayRoute.Selector()
 
     var displaySamples: [SchoolCaptureDisplayRoute.Sample] { selector.samples }
@@ -32,6 +35,9 @@ struct SchoolCaptureMapSegment: Identifiable {
             if firstPoint == nil { firstPoint = point }
             lastPoint = point
             if selector.append(point) != .none { displayRevision += 1 }
+            if measurement.accuracyMeters.isFinite, measurement.accuracyMeters <= SchoolCaptureDisplayRoute.maximumAccuracyMeters {
+                liveFix = measurement
+            }
         }
     }
 }

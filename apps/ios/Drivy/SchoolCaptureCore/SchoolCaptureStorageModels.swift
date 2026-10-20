@@ -65,6 +65,10 @@ struct SchoolCaptureMeasurement: Sendable {
     let latitude: Double
     let longitude: Double
     let accuracyMeters: Double
+    /// Doppler speed and course reported by iOS with the fix. Display only: they move the live
+    /// marker between two fixes and are never stored, sent nor used as an anchor.
+    var speedMetersPerSecond: Double? = nil
+    var courseDegrees: Double? = nil
 }
 
 struct SchoolCaptureQueuedMutation: Codable, Sendable, Identifiable {

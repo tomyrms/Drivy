@@ -425,6 +425,93 @@ struct SchoolTrackDisplayTests {
         #expect(pending.isPending && !pending.isUsable)
     }
 
+    // MARK: Smooth replay and predicted live marker
+
+    @Test func aSlowVehicleRollsSteadilyInsteadOfStoppingAndJumping() throws {
+        // Walking pace (0,8 m/s) with 1,5 m of noise: the display filter keeps one vertex every
+        // few seconds. The playhead must still advance at every fix, never stand for seconds.
+        let points = (0..<120).map { fix($0, second: Double($0), east: Double($0) * 0.8 + noise($0, 1.5), north: noise($0 + 9, 1.5)) }
+        #expect(SchoolCaptureDisplayRoute.select(points).count < 60)
+        let timeline = replay(points)
+        var previous = try #require(timeline.position(at: 5)).longitude
+        var longestStill = 0.0, still = 0.0
+        for frame in 1...(100 * 60) {
+            let place = try #require(timeline.position(at: 5 + Double(frame) / 60))
+            #expect(place.longitude >= previous - 1e-12)
+            if place.longitude - previous < 1e-9 { still += 1.0 / 60 } else { longestStill = max(longestStill, still); still = 0 }
+            previous = place.longitude
+        }
+        #expect(longestStill < 1.0)
+    }
+
+    @Test func theSpeedChangesSmoothlyAcrossAFixAndStillReachesIt() throws {
+        // 5 m/s then 15 m/s: linear interpolation snaps the speed at the joining fix.
+        var east = 0.0
+        let points = (0...20).map { index -> SchoolCapturePoint in
+            defer { east += index < 10 ? 5 : 15 }
+            return fix(index, second: Double(index), east: east)
+        }
+        let timeline = replay(points)
+        func speed(_ t: Double) throws -> Double {
+            let a = try #require(timeline.position(at: t - 0.01)), b = try #require(timeline.position(at: t + 0.01))
+            return (b.longitude - a.longitude) / Self.metre / 0.02
+        }
+        // Either side of the fix, the speed differs by much less than the 10 m/s step.
+        #expect(abs(try speed(10 - 0.02) - speed(10 + 0.02)) < 1)
+        // Every measured instant is still exactly its fix.
+        for index in [3, 10, 17] {
+            #expect(abs(try #require(timeline.position(at: Double(index))).longitude - points[index].longitude) < 1e-9)
+        }
+    }
+
+    @Test func theArrowLooksAheadAlongTheRoadInsteadOfFollowingEachWiggle() throws {
+        // Eastward line with a 2 m zigzag at every vertex: each short edge points 20° off.
+        let points = (0...40).map { fix($0, second: Double($0), east: Double($0) * 6, north: $0 % 2 == 0 ? 0 : 2) }
+        let timeline = replay(points)
+        for t in stride(from: 3.0, through: 35, by: 0.37) {
+            let heading = try #require(timeline.position(at: t)?.heading)
+            #expect(abs(SchoolTrackGeometry.angleDelta(from: 90, to: heading)) < 12)
+        }
+        let camera = try #require(timeline.heading(at: 20, lookAhead: 22))
+        #expect(abs(SchoolTrackGeometry.angleDelta(from: 90, to: camera)) < 5)
+    }
+
+    @Test func theLiveMarkerRollsOnBetweenFixesThenWaits() throws {
+        var predictor = SchoolMapPredictor()
+        predictor.receive(latitude: 0, longitude: 0, speed: 10, course: 90, at: 0, instant: true)
+        // Half a second later the car is drawn 5 m further east, not still on the fix.
+        let rolling = try #require(predictor.position(at: 0.5))
+        #expect(abs(rolling.longitude / Self.metre - 5) < 0.05)
+        #expect(!predictor.isSettled(at: 0.5))
+        // No fix for a while: the marker stops after the extrapolation limit.
+        let held = try #require(predictor.position(at: 5)).longitude
+        #expect(abs(held / Self.metre - 10 * SchoolMapPredictor.maximumExtrapolation) < 0.05)
+        #expect(predictor.isSettled(at: 5))
+    }
+
+    @Test func aNewFixCorrectsTheLiveMarkerWithoutAJump() throws {
+        var predictor = SchoolMapPredictor()
+        predictor.receive(latitude: 0, longitude: 0, speed: 10, course: 90, at: 0, instant: true)
+        let before = try #require(predictor.position(at: 1)).longitude
+        // The fix lands 3 m behind the prediction: the marker does not jump back.
+        predictor.receive(latitude: 0, longitude: 7 * Self.metre, speed: 10, course: 90, at: 1)
+        let after = try #require(predictor.position(at: 1)).longitude
+        #expect(abs(after - before) < 1e-9)
+        // The correction fades: a second later the marker is where the fix predicts.
+        let settled = try #require(predictor.position(at: 2)).longitude / Self.metre
+        #expect(abs(settled - 17) < 0.5)
+        // Stopped: GPS speed noise does not crawl the marker.
+        predictor.receive(latitude: 0, longitude: 20 * Self.metre, speed: 0.3, course: 90, at: 3, instant: true)
+        #expect(abs(try #require(predictor.position(at: 4)).longitude / Self.metre - 20) < 1e-6)
+    }
+
+    @Test func theLivePredictionCatchesUpTheStorageDelay() throws {
+        var predictor = SchoolMapPredictor()
+        // A fix taken 0,4 s ago at 10 m/s is drawn 4 m ahead of where it was measured.
+        predictor.receive(latitude: 0, longitude: 0, speed: 10, course: 0, at: 10, measuredAt: 9.6, instant: true)
+        #expect(abs(try #require(predictor.position(at: 10)).latitude / Self.metre - 4) < 0.05)
+    }
+
     // MARK: Player
 
     @Test @MainActor func seekingIsImmediateAndPlaybackFollowsOneClock() throws {
