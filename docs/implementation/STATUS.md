@@ -1,6 +1,6 @@
 # État de la réalisation
 
-## 20 octobre 2026 : recalage suisse OSRM, chantier en cours
+## 20 octobre 2026 : recalage suisse OSRM déployé, qualification iOS en cours
 
 Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous, non fusionnée. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés après redémarrage du conteneur à 22:59 Europe/Zurich : accès depuis CT 114 réussi, accès depuis le PC refusé, connexions sortantes nouvelles toujours bloquées, aucun redémarrage spontané du moteur.
 
@@ -8,7 +8,21 @@ Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-desso
 
 **Mesures exécutées en lecture seule** : trajet court 116/116 mesures couvertes (confiance 0,679, 43 ms), trajet lent 228/1 058 (0,960, 23 ms), mêmes couvertures que les résultats Mapbox déjà stockés. Aucun nouvel envoi de ces positions à Mapbox. RSS du moteur environ 650 Mio ; le compteur cgroup inclut aussi le cache de fichiers, sans OOM observé. Ces couvertures ne mesurent pas la justesse terrain.
 
-**Reste à exécuter** : purge testée des deux caches Mapbox encore présents, route directe et intégration iOS, tests PostgreSQL et Apple, rejeu direct avant/après, IPA. Le recalage des nouveaux calculs n'est plus confié à un tiers ; les fonds de carte restent Apple Plans. Notices déjà adoptées non modifiées automatiquement. GPS, batterie, VoiceOver et fluidité physique restent à qualifier sur iPhone.
+**Release serveur `cf0f316` déployée à 23:14 Europe/Zurich**, après nouvelle sauvegarde vérifiée par décompression complète. Migration 035 appliquée, 35 empreintes conformes. Deux caches Mapbox supprimés, aucun ancien bail, 18 chunks et 204 483 octets chiffrés strictement inchangés. API readiness 200, route live sans identité 401, processus configuré OSRM privé sans jeton Mapbox actif. Aucun message d'échec API depuis la bascule au contrôle de 23:15.
+
+**Vérifications serveur** : CI `39498076583` verte sur Node 24 avec vraie PostgreSQL et SMTP, 552 tests API et 316 web, types/builds ; parcours navigateur `39498076715` vert. Rejeu du direct exécuté en lecture seule : les deux captures restent sous 2 m/s avec vitesse estimée, donc aucune correction routière appliquée, avant/après identiques. Comparaison Mapbox/OSRM effectuée seulement sur une trace synthétique identique. Détails et limites dans [recalage-suisse-20261020.md](recalage-suisse-20261020.md).
+
+**Reste à qualifier** : campagne Apple `39499618964` et IPA de la version iOS finale en cours. Le premier build a échoué sur un initialiseur Swift privé, corrigé ; la revue a aussi fait corriger expiration, annulation OIDC et arrêt après refus de droit confirmé. Le recalage n'est plus confié à un tiers ; les fonds de carte restent Apple Plans. Notices déjà adoptées non modifiées automatiquement. GPS, batterie, VoiceOver et fluidité physique restent à qualifier sur iPhone.
+
+| Exigence | Vérification | Résultat observé |
+|---|---|---|
+| Recalage privé sans tiers | Configuration du processus, firewall et redémarrage CT117 | OSRM privé, sorties réseau nouvelles bloquées, aucun jeton Mapbox actif |
+| Purge sans altérer les mesures | Migration 035, comparaison des chunks et baux avant/après | 2 caches Mapbox supprimés, 18 chunks identiques, 35 migrations conformes |
+| Droits, panne, retard et confidentialité | Tests API sur vraie PostgreSQL en CI | 552 tests API réussis, dont 52 tests directs unitaires/intégration |
+| Comparaison des moteurs | Même trace synthétique via le client applicatif | 98,1 % OSRM / 93,4 % Mapbox, référence biaisée OSRM, aucune donnée réelle envoyée |
+| Direct sur leçons réelles | Rejeu privé avant/après et diagnostic moteur séparé | Aucun collage à faible vitesse, métriques identiques, aucune qualification terrain déduite |
+| Swift et IPA | Runner Apple, version iOS corrigée | En cours : `39499618964` et `39498733858` |
+| GPS, batterie, VoiceOver et fluidité physique | Recette sur iPhone | Non exécutée, à faire par le porteur |
 
 ## 20 octobre 2026 : GPS en direct et replay fluides
 

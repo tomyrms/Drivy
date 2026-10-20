@@ -111,7 +111,9 @@ Les résultats hors durée sont identiques au second passage. **Il s'agit d'une 
 - Suite globale `npm test` tentée sans `TEST_DATABASE_URL` pour interdire toute base/homelab implicite : 11 fichiers verts, 32 rouges, 182 tests réussis, 4 échoués, 171 ignorés. Les suites d'intégration exigent une vraie base isolée. Un test de notice OSRM concurrent était aussi rouge et a été signalé à son auteur. Après correction, contrôle direct du binaire Vitest à **21:05:17 UTC** : **34 tests verts** (`track-matching.test.ts`, 28 tests, et `text-proposals.test.ts`, 6 tests). Une tentative intermédiaire via npm, bloquée sans sortie, a été annulée avant ce contrôle direct. Ce succès ciblé ne transforme pas l'exécution globale précédente en succès.
 - Aucun contrôle PostgreSQL, iOS, batterie, GPS physique ou VoiceOver revendiqué dans ce lot. Node local v26.8.1 diffère du runtime Node 24 exigé par le dépôt.
 
-## Exigences de preuve et travaux en attente
+## État intermédiaire des preuves avant intégration
+
+Cette matrice décrit les lacunes constatées avant les résultats d'intégration et le déploiement consignés plus bas. Elle ne remplace pas la matrice finale de qualification.
 
 | Exigence | Preuve disponible | État / suite |
 |---|---|---|
@@ -139,9 +141,76 @@ Les refus sont conservateurs : vitesse inférieure à 2 m/s, précision insuffis
 ### Corrections issues des vérifications
 
 - Première campagne Apple `39496894028` et IPA `39496894877` : compilation en échec, initialiseur de `SchoolLiveMatchWindow` rendu privé par son état interne. Initialiseur explicite ajouté dans `98c2ba7`. Une relance doit confirmer la compilation et les tests, pas seulement la lecture du correctif.
-- Revue indépendante : durée de vie initialement comptée depuis la réception au lieu de l'émission, attente OIDC partagée non interrompue par l'annulation du groupe de tâches, et refus de droit live ignoré par le coordinateur. Corrections et tests en cours avant livraison iOS.
+- Deuxième campagne Apple `39498734817` : compilation des tests en échec, appels `mutating` inclus dans les macros Swift Testing. Les quinze appels concernés sont évalués avant les assertions dans `f730cc1`, sans modification du code produit. Nouvelle campagne `39499618964` lancée et suivie.
+- Revue indépendante : durée de vie initialement comptée depuis la réception au lieu de l'émission, attente OIDC partagée non interrompue par l'annulation du groupe de tâches, et refus de droit live ignoré par le coordinateur. Corrections et tests ajoutés dans `75361b5`, puis contre-revue sans autre défaut concret.
 - Invalidation replay iOS : aucun cache disque de route recalée, mais le DTO ignorait la provenance et la version. La garde doit désormais exiger OSRM et l'algorithme 2, sinon conserver les mesures réelles comme affichage de repli.
 
 ## Notice de l'école
 
 Formulation à reprendre après déploiement complet : « Le recalage routier est calculé sur notre hébergement à partir des données OpenStreetMap. Les positions ne sont pas envoyées à un fournisseur tiers pour ce calcul. » Les fonds de carte restent fournis par Apple Plans. Cette formulation ne prétend pas supprimer tous les échanges réseau de l'app. Les notices déjà adoptées ne sont pas réécrites automatiquement.
+
+## Comparaison synthétique demandée avec Mapbox
+
+Exécution complémentaire réelle à **21:07:04 UTC**, via le même client applicatif et le même pipeline `matchTrack`, algorithme 2. Les deux moteurs reçoivent exactement les mêmes 789 points synthétiques, graine 7, arrêt de 20 secondes. Empreinte d'entrée : `50da31042740240e77b0239c26a0b9295936c8aa49d4f197a0c6292bb92c5a40`. Le wrapper privé charge le jeton en mémoire, sans le journaliser. Aucune position de personne n'est envoyée à Mapbox.
+
+| Mesure | OSRM local | Mapbox, appel Internet réel |
+|---|---:|---:|
+| Mesures couvertes | 774/789, 98,1 % | 737/789, 93,4 % |
+| Tronçons / appels | 4 / 4 | 5 / 4 |
+| Temps total | 77,421 ms | 591,831 ms |
+| Médiane par appel | 14,375 ms | 137,381 ms |
+| Écart géométrique médian à la référence | 0 m | 0,001 m |
+| Écart p95 / maximum | 0,043 / 5,756 m | 0,093 / 3,279 m |
+
+Confiances OSRM : 0,909 / 0,892 / 0,977 / 0,884. Confiances Mapbox : 0,972 / 0,945 / 0,891 / 0,977 / 0,903. Rapport agrégé local : `.local/osrm/compare-private-result.json`. Le moteur Docker local a ensuite été arrêté.
+
+Cette comparaison complète la baseline précédente mais ne constitue pas un classement de qualité : référence générée par OSRM, un seul passage, quatre appels par moteur, réseau local contre Internet. Les écarts portent sur les sommets vers une polyligne, sans vérité terrain indépendante ni jugement temporel. Ces durées ne sont pas celles du homelab ni du réseau mobile.
+
+## Rejeu du direct sur les deux captures
+
+[Méthode, résultats et limites](direct-replay-osrm-20261020.md). Les vitesses et caps Doppler ne sont pas présents dans les captures stockées. Avec l'estimation causale utilisée pour le rejeu, les vitesses maximales sont 1,7068 et 1,9225 m/s : les deux trajets restent sous le seuil de 2 m/s. **Zéro appel produit, zéro correction appliquée, avant/après identiques.** Aucun seuil n'est abaissé pour obtenir artificiellement un résultat.
+
+Le diagnostic séparé appelle OSRM sans appliquer ses résultats au marqueur : 352 et 38 fenêtres, temps médians d'environ 2 à 3 ms, aucun timeout ni défaut réseau. Les 183 HTTP 400 de la première capture sont `NoSegment` (180) ou `NoMatch` (3), pas des pannes de transport. Cette mesure vérifie le moteur et documente les refus, mais ne qualifie pas une correction acceptée en conduite. Les tests synthétiques et Swift doivent couvrir ce chemin, puis un essai iPhone doit en apprécier le rendu réel.
+
+## Déploiement API et purge exécutés à 21:14 UTC
+
+Release **`cf0f316417a9613cbc50c3e6a7feec61ad41192c`**, API et web sur le même répertoire, identité active sans modification. Avant installation : sauvegarde privée CT113 `/root/drivy_refonte-before-cf0f316417a9613cbc50c3e6a7feec61ad41192c-20261020T211441Z-42719ad1e910.dump`, propriétaire root, permissions 600, synchronisée et vérifiée par décompression complète `pg_restore --file=/dev/null`. Pas de restauration d'essai.
+
+L'ancienne API a été arrêtée avant la migration : aucun ancien processus ne peut continuer à réclamer un bail par la signature supprimée. Les 35 migrations appliquées ont toutes été comparées aux empreintes du commit. SHA256 de la migration 035 : `5440b5fa0f5935977c7bb0a2b00493d42157e07a27cef74d632e64f6b0899d1e`. Archive de release vérifiée après transfert : `480884a090b45f8b12799e7b45412cd534f2306687be6c0eda310113b80921b3`.
+
+Contrôles post-déploiement à 21:15 UTC :
+
+- Cache Mapbox : **2 lignes avant, 0 après**. Aucune ligne d'algorithme ancien ni bail en cours. Ancienne fonction à quatre arguments absente, nouvelle fonction présente.
+- Mesures : **18 chunks, 204 483 octets chiffrés**, empreinte agrégée `07c363f29bdcbebd9c0e2f8cc6cb096d` identique avant/après. Aucun recalcul forcé ni écriture sur les leçons réelles pendant la recette. Le prochain replay autorisé reconstruira son cache OSRM à la demande.
+- API readiness 200, nouvelle route live sans identité 401, services API/web/identité actifs. Environnement du processus : fournisseur OSRM, endpoint privé, aucun jeton Mapbox actif. Anciennes variables toujours commentées dans le fichier privé.
+- OSRM actif, zéro redémarrage spontané, mémoire cgroup 1 102 225 408 octets au contrôle. Zéro erreur de service API et zéro message d'échec de traitement depuis le déploiement, compteurs seuls exportés.
+
+La sauvegarde conserve l'état antérieur pour restauration. La purge concerne le cache actif, pas les sauvegardes historiques. Ne pas remettre un ancien binaire seul après la migration 035 ni réactiver Mapbox pour contourner une panne : les mesures réelles restent le repli.
+
+### Preuves de la version serveur
+
+CI **`39498076583`**, commit `cf0f316`, réussie : **552 tests API / 43 fichiers**, vraie PostgreSQL 17 et SMTP, **316 tests web / 27 fichiers**, typage et builds, Node 24. Parcours navigateur d'ouverture d'école **`39498076715`** réussi. Manifeste canonique contrôlé : **556 fichiers inchangés**, sans régénération.
+
+Le lot direct compte 26 tests unitaires et 26 tests PostgreSQL. La régression de demi-tour récent a d'abord été observée rouge sur une fenêtre de 20 points, puis corrigée et contre-vérifiée : refus sans appel moteur. Le lot purge compte 55 tests ciblés, dont migration peuplée, baux concurrents, cache de mauvais fournisseur/version et conservation des chunks et notices. Ces preuves qualifient les chemins logiciels, pas la justesse physique du GPS.
+
+## Matrice finale de qualification
+
+| Exigence | Vérification exécutée | Résultat observé et limite |
+|---|---|---|
+| OSRM Suisse, voiture, version épinglée | Image/données/binaire vérifiés, préparation Windows réelle, service CT117 | v26.10.0, profil voiture, archive transférée à empreinte identique ; nouveau script de préparation testé mais pipeline complet de ce script non rejoué |
+| Respect de la mémoire disponible | Prétraitement hors homelab, RSS/cgroup et OOM du moteur | RSS environ 650 Mio, cgroup 1,10 Go au dernier contrôle, zéro redémarrage spontané ; charge longue non qualifiée |
+| Moteur privé et résilient au redémarrage | Bind explicite, nftables, redémarrage CT117, appel synthétique depuis CT114 | Accès API réussi, PC refusé, egress neuf bloqué, journaux moteur désactivés |
+| Sauvegarde avant déploiement | Archives privées, lecture complète avant bascule/configuration/durcissement/release | Vérifications réussies, restauration non testée ; création initiale du CT sans sauvegarde constitue l'écart décrit plus haut |
+| Comparaison OSRM/Mapbox | Même trace synthétique et même client, protocole corrigé | 774/789 contre 737/789 couverts ; aucune donnée réelle envoyée à Mapbox, aucune supériorité terrain déduite |
+| Bascule sans résultats Mapbox persistants actifs | Migration réelle, invalidation fournisseur/version/baux testée sur PostgreSQL | 2 caches actifs supprimés, 0 restant ; sauvegardes privées antérieures conservées |
+| Mesures réellement enregistrées inchangées | Comparaison des chunks chiffrés et empreinte avant/après | 18 chunks, 204 483 octets, empreinte identique ; correction strictement affichage |
+| Seul le moniteur autorisé peut appeler le direct | Cas autre moniteur/école/élève, droits perdus pendant attente, double transaction | 26 tests PostgreSQL directs réussis, refus sans divulgation de position |
+| Cadence, panne et réponse tardive | Tests du limiteur, HTTP natif interrompu, moteur en panne et délai dépassé | 26 tests unitaires directs réussis, budget moteur 750 ms, pas de persistance ni repli tiers |
+| Aucune position dans les journaux | Tests de logs API et erreurs, sorties OSRM nulles, contrôle agrégé après release | Tests réussis ; zéro message d'échec API observé, aucun journal de coordonnées exporté |
+| Ne pas forcer parking/manœuvre | Tests confiance/distance/ambiguïté/vitesse et demi-tour récent | Refus conservateurs, dont régression de fenêtre longue corrigée ; limites physiques à vérifier sur appareil |
+| Réponse périmée ignorée, correction continue, ancres intactes | Tests Swift ajoutés, contre-revue, rejeu numérique | Campagne Apple finale en cours ; aucun gain terrain revendiqué par le port JS |
+| Rejeu réel avant/après | Déchiffrement CT114 en mémoire, lecture seule CT113, statistiques seulement | Deux captures, zéro correction admise avec vitesse estimée ; diagnostic séparé sans application au marqueur |
+| Build et tests Swift Apple | Workflow `39499618964` sur le code iOS corrigé | En cours ; première compilation échouée puis corrigée, pas encore de succès final revendiqué |
+| IPA d'essai | Workflow `39498733858` déclenché par push | En cours ; aucune signature, installation, fusion ou publication de l'app effectuée |
+| Notice et attribution | Proposition de notice OSRM, lien OpenStreetMap fixe dans les réglages | Notices adoptées non modifiées, MapKit conservé, aucun SDK Mapbox ajouté |
+| GPS/batterie/VoiceOver/fluidité | Nécessite un iPhone physique et une conduite autorisée | Non exécuté depuis Windows ou simulateur, reste à qualifier |
