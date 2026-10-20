@@ -72,6 +72,16 @@ test('next acquisition invalidates response even before next durable delivery', 
   assert.deepEqual(s.before.errorM, s.after.errorM);
 });
 
+test('road suggestion expires two seconds from send, not from response arrival', () => {
+  const points = [point(0, 0), point(1, 10), point(4, 40)];
+  const records = [{ index: 1, durationMs: 1000, result: { status: 'MATCHED', confidence: 0.99, distanceMeters: 1,
+    position: { latitude: points[1].latitude, longitude: 1 / 111195 } } }];
+  const s = simulateRun(points, records, { deliveryMs: 100, additionalNetworkMs: 0 });
+  assert.equal(s.applied, 1);
+  // Sent at 1.1s, received at 2.1s, expires at 3.1s. Next acquisition is only at 4s.
+  assert.ok(s.coverageSeconds >= 0.98 && s.coverageSeconds <= 1.02);
+});
+
 test('real API function and numerical predictor produce anonymous, finite aggregates', async () => {
   const esbuild = require('esbuild');
   const bundle = esbuild.buildSync({ entryPoints: ['apps/api/src/live-matching.ts'], bundle: true, write: false, platform: 'node', format: 'esm', logLevel: 'silent' }).outputFiles[0].text;

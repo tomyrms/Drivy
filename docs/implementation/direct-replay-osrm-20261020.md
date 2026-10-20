@@ -4,7 +4,7 @@
 
 Deux captures demandées ont été relues sans mutation de base. Les lignes chiffrées ont été lues dans CT113, puis déchiffrées uniquement en mémoire dans CT114. Le moteur appelé directement est celui du homelab. Aucun service n'a été déployé ou redémarré. Les sorties ne contiennent que des statistiques et empreintes de code, sans identifiants de personnes ou de captures, coordonnées ou horodatages individuels.
 
-Les scripts versionnés sont `infra/osrm/live-compare.py`, `live-compare.js` et leurs tests. Les entrées demandées `.local/osrm/live-compare.py/.js` y délèguent. La méthode et les commandes reproductibles figurent dans `infra/osrm/LIVE_COMPARE.md`. Le rapport JSON agrégé final reste dans `.local/osrm/live-compare-final.json`.
+Les scripts versionnés sont `infra/osrm/live-compare.py`, `live-compare.js` et leurs tests. Les entrées demandées `.local/osrm/live-compare.py/.js` y délèguent. La méthode et les commandes reproductibles figurent dans `infra/osrm/LIVE_COMPARE.md`. Le scénario principal revérifié après correction du TTL est conservé dans `.local/osrm/live-compare-principal-final.json`. Le diagnostic moteur précédent reste dans `.local/osrm/live-compare-final.json`, sans nouvel appel moteur lors de la revérification du TTL.
 
 ## Résultat représentatif des gardes actuels
 
@@ -65,15 +65,25 @@ Les trois critères confiance, distance et ambiguïté sont évalués lorsqu'un 
 
 - Vitesse et cap sont estimés à partir de mesures passées couvrant environ deux secondes. Aucun Doppler réel n'est récupérable depuis ces captures. Le téléphone aurait pu prendre des décisions différentes avec ses valeurs natives.
 - Latence d'écriture/livraison supposée à 100 ms, aucune latence mobile ajoutée dans cette exécution, frames calculées à 60 Hz. Le predictor utilise la livraison, conformément à l'UI actuelle.
-- Une acquisition plus récente invalide la réponse précédente même avant écriture durable. La réponse doit arriver dans les deux secondes, puis la suggestion expire après deux secondes sans nouvelle acquisition.
+- Une acquisition plus récente invalide la réponse précédente même avant écriture durable. La réponse et l'affichage partagent un budget de deux secondes depuis **l'émission** : une réponse reçue après une seconde ne conserve qu'une seconde d'affichage, pas deux secondes supplémentaires.
 - Les tests synthétiques couvrent acceptation, continuité de l'application/retrait, refus de confiance, réponse devenue ancienne avant la livraison suivante, délai > 2 s, sortie anonyme et impossibilité pour le diagnostic de modifier le predictor.
-- Vérification exécutée : 9 tests Node et 4 tests Python réussis, préparation locale sans SSH, puis exécution réelle CT114 avec sortie agrégée validée. Pas de suite métier avec mutation PostgreSQL dans cette mission.
+- Vérification exécutée : 10 tests Node et 4 tests Python réussis, préparation locale sans SSH, puis exécution réelle CT114 avec sortie agrégée validée. Le test d'expiration depuis émission a d'abord échoué sur l'ancien port, puis réussi après correction. Pas de suite métier avec mutation PostgreSQL dans cette mission.
 - **Ces captures ne qualifient pas la correction routière en conduite, la fluidité physique, le GPS, la batterie ou VoiceOver. Aucune amélioration terrain n'est revendiquée.**
 
-Empreintes SHA-256 du passage final, après stabilisation API `cf0f316` et son garde de demi-tour récent :
+Empreintes SHA-256 du **diagnostic moteur précédent**, après stabilisation API `cf0f316` et avant correction du TTL iOS. Ses réponses n'étaient jamais appliquées au predictor, donc les statistiques moteur ne dépendent pas de ce TTL :
 
 ```text
 API bundle 8720d3022275bccd920b4591d08df110950dc1c4d3a0bd35ab1435f07d50abf0
 Swift     a049e27d6ebd52a6b6e6e4e2eef6af06d0da5ac991e1060189608a66f5de5b4a
 Rejeu JS  a6f759693c738b893ceb5e39c0cd12e4102d908fc2503e5ff692076274b0c1d4
+```
+
+Le scénario principal seul a ensuite été réexécuté avec le Swift final `75361b5` et l'expiration à `sentAt + 2 s`. Les deux objets statistiques sont strictement identiques au passage précédent, après retrait de son bloc diagnostique : toujours zéro requête produit, zéro correction, avant/après identiques. Aucun appel diagnostique supplémentaire n'a été effectué.
+
+Empreintes de ce **rejeu principal final**. L'empreinte Swift couvre la concaténation exacte de `SchoolMapMotion.swift`, `SchoolLiveMatchCoordinator.swift`, `SchoolLiveMatchModels.swift` et `SchoolCaptureLiveMap.swift`, pas le seul predictor :
+
+```text
+API bundle 8720d3022275bccd920b4591d08df110950dc1c4d3a0bd35ab1435f07d50abf0
+Swift     4d319f40a0738d5ea6fe70810112b74e233922c67cc586d5cdbf94db36911972
+Rejeu JS  e469c8908e00fb1e84be32a8f2447119e512c2081ca10eb111df8f7ba3fe84d7
 ```

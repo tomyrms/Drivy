@@ -33,7 +33,7 @@ L'ordre du tableau `captures` est celui des arguments. Les UUID, noms, coordonn�
 - `after` : même predictor avec le déplacement routier et la correction exponentielle de `SchoolMapPredictor`.
 - Requête au plus toutes les 2,5 secondes, déclenchée par une mesure, avec 3 à 20 mesures sur 30 secondes au maximum. À 1 Hz, la cadence effective est d'environ trois secondes.
 - Les règles API sont exécutées par le module réel. Les raisons de refus sont une ventilation diagnostique des gardes, pas une deuxième source de décisions d'acceptation.
-- Acquisition suivante : réponse antérieure périmée, y compris avant écriture durable de la nouvelle mesure. Réponse trop vieille : rejet. Expiration d'une correction acceptée après deux secondes sans nouvelle mesure.
+- Acquisition suivante : réponse antérieure périmée, y compris avant écriture durable de la nouvelle mesure. Réponse trop vieille : rejet. La correction expire deux secondes après **l'émission de la requête**, jamais deux secondes supplémentaires après réception.
 - Les segments et ruptures temporelles de plus de quatre secondes ne sont pas reliés. Une rupture de séquence provoque aussi un reset conservateur dans ce modèle.
 - La livraison après acquisition est supposée à 100 ms. Le predictor est ancré à la **livraison**, comme l'UI actuelle, sans `measuredAt`.
 - `--network-ms N` ajoute un RTT client/API hypothétique à la durée mesurée du calcul. Cela ne constitue pas une mesure réseau iPhone.

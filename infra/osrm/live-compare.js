@@ -152,9 +152,10 @@ function simulateRun(points, records, config) {
     events.push({ t: p.elapsedMs / 1000 + delivery, type: 'fix', index, order: 1 });
   });
   for (const record of records) if (record.result.status === 'MATCHED') {
-    const t = points[record.index].elapsedMs / 1000 + delivery + (record.durationMs + config.additionalNetworkMs) / 1000;
+    const sentAt = points[record.index].elapsedMs / 1000 + delivery;
+    const t = sentAt + (record.durationMs + config.additionalNetworkMs) / 1000;
     events.push({ t, type: 'response', record, order: 2 });
-    events.push({ t: t + 2, type: 'expiry', record, order: 3 });
+    events.push({ t: sentAt + 2, type: 'expiry', record, order: 3 });
   }
   events.sort((a, b) => a.t - b.t || a.order - b.order);
   let ei = 0, latest = -1, current = -1, active = null, referenceIndex = 0, previous = null;
