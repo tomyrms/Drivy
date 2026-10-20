@@ -25,6 +25,8 @@ import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
 import { registerCaptures } from './captures.js';
 import { registerMatchedRoutes } from './matched-routes.js';
+import { registerLiveMatchRoutes } from './live-match-routes.js';
+import type { LiveMatcher } from './live-matching.js';
 import type { MapMatcher, MapMatchingConfig } from './map-matching-client.js';
 import type { CaptureConfig } from './capture-crypto.js';
 import { registerHealth } from './health.js';
@@ -91,7 +93,7 @@ export function clientError(error: unknown): ApiError | undefined {
   return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
+export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
   // Derrière le proxy public, l'adresse du client sert de clé aux freins des routes sans connexion (codes, création de compte).
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384, ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}) });
   const cursors = new Cursors(options.cursorSecret);
@@ -205,6 +207,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerLessonReports(app,options);
   registerCaptures(app,options);
   registerMatchedRoutes(app,options);
+  registerLiveMatchRoutes(app,options);
   registerCaptureObservations(app,options);
   registerSharing(app,options);
   registerAdministration(app,options);
