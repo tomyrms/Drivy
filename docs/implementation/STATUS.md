@@ -2,7 +2,7 @@
 
 ## 20 octobre 2026 : recalage suisse OSRM, chantier en cours
 
-Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous, non fusionnée. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés, redémarrage du conteneur testé avant le dernier durcissement.
+Branche `claude/recalage-suisse-osrm-20261020`, issue de la branche GPS ci-dessous, non fusionnée. OSRM **v26.10.0**, profil voiture, extrait Suisse Geofabrik préparé sur Windows puis installé dans le nouveau **CT 117**. Écoute `192.168.1.158:5000`, accessible seulement à CT 114 et à l'hôte. Connexions sortantes nouvelles bloquées, sorties du moteur et core dumps désactivés. Service systemd et pare-feu vérifiés après redémarrage du conteneur à 22:59 Europe/Zurich : accès depuis CT 114 réussi, accès depuis le PC refusé, connexions sortantes nouvelles toujours bloquées, aucun redémarrage spontané du moteur.
 
 **Bascule API exécutée à 22:56 Europe/Zurich** : `MAP_MATCHING_PROVIDER=osrm`, anciennes variables Mapbox commentées, service actif et readiness 200. Sauvegarde privée préalable vérifiée par lecture du catalogue et de tous les blocs (`pg_restore --file=/dev/null`), sans restauration d'essai. **Écart de procédure** : la création et l'installation initiales du CT 117 avaient été effectuées sans sauvegarde préalable. La sauvegarde faite ensuite ne corrige pas rétroactivement cet écart. Bascule API et durcissement ultérieur ont chacun leur sauvegarde vérifiée.
 

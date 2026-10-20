@@ -1,8 +1,8 @@
-# Recalage Suisse : état initial, scripts et preuves du 20 octobre 2026
+# Recalage suisse : déploiement OSRM et affichage direct
 
 ## Périmètre de cette livraison
 
-Mission complémentaire limitée à la lecture, aux scripts et à cette documentation. Aucun accès SSH, aucune modification du homelab, aucune migration de base ni modification de `STATUS.md` par l'auteur de ce lot. Les faits d'exploitation ci-dessous proviennent du mandat, des fichiers locaux et des comptes rendus du coordinateur. Les essais propres à ce lot sont locaux, avec des données synthétiques et un Docker éphémère.
+Branche `claude/recalage-suisse-osrm-20261020`, issue de `claude/gps-replay-fluide-20261020`, sans fusion ni publication de l'app. Cette livraison couvre le moteur privé, la bascule des replays, la purge des dérivés Mapbox et une correction éphémère du marqueur iOS. Les preuves distinguent les opérations réellement exécutées sur le homelab, les tests synthétiques et PostgreSQL locaux, la campagne Apple et les qualifications encore nécessaires sur iPhone.
 
 Références lues : `COMMENCER_ICI.md`, règles R41 à R50, `03-fonctionnel/gps-replay.md`, contrat API de conception, scénarios T102 à T109, `gps-fluide-recalage-20261011.md` et `gps-replay-fluide-20261020.md`. Le contrat canonique reste OpenAPI 3.11.0. Les droits serveur, le chiffrement des mesures, les lacunes et la distinction entre trace mesurée et recalage restent obligatoires. Le partage automatique validé le 28 septembre prime sur les anciens scénarios de publication, sans exposer les observations privées.
 
@@ -126,4 +126,22 @@ Les résultats hors durée sont identiques au second passage. **Il s'agit d'une 
 | Sauvegarde restaurable | Trois archives vérifiées en lecture selon le mandat/coordinateur | **PENDING** : restauration dans une base isolée, incident de création sans sauvegarde non effacé |
 | Environnement de référence | Tests locaux Node 26, OSRM réel en Docker | **PENDING** : Node 24, vraie PostgreSQL isolée pour les changements API, tests Apple et terrain |
 
-Le coordinateur reste responsable de l'actualisation de `STATUS.md` et de la synthèse finale des lots. Cette note initiale ne certifie ni une purge déjà appliquée, ni une qualité terrain, ni l'absence d'envoi tiers dans toute l'application après la bascule.
+Cette chronologie conserve l'état des preuves initiales. Les résultats d'intégration et de déploiement ultérieurs sont ajoutés ci-dessous. La bascule du recalage ne signifie pas que toute l'application cesse ses échanges avec Apple Plans.
+
+## Intégration du recalage direct
+
+L'extension `apps/api/contracts/live-match.json` décrit `POST /v1/schools/:schoolId/captures/:captureId/live-match`, sans modification du contrat canonique. Le serveur relit les droits avant et après le calcul, dans deux transactions distinctes. Seul le moniteur auteur de la capture encore autorisée peut obtenir une réponse. Les positions ne sont ni stockées par cette route, ni journalisées. Le limiteur est en mémoire et distingue cadence, simultanéité et saturation.
+
+Le client OSRM direct n'accepte qu'une adresse privée ou locale, interdit les redirections, borne le corps à 64 Kio et le délai total moteur à 750 ms. Aucun repli Mapbox. L'app propose une fenêtre de 3 à 20 mesures réelles, sur 30 secondes au plus, toutes les 2,5 secondes au minimum. L'envoi suit leur écriture durable. Les identifiants du segment, de la séquence et du temps écoulé doivent encore correspondre à la mesure courante à réception.
+
+Les refus sont conservateurs : vitesse inférieure à 2 m/s, précision insuffisante, trajectoire de manœuvre, confiance inférieure à 0,8, alternatives OSRM ou correction excessive. La borne de correction est `min(20 m, max(5 m, précision))`. Un refus ou une panne laisse fonctionner la prédiction locale. Une correction admise ne modifie que le marqueur, jamais les mesures, la trace ou les ancres d'observation. Son ajout et son retrait conservent la position affichée au même instant et ne redémarrent pas l'horizon de prédiction.
+
+### Corrections issues des vérifications
+
+- Première campagne Apple `39496894028` et IPA `39496894877` : compilation en échec, initialiseur de `SchoolLiveMatchWindow` rendu privé par son état interne. Initialiseur explicite ajouté dans `98c2ba7`. Une relance doit confirmer la compilation et les tests, pas seulement la lecture du correctif.
+- Revue indépendante : durée de vie initialement comptée depuis la réception au lieu de l'émission, attente OIDC partagée non interrompue par l'annulation du groupe de tâches, et refus de droit live ignoré par le coordinateur. Corrections et tests en cours avant livraison iOS.
+- Invalidation replay iOS : aucun cache disque de route recalée, mais le DTO ignorait la provenance et la version. La garde doit désormais exiger OSRM et l'algorithme 2, sinon conserver les mesures réelles comme affichage de repli.
+
+## Notice de l'école
+
+Formulation à reprendre après déploiement complet : « Le recalage routier est calculé sur notre hébergement à partir des données OpenStreetMap. Les positions ne sont pas envoyées à un fournisseur tiers pour ce calcul. » Les fonds de carte restent fournis par Apple Plans. Cette formulation ne prétend pas supprimer tous les échanges réseau de l'app. Les notices déjà adoptées ne sont pas réécrites automatiquement.
