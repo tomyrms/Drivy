@@ -21,6 +21,7 @@ import SwiftUI
     private var course: Double?
     private var moving = false
     private var target: (segmentID: UUID, elapsedMs: Int)?
+    private var roadMatch: SchoolLiveMatchResponse?
 
     var positionLabel: String {
         if course != nil { return "Position et direction du déplacement" }
@@ -58,6 +59,27 @@ import SwiftUI
         wake?()
     }
 
+    /// Results are checked again at the rendering boundary, against the current real fix.
+    /// Clearing a suggestion glides back to prediction rather than jumping off the road.
+    func showRoadMatch(_ response: SchoolLiveMatchResponse?, segment: SchoolCaptureMapSegment?) {
+        guard !reduceMotion, let response, let segment, let last = segment.lastPoint,
+              response.segmentId == segment.id, response.sequence == last.sequence,
+              response.elapsedMs == last.elapsedMs, target?.segmentID == segment.id,
+              target?.elapsedMs == last.elapsedMs, let position = response.position else {
+            if roadMatch != nil {
+                roadMatch = nil
+                predictor.clearRoadCorrection(at: CACurrentMediaTime())
+                wake?()
+            }
+            return
+        }
+        guard response != roadMatch else { return }
+        if predictor.correctRoadPosition(latitude: position.latitude, longitude: position.longitude, at: CACurrentMediaTime()) {
+            roadMatch = response
+            wake?()
+        }
+    }
+
     func pose(at now: TimeInterval) -> SchoolMapPose? {
         guard let place = predictor.position(at: now) else { return nil }
         return SchoolMapPose(latitude: place.latitude, longitude: place.longitude,
@@ -88,6 +110,7 @@ struct SchoolCaptureLiveMap: View {
     let isRecording: Bool
     /// Départ sans position enregistrée : la position de l’appareil selon Plans, affichée et jamais enregistrée.
     var showsDevicePosition = false
+    var roadMatch: SchoolLiveMatchResponse? = nil
     @Binding var followMode: DrivyMapFollowMode
     @State private var trace = SchoolLiveTrace()
     @State private var motion = SchoolLiveMapMotion()
@@ -125,6 +148,7 @@ struct SchoolCaptureLiveMap: View {
         motion.followMode = followMode
         motion.reduceMotion = reduceMotion
         motion.show(trace.position, fix: liveSegment?.liveFix)
+        motion.showRoadMatch(isRecording ? roadMatch : nil, segment: liveSegment)
     }
 
     /// Segment being recorded, whose freshest fix moves the marker.

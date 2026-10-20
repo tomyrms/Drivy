@@ -821,6 +821,6 @@ private struct SchoolCaptureLiveRoute: View {
             observations: controller.liveObservations?.mapObservations ?? [],
             priorSegments: controller.priorSegments, priorObservations: controller.priorObservations,
             resetCameraID: resetCameraID, isRecording: isRecording,
-            showsDevicePosition: showsDevicePosition, followMode: $followMode)
+            showsDevicePosition: showsDevicePosition, roadMatch: controller.liveMatch.result, followMode: $followMode)
     }
 }

@@ -88,6 +88,8 @@ struct SchoolMapPredictor {
     private var fix: (latitude: Double, longitude: Double, at: TimeInterval)?
     /// Metres per second eastward and northward.
     private var velocity: (east: Double, north: Double) = (0, 0)
+    /// Optional route displacement of the current real fix. Never changes the fix or its clock.
+    private var roadOffset: (east: Double, north: Double) = (0, 0)
     /// Drawn minus predicted when the last fix arrived, in metres; fades away.
     private var correction: (east: Double, north: Double, at: TimeInterval) = (0, 0, 0)
     private(set) var course: Double?
@@ -110,6 +112,7 @@ struct SchoolMapPredictor {
         }
         let taken = min(now, max(now - Self.maximumExtrapolation, measuredAt ?? now))
         fix = (latitude, longitude, taken)
+        roadOffset = (0, 0)
         correction = (0, 0, now)
         guard !instant, let drawn, let predicted = position(at: now) else { return }
         let offset = Self.offset(from: predicted, to: drawn)
@@ -118,16 +121,43 @@ struct SchoolMapPredictor {
         }
     }
 
+    /// Corrects the display towards a route position for the same fix, without resetting
+    /// velocity, extrapolation time, or the real fix. Rejected offsets never teleport the marker.
+    @discardableResult
+    mutating func correctRoadPosition(latitude: Double, longitude: Double, at now: TimeInterval) -> Bool {
+        guard let fix, latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude),
+              (-180...180).contains(longitude), let drawn = position(at: now) else { return false }
+        let offset = Self.offset(from: (fix.latitude, fix.longitude), to: (latitude, longitude))
+        guard hypot(offset.east, offset.north) <= 20 else { return false }
+        roadOffset = offset
+        preserveDrawnPosition(drawn, at: now)
+        return true
+    }
+
+    mutating func clearRoadCorrection(at now: TimeInterval) {
+        guard roadOffset.east != 0 || roadOffset.north != 0, let drawn = position(at: now) else { return }
+        roadOffset = (0, 0)
+        preserveDrawnPosition(drawn, at: now)
+    }
+
+    private mutating func preserveDrawnPosition(_ drawn: (latitude: Double, longitude: Double), at now: TimeInterval) {
+        correction = (0, 0, now)
+        guard let predicted = position(at: now) else { return }
+        let offset = Self.offset(from: predicted, to: drawn)
+        correction = (offset.east, offset.north, now)
+    }
+
     mutating func reset() {
         fix = nil; velocity = (0, 0); correction = (0, 0, 0); course = nil
+        roadOffset = (0, 0)
     }
 
     func position(at now: TimeInterval) -> (latitude: Double, longitude: Double)? {
         guard let fix else { return nil }
         let ahead = min(Self.maximumExtrapolation, max(0, now - fix.at))
         let fade = correctionTimeConstant > 0 ? exp(-max(0, now - correction.at) / correctionTimeConstant) : 0
-        let east = velocity.east * ahead + correction.east * fade
-        let north = velocity.north * ahead + correction.north * fade
+        let east = velocity.east * ahead + roadOffset.east + correction.east * fade
+        let north = velocity.north * ahead + roadOffset.north + correction.north * fade
         return Self.move((fix.latitude, fix.longitude), east: east, north: north)
     }
 

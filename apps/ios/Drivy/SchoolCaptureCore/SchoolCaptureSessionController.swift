@@ -107,7 +107,10 @@ final class SchoolCaptureSessionController {
     enum State { case idle, preparing, recording, paused, stopping, saved, failed }
     /// Passage bref entre deux états stables : mise en pause, reprise, nouveau segment après une perte de signal.
     enum Transition: Equatable { case pausing, resuming, recoveringSignal }
-    private(set) var state: State = .idle
+    private(set) var state: State = .idle {
+        didSet { if state != .recording { liveMatch.stop() } }
+    }
+    let liveMatch = SchoolLiveMatchCoordinator()
     /// Renseigné pendant le seul passage en cours ; un arrêt définitif ou un autre trajet l’efface.
     private(set) var transition: Transition?
     private(set) var captureID: UUID?
@@ -428,10 +431,12 @@ final class SchoolCaptureSessionController {
         if let scope, retainsInstructorRole, let current = permittedScope, context != nil,
            scope.sharesMembership(with: current), scope.accessEpoch > current.accessEpoch {
             deferredScope = scope
+            liveMatch.stop()
             return
         }
         deferredScope = nil
         guard permittedScope != scope else { return }
+        liveMatch.stop()
         scopeGeneration = UUID()
         if scope == nil { networkMonitor?.cancel(); networkMonitor = nil; networkAvailable = nil }
         for active in backgroundTransfers.values {
@@ -846,6 +851,14 @@ final class SchoolCaptureSessionController {
         if beginning == nil { beginning = .now }
         segments.append(SchoolCaptureMapSegment(id: handle.segmentID, measurements: []))
         state = .recording
+        liveMatch.start(segmentID: handle.segmentID, permits: { [weak self, weak active] in
+            guard let self, let active else { return false }
+            return self.context === active && self.generation == request && self.state == .recording
+                && self.permittedScope == active.scope && self.deferredScope == nil
+                && active.handle == handle && !active.terminalRequested && active.lease.permitsCollection()
+        }, send: { [client = active.transfer.client, scope = active.scope, captureID = active.session.id] body in
+            try await client.liveMatch(scope: scope, captureID: captureID, request: body)
+        })
     }
 
     private func receive(_ event: SchoolCaptureLocationEvent, request: UUID) {
@@ -855,6 +868,7 @@ final class SchoolCaptureSessionController {
         case .signalChanged(let signal): locationMessage = signal.message
         case .measurements(let handle, let values):
             guard state == .recording, active.handle == handle else { return }
+            if let last = values.last { liveMatch.measurementArrived(segmentID: handle.segmentID, elapsedMs: last.elapsedMs) }
             do {
                 let saved = try active.local.enqueue(values, handle: handle)
                 let previousPresentation = active.presentationTail
@@ -865,7 +879,9 @@ final class SchoolCaptureSessionController {
                     do {
                         _ = try await saved.value
                         guard generation == request, let index = segments.firstIndex(where: { $0.id == handle.segmentID }) else { return }
+                        let sequence = segments[index].measurementCount
                         segments[index].appendDurable(values)
+                        liveMatch.appendDurable(values, startingAt: sequence, segmentID: handle.segmentID)
                         if !hasDisplayedPosition, !segments[index].displaySamples.isEmpty { hasDisplayedPosition = true }
                     } catch { failCollector(active, request: request, error: error) }
                 }

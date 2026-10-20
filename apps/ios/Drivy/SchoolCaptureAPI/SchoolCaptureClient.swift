@@ -40,6 +40,68 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         self.transport = transport
     }
 
+    /// Best-effort display request, deliberately separate from durable mutations. No retry,
+    /// receipt, cache or outbox. The total budget includes identity verification and body transfer.
+    func liveMatch(scope: SchoolCommandScope, captureID: UUID,
+                   request: SchoolLiveMatchRequest) async throws -> SchoolLiveMatchResponse {
+        guard scope.apiBaseURL == baseURL.absoluteString, DrivyAPIClient.permits(baseURL), request.isValid else {
+            throw SchoolCaptureFailure.invalidResponse
+        }
+        return try await withThrowingTaskGroup(of: SchoolLiveMatchResponse.self) { group in
+            group.addTask { [self] in
+                try await performLiveMatch(scope: scope, captureID: captureID, body: request)
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(SchoolLiveMatchWindow.responseLifetime))
+                throw SchoolCaptureFailure.unavailable
+            }
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else { throw CancellationError() }
+            try Task.checkCancellation()
+            return result
+        }
+    }
+
+    private func performLiveMatch(scope: SchoolCommandScope, captureID: UUID,
+                                  body: SchoolLiveMatchRequest) async throws -> SchoolLiveMatchResponse {
+        let token = try await accessToken()
+        let person: SchoolPerson
+        do {
+            person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
+        } catch { throw error.unlessCancelled(SchoolCaptureFailure.unavailable) }
+        guard person.personId == scope.personID, person.memberships.contains(where: {
+            $0.schoolId == scope.schoolID && $0.membershipId == scope.membershipID
+                && $0.accessEpoch == scope.accessEpoch && $0.roles.contains("INSTRUCTOR")
+        }) else { throw SchoolCaptureFailure.forbidden }
+        try Task.checkCancellation()
+        var url = baseURL
+        for part in schoolPath(scope.schoolID, ["captures", captureID.uuidString, "live-match"]) { url.appendPathComponent(part) }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = SchoolLiveMatchWindow.responseLifetime
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.httpBody = try JSONEncoder().encode(body)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json, application/problem+json", forHTTPHeaderField: "Accept")
+        let response: SchoolHTTPResponse
+        do { response = try await transport.send(request) }
+        catch { throw error.unlessCancelled(SchoolCaptureFailure.unavailable) }
+        try Task.checkCancellation()
+        guard response.url == url, response.data.count <= 8_192 else { throw SchoolCaptureFailure.invalidResponse }
+        if response.status == 401 { throw SchoolCaptureFailure.unauthorized }
+        if response.status == 403 { throw SchoolCaptureFailure.forbidden }
+        if response.status == 404 { throw SchoolCaptureFailure.notFound }
+        guard response.status == 200 else { throw SchoolCaptureFailure.unavailable }
+        let type = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
+        guard type == "application/json",
+              let envelope = try? JSONDecoder().decode(Envelope<SchoolLiveMatchResponse>.self, from: response.data),
+              !envelope.requestId.isEmpty, envelope.requestId.count <= 150, SchoolLesson.date(envelope.serverTime) != nil,
+              envelope.data.matches(body) else { throw SchoolCaptureFailure.invalidResponse }
+        return envelope.data
+    }
+
     func publicKeys() async throws -> SchoolCapturePublicKeys {
         let value: SchoolCapturePublicKeys = try await read(["v1", "capture-keys"])
         guard !value.keys.isEmpty, value.keys.count <= 20,
