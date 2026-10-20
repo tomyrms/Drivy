@@ -96,6 +96,8 @@ struct SchoolLiveMatchWindow {
     private var lastRequestAt: TimeInterval?
     private var lastRequestedSequence: Int?
 
+    init(segmentID: UUID) { self.segmentID = segmentID }
+
     mutating func append(_ added: [SchoolLiveMatchPoint]) {
         for point in added {
             if let latest, point.sequence <= latest.sequence || point.elapsedMs <= latest.elapsedMs { continue }
