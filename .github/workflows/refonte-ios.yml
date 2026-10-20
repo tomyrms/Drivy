@@ -9,9 +9,14 @@ on:
         type: boolean
         default: false
       unit_only:
-        description: Relancer uniquement DrivyTests sur iPhone, sans parcours UI, iPad ni IPA
+        description: Tests métier sur iPhone selon unit_test_scope, sans UI, iPad ni IPA
         type: boolean
         default: false
+      unit_test_scope:
+        description: 'Avec unit_only : gps pour le parcours GPS, all pour toute la suite métier'
+        type: choice
+        options: [gps, all]
+        default: gps
       ui_test_suite:
         description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), iPhone et iPad sans IPA ; vide pour tout'
         type: string
@@ -53,7 +58,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   apple:
-    name: Tests natifs et IPA
+    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
     timeout-minutes: 45
@@ -62,8 +67,21 @@ jobs:
       DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
       DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
       DRIVY_OIDC_CLIENT_ID: ${{ vars.DRIVY_OIDC_CLIENT_ID }}
+      DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
+      DRIVY_IOS_UNIT_TEST_SCOPE: ${{ inputs.unit_test_scope || 'gps' }}
+      DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
+      DRIVY_IOS_VISUAL_ONLY: ${{ inputs.visual_only && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Valider le mode et la sélection des tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/ios/test-selection.sh
+          if [[ "$unit_only" == 1 ]]; then
+            echo "Tests métier iPhone : $unit_test_scope, sans UI, iPad ni IPA."
+            printf '%s\n' "${test_options[@]}"
+          fi
       - name: Installer XcodeGen vérifié
         shell: bash
         run: |
@@ -95,9 +113,11 @@ jobs:
           VISUAL_SCREENS: ${{ inputs.visual_screens }}
         run: |
           set -euo pipefail
+          source scripts/ios/test-selection.sh
           action=build-for-testing
           if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status|lesson-evidence|lesson-permit|planning-details|planning-confirmation)[[:space:]] ]]; then action=build; fi
           xcodebuild "$action" \
+            ${test_options[@]+"${test_options[@]}"} \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath artifacts/ios/DerivedData \
@@ -113,12 +133,9 @@ jobs:
               raise SystemExit('Accès au trousseau absent des entitlements du simulateur.')
           shutil.copyfile(matches[0], 'artifacts/ios/simulator-entitlements.plist')
           PY
-      - name: Tests natifs et parcours iPhone puis iPad
+      - name: ${{ inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || 'Tests et parcours iPhone puis iPad' }}
         if: inputs.visual_only != true
         shell: bash
-        env:
-          DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
-          DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
         run: bash scripts/ios/test-simulator.sh
       - name: Capturer les écrans pour la revue visuelle
         if: inputs.visual_only == true
