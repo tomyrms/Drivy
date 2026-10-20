@@ -200,12 +200,10 @@ struct SchoolReplayPath: Sendable {
     /// the arrow or the camera at every vertex, and a bend is taken as one smooth turn.
     func heading(atMeters meters: Double, ahead: Double) -> Double? {
         guard latitudes.count > 1, length > 0 else { return nil }
-        let behind = min(ahead / 3, 4)
-        var from = max(0, meters - behind), to = min(length, meters + ahead)
+        let behind = min(ahead / 3, 4), span = min(length, behind + ahead)
+        var from = meters - behind, to = meters + ahead
         // Near the ends the window slides inward rather than shrinking to nothing.
-        if to - from < min(length, behind + ahead) {
-            if from == 0 { to = min(length, behind + ahead) } else { from = max(0, length - behind - ahead) }
-        }
+        if from < 0 { from = 0; to = span } else if to > length { to = length; from = length - span }
         guard to - from > 0.5, let start = place(atMeters: from), let end = place(atMeters: to) else {
             return place(atMeters: meters)?.heading
         }

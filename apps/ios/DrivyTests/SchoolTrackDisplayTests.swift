@@ -468,7 +468,7 @@ struct SchoolTrackDisplayTests {
         // Eastward line with a 2 m zigzag at every vertex: each short edge points 20° off.
         let points = (0...40).map { fix($0, second: Double($0), east: Double($0) * 6, north: $0 % 2 == 0 ? 0 : 2) }
         let timeline = replay(points)
-        for t in stride(from: 3.0, through: 35, by: 0.37) {
+        for t in stride(from: 0.0, through: 40, by: 0.37) {
             let heading = try #require(timeline.position(at: t)?.heading)
             #expect(abs(SchoolTrackGeometry.angleDelta(from: 90, to: heading)) < 12)
         }

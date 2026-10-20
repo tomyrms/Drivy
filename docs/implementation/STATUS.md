@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 20 octobre 2026 : GPS en direct et replay fluides
+
+Branche `claude/gps-replay-fluide-20261020`, non fusionnée, non déployée. Détail : [gps-replay-fluide-20261020.md](gps-replay-fluide-20261020.md).
+
+Cause mesurée sur la leçon réelle avec Dania (homelab, lecture seule, statistiques seulement) : le filtre d’affichage ne gardait que 151 mesures sur 1 058, et le curseur restait figé 4 s (médiane) puis sautait d’environ 4 m. Le replay tire maintenant son horaire de toutes les mesures, avec une vitesse continue ; la flèche et la caméra visent la route plus loin et tiennent à ×5 et ×10. En direct, le marqueur est prédit à partir de la vitesse et du cap mesurés par iOS ; le mode direction suit le cap de route. Carte à 120 Hz.
+
+**Exécuté** : comparaison avant/après sur la leçon réelle (curseur figé de 906 s à 287 s, uniquement les arrêts réels ; 147 arrêts de plus d’une seconde à 17), scénarios des tests rejoués en JavaScript avec le filtre de l’API. Tests Swift sur runner Apple : premier passage, un seul échec, le nouveau test de la flèche (fenêtre mal recentrée au bord d’un tronçon), corrigé ; second passage, voir ci-dessous.
+
+**À qualifier sur iPhone** : fluidité perçue, prédiction en virage serré, au rond-point et au freinage, 120 Hz réel. **Pas fait** : collage à la route pendant la leçon par le SDK Navigation Mapbox. Il demande une carte Mapbox à la place de MapKit et un destinataire de positions de plus ; c’est une décision du porteur.
+
 ## 19 octobre 2026 : V4 intégrée à la production et déployée
 
 PR #36 fusionnée dans `master` en `d9a67c0`, à la demande du porteur. La branche réunit la refonte V4 (`design/ui-ux-v4-20261018`, `a93969f`) et la production `claude/audit-4agents-20261018` (`3893b7c`) : connexion native, création de compte par code, formations et tarifs, migration 034, confirmation d’identité et GPS. Sept conflits résolus : agenda web, BFF, session, test UI iOS, recette d’ouverture, `STATUS.md`. La recherche d’agenda V4 est conservée ; la réauthentification garde la vérification de fraîcheur de la production.
