@@ -22,7 +22,7 @@ beforeAll(async () => {
   const key = await exportJWK(keys.publicKey);
   const verifyToken = createTokenVerifier({OIDC_ISSUER: issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},
     createLocalJWKSet({keys:[{...key,kid:'integration',alg:'RS256'}]}));
-  app = buildApp({pool,verifyToken,cursorSecret:'secret-test-32-caracteres-minimum'});
+  app = buildApp({pool,verifyToken,cursorSecret:'secret-test-32-caracteres-minimum',logger:true});
 });
 beforeEach(async () => {
   await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');
