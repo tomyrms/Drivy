@@ -60,7 +60,7 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
       const result:Record<string,unknown[]>={};
       for(const table of tables) {
         if(!/^[a-z_]+$/.test(table))throw new Error('Nom de table de recette inattendu.');
-        result[table]=(await pool.query(`SELECT to_jsonb(t)-$1::text[] AS value FROM drivy.${table} t ORDER BY (to_jsonb(t)-$1::text[])::text`,[table==='school_setup'?newColumns:table==='offering_version'?['label']:[]])).rows.map(row=>row.value);
+        result[table]=(await pool.query(`SELECT to_jsonb(t)-$1::text[] AS value FROM drivy.${table} t ORDER BY (to_jsonb(t)-$1::text[])::text`,[table==='school_setup'?newColumns:table==='offering_version'?['label']:table==='person'?['first_name','last_name','contact_phone','photo_version']:[]])).rows.map(row=>row.value);
       }
       return result;
     };
@@ -73,6 +73,8 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     // 033 ajoute seulement le nom facultatif d'un parcours : aucune ligne existante ne reçoit de nom déduit.
     expect((await pool.query('SELECT count(*)::int AS named FROM drivy.offering_version WHERE label IS NOT NULL')).rows[0].named).toBe(0);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_opening_link')).rows[0].n).toBe(0);
+    // 038 n’invente aucun prénom, nom, téléphone ni photo pour les comptes existants.
+    expect((await pool.query('SELECT count(*)::int n FROM drivy.person WHERE first_name IS NOT NULL OR last_name IS NOT NULL OR contact_phone IS NOT NULL OR photo_version<>0')).rows[0].n).toBe(0);
     expect((await env.call('GET','/v1/me',undefined,undefined,'demo-admin')).json().data).toEqual(beforeEntry);
     expect(await privacyViews()).toEqual(beforePrivacy);
     for(const [schoolId,subject,status] of [[id.schoolA,'demo-admin','ACTIVE'],[id.schoolB,'demo-instructor','DRAFT']] as const) {
