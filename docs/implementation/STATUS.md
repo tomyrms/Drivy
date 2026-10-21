@@ -8,6 +8,7 @@
 
 ## 21 octobre 2026 : recalage direct sur la route (#90), déployé
 
+- Donnée de recette (22.10, 00:25) : leçon terminée « Test : trajet simulé » du 21.10 à 08:00 pour Dania Badoni (Ramos Auto ecole), trajet synthétique de 1 000 points (17 min, ~9 km dans Berne, trois arrêts), chiffré avec la clé de capture, sans aucune position réelle. Sauvegarde préalable `/root/drivy_refonte-before-test-lesson-20261021T222437Z.dump`. Déchiffrement et recalage du replay vérifiés (71 % du trajet recalé). À supprimer après la recette.
 - API 0c887e1 déployée sur CT114 (00:17 Zurich) après sauvegarde vérifiée `/root/drivy_refonte-before-0c887e1-20261021T221632Z.dump`. Sans migration. L'ancienne app ignore le champ `route` et reste compatible.
 - Ligne et marqueur en direct suivent la route (OSRM privé) : mesures espacées de 20 m, plus de garde de vitesse, tronçon routier ancré renvoyé par l'API (`live-match` v2), réponses tardives conservées pour la ligne, Réduire les animations garde le recalage. Détails et mesures : `recalage-direct-route-20261021.md`.
 - Exécuté : tests API (53, dont 26 sur PostgreSQL réelle), validation du vrai module sur CT114 contre CT117 (0 % → 25 à 67 % de fenêtres recalées en conduite synthétique, position p50 3 à 5 m, 0 % à pied hors route), compilation IPA.
