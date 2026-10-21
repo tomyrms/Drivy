@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 21 octobre 2026 : homonymes distingués avant une action sur un compte (#53), non qualifié
+
+- Quand deux membres, deux moniteurs ou deux invitations ont le même libellé (comparaison sans accents, casse ni espaces doublés), chacun reçoit une courte référence « Réf. A1B2 ». Elle reprend la fin de l'identifiant technique (partie aléatoire des UUID) et s'allonge jusqu'à différer de tous les homonymes. Un libellé unique n'a pas de référence.
+- Aucune donnée personnelle supplémentaire n'est lue ni exposée : l'API et les droits ne changent pas. Les actions gardent l'identifiant technique comme clé. Le code d'invitation n'est jamais utilisé.
+- Web : liste et détail de l'équipe, titre des confirmations (modifier les accès, retirer l'accès), messages de résultat, recherche (la référence est cherchable), liste et détail des invitations, sélecteur et confirmation du moniteur d'un code élève, filtre moniteur de l'agenda. Règle `client/person-reference.ts`, test `test/person-reference.test.ts`.
+- iOS : même règle (`Core/HomonymReference.swift`) dans les sélecteurs de moniteur de la planification et des invitations.
+- Exécuté : typecheck web, tests `person-reference` et `invitation-model`, compilation de l'IPA. Non exécuté : suite complète, recette VoiceOver et clavier.
+
 ## 21 octobre 2026 : positions conservées après une coupure du signal (#46), non qualifié
 
 - Avant : quand un lot de positions iOS contenait une coupure de signal, la première position reçue après la coupure et le reste du lot étaient jetés. Le nouveau segment ne gardait que les positions arrivées ensuite.

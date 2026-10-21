@@ -14,6 +14,7 @@ import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Plac
 import { useListState } from './list-state';
 import { consolePath } from './route';
 import { PersonAvatar } from '../person-avatar';
+import { distinctLabel, homonymReferences } from '../person-reference';
 
 const roles: readonly { value: Role; explanation: string }[] = [
   { value: 'ADMIN', explanation: 'Gérer l’école, ses membres et les dossiers administratifs.' },
@@ -59,8 +60,10 @@ export function TeamSection() {
   const [accessConflict, setAccessConflict] = useState(false);
   const draftBase = useRef<{ id: string; version: number; roles: Role[]; grants: string[] } | null>(null);
   const members = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)), [loaded.data]);
+  const references = useMemo(() => homonymReferences(members.map(item => ({ id: item.id, label: item.displayName }))), [members]);
+  const nameOf = (item: { id: string; displayName: string }) => distinctLabel(item.displayName, references.get(item.id));
   const audience = members.filter(item => showLearners || isStaff(item));
-  const visible = audience.filter(item => (statusFilter === 'all' || (statusFilter === 'active') === (item.status === 'ACTIVE')) && matchesSearch([item.displayName], filter))
+  const visible = audience.filter(item => (statusFilter === 'all' || (statusFilter === 'active') === (item.status === 'ACTIVE')) && matchesSearch([item.displayName, references.get(item.id)], filter))
     .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * (a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)));
   const pageSize = 25;
   const currentPage = Math.max(1, Math.min(page, Math.ceil(visible.length / pageSize) || 1));
@@ -109,12 +112,12 @@ export function TeamSection() {
       const command = createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id,
         resourceVersion: current.version, body: { roles: roles.map(item => item.value).filter(value => draftRoles.includes(value)), grants: grants.map(item => item.value).filter(value => draftGrants.includes(value)), reason: reason.trim() } });
       submittedOperation.current = command.operationId;
-      result = await runner.run(command, `Les accès de ${current.displayName} sont modifiés.`);
+      result = await runner.run(command, `Les accès de ${nameOf(current)} sont modifiés.`);
     } else if (dialog === 'deactivate' && !deactivateProblem && !self) {
       const command = createCommand({ schoolId, kind: 'deactivateMember', path: `members/${current.id}/deactivate`, ifMatch: current.version, resourceId: current.id,
         resourceVersion: current.version, body: { reason: deactivateReason.trim() } });
       submittedOperation.current = command.operationId;
-      result = await runner.run(command, `${current.displayName} n’a plus accès à l’école.`);
+      result = await runner.run(command, `${nameOf(current)} n’a plus accès à l’école.`);
     }
     if (result && result.status !== 'rejected') setDialog(null);
   }
@@ -154,6 +157,7 @@ export function TeamSection() {
                 href={consolePath(schoolId, 'equipe', { ...routeQuery, selection: item.id })}
                 onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); setSelected(item.id); } }}>
                 <PersonAvatar name={item.displayName} /><span className="person-name">{item.displayName}</span></a>
+                {references.has(item.id) && <span className="record-secondary">Réf. {references.get(item.id)}</span>}
                 {item.id === membership.membershipId && <span className="record-secondary">Vous</span>}</th>
               <td data-label="Rôles">{rolesText(item.roles)}</td>
               <td data-label="Accès">{item.status === 'ACTIVE' ? 'Actif' : <span className="record-attention"><Symbol kind="ban" bare />Inactif</span>}</td>
@@ -161,7 +165,7 @@ export function TeamSection() {
           <ListPagination page={currentPage} pageSize={pageSize} total={visible.length} onPageChange={setPage} label="Pagination des membres" />
         </>}
         detail={current ? <DetailPanel headingLevel={1} focusKey={current.id} title={current.displayName} leading={<PersonAvatar name={current.displayName} size="large" />}
-            meta={<span className="person-meta">{self && <span>Votre propre accès</span>}<span>{rolesText(current.roles)}</span></span>}
+            meta={<span className="person-meta">{self && <span>Votre propre accès</span>}{references.has(current.id) && <span>Réf. {references.get(current.id)}</span>}<span>{rolesText(current.roles)}</span></span>}
             badge={current.status !== 'ACTIVE' ? <StatusBadge tone="neutral" symbol="ban">Accès inactif</StatusBadge> : undefined}>
             {current.roles.includes('INSTRUCTOR') && <div className="detail-links">
               <button type="button" className="button quiet" onClick={() => navigate('agenda', { instructor: current.id })}><Symbol kind="calendar" bare />Voir le planning</button>
@@ -204,7 +208,7 @@ export function TeamSection() {
         {...(dialog === 'deactivate' ? { acknowledgement: 'Je comprends que cette personne ne pourra plus accéder à l’école.', acknowledged, onAcknowledge: setAcknowledged }
           : loseAdmin ? { acknowledgement: 'Je comprends que je ne pourrai plus administrer cette école.', acknowledged, onAcknowledge: setAcknowledged } : {})}>
         <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
-        <p className="dialog-lead">{current.displayName}</p>
+        <p className="dialog-lead">{nameOf(current)}</p>
         {dialog === 'deactivate' ? <TextArea label="Motif du retrait" required rows={3} maxLength={1000} value={deactivateReason} onChange={setDeactivateReason} disabled={runner.busy} />
           : <Facts items={[
           ['Rôles actuels', rolesText(current.roles)], ['Rôles demandés', rolesText(roles.map(item => item.value).filter(value => draftRoles.includes(value)))],
@@ -312,8 +316,11 @@ export function InvitationsSection() {
     && instructors.some(item => item.id === instructorId) ? null : commandMessage('INVITATION_TRAINING_INVALID');
   const actionable = current && (current.status === 'PENDING' || current.status === 'EXPIRED');
   const chosenInstructor = instructors.find(item => item.id === instructorId);
+  const invitationReferences = useMemo(() => homonymReferences(items.map(item => ({ id: item.id, label: invitationLabel(item, data?.offerings ?? [], data?.members ?? []) }))), [items, data]);
+  const instructorReferences = useMemo(() => homonymReferences(instructors.map(item => ({ id: item.id, label: item.displayName }))), [instructors]);
+  const instructorName = (item: { id: string; displayName: string }) => distinctLabel(item.displayName, instructorReferences.get(item.id));
 
-  const label = (item: Invitation) => invitationLabel(item, data?.offerings ?? [], data?.members ?? []);
+  const label = (item: Invitation) => distinctLabel(invitationLabel(item, data?.offerings ?? [], data?.members ?? []), invitationReferences.get(item.id));
   const expiryOf = (value: string) => formatDateTime(value, school.timeZone);
   const visible = items.filter(item => (statusFilter === 'all' || item.status === statusFilter) && matchesSearch([label(item)], search));
   const leaveForm = (proceed: () => void) => confirmNavigation ? confirmNavigation(proceed) : proceed();
@@ -420,7 +427,7 @@ export function InvitationsSection() {
                   disabled={!canWrite} onChange={on => setOfferingIds(ids => on ? [...ids, item.id] : ids.filter(id => id !== item.id))} />)}
               </fieldset>
               <SelectField label="Moniteur" value={instructorId} placeholder="Choisir un moniteur" disabled={!canWrite} onChange={setInstructorId} search
-                options={instructors.map(item => ({ value: item.id, label: item.displayName }))} />
+                options={instructors.map(item => ({ value: item.id, label: instructorName(item) }))} />
               {showErrors && trainingProblem && <p className="field-error"><Symbol kind="alert" bare />{trainingProblem}</p>}
               {offerings.length === 0 && <Notice tone="info" title="Aucune offre ouverte" live={false}
                 actions={<button type="button" className="button quiet" onClick={() => navigate('offres')}>Ouvrir les offres</button>}>
@@ -479,7 +486,7 @@ export function InvitationsSection() {
         <OutcomeNotice outcome={runner.outcome} />
         {dialog === 'create' && creating === 'code' && <>
           <p className="dialog-lead">Code élève · {offerings.filter(item => offeringIds.includes(item.id)).map(item => offeringLabel(item, offerings)).join(', ')}</p>
-          <Facts items={[['Moniteur', chosenInstructor?.displayName ?? '—'], ['École', school.name], ['Validité du code', '7 jours, à usage unique']]} />
+          <Facts items={[['Moniteur', chosenInstructor ? instructorName(chosenInstructor) : '—'], ['École', school.name], ['Validité du code', '7 jours, à usage unique']]} />
         </>}
         {dialog === 'create' && creating === 'email' && <>
           <p className="dialog-lead">{email.trim()}</p>

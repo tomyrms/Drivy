@@ -41,6 +41,11 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var accessFailure: SchoolInvitationFailure?
     private(set) var offerings: [SchoolOffering] = []
     private(set) var instructors: [SchoolInvitationInstructor] = []
+    /// The instructor's name, followed by a short reference when another instructor has the same one.
+    func instructorLabel(_ instructor: SchoolInvitationInstructor) -> String {
+        HomonymReference.label(instructor.displayName,
+                               reference: HomonymReference.references(instructors.map { ($0.id, $0.displayName) })[instructor.id])
+    }
     private(set) var creationOptionsError: String?
     private(set) var issuedCode: SchoolIssuedInvitationCode?
     private(set) var codeRecovery: SchoolCodeRecovery?

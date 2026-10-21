@@ -11,6 +11,7 @@ import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
 import { useListState } from './list-state';
+import { distinctLabel, homonymReferences } from '../person-reference';
 import './agenda-studio.css';
 
 const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' | 'clock' }>> = {
@@ -60,6 +61,7 @@ export function AgendaSection() {
   }, [reloadLessons, reloadDirectory]);
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
+  const instructorReferences = useMemo(() => homonymReferences(instructors.map(item => ({ id: item.id, label: item.displayName }))), [instructors]);
   const searchQuery = agendaSearchQuery(directory, search);
   const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchQuery), school.timeZone),
     [data, directory.data, searchQuery, school.timeZone]);
@@ -94,7 +96,7 @@ export function AgendaSection() {
         </form>
         <div className="agenda-studio-filters">
           {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor} search appearance="filter"
-            options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: item.displayName })),
+            options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: distinctLabel(item.displayName, instructorReferences.get(item.id)) })),
               ...(instructor && !instructors.some(item => item.id === instructor) ? [{ value: instructor, label: memberName(instructor) }] : [])]} />}
           <RecordSearch label="Élève" value={search} onChange={setSearch} placeholder="Rechercher un élève" />
           {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}

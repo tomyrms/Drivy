@@ -145,6 +145,11 @@ struct SchoolPlanningInstructor: Identifiable {
     var selectedTerms: SchoolCommercialTerms? { terms.first { $0.id == selectedProduct?.termsVersionId } }
     var selectedPolicy: SchoolCatalogPolicy? { policies.first { $0.id == selectedOffering?.policyVersionId } }
     var timeZone: String { school?.timeZone ?? originalLesson?.timeZone ?? "Europe/Zurich" }
+    /// The instructor's name, followed by a short reference when another instructor has the same one.
+    func instructorLabel(_ instructor: SchoolPlanningInstructor) -> String {
+        HomonymReference.label(instructor.displayName,
+                               reference: HomonymReference.references(instructors.map { ($0.id, $0.displayName) })[instructor.id])
+    }
     var assignedInstructors: [SchoolPlanningInstructor] {
         let now = Date()
         let ids = Set(assignments.filter { assignment in

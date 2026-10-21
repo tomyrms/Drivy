@@ -367,7 +367,7 @@ struct InvitationCreationView: View {
                         Picker("Moniteur", selection: $model.selectedInstructorID) {
                             if model.selectedInstructorID == nil { Text("Choisir").tag(nil as UUID?) }
                             ForEach(model.instructors) { instructor in
-                                Text(instructor.displayName).tag(Optional(instructor.id))
+                                Text(model.instructorLabel(instructor)).tag(Optional(instructor.id))
                             }
                         }
                         .accessibilityIdentifier("invitation-instructor")

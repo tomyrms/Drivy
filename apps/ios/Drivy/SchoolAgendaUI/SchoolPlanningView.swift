@@ -182,10 +182,10 @@ struct SchoolPlanningView: View {
         Section {
             Picker("Moniteur", selection: $model.instructorID) {
                 Text("Choisir un moniteur").tag(nil as UUID?)
-                ForEach(model.assignedInstructors) { instructor in Text(instructor.displayName).tag(Optional(instructor.id)) }
+                ForEach(model.assignedInstructors) { instructor in Text(model.instructorLabel(instructor)).tag(Optional(instructor.id)) }
                 if let selected = model.instructors.first(where: { $0.id == model.instructorID }),
                    !model.assignedInstructors.contains(where: { $0.id == selected.id }) {
-                    Text(selected.displayName).tag(Optional(selected.id)).disabled(true)
+                    Text(model.instructorLabel(selected)).tag(Optional(selected.id)).disabled(true)
                 }
             }
             .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false }
