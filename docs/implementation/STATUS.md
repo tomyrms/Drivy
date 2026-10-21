@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 21 octobre 2026 : démarrage d'une leçon et départs GPS résiduels (#86, #87), non qualifié
+
+- Mesure homelab (lecture seule, aucune modification) : API et base répondent en 0,5 à 8 ms depuis Caddy. Box vers Internet 5 ms. Mémoire et charge des CT113/114/117/109 normales. Pas de tunnel `cloudflared`. Par Cloudflare, la même requête prend 0,6 à 3,4 s. Même `drivy.shulker.ch/cdn-cgi/trace`, servi par Cloudflare sans joindre l'origine, prend 0,45 à 0,9 s, contre 30 à 50 ms pour `www.cloudflare.com` sur la même adresse. Le porteur constate la même lenteur en 5G. Cause : chez Cloudflare (ZRH, après sa maintenance du 20-21 octobre), pas dans le homelab. Aucune configuration changée.
+- #87 : un départ GPS refusé (4xx) ou jamais émis est classé dans le coffre (`settleStartWithoutAuthorization`) et ne bloque plus les autres leçons. À l'ouverture, les départs en attente de plus de 2 min sont relus (5 s au plus, en lecture) ; ceux que l'école ne connaît pas sont retirés. Le bouton « Vérifier auprès de l'école » reste en place avec « Vérification… ». Une demande émise sans réponse reste à vérifier.
+- #86 : préférences et élèves lus en parallèle, première page affichée tout de suite, élève connu relu seul, lieu de rendez-vous lu sur 20 leçons récentes sans bloquer le bouton ni écraser une saisie. Départ GPS en un geste : relecture finale remplacée par la seule lecture de l'école quand le contexte a moins de 60 s (l'école revoit version, accord et diagnostic à l'écriture), mesure et diagnostic sans relire le contexte, accord et diagnostic relus en parallèle.
+- Exécuté : compilation IPA (premier lot). Non exécuté : tests Swift, recette appareil, mesure avant/après sur iPhone.
+
 ## 21 octobre 2026 : captures locales illisibles isolées sans perdre les autres (#48), non qualifié
 
 - Avant : dans le coffre SQLCipher, une seule ligne de trajet ou de commande impossible à décoder faisait échouer toute la lecture. À l'ouverture, `recoverInterrupted` scellait tous les trajets interrompus dans une seule transaction : un trajet défectueux bloquait l'ouverture du coffre et la récupération des trajets sains.

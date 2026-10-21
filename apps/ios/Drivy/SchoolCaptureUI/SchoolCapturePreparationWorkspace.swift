@@ -198,7 +198,7 @@ struct SchoolCaptureStartReview: Identifiable {
         if !sourceTransferred { startTransfer?.invalidate() }
         startTransfer = nil
         closeDiagnostic()
-        lesson = nil; learner = nil; notice = nil; choice = nil; assessment = nil
+        lesson = nil; learner = nil; notice = nil; choice = nil; assessment = nil; contextReadAt = nil; choiceReadAt = nil
         pending = []; contextIsCurrent = false; isInstructor = false; isLoading = false; isBusy = false
         noticeError = nil; assessmentMessage = nil; storageError = nil
     }
@@ -226,8 +226,14 @@ struct SchoolCaptureStartReview: Identifiable {
             guard isCurrent(request) else { return }
             apply(context)
             if context.isInstructor && !sourceTransferred && diagnosticIsAvailable { snapshot = try? diagnosticSource().diagnosticSnapshot() }
-            await loadChoice(request)
-            if let assessment, isCurrent(request) { await refreshAssessment(assessment, request: request) }
+            // Accord et diagnostic se relisent ensemble : aucun ne dépend de l’autre.
+            if let assessment, isCurrent(request) {
+                async let choiceRead: Void = loadChoice(request)
+                await refreshAssessment(assessment, request: request)
+                await choiceRead
+            } else {
+                await loadChoice(request)
+            }
         } catch {
             guard isCurrent(request) else { return }
             isLoading = false; fail(error)
@@ -239,23 +245,26 @@ struct SchoolCaptureStartReview: Identifiable {
         await performLocalDiagnostic { source in source.requestPermission() }
     }
 
-    func requestSample() async {
+    func requestSample(reusingFreshContext: Bool = false) async {
         guard mayDiagnose, !isSampling else { return }
-        await performLocalDiagnostic { source in
+        await performLocalDiagnostic(reusingFreshContext: reusingFreshContext) { source in
             try source.requestDiagnosticSample()
             self.isSampling = true
         }
     }
 
-    private func performLocalDiagnostic(_ action: (any SchoolCaptureLocationProviding) throws -> Void) async {
+    private func performLocalDiagnostic(reusingFreshContext: Bool = false, _ action: (any SchoolCaptureLocationProviding) throws -> Void) async {
         let request = generation
         isBusy = true; errorMessage = nil
         defer { if isCurrent(request) { isBusy = false } }
         do {
-            let context = try await readContext()
-            guard isCurrent(request) else { return }
-            apply(context)
-            guard context.isInstructor, context.lesson.status == "PLANNED" else { throw SchoolCaptureFailure.forbidden }
+            // Une mesure locale ne part pas à l’école : un contexte lu à l’instant suffit pour la demander.
+            if !(reusingFreshContext && contextReadAt.map { Date().timeIntervalSince($0) < 30 } == true) {
+                let context = try await readContext()
+                guard isCurrent(request) else { return }
+                apply(context)
+            }
+            guard isInstructor, lesson?.status == "PLANNED" else { throw SchoolCaptureFailure.forbidden }
             guard diagnosticIsAvailable else { throw SchoolCaptureStorageFailure.alreadyActive }
             let source = diagnosticSource()
             try action(source)
@@ -264,15 +273,18 @@ struct SchoolCaptureStartReview: Identifiable {
     }
 
     /// The user explicitly sends metadata; coordinates and free space never leave this screen.
-    func assess() async {
+    func assess(reusingFreshContext: Bool = false) async {
         guard maySendAssessment, let store else { return }
         let request = generation
         isBusy = true; errorMessage = nil; assessmentMessage = nil
         do {
-            let context = try await readContext()
-            guard isCurrent(request) else { return }
-            apply(context)
-            guard context.isInstructor, context.lesson.status == "PLANNED" else { throw SchoolCaptureFailure.forbidden }
+            // Départ en un geste : la leçon et les droits viennent d’être lus ; l’école les revoit à l’écriture.
+            if !(reusingFreshContext && contextReadAt.map { Date().timeIntervalSince($0) < 30 } == true) {
+                let context = try await readContext()
+                guard isCurrent(request) else { return }
+                apply(context)
+            }
+            guard isInstructor, lesson?.status == "PLANNED" else { throw SchoolCaptureFailure.forbidden }
             guard diagnosticIsAvailable else { throw SchoolCaptureStorageFailure.alreadyActive }
             try await reloadQueue(request)
             guard isCurrent(request) else { return }
@@ -546,7 +558,7 @@ struct SchoolCaptureStartReview: Identifiable {
         } ?? false
         if !assessmentIsValid {
             setQuickStep("Mesure GPS…")
-            await requestSample()
+            await requestSample(reusingFreshContext: true)
             // Une mesure refusée d’emblée (services désactivés, app au second plan) dit sa vraie cause,
             // au lieu de partir vers un diagnostic sans mesure.
             if !isSampling, let reason = errorMessage { return quickFailure(reason) }
@@ -562,7 +574,7 @@ struct SchoolCaptureStartReview: Identifiable {
                 return quickFailure("Aucune position GPS reçue. Place-toi à découvert puis réessaie.")
             }
             setQuickStep("Vérification de l’appareil…")
-            await assess()
+            await assess(reusingFreshContext: true)
             guard let value = assessment, value.status == .qualified else {
                 let reasons = assessment?.blockers.map(\.message).joined(separator: "\n")
                 return quickFailure(reasons.flatMap { $0.isEmpty ? nil : $0 } ?? errorMessage ?? "Cet appareil n’a pas pu être vérifié.")
@@ -570,7 +582,7 @@ struct SchoolCaptureStartReview: Identifiable {
         }
 
         setQuickStep("Démarrage du trajet…")
-        guard let review = await reviewStart() else {
+        guard let review = await quickStartReview() else {
             return quickFailure(errorMessage ?? "Le départ n’a pas pu être préparé.")
         }
         guard await confirmStart(review, acknowledged: true, revalidate: false) else {
@@ -789,8 +801,13 @@ struct SchoolCaptureStartReview: Identifiable {
     private func refreshAssessment(_ value: SchoolDeviceAssessment, request: UUID) async {
         assessment = nil
         do {
-            let refreshed = try await client.assessment(schoolID: scope.schoolID, deviceID: value.deviceId, assessmentID: value.id)
-            _ = try await currentMembership()
+            // Diagnostic et droits ne dépendent pas l’un de l’autre : ils se lisent ensemble.
+            let schoolID = scope.schoolID, client = self.client
+            let membership = Task { @MainActor in try await currentMembership() }
+            let refreshed: SchoolDeviceAssessment
+            do { refreshed = try await client.assessment(schoolID: schoolID, deviceID: value.deviceId, assessmentID: value.id) }
+            catch { membership.cancel(); _ = try? await membership.value; throw error }
+            _ = try await membership.value
             guard isCurrent(request) else { return }
             assessment = refreshed; assessmentMessage = nil
         } catch {
@@ -842,6 +859,36 @@ struct SchoolCaptureStartReview: Identifiable {
     }
     private func apply(_ value: Context) {
         lesson = value.lesson; learner = value.learner; isInstructor = value.isInstructor; contextIsCurrent = true
+        contextReadAt = Date()
+    }
+    /// Moments des dernières lectures du contexte et de l’accord : le départ en un geste s’en sert sans les relire.
+    @ObservationIgnored private var contextReadAt: Date?
+    @ObservationIgnored private var choiceReadAt: Date?
+    static let quickReviewMaxAge: TimeInterval = 60
+
+    /// Départ en un geste : leçon, droits, accord et diagnostic viennent d’être lus par cette même exécution.
+    /// Les relire tous (six allers-retours) ne protégeait rien de plus : l’école revoit la version de la leçon,
+    /// l’accord et le diagnostic à l’écriture du départ. Seule l’école (module GPS) est relue ici.
+    /// Une lecture trop ancienne ou incomplète repasse par la relecture complète.
+    private func quickStartReview() async -> SchoolCaptureStartReview? {
+        let now = Date()
+        guard mayReviewStart, let lesson, let learner, let notice, let choice, let assessment,
+              assessment.membershipId == scope.membershipID,
+              let contextReadAt, let choiceReadAt,
+              now.timeIntervalSince(contextReadAt) < Self.quickReviewMaxAge,
+              now.timeIntervalSince(choiceReadAt) < Self.quickReviewMaxAge else { return await reviewStart() }
+        let request = generation
+        isBusy = true; errorMessage = nil; startMessage = nil
+        defer { if isCurrent(request) { isBusy = false } }
+        do {
+            let school = try await reader.school(id: scope.schoolID)
+            guard isCurrent(request) else { return nil }
+            guard school.status == "ACTIVE", school.modules.gpsEnabled else {
+                throw SchoolCaptureFailure.rejected("Le GPS scolaire n’est pas activé dans cette école. La leçon peut continuer sans GPS.")
+            }
+            return .init(lesson: lesson, learnerName: learner.displayName, notice: notice, choice: choice,
+                assessment: assessment, pendingMutation: nil)
+        } catch { if isCurrent(request) { fail(error) }; return nil }
     }
     private func loadChoice(_ request: UUID) async {
         notice = nil; choice = nil; noticeError = nil
@@ -857,7 +904,7 @@ struct SchoolCaptureStartReview: Identifiable {
             let notice = try await noticeRead.value
             let choice = try await choiceRead.value
             guard isCurrent(request) else { return }
-            self.notice = notice; self.choice = choice
+            self.notice = notice; self.choice = choice; choiceReadAt = Date()
         } catch {
             guard isCurrent(request) else { return }
             noticeError = (error as? LocalizedError)?.errorDescription ?? "Le choix GPS n’a pas pu être relu."
