@@ -1,10 +1,10 @@
 # État de la réalisation
 
-## 21 octobre 2026 : contourner le proxy Cloudflare (#93), préparé, bascule en attente
+## 21 octobre 2026 : contourner le proxy Cloudflare (#93), non retenu
 
 - Inventaire en lecture seule et procédure : [contournement-cloudflare-20261021.md](contournement-cloudflare-20261021.md). Caddy CT109 a déjà un certificat Let's Encrypt valide pour `drivy.shulker.ch` sans défi DNS, seuls 80/443 sont joignables, aucun filtrage « IP Cloudflare » n'existe : passer l'enregistrement `drivy` en « DNS only » suffit, sans changement Caddy ni IPA.
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
-- Non fait : la bascule dans le tableau de bord Cloudflare (pas d'accès automatisé), mesure 5G, recette iOS après bascule. Le DNS autoritatif reste chez Cloudflare.
+- Décision du porteur (21 octobre 2026) : pas de bascule, le proxy Cloudflare est conservé. La lenteur mesurée par Cloudflare reste ouverte.
 
 ## 21 octobre 2026 : profil personnel complet et photo (#64)
 

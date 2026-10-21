@@ -1,6 +1,6 @@
 # Contournement du proxy Cloudflare pour Drivy (#93) — 21 octobre 2026
 
-État : **préparé, bascule en attente**. Aucune modification de DNS, de Caddy, du NAT ou de l'IPA.
+État : **non retenu par le porteur le 21 octobre 2026** (IP visible, perte de la protection Cloudflare). Aucune modification de DNS, de Caddy, du NAT ou de l'IPA. La procédure reste valable si la décision change.
 
 ## Inventaire (lecture seule)
 
