@@ -65,10 +65,14 @@ export function registerPersonalProfile(app: FastifyInstance, options: { pool: P
         )).rows[0];
         if (!current) throw forbidden();
         checkVersion(current.version, expected);
+        // Le marqueur est transactionnel. Sans lui, la RLS historique interdit UPDATE,
+        // même au compte connecté (ex. manipulation SQL hors du parcours vérifié).
+        await db.query("SELECT set_config('app.personal_profile_command','authorized',true)");
         result = (await db.query<PersonRow>(
-          'SELECT * FROM drivy.update_personal_display_name($1,$2,$3)',
-          [personId, expected, body.displayName]
+          'UPDATE drivy.person SET display_name=$2,version=version+1 WHERE id=$1 RETURNING id AS "personId",version,display_name AS "displayName",locale',
+          [personId, body.displayName]
         )).rows[0]!;
+        await db.query("SELECT set_config('app.personal_profile_command','',true)");
         await db.query(
           'INSERT INTO drivy.personal_profile_operation(person_id,operation_id,payload_hash,response_version,response_display_name,response_locale) VALUES($1,$2,$3,$4,$5,$6)',
           [personId,body.operationId,payloadHash,result.version,result.displayName,result.locale]
