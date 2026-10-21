@@ -32,6 +32,9 @@ struct SchoolHomeView: View {
     @State private var learnerConsent: SchoolRecordingChoiceWorkspace?
     /// Élève du trajet en cours, lu à part quand il n’est pas dans la page d’élèves affichée.
     @State private var captureLearner: (id: UUID, name: String)?
+    /// L’écran du trajet a été quitté par le moniteur : la capture continue, l’app retrouve ses onglets.
+    /// « Une capture existe » et « son écran est présenté » restent deux faits distincts.
+    @State private var captureMinimized = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
 
@@ -98,6 +101,7 @@ struct SchoolHomeView: View {
         // Seul le départ d’un trajet ramène sur « Aujourd’hui ». L’identifiant du trajet reste le même pendant
         // la pause et la reprise ; l’état « en collecte », lui, repasse à vrai à chaque reprise.
         .onChange(of: captureController?.captureID) { previous, current in
+            if current != previous { captureMinimized = false }
             if current != nil && current != previous { selectedTab = .session; SchoolTodayMemory.forget() }
         }
         .onChange(of: selectedTab) { previous, _ in
@@ -136,6 +140,7 @@ struct SchoolHomeView: View {
 
     private func resetScope() {
         dossierPlanningModel?.invalidate(); dossierPlanningModel = nil; chosenPermit = nil; captureLesson = nil
+        captureMinimized = false
         requiredActions.reset()
     }
 
@@ -172,6 +177,7 @@ struct SchoolHomeView: View {
                 .tabItem { tabLabel("Profil", systemImage: "person.crop.circle", tab: .profile) }
                 .tag(SchoolHomeTab.profile)
         }
+        .modifier(CaptureReturnAccessory(isEnabled: showsCaptureReturn, button: { captureReturnButton }))
         // Ce que les onglets savent déjà : relu quand la page d’élèves, les droits ou l’accueil changent.
         .onChange(of: workspace.learners.map { "\($0.id):\($0.profileReadiness ?? "")\($0.archivedAt == nil)" }, initial: true) { _, _ in refreshStaffActions() }
         .onChange(of: workspace.learnersToComplete) { _, _ in refreshStaffActions() }
@@ -198,15 +204,79 @@ struct SchoolHomeView: View {
         return "\(membership.membershipId.uuidString):\(membership.accessEpoch):\(membership.roles.joined(separator: ",")):\(membership.grants.joined(separator: ","))"
     }
 
+    /// Le trajet est présenté en plein écran, sans barre d’onglets ; quitté, il laisse place à la journée.
+    private var presentsCapture: Bool {
+        captureController?.captureID != nil && !captureMinimized
+    }
+
+    /// Retour au trajet proposé partout dans l’app tant que la capture existe et que son écran est quitté.
+    private var showsCaptureReturn: Bool {
+        captureController?.captureID != nil && captureMinimized
+    }
+
+    private func minimizeCapture() {
+        guard let captureController else { return }
+        // Trajet déjà confirmé par l’école : le quitter le ferme, comme le retour habituel.
+        if captureController.state == .saved, let result = captureController.finalizedSyncState,
+           result == .synced || result == .partial {
+            captureController.closeSaved()
+            return
+        }
+        captureMinimized = true
+    }
+
+    private func returnToCapture() {
+        guard captureController?.captureID != nil else { captureMinimized = false; return }
+        selectedTab = .session
+        captureMinimized = false
+    }
+
+    private var captureReturnButton: some View {
+        let paused = captureController?.state == .paused
+        let saved = captureController?.state == .saved
+        return Button(action: returnToCapture) {
+            HStack(spacing: DrivySpacing.s) {
+                Image(systemName: saved ? "checkmark.circle.fill" : paused ? "pause.circle.fill" : "location.fill")
+                    .foregroundStyle(DrivyTheme.accent)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(saved ? "Trajet arrêté" : paused ? "Trajet en pause" : "Trajet en cours")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.text)
+                    Text(captureLearnerName)
+                        .font(.caption)
+                        .foregroundStyle(DrivyTheme.muted)
+                }
+                .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(DrivyTheme.muted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, DrivySpacing.m)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(saved ? "Revenir au trajet" : "Revenir au trajet en cours")
+        .accessibilityValue("\(captureLearnerName)\(saved ? ", arrêté" : paused ? ", en pause" : "")")
+        .accessibilityIdentifier("capture-return")
+    }
+
     private var sessionTab: some View {
         NavigationStack {
             Group {
-                if let captureController, captureController.captureID != nil {
+                if let captureController, presentsCapture {
                     SchoolCaptureLiveView(controller: captureController, learnerName: captureLearnerName,
                         closeSaved: { captureController.closeSaved() },
                         openLesson: { lessonID, completing in
                             captureLesson = CaptureLessonRoute(id: lessonID, learnerName: captureLearnerName, completing: completing)
-                        }, observationClient: agendaClient?.observationClient, isTabRoot: true)
+                        }, observationClient: agendaClient?.observationClient, isTabRoot: true,
+                        minimize: { minimizeCapture() })
+                        // Plein écran : la carte prend la place des onglets, rendus dès que l’écran est quitté.
+                        .toolbar(.hidden, for: .tabBar)
                 } else {
                     SchoolTodayView(workspace: workspace, agendaClient: agendaClient, captureController: captureController,
                         schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
@@ -214,6 +284,16 @@ struct SchoolHomeView: View {
                         .navigationBarTitleDisplayMode(.inline)
                         // La carte va jusqu’en haut : aucun fond ni flou de barre ne la coupe en rectangle.
                         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            // Avant iOS 26.1, pas d’accessoire d’onglets masquable : le retour vit dans Aujourd’hui.
+                            if showsCaptureReturn, !CaptureReturnSupport.usesTabAccessory {
+                                captureReturnButton
+                                    .padding(.vertical, DrivySpacing.xs)
+                                    .background(DrivyTheme.surfaceRaised, in: Capsule())
+                                    .drivyShadow(radius: 12, y: 4)
+                                    .padding(.horizontal, DrivySpacing.m).padding(.bottom, DrivySpacing.s)
+                            }
+                        }
                 }
             }
             .toolbar { staffToolbar }
@@ -437,4 +517,24 @@ private struct CaptureLessonRoute: Identifiable {
     let id: UUID
     let learnerName: String
     let completing: Bool
+}
+
+/// « Revenir au trajet en cours » au-dessus des onglets, depuis n’importe quel onglet (iOS 26.1 et ensuite).
+private struct CaptureReturnAccessory<Accessory: View>: ViewModifier {
+    let isEnabled: Bool
+    @ViewBuilder let button: () -> Accessory
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: isEnabled) { button() }
+        } else {
+            content
+        }
+    }
+}
+
+private enum CaptureReturnSupport {
+    static var usesTabAccessory: Bool {
+        if #available(iOS 26.1, *) { true } else { false }
+    }
 }

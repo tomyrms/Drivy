@@ -12,6 +12,8 @@ struct SchoolCaptureLiveView: View {
     var openLesson: ((UUID, Bool) -> Void)? = nil
     var observationClient: SchoolObservationClient? = nil
     var isTabRoot: Bool = false
+    /// Quitter l’écran du trajet sans toucher à la leçon ni au GPS : la collecte continue, l’app reprend ses onglets.
+    var minimize: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -302,10 +304,32 @@ struct SchoolCaptureLiveView: View {
         if showsElapsed {
             DrivyLiveTopBar(context: learnerName, tickingFrom: clockOrigin, elapsed: { elapsedLabel },
                 elapsedLabel: elapsedAccessibilityLabel, status: status, leading: back,
-                floating: floating) { lessonMenu }
+                floating: floating) { trailingCommands }
         } else {
             DrivyLiveTopBar(context: learnerName, elapsed: nil, elapsedLabel: elapsedAccessibilityLabel,
-                status: status, leading: back, floating: floating) { lessonMenu }
+                status: status, leading: back, floating: floating) { trailingCommands }
+        }
+    }
+
+    /// Sortie de l’écran à côté des trois points : elle n’arrête, ne met en pause ni ne termine rien.
+    private var trailingCommands: some View {
+        HStack(spacing: DrivySpacing.xs) {
+            if let minimize {
+                Button(action: minimize) {
+                    Image(systemName: "chevron.down")
+                        .font(DrivyMapGlyph.control)
+                        .foregroundStyle(isFinishing ? DrivyTheme.disabledText : DrivyTheme.text)
+                        .frame(width: 48, height: 48)
+                        .background(DrivyTheme.surfaceMuted, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isFinishing)
+                .accessibilityLabel("Quitter l’écran du trajet")
+                .accessibilityHint(controller.state == .saved ? "Fermer le trajet" : "La leçon et le GPS continuent")
+                .accessibilityIdentifier("capture-minimize")
+            }
+            lessonMenu
         }
     }
 

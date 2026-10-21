@@ -301,6 +301,8 @@ private struct SchoolLessonReportContent: View {
                     if completing { beginCompletion() }
                     showsLive = false
                 }, observationClient: agenda.observationClient)
+                // Même plein écran que depuis Aujourd’hui ; le retour à la fiche rend les onglets.
+                .toolbar(.hidden, for: .tabBar)
             }
         }
         .navigationDestination(isPresented: $showsReport) {

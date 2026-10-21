@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 21 octobre 2026 : GPS en plein écran et sortie sans arrêt (#60), non qualifié
+
+- Pendant le trajet, la barre d’onglets est masquée (depuis Aujourd’hui et depuis la fiche leçon).
+- Un bouton « Quitter l’écran du trajet » (chevron bas) se trouve à côté des trois points. Il ne met pas en pause, ne termine et n’annule rien : l’état « écran quitté » est séparé de l’existence de la capture dans `SchoolHomeView`.
+- Une fois l’écran quitté, « Revenir au trajet en cours » reste au-dessus des onglets (`tabViewBottomAccessory(isEnabled:)`, iOS 26.1+). Sur iOS 26.0, le rappel est affiché en bas d’Aujourd’hui.
+- Un nouveau trajet, un changement d’école ou de droits rouvrent l’écran normal. Un trajet déjà confirmé par l’école se ferme quand on le quitte.
+- Exécuté : compilation de l’IPA seulement. Non exécuté : tests Swift/UI, recette iPhone/iPad, VoiceOver.
+
 ## 21 octobre 2026 : signalements autonomes (#56), déployé
 
 Fusion en avance rapide dans `master` à la demande du porteur, puis **release `a70c17d` déployée à 02:18 Europe/Zurich**. Code serveur identique à `c1592b3`, dont la CI vérifications et navigateur est verte. Avant installation : sauvegarde privée CT113 `/root/drivy_refonte-before-a70c17d4b70a2c2de8bf224fb63067c20d9b196c-20261021T001819Z-7bfb2e5b1fba.dump`, root 0600, vérifiée par `pg_restore --file=/dev/null`. Pré-contrôle : aucune des 14 observations existantes ne contredit les nouvelles contraintes. Migration 036 appliquée, 36 empreintes conformes, contraintes `geo_observation_live_qualified` et `geo_observation_theme_key` présentes, 14 observations inchangées. API, web et identité actifs sur la release, readiness interne 200, routes publiques `/v1/me` et `/observation-themes` sans jeton 401, web 200, environnement API et configuration OSRM inchangés, aucune erreur API au contrôle du 21 octobre à 11:42.
