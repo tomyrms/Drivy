@@ -682,7 +682,12 @@ struct SchoolCaptureLiveView: View {
     private var lessonMenu: some View {
         Menu {
             Button("Voir la leçon", systemImage: "doc.text") { close() }
-            // Une leçon commencée ne s’annule plus (API : 409 LESSON_STARTED) : on la termine.
+            // #61 : une leçon commencée s’annule ; le GPS s’arrête d’abord (`beforeCancellation`), la leçon devient « Annulée ».
+            if controller.completedLessonID != controller.lessonID, observationClient != nil {
+                Button("Annuler la leçon", systemImage: "xmark.circle", role: .destructive) { openCancellation() }
+                    .disabled(isOpeningCancellation)
+                    .accessibilityIdentifier("capture-cancel-lesson")
+            }
         } label: {
             // La lecture de la leçon à annuler se signale là où le geste a eu lieu : le panneau reste en place.
             Group {
