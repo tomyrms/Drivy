@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 21 octobre 2026 : contourner le proxy Cloudflare (#93), préparé, bascule en attente
+
+- Inventaire en lecture seule et procédure : [contournement-cloudflare-20261021.md](contournement-cloudflare-20261021.md). Caddy CT109 a déjà un certificat Let's Encrypt valide pour `drivy.shulker.ch` sans défi DNS, seuls 80/443 sont joignables, aucun filtrage « IP Cloudflare » n'existe : passer l'enregistrement `drivy` en « DNS only » suffit, sans changement Caddy ni IPA.
+- Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
+- Non fait : la bascule dans le tableau de bord Cloudflare (pas d'accès automatisé), mesure 5G, recette iOS après bascule. Le DNS autoritatif reste chez Cloudflare.
+
 ## 21 octobre 2026 : renommer son compte (#64) et annuler une leçon commencée (#61), déployé
 
 - #64 : `PATCH /v1/me/profile` (extension, `apps/api/contracts/self-profile.json`), migration `037_self_profile.sql` : chaque personne renomme son propre compte, quel que soit son rôle ; la base refuse l'écriture hors de cette route et sur une autre personne. iOS : ligne « Mon nom » dans le compte pour tous les rôles. La photo de profil reste à faire (stockage protégé d'images).
