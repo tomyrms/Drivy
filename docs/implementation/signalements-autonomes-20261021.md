@@ -60,6 +60,10 @@ Avant ce changement, l'app gardait un thème seulement si l'une de ses `competen
 - Classement intelligent : inchangé, il compte déjà par `theme_key` des événements `LIVE QUALIFIED`.
 - Bilan : les regroupements « compétences travaillées » ne retiennent que les observations qui portent une compétence. Un signalement autonome ne marque aucune compétence et ne crée ni note ni niveau. C'est voulu.
 
+## Écart avec le contrat canonique
+
+L’OpenAPI 3.11.0 du dossier de conception (`GeoObservation`, `GeoObservationCommand`) exige encore un `competencyId` UUID pour un événement `LIVE QUALIFIED` et ne décrit pas `themeKey`. Le dossier est une livraison conservée : il n’est pas modifié. Ce contrat n’est validé par aucun test des observations (aucun `expectContract` sur ces schémas). L’écart est donc assumé ici, comme `themeKey` l’était déjà depuis le 12 octobre.
+
 ## Vérifications
 
 | Exigence de #56 | Vérification | Résultat |
@@ -72,4 +76,7 @@ Avant ce changement, l'app gardait un thème seulement si l'une de ses `competen
 | Validateurs iOS aller/retour | Swift : corps et lecture autonomes valides, sans thème ni compétence refusés | Écrit, non exécuté (campagne annulée) |
 | Masquage, ordre, instantané, école ancienne | Tests Swift existants adaptés | Écrit, non exécuté (campagne annulée) |
 | Suite serveur et web complète | `npm test` API (vraie PostgreSQL, Mailpit) et web | 557 API, 316 web |
+| Migration 036 sur une base déjà peuplée | Test de migration : copie synthétique peuplée en 030, puis 031 à 036 rejouées | Réussi (liste des migrations et données inchangées) |
+| Le code de l’app compile sans compétence dans la tuile | IPA d’essai `39517398901` (cible app, pas la cible de tests) | Réussi |
+| Ancien client : compétence sans `themeKey`, commande en file | API : `POST` avec compétence seule accepté, `themeKey: null` | Réussi |
 | Palette sur iPhone/iPad, VoiceOver | Recette sur appareil (#55) | Non exécutée |
