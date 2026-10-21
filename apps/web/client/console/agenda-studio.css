@@ -49,3 +49,4 @@
   .agenda-open-indicator { display: none; }
   .agenda-day-heading { gap: .5rem; }
 }
+.agenda-freshness { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .75rem; }

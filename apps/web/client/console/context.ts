@@ -97,22 +97,37 @@ export function readError(error: unknown): string {
   return errorMessage(error);
 }
 
-export type Loaded<T> = { status: 'loading' | 'ready' | 'error'; data: T | undefined; error: string | null; needsLogin?: boolean; reload: () => void };
+export type Loaded<T> = {
+  status: 'loading' | 'ready' | 'error'; data: T | undefined; error: string | null; needsLogin?: boolean; reload: () => void;
+  /** Re-read in the background: what is shown stays on screen (no loading state) until the answer replaces it. */
+  refresh?: () => void;
+  /** When the data on screen was last read successfully, in milliseconds. */
+  readAt?: number;
+};
 
 /** Keep the same resource during refresh; hide the previous resource immediately when scope changes. */
 export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], scope = String(deps[0] ?? '')): Loaded<T> {
-  const [state, setState] = useState<ScopedReadState<T>>({ scope, status: 'loading', data: undefined, error: null });
+  const [state, setState] = useState<ScopedReadState<T> & { readAt?: number }>({ scope, status: 'loading', data: undefined, error: null });
   const generation = useRef(0);
+  const inFlight = useRef(false);
   const run = useCallback(loader, deps);
-  const reload = useCallback(() => {
+  const start = useCallback((silent: boolean) => {
     const current = ++generation.current;
-    setState(previous => ({ scope, status: 'loading', data: readStateFor(previous, scope).data, error: null }));
-    run().then(data => { if (current === generation.current) setState({ scope, status: 'ready', data, error: null }); },
-      error => { if (current === generation.current) setState(previous => failedReadState(previous, scope,
-        error instanceof RequestFailure ? error : {}, readError(error))); });
+    inFlight.current = true;
+    if (!silent) setState(previous => ({ scope, status: 'loading', data: readStateFor(previous, scope).data, error: null }));
+    run().then(data => { if (current === generation.current) { inFlight.current = false; setState({ scope, status: 'ready', data, error: null, readAt: Date.now() }); } },
+      error => { if (current === generation.current) { inFlight.current = false; setState(previous => {
+        const failed = failedReadState(previous, scope, error instanceof RequestFailure ? error : {}, readError(error));
+        // Kept data keeps the time it was read: the screen tells how old it is.
+        return failed.data !== undefined && previous.scope === scope && previous.readAt !== undefined ? { ...failed, readAt: previous.readAt } : failed;
+      }); } });
   }, [run, scope]);
-  useEffect(() => { reload(); return () => { generation.current++; }; }, [reload]);
-  return { ...readStateFor(state, scope), reload };
+  const reload = useCallback(() => start(false), [start]);
+  // A background refresh never overlaps a read in progress: the newest answer would be thrown away anyway.
+  const refresh = useCallback(() => { if (!inFlight.current) start(true); }, [start]);
+  useEffect(() => { reload(); return () => { generation.current++; inFlight.current = false; }; }, [reload]);
+  const visible = readStateFor(state, scope);
+  return { ...visible, reload, refresh, ...(state.scope === scope && state.readAt !== undefined ? { readAt: state.readAt } : {}) };
 }
 
 /** Draft that follows the school's value until the person edits it. */

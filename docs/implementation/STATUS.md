@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 21 octobre 2026 : agenda web tenu à jour des changements faits ailleurs (#49), non qualifié
+
+- Avant : la minuterie de 30 secondes ne mettait à jour que l'heure affichée. Les leçons n'étaient relues qu'au retour sur l'onglet après une minute.
+- Maintenant, tant que l'onglet est visible, la semaine affichée et le répertoire sont relus en arrière-plan quand la dernière lecture date d'une minute (vérification toutes les 15 secondes, donc un délai cible d'environ 60 à 75 secondes, non mesuré en production). Un onglet masqué ne lit rien. Il relit en revenant si la lecture date d'une minute.
+- La relecture en arrière-plan (`useLoad().refresh`) ne passe pas par l'état de chargement : semaine, filtres, recherche et défilement restent en place. Elle ne se superpose jamais à une lecture en cours. Une réponse d'une ancienne semaine ou d'un autre moniteur est ignorée (génération et portée déjà en place).
+- En-tête : « À jour à HH:MM » (heure de la dernière lecture réussie, distincte de l'horloge d'affichage) et un bouton « Actualiser ». Un échec garde la semaine affichée avec le message « Lecture impossible… Les informations affichées peuvent être anciennes. » et l'heure de la dernière lecture réussie.
+- Pas d'événements serveur : la relecture bornée suffit à l'infrastructure actuelle et reste réutilisable pour les cours collectifs.
+- Exécuté : typecheck web, tests `load-model`, `agenda-model`, `console-agenda-learners`. Non exécuté : suite complète, essai avec deux appareils. Visible seulement après déploiement du web.
+
 ## 21 octobre 2026 : homonymes distingués avant une action sur un compte (#53), non qualifié
 
 - Quand deux membres, deux moniteurs ou deux invitations ont le même libellé (comparaison sans accents, casse ni espaces doublés), chacun reçoit une courte référence « Réf. A1B2 ». Elle reprend la fin de l'identifiant technique (partie aléatoire des UUID) et s'allonge jusqu'à différer de tous les homonymes. Un libellé unique n'a pas de référence.

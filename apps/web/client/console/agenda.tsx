@@ -14,6 +14,9 @@ import { useListState } from './list-state';
 import { distinctLabel, homonymReferences } from '../person-reference';
 import './agenda-studio.css';
 
+const agendaRefreshMs = 60_000;
+const formatClock = (instant: number, timeZone: string) => new Intl.DateTimeFormat('fr-CH', { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(instant));
+
 const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: string; tone: Tone; symbol: 'check' | 'ban' | 'alert' | 'clock' }>> = {
   cancelled: { label: 'Annulée', tone: 'neutral', symbol: 'ban' },
   absent: { label: 'Absent', tone: 'warning', symbol: 'alert' },
@@ -47,18 +50,23 @@ export function AgendaSection() {
     const lessons = await readAll(schoolId, 'lessons', lessonSchema, { from: bounds.from, to: bounds.to, ...(instructor ? { instructorMembershipId: instructor } : {}) });
     return { lessons: lessons.items, truncated: lessons.truncated };
   }, [schoolId, revision, bounds?.from, bounds?.to, instructor], `${schoolId}/${monday}/${instructor}`);
-  // The agenda is left open all day: coming back to the tab re-reads a week that is more than a minute old.
-  const lastRead = useRef(Date.now());
-  useEffect(() => { if (loaded.status === 'ready') lastRead.current = Date.now(); }, [loaded.status, loaded.data]);
-  const reloadLessons = loaded.reload, reloadDirectory = directory.reload;
+  // The agenda stays open all day while lessons change on the phones: re-read the week in the background
+  // every minute while the tab is visible, and as soon as it becomes visible again after a minute away.
+  // A background read keeps the week, filters, search and scroll on screen; a hidden tab reads nothing.
+  const refreshLessons = loaded.refresh, refreshDirectory = directory.refresh;
+  const readAt = loaded.readAt;
+  const lastRead = useRef(readAt ?? Date.now());
+  useEffect(() => { if (readAt !== undefined) lastRead.current = readAt; }, [readAt]);
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible' || Date.now() - lastRead.current < 60_000) return;
-      lastRead.current = Date.now(); reloadLessons(); reloadDirectory();
+    const refreshIfStale = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastRead.current < agendaRefreshMs) return;
+      lastRead.current = Date.now(); refreshLessons?.(); refreshDirectory?.();
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [reloadLessons, reloadDirectory]);
+    const timer = window.setInterval(refreshIfStale, 15_000);
+    document.addEventListener('visibilitychange', refreshIfStale);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfStale); };
+  }, [refreshLessons, refreshDirectory]);
+  const refreshNow = () => { lastRead.current = Date.now(); loaded.reload(); directory.refresh?.(); };
   const data = loaded.data;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
   const instructorReferences = useMemo(() => homonymReferences(instructors.map(item => ({ id: item.id, label: item.displayName }))), [instructors]);
@@ -73,7 +81,11 @@ export function AgendaSection() {
 
   return (
     <div className="section-stack agenda-studio">
-      <SectionHeading context="Planning" title="Agenda" />
+      <SectionHeading context="Planning" title="Agenda" actions={<div className="agenda-freshness">
+        {readAt !== undefined && <span className="caption">À jour à <time dateTime={new Date(readAt).toISOString()}>{formatClock(readAt, school.timeZone)}</time></span>}
+        <button type="button" className="button quiet" onClick={refreshNow} disabled={loaded.status === 'loading'} aria-busy={loaded.status === 'loading'}>
+          <Symbol kind="refresh" bare />Actualiser</button>
+      </div>} />
       <PlanningReadinessBanner />
       <FirstLessonActions />
       <div className="agenda-studio-toolbar">
