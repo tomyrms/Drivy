@@ -66,8 +66,8 @@ export function registerPersonalProfile(app: FastifyInstance, options: { pool: P
         if (!current) throw forbidden();
         checkVersion(current.version, expected);
         result = (await db.query<PersonRow>(
-          'UPDATE drivy.person SET display_name=$2,version=version+1 WHERE id=$1 RETURNING id AS "personId",version,display_name AS "displayName",locale',
-          [personId, body.displayName]
+          'SELECT * FROM drivy.update_personal_display_name($1,$2,$3)',
+          [personId, expected, body.displayName]
         )).rows[0]!;
         await db.query(
           'INSERT INTO drivy.personal_profile_operation(person_id,operation_id,payload_hash,response_version,response_display_name,response_locale) VALUES($1,$2,$3,$4,$5,$6)',
