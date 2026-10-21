@@ -157,7 +157,7 @@ final class DrivyAPIClient: SchoolAPI {
             guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json",
                   let envelope = try? JSONDecoder().decode(Envelope<SchoolPersonalAccountUpdate>.self, from: response.data),
                   Self.isTimestamp(envelope.serverTime),
-                  envelope.data.personId != UUID(), envelope.data.version > expectedVersion else {
+                  envelope.data.version > expectedVersion else {
                 throw SchoolAPIError.invalidResponse
             }
             return envelope.data
