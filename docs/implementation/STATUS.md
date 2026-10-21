@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 21 octobre 2026 : renommer son compte (#64) et annuler une leçon commencée (#61), déployé
+
+- #64 : `PATCH /v1/me/profile` (extension, `apps/api/contracts/self-profile.json`), migration `037_self_profile.sql` : chaque personne renomme son propre compte, quel que soit son rôle ; la base refuse l'écriture hors de cette route et sur une autre personne. iOS : ligne « Mon nom » dans le compte pour tous les rôles. La photo de profil reste à faire (stockage protégé d'images).
+- #61 (décision du porteur : « Annulée », comme si la leçon n'avait pas eu lieu) : une leçon commencée mais non terminée s'annule ; `actual_start` est effacé, un trajet actif est révoqué par `capture_lesson_changed`, positions et signalements déjà reçus sont conservés. Une leçon terminée ne s'annule toujours pas. iOS : « Annuler la leçon » dans le menu du GPS actif (arrêt du GPS avant l'envoi) et dans la fiche.
+- Exécuté (PostgreSQL 17 local) : suite API complète, 564 tests réussis, dont `self-profile` et `lesson-cancel-started` ajoutés et cinq tests de l'ancienne règle A2-11 adaptés. Les deux tests SMTP passent avec `TEST_SMTP_PORT=11025 TEST_MAILPIT_URL=http://127.0.0.1:18025` (ports du Mailpit local). IPA compilée (`39662108676`). Non exécuté : tests Swift, recette appareil.
+- **Déployé le 21 octobre 2026 à 21:37 Europe/Zurich** : release `eef3291` (web inchangé depuis `d537784`), archive SHA-256 `87101c60…b685`. Sauvegarde avant installation `/root/drivy_refonte-before-eef32912f3252d3889c96fc492c4b17641785128-20261021T193701Z-9ca1939fd78b.dump` sur CT113, root 0600, relue par `pg_restore`. 37 migrations, politique `person_self_profile_update` présente. Seule l'API redémarrée ; API, web et identité actifs ; depuis Caddy : readiness 200, `/v1/me` 401, `PATCH /v1/me/profile` sans version 428, web 200 ; aucune erreur API.
+
 ## 21 octobre 2026 : démarrage d'une leçon et départs GPS résiduels (#86, #87), non qualifié
 
 - Mesure homelab (lecture seule, aucune modification) : API et base répondent en 0,5 à 8 ms depuis Caddy. Box vers Internet 5 ms. Mémoire et charge des CT113/114/117/109 normales. Pas de tunnel `cloudflared`. Par Cloudflare, la même requête prend 0,6 à 3,4 s. Même `drivy.shulker.ch/cdn-cgi/trace`, servi par Cloudflare sans joindre l'origine, prend 0,45 à 0,9 s, contre 30 à 50 ms pour `www.cloudflare.com` sur la même adresse. Le porteur constate la même lenteur en 5G. Cause : chez Cloudflare (ZRH, après sa maintenance du 20-21 octobre), pas dans le homelab. Aucune configuration changée.
