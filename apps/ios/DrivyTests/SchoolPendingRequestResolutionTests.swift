@@ -93,6 +93,33 @@ import Testing
         await #expect(throws: SchoolCaptureStorageFailure.invalidReceipt) { try await store.discardUnknown(id: first, scope: scope) }
     }
 
+    /// Leçon A refusée ou jamais émise, puis leçon B : le départ de B n’est plus bloqué (#87).
+    @Test func aRefusedOrUnsentStartNoLongerBlocksAnotherLesson() async throws {
+        let scope = ConfigurationFixture.scope(), device = UUID()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("capture-settle-\(UUID()).sqlite")
+        let store = try SQLCipherSchoolCaptureStore(url: url, key: Data(repeating: 0x3E, count: 32), protectFiles: false, installationID: device)
+        func start(_ operation: UUID, lesson: UUID) throws -> SchoolCapturePendingMutation {
+            try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture, targetID: lesson, expectedVersion: 1,
+                body: SchoolStartCaptureBody(operationId: operation, deviceId: device, choiceId: UUID(), choiceVersion: 1,
+                    noticeVersionId: UUID(), explicitStartConfirmed: true, deviceAssessmentId: UUID()))
+        }
+        let lessonA = UUID(), lessonB = UUID(), refused = UUID(), unsent = UUID(), next = UUID()
+        try await store.stage(try start(refused, lesson: lessonA))
+        _ = try await store.markAttempted(id: refused, scope: scope)
+        // Émise sans réponse : l’issue reste incertaine, elle ne se classe pas sans refus explicite.
+        await #expect(throws: SchoolCaptureStorageFailure.uncertainCommand) {
+            try await store.settleStartWithoutAuthorization(id: refused, scope: scope, refusedByServer: false)
+        }
+        try await store.settleStartWithoutAuthorization(id: refused, scope: scope, refusedByServer: true)
+        try await store.stage(try start(unsent, lesson: lessonA))
+        try await store.settleStartWithoutAuthorization(id: unsent, scope: scope, refusedByServer: false)
+        #expect(try await store.pending(scope: scope, deviceID: device).isEmpty)
+        try await store.stage(try start(next, lesson: lessonB))
+        #expect(try await store.pending(scope: scope, deviceID: device).map(\.id) == [next])
+        #expect(SchoolCapturePreparationWorkspace.isDefinitiveRefusal(SchoolCaptureFailure.rejected("x")))
+        #expect(!SchoolCapturePreparationWorkspace.isDefinitiveRefusal(SchoolCaptureFailure.unavailable))
+    }
+
     private func learner(_ name: String) -> SchoolLearner {
         SchoolLearner(id: UUID(), schoolId: HubFixture.schoolID, personId: UUID(), version: 1, displayName: name,
             contactEmail: nil, contactPhone: nil, archivedAt: nil, profileReadiness: nil, profilePhotoDocumentId: nil)

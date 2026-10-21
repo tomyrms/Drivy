@@ -261,6 +261,7 @@ struct SchoolCapturePreparationView: View {
             }
             .accessibilityIdentifier("capture-quick-start-block")
         } else if model.captureStarted == false && !model.accessRevoked && model.pendingAssessments.isEmpty && model.pendingStarts.isEmpty {
+            if let message = model.startMessage { DrivyInlineMessage(text: message, tone: .neutral) }
             // L’attente se lit dans le bouton, qui ne se grise pas : un appui pendant la lecture reste sans effet.
             Button {
                 guard !isWaiting else { return }
@@ -449,8 +450,16 @@ struct SchoolCapturePreparationView: View {
                         Text(queued.mutation.targetID == model.lessonID ? "Une demande de départ est conservée pour cette leçon." : "Une demande de départ concerne une autre leçon de cette école.")
                             .font(.subheadline)
                         if model.mayVerifyPendingStart(queued) {
-                            Button("Vérifier auprès de l’école") { Task { await model.verifyStart(queued) } }
-                                .buttonStyle(DrivySecondaryButtonStyle())
+                            let verifying = model.verifyingID == queued.id
+                            Button { Task { await model.verifyStart(queued) } } label: {
+                                HStack(spacing: DrivySpacing.s) {
+                                    if verifying { ProgressView().controlSize(.small) }
+                                    Text(verifying ? "Vérification…" : "Vérifier auprès de l’école")
+                                }
+                            }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                            .disabled(!model.mayRunPendingStartVerification(queued))
+                            .accessibilityValue(verifying ? "En cours" : "")
                         }
                         if model.mayReviewPendingStart(queued) {
                             Button("Relire ce départ") { Task { startReview = await model.reviewStart(resuming: queued) } }

@@ -215,6 +215,7 @@ struct SchoolCaptureStartReview: Identifiable {
         do {
             if store == nil { store = try await journalProvider() }
             try await reloadQueue(request)
+            await reconcilePendingStarts(request)
         } catch {
             guard isCurrent(request) else { return }
             storageError = "Le journal protégé n’est pas accessible. Aucun diagnostic ne sera envoyé."
@@ -320,10 +321,16 @@ struct SchoolCaptureStartReview: Identifiable {
             && queued.mutation.scope == scope && queued.mutation.targetID == lessonID
             && queued.mutation.kind == .startCapture && pendingStarts.contains { $0.id == queued.id }
     }
+    /// Demande en cours de vérification : son bouton reste en place, inactif, avec « Vérification… ».
+    private(set) var verifyingID: UUID?
+    /// Le bouton reste visible pendant une vérification ; `mayRunPendingStartVerification` décide s’il est actif.
     func mayVerifyPendingStart(_ queued: SchoolCaptureQueuedMutation) -> Bool {
-        !invalidated && contextIsCurrent && isInstructor && !isLoading && !isBusy && storageError == nil
-            && queued.mutation.scope == scope
+        !invalidated && contextIsCurrent && isInstructor && storageError == nil
+            && queued.mutation.scope == scope && !unknownRequestIDs.contains(queued.id)
             && queued.mutation.kind == .startCapture && pendingStarts.contains { $0.id == queued.id }
+    }
+    func mayRunPendingStartVerification(_ queued: SchoolCaptureQueuedMutation) -> Bool {
+        mayVerifyPendingStart(queued) && !isLoading && !isBusy && verifyingID == nil
     }
 
     func reviewStart(resuming queued: SchoolCaptureQueuedMutation? = nil) async -> SchoolCaptureStartReview? {
@@ -387,7 +394,19 @@ struct SchoolCaptureStartReview: Identifiable {
                 stopCollection: { [weak self] _ in self?.closeDiagnostic() })
             startTransfer = transfer
             authorizationMayExist = true
-            let result = try await transfer.transmit(operationID: mutation.id)
+            let result: SchoolCaptureTransferCoordinator.Result
+            do { result = try await transfer.transmit(operationID: mutation.id) }
+            catch {
+                // Un refus explicite de l’école (ou une demande jamais émise) ne laisse aucune autorisation :
+                // la demande est classée pour ne plus bloquer les départs suivants, de cette leçon ou d’une autre.
+                if Self.isDefinitiveRefusal(error) {
+                    try? await store.settleStartWithoutAuthorization(id: mutation.id, scope: scope, refusedByServer: true)
+                    authorizationMayExist = false
+                } else if (try? await store.settleStartWithoutAuthorization(id: mutation.id, scope: scope, refusedByServer: false)) != nil {
+                    authorizationMayExist = false
+                }
+                throw error
+            }
             guard isCurrent(request) else {
                 await sealUnusedAuthorization(result, store: store)
                 return false
@@ -482,7 +501,7 @@ struct SchoolCaptureStartReview: Identifiable {
         }
         if let storageError { return quickFailure(storageError) }
         guard pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else {
-            return quickFailure("Une demande précédente est à vérifier avant un nouveau départ.")
+            return quickFailure(Self.pendingRequestMessage)
         }
         guard let notice else { return quickFailure(noticeError ?? "Les textes de confidentialité de l’école n’ont pas pu être lus.") }
         guard let choice, choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else {
@@ -585,10 +604,10 @@ struct SchoolCaptureStartReview: Identifiable {
     }
 
     func verifyStart(_ queued: SchoolCaptureQueuedMutation) async {
-        guard mayVerifyPendingStart(queued), let store else { return }
+        guard mayRunPendingStartVerification(queued), let store else { return }
         let request = generation
-        isBusy = true; errorMessage = nil; startMessage = nil
-        defer { if isCurrent(request) { isBusy = false } }
+        isBusy = true; verifyingID = queued.id; errorMessage = nil; startMessage = nil
+        defer { verifyingID = nil; if isCurrent(request) { isBusy = false } }
         do {
             _ = try await readContext()
             let receipt = try await client.receipt(for: queued.mutation)
@@ -614,8 +633,65 @@ struct SchoolCaptureStartReview: Identifiable {
                 startMessage = "L’école a confirmé la demande. Aucun GPS n’a démarré ici ; le départ exige toujours une nouvelle relecture et une confirmation."
             }
         } catch SchoolCaptureFailure.operationUnknown {
-            if isCurrent(request) { unknownRequestIDs.insert(queued.id) }
+            guard isCurrent(request) else { return }
+            // Hors délai réseau, une demande inconnue de l’école n’existera plus : elle est classée sans autre geste.
+            if Date().timeIntervalSince(queued.mutation.createdAt) > Self.settledRequestAge,
+               (try? await store.discardUnknown(id: queued.id, scope: scope)) != nil {
+                try? await reloadQueue(request)
+                if isCurrent(request) { startMessage = "Cette demande n’était pas arrivée à l’école. Elle est retirée ; tu peux démarrer le trajet." }
+            } else { unknownRequestIDs.insert(queued.id) }
         } catch { if isCurrent(request) { fail(error) } }
+    }
+
+    static let pendingRequestMessage = "Une demande précédente est à vérifier avant un nouveau départ."
+
+    /// Réponses 4xx de l’école : la transaction a été annulée, aucun départ n’existe pour cette opération.
+    nonisolated static func isDefinitiveRefusal(_ error: any Error) -> Bool {
+        switch error as? SchoolCaptureFailure {
+        case .rejected, .changed, .choiceNotSet: true
+        default: false
+        }
+    }
+
+    /// Une demande plus ancienne que ce délai n’est plus en vol : les délais réseau (30 s) sont écoulés.
+    static let settledRequestAge: TimeInterval = 120
+
+    /// Lecture automatique et bornée des départs en attente, sans rien réémettre ni relancer de GPS :
+    /// une demande jamais émise ou inconnue de l’école est classée ; les autres restent à vérifier.
+    private func reconcilePendingStarts(_ request: UUID) async {
+        guard let store, isCurrent(request) else { return }
+        let now = Date()
+        let candidates = pendingStarts.filter {
+            $0.mutation.scope == scope && now.timeIntervalSince($0.mutation.createdAt) > Self.settledRequestAge
+        }.prefix(3)
+        guard !candidates.isEmpty else { return }
+        var changed = false
+        for queued in candidates {
+            guard isCurrent(request) else { return }
+            if queued.state == .queued {
+                if (try? await store.settleStartWithoutAuthorization(id: queued.id, scope: scope, refusedByServer: false)) != nil { changed = true }
+                continue
+            }
+            let mutation = queued.mutation, client = self.client
+            let outcome = await Self.withDeadline(seconds: 5) { () -> Bool? in
+                do { _ = try await client.receipt(for: mutation); return false }
+                catch SchoolCaptureFailure.operationUnknown { return true }
+                catch { return nil }
+            }
+            guard isCurrent(request) else { return }
+            if outcome == true, (try? await store.discardUnknown(id: queued.id, scope: scope)) != nil { changed = true }
+        }
+        if changed { try? await reloadQueue(request) }
+    }
+
+    private static func withDeadline<T: Sendable>(seconds: Double, _ work: @escaping @Sendable () async -> T?) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await work() }
+            group.addTask { try? await Task.sleep(for: .seconds(seconds)); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
     }
 
     private func freshStartReview(resuming mutation: SchoolCapturePendingMutation?) async throws -> SchoolCaptureStartReview {
@@ -794,6 +870,10 @@ struct SchoolCaptureStartReview: Identifiable {
         let queue = try await store.pending(scope: scope, deviceID: deviceID)
         guard isCurrent(request) else { return }
         pending = queue
+        // La demande qui bloquait est résolue : son message de blocage disparaît, le départ redevient possible.
+        if pendingStarts.isEmpty, pendingAssessments.isEmpty, !hasOldScope, quickBlock == .failed(Self.pendingRequestMessage) {
+            quickBlock = nil
+        }
     }
     private func failedMutation(_ error: any Error, request: UUID) async {
         guard isCurrent(request) else { return }

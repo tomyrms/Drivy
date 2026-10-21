@@ -187,6 +187,14 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
               lesson.startsAt != nil, lesson.endsAt != nil else { throw SchoolPlanningFailure.invalidResponse }
         return lesson
     }
+    /// Leçons les plus récentes d’une formation, une seule page : de quoi reprendre le dernier lieu sans lire tout l’historique.
+    func recentLessons(schoolID: UUID, trainingID: UUID, limit: Int = 20) async throws -> [SchoolLesson] {
+        let page: SchoolPage<SchoolLesson> = try await request(schoolID, ["lessons"], query: [
+            URLQueryItem(name: "trainingId", value: trainingID.uuidString), URLQueryItem(name: "order", value: "desc"),
+            URLQueryItem(name: "limit", value: String(limit))])
+        guard page.items.allSatisfy({ $0.schoolId == schoolID && $0.version > 0 }) else { throw SchoolPlanningFailure.invalidResponse }
+        return page.items
+    }
     func defaults(schoolID: UUID, membershipID: UUID) async throws -> SchoolPlanningDefaults {
         let result: SchoolPlanningDefaults = try await request(schoolID, ["planning-defaults"])
         guard result.schoolId == schoolID, result.id == membershipID, result.version > 0 else { throw SchoolPlanningFailure.invalidResponse }

@@ -189,6 +189,22 @@ actor SQLCipherSchoolCaptureStore {
         }
     }
 
+    /// Classe un départ GPS dont l’issue est certaine sans autorisation : jamais émis (`queued`), ou refusé
+    /// explicitement par l’école (réponse 4xx, transaction annulée). Rien n’existe chez l’école pour lui ;
+    /// il cesse de bloquer les départs suivants. Une commande déjà émise ne passe ici que sur refus explicite.
+    func settleStartWithoutAuthorization(id: UUID, scope: SchoolCommandScope, refusedByServer: Bool) throws {
+        try write {
+            var queued = try mutation(id, scope: scope)
+            guard queued.mutation.kind == .startCapture,
+                  queued.state == .queued || (refusedByServer && queued.state == .attempted) else {
+                throw SchoolCaptureStorageFailure.uncertainCommand
+            }
+            queued.state = .refused
+            queued.resultBody = try JSONEncoder().encode(["code": refusedByServer ? "START_REFUSED" : "NOT_SENT"])
+            try save(queued)
+        }
+    }
+
     func acceptAuthorization(operationID: UUID, authorization: SchoolCaptureAuthorization, lease: SchoolCaptureLease,
                              scope: SchoolCommandScope, deviceID requestedDevice: UUID) throws -> SchoolCaptureStoredSession {
         let remote = authorization.capture

@@ -68,19 +68,34 @@ struct SchoolStartNowBody: Encodable, Sendable {
         do { pending = try outbox.pending(for: scope); storageAvailable = true }
         catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
-            let defaults = try await client.defaults(schoolID: scope.schoolID, membershipID: scope.membershipID)
-            var all: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
-            repeat {
-                let page = try await client.reader.learners(schoolID: scope.schoolID, query: "", cursor: cursor,
-                    instructorMembershipID: scope.membershipID)
-                all.append(contentsOf: page.items); cursor = page.nextCursor
-                guard all.count <= 10_000 else { throw SchoolPlanningFailure.invalidResponse }
-                if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
-            } while cursor != nil
+            // Préférences et élèves ne dépendent pas l’un de l’autre : ils se lisent ensemble (#86).
+            let schoolID = scope.schoolID, membershipID = scope.membershipID, client = self.client
+            let defaultsRead = Task { @MainActor in try await client.defaults(schoolID: schoolID, membershipID: membershipID) }
+            defer { defaultsRead.cancel() }
+            var all: [SchoolLearner] = []
+            if let preset = presetLearnerID {
+                // Élève connu depuis sa fiche : seul son dossier est relu. Le serveur ne le rend visible à un moniteur
+                // que s’il lui est affecté ; ses formations (relues ensuite) disent s’il peut démarrer.
+                do { all = [try await client.reader.learner(schoolID: schoolID, id: preset)] }
+                catch SchoolAPIError.notFound { all = [] }
+            } else {
+                var cursor: String?, seen = Set<String>()
+                repeat {
+                    let page = try await client.reader.learners(schoolID: schoolID, query: "", cursor: cursor,
+                        instructorMembershipID: membershipID, pageSize: 100)
+                    all.append(contentsOf: page.items); cursor = page.nextCursor
+                    guard all.count <= 10_000 else { throw SchoolPlanningFailure.invalidResponse }
+                    if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
+                    // Première page affichée tout de suite : la liste se consulte pendant que la suite arrive.
+                    if cursor != nil, request == generation, !Task.isCancelled, learners.isEmpty {
+                        learners = Self.visible(all)
+                    }
+                } while cursor != nil
+            }
+            let defaults = try await defaultsRead.value
             guard request == generation, !Task.isCancelled else { return }
             self.defaults = defaults
-            learners = all.filter { $0.archivedAt == nil }
-                .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+            learners = Self.visible(all)
             if learners.isEmpty { setContextError("Aucun élève ne t’est affecté. Demande à l’administration de vérifier les affectations.") }
             isLoading = false
             if let preset = presetLearnerID {
@@ -101,6 +116,11 @@ struct SchoolStartNowBody: Encodable, Sendable {
         }
     }
 
+    private static func visible(_ all: [SchoolLearner]) -> [SchoolLearner] {
+        all.filter { $0.archivedAt == nil }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
     /// Choisit l’élève ; sa seule formation en cours et son dernier lieu de rendez-vous sont repris.
     func select(_ id: UUID) async {
         guard !invalidated, learners.contains(where: { $0.id == id }), !isBusy else { return }
@@ -117,25 +137,31 @@ struct SchoolStartNowBody: Encodable, Sendable {
             trainings = active.filter { $0.startNowBlockerCode == nil }
             trainingID = trainings.contains(where: { $0.id == previousTrainingID }) ? previousTrainingID : defaults?.trainingID(in: trainings)
             if trainings.isEmpty { setContextError(Self.startBlockerMessage(active.first?.startNowBlockerCode)) }
-            if let training = trainingID, training != previousTrainingID {
-                let lessons: [SchoolLesson]
-                do {
-                    lessons = try await client.records(scope.schoolID, path: ["lessons"],
-                        query: [URLQueryItem(name: "trainingId", value: training.uuidString)])
-                } catch {
-                    if Self.isAccessRefusal(error) || error is CancellationError { throw error }
-                    lessons = []
-                }
-                guard request == generation else { return }
-                meetingPoint = SchoolStartNowWorkspace.lastMeetingPoint(lessons, trainingID: training) ?? ""
-            }
             if trainingID != nil && trainingID == previousTrainingID { meetingPoint = previousMeetingPoint }
+            // La formation suffit pour démarrer : le dernier lieu n’est qu’un préremplissage, lu ensuite sans bloquer.
             contextValid = true; isLoading = false
+            if let training = trainingID, training != previousTrainingID {
+                await prefillMeetingPoint(training: training, request: request)
+            }
         } catch {
             guard request == generation else { return }
             isLoading = false
             if Self.isAccessRefusal(error) { clearContext() }
             if !(error is CancellationError) { setContextError((error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription) }
+        }
+    }
+
+    /// Préremplit le lieu depuis les leçons récentes, sans jamais écraser une saisie faite entre-temps.
+    private func prefillMeetingPoint(training: UUID, request: UUID) async {
+        let typedBefore = meetingPoint
+        do {
+            let lessons = try await client.recentLessons(schoolID: scope.schoolID, trainingID: training)
+            guard request == generation, trainingID == training, meetingPoint == typedBefore, typedBefore.isEmpty else { return }
+            meetingPoint = Self.lastMeetingPoint(lessons, trainingID: training) ?? ""
+        } catch {
+            guard request == generation, Self.isAccessRefusal(error) else { return }
+            clearContext()
+            setContextError((error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription)
         }
     }
 

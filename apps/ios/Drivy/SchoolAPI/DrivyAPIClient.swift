@@ -115,8 +115,8 @@ final class DrivyAPIClient: SchoolAPI {
     }
 
     func learners(schoolID: UUID, query: String, cursor: String?, instructorMembershipID: UUID?,
-                  status: String? = nil, own: Bool = false) async throws -> SchoolPage<SchoolLearner> {
-        var items = [URLQueryItem(name: "limit", value: "50")]
+                  status: String? = nil, own: Bool = false, pageSize: Int = 50) async throws -> SchoolPage<SchoolLearner> {
+        var items = [URLQueryItem(name: "limit", value: String(min(100, max(1, pageSize))))]
         if let status { items.append(URLQueryItem(name: "status", value: status)) }
         if own { items.append(URLQueryItem(name: "own", value: "true")) }
         if let instructorMembershipID { items.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString)) }
