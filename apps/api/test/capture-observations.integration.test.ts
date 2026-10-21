@@ -87,6 +87,6 @@ try{
  assert(!(await call('GET',route,undefined,undefined,'demo-alice')).json().data.items.some((o:any)=>o.id===marker.id));
  assert((await call('GET',route)).json().data.items.some((o:any)=>o.id===marker.id));
  const learnerReport=await call('GET',`/report-revisions/${shared.currentPublishedRevisionId}`,undefined,undefined,'demo-alice');assert.equal(learnerReport.statusCode,200);assert.deepEqual(learnerReport.json().data.textObservations,[]);
- assert.equal(rls.rows[0].forced,49);assert(rls.rows[0].tables.includes('observation_ranking'));assert(rls.rows[0].tables.includes('planning_defaults'));assert(rls.rows[0].tables.includes('observation_theme_settings'));assert(rls.rows[0].tables.includes('capture_matched_route'));assert(rls.rows[0].tables.includes('school_opening_link'));
+ assert.equal(rls.rows[0].forced,50);assert(rls.rows[0].tables.includes('observation_ranking'));assert(rls.rows[0].tables.includes('planning_defaults'));assert(rls.rows[0].tables.includes('observation_theme_settings'));assert(rls.rows[0].tables.includes('capture_matched_route'));assert(rls.rows[0].tables.includes('school_opening_link'));
 }finally{await app.close();await migration.end();await pool.end();}
 });
