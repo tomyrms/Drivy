@@ -4,9 +4,18 @@ import QuartzCore
 
 /// Owned by the active capture, not the view. Only durable *real* fixes enter its window.
 /// A response has no path back to the store, upload queue, trace or observation anchors.
+///
+/// Two uses of one answer (#90): the road *stretch* describes fixes already drawn and stays valid after newer fixes
+/// arrive, so it replaces their part of the line even when it comes back late; the road *position* moves the marker
+/// only while it still describes the current fix, within two seconds of emission. A newer fix therefore no longer
+/// cancels the request in flight: it only withdraws the marker correction.
 @MainActor @Observable
 final class SchoolLiveMatchCoordinator {
+    /// Marker correction for the current fix, cleared by the next fix or after its display lifetime.
     private(set) var result: SchoolLiveMatchResponse?
+    /// Road stretches accepted for this segment, oldest first. Bounded; never measurements.
+    private(set) var roadRoutes: [SchoolLiveRoadRoute] = []
+    static let maximumRoutes = 600
     @ObservationIgnored private var window: SchoolLiveMatchWindow?
     @ObservationIgnored private var latestAcquiredElapsedMs: Int?
     @ObservationIgnored private var generation = UUID()
@@ -25,16 +34,21 @@ final class SchoolLiveMatchCoordinator {
         self.sleep = sleep
     }
 
+    /// A new segment of the same capture keeps the stretches already drawn; another capture starts from none.
     func start(segmentID: UUID, permits: @escaping @MainActor () -> Bool,
-               onAccessFailure: @escaping @MainActor () -> Void = {},
+               onAccessFailure: @escaping @MainActor () -> Void = {}, keepsRoutes: Bool = false,
                send: @escaping @MainActor (SchoolLiveMatchRequest) async throws -> SchoolLiveMatchResponse) {
+        let kept = keepsRoutes ? roadRoutes : []
         stop()
+        roadRoutes = kept
         window = SchoolLiveMatchWindow(segmentID: segmentID)
         self.permits = permits
         self.onAccessFailure = onAccessFailure
         self.send = send
     }
 
+    /// Pause, end, revocation or scope change: nothing is in flight any more and no correction remains.
+    /// The accepted stretches stay drawn until `start` for another capture or `clearRoutes`.
     func stop() {
         generation = UUID()
         contextGeneration = UUID()
@@ -50,14 +64,14 @@ final class SchoolLiveMatchCoordinator {
         onAccessFailure = nil
     }
 
-    /// Called at acquisition, before the durable append completes. An older network response
-    /// cannot win the race against a newer fix still being written to the encrypted store.
+    func clearRoutes() { stop(); roadRoutes = [] }
+
+    /// Called at acquisition, before the durable append completes: the marker correction for an older fix is
+    /// withdrawn at once. The request in flight continues; its stretch may still be drawn.
     func measurementArrived(segmentID: UUID, elapsedMs: Int) {
         guard window?.segmentID == segmentID else { return }
         latestAcquiredElapsedMs = max(latestAcquiredElapsedMs ?? elapsedMs, elapsedMs)
         generation = UUID()
-        task?.cancel()
-        task = nil
         expiry?.cancel()
         expiry = nil
         result = nil
@@ -73,18 +87,21 @@ final class SchoolLiveMatchCoordinator {
         let sentAt = now()
         guard measurements.last!.elapsedMs >= (latestAcquiredElapsedMs ?? 0),
               task == nil, let request = window?.request(at: sentAt), let send else { return }
-        let generation = self.generation
         let contextGeneration = self.contextGeneration
+        let fixGeneration = self.generation
         task = Task { [weak self] in
             do {
                 try Task.checkCancellation()
                 let response = try await send(request)
-                guard let self, self.generation == generation else { return }
+                guard let self, self.contextGeneration == contextGeneration else { return }
                 self.task = nil
-                guard !Task.isCancelled, self.permits?() == true,
+                guard !Task.isCancelled, self.permits?() == true else { return }
+                if let route = response.roadRoute(for: request) { self.keep(route) }
+                // The marker only for the fix it describes: no newer fix acquired since, still within its lifetime.
+                guard self.generation == fixGeneration,
                       self.window?.accepts(response, for: request, sentAt: sentAt, now: self.now()) == true else { return }
                 self.result = response
-                // The total display budget starts at emission, not reception.
+                let generation = self.generation
                 let remaining = max(0, sentAt + SchoolLiveMatchWindow.responseLifetime - self.now())
                 let sleep = self.sleep
                 self.expiry = Task { [weak self] in
@@ -96,14 +113,22 @@ final class SchoolLiveMatchCoordinator {
                 }
             } catch {
                 guard let self, self.contextGeneration == contextGeneration else { return }
-                if self.generation == generation { self.task = nil }
-                // A newer fix invalidates geometry, not a known access refusal for this capture.
+                self.task = nil
+                // A known access refusal for this capture asks for revalidation; transport failures change nothing.
                 if let failure = error as? SchoolCaptureFailure,
                    [.unauthorized, .forbidden, .notFound, .expired].contains(failure) {
                     self.onAccessFailure?()
                 }
-                // Transport/matcher failures leave the local prediction alone.
             }
         }
+    }
+
+    /// Stretches arrive in request order; one starting no later than the previous one replaces what it overlaps.
+    private func keep(_ route: SchoolLiveRoadRoute) {
+        guard let first = route.anchors.first?.sequence else { return }
+        while let last = roadRoutes.last, last.segmentID == route.segmentID,
+              let lastFirst = last.anchors.first?.sequence, lastFirst >= first { roadRoutes.removeLast() }
+        roadRoutes.append(route)
+        if roadRoutes.count > Self.maximumRoutes { roadRoutes.removeFirst(roadRoutes.count - Self.maximumRoutes) }
     }
 }

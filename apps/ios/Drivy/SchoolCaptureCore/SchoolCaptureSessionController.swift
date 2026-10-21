@@ -412,7 +412,7 @@ final class SchoolCaptureSessionController {
         liveObservations?.stop(); liveObservations = nil
         context?.source.onEvent = nil
         context = nil; generation = UUID()
-        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; liveMatch.clearRoutes(); hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         beginning = nil; endedAt = nil
@@ -476,7 +476,7 @@ final class SchoolCaptureSessionController {
         context = nil
         generation = UUID()
         old?.transfer.invalidate()
-        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; liveMatch.clearRoutes(); hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false; beginning = nil; endedAt = nil
         finalizedSyncState = nil
         priorSegments = []; priorObservations = []; lessonStartedAt = nil; knownLessonStarts = [:]
@@ -527,7 +527,7 @@ final class SchoolCaptureSessionController {
         context = active
         completedLessonID = nil
         captureID = session.id; lessonID = session.serverCapture.lessonId
-        segments = []; hasDisplayedPosition = false; beginning = nil; endedAt = nil; transition = nil; state = .preparing
+        segments = []; liveMatch.clearRoutes(); hasDisplayedPosition = false; beginning = nil; endedAt = nil; transition = nil; state = .preparing
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false; synchronizationNeedsRetry = false
         finalizedSyncState = nil
         priorSegments = []; priorObservations = []
@@ -572,7 +572,7 @@ final class SchoolCaptureSessionController {
     private func discardUnstartedContext(_ active: Context) {
         active.source.onEvent = nil
         context = nil; generation = UUID()
-        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; hasDisplayedPosition = false
+        transition = nil; state = .idle; captureID = nil; lessonID = nil; segments = []; liveMatch.clearRoutes(); hasDisplayedPosition = false
         errorMessage = nil; locationMessage = nil; transferMessage = nil; isTransferring = false
         synchronizationNeedsRetry = false; finalizedSyncState = nil
         beginning = nil; endedAt = nil
@@ -874,7 +874,7 @@ final class SchoolCaptureSessionController {
         }, onAccessFailure: { [weak self, weak active] in
             guard let self, let active else { return }
             self.confirmLiveMatchAccess(active, request: request)
-        }, send: { [client = active.transfer.client, scope = active.scope, captureID = active.session.id] body in
+        }, keepsRoutes: true, send: { [client = active.transfer.client, scope = active.scope, captureID = active.session.id] body in
             try await client.liveMatch(scope: scope, captureID: captureID, request: body)
         })
     }

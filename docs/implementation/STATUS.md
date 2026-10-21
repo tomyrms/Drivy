@@ -6,6 +6,12 @@
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
 - Décision du porteur (21 octobre 2026) : pas de bascule, le proxy Cloudflare est conservé. La lenteur mesurée par Cloudflare reste ouverte.
 
+## 21 octobre 2026 : recalage direct sur la route (#90)
+
+- Ligne et marqueur en direct suivent la route (OSRM privé) : mesures espacées de 20 m, plus de garde de vitesse, tronçon routier ancré renvoyé par l'API (`live-match` v2), réponses tardives conservées pour la ligne, Réduire les animations garde le recalage. Détails et mesures : `recalage-direct-route-20261021.md`.
+- Exécuté : tests API (53, dont 26 sur PostgreSQL réelle), validation du vrai module sur CT114 contre CT117 (0 % → 25 à 67 % de fenêtres recalées en conduite synthétique, position p50 3 à 5 m, 0 % à pied hors route), compilation IPA.
+- À qualifier : conduite réelle, réseau mobile, iPad, VoiceOver ; tests Swift sur runner Apple non lancés.
+
 ## 21 octobre 2026 : profil personnel complet et photo (#64), déployé
 
 - Complément 7d14a39 (déployé 23:05 Zurich, sauvegarde `/root/drivy_refonte-before-7d14a39-20261021T210412Z.dump`) : migration `039_self_profile_contact.sql`, e-mail de contact, date de naissance et adresse postale dans « Mon profil » (contrat v3). L'e-mail de contact n'est pas l'adresse de connexion. Suite API : 546/566 dans la passe complète, les 20 échecs restants sont dans `g1b` et le fichier passe seul (27/27) ; instabilité sous charge à surveiller.

@@ -12,8 +12,9 @@ import type {LiveMatcher,LiveMatchInput} from '../src/live-matching.js';
 let pool:Pool,h:CaptureHarness,trip:Awaited<ReturnType<CaptureHarness['startTrip']>>;
 let validate:(value:unknown)=>boolean,validateRequest:(value:unknown)=>boolean;
 const apps:ReturnType<typeof buildApp>[]=[];
-const body=():LiveMatchInput=>{const now=Date.now();return {segmentId:randomUUID(),points:Array.from({length:3},(_,i)=>({sequence:i,elapsedMs:i*1000,capturedAt:new Date(now-2000+i*1000).toISOString(),latitude:46+i*0.0001,longitude:7,accuracyMeters:5,speed:11}))};};
-const road:LiveMatcher=async points=>({code:'Ok',matchings:[{confidence:0.95}],tracepoints:points.map(p=>({location:[p.longitude,p.latitude],matchings_index:0,alternatives_count:0}))});
+// Quatre mesures à 25 m l'une de l'autre : assez de mouvement pour que la fenêtre parte au moteur.
+const body=():LiveMatchInput=>{const now=Date.now();return {segmentId:randomUUID(),points:Array.from({length:4},(_,i)=>({sequence:i,elapsedMs:i*1000,capturedAt:new Date(now-3000+i*1000).toISOString(),latitude:46+i*25/111_195,longitude:7,accuracyMeters:5,speed:11}))};};
+const road:LiveMatcher=async points=>({code:'Ok',matchings:[{confidence:0.95,geometry:{type:'LineString',coordinates:points.map(p=>[p.longitude,p.latitude])}}],tracepoints:points.map(p=>({location:[p.longitude,p.latitude],matchings_index:0,alternatives_count:0}))});
 const url=(school=id.schoolA as string,capture=trip.capture.id)=>`/v1/schools/${school}/captures/${capture}/live-match`;
 const appFor=(matcher:LiveMatcher|undefined=road,subject='demo-instructor')=>{const app=buildApp({pool,cursorSecret:'live-match-test-secret-32-characters',verifyToken:async()=>({issuer,subject}),liveMatcher:matcher});apps.push(app);return app;};
 const post=(app:ReturnType<typeof buildApp>,payload:unknown=body(),path=url())=>app.inject({method:'POST',url:path,payload:payload as object});
@@ -42,11 +43,13 @@ beforeEach(async()=>{
 afterEach(async()=>{for(const app of apps.splice(0))await app.close();await h?.app.close();await pool?.end();vi.restoreAllMocks();});
 
 describe('extension live-match, PostgreSQL réel',()=>{
- it('retourne uniquement le recalage de la dernière mesure sans aucune écriture',async()=>{
+ it('retourne la position et le tronçon recalés de la dernière mesure sans aucune écriture',async()=>{
   const app=appFor(),input=body(),before=await snapshot();expect(validateRequest(input)).toBe(true);
   const result=await post(app,input);
   expect(result.statusCode).toBe(200);expect(validate(result.json())).toBe(true);
-  expect(result.json().data).toEqual({status:'MATCHED',segmentId:input.segmentId,sequence:2,elapsedMs:2000,position:{latitude:input.points[2]!.latitude,longitude:7},confidence:0.95,distanceMeters:0});
+  const latitude=Math.round(input.points[3]!.latitude*1e7)/1e7;
+  expect(result.json().data).toMatchObject({status:'MATCHED',segmentId:input.segmentId,sequence:3,elapsedMs:3000,position:{latitude,longitude:7},confidence:0.95});
+  expect(result.json().data.route.anchors.map((a:number[])=>a[0])).toEqual([0,1,2,3]);
   expect(result.headers['cache-control']).toBe('no-store');expect(await snapshot()).toEqual(before);
  });
  it('authentifie avec le vérificateur réel avant tout traitement',async()=>{

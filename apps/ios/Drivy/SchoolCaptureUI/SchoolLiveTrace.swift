@@ -39,6 +39,8 @@ import Foundation
     private var states: [UUID: SegmentState] = [:]
     private var order: [UUID] = []
     private var bridges: [String: DrivyRouteMapLine?] = [:]
+    /// Lines of a segment drawn on the road (#90), keyed by its display revision and its stretches.
+    private var roadLines: [UUID: (key: Int, lines: [DrivyRouteMapLine])] = [:]
     private(set) var lines: [DrivyRouteMapLine] = []
     private(set) var hasGaps = false
     private(set) var start: CLLocationCoordinate2D?
@@ -48,12 +50,15 @@ import Foundation
     /// Idempotent: called again with unchanged segments, it does nothing.
     /// `liveFrom`: index of the first segment of the trip being recorded. Earlier segments (previous trips of the
     /// same lesson) are drawn and give the start, never the current position.
-    func update(_ segments: [SchoolCaptureMapSegment], liveFrom: Int = 0) {
+    /// `roads`: accepted road stretches; between their anchors the line follows the road instead of the fixes.
+    /// Positions, start and observation anchors stay the measured ones.
+    func update(_ segments: [SchoolCaptureMapSegment], liveFrom: Int = 0, roads: [SchoolLiveRoadRoute] = []) {
         let ids = segments.map(\.id)
         var changed = ids != order
         if changed {
             let current = Set(ids)
             states = states.filter { current.contains($0.key) }
+            roadLines = roadLines.filter { current.contains($0.key) }
             bridges = bridges.filter { key, _ in key.split(separator: ">").allSatisfy { part in current.contains { $0.uuidString == part } } }
             order = ids
         }
@@ -61,6 +66,20 @@ import Foundation
             var state = states[segment.id] ?? SegmentState()
             advance(&state, with: segment)
             states[segment.id] = state
+            changed = true
+        }
+        let bySegment = Dictionary(grouping: roads, by: \.segmentID)
+        for segment in segments {
+            guard let stretches = bySegment[segment.id], !stretches.isEmpty else {
+                if roadLines.removeValue(forKey: segment.id) != nil { changed = true }
+                continue
+            }
+            var hasher = Hasher()
+            hasher.combine(segment.displayRevision)
+            for stretch in stretches { hasher.combine(stretch.anchors.first?.sequence); hasher.combine(stretch.anchors.last?.sequence); hasher.combine(stretch.vertices.count) }
+            let key = hasher.finalize()
+            guard roadLines[segment.id]?.key != key else { continue }
+            roadLines[segment.id] = (key, Self.roadLines(segment: segment, stretches: stretches))
             changed = true
         }
         guard changed || liveFrom != self.liveFrom else { return }
@@ -75,8 +94,12 @@ import Foundation
                 all.append(bridge)
                 gapCount += 1
             }
-            all.append(contentsOf: state.closed)
-            all.append(contentsOf: state.tail)
+            if let road = roadLines[segment.id] {
+                all.append(contentsOf: road.lines)
+            } else {
+                all.append(contentsOf: state.closed)
+                all.append(contentsOf: state.tail)
+            }
         }
         lines = all
         hasGaps = gapCount > 0
@@ -150,6 +173,63 @@ import Foundation
             state.tail.append(.init(id: "\(prefix):\(state.fragment):\(state.chunk)", revision: revision, style: .route,
                                     coordinates: state.open + [coordinate]))
         }
+    }
+
+    /// The displayed fixes of one segment, with each accepted stretch drawn in place of the fixes it covers.
+    /// A stretch is used only inside one fragment (never across a silence or a rejected jump); when two overlap,
+    /// the later one wins from its first anchor and the earlier one is cut at its last anchor before that.
+    /// Cut into chunks like the measured line, each chunk revised only when its content changes.
+    static func roadLines(segment: SchoolCaptureMapSegment, stretches: [SchoolLiveRoadRoute]) -> [DrivyRouteMapLine] {
+        let samples = segment.displaySamples
+        guard !samples.isEmpty else { return [] }
+        let breaks = samples.filter(\.startsFragment).map(\.point.sequence)
+        // Non-overlapping stretches, oldest first, none crossing a fragment start.
+        var resolved: [(first: Int, last: Int, vertices: [SchoolLiveRoadRoute.Vertex])] = []
+        for stretch in stretches.sorted(by: { ($0.anchors.first?.sequence ?? 0) < ($1.anchors.first?.sequence ?? 0) }) {
+            guard let first = stretch.anchors.first, let last = stretch.anchors.last,
+                  !breaks.contains(where: { $0 > first.sequence && $0 <= last.sequence }) else { continue }
+            while let previous = resolved.last, previous.last > first.sequence {
+                resolved.removeLast()
+                guard let source = stretches.first(where: { $0.anchors.first?.sequence == previous.first }),
+                      let cut = source.anchors.last(where: { $0.sequence <= first.sequence }), cut.sequence > previous.first else { continue }
+                resolved.append((previous.first, cut.sequence, Array(source.vertices[0...cut.index])))
+                break
+            }
+            resolved.append((first.sequence, last.sequence, stretch.vertices))
+        }
+        var fragments: [[CLLocationCoordinate2D]] = []
+        var current: [CLLocationCoordinate2D] = []
+        var next = 0
+        var skipUntil = -1
+        for sample in samples {
+            if sample.startsFragment, !current.isEmpty { fragments.append(current); current = [] }
+            let sequence = sample.point.sequence
+            // Every stretch that starts at or before this fix is drawn here, in order: its first vertex is the
+            // road place of its first anchor, its last the road place of its last anchor.
+            while next < resolved.count, sequence >= resolved[next].first {
+                current.append(contentsOf: resolved[next].vertices.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
+                skipUntil = max(skipUntil, resolved[next].last)
+                next += 1
+            }
+            if sequence <= skipUntil { continue }
+            current.append(CLLocationCoordinate2D(latitude: sample.point.latitude, longitude: sample.point.longitude))
+        }
+        if !current.isEmpty { fragments.append(current) }
+        let prefix = segment.id.uuidString
+        var out: [DrivyRouteMapLine] = []
+        for (fragment, coordinates) in fragments.enumerated() {
+            var start = 0, chunk = 0
+            repeat {
+                let end = min(coordinates.count, start + chunkSize)
+                let slice = Array(coordinates[start..<end])
+                var hasher = Hasher()
+                for c in slice { hasher.combine(c.latitude); hasher.combine(c.longitude) }
+                out.append(.init(id: "\(prefix):road:\(fragment):\(chunk)", revision: hasher.finalize(), style: .route, coordinates: slice))
+                // The next chunk starts on the same vertex: the line has no hole.
+                start = end - 1; chunk += 1
+            } while start < coordinates.count - 1
+        }
+        return out
     }
 
     /// Dashed connector across a silence between two segments; decided once both ends are known.
