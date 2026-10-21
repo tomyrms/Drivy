@@ -17,7 +17,7 @@ L'issue #64 reste **ouverte** jusqu'à la livraison des photos et des autres cri
 
 ## Livraison et déploiement
 
-- Branche : `feat/64-personal-profile-edit` (non intégrée à `master` lors de cette note).
+- Branche de livraison : `codex/64-personal-profile-edit` (copie de travail `feat/64-personal-profile-edit` ; non intégrée à `master` lors de cette note).
 - Nouvelle migration : `037_personal_profile_edit.sql`. **Ne pas** activer le formulaire iOS avec une ancienne API qui ignore `PATCH /v1/me`.
 - Déploiement homelab : sauvegarder PostgreSQL et vérifier la restauration, exécuter les migrations via le mécanisme habituel, déployer la même version d'API que l'application, puis compiler l'IPA et l'installer sur un appareil test. Aucun déploiement distant n'a été effectué dans ce lot.
 - Tests d'intégration ciblés ajoutés (sans les déclarer exécutés) : moniteur sans dossier, admin, élève, idempotence et conflits.
