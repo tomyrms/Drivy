@@ -68,12 +68,6 @@ struct SchoolReportFold<Value> {
     let hidden: [Value]
 }
 
-/// Compétences du référentiel, celles de la leçon d’abord.
-struct SchoolReportCompetencyGroups: Equatable {
-    let worked: [SchoolCatalogCompetency]
-    let others: [SchoolCatalogCompetency]
-}
-
 /// Règles de la rédaction du bilan : étapes, ordre, repères. Aucune n’écrit ni n’envoie quoi que ce soit.
 enum SchoolReportFlowRules {
     /// Ordre du parcours. C’est le seul endroit où il se décide : l’inverser se fait ici.
@@ -127,18 +121,6 @@ enum SchoolReportFlowRules {
     static func position(of index: Int, count: Int) -> String? {
         guard count > 1, (0..<count).contains(index) else { return nil }
         return "\(index + 1) sur \(count)"
-    }
-
-    /// En tête : les compétences signalées en route, visées par un objectif ou déjà notées dans le bilan enregistré.
-    /// Les autres suivent, repliées. Sans aucun repère, la liste reste entière et à plat.
-    static func competencyGroups(_ competencies: [SchoolCatalogCompetency], observations: [SchoolObservation],
-                                 goals: [SchoolLessonGoal], saved: [SchoolReportObservation]) -> SchoolReportCompetencyGroups {
-        let marked = Set(observations.compactMap(\.competencyId)).union(goals.compactMap(\.competencyId)).union(saved.map(\.competencyId))
-        let worked = competencies.filter { marked.contains($0.id) }
-        guard !worked.isEmpty, worked.count < competencies.count else {
-            return SchoolReportCompetencyGroups(worked: competencies, others: [])
-        }
-        return SchoolReportCompetencyGroups(worked: worked, others: competencies.filter { !marked.contains($0.id) })
     }
 
     /// « En route : Attention, Point positif » : ce que le moniteur a signalé sur cette compétence pendant la leçon.

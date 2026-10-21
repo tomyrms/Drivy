@@ -146,25 +146,6 @@ import Testing
 
     // MARK: Compétences
 
-    @Test func competenciesOfTheLessonComeFirstAndTheOthersStayReachable() {
-        let all = (1...4).map { Self.competency($0) }
-        let groups = SchoolReportFlowRules.competencyGroups(all,
-            observations: [Self.observation(competency: all[2].id, status: "ATTENTION")],
-            goals: [SchoolLessonGoal(label: "Priorités", competencyId: all[0].id)],
-            saved: [])
-        #expect(groups.worked.map(\.id) == [all[0].id, all[2].id])
-        #expect(groups.others.map(\.id) == [all[1].id, all[3].id])
-    }
-
-    @Test func withoutAnyMarkTheListStaysWholeAndFlat() {
-        let all = (1...3).map { Self.competency($0) }
-        let none = SchoolReportFlowRules.competencyGroups(all, observations: [], goals: [], saved: [])
-        #expect(none.worked == all && none.others.isEmpty)
-        let every = SchoolReportFlowRules.competencyGroups(all, observations: [], goals: [],
-            saved: all.map { SchoolReportObservation(competencyId: $0.id, level: "GUIDED", context: "") })
-        #expect(every.worked == all && every.others.isEmpty)
-    }
-
     @Test func signalsMadeOnTheRoadAreRecalledOncePerAppraisal() {
         let id = UUID()
         let observations = [Self.observation(competency: id, status: "ATTENTION"), Self.observation(competency: id, status: "POSITIVE"),

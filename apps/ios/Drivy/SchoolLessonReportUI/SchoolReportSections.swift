@@ -388,33 +388,17 @@ struct SchoolReportTextSection: View {
     }
 }
 
-/// Niveaux par compétence. Celles de la leçon viennent d’abord ; les autres restent à un geste, repliées.
+/// Niveaux par compétence : toutes celles du référentiel de la formation, à plat et dans son ordre. Les signalements
+/// du trajet, les objectifs et les niveaux déjà notés n’en choisissent, n’en trient ni n’en replient aucune (#56, #57).
 struct SchoolReportCompetenciesSection: View {
     @Bindable var model: SchoolLessonReportWorkspace
     @State private var expanded = Set<UUID>()
-    @State private var showsOthers = false
-
-    private var competencyGroups: SchoolReportCompetencyGroups {
-        SchoolReportFlowRules.competencyGroups(model.competencies, observations: model.lessonObservations,
-            goals: model.preparation?.goals ?? [], saved: model.draft?.observations ?? [])
-    }
 
     var body: some View {
-        let groups = competencyGroups
         if !model.competencies.isEmpty {
             Section {
-                ForEach(groups.worked) { competency in
+                ForEach(model.competencies) { competency in
                     SchoolReportCompetencyRow(model: model, competency: competency, expanded: $expanded)
-                }
-                if !groups.others.isEmpty {
-                    // Une compétence déjà notée dans ce groupe le garde ouvert : rien de saisi n’est caché.
-                    let rated = groups.others.contains { other in model.observations.contains { $0.id == other.id } }
-                    DisclosureGroup("Autres compétences", isExpanded: Binding(get: { showsOthers || rated }, set: { showsOthers = $0 })) {
-                        ForEach(groups.others) { competency in
-                            SchoolReportCompetencyRow(model: model, competency: competency, expanded: $expanded)
-                        }
-                    }
-                    .accessibilityIdentifier("lesson-competency-others")
                 }
             } header: { Text("Compétences").drivyFormSectionHeader() }
                 .drivyFormRows()
