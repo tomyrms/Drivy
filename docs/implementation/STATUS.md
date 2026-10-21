@@ -6,7 +6,8 @@
 - #58 : « Rétablir la configuration d’origine » utilise maintenant une alerte avec un message, comme les autres confirmations (« Recharger les informations de l’école ? »). Le message précise que le classement intelligent ne change pas. Le bouton revérifie le droit avant d’envoyer.
 - #57 : l’étape Compétences du bilan affiche toutes les compétences du référentiel de la formation, à plat et dans son ordre. Le regroupement par signalement, objectif ou niveau déjà noté et le repli « Autres compétences » sont supprimés (règle `competencyGroups` et ses deux tests retirés). Les saisies et les brouillons restent attachés à chaque compétence.
 - #47 : après une fin de leçon abandonnée (feuille du permis fermée) ou refusée, le trajet est arrêté et enregistré alors que la leçon continue. La fiche affiche déjà « Le trajet est arrêté. La leçon continue. ». Sa barre propose maintenant « Terminer la leçon » et « Reprendre le GPS ». La reprise est seulement manuelle : elle ferme le trajet arrêté sur l’appareil (ses points et son heure d’arrêt ne changent pas, son envoi continue), puis repasse par la préparation habituelle avec la vérification de l’accord. Rien ne repart tout seul. Un trajet en échec garde sa propre reprise.
-- Exécuté : compilation de l’IPA seulement. Non exécuté : tests, recette iPhone/iPad, VoiceOver.
+- Relecture de validation : #47 planifie l’envoi du trajet arrêté avant de le fermer (sinon il n’aurait été repris qu’au prochain retour au premier plan). Pour #62, le nom est en bouton `.borderless` de 44 pt, pour ne pas capter les touches de la ligne de formulaire. Le test UI `FieldFlowTests` qui quittait le trajet par les onglets suit maintenant le parcours #60 : onglets absents, sortie, Agenda, retour au trajet.
+- Exécuté : compilation de l’IPA, plus le test UI ciblé ci-dessus. Non exécuté : campagne complète, recette iPhone/iPad, VoiceOver.
 
 ## 21 octobre 2026 : GPS en plein écran et sortie sans arrêt (#60), non qualifié
 

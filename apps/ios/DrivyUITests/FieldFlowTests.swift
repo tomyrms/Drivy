@@ -73,22 +73,29 @@ import XCTest
         capture(app, name: "start-now-gps-permission-refused")
     }
 
-    func testLeavingLiveThroughTabsKeepsTheStartedLessonWithoutOfferingCancellation() {
+    func testLeavingLiveThroughTheExitButtonKeepsTheStartedLessonWithoutOfferingCancellation() {
         continueAfterFailure = false
         let app = launch("live")
         let signal = app.buttons["capture-signal-observation"]
         XCTAssertTrue(signal.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertFalse(app.buttons["capture-cancel-lesson"].exists)
         XCTAssertFalse(app.buttons["Revenir à la leçon"].exists)
+        // Plein écran (#60) : aucune barre d’onglets pendant le trajet.
+        XCTAssertFalse(app.tabBars.buttons["Agenda"].exists)
         app.buttons["capture-more"].tap()
         // Une leçon commencée ne s'annule plus (API 409 LESSON_STARTED, depuis cdb0f82) : le menu ne propose que de la voir.
         XCTAssertTrue(app.buttons["Voir la leçon"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.buttons["Annuler la leçon"].exists)
-        // Dismiss the menu outside its actions, then leave through the actual tab bar.
-        nativeTab("Agenda", in: app).tap()
-        if signal.exists { nativeTab("Agenda", in: app).tap() }
+        app.tap()
+        // Sortie à côté des trois points : la leçon et le GPS continuent, les onglets reviennent.
+        let exit = app.buttons["capture-minimize"]
+        XCTAssertTrue(exit.waitForExistence(timeout: 5), app.debugDescription)
+        exit.tap()
         XCTAssertTrue(signal.waitForNonExistence(timeout: 5))
-        nativeTab("Aujourd’hui", in: app).tap()
+        nativeTab("Agenda", in: app).tap()
+        let back = app.buttons["capture-return"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5), app.debugDescription)
+        back.tap()
         XCTAssertTrue(signal.waitForExistence(timeout: 5))
         XCTAssertTrue(signal.isEnabled)
     }

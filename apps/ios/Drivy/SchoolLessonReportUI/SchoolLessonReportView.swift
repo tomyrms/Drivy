@@ -848,6 +848,8 @@ private struct SchoolLessonReportContent: View {
     /// tels quels, son envoi continue), puis la préparation habituelle redemande l’accord. Rien ne repart seul.
     private func restartCapture() async {
         guard capturePreparation == nil, !isOpeningTrip, !isFinishing, mayRestartCapture(now: Date()), let capture else { return }
+        // L’envoi du trajet arrêté est planifié avant sa fermeture : il continue en arrière-plan, journal à l’appui.
+        guard await capture.finishForLesson(lessonID: model.lessonID), mayRestartCapture(now: Date()) else { return }
         capture.closeLessonFlow(lessonID: model.lessonID)
         await openCapturePreparation()
     }

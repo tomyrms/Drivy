@@ -58,9 +58,12 @@ struct SchoolLessonHeaderView: View {
                 DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact) {
                     DrivyRowChevron()
                 }
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            // Dans la ligne de formulaire de la fiche, seul le nom réagit : « Réessayer » plus bas garde son propre geste.
+            .buttonStyle(.borderless)
+            .tint(DrivyTheme.text)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Ouvrir le dossier de \(identity.name)")
             .accessibilityAddTraits(.isButton)
