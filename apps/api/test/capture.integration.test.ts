@@ -127,7 +127,7 @@ try{
  const repaired=(await call('GET',`/lessons/${lesson}`)).json().data;
  assert.equal(repaired.actualStart,capture.authorizedAt);assert.equal(repaired.version,3);
  assert.equal((await pool.query("SELECT bool_and(relforcerowsecurity) AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'")).rows[0].forced,true);
- assert.equal(rls.rows[0].forced,49);assert(rls.rows[0].tables.includes('observation_ranking'));assert(rls.rows[0].tables.includes('planning_defaults'));assert(rls.rows[0].tables.includes('observation_theme_settings'));assert(rls.rows[0].tables.includes('capture_matched_route'));assert(rls.rows[0].tables.includes('school_opening_link'));
+ assert.equal(rls.rows[0].forced,50);assert(rls.rows[0].tables.includes('observation_ranking'));assert(rls.rows[0].tables.includes('planning_defaults'));assert(rls.rows[0].tables.includes('observation_theme_settings'));assert(rls.rows[0].tables.includes('capture_matched_route'));assert(rls.rows[0].tables.includes('school_opening_link'));
 }finally{await app.close();await migration.end();await pool.end();}
 
 });

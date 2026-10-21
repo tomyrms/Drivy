@@ -1,5 +1,28 @@
 import Foundation
 
+private struct SchoolPersonalAccountChange: Encodable {
+    let operationId: UUID
+    let displayName: String
+}
+
+struct SchoolPersonalAccountUpdate: Decodable, Sendable {
+    let personId: UUID
+    let version: Int
+    let displayName: String
+    let locale: String
+}
+
+enum SchoolPersonalAccountError: Error, LocalizedError {
+    case versionConflict, operationConflict
+
+    var errorDescription: String? {
+        switch self {
+        case .versionConflict: "Le profil a changé sur un autre appareil. Ferme puis rouvre cette page pour le relire."
+        case .operationConflict: "Cette demande a déjà été utilisée. Modifie le nom puis réessaie."
+        }
+    }
+}
+
 struct SchoolHTTPResponse: Sendable {
     let data: Data
     let status: Int
@@ -94,6 +117,60 @@ final class DrivyAPIClient: SchoolAPI {
             throw SchoolAPIError.invalidResponse
         }
         return person
+    }
+
+    /// Édition du nom public du compte (pas du dossier scolaire ni de l'identifiant OIDC).
+    /// If-Match protège les modifications concurrentes ; operationId rend les reprises réseau sûres.
+    func changeMyDisplayName(_ name: String, expectedVersion: Int, operationID: UUID) async throws -> SchoolPersonalAccountUpdate {
+        guard Self.permits(baseURL), expectedVersion > 0 else { throw SchoolAPIError.invalidConfiguration }
+        let url = baseURL.appending(path: "v1/me")
+        let payload = SchoolPersonalAccountChange(operationId: operationID, displayName: name)
+        let body = try JSONEncoder().encode(payload)
+
+        func send(_ token: String) async throws -> SchoolPersonalAccountUpdate {
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.httpBody = body
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("application/json, application/problem+json", forHTTPHeaderField: "Accept")
+            request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+            request.setValue("\"\(expectedVersion)\"", forHTTPHeaderField: "If-Match")
+            request.setValue(operationID.uuidString, forHTTPHeaderField: "Idempotency-Key")
+            let response: SchoolHTTPResponse
+            do { response = try await transport.send(request) }
+            catch let error where error.isRequestCancellation { throw CancellationError() }
+            catch { throw SchoolAPIError.unavailable }
+            try Task.checkCancellation()
+            guard response.url == url, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else {
+                throw SchoolAPIError.invalidResponse
+            }
+            switch response.status {
+            case 200: break
+            case 401: throw SchoolAPIError.unauthorized
+            case 403: throw SchoolAPIError.forbidden
+            case 409: throw SchoolPersonalAccountError.operationConflict
+            case 412: throw SchoolPersonalAccountError.versionConflict
+            case 408, 429, 500...599: throw SchoolAPIError.unavailable
+            default: throw SchoolAPIError.invalidResponse
+            }
+            guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json",
+                  let envelope = try? JSONDecoder().decode(Envelope<SchoolPersonalAccountUpdate>.self, from: response.data),
+                  Self.isTimestamp(envelope.serverTime),
+                  envelope.data.version > expectedVersion else {
+                throw SchoolAPIError.invalidResponse
+            }
+            return envelope.data
+        }
+
+        let token = try await accessToken()
+        do { return try await send(token) }
+        catch SchoolAPIError.unauthorized {
+            guard await tokenSource.invalidateAccessToken(token) else { throw SchoolAPIError.unauthorized }
+            let renewed = try await accessToken()
+            guard renewed != token else { throw SchoolAPIError.unauthorized }
+            return try await send(renewed)
+        }
     }
 
     func school(id: UUID) async throws -> SchoolDetails {

@@ -119,6 +119,17 @@ final class SchoolWorkspace {
         }
     }
 
+    /// Applique le reçu confirmé de modification du compte sans attendre une nouvelle lecture réseau.
+    /// Invalider les lectures en vol : une ancienne réponse ne doit jamais réécraser le nouveau nom.
+    func acceptPersonalAccountUpdate(_ update: SchoolPersonalAccountUpdate) {
+        guard let current = person, !accessRevoked,
+              current.personId == update.personId, update.version > current.version else { return }
+        accountRefresh = UUID()
+        accountReadAt = Date()
+        person = SchoolPerson(personId: current.personId, version: update.version,
+            displayName: update.displayName, locale: update.locale, memberships: current.memberships)
+    }
+
     /// Return to the app: re-read the account without clearing anything on screen, at most
     /// every five minutes. Only a change of rights in the current school reloads it; a network
     /// failure changes nothing, a refusal from the school closes the account as any read does.
