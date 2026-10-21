@@ -164,6 +164,24 @@ final class SchoolWorkspace {
         }
     }
 
+    /// Renomme le compte connecté. Le nom enregistré remplace aussitôt celui de l’écran ; un conflit relit le compte.
+    /// Rien n’est affiché comme enregistré avant la réponse de l’école.
+    func renameSelf(_ name: String) async throws {
+        guard let current = person else { throw SchoolAPIError.unauthorized }
+        do {
+            let saved = try await api.renameSelf(displayName: name, version: current.version)
+            guard saved.personId == current.personId, person?.personId == current.personId else { return }
+            person = SchoolPerson(personId: current.personId, version: saved.version, displayName: saved.displayName,
+                locale: current.locale, memberships: person?.memberships ?? current.memberships)
+        } catch SchoolSelfProfileFailure.changed {
+            await refreshAccount(minimumInterval: 0)
+            throw SchoolSelfProfileFailure.changed
+        } catch {
+            _ = invalidateAccess(for: error)
+            throw error
+        }
+    }
+
     /// Le portail peut activer l'école sans changer les rôles : son retour relit aussi l'état scolaire.
     func willOpenManagement() { awaitsManagementReturn = true }
 

@@ -164,6 +164,26 @@ protocol SchoolAPI: AnyObject {
     /// Les dossiers actifs de toute l’école auxquels manque une information requise (filtre `requiresAction`),
     /// toutes pages lues ; `nil` quand ce client ne sait pas les lire.
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]?
+    /// Renomme le compte connecté (`PATCH /v1/me/profile`). `version` : celle de la personne lue par `me()`.
+    func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile
+}
+
+/// Ce que l’école renvoie après un renommage : le nom enregistré et la nouvelle version de la personne.
+struct SchoolSelfProfile: Codable, Sendable, Equatable {
+    let personId: UUID
+    let displayName: String
+    let version: Int
+}
+
+enum SchoolSelfProfileFailure: Error, LocalizedError, Equatable {
+    case changed, invalidName, unsupported
+    var errorDescription: String? {
+        switch self {
+        case .changed: "Ton profil a changé sur un autre appareil. Il vient d’être relu : vérifie ton nom puis enregistre."
+        case .invalidName: "Ce nom ne peut pas être enregistré. Utilise entre 1 et 200 caractères."
+        case .unsupported: "Ton école ne permet pas encore de modifier ton nom depuis l’app."
+        }
+    }
 }
 
 extension SchoolAPI {
@@ -171,6 +191,7 @@ extension SchoolAPI {
         try await learners(schoolID: schoolID, query: "", cursor: nil)
     }
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? { nil }
+    func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
 }
 
 enum SchoolAPIError: Error, LocalizedError, Equatable {

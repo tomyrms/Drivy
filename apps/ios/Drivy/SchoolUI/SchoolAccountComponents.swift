@@ -24,6 +24,9 @@ struct SchoolAccountActions {
     @MainActor @ViewBuilder
     func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
+        if let workspace, workspace.person != nil {
+            SchoolRenameSelfRow(workspace: workspace)
+        }
         if let openProfile {
             DrivyNavigationRow(title: "Mes informations", action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
@@ -142,6 +145,83 @@ struct SchoolAccountHeading: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("account-heading")
+    }
+}
+
+/// « Mon nom » : chaque compte (moniteur, administration, élève) renomme le sien, sans passer par le web (#64).
+/// Le nom du dossier d’élève reste dans « Mes informations » ; celui-ci est le nom du compte Drivy.
+private struct SchoolRenameSelfRow: View {
+    let workspace: SchoolWorkspace
+    @State private var editing = false
+
+    var body: some View {
+        DrivyNavigationRow(title: "Mon nom", detail: workspace.person?.displayName, action: { editing = true })
+            .accessibilityIdentifier("rename-self")
+            .sheet(isPresented: $editing) { SchoolRenameSelfSheet(workspace: workspace) }
+    }
+}
+
+private struct SchoolRenameSelfSheet: View {
+    let workspace: SchoolWorkspace
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var isSaving = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var valid: Bool { !trimmed.isEmpty && trimmed.count <= 200 }
+    private var unchanged: Bool { trimmed == workspace.person?.displayName }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Nom affiché", text: $name)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .focused($focused)
+                        .onSubmit { save() }
+                        .disabled(isSaving)
+                        .accessibilityIdentifier("rename-self-field")
+                } footer: {
+                    if let error { DrivyFormMessage(text: error, tone: .danger) }
+                    else if trimmed.count > 200 { DrivyFormMessage(text: "Raccourcis ton nom à 200 caractères.", tone: .danger) }
+                }
+            }
+            .navigationTitle("Mon nom").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(isSaving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSaving { ProgressView().accessibilityLabel("Enregistrement…") }
+                    else { Button("Enregistrer") { save() }.disabled(!valid || unchanged) }
+                }
+            }
+            .interactiveDismissDisabled(isSaving)
+        }
+        .presentationDetents([.medium])
+        .tint(DrivyTheme.accent)
+        .onAppear { name = workspace.person?.displayName ?? ""; focused = true }
+    }
+
+    private func save() {
+        guard valid, !unchanged, !isSaving else { return }
+        isSaving = true; error = nil
+        let value = trimmed
+        Task {
+            do {
+                try await workspace.renameSelf(value)
+                isSaving = false
+                UIAccessibility.post(notification: .announcement, argument: "Nom enregistré")
+                dismiss()
+            } catch {
+                isSaving = false
+                // La saisie reste en place : elle se corrige ou se renvoie telle quelle.
+                self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
+            }
+        }
     }
 }
 
