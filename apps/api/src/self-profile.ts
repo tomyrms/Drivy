@@ -21,18 +21,39 @@ const phone = z.union([z.null(), z.string()]).transform(value => {
   const trimmed = value?.trim() ?? '';
   return trimmed === '' ? null : trimmed;
 }).refine(value => value === null || /^[+0-9 ().\-/]{3,32}$/.test(value), 'Numéro invalide.');
+const email = z.union([z.null(), z.string()]).transform(value => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+}).refine(value => value === null || (value.length <= 254 && z.email().safeParse(value).success), 'Adresse invalide.');
+const birthDate = z.union([z.null(), z.iso.date()]).refine(value => value === null || value >= '1900-01-01', 'Date invalide.');
+const part = (max: number) => z.string().transform(value => value.trim().normalize('NFC'))
+  .refine(value => [...value].length >= 1 && [...value].length <= max && !/[\u0000-\u001f\u007f]/u.test(value));
+const address = z.object({ line1: part(200), line2: z.union([z.null(), z.string()]).transform(value => {
+  const trimmed = value?.trim().normalize('NFC') ?? '';
+  return trimmed === '' ? null : trimmed;
+}).refine(value => value === null || ([...value].length <= 200 && !/[\u0000-\u001f\u007f]/u.test(value))).optional().transform(value => value ?? null),
+  postalCode: part(20), locality: part(150), countryCode: z.string().regex(/^[A-Z]{2}$/) }).strict();
+type Address = z.infer<typeof address>;
 const update = z.object({
   displayName: name(200),
   firstName: optionalName(150).optional(),
   lastName: optionalName(150).optional(),
   contactPhone: phone.optional(),
+  contactEmail: email.optional(),
+  birthDate: birthDate.optional(),
+  postalAddress: z.union([z.null(), address]).optional(),
 }).strict();
 const empty = z.object({}).strict();
 
-interface PersonRow { id: string; display_name: string; first_name: string | null; last_name: string | null; contact_phone: string | null; version: number; photo_version: number }
+interface PersonRow { id: string; display_name: string; first_name: string | null; last_name: string | null; contact_phone: string | null;
+  contact_email: string | null; birth_date: string | null; postal_address: Address | null; version: number; photo_version: number }
 const projection = (row: PersonRow) => ({ personId: row.id, displayName: row.display_name, firstName: row.first_name, lastName: row.last_name,
-  contactPhone: row.contact_phone, photoVersion: row.photo_version > 0 ? row.photo_version : null, version: row.version });
-const columns = 'id,display_name,first_name,last_name,contact_phone,version,photo_version';
+  contactPhone: row.contact_phone, contactEmail: row.contact_email, birthDate: row.birth_date, postalAddress: row.postal_address,
+  photoVersion: row.photo_version > 0 ? row.photo_version : null, version: row.version });
+const columns = `id,display_name,first_name,last_name,contact_phone,contact_email,to_char(birth_date,'YYYY-MM-DD') AS birth_date,postal_address,version,photo_version`;
+const addressKey = (a: Address | null) => a === null ? 'null'
+  : JSON.stringify([a.line1, a.line2 ?? null, a.postalCode, a.locality, a.countryCode]);
+const sameAddress = (a: Address | null, b: Address | null) => addressKey(a) === addressKey(b);
 
 const photoAAD = (personId: string, photoVersion: number) => Buffer.from(canonicalCaptureJSON({ personId, kind: 'profile-photo', photoVersion }));
 
@@ -99,13 +120,22 @@ export function registerSelfProfile(app: FastifyInstance, options: { pool: Pool;
         first_name: value.firstName === undefined ? person.first_name : value.firstName,
         last_name: value.lastName === undefined ? person.last_name : value.lastName,
         contact_phone: value.contactPhone === undefined ? person.contact_phone : value.contactPhone,
+        contact_email: value.contactEmail === undefined ? person.contact_email : value.contactEmail,
+        birth_date: value.birthDate === undefined ? person.birth_date : value.birthDate,
+        postal_address: value.postalAddress === undefined ? person.postal_address : value.postalAddress,
       };
+      if (next.birth_date && next.birth_date !== person.birth_date
+        && (await db.query<{ future: boolean }>("SELECT $1::date>(now() AT TIME ZONE 'Europe/Zurich')::date AS future", [next.birth_date])).rows[0]!.future)
+        throw new ApiError(400, 'INVALID_REQUEST', 'La date de naissance ne peut pas être dans le futur.');
       const same = next.display_name === person.display_name && next.first_name === person.first_name
-        && next.last_name === person.last_name && next.contact_phone === person.contact_phone;
+        && next.last_name === person.last_name && next.contact_phone === person.contact_phone && next.contact_email === person.contact_email
+        && next.birth_date === person.birth_date && sameAddress(next.postal_address, person.postal_address);
       if (same) return projection(person);
       if (person.version !== expected) throw conflict();
-      const row = (await db.query<PersonRow>(`UPDATE drivy.person SET display_name=$2,first_name=$3,last_name=$4,contact_phone=$5,version=version+1
-        WHERE id=$1 RETURNING ${columns}`, [person.id, next.display_name, next.first_name, next.last_name, next.contact_phone])).rows[0]!;
+      const row = (await db.query<PersonRow>(`UPDATE drivy.person SET display_name=$2,first_name=$3,last_name=$4,contact_phone=$5,
+        contact_email=$6,birth_date=$7::date,postal_address=$8::jsonb,version=version+1
+        WHERE id=$1 RETURNING ${columns}`, [person.id, next.display_name, next.first_name, next.last_name, next.contact_phone,
+        next.contact_email, next.birth_date, next.postal_address === null ? null : JSON.stringify(next.postal_address)])).rows[0]!;
       return projection(row);
     });
     reply.header('ETag', `"${data.version}"`);

@@ -197,8 +197,9 @@ final class DrivyAPIClient: SchoolAPI {
 
     func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile {
         let current = try await selfProfile()
-        return try await saveSelfProfile(SchoolSelfProfileEdit(displayName: displayName, firstName: current.firstName ?? "",
-            lastName: current.lastName ?? "", contactPhone: current.contactPhone ?? ""), version: version)
+        var edit = SchoolSelfProfileEdit(current)
+        edit.displayName = displayName
+        return try await saveSelfProfile(edit, version: version)
     }
 
     func selfProfile() async throws -> SchoolSelfProfile {

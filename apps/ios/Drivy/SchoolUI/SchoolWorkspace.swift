@@ -171,8 +171,9 @@ final class SchoolWorkspace {
     /// Rien n’est affiché comme enregistré avant la réponse de l’école.
     func renameSelf(_ name: String) async throws {
         guard let profile = try? await loadSelfProfile() else { throw SchoolSelfProfileFailure.unsupported }
-        try await saveSelfProfile(SchoolSelfProfileEdit(displayName: name, firstName: profile.firstName ?? "",
-            lastName: profile.lastName ?? "", contactPhone: profile.contactPhone ?? ""))
+        var edit = SchoolSelfProfileEdit(profile)
+        edit.displayName = name
+        try await saveSelfProfile(edit)
     }
 
     /// Profil personnel complet, relu auprès de l’école ; sa photo est relue si sa version a changé.
