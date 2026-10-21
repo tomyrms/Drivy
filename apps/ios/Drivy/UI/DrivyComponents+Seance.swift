@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Shared anatomy of the school GPS screens (trajet en cours, fin de trajet, replay):
 // - an opaque top bar (leave, elapsed time readable at a glance, real GPS state, stop);
@@ -344,12 +345,13 @@ struct DrivyMapDock<Content: View>: View {
     }
 }
 
-/// Live following separates centering from device orientation. A manual gesture returns to free.
+/// Live following separates centering from device orientation. The button never stops following: it centres, then
+/// alternates north up and direction of travel. Only a gesture on the map returns to free, like Plans.
 enum DrivyMapFollowMode: Equatable {
     case free, position, heading
 
     var next: Self {
-        switch self { case .free: .position; case .position: .heading; case .heading: .free }
+        switch self { case .free: .position; case .position: .heading; case .heading: .position }
     }
     var followsPosition: Bool { self != .free }
     var symbol: String {
@@ -366,7 +368,7 @@ enum DrivyMapFollowMode: Equatable {
         switch self {
         case .free: "Recentrer sur la position"
         case .position: "Suivre dans le sens du trajet"
-        case .heading: "Arrêter le suivi"
+        case .heading: "Revenir au nord en haut"
         }
     }
 
@@ -389,13 +391,15 @@ struct DrivyMapControls: View {
     @Binding private var followMode: DrivyMapFollowMode
     private let legacyFollowLabel: String?
     let canFollow: Bool
+    /// Faux tant qu’il n’y a pas de tracé à cadrer : la vue d’ensemble ne promet rien qu’elle ne montrerait pas.
+    var canShowWholeRoute = true
     let axis: Axis
     let showWholeRoute: () -> Void
 
-    init(followMode: Binding<DrivyMapFollowMode>, canFollow: Bool = true, axis: Axis = .vertical,
+    init(followMode: Binding<DrivyMapFollowMode>, canFollow: Bool = true, canShowWholeRoute: Bool = true, axis: Axis = .vertical,
          showWholeRoute: @escaping () -> Void) {
         _followMode = followMode; legacyFollowLabel = nil
-        self.canFollow = canFollow; self.axis = axis; self.showWholeRoute = showWholeRoute
+        self.canFollow = canFollow; self.canShowWholeRoute = canShowWholeRoute; self.axis = axis; self.showWholeRoute = showWholeRoute
     }
 
     /// Replay keeps its existing two-state route-direction control; no device-heading mode is added.
@@ -411,6 +415,12 @@ struct DrivyMapControls: View {
         if let legacyFollowLabel { return followMode.followsPosition ? "Arrêter le suivi de position" : legacyFollowLabel }
         return followMode.nextActionLabel
     }
+
+    /// Symbole du tracé, avec repli si la version du système ne l’a pas : jamais un bouton vide.
+    private static let wholeRouteSymbol: String = {
+        let route = "point.topleft.down.to.point.bottomright.curvepath"
+        return UIImage(systemName: route) != nil ? route : "arrow.up.left.and.arrow.down.right"
+    }()
 
     var body: some View {
         GlassEffectContainer(spacing: DrivySpacing.xs) {
@@ -433,12 +443,14 @@ struct DrivyMapControls: View {
                 .accessibilityIdentifier("map-follow-position")
                 .accessibilityAddTraits(followMode.followsPosition ? [.isSelected] : [])
                 Button(action: showWholeRoute) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    // Un tracé entre deux points, pas les flèches du plein écran : la commande cadre le trajet.
+                    Image(systemName: Self.wholeRouteSymbol)
                         .font(DrivyMapGlyph.primaryControl)
-                        .foregroundStyle(DrivyTheme.text)
+                        .foregroundStyle(canShowWholeRoute ? DrivyTheme.text : DrivyTheme.disabledText)
                         .frame(width: 48, height: 48)
                         .drivyLegibleMapControl(in: Circle())
                 }
+                .disabled(!canShowWholeRoute)
                 .accessibilityLabel("Voir tout le trajet")
                 .accessibilityIdentifier("map-show-whole-route")
             }

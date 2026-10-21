@@ -50,6 +50,9 @@ struct DrivyRouteMapView: UIViewRepresentable {
     let isFollowing: Bool
     /// A new value recentres: on the marker when following, on the whole route otherwise.
     let cameraRequest: UUID
+    /// A new value sends the camera back to the position even if the follow mode did not change (button tapped again,
+    /// heading ↔ north up): the camera answers every tap, not every other one.
+    var recenterRequest: UUID? = nil
     /// Before any recorded fix: the device position as Plans shows it, never recorded.
     var showsDevicePosition = false
     /// The camera joins the first drawn position once, unless the user already moved the map.
@@ -95,6 +98,7 @@ struct DrivyRouteMapView: UIViewRepresentable {
         private var positionShown = false
         private var isFollowing = false
         private var cameraRequest: UUID?
+        private var recenterRequest: UUID?
         private var showsDevicePosition = false
         private var centersOnFirstPose = false
         private var reduceMotion = false
@@ -187,8 +191,10 @@ struct DrivyRouteMapView: UIViewRepresentable {
             isFollowing = view.isFollowing
             let requested = cameraRequest != nil && cameraRequest != view.cameraRequest
             cameraRequest = view.cameraRequest
+            let recenters = recenterRequest != nil && recenterRequest != view.recenterRequest
+            recenterRequest = view.recenterRequest
             if hasInitialCamera {
-                if isFollowing, startsFollowing || requested { startBlend() }
+                if isFollowing, startsFollowing || requested || recenters { recenter(on: map) }
                 else if requested, !isFollowing { fitRoute(animated: !reduceMotion) }
             }
             placeInitialCamera()
@@ -291,6 +297,18 @@ struct DrivyRouteMapView: UIViewRepresentable {
             blend = SchoolMapCameraBlend(startedAt: CACurrentMediaTime(), duration: 0.6)
         }
 
+        /// Back to the car: blend from where the camera is. Before any recorded fix, the device position Plans shows
+        /// (never recorded) is the only place to go back to.
+        private func recenter(on map: DrivyMapCanvas) {
+            userMovedMap = false
+            if motion?.pose(at: CACurrentMediaTime()) == nil, showsDevicePosition {
+                blend = nil; blendOrigin = nil; applied = nil; activeGestures = 0
+                map.setUserTrackingMode(.follow, animated: !reduceMotion)
+                return
+            }
+            startBlend()
+        }
+
         // MARK: Camera placement
 
         /// Once, as soon as the map has a size: a camera set on an empty view is lost.
@@ -309,7 +327,8 @@ struct DrivyRouteMapView: UIViewRepresentable {
             hasInitialCamera = true
         }
 
-        /// Whole route on screen; a single point still gets a street-level frame.
+        /// Whole route on screen, north up, clear of the floating header and commands; a single point still gets a
+        /// street-level frame. Before any route, nothing is promised (the button is disabled).
         private func fitRoute(animated: Bool) {
             guard let map else { return }
             var rect = MKMapRect.null
@@ -320,11 +339,25 @@ struct DrivyRouteMapView: UIViewRepresentable {
             guard !rect.isNull else { return }
             let center = MKMapPoint(x: rect.midX, y: rect.midY)
             let minimumSpan = MKMapPointsPerMeterAtLatitude(center.coordinate.latitude) * 160
-            let width = max(rect.width, minimumSpan) * 1.2, height = max(rect.height, minimumSpan) * 1.2
+            let width = max(rect.width, minimumSpan), height = max(rect.height, minimumSpan)
             if map.userTrackingMode != .none { map.setUserTrackingMode(.none, animated: false) }
-            applied = nil
-            map.setVisibleMapRect(MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height),
-                                  animated: animated)
+            blend = nil; blendOrigin = nil; applied = nil
+            // The map runs under the floating header and command dock. Its safe area says how much they cover when
+            // SwiftUI passes it on; a share of the height keeps the route clear of them otherwise.
+            let inset = map.safeAreaInsets, bounds = map.bounds.size
+            let margin: CGFloat = 32
+            let top = min(max(inset.top, bounds.height * 0.2) + margin, bounds.height * 0.4)
+            let bottom = min(max(inset.bottom, bounds.height * 0.22) + margin, bounds.height * 0.4)
+            let side = min(max(inset.left, inset.right) + margin, bounds.width * 0.25)
+            let padding = UIEdgeInsets(top: top, left: side, bottom: bottom, right: side)
+            let fitted = MKMapRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
+            if map.camera.heading != 0 {
+                // North up first: a rotated camera would frame the route on a turned map.
+                let camera = map.camera.copy() as? MKMapCamera ?? map.camera
+                camera.heading = 0
+                map.setCamera(camera, animated: false)
+            }
+            map.setVisibleMapRect(fitted, edgePadding: padding, animated: animated)
         }
 
         // MARK: Overlays and pins

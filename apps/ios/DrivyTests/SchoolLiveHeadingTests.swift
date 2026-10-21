@@ -47,8 +47,10 @@ struct SchoolLiveHeadingTests {
         #expect(centered == .position && centered.cameraHeading(deviceHeading: 270) == 0)
         let oriented = centered.next
         #expect(oriented == .heading && oriented.cameraHeading(deviceHeading: 270) == 270)
-        #expect(oriented.next == .free && !oriented.next.followsPosition)
-        #expect(oriented.next.cameraHeading(deviceHeading: 270) == nil)
+        // Le bouton n’arrête jamais le suivi (#59) : il revient au nord en haut ; seul un geste sur la carte libère.
+        #expect(oriented.next == .position && oriented.next.followsPosition)
+        #expect(oriented.next.cameraHeading(deviceHeading: 270) == 0)
+        #expect(oriented.nextActionLabel == "Revenir au nord en haut")
     }
 
     @Test func unavailableCompassDoesNotInventAnOrientationForHeadingMode() {

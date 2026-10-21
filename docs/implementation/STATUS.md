@@ -1,5 +1,19 @@
 # État de la réalisation
 
+## 21 octobre 2026 : commandes de la carte GPS (#59), non qualifié
+
+Causes trouvées en lisant le code (le problème n'a pas été reproduit sur appareil) :
+- Le bouton de suivi parcourait trois modes : libre, puis nord en haut, puis sens du trajet, puis libre. Au troisième appui, il coupait donc le suivi, ce qui ressemble à « une fois sur deux ».
+- La caméra ne se recentrait que si le mode changeait. Après un déplacement manuel, ou avant le premier point enregistré, un appui pouvait ne rien faire de visible.
+- « Voir tout le trajet » cadrait sans tenir compte de l'en-tête ni des commandes posés sur la carte, et sans revenir au nord. Sur un trajet court, le résultat ressemblait à un recentrage.
+
+Corrections :
+- Le bouton ne coupe plus le suivi. Il recentre, puis alterne entre nord en haut et sens du trajet. Seul un geste sur la carte repasse en mode libre, comme dans Plans.
+- Chaque appui recentre la caméra (`recenterRequest`), y compris sur la position de l'appareil avant le premier point.
+- « Voir tout le trajet » remet le nord en haut et cadre le tracé avec des marges qui évitent l'en-tête et les commandes. Le bouton est désactivé tant qu'aucun tracé n'existe, et son icône montre maintenant un tracé au lieu des flèches de plein écran.
+- Le replay garde ses deux états.
+- Exécuté : compilation de l'IPA. Non exécuté : tests, recette sur iPhone en voiture, iPad, VoiceOver.
+
 ## 21 octobre 2026 : dossier depuis la fiche leçon (#62), confirmation des signalements (#58), toutes les compétences au bilan (#57), sortie de la clôture abandonnée (#47), non qualifiés
 
 - #62 : pour l’équipe (moniteur, administration), le nom de l’élève en tête d’une fiche leçon ou d’un récapitulatif porte un chevron et ouvre son dossier en feuille, à partir de l’identifiant de l’élève et de l’école de la leçon. La fiche reste en dessous, avec sa saisie et le trajet. Côté élève, le nom du moniteur reste du texte. Le dossier ouvert ainsi n’a ni « Démarrer » ni « Planifier ». Il devient aussi l’élève sélectionné dans l’onglet Élèves.

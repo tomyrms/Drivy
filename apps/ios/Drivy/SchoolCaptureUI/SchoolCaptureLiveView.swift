@@ -782,7 +782,10 @@ struct SchoolCaptureLiveView: View {
     }
 
     private func mapControls(axis: Axis) -> some View {
-        DrivyMapControls(followMode: $followMode, axis: axis) {
+        // Vue d’ensemble seulement quand un tracé existe : une position seule n’a pas d’ensemble à montrer.
+        DrivyMapControls(followMode: $followMode,
+            canShowWholeRoute: controller.segments.contains { $0.measurementCount > 1 } || !controller.priorSegments.isEmpty,
+            axis: axis) {
             followMode = .free
             resetCameraID = UUID()
         }

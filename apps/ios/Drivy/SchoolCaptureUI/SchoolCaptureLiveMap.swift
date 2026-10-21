@@ -123,6 +123,8 @@ struct SchoolCaptureLiveMap: View {
     @State private var motion = SchoolLiveMapMotion()
     @State private var compass = SchoolLiveHeadingSource()
     @State private var isVisible = false
+    /// Chaque appui sur la commande de suivi ramène la caméra à la voiture, même quand le mode suivi l’était déjà.
+    @State private var recenterRequest = UUID()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -132,7 +134,7 @@ struct SchoolCaptureLiveMap: View {
         // Idempotent: unchanged segments cost a comparison, a new fix only its own vertex.
         let _ = synchronize()
         DrivyRouteMapView(lines: trace.lines, pins: pins, motion: motion,
-            isFollowing: followMode.followsPosition, cameraRequest: resetCameraID,
+            isFollowing: followMode.followsPosition, cameraRequest: resetCameraID, recenterRequest: recenterRequest,
             showsDevicePosition: showsDevicePosition && trace.position == nil,
             centersOnFirstPose: true,
             onUserMovedMap: { followMode = .free })
@@ -145,6 +147,7 @@ struct SchoolCaptureLiveMap: View {
         }
         .onDisappear { isVisible = false; compass.stop() }
         .onChange(of: compassIsActive) { _, active in compass.setActive(active) }
+        .onChange(of: followMode) { _, mode in if mode.followsPosition { recenterRequest = UUID() } }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Carte du trajet enregistré")
         .accessibilityValue(followMode.label + (trace.hasGaps ? ", portions sans mesure indiquées en pointillé" : ""))
