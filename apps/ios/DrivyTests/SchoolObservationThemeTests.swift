@@ -205,7 +205,8 @@ struct SchoolObservationThemeBodyTests {
         let autonomous = try observation(#""bends""#)
         #expect(autonomous.hasValidObservation && autonomous.competencyId == nil && autonomous.themeKey == "bends")
         #expect(autonomous.glyph() == SchoolObservationPictogram.bends.glyph)
-        #expect(try !observation("null").hasValidObservation)
+        let unnamed = try observation("null")
+        #expect(!unnamed.hasValidObservation)
     }
 
     @Test func theSavedConfigurationNamesEveryKeyOnceWithItsDisplay() throws {
