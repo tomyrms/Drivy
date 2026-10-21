@@ -9,7 +9,7 @@ private struct SchoolWorkspaceSheet<Model: AnyObject>: Identifiable {
 }
 
 /// Ce que le compte ouvre une fois sa feuille fermée : une seule feuille à la fois.
-private enum AccountFollowUp { case join, invitations, profile, onboarding }
+private enum AccountFollowUp { case join, invitations, profile, personal, onboarding }
 
 struct SchoolRootView: View {
     let configuration: AppConfiguration?
@@ -18,6 +18,7 @@ struct SchoolRootView: View {
     /// Created once by the app; nil only without configuration.
     var clients: SchoolHomeClients? = nil
     @State private var showsAccount = false
+    @State private var showsPersonalEditor = false
     @State private var afterAccount: AccountFollowUp?
     @State private var presenter: UIViewController?
     // Les modèles restent disponibles jusqu’à onDismiss pour la réconciliation ;
@@ -56,7 +57,7 @@ struct SchoolRootView: View {
 
     private var presentsSheet: Bool {
         joinRoute != nil || codeJoinRoute != nil || invitationsRoute != nil || inviteRoute != nil || profileRoute != nil
-            || accessRoute != nil || openingRoute != nil
+            || accessRoute != nil || openingRoute != nil || showsPersonalEditor
     }
 
     var body: some View {
@@ -170,12 +171,24 @@ struct SchoolRootView: View {
                 openProfile: followUp(.profile, when: ownProfileLearner != nil),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
                 openJoinSchool: followUp(.join, when: canJoinSchool),
-                signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding))
+                signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding),
+                editAccount: followUp(.personal, when: workspace?.person != nil && identity.isAuthenticated))
         }
     }
 
     private var joinLayer: some View {
         accountLayer
+            .sheet(isPresented: $showsPersonalEditor) {
+                if identity.isAuthenticated, let workspace, let person = workspace.person, let configuration {
+                    SchoolPersonalProfileView(person: person) { displayName, version, operationID in
+                        let client = DrivyAPIClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
+                        let updated = try await client.changeMyDisplayName(displayName, expectedVersion: version, operationID: operationID)
+                        guard updated.personId == person.personId else { throw SchoolAPIError.invalidResponse }
+                        // La lecture du compte rafraîchit aussi les en-têtes des autres écrans et des écoles.
+                        _ = await workspace.refreshAccount(minimumInterval: 0)
+                    }
+                }
+            }
             .sheet(item: $joinRoute, onDismiss: joinDismissed) { route in
                 SchoolJoinView(model: route.model, openSchool: { membership in
                     joinMembershipToOpen = membership; joinRoute = nil
@@ -276,6 +289,7 @@ struct SchoolRootView: View {
             if pendingJoinLink != nil { openJoin() } else { openCodeJoin() }
         case .invitations: openInvitations(creation: false)
         case .profile: if let learner = ownProfileLearner { openProfile(learner) }
+        case .personal: if identity.isAuthenticated && workspace?.person != nil { showsPersonalEditor = true }
         case .onboarding: if canResumeOnboarding && !presentsSheet { openOnboarding() }
         }
     }
@@ -287,6 +301,7 @@ struct SchoolRootView: View {
             openInvitations: followUp(.invitations, when: canManageInvitations),
             openJoinSchool: followUp(.join, when: canJoinSchool),
             signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding),
+            editAccount: followUp(.personal, when: workspace?.person != nil && identity.isAuthenticated),
             tripInProgress: tripInProgress)
     }
 
@@ -685,6 +700,7 @@ struct SchoolRootView: View {
 
     private func closeAll() {
         onboardingToResume = nil
+        showsPersonalEditor = false
         closeJoin(); closeCodeJoin(); closeInvitations(); closeProfile(); closeOpening()
     }
 
@@ -772,12 +788,13 @@ struct SchoolAccountView: View {
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
     var resumeOnboarding: (() -> Void)? = nil
+    var editAccount: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
     private var actions: SchoolAccountActions {
         SchoolAccountActions(manageURL: manageURL, openProfile: openProfile, openInvitations: openInvitations,
-            openJoinSchool: openJoinSchool, signOut: signOut, resumeOnboarding: resumeOnboarding)
+            openJoinSchool: openJoinSchool, signOut: signOut, resumeOnboarding: resumeOnboarding, editAccount: editAccount)
     }
 
     var body: some View {
