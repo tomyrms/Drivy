@@ -199,6 +199,18 @@ describe('signalements autonomes (#56)',()=>{
   expect((await call('GET',`/trainings/${id.aliceTraining}/progress`)).json().data.items).toEqual(progressBefore.data.items);
   expect((await pool.query('SELECT count(*)::int AS n FROM drivy.competency_definition WHERE school_id=$1',[id.schoolA])).rows[0].n).toBeGreaterThan(0);
  });
+ it('le corps exact envoyé par l’app (compétence nulle, clé, sans brouillon) est accepté puis relu tel quel',async()=>{
+  // Octets produits par SchoolLiveObservationRecorder.save : tous les champs requis présents, `competencyId: null`.
+  const body={operationId:randomUUID(),draftId:null,captureId:null,segmentId:null,pointSequence:null,competencyId:null,text:'Éco-conduite',
+   origin:'LIVE',observedAt:new Date().toISOString(),eventKind:'QUALIFIED',eventStatus:'TO_REWORK',themeKey:'eco-driving'};
+  const sent=await call('POST',route,body);expect(sent.statusCode,sent.body).toBe(201);
+  // Rejeu par la file chiffrée : même opération, même corps, aucune seconde ligne.
+  const replay=await call('POST',route,body);expect(replay.statusCode,replay.body).toBe(201);expect(replay.json().data.id).toBe(sent.json().data.id);
+  const read=(await call('GET',route)).json().data.items.find((item:{id:string})=>item.id===sent.json().data.id);
+  // Champs que le validateur de lecture iOS (hasValidObservation) exige pour un LIVE QUALIFIED autonome.
+  expect(read).toMatchObject({competencyId:null,themeKey:'eco-driving',eventKind:'QUALIFIED',eventStatus:'TO_REWORK',origin:'LIVE',authorMembershipId:id.instructorMember});
+  expect(read.observedAt).toBeTruthy();
+ });
  it('les dix-huit thèmes sont enregistrables sans compétence, avec chacun leur clé',async()=>{
   for(const theme of observationThemes){
    const response=await call('POST',route,signal({themeKey:theme.key,text:theme.title,eventStatus:'POSITIVE'}));
