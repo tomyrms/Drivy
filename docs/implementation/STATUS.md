@@ -6,7 +6,7 @@ Branche `claude/signalements-autonomes-20261021`, commit `2e23999`, non fusionn�
 
 **Exécuté** : 557 tests API sur vraie PostgreSQL et Mailpit en local, 316 tests web ; CI vérifications `39517398912`, parcours navigateur `39517398907` et IPA d’essai `39517398901` verts (l’IPA prouve que l’app compile, pas que ses tests passent).
 
-**Pas exécuté** : les tests Swift modifiés et ajoutés. La campagne `39517398394` a été annulée à la demande du porteur avant résultat. Recette iPhone/iPad (18 tuiles, VoiceOver) non faite. Ordre de déploiement : service (036) avant l’app.
+**Pas exécuté** : les tests Swift modifiés et ajoutés. La campagne `39517398394` a été annulée à la demande du porteur après la compilation (`TEST BUILD SUCCEEDED`, cible `DrivyTests` comprise) et 6 premiers tests XCTest réussis, avant les suites de #56. Recette iPhone/iPad (18 tuiles, VoiceOver) non faite. Ordre de déploiement : service (036) avant l’app.
 
 ## 20 octobre 2026 : recalage suisse OSRM déployé, tests Apple réussis
 

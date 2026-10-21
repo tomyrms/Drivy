@@ -72,11 +72,12 @@ L’OpenAPI 3.11.0 du dossier de conception (`GeoObservation`, `GeoObservationCo
 | Création, relecture, modification sans compétence ; thème conservé quand `themeKey` est omis | API, vraie PostgreSQL | Réussi |
 | Thème inconnu, statut absent, ni thème ni compétence : refusés | API (400) et SQL direct (contraintes nommées) | Réussi |
 | Progression et compétences intactes après signalement | API : `GET /trainings/{id}/progress` identique avant/après | Réussi |
-| Palette identique quel que soit le référentiel | Swift : `tiles(for:)` n'accepte plus de compétences ; 18 tuiles si tout est affiché | Écrit, non exécuté (campagne annulée) |
-| Validateurs iOS aller/retour | Swift : corps et lecture autonomes valides, sans thème ni compétence refusés | Écrit, non exécuté (campagne annulée) |
-| Masquage, ordre, instantané, école ancienne | Tests Swift existants adaptés | Écrit, non exécuté (campagne annulée) |
+| Palette identique quel que soit le référentiel | Swift : `tiles(for:)` n'accepte plus de compétences ; 18 tuiles si tout est affiché | Compilé (`TEST BUILD SUCCEEDED`, run `39517398394`), non exécuté (campagne annulée) |
+| Validateurs iOS aller/retour | Swift : corps et lecture autonomes valides, sans thème ni compétence refusés | Compilé, non exécuté (campagne annulée) |
+| Masquage, ordre, instantané, école ancienne | Tests Swift existants adaptés | Compilé, non exécuté (campagne annulée) |
 | Suite serveur et web complète | `npm test` API (vraie PostgreSQL, Mailpit) et web | 557 API, 316 web |
 | Migration 036 sur une base déjà peuplée | Test de migration : copie synthétique peuplée en 030, puis 031 à 036 rejouées | Réussi (liste des migrations et données inchangées) |
-| Le code de l’app compile sans compétence dans la tuile | IPA d’essai `39517398901` (cible app, pas la cible de tests) | Réussi |
+| Le code de l’app et ses tests compilent | IPA d’essai `39517398901` (cible app) ; `build-for-testing` du run `39517398394` (cible `DrivyTests`, arm64 et x86_64) | Réussi. Depuis, seules deux lignes de test changées (`98ff187`) |
+| Corps exact envoyé par l’app, renvoi idempotent, relecture | API, vraie PostgreSQL | Réussi |
 | Ancien client : compétence sans `themeKey`, commande en file | API : `POST` avec compétence seule accepté, `themeKey: null` | Réussi |
 | Palette sur iPhone/iPad, VoiceOver | Recette sur appareil (#55) | Non exécutée |
