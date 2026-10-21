@@ -166,22 +166,47 @@ protocol SchoolAPI: AnyObject {
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]?
     /// Renomme le compte connecté (`PATCH /v1/me/profile`). `version` : celle de la personne lue par `me()`.
     func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile
+    /// Profil personnel complet (`GET /v1/me/profile`).
+    func selfProfile() async throws -> SchoolSelfProfile
+    /// Enregistre nom affiché, prénom, nom et téléphone (`PATCH /v1/me/profile`).
+    func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile
+    /// Remplace la photo (JPEG carré) ; `nil` la retire.
+    func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile
+    /// Photo d’une personne visible par le compte connecté ; `nil` si elle n’en a pas ou n’est pas visible.
+    func personPhoto(personID: UUID) async throws -> Data?
 }
 
-/// Ce que l’école renvoie après un renommage : le nom enregistré et la nouvelle version de la personne.
+struct SchoolProfilePhoto: Sendable, Equatable {
+    let version: Int
+    let data: Data
+}
+
+struct SchoolSelfProfileEdit: Encodable, Sendable, Equatable {
+    var displayName: String
+    var firstName: String
+    var lastName: String
+    var contactPhone: String
+}
+
+/// Ce que l’école renvoie du profil : la version de la personne et, pour la photo, sa version (`nil` : initiales).
 struct SchoolSelfProfile: Codable, Sendable, Equatable {
     let personId: UUID
     let displayName: String
+    var firstName: String? = nil
+    var lastName: String? = nil
+    var contactPhone: String? = nil
+    var photoVersion: Int? = nil
     let version: Int
 }
 
 enum SchoolSelfProfileFailure: Error, LocalizedError, Equatable {
-    case changed, invalidName, unsupported
+    case changed, invalidName, invalidPhoto, unsupported
     var errorDescription: String? {
         switch self {
-        case .changed: "Ton profil a changé sur un autre appareil. Il vient d’être relu : vérifie ton nom puis enregistre."
-        case .invalidName: "Ce nom ne peut pas être enregistré. Utilise entre 1 et 200 caractères."
-        case .unsupported: "Ton école ne permet pas encore de modifier ton nom depuis l’app."
+        case .changed: "Ton profil a changé sur un autre appareil. Il vient d’être relu : vérifie puis enregistre."
+        case .invalidName: "Une information ne peut pas être enregistrée. Vérifie le nom et le numéro de téléphone."
+        case .invalidPhoto: "Cette photo ne peut pas être utilisée. Choisis-en une autre."
+        case .unsupported: "Ton école ne permet pas encore de modifier ton profil depuis l’app."
         }
     }
 }
@@ -192,6 +217,10 @@ extension SchoolAPI {
     }
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? { nil }
     func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
+    func selfProfile() async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
+    func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
+    func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
+    func personPhoto(personID: UUID) async throws -> Data? { nil }
 }
 
 enum SchoolAPIError: Error, LocalizedError, Equatable {

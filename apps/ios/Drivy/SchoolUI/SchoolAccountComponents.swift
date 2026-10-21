@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// Ce que le compte permet de faire, partagé entre la feuille « Compte » (élève, compte sans école)
@@ -123,7 +124,7 @@ struct SchoolAccountHeading: View {
         // Même anatomie que l’en-tête du dossier d’un élève (DrivyLearnerIdentity, variante page).
         HStack(spacing: DrivySpacing.s) {
             if !typeSize.isAccessibilitySize {
-                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: DrivyAvatar.pageSize)
+                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: DrivyAvatar.pageSize, photo: workspace?.selfPhoto?.data)
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
@@ -145,83 +146,218 @@ struct SchoolAccountHeading: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("account-heading")
+        .task(id: workspace?.person?.personId) {
+            // La photo du compte se lit dès l’en-tête, sans attendre l’ouverture de « Mon profil ».
+            if let workspace, workspace.person != nil, workspace.selfProfile == nil { _ = try? await workspace.loadSelfProfile() }
+        }
     }
 }
 
-/// « Mon nom » : chaque compte (moniteur, administration, élève) renomme le sien, sans passer par le web (#64).
-/// Le nom du dossier d’élève reste dans « Mes informations » ; celui-ci est le nom du compte Drivy.
+/// « Mon profil » : chaque compte (moniteur, administration, élève) tient le sien, sans passer par le web (#64).
+/// Le dossier d’élève reste dans « Mes informations » ; ceci est le compte Drivy de la personne.
 private struct SchoolRenameSelfRow: View {
     let workspace: SchoolWorkspace
     @State private var editing = false
 
     var body: some View {
-        DrivyNavigationRow(title: "Mon nom", detail: workspace.person?.displayName, action: { editing = true })
+        DrivyNavigationRow(title: "Mon profil", detail: workspace.person?.displayName, action: { editing = true })
             .accessibilityIdentifier("rename-self")
-            .sheet(isPresented: $editing) { SchoolRenameSelfSheet(workspace: workspace) }
+            .sheet(isPresented: $editing) { SchoolSelfProfileSheet(workspace: workspace) }
     }
 }
 
-private struct SchoolRenameSelfSheet: View {
+private struct SchoolSelfProfileSheet: View {
     let workspace: SchoolWorkspace
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
+    @State private var edit = SchoolSelfProfileEdit(displayName: "", firstName: "", lastName: "", contactPhone: "")
+    @State private var loaded: SchoolSelfProfileEdit?
+    @State private var isLoading = true
     @State private var isSaving = false
+    @State private var isSavingPhoto = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var confirmsRemoval = false
     @State private var error: String?
-    @FocusState private var focused: Bool
 
-    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var valid: Bool { !trimmed.isEmpty && trimmed.count <= 200 }
-    private var unchanged: Bool { trimmed == workspace.person?.displayName }
+    private func clean(_ value: String) -> String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmed: SchoolSelfProfileEdit {
+        SchoolSelfProfileEdit(displayName: clean(edit.displayName), firstName: clean(edit.firstName),
+            lastName: clean(edit.lastName), contactPhone: clean(edit.contactPhone))
+    }
+    private var phoneValid: Bool {
+        let phone = trimmed.contactPhone
+        return phone.isEmpty || (phone.count >= 3 && phone.count <= 32 && phone.allSatisfy { "+0123456789 ().-/".contains($0) })
+    }
+    private var valid: Bool {
+        !trimmed.displayName.isEmpty && trimmed.displayName.count <= 200 && trimmed.firstName.count <= 150
+            && trimmed.lastName.count <= 150 && phoneValid
+    }
+    private var unchanged: Bool { trimmed == loaded }
+    private var busy: Bool { isSaving || isSavingPhoto || isLoading }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section { photoRow }
                 Section {
-                    TextField("Nom affiché", text: $name)
-                        .textContentType(.name)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        .submitLabel(.done)
-                        .focused($focused)
-                        .onSubmit { save() }
-                        .disabled(isSaving)
+                    TextField("Prénom", text: $edit.firstName)
+                        .textContentType(.givenName).textInputAutocapitalization(.words).autocorrectionDisabled()
+                        .accessibilityIdentifier("self-first-name")
+                    TextField("Nom", text: $edit.lastName)
+                        .textContentType(.familyName).textInputAutocapitalization(.words).autocorrectionDisabled()
+                        .accessibilityIdentifier("self-last-name")
+                }
+                Section("Nom affiché") {
+                    TextField("Nom affiché", text: $edit.displayName)
+                        .textContentType(.name).textInputAutocapitalization(.words).autocorrectionDisabled()
                         .accessibilityIdentifier("rename-self-field")
+                }
+                Section {
+                    TextField("Téléphone", text: $edit.contactPhone)
+                        .textContentType(.telephoneNumber).keyboardType(.phonePad)
+                        .accessibilityIdentifier("self-phone")
                 } footer: {
                     if let error { DrivyFormMessage(text: error, tone: .danger) }
-                    else if trimmed.count > 200 { DrivyFormMessage(text: "Raccourcis ton nom à 200 caractères.", tone: .danger) }
+                    else if !phoneValid { DrivyFormMessage(text: "Ce numéro contient un caractère inattendu.", tone: .danger) }
+                    else if trimmed.displayName.count > 200 { DrivyFormMessage(text: "Raccourcis le nom affiché à 200 caractères.", tone: .danger) }
                 }
             }
-            .navigationTitle("Mon nom").navigationBarTitleDisplayMode(.inline)
+            .disabled(busy)
+            .overlay { if isLoading { ProgressView().accessibilityLabel("Chargement du profil") } }
+            .navigationTitle("Mon profil").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(isSaving) }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving { ProgressView().accessibilityLabel("Enregistrement…") }
-                    else { Button("Enregistrer") { save() }.disabled(!valid || unchanged) }
+                    else { Button("Enregistrer") { save() }.disabled(!valid || unchanged || busy) }
                 }
             }
-            .interactiveDismissDisabled(isSaving)
+            .interactiveDismissDisabled(isSaving || isSavingPhoto)
+            .confirmationDialog("Retirer la photo ?", isPresented: $confirmsRemoval, titleVisibility: .visible) {
+                Button("Retirer la photo", role: .destructive) { upload(nil) }
+            }
         }
-        .presentationDetents([.medium])
         .tint(DrivyTheme.accent)
-        .onAppear { name = workspace.person?.displayName ?? ""; focused = true }
+        .task { await load() }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            pickedPhoto = nil
+            Task { await prepare(item) }
+        }
+    }
+
+    private var photoRow: some View {
+        HStack(spacing: DrivySpacing.m) {
+            ZStack {
+                DrivyAvatar(name: trimmed.displayName.isEmpty ? (workspace.person?.displayName ?? "") : trimmed.displayName,
+                    size: 72, photo: workspace.selfPhoto?.data)
+                if isSavingPhoto { ProgressView().accessibilityLabel("Envoi de la photo…") }
+            }
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+                    Text(workspace.selfPhoto == nil ? "Ajouter une photo" : "Changer la photo")
+                }
+                .accessibilityIdentifier("self-photo-pick")
+                if workspace.selfProfile?.photoVersion != nil {
+                    Button("Retirer la photo", role: .destructive) { confirmsRemoval = true }
+                        .accessibilityIdentifier("self-photo-remove")
+                }
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.vertical, DrivySpacing.xxs)
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let profile = try await workspace.loadSelfProfile()
+            fill(from: profile)
+        } catch {
+            // Le nom du compte reste modifiable même si le profil complet ne se lit pas.
+            if let person = workspace.person {
+                fill(from: SchoolSelfProfile(personId: person.personId, displayName: person.displayName, version: person.version))
+            }
+            self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
+        }
+    }
+
+    private func fill(from profile: SchoolSelfProfile) {
+        let value = SchoolSelfProfileEdit(displayName: profile.displayName, firstName: profile.firstName ?? "",
+            lastName: profile.lastName ?? "", contactPhone: profile.contactPhone ?? "")
+        edit = value; loaded = value
     }
 
     private func save() {
-        guard valid, !unchanged, !isSaving else { return }
+        guard valid, !unchanged, !busy else { return }
         isSaving = true; error = nil
         let value = trimmed
         Task {
             do {
-                try await workspace.renameSelf(value)
+                try await workspace.saveSelfProfile(value)
                 isSaving = false
-                UIAccessibility.post(notification: .announcement, argument: "Nom enregistré")
+                UIAccessibility.post(notification: .announcement, argument: "Profil enregistré")
                 dismiss()
             } catch {
                 isSaving = false
+                if case SchoolSelfProfileFailure.changed = error, let profile = workspace.selfProfile { loaded = SchoolSelfProfileEdit(
+                    displayName: profile.displayName, firstName: profile.firstName ?? "", lastName: profile.lastName ?? "",
+                    contactPhone: profile.contactPhone ?? "") }
                 // La saisie reste en place : elle se corrige ou se renvoie telle quelle.
                 self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
             }
         }
+    }
+
+    private func prepare(_ item: PhotosPickerItem) async {
+        error = nil
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let jpeg = await Task.detached(priority: .userInitiated, operation: { SchoolProfilePhotoEncoder.squareJPEG(from: data) }).value
+        else { error = SchoolSelfProfileFailure.invalidPhoto.localizedDescription; return }
+        upload(jpeg)
+    }
+
+    private func upload(_ jpeg: Data?) {
+        guard !isSavingPhoto else { return }
+        isSavingPhoto = true; error = nil
+        Task {
+            do {
+                try await workspace.setSelfPhoto(jpeg)
+                UIAccessibility.post(notification: .announcement, argument: jpeg == nil ? "Photo retirée" : "Photo enregistrée")
+            } catch {
+                self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
+            }
+            isSavingPhoto = false
+        }
+    }
+}
+
+/// Recadre au centre en carré, réduit à 512 px au plus et réencode en JPEG : aucune métadonnée de la photo
+/// d’origine (position, appareil) ne part, et l’envoi reste sous la limite de l’école.
+enum SchoolProfilePhotoEncoder {
+    static let side: CGFloat = 512
+    static let maxBytes = 250_000
+
+    static func squareJPEG(from data: Data) -> Data? {
+        guard let image = UIImage(data: data), let cg = image.cgImage else { return nil }
+        let width = CGFloat(cg.width), height = CGFloat(cg.height)
+        let crop = min(width, height)
+        guard crop >= 64 else { return nil }
+        // L’orientation EXIF est appliquée par le dessin ; le carré se prend dans l’image redressée.
+        let upright = image.size
+        let edge = min(upright.width, upright.height)
+        let target = min(side, edge * image.scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1; format.opaque = true
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: target, height: target), format: format).image { _ in
+            let factor = target / edge
+            let drawn = CGSize(width: upright.width * factor, height: upright.height * factor)
+            image.draw(in: CGRect(x: (target - drawn.width) / 2, y: (target - drawn.height) / 2, width: drawn.width, height: drawn.height))
+        }
+        for quality in [0.82, 0.7, 0.55, 0.4] as [CGFloat] {
+            if let jpeg = rendered.jpegData(compressionQuality: quality), jpeg.count <= maxBytes { return jpeg }
+        }
+        return nil
     }
 }
 

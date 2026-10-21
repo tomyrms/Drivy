@@ -157,7 +157,10 @@ struct SchoolLearnerDossierView: View {
         let stacked = typeSize.isAccessibilitySize
         return HStack(alignment: .center, spacing: DrivySpacing.s) {
             // At the largest text sizes the name takes the whole width.
-            if !stacked { DrivyAvatar(name: learner.displayName, size: DrivyAvatar.pageSize) }
+            if !stacked {
+                DrivyAvatar(name: learner.displayName, size: DrivyAvatar.pageSize, photo: workspace.photo(for: learner.personId))
+                    .task(id: learner.personId) { await workspace.loadPhoto(for: learner.personId) }
+            }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(learner.displayName)
                     .font(.drivyTitle)

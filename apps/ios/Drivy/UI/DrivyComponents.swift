@@ -124,7 +124,8 @@ struct DrivySectionHeader: View {
     }
 }
 
-/// Initials in a neutral circle. Never a photo placeholder or a fake logo.
+/// Initials in a neutral circle, or the person's own photo when the school has one for them.
+/// Never a placeholder picture or a fake logo.
 /// The circle keeps its size; very large text sizes shrink the initials to fit.
 /// Selected, the circle takes the surface so it stays visible on the soft-accent
 /// row that carries the selection.
@@ -135,17 +136,29 @@ struct DrivyAvatar: View {
     let name: String
     var size: CGFloat = 44
     var isSelected = false
+    /// JPEG bytes read from the school (`GET /v1/people/{id}/photo`). Undecodable bytes fall back to initials.
+    var photo: Data? = nil
 
     var body: some View {
-        Text(DrivyAvatar.initials(name))
-            .font(size > 52 ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .padding(DrivySpacing.xxs)
-            .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
-            .frame(width: size, height: size)
-            .background(isSelected ? DrivyTheme.surfaceRaised : DrivyTheme.surfaceMuted, in: Circle())
-            .accessibilityHidden(true)
+        if let photo, let image = UIImage(data: photo) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .overlay { if isSelected { Circle().strokeBorder(DrivyTheme.accent, lineWidth: 2) } }
+                .accessibilityHidden(true)
+        } else {
+            Text(DrivyAvatar.initials(name))
+                .font(size > 52 ? .title3.weight(.semibold) : .subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(DrivySpacing.xxs)
+                .foregroundStyle(isSelected ? DrivyTheme.accent : DrivyTheme.text)
+                .frame(width: size, height: size)
+                .background(isSelected ? DrivyTheme.surfaceRaised : DrivyTheme.surfaceMuted, in: Circle())
+                .accessibilityHidden(true)
+        }
     }
 
     static func initials(_ name: String) -> String {

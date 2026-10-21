@@ -75,6 +75,9 @@ final class SchoolWorkspace {
         accountRequest = UUID()
         accountRefresh = UUID()
         person = nil
+        selfProfile = nil
+        selfPhoto = nil
+        peoplePhotos = [:]
         accountError = nil
         requiresAuthentication = false
         identityNotLinked = false
@@ -167,18 +170,94 @@ final class SchoolWorkspace {
     /// Renomme le compte connecté. Le nom enregistré remplace aussitôt celui de l’écran ; un conflit relit le compte.
     /// Rien n’est affiché comme enregistré avant la réponse de l’école.
     func renameSelf(_ name: String) async throws {
+        guard let profile = try? await loadSelfProfile() else { throw SchoolSelfProfileFailure.unsupported }
+        try await saveSelfProfile(SchoolSelfProfileEdit(displayName: name, firstName: profile.firstName ?? "",
+            lastName: profile.lastName ?? "", contactPhone: profile.contactPhone ?? ""))
+    }
+
+    /// Profil personnel complet, relu auprès de l’école ; sa photo est relue si sa version a changé.
+    private(set) var selfProfile: SchoolSelfProfile?
+    /// Photo du compte connecté, en mémoire seulement (jamais écrite sur l’appareil), avec la version lue.
+    private(set) var selfPhoto: SchoolProfilePhoto?
+
+    @discardableResult
+    func loadSelfProfile() async throws -> SchoolSelfProfile {
         guard let current = person else { throw SchoolAPIError.unauthorized }
         do {
-            let saved = try await api.renameSelf(displayName: name, version: current.version)
-            guard saved.personId == current.personId, person?.personId == current.personId else { return }
-            person = SchoolPerson(personId: current.personId, version: saved.version, displayName: saved.displayName,
-                locale: current.locale, memberships: person?.memberships ?? current.memberships)
+            let profile = try await api.selfProfile()
+            guard profile.personId == current.personId, person?.personId == current.personId else { throw SchoolAPIError.invalidResponse }
+            apply(profile)
+            await refreshSelfPhoto()
+            return profile
+        } catch {
+            _ = invalidateAccess(for: error)
+            throw error
+        }
+    }
+
+    func saveSelfProfile(_ edit: SchoolSelfProfileEdit) async throws {
+        guard let current = person, let version = selfProfile?.version ?? Optional(current.version) else { throw SchoolAPIError.unauthorized }
+        do {
+            apply(try await api.saveSelfProfile(edit, version: version))
         } catch SchoolSelfProfileFailure.changed {
-            await refreshAccount(minimumInterval: 0)
+            _ = try? await loadSelfProfile()
             throw SchoolSelfProfileFailure.changed
         } catch {
             _ = invalidateAccess(for: error)
             throw error
+        }
+    }
+
+    /// Remplace (`jpeg`) ou retire (`nil`) la photo. L’écran ne montre la nouvelle photo qu’après l’accord de l’école.
+    func setSelfPhoto(_ jpeg: Data?) async throws {
+        guard let version = selfProfile?.version ?? person?.version else { throw SchoolAPIError.unauthorized }
+        do {
+            let profile = try await api.setSelfPhoto(jpeg, version: version)
+            apply(profile)
+            if let jpeg, let photo = profile.photoVersion { selfPhoto = SchoolProfilePhoto(version: photo, data: jpeg) } else { selfPhoto = nil }
+        } catch SchoolSelfProfileFailure.changed {
+            _ = try? await loadSelfProfile()
+            throw SchoolSelfProfileFailure.changed
+        } catch {
+            _ = invalidateAccess(for: error)
+            throw error
+        }
+    }
+
+    /// Photos des autres personnes lues pendant la session (mémoire seulement). `nil` stocké : la personne n’en a pas.
+    private(set) var peoplePhotos: [UUID: Data?] = [:]
+
+    /// Photo d’une personne de l’école, lue une fois par session. Le compte connecté reprend la sienne.
+    func photo(for personID: UUID) -> Data? {
+        if personID == person?.personId { return selfPhoto?.data }
+        return peoplePhotos[personID] ?? nil
+    }
+
+    func loadPhoto(for personID: UUID) async {
+        guard personID != person?.personId, peoplePhotos[personID] == nil else { return }
+        do {
+            let data = try await api.personPhoto(personID: personID)
+            peoplePhotos[personID] = .some(data)
+        } catch {
+            // Une photo manquante n’est pas une erreur à montrer : les initiales restent.
+        }
+    }
+
+    private func refreshSelfPhoto() async {
+        guard let profile = selfProfile else { return }
+        guard let version = profile.photoVersion else { selfPhoto = nil; return }
+        if selfPhoto?.version == version { return }
+        if let data = try? await api.personPhoto(personID: profile.personId), selfProfile?.photoVersion == version {
+            selfPhoto = SchoolProfilePhoto(version: version, data: data)
+        }
+    }
+
+    private func apply(_ profile: SchoolSelfProfile) {
+        guard let current = person, profile.personId == current.personId else { return }
+        selfProfile = profile
+        if current.displayName != profile.displayName || current.version != profile.version {
+            person = SchoolPerson(personId: current.personId, version: profile.version, displayName: profile.displayName,
+                locale: current.locale, memberships: current.memberships)
         }
     }
 

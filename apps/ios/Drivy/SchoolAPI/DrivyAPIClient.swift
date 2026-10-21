@@ -196,14 +196,58 @@ final class DrivyAPIClient: SchoolAPI {
     }
 
     func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile {
-        let body = try JSONEncoder().encode(["displayName": displayName])
+        let current = try await selfProfile()
+        return try await saveSelfProfile(SchoolSelfProfileEdit(displayName: displayName, firstName: current.firstName ?? "",
+            lastName: current.lastName ?? "", contactPhone: current.contactPhone ?? ""), version: version)
+    }
+
+    func selfProfile() async throws -> SchoolSelfProfile {
+        do { return try await read(["v1", "me", "profile"]) }
+        catch SchoolAPIError.notFound { throw SchoolSelfProfileFailure.unsupported }
+    }
+
+    func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile {
+        let body = try JSONEncoder().encode(edit)
         let value: SchoolSelfProfile = try await send(["v1", "me", "profile"], query: [], method: "PATCH", body: body, ifMatch: version)
         guard value.version >= version, !value.displayName.isEmpty else { throw SchoolAPIError.invalidResponse }
         return value
     }
 
+    func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile {
+        let value: SchoolSelfProfile = try await send(["v1", "me", "profile", "photo"], query: [], method: jpeg == nil ? "DELETE" : "PUT",
+            body: jpeg, ifMatch: version, contentType: "image/jpeg")
+        guard value.version >= version else { throw SchoolAPIError.invalidResponse }
+        return value
+    }
+
+    /// Octets JPEG bruts : la réponse n’est pas une enveloppe JSON. 404 : pas de photo (ou pas visible), les initiales s’affichent.
+    func personPhoto(personID: UUID) async throws -> Data? {
+        guard Self.permits(baseURL) else { throw SchoolAPIError.invalidConfiguration }
+        var target = baseURL
+        for part in ["v1", "people", personID.uuidString.lowercased(), "photo"] { target.appendPathComponent(part) }
+        let token = try await accessToken()
+        var request = URLRequest(url: target)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("image/jpeg, application/problem+json", forHTTPHeaderField: "Accept")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        let response: SchoolHTTPResponse
+        do { response = try await transport.send(request) }
+        catch let error where error.isRequestCancellation { throw CancellationError() }
+        catch { throw SchoolAPIError.unavailable }
+        switch response.status {
+        case 200:
+            guard response.contentType?.lowercased().hasPrefix("image/jpeg") == true, response.data.count <= 300_000,
+                  response.data.starts(with: [0xFF, 0xD8]) else { throw SchoolAPIError.invalidResponse }
+            return response.data
+        case 404: return nil
+        case 401: throw SchoolAPIError.unauthorized
+        case 403: throw SchoolAPIError.forbidden
+        default: throw SchoolAPIError.unavailable
+        }
+    }
+
     private func send<Value: Decodable & Sendable>(_ path: [String], query: [URLQueryItem], method: String,
-                                                    body: Data?, ifMatch: Int?) async throws -> Value {
+                                                    body: Data?, ifMatch: Int?, contentType: String = "application/json") async throws -> Value {
         guard Self.permits(baseURL) else { throw SchoolAPIError.invalidConfiguration }
         var url = baseURL
         for component in path { url.appendPathComponent(component) }
@@ -216,7 +260,7 @@ final class DrivyAPIClient: SchoolAPI {
         }
         guard let target = components.url else { throw SchoolAPIError.invalidConfiguration }
         let token = try await accessToken()
-        do { return try await perform(target, token: token, method: method, body: body, ifMatch: ifMatch) }
+        do { return try await perform(target, token: token, method: method, body: body, ifMatch: ifMatch, contentType: contentType) }
         catch SchoolAPIError.unauthorized {
             // Un premier 401 peut viser un jeton que l’appareil croit encore valable (horloge en retard, session
             // révoquée chez le fournisseur) : un seul renouvellement forcé et un seul nouvel essai avant de
@@ -224,7 +268,7 @@ final class DrivyAPIClient: SchoolAPI {
             guard await tokenSource.invalidateAccessToken(token) else { throw SchoolAPIError.unauthorized }
             let renewed = try await accessToken()
             guard renewed != token else { throw SchoolAPIError.unauthorized }
-            return try await perform(target, token: renewed, method: method, body: body, ifMatch: ifMatch)
+            return try await perform(target, token: renewed, method: method, body: body, ifMatch: ifMatch, contentType: contentType)
         }
     }
 
@@ -241,12 +285,12 @@ final class DrivyAPIClient: SchoolAPI {
     }
 
     private func perform<Value: Decodable & Sendable>(_ target: URL, token: String, method: String = "GET",
-                                                       body: Data? = nil, ifMatch: Int? = nil) async throws -> Value {
+                                                       body: Data? = nil, ifMatch: Int? = nil, contentType: String = "application/json") async throws -> Value {
         var request = URLRequest(url: target)
         request.httpMethod = method
         if let body {
             request.httpBody = body
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
         if let ifMatch { request.setValue("\"\(ifMatch)\"", forHTTPHeaderField: "If-Match") }
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -272,6 +316,7 @@ final class DrivyAPIClient: SchoolAPI {
         case 404: throw SchoolAPIError.notFound
         case 412 where method != "GET": throw SchoolSelfProfileFailure.changed
         case 400 where method != "GET": throw SchoolSelfProfileFailure.invalidName
+        case 415 where method != "GET", 422 where method != "GET": throw SchoolSelfProfileFailure.invalidPhoto
         case 400:
             let problem = try? JSONDecoder().decode(ProblemCode.self, from: response.data)
             throw problem?.code == "INVALID_CURSOR" ? SchoolAPIError.invalidCursor : .invalidResponse
