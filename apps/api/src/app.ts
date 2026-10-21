@@ -17,6 +17,7 @@ import { registerAccounts } from './accounts.js';
 import type { AccountProvisioner } from './account-provisioning.js';
 import type { AttemptLimiter } from './attempt-limiter.js';
 import { registerProfiles } from './profiles.js';
+import { registerPersonalProfile } from './personal-profile.js';
 import { registerCatalogue } from './catalogue.js';
 import { registerFormations } from './formation-catalogue.js';
 import { registerLessons } from './lessons.js';
@@ -200,6 +201,7 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerInvitations(app,options);
   registerAccounts(app,options);
   registerProfiles(app,options);
+  registerPersonalProfile(app,options);
   registerCatalogue(app,options);
   registerFormations(app,options);
   registerLessonSetup(app,options);
