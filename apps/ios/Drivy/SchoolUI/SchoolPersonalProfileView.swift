@@ -21,7 +21,7 @@ struct SchoolPersonalProfileView: View {
 
     private var normalizedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCanonicalMapping }
     private var nameIsValid: Bool {
-        !normalizedName.isEmpty && normalizedName.count <= 200
+        !normalizedName.isEmpty && normalizedName.unicodeScalars.count <= 200
             && normalizedName.unicodeScalars.allSatisfy { !CharacterSet.controlCharacters.contains($0) }
     }
     private var hasEdits: Bool { normalizedName != person.displayName }
