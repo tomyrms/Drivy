@@ -6,8 +6,9 @@
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
 - Décision du porteur (21 octobre 2026) : pas de bascule, le proxy Cloudflare est conservé. La lenteur mesurée par Cloudflare reste ouverte.
 
-## 21 octobre 2026 : profil personnel complet et photo (#64)
+## 21 octobre 2026 : profil personnel complet et photo (#64), déployé
 
+- Déployé e2d3711 sur CT114 (22:08 Zurich) après sauvegarde vérifiée `/root/drivy_refonte-before-e2d3711-20261021T200800Z.dump` (CT113). Migration 038 appliquée ; depuis CT109, `/v1/me/profile` et `/v1/people/{id}/photo` répondent 401 sans jeton. Clé de capture présente dans l'environnement (noms seuls contrôlés).
 - API : migration `038_self_profile_details.sql` (prénom, nom, téléphone, version de photo sur `person` ; table `person_photo` chiffrée AES-256-GCM avec la clé de capture, RLS : soi-même ou membre actif d'une même école). Routes `GET`/`PATCH /v1/me/profile`, `PUT`/`DELETE /v1/me/profile/photo`, `GET /v1/people/{id}/photo` ; contrat `self-profile.json` v2. Le serveur retire EXIF/XMP/ICC/commentaires, borne 64 à 1024 px et 256 Kio.
 - iOS : « Mon nom » devient « Mon profil » (photo, prénom, nom, nom affiché, téléphone) pour tous les rôles. PhotosPicker sans autorisation photothèque ; recadrage carré 512 px réencodé sur l'appareil. Photo en mémoire seulement, affichée dans l'en-tête du compte et du dossier élève.
 - Exécuté : suite API complète avec PostgreSQL réelle (566 tests ; 3 invariants mis à jour : 50 tables RLS, instantané de migration), typecheck, compilation IPA.
