@@ -184,8 +184,8 @@ struct SchoolRootView: View {
                         let client = DrivyAPIClient(baseURL: configuration.apiBaseURL, tokenSource: identity)
                         let updated = try await client.changeMyDisplayName(displayName, expectedVersion: version, operationID: operationID)
                         guard updated.personId == person.personId else { throw SchoolAPIError.invalidResponse }
-                        // La lecture du compte rafraîchit aussi les en-têtes des autres écrans et des écoles.
-                        _ = await workspace.refreshAccount(minimumInterval: 0)
+                        // Le reçu serveur rafraîchit l'app immédiatement, même si une relecture échoue.
+                        workspace.acceptPersonalAccountUpdate(updated)
                     }
                 }
             }
