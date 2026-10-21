@@ -17,6 +17,8 @@ import Observation
     private(set) var errorMessage: String?
     private(set) var feedback: String?
     private(set) var accessRevoked = false
+    /// Trajets de ce compte conservés sur l’appareil mais devenus illisibles : ni envoyés ni effacés.
+    private(set) var quarantined: [UUID] = []
     @ObservationIgnored private let owner: SchoolCaptureSessionController
     @ObservationIgnored private var store: SQLCipherSchoolCaptureStore?
     @ObservationIgnored private var generation = UUID()
@@ -120,7 +122,9 @@ import Observation
         let finished = try await store.acknowledgedFinalizations(scope: scope)
         let deviceID = await store.installationID()
         let queued = try await store.pending(scope: scope, deviceID: deviceID)
+        let isolated = try await store.quarantinedCaptures(scope: scope)
         guard current(request) else { return }
+        quarantined = isolated
         let requeued = Set(queued.filter { $0.mutation.kind == .finalizeCapture }.map(\.mutation.targetID))
         let unfinished = stored.filter { ($0.state == .stopped || $0.state == .interrupted)
             && (finished[$0.id] == nil || requeued.contains($0.id)) }
@@ -175,7 +179,7 @@ import Observation
     func invalidate() {
         invalidated = true; generation = UUID()
         captures = []; pendingCount = [:]; pendingFinalization = [:]; confirmedFinalization = [:]; errorMessage = nil; feedback = nil
-        incomplete = []
+        incomplete = []; quarantined = []
         // Admitted commands keep their original identity and persist their receipt.
         // Closing this list must not invalidate the ongoing session's lease.
     }

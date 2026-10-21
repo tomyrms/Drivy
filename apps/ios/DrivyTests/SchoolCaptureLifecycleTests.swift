@@ -501,6 +501,54 @@ import Testing
         controller.closeSaved()
         #expect(controller.lessonStartedAt == nil && controller.priorSegments.isEmpty)
     }
+
+    // #48 : défauts injectés dans un coffre de test seulement.
+    private static let vaultKey = Data(repeating: 0x3D, count: 32)
+    private func inject(_ url: URL, _ sql: String, _ values: [SQLValue] = []) throws {
+        try CipherConnection(url: url, key: Self.vaultKey).execute(sql, values)
+    }
+
+    @Test func aMalformedTripIsIsolatedWithoutHidingTheHealthyOne() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let broken = UUID().uuidString
+        try inject(fixture.storeURL, "INSERT INTO capture(id,workspace,device_id,state,data) SELECT ?,workspace,device_id,'stopped',X'7B2269' FROM capture LIMIT 1",
+            [.text(broken)])
+        #expect(try await fixture.store.sessions(scope: fixture.scope).map(\.id) == [fixture.capture.id])
+        #expect(try await fixture.store.quarantinedCaptures(scope: fixture.scope).map(\.uuidString) == [broken])
+        _ = try await fixture.store.sessions(scope: fixture.scope)
+        let check = try CipherConnection(url: fixture.storeURL, key: Self.vaultKey)
+        // Octets d’origine gardés, isolement non dupliqué.
+        #expect(try check.integer("SELECT COUNT(*) FROM capture WHERE id='\(broken)' AND data=X'7B2269'") == 1)
+        #expect(try check.integer("SELECT COUNT(*) FROM quarantine") == 1)
+        let saved = await fixture.controller.stopAndSynchronize()
+        #expect(saved)
+        await fixture.waitUntilSettled()
+    }
+
+    @Test func aRelaunchReleasesAMalformedActiveTripWithoutErasingIt() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let id = fixture.capture.id.uuidString
+        try inject(fixture.storeURL, "UPDATE capture SET data=X'00' WHERE id=?", [.text(id)])
+        let reopened = try SQLCipherSchoolCaptureStore(url: fixture.storeURL, key: Self.vaultKey, protectFiles: false, installationID: UUID())
+        let device = await reopened.installationID()
+        try await reopened.recoverInterrupted(deviceID: device)
+        try await reopened.recoverInterrupted(deviceID: device)
+        #expect(try await reopened.quarantinedCaptures(scope: fixture.scope) == [fixture.capture.id])
+        let check = try CipherConnection(url: fixture.storeURL, key: Self.vaultKey)
+        #expect(try check.integer("SELECT COUNT(*) FROM capture WHERE state IN('ready','recording','paused')") == 0)
+        #expect(try check.integer("SELECT COUNT(*) FROM capture WHERE id='\(id)' AND data=X'00'") == 1)
+        #expect(try check.integer("SELECT COUNT(*) FROM quarantine WHERE row_id='\(id)' AND original_state IN('ready','recording','paused')") == 1)
+    }
+
+    @Test func aWrongKeyFailsExplicitlyAndTheRightKeyStillReadsTheVault() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        #expect(throws: (any Error).self) {
+            _ = try SQLCipherSchoolCaptureStore(url: fixture.storeURL, key: Data(repeating: 0x11, count: 32),
+                protectFiles: false, installationID: UUID())
+        }
+        let reopened = try SQLCipherSchoolCaptureStore(url: fixture.storeURL, key: Self.vaultKey, protectFiles: false, installationID: UUID())
+        #expect(try await reopened.sessions(scope: fixture.scope).map(\.id) == [fixture.capture.id])
+    }
 }
 
 @MainActor private struct CaptureLifecycleFixture {

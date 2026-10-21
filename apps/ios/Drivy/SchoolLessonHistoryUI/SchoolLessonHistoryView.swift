@@ -210,7 +210,7 @@ private struct SchoolLessonHistoryList: View {
     /// Rows left under the one that asks for the next page.
     private static let prefetchDistance = 20
 
-    private var hasUploads: Bool { !(uploads?.pendingUploads.isEmpty ?? true) }
+    private var hasUploads: Bool { !(uploads?.pendingUploads.isEmpty ?? true) || !(uploads?.quarantined.isEmpty ?? true) }
     private var hasUploadError: Bool { uploads?.errorMessage != nil }
     private var isSearching: Bool { !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var needsFullHistory: Bool { SchoolLessonHistoryWorkspace.needsFullHistory(filter: filter, search: search) }

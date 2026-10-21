@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 21 octobre 2026 : captures locales illisibles isolées sans perdre les autres (#48), non qualifié
+
+- Avant : dans le coffre SQLCipher, une seule ligne de trajet ou de commande impossible à décoder faisait échouer toute la lecture. À l'ouverture, `recoverInterrupted` scellait tous les trajets interrompus dans une seule transaction : un trajet défectueux bloquait l'ouverture du coffre et la récupération des trajets sains.
+- Maintenant, les lectures de trajets et de commandes (`sessions`, `pending`, finalisations confirmées, adoption d'époque, purge, récupération) décodent ligne par ligne. Une ligne illisible est notée dans une nouvelle table `quarantine` (identifiant, table, compte et école, cause `decode` ou `recovery`, état d'avant, date), puis sautée. Ses octets restent tels quels dans leur table : rien n'est effacé, aucune position n'est copiée. Une nouvelle détection ne crée pas de doublon.
+- La récupération après relance scelle chaque trajet dans sa propre transaction. Un trajet qui échoue est isolé et passe à l'état « interrompu » (seule la colonne d'état change), sans commande inventée. Un trajet actif illisible est traité pareil, pour qu'il ne bloque pas les départs suivants. Avant cette relance, son état actif continue à empêcher tout nouveau départ.
+- Une panne de base (stockage chiffré illisible, disque, clé absente) n'est pas une ligne défectueuse : l'erreur remonte telle quelle. Pas de nouvelle clé, pas de réinitialisation, pas de repli en clair.
+- « À envoyer » montre « Un trajet de cet appareil ne peut plus être lu. Il reste gardé, sans envoi. » pour les trajets isolés du compte et de l'école en cours.
+- Tests ajoutés dans `SchoolCaptureLifecycleTests` : ligne illisible à côté d'un trajet sain, trajet actif illisible à la relance (deux relances, rien d'effacé), mauvaise clé refusée sans réinitialisation. Exécuté : compilation de l'IPA. Non exécuté : ces tests et la suite Swift (runner Apple), recette sur appareil. Reste à faire : aucune action de support ou d'export du diagnostic.
+
 ## 21 octobre 2026 : agenda web tenu à jour des changements faits ailleurs (#49), non qualifié
 
 - Avant : la minuterie de 30 secondes ne mettait à jour que l'heure affichée. Les leçons n'étaient relues qu'au retour sur l'onglet après une minute.

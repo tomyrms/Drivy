@@ -84,6 +84,22 @@ final class CipherConnection {
         }
     }
 
+    /// Rows of `SELECT key,data …` left undecoded: one malformed record must not hide the others.
+    func rawRows(_ sql: String, _ values: [SQLValue] = []) throws -> [(key: String, data: Data)] {
+        let statement = try prepare(sql, values)
+        defer { sqlite3_finalize(statement) }
+        var result: [(key: String, data: Data)] = []
+        while true {
+            let status = sqlite3_step(statement)
+            if status == SQLITE_DONE { return result }
+            guard status == SQLITE_ROW, let text = sqlite3_column_text(statement, 0) else { throw StorageError.storageUnavailable }
+            let key = String(cString: text)
+            let bytes = sqlite3_column_blob(statement, 1)
+            let count = Int(sqlite3_column_bytes(statement, 1))
+            result.append((key, bytes.map { Data(bytes: $0, count: count) } ?? Data()))
+        }
+    }
+
     private func prepare(_ sql: String, _ values: [SQLValue]) throws -> OpaquePointer {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {

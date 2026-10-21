@@ -56,6 +56,9 @@ actor SQLCipherSchoolCaptureStore {
         guard let storedDevice = try database.records("SELECT data FROM installation WHERE id=1", as: UUID.self).first else {
             throw SchoolCaptureStorageFailure.unavailable
         }
+        // Lignes d’un trajet ou d’une commande devenues illisibles : isolées, jamais effacées. Leurs octets restent
+        // dans leur table d’origine ; cette table ne garde que la référence, la cause et l’état d’avant, sans position.
+        try database.execute("CREATE TABLE IF NOT EXISTS quarantine(row_id TEXT PRIMARY KEY,kind TEXT NOT NULL,workspace TEXT,device_id TEXT NOT NULL,reason TEXT NOT NULL,original_state TEXT NOT NULL,detected_at REAL NOT NULL);")
         deviceID = storedDevice
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
         self.database = database
@@ -79,8 +82,8 @@ actor SQLCipherSchoolCaptureStore {
     // markAttempted refuse leur émission sous un autre scope : aucun rebinding implicite.
     func pending(scope: SchoolCommandScope, deviceID requestedDevice: UUID) throws -> [SchoolCaptureQueuedMutation] {
         guard requestedDevice == deviceID else { throw SchoolCaptureStorageFailure.invalidContext }
-        return try database.records("SELECT data FROM mutation WHERE workspace=? AND device_id=? AND state IN('queued','attempted') ORDER BY created_at,id",
-            [.text(workspace(scope)), .text(deviceID.uuidString)], as: SchoolCaptureQueuedMutation.self)
+        return try readableMutations("workspace=? AND device_id=? AND state IN('queued','attempted') ORDER BY created_at,id",
+            [.text(workspace(scope)), .text(deviceID.uuidString)])
     }
 
     func queuedMutation(id: UUID, scope: SchoolCommandScope) throws -> SchoolCaptureQueuedMutation {
@@ -230,9 +233,15 @@ actor SQLCipherSchoolCaptureStore {
     }
 
     func sessions(scope: SchoolCommandScope) throws -> [SchoolCaptureStoredSession] {
-        let values = try database.records("SELECT data FROM capture WHERE workspace=? AND device_id=? ORDER BY rowid DESC",
-            [.text(workspace(scope)), .text(deviceID.uuidString)], as: SchoolCaptureStoredSession.self)
+        let values = try readableCaptures("workspace=? AND device_id=? ORDER BY rowid DESC",
+            [.text(workspace(scope)), .text(deviceID.uuidString)])
         return values.filter { $0.scope == scope }
+    }
+
+    /// Trajets de ce compte et de cette école isolés parce qu’ils ne se relisent plus : références seulement.
+    func quarantinedCaptures(scope: SchoolCommandScope) throws -> [UUID] {
+        try database.rawRows("SELECT row_id,NULL FROM quarantine WHERE kind='capture' AND device_id=? AND workspace=? ORDER BY detected_at,row_id",
+            [.text(deviceID.uuidString), .text(workspace(scope))]).compactMap { UUID(uuidString: $0.key) }
     }
 
     /// Trajets scellés de la même adhésion, conservés sous une époque d’accès antérieure.
@@ -281,8 +290,7 @@ actor SQLCipherSchoolCaptureStore {
     func purgeSettledCaptures(captureID: UUID? = nil) throws -> Int {
         var purged = 0
         try write {
-            let rows = try database.records("SELECT data FROM capture WHERE device_id=?", [.text(deviceID.uuidString)],
-                as: SchoolCaptureStoredSession.self)
+            let rows = try readableCaptures("device_id=?", [.text(deviceID.uuidString)])
             for capture in rows where captureID == nil || capture.id == captureID {
                 guard capture.deviceID == deviceID, capture.manifest != nil, capture.stopOperationID != nil,
                       leases[capture.id] == nil else { continue }
@@ -317,8 +325,8 @@ actor SQLCipherSchoolCaptureStore {
     }
 
     private func adoptableCaptures(_ scope: SchoolCommandScope) throws -> [SchoolCaptureStoredSession] {
-        try database.records("SELECT data FROM capture WHERE workspace=? AND device_id=?",
-            [.text(workspace(scope)), .text(deviceID.uuidString)], as: SchoolCaptureStoredSession.self).filter {
+        try readableCaptures("workspace=? AND device_id=?",
+            [.text(workspace(scope)), .text(deviceID.uuidString)]).filter {
             $0.deviceID == deviceID && $0.manifest != nil && $0.stopOperationID != nil && leases[$0.id] == nil
                 && $0.scope.sharesMembership(with: scope) && $0.scope.accessEpoch < scope.accessEpoch
         }
@@ -327,8 +335,8 @@ actor SQLCipherSchoolCaptureStore {
     /// PARTIAL peut aussi désigner une coupure serveur avant AP158. Seul son
     /// accusé conservé prouve qu'une finalisation a réellement été confirmée.
     func acknowledgedFinalizations(scope: SchoolCommandScope) throws -> [UUID: SchoolCaptureSession] {
-        let rows = try database.records("SELECT data FROM mutation WHERE workspace=? AND kind=? AND state='acknowledged' ORDER BY created_at",
-            [.text(workspace(scope)), .text(SchoolCaptureMutationKind.finalizeCapture.rawValue)], as: SchoolCaptureQueuedMutation.self)
+        let rows = try readableMutations("workspace=? AND kind=? AND state='acknowledged' ORDER BY created_at",
+            [.text(workspace(scope)), .text(SchoolCaptureMutationKind.finalizeCapture.rawValue)])
         var result: [UUID: SchoolCaptureSession] = [:]
         for row in rows where row.mutation.scope == scope {
             guard let bytes = row.resultBody, let capture = try? JSONDecoder().decode(SchoolCaptureSession.self, from: bytes),
@@ -487,19 +495,36 @@ actor SQLCipherSchoolCaptureStore {
         guard requestedDevice == deviceID else { throw SchoolCaptureStorageFailure.invalidContext }
         // Le scellement ne divulgue aucune donnée et ne dépend pas de droits réseau.
         // Il garde le scope d'origine même si le compte courant ou son epoch a changé.
-        let candidates = try database.records("SELECT data FROM capture WHERE device_id=? AND state IN('ready','recording','paused')",
-            [.text(deviceID.uuidString)], as: SchoolCaptureStoredSession.self)
+        let active: [SQLValue] = [.text(deviceID.uuidString)]
+        let candidates = try readableCaptures("device_id=? AND state IN('ready','recording','paused')", active)
         for candidate in candidates { leases.removeValue(forKey: candidate.id) }
+        // Après une relance, aucun collecteur ne tourne plus : une ligne active illisible passe en « interrompue »
+        // (colonne d’état seulement, octets gardés). Avant cette relance, sa colonne active bloque tout nouveau départ.
         try write {
-            for var capture in candidates {
-                guard capture.stopOperationID == nil, let authorized = SchoolLesson.date(capture.serverCapture.authorizedAt),
-                      let expiry = SchoolLesson.date(capture.serverCapture.expiresAt) else { throw SchoolCaptureStorageFailure.invalidContext }
-                let rows = try segments(capture.id)
-                let durableBoundaries = rows.flatMap { [SchoolLesson.date($0.startedAt), $0.endedAt.flatMap(SchoolLesson.date)] }.compactMap { $0 }
-                let lastPoint = rows.compactMap { $0.lastCapturedAt.flatMap(SchoolLesson.date) }.max()
-                let knownEnd = (durableBoundaries + [authorized] + (lastPoint.map { [$0.addingTimeInterval(0.001)] } ?? [])).max() ?? authorized
-                let end = min(knownEnd, expiry)
-                _ = try sealCapture(&capture, stoppedAt: Self.timestamp(end), reason: .deviceError, interrupted: true)
+            try database.execute("UPDATE capture SET state='interrupted' WHERE device_id=? AND state IN('ready','recording','paused') AND id IN (SELECT row_id FROM quarantine WHERE kind='capture')", active)
+        }
+        // Une transaction par trajet : l’échec de l’un n’empêche plus de sceller les autres.
+        for candidate in candidates {
+            do {
+                try write {
+                    var capture = candidate
+                    guard capture.stopOperationID == nil, let authorized = SchoolLesson.date(capture.serverCapture.authorizedAt),
+                          let expiry = SchoolLesson.date(capture.serverCapture.expiresAt) else { throw SchoolCaptureStorageFailure.invalidContext }
+                    let rows = try segments(capture.id)
+                    let durableBoundaries = rows.flatMap { [SchoolLesson.date($0.startedAt), $0.endedAt.flatMap(SchoolLesson.date)] }.compactMap { $0 }
+                    let lastPoint = rows.compactMap { $0.lastCapturedAt.flatMap(SchoolLesson.date) }.max()
+                    let knownEnd = (durableBoundaries + [authorized] + (lastPoint.map { [$0.addingTimeInterval(0.001)] } ?? [])).max() ?? authorized
+                    let end = min(knownEnd, expiry)
+                    _ = try sealCapture(&capture, stoppedAt: Self.timestamp(end), reason: .deviceError, interrupted: true)
+                }
+            } catch {
+                // Base illisible ou clé absente : rien à isoler, l’erreur remonte telle quelle.
+                if Self.isPhysical(error) { throw error }
+                try write {
+                    try isolate(table: "capture", id: candidate.id.uuidString, workspace: workspace(candidate.scope),
+                                reason: "recovery", originalState: candidate.state.rawValue)
+                    try database.execute("UPDATE capture SET state='interrupted' WHERE id=?", [.text(candidate.id.uuidString)])
+                }
             }
         }
     }
@@ -752,6 +777,41 @@ actor SQLCipherSchoolCaptureStore {
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
         try database.transaction(body)
         if protectFiles { try ProtectedStorage.protectDatabaseFiles(at: url) }
+    }
+
+    /// Un échec de base (chiffrement, disque) n’est pas un défaut de ligne : il ne s’isole pas.
+    private static func isPhysical(_ error: Error) -> Bool {
+        error is StorageError || error as? SchoolCaptureStorageFailure == .keyUnavailable
+            || error as? SchoolCaptureStorageFailure == .unavailable
+    }
+
+    /// Note une ligne illisible sans toucher à ses octets. Rejouer l’isolement ne change rien.
+    private func isolate(table: String, id: String, workspace: String?, reason: String, originalState: String) throws {
+        try database.execute("INSERT OR IGNORE INTO quarantine(row_id,kind,workspace,device_id,reason,original_state,detected_at) VALUES(?,?,?,?,?,?,?)",
+            [.text(id), .text(table), .text(workspace ?? ""), .text(deviceID.uuidString), .text(reason),
+             .text(originalState), .number(Date().timeIntervalSince1970)])
+    }
+
+    /// Lignes décodables d’une table. Une ligne illisible est notée en quarantaine et sautée ; les autres sont rendues.
+    private func readable<T: Decodable>(_ table: String, _ condition: String, _ values: [SQLValue], as: T.Type) throws -> [T] {
+        let rows = try database.rawRows("SELECT id,data FROM \(table) WHERE \(condition)", values)
+        var result: [T] = []
+        var broken: [String] = []
+        for row in rows {
+            if let value = try? JSONDecoder().decode(T.self, from: row.data) { result.append(value) } else { broken.append(row.key) }
+        }
+        for id in broken {
+            let meta = try database.rawRows("SELECT workspace,CAST(state AS BLOB) FROM \(table) WHERE id=?", [.text(id)]).first
+            try isolate(table: table, id: id, workspace: meta?.key, reason: "decode",
+                        originalState: meta.flatMap { String(data: $0.data, encoding: .utf8) } ?? "")
+        }
+        return result
+    }
+    private func readableCaptures(_ condition: String, _ values: [SQLValue]) throws -> [SchoolCaptureStoredSession] {
+        try readable("capture", condition, values, as: SchoolCaptureStoredSession.self)
+    }
+    private func readableMutations(_ condition: String, _ values: [SQLValue]) throws -> [SchoolCaptureQueuedMutation] {
+        try readable("mutation", condition, values, as: SchoolCaptureQueuedMutation.self)
     }
     private static func timestamp(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()

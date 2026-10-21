@@ -14,6 +14,14 @@ struct SchoolCaptureUploadsSection: View {
                 SchoolCaptureUploadRow(model: model, capture: capture,
                     learnerName: learnerName(capture.serverCapture.learnerId), onChange: onChange)
             }
+            if !model.quarantined.isEmpty {
+                SchoolErrorNotice(message: model.quarantined.count == 1
+                    ? "Un trajet de cet appareil ne peut plus être lu. Il reste gardé, sans envoi."
+                    : "\(model.quarantined.count) trajets de cet appareil ne peuvent plus être lus. Ils restent gardés, sans envoi.")
+                    .listRowInsets(EdgeInsets())
+                    .drivyClearRow()
+                    .accessibilityIdentifier("school-upload-quarantined")
+            }
             if let error = model.errorMessage {
                 SchoolErrorNotice(message: error,
                     retry: model.accessRevoked || model.isBusy ? nil : { Task { await model.load() } })
