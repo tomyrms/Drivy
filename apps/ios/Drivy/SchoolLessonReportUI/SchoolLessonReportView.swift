@@ -244,6 +244,8 @@ private struct SchoolLessonReportContent: View {
         case absent
         case live
         case start
+        /// Trajet arrêté alors que la leçon continue (clôture abandonnée ou refusée) : reprendre le GPS ou terminer.
+        case restart
         case finish
     }
 
@@ -719,6 +721,7 @@ private struct SchoolLessonReportContent: View {
         }
         if captureStatus == .collecting { return .live }
         if mayStartCapture(now: now) { return .start }
+        if mayRestartCapture(now: now) { return .restart }
         return .finish
     }
 
@@ -759,6 +762,19 @@ private struct SchoolLessonReportContent: View {
                     .disabled(!model.acceptsInput)
                     .accessibilityIdentifier("lesson-prepare-gps")
                 completeButton(primary: false)
+            case .restart:
+                Button { Task { await restartCapture() } } label: {
+                    if isOpeningTrip {
+                        DrivyBusyLabel(title: "Reprendre le GPS", busyTitle: "Vérification de l’accord GPS…", isBusy: true)
+                    } else {
+                        Label("Reprendre le GPS", systemImage: "location.fill")
+                    }
+                }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .disabled(!model.acceptsInput || isFinishing)
+                    .accessibilityHint("Un nouveau trajet s’ajoute à cette leçon")
+                    .accessibilityIdentifier("lesson-restart-gps")
+                completeButton(primary: true)
             case .finish:
                 completeButton(primary: true)
             }
@@ -817,6 +833,23 @@ private struct SchoolLessonReportContent: View {
         guard let lesson = model.lesson, let capture else { return false }
         return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
             capture: captureStatus, controllerCanPrepare: capture.canPrepareCapture, now: now)
+    }
+
+    /// Le trajet de la leçon est arrêté et enregistré sur l’appareil, la leçon est commencée et pas terminée : un
+    /// nouveau trajet peut la compléter, aux mêmes conditions qu’un premier départ. Un trajet en échec garde sa reprise.
+    private func mayRestartCapture(now: Date) -> Bool {
+        guard let lesson = model.lesson, lesson.hasStarted, let capture, captureStatus == .stopped,
+              capture.state == .saved, capture.lessonID == model.lessonID, capture.completedLessonID != model.lessonID else { return false }
+        return SchoolLessonHubRules.mayStartCapture(lesson: lesson, isAuthor: model.isAuthor, school: schoolWorkspace.school,
+            capture: .none, controllerCanPrepare: true, now: now)
+    }
+
+    /// Geste explicite seulement : le trajet arrêté se ferme sur l’appareil (ses points et son heure d’arrêt restent
+    /// tels quels, son envoi continue), puis la préparation habituelle redemande l’accord. Rien ne repart seul.
+    private func restartCapture() async {
+        guard capturePreparation == nil, !isOpeningTrip, !isFinishing, mayRestartCapture(now: Date()), let capture else { return }
+        capture.closeLessonFlow(lessonID: model.lessonID)
+        await openCapturePreparation()
     }
     /// La préparation se lit d’abord (leçon, accord de l’élève) : le rideau ne se lève que pour un départ qui peut
     /// partir sans question. Sinon la feuille s’ouvre sur la question d’accord, sans rideau qui se couperait.

@@ -1,10 +1,11 @@
 # État de la réalisation
 
-## 21 octobre 2026 : dossier depuis la fiche leçon (#62), confirmation des signalements (#58), toutes les compétences au bilan (#57), non qualifiés
+## 21 octobre 2026 : dossier depuis la fiche leçon (#62), confirmation des signalements (#58), toutes les compétences au bilan (#57), sortie de la clôture abandonnée (#47), non qualifiés
 
 - #62 : pour l’équipe (moniteur, administration), le nom de l’élève en tête d’une fiche leçon ou d’un récapitulatif porte un chevron et ouvre son dossier en feuille, à partir de l’identifiant de l’élève et de l’école de la leçon. La fiche reste en dessous, avec sa saisie et le trajet. Côté élève, le nom du moniteur reste du texte. Le dossier ouvert ainsi n’a ni « Démarrer » ni « Planifier ». Il devient aussi l’élève sélectionné dans l’onglet Élèves.
 - #58 : « Rétablir la configuration d’origine » utilise maintenant une alerte avec un message, comme les autres confirmations (« Recharger les informations de l’école ? »). Le message précise que le classement intelligent ne change pas. Le bouton revérifie le droit avant d’envoyer.
 - #57 : l’étape Compétences du bilan affiche toutes les compétences du référentiel de la formation, à plat et dans son ordre. Le regroupement par signalement, objectif ou niveau déjà noté et le repli « Autres compétences » sont supprimés (règle `competencyGroups` et ses deux tests retirés). Les saisies et les brouillons restent attachés à chaque compétence.
+- #47 : après une fin de leçon abandonnée (feuille du permis fermée) ou refusée, le trajet est arrêté et enregistré alors que la leçon continue. La fiche affiche déjà « Le trajet est arrêté. La leçon continue. ». Sa barre propose maintenant « Terminer la leçon » et « Reprendre le GPS ». La reprise est seulement manuelle : elle ferme le trajet arrêté sur l’appareil (ses points et son heure d’arrêt ne changent pas, son envoi continue), puis repasse par la préparation habituelle avec la vérification de l’accord. Rien ne repart tout seul. Un trajet en échec garde sa propre reprise.
 - Exécuté : compilation de l’IPA seulement. Non exécuté : tests, recette iPhone/iPad, VoiceOver.
 
 ## 21 octobre 2026 : GPS en plein écran et sortie sans arrêt (#60), non qualifié
