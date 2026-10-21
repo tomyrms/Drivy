@@ -8,6 +8,7 @@
 
 ## 21 octobre 2026 : profil personnel complet et photo (#64), déployé
 
+- Complément 7d14a39 (déployé 23:05 Zurich, sauvegarde `/root/drivy_refonte-before-7d14a39-20261021T210412Z.dump`) : migration `039_self_profile_contact.sql`, e-mail de contact, date de naissance et adresse postale dans « Mon profil » (contrat v3). L'e-mail de contact n'est pas l'adresse de connexion. Suite API : 546/566 dans la passe complète, les 20 échecs restants sont dans `g1b` et le fichier passe seul (27/27) ; instabilité sous charge à surveiller.
 - Déployé e2d3711 sur CT114 (22:08 Zurich) après sauvegarde vérifiée `/root/drivy_refonte-before-e2d3711-20261021T200800Z.dump` (CT113). Migration 038 appliquée ; depuis CT109, `/v1/me/profile` et `/v1/people/{id}/photo` répondent 401 sans jeton. Clé de capture présente dans l'environnement (noms seuls contrôlés).
 - API : migration `038_self_profile_details.sql` (prénom, nom, téléphone, version de photo sur `person` ; table `person_photo` chiffrée AES-256-GCM avec la clé de capture, RLS : soi-même ou membre actif d'une même école). Routes `GET`/`PATCH /v1/me/profile`, `PUT`/`DELETE /v1/me/profile/photo`, `GET /v1/people/{id}/photo` ; contrat `self-profile.json` v2. Le serveur retire EXIF/XMP/ICC/commentaires, borne 64 à 1024 px et 256 Kio.
 - iOS : « Mon nom » devient « Mon profil » (photo, prénom, nom, nom affiché, téléphone) pour tous les rôles. PhotosPicker sans autorisation photothèque ; recadrage carré 512 px réencodé sur l'appareil. Photo en mémoire seulement, affichée dans l'en-tête du compte et du dossier élève.
