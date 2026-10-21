@@ -6,6 +6,13 @@
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
 - Non fait : la bascule dans le tableau de bord Cloudflare (pas d'accès automatisé), mesure 5G, recette iOS après bascule. Le DNS autoritatif reste chez Cloudflare.
 
+## 21 octobre 2026 : profil personnel complet et photo (#64)
+
+- API : migration `038_self_profile_details.sql` (prénom, nom, téléphone, version de photo sur `person` ; table `person_photo` chiffrée AES-256-GCM avec la clé de capture, RLS : soi-même ou membre actif d'une même école). Routes `GET`/`PATCH /v1/me/profile`, `PUT`/`DELETE /v1/me/profile/photo`, `GET /v1/people/{id}/photo` ; contrat `self-profile.json` v2. Le serveur retire EXIF/XMP/ICC/commentaires, borne 64 à 1024 px et 256 Kio.
+- iOS : « Mon nom » devient « Mon profil » (photo, prénom, nom, nom affiché, téléphone) pour tous les rôles. PhotosPicker sans autorisation photothèque ; recadrage carré 512 px réencodé sur l'appareil. Photo en mémoire seulement, affichée dans l'en-tête du compte et du dossier élève.
+- Exécuté : suite API complète avec PostgreSQL réelle (566 tests ; 3 invariants mis à jour : 50 tables RLS, instantané de migration), typecheck, compilation IPA.
+- À qualifier sur appareil : choix d'une photo réelle (HEIC, panorama, orientation), VoiceOver de la feuille.
+
 ## 21 octobre 2026 : renommer son compte (#64) et annuler une leçon commencée (#61), déployé
 
 - #64 : `PATCH /v1/me/profile` (extension, `apps/api/contracts/self-profile.json`), migration `037_self_profile.sql` : chaque personne renomme son propre compte, quel que soit son rôle ; la base refuse l'écriture hors de cette route et sur une autre personne. iOS : ligne « Mon nom » dans le compte pour tous les rôles. La photo de profil reste à faire (stockage protégé d'images).
