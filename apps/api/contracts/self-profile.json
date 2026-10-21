@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:self-profile:1",
+  "$comment": "Extension du 21 octobre 2026 (issue #64) : PATCH /v1/me/profile. La personne connectée modifie le nom affiché de son propre compte, quel que soit son rôle. OpenAPI canonique 3.11.0 conservé. If-Match obligatoire (version de la personne, celle de GET /v1/me). Rejouer le même nom répond 200 sans incrémenter la version. Refus : 412 VERSION_CONFLICT, 428 PRECONDITION_REQUIRED, 400 INVALID_REQUEST, 403 IDENTITY_NOT_LINKED.",
+  "$defs": {
+    "SelfProfileUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displayName"],
+      "properties": {
+        "displayName": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Espaces de bord retirés, normalisé NFC, sans caractère de contrôle."}
+      }
+    },
+    "SelfProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["personId", "displayName", "version"],
+      "properties": {
+        "personId": {"type": "string", "format": "uuid"},
+        "displayName": {"type": "string", "minLength": 1, "maxLength": 200},
+        "version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "SelfProfileEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {"$ref": "#/$defs/SelfProfile"},
+        "requestId": {"type": "string", "format": "uuid"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}
