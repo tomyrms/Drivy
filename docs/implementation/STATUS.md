@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 21 octobre 2026 : édition du nom de compte depuis iOS (#64), premier lot non qualifié
+
+- Parcours natif « Modifier mon profil » disponible depuis Compte/Profil pour les comptes moniteur, administrateur et élève, indépendamment de la présence d’un dossier scolaire LEARNER. Le formulaire scolaire préexistant de l’élève reste intact.
+- Nouvelle mutation serveur personnelle PATCH /v1/me : nom public de drivy.person seulement, contrôle OIDC, RLS, version If-Match, reçus d’idempotence et protection contre un rejeu de compte suspendu. Aucun rôle, droit ni identifiant de connexion modifiable.
+- Nouvelle migration 037_personal_profile_edit.sql ; tests d’intégration PostgreSQL ciblés ajoutés. Description technique et points restants : docs/implementation/issue-64-personal-profile.md.
+- **Non exécutés** : tests automatisés, compilation Apple, IPA et recette sur appareil. **Non déployés** : API et migration homelab.
+- Reste à livrer avant clôture #64 : photos d’avatar (sélection/cadrage/stockage privé/lecture/suppression), coordonnées personnelles et synchronisation, contrats et qualification de bout en bout. Ne pas annoncer l’issue comme terminée.
+
 ## 21 octobre 2026 : démarrage d'une leçon et départs GPS résiduels (#86, #87), non qualifié
 
 - Mesure homelab (lecture seule, aucune modification) : API et base répondent en 0,5 à 8 ms depuis Caddy. Box vers Internet 5 ms. Mémoire et charge des CT113/114/117/109 normales. Pas de tunnel `cloudflared`. Par Cloudflare, la même requête prend 0,6 à 3,4 s. Même `drivy.shulker.ch/cdn-cgi/trace`, servi par Cloudflare sans joindre l'origine, prend 0,45 à 0,9 s, contre 30 à 50 ms pour `www.cloudflare.com` sur la même adresse. Le porteur constate la même lenteur en 5G. Cause : chez Cloudflare (ZRH, après sa maintenance du 20-21 octobre), pas dans le homelab. Aucune configuration changée.
