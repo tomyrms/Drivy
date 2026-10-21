@@ -7,17 +7,30 @@ struct SchoolLessonHeaderView: View {
     let model: SchoolLessonReportWorkspace
     let learnerName: String
     var finishError: String? = nil
+    @Environment(\.schoolLearnerDossier) private var dossier
+    @State private var openedLearner: OpenedLearner?
+
+    private struct OpenedLearner: Identifiable { let id: UUID }
 
     private var identity: SchoolLessonHeaderIdentity? {
         SchoolLessonHubRules.headerIdentity(learnerName: learnerName, instructorName: model.lesson?.providedInstructorName,
             isOwnLearner: model.isOwnLearner, roles: model.membership.roles)
     }
 
+    /// Le nom ouvre le dossier seulement pour l’équipe, quand l’en-tête nomme bien l’élève de la leçon et de
+    /// cette école. Le serveur relit les droits à l’ouverture du dossier.
+    private var dossierLearnerID: UUID? {
+        guard let dossier, let lesson = model.lesson, !model.isOwnLearner,
+              SchoolLessonHubRules.mayManage(model.membership.roles),
+              lesson.schoolId == model.membership.schoolId, dossier.schoolID == lesson.schoolId else { return nil }
+        return lesson.learnerId
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
             if identity != nil || model.lesson != nil {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                    if let identity { DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact) }
+                    if let identity { identityRow(identity) }
                     if let lesson = model.lesson { SchoolLessonFacts(model: model, lesson: lesson) }
                 }
             }
@@ -33,7 +46,42 @@ struct SchoolLessonHeaderView: View {
             if let message = model.information { DrivyInlineMessage(text: message, tone: .neutral) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Feuille par-dessus la fiche : la leçon, son brouillon et le trajet restent en place derrière.
+        .sheet(item: $openedLearner) { opened in
+            if let dossier { dossier.make(opened.id) }
+        }
     }
+
+    @ViewBuilder private func identityRow(_ identity: SchoolLessonHeaderIdentity) -> some View {
+        if let learnerID = dossierLearnerID {
+            Button { dossier?.select(learnerID); openedLearner = OpenedLearner(id: learnerID) } label: {
+                DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact) {
+                    DrivyRowChevron()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Ouvrir le dossier de \(identity.name)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("lesson-open-dossier")
+        } else {
+            DrivyLearnerIdentity(name: identity.name, detail: identity.role, variant: .compact)
+        }
+    }
+}
+
+/// Ouvre le dossier existant d’un élève à partir de son identifiant, pour l’école ouverte. Fourni par l’accueil
+/// de l’équipe ; absent ailleurs (élève, aperçus), et le nom reste alors du texte.
+struct SchoolLearnerDossierOpener {
+    let schoolID: UUID
+    /// Choisit l’élève avant la présentation : le dossier ne montre jamais, même un instant, l’élève précédent.
+    let select: (UUID) -> Void
+    let make: (UUID) -> AnyView
+}
+
+extension EnvironmentValues {
+    @Entry var schoolLearnerDossier: SchoolLearnerDossierOpener? = nil
 }
 
 /// Faits de la leçon sous l’élève : son état s’il est inhabituel, quand, à quel prix, où, avec qui.

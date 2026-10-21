@@ -56,6 +56,7 @@ struct SchoolHomeView: View {
         }
         .tint(DrivyTheme.accent)
         .environment(requiredActions)
+        .environment(\.schoolLearnerDossier, learnerDossierOpener)
         .sheet(isPresented: $choosesSchool) {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
@@ -325,6 +326,20 @@ struct SchoolHomeView: View {
 
     // MARK: Élève
 
+    /// Dossier ouvert depuis le nom d’une fiche leçon : le même dossier que l’onglet Élèves, sans commande de
+    /// départ ni de planification, en feuille au-dessus de la leçon qui reste en place.
+    private var learnerDossierOpener: SchoolLearnerDossierOpener? {
+        guard workspace.entryDestination == .instructor, let membership = workspace.membership,
+              membership.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) else { return nil }
+        return SchoolLearnerDossierOpener(schoolID: membership.schoolId, select: { workspace.selectLearner($0) }) { learnerID in
+            AnyView(SchoolLessonDossierSheet(workspace: workspace, learnerID: learnerID, openProfile: openProfile,
+                makeLearnerProfile: makeLearnerProfile, trainingClient: trainingClient)
+                .environment(requiredActions))
+        }
+    }
+
+    // MARK: Élève (onglets)
+
     private var learnerSelection: Binding<SchoolHomeTab> {
         Binding(get: { [.lessons, .progress, .profile].contains(selectedTab) ? selectedTab : .lessons }, set: { selectedTab = $0 })
     }
@@ -517,6 +532,25 @@ private struct CaptureLessonRoute: Identifiable {
     let id: UUID
     let learnerName: String
     let completing: Bool
+}
+
+/// Le dossier d’un élève en feuille, ouvert depuis une leçon. La sélection de l’onglet Élèves suit cet élève :
+/// c’est le même dossier, lu avec les droits de l’école ouverte.
+private struct SchoolLessonDossierSheet: View {
+    @Bindable var workspace: SchoolWorkspace
+    let learnerID: UUID
+    let openProfile: ((SchoolLearner) -> Void)?
+    let makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)?
+    let trainingClient: SchoolTrainingClient?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SchoolLearnerDossierView(workspace: workspace, openProfile: openProfile, makeLearnerProfile: makeLearnerProfile,
+            openPlanning: nil, trainingClient: trainingClient, agendaClient: nil, captureController: nil,
+            close: { dismiss() })
+            .onAppear { if workspace.selectedLearnerID != learnerID { workspace.selectLearner(learnerID) } }
+            .tint(DrivyTheme.accent)
+    }
 }
 
 /// « Revenir au trajet en cours » au-dessus des onglets, depuis n’importe quel onglet (iOS 26.1 et ensuite).

@@ -68,9 +68,18 @@ struct SchoolObservationThemeSettingsView: View {
         .sheet(isPresented: $showsPreview) {
             SchoolObservationThemePreviewSheet(themes: shownThemes)
         }
-        .confirmationDialog("Rétablir les signalements d’origine et leur ordre ?", isPresented: $confirmsReset, titleVisibility: .visible) {
-            Button("Rétablir", role: .destructive) { store.resetAll() }
+        // Même forme que les autres confirmations de Drivy : une alerte, un titre, ce qui change, Annuler puis Rétablir.
+        .alert("Rétablir la configuration d’origine ?", isPresented: $confirmsReset) {
             Button("Annuler", role: .cancel) { }
+            Button("Rétablir", role: .destructive) {
+                guard store.canEdit, !store.isOriginal else { return }
+                store.resetAll()
+            }
+            .accessibilityIdentifier("observation-themes-confirm-reset")
+        } message: {
+            Text(ranking == nil
+                ? "Les signalements de l’école et leur ordre reviennent à ceux d’origine."
+                : "Les signalements de l’école et leur ordre reviennent à ceux d’origine. Ton classement intelligent ne change pas.")
         }
         // Retour à l’état confirmé après un échec, configuration relue, changement de mode : les rangées glissent à leur place.
         .animation(DrivyMotion.context(reduceMotion), value: shownThemes.map(\.key))

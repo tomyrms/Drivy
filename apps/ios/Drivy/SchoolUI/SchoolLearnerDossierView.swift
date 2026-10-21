@@ -12,6 +12,8 @@ struct SchoolLearnerDossierView: View {
     let trainingClient: SchoolTrainingClient?
     let agendaClient: SchoolAgendaClient?
     let captureController: SchoolCaptureSessionController?
+    /// Présent quand le dossier s’ouvre en feuille (depuis une leçon) : un bouton Fermer rend la leçon.
+    var close: (() -> Void)? = nil
     /// Lessons or progression: the choice survives a reread and a change of permit.
     @State private var section: SchoolTrainingSection = .lessons
     @State private var profileModel: SchoolProfileWorkspace?
@@ -50,6 +52,13 @@ struct SchoolLearnerDossierView: View {
             dossier
                 .navigationTitle("Dossier")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if let close {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Fermer", action: close).accessibilityIdentifier("dossier-close")
+                        }
+                    }
+                }
         }
         .task(id: scopeKey) { await reload() }
         .sheet(item: $editingProfile, onDismiss: { editingFocus = nil; Task { await reload() } }) { model in
