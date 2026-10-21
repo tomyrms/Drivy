@@ -9,6 +9,8 @@ struct SchoolAccountActions {
     let openJoinSchool: (() -> Void)?
     let signOut: () -> Void
     var resumeOnboarding: (() -> Void)? = nil
+    /// Profil global du compte, indépendant des informations du dossier élève.
+    var editAccount: (() -> Void)? = nil
     /// Un trajet GPS est en cours : quitter le compte ou l’école l’arrêterait, ces gestes demandent alors un accord.
     var tripInProgress = false
 
@@ -24,6 +26,10 @@ struct SchoolAccountActions {
     @MainActor @ViewBuilder
     func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
+        if let editAccount {
+            DrivyNavigationRow(title: "Modifier mon profil", action: editAccount)
+                .accessibilityIdentifier("edit-personal-profile")
+        }
         if let openProfile {
             DrivyNavigationRow(title: "Mes informations", action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
