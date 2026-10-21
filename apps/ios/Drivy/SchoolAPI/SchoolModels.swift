@@ -186,6 +186,35 @@ struct SchoolSelfProfileEdit: Encodable, Sendable, Equatable {
     var firstName: String
     var lastName: String
     var contactPhone: String
+    var contactEmail: String = ""
+    /// Date civile `yyyy-MM-dd`, ou vide.
+    var birthDate: String = ""
+    var postalAddress: SchoolPostalAddress? = nil
+
+    private enum CodingKeys: String, CodingKey { case displayName, firstName, lastName, contactPhone, contactEmail, birthDate, postalAddress }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(displayName, forKey: .displayName)
+        try c.encode(firstName, forKey: .firstName)
+        try c.encode(lastName, forKey: .lastName)
+        try c.encode(contactPhone, forKey: .contactPhone)
+        try c.encode(contactEmail, forKey: .contactEmail)
+        // Vide : effacé (null), jamais une chaîne vide que le serveur refuserait comme date.
+        if birthDate.isEmpty { try c.encodeNil(forKey: .birthDate) } else { try c.encode(birthDate, forKey: .birthDate) }
+        if let postalAddress { try c.encode(postalAddress, forKey: .postalAddress) } else { try c.encodeNil(forKey: .postalAddress) }
+    }
+
+    init(displayName: String, firstName: String, lastName: String, contactPhone: String,
+         contactEmail: String = "", birthDate: String = "", postalAddress: SchoolPostalAddress? = nil) {
+        self.displayName = displayName; self.firstName = firstName; self.lastName = lastName; self.contactPhone = contactPhone
+        self.contactEmail = contactEmail; self.birthDate = birthDate; self.postalAddress = postalAddress
+    }
+
+    init(_ profile: SchoolSelfProfile) {
+        self.init(displayName: profile.displayName, firstName: profile.firstName ?? "", lastName: profile.lastName ?? "",
+            contactPhone: profile.contactPhone ?? "", contactEmail: profile.contactEmail ?? "", birthDate: profile.birthDate ?? "",
+            postalAddress: profile.postalAddress)
+    }
 }
 
 /// Ce que l’école renvoie du profil : la version de la personne et, pour la photo, sa version (`nil` : initiales).
@@ -195,6 +224,9 @@ struct SchoolSelfProfile: Codable, Sendable, Equatable {
     var firstName: String? = nil
     var lastName: String? = nil
     var contactPhone: String? = nil
+    var contactEmail: String? = nil
+    var birthDate: String? = nil
+    var postalAddress: SchoolPostalAddress? = nil
     var photoVersion: Int? = nil
     let version: Int
 }

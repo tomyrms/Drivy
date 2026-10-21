@@ -42,6 +42,19 @@ describe('Profil personnel complet (#64)', () => {
       // Champ vidé : il redevient absent.
       const cleared = await save({ displayName: 'Nom choisi', contactPhone: '' }, before.version + 1, subject);
       expect(cleared.json().data).toMatchObject({ contactPhone: null, firstName: 'Prénom' });
+      // E-mail de contact, date de naissance et adresse : enregistrés, relus, puis effacés.
+      const address = { line1: ' Rue du Lac 1 ', line2: '', postalCode: '1000', locality: 'Lausanne', countryCode: 'CH' };
+      const full = await save({ displayName: 'Nom choisi', contactEmail: ' moi@example.invalid ', birthDate: '1990-05-17', postalAddress: address },
+        cleared.json().data.version, subject);
+      expect(full.statusCode, full.body).toBe(200);
+      expect(full.json().data).toMatchObject({ contactEmail: 'moi@example.invalid', birthDate: '1990-05-17',
+        postalAddress: { line1: 'Rue du Lac 1', line2: null, postalCode: '1000', locality: 'Lausanne', countryCode: 'CH' } });
+      // Renvoi identique (adresse réordonnée par la base) : aucune nouvelle version.
+      const again = await save({ displayName: 'Nom choisi', contactEmail: 'moi@example.invalid', birthDate: '1990-05-17', postalAddress: address },
+        cleared.json().data.version, subject);
+      expect(again.statusCode, again.body).toBe(200); expect(again.json().data.version).toBe(full.json().data.version);
+      const wiped = await save({ displayName: 'Nom choisi', contactEmail: null, birthDate: null, postalAddress: null }, full.json().data.version, subject);
+      expect(wiped.json().data).toMatchObject({ contactEmail: null, birthDate: null, postalAddress: null, firstName: 'Prénom' });
     }
   });
 
@@ -58,7 +71,10 @@ describe('Profil personnel complet (#64)', () => {
     expect((await save({ displayName: 'Autre nom' }, before.version + 5, 'demo-admin')).json().code).toBe('VERSION_CONFLICT');
     expect((await save({ displayName: 'Autre nom' }, null, 'demo-admin')).statusCode).toBe(428);
     for (const bad of [{ displayName: '' }, { displayName: 'x'.repeat(201) }, { displayName: 'Nom\u0007' }, { displayName: 'Ok', contactPhone: 'abc' },
-      { displayName: 'Ok', firstName: 'x'.repeat(151) }, { displayName: 'Ok', roles: ['ADMIN'] }])
+      { displayName: 'Ok', firstName: 'x'.repeat(151) }, { displayName: 'Ok', roles: ['ADMIN'] }, { displayName: 'Ok', contactEmail: 'pas-un-mail' },
+      { displayName: 'Ok', birthDate: '2999-01-01' }, { displayName: 'Ok', birthDate: '1850-01-01' }, { displayName: 'Ok', birthDate: '17.05.1990' },
+      { displayName: 'Ok', postalAddress: { line1: 'Rue', postalCode: '1000', locality: 'Lausanne', countryCode: 'ch' } },
+      { displayName: 'Ok', postalAddress: { line1: '', postalCode: '1000', locality: 'Lausanne', countryCode: 'CH' } }])
       expect((await save(bad, before.version, 'demo-admin')).statusCode).toBe(400);
     expect(await me('demo-admin')).toEqual(before);
   });

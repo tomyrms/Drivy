@@ -60,7 +60,7 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
       const result:Record<string,unknown[]>={};
       for(const table of tables) {
         if(!/^[a-z_]+$/.test(table))throw new Error('Nom de table de recette inattendu.');
-        result[table]=(await pool.query(`SELECT to_jsonb(t)-$1::text[] AS value FROM drivy.${table} t ORDER BY (to_jsonb(t)-$1::text[])::text`,[table==='school_setup'?newColumns:table==='offering_version'?['label']:table==='person'?['first_name','last_name','contact_phone','photo_version']:[]])).rows.map(row=>row.value);
+        result[table]=(await pool.query(`SELECT to_jsonb(t)-$1::text[] AS value FROM drivy.${table} t ORDER BY (to_jsonb(t)-$1::text[])::text`,[table==='school_setup'?newColumns:table==='offering_version'?['label']:table==='person'?['first_name','last_name','contact_phone','photo_version','contact_email','birth_date','postal_address']:[]])).rows.map(row=>row.value);
       }
       return result;
     };
@@ -69,12 +69,12 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     await migrate(migration);
     expect(await snapshot()).toEqual(before);
     expect((await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations WHERE name=ANY($1::text[]) ORDER BY name',[oldNames])).rows).toEqual(history);
-    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql','034_withdrawal_reason_staff_only.sql','035_osrm_matched_route.sql','036_autonomous_signals.sql','037_self_profile.sql','038_self_profile_details.sql']);
+    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql','034_withdrawal_reason_staff_only.sql','035_osrm_matched_route.sql','036_autonomous_signals.sql','037_self_profile.sql','038_self_profile_details.sql','039_self_profile_contact.sql']);
     // 033 ajoute seulement le nom facultatif d'un parcours : aucune ligne existante ne reçoit de nom déduit.
     expect((await pool.query('SELECT count(*)::int AS named FROM drivy.offering_version WHERE label IS NOT NULL')).rows[0].named).toBe(0);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_opening_link')).rows[0].n).toBe(0);
     // 038 n’invente aucun prénom, nom, téléphone ni photo pour les comptes existants.
-    expect((await pool.query('SELECT count(*)::int n FROM drivy.person WHERE first_name IS NOT NULL OR last_name IS NOT NULL OR contact_phone IS NOT NULL OR photo_version<>0')).rows[0].n).toBe(0);
+    expect((await pool.query('SELECT count(*)::int n FROM drivy.person WHERE first_name IS NOT NULL OR last_name IS NOT NULL OR contact_phone IS NOT NULL OR photo_version<>0 OR contact_email IS NOT NULL OR birth_date IS NOT NULL OR postal_address IS NOT NULL')).rows[0].n).toBe(0);
     expect((await env.call('GET','/v1/me',undefined,undefined,'demo-admin')).json().data).toEqual(beforeEntry);
     expect(await privacyViews()).toEqual(beforePrivacy);
     for(const [schoolId,subject,status] of [[id.schoolA,'demo-admin','ACTIVE'],[id.schoolB,'demo-instructor','DRAFT']] as const) {

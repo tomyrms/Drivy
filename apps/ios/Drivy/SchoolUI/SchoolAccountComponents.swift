@@ -171,6 +171,8 @@ private struct SchoolSelfProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var edit = SchoolSelfProfileEdit(displayName: "", firstName: "", lastName: "", contactPhone: "")
     @State private var loaded: SchoolSelfProfileEdit?
+    @State private var hasAddress = false
+    @State private var address = SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var isSavingPhoto = false
@@ -179,17 +181,29 @@ private struct SchoolSelfProfileSheet: View {
     @State private var error: String?
 
     private func clean(_ value: String) -> String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var cleanAddress: SchoolPostalAddress? {
+        guard hasAddress else { return nil }
+        let line2 = clean(address.line2 ?? "")
+        return SchoolPostalAddress(line1: clean(address.line1), line2: line2.isEmpty ? nil : line2, postalCode: clean(address.postalCode),
+            locality: clean(address.locality), countryCode: address.countryCode)
+    }
     private var trimmed: SchoolSelfProfileEdit {
         SchoolSelfProfileEdit(displayName: clean(edit.displayName), firstName: clean(edit.firstName),
-            lastName: clean(edit.lastName), contactPhone: clean(edit.contactPhone))
+            lastName: clean(edit.lastName), contactPhone: clean(edit.contactPhone), contactEmail: clean(edit.contactEmail),
+            birthDate: edit.birthDate, postalAddress: cleanAddress)
     }
     private var phoneValid: Bool {
         let phone = trimmed.contactPhone
         return phone.isEmpty || (phone.count >= 3 && phone.count <= 32 && phone.allSatisfy { "+0123456789 ().-/".contains($0) })
     }
+    private var emailValid: Bool {
+        let email = trimmed.contactEmail
+        return email.isEmpty || (email.count <= 254 && email.range(of: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", options: .regularExpression) != nil)
+    }
+    private var addressValid: Bool { cleanAddress?.isValid ?? true }
     private var valid: Bool {
         !trimmed.displayName.isEmpty && trimmed.displayName.count <= 200 && trimmed.firstName.count <= 150
-            && trimmed.lastName.count <= 150 && phoneValid
+            && trimmed.lastName.count <= 150 && phoneValid && emailValid && addressValid
     }
     private var unchanged: Bool { trimmed == loaded }
     private var busy: Bool { isSaving || isSavingPhoto || isLoading }
@@ -211,13 +225,35 @@ private struct SchoolSelfProfileSheet: View {
                         .textContentType(.name).textInputAutocapitalization(.words).autocorrectionDisabled()
                         .accessibilityIdentifier("rename-self-field")
                 }
-                Section {
+                Section("Contact") {
+                    TextField("E-mail", text: $edit.contactEmail)
+                        .textContentType(.emailAddress).keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("self-email")
+                    if !emailValid { DrivyFormMessage(text: "Vérifie le format de l’adresse e-mail.", tone: .danger) }
                     TextField("Téléphone", text: $edit.contactPhone)
                         .textContentType(.telephoneNumber).keyboardType(.phonePad)
                         .accessibilityIdentifier("self-phone")
-                } footer: {
+                    if !phoneValid { DrivyFormMessage(text: "Ce numéro contient un caractère inattendu.", tone: .danger) }
+                }
+                Section("Date de naissance") { birthRow }
+                Section {
+                    Toggle("Renseigner une adresse", isOn: $hasAddress.animation())
+                        .drivyControlTint()
+                        .accessibilityIdentifier("self-address-toggle")
+                    if hasAddress {
+                        TextField("Rue et numéro", text: $address.line1).textContentType(.streetAddressLine1)
+                        TextField("Complément · facultatif", text: Binding(get: { address.line2 ?? "" }, set: { address.line2 = $0.isEmpty ? nil : $0 }))
+                            .textContentType(.streetAddressLine2)
+                        TextField("Code postal", text: $address.postalCode).textContentType(.postalCode)
+                        TextField("Localité", text: $address.locality).textContentType(.addressCity)
+                        countryPicker
+                        if !addressValid, !clean(address.line1).isEmpty || !address.countryCode.isEmpty {
+                            DrivyFormMessage(text: "Complète la rue, le code postal, la localité et le pays.", tone: .danger)
+                        }
+                    }
+                } header: { Text("Adresse") } footer: {
                     if let error { DrivyFormMessage(text: error, tone: .danger) }
-                    else if !phoneValid { DrivyFormMessage(text: "Ce numéro contient un caractère inattendu.", tone: .danger) }
                     else if trimmed.displayName.count > 200 { DrivyFormMessage(text: "Raccourcis le nom affiché à 200 caractères.", tone: .danger) }
                 }
             }
@@ -243,6 +279,39 @@ private struct SchoolSelfProfileSheet: View {
             pickedPhoto = nil
             Task { await prepare(item) }
         }
+    }
+
+    /// Date civile choisie avec le sélecteur natif ; aucune date n’est posée tant que la personne n’en choisit pas.
+    @ViewBuilder private var birthRow: some View {
+        if let date = Self.civil.date(from: edit.birthDate) {
+            DatePicker("Date de naissance", selection: Binding(get: { date }, set: { edit.birthDate = Self.civil.string(from: $0) }),
+                in: Self.earliest...Date(), displayedComponents: .date)
+                .environment(\.locale, Locale(identifier: "fr_CH"))
+                .accessibilityIdentifier("self-birth-date")
+            Button("Retirer la date", role: .destructive) { edit.birthDate = "" }
+                .accessibilityIdentifier("self-birth-date-clear")
+        } else {
+            Button("Ajouter la date de naissance") {
+                edit.birthDate = Self.civil.string(from: Calendar(identifier: .gregorian).date(byAdding: .year, value: -18, to: Date()) ?? Date())
+            }
+            .accessibilityIdentifier("self-birth-date-add")
+        }
+    }
+    private static let civil: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "Europe/Zurich"); f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
+        return f
+    }()
+    private static let earliest = civil.date(from: "1900-01-01") ?? .distantPast
+
+    private var countryPicker: some View {
+        let code = address.countryCode, local = SchoolProfileCountry.local
+        return Picker("Pays", selection: $address.countryCode) {
+            if !SchoolProfileCountry.all.contains(where: { $0.code == code }) { Text(code.isEmpty ? "Choisir" : code).tag(code) }
+            if let local { Text(local.name).tag(local.code); Divider() }
+            ForEach(SchoolProfileCountry.all.filter { $0.code != local?.code }) { Text($0.name).tag($0.code) }
+        }
+        .accessibilityIdentifier("self-country")
     }
 
     private var photoRow: some View {
@@ -283,9 +352,10 @@ private struct SchoolSelfProfileSheet: View {
     }
 
     private func fill(from profile: SchoolSelfProfile) {
-        let value = SchoolSelfProfileEdit(displayName: profile.displayName, firstName: profile.firstName ?? "",
-            lastName: profile.lastName ?? "", contactPhone: profile.contactPhone ?? "")
+        let value = SchoolSelfProfileEdit(profile)
         edit = value; loaded = value
+        hasAddress = profile.postalAddress != nil
+        address = profile.postalAddress ?? SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
     }
 
     private func save() {
@@ -300,9 +370,7 @@ private struct SchoolSelfProfileSheet: View {
                 dismiss()
             } catch {
                 isSaving = false
-                if case SchoolSelfProfileFailure.changed = error, let profile = workspace.selfProfile { loaded = SchoolSelfProfileEdit(
-                    displayName: profile.displayName, firstName: profile.firstName ?? "", lastName: profile.lastName ?? "",
-                    contactPhone: profile.contactPhone ?? "") }
+                if case SchoolSelfProfileFailure.changed = error, let profile = workspace.selfProfile { loaded = SchoolSelfProfileEdit(profile) }
                 // La saisie reste en place : elle se corrige ou se renvoie telle quelle.
                 self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
             }
