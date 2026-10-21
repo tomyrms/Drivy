@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:drivy:contract:live-match:1",
-  "$comment": "Extension du 20 octobre 2026, POST /v1/schools/{schoolId}/captures/{captureId}/live-match. OpenAPI canonique 3.11.0 inchangé. Aucune persistance, aucun journal de positions, aucune clé d'idempotence requise, aucune publication. Les positions de réponse servent seulement à l'affichage et ne deviennent jamais mesures ou ancres pédagogiques. OSRM privé exclusivement, aucun fallback Mapbox. Le client rejette toute réponse dont capture/segment/sequence/elapsedMs ne correspondent plus à sa dernière mesure active et toute réponse âgée de plus de 2 secondes depuis l'émission.",
+  "$id": "urn:drivy:contract:live-match:2",
+  "$comment": "Extension du 20 octobre 2026, révisée le 21 octobre (issue #90) : POST /v1/schools/{schoolId}/captures/{captureId}/live-match. OpenAPI canonique 3.11.0 inchangé. Aucune persistance, aucun journal de positions, aucune clé d'idempotence, aucune publication. Position et tronçon renvoyés servent seulement à l'affichage et ne deviennent jamais mesures ni ancres pédagogiques. OSRM privé exclusivement, aucun repli vers un tiers. Le client applique la position seulement si elle correspond à sa dernière mesure active dans les 2 secondes suivant l'émission ; le tronçon ancré sur des mesures déjà affichées peut remplacer leur portion de ligne même si une mesure plus récente est arrivée.",
   "$defs": {
     "LiveMatchRequest": {
       "type": "object", "additionalProperties": false, "required": ["segmentId", "points"],
-      "$comment": "3 à 20 mesures réelles d'un même segment, fenêtre de 30 secondes au plus sur capturedAt et elapsedMs. Sequence, elapsedMs et capturedAt strictement croissants. Écarts des deux horloges par paire <=1000ms. Trous de séquence autorisés. Seuls les points inclus dans l'autorisation capture sont admissibles. Les limites inter-points sont vérifiées côté serveur en plus du schéma.",
+      "$comment": "3 à 30 mesures réelles d'un même segment, fenêtre de 30 secondes au plus sur capturedAt et elapsedMs. Sequence, elapsedMs et capturedAt strictement croissants. Écart des deux horloges par paire <= 1000 ms. Trous de séquence autorisés. Seules les mesures comprises dans l'autorisation de capture sont admissibles.",
       "properties": {
         "segmentId": {"type": "string", "format": "uuid"},
-        "points": {"type": "array", "minItems": 3, "maxItems": 20, "items": {"$ref": "#/$defs/LivePoint"}}
+        "points": {"type": "array", "minItems": 3, "maxItems": 30, "items": {"$ref": "#/$defs/LivePoint"}}
       }
     },
     "LivePoint": {
@@ -21,7 +21,15 @@
         "latitude": {"type": "number", "minimum": -90, "maximum": 90},
         "longitude": {"type": "number", "minimum": -180, "maximum": 180},
         "accuracyMeters": {"type": "number", "minimum": 0, "maximum": 10000},
-        "speed": {"type": "number", "minimum": 0, "maximum": 100, "description": "Vitesse mesurée fiable en mètres/seconde, facultative. Jamais une prédiction d'affichage."}
+        "speed": {"type": "number", "minimum": 0, "maximum": 100, "description": "Vitesse mesurée en mètres par seconde, facultative et informative. N'intervient plus dans l'admission."}
+      }
+    },
+    "LiveRoute": {
+      "type": "object", "additionalProperties": false, "required": ["coordinates", "anchors"],
+      "$comment": "Géométrie routière recalée entre les mesures retenues, la dernière incluse et en dernier. coordinates : [latitude, longitude], 2 à 400 sommets. anchors : [sequence, index du sommet], dans l'ordre, au moins trois, la première sur le sommet 0 et la dernière sur le dernier.",
+      "properties": {
+        "coordinates": {"type": "array", "minItems": 2, "maxItems": 400, "items": {"type": "array", "prefixItems": [{"type": "number", "minimum": -90, "maximum": 90}, {"type": "number", "minimum": -180, "maximum": 180}], "items": false, "minItems": 2}},
+        "anchors": {"type": "array", "minItems": 3, "maxItems": 30, "items": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 0, "maximum": 2147483646}, {"type": "integer", "minimum": 0, "maximum": 399}], "items": false, "minItems": 2}}
       }
     },
     "LiveMatchResult": {
@@ -33,19 +41,20 @@
         "sequence": {"type": "integer", "minimum": 0, "maximum": 2147483646},
         "elapsedMs": {"type": "integer", "minimum": 0, "maximum": 10800000},
         "position": {"type": "object", "additionalProperties": false, "required": ["latitude", "longitude"], "properties": {"latitude": {"type": "number", "minimum": -90, "maximum": 90}, "longitude": {"type": "number", "minimum": -180, "maximum": 180}}},
-        "confidence": {"type": "number", "minimum": 0.8, "maximum": 1},
-        "distanceMeters": {"type": "number", "minimum": 0, "maximum": 20}
+        "confidence": {"type": "number", "minimum": 0.6, "maximum": 1},
+        "distanceMeters": {"type": "number", "minimum": 0, "maximum": 25},
+        "route": {"$ref": "#/$defs/LiveRoute"}
       },
       "oneOf": [
-        {"properties": {"status": {"const": "MATCHED"}}, "required": ["position", "confidence", "distanceMeters"]},
-        {"properties": {"status": {"const": "UNAVAILABLE"}}, "not": {"anyOf": [{"required": ["position"]}, {"required": ["confidence"]}, {"required": ["distanceMeters"]}]}}
+        {"properties": {"status": {"const": "MATCHED"}}, "required": ["position", "confidence", "distanceMeters", "route"]},
+        {"properties": {"status": {"const": "UNAVAILABLE"}}, "not": {"anyOf": [{"required": ["position"]}, {"required": ["confidence"]}, {"required": ["distanceMeters"]}, {"required": ["route"]}]}}
       ],
-      "$comment": "Dernière mesure seulement. UNAVAILABLE sans positions si moteur absent/timeout/panne ou ambiguïté. Deadline moteur 750ms incluant réponse, corps OSRM <=64KiB. Confiance >=0.8, tous les points présents dans le même matching et alternatives_count=0. Écart de chaque mesure <=min(20,max(5,accuracyMeters))m. Refus de précision >30m, gap >5s, vitesse implicite >50m/s, dernière vitesse implicite <2m/s, speed dernier <2m/s si présent, déplacement net <10m ou rapport net/chemin <0.75. Refus d'une inversion de direction (>90 degrés) dans les quatre dernières transitions ou entre le dernier déplacement et la progression qui le précède. Dernière mesure âgée de <=10s, première <=40s, tolérance future <=10s. Seuils conservateurs non qualifiés sur appareil."
+      "$comment": "Politique (diagnostic #89) : le moteur reçoit au plus les mesures espacées d'au moins 20 m en remontant depuis la dernière (moins de trois : immobile, UNAVAILABLE sans appel). Refus sans appel : dernière mesure > 30 m de précision, lacune > 5 s, vitesse implicite > 50 m/s, demi-tour dans les quatre dernières transitions retenues, rapport net/chemin < 0,6, dernière mesure âgée de plus de 10 s, première de plus de 40 s. Après réponse : confiance >= 0,6, au moins trois mesures consécutives jusqu'à la dernière sur le même tronçon, écart de chacune <= min(25, max(10, 2,5 x précision)) m, longueur routière <= 1,6 x chemin mesuré + 30 m (aucun détour inventé). Délai moteur 750 ms corps compris, corps OSRM <= 128 Kio. Seuils synthétiques, à requalifier sur appareil."
     },
     "LiveMatchEnvelope": {
       "type": "object", "additionalProperties": false, "required": ["data", "requestId", "serverTime"],
       "properties": {"data": {"$ref": "#/$defs/LiveMatchResult"}, "requestId": {"type": "string"}, "serverTime": {"type": "string", "format": "date-time"}},
-      "$comment": "HTTP 200, Cache-Control no-store. Droits withActor relus avant et après moteur en deux transactions READ ONLY distinctes. Propriétaire personne et membership INSTRUCTOR actif, auteur actuel de leçon et affectation valide, capture AUTHORIZED privée, non expirée, non arrêtée, non révoquée, choix effectif ALLOWED. 400 paramètres invalides sans valeur sensible, 401 identité absente/invalide, 403 accès scolaire absent, 404 capture non autorisée, 413 corps >16KiB, 429 cadence ou saturation avec Retry-After:2. Limiteur par instance: 1024 empreintes d'identité max, durée inactive 60s, un appel/2s et un appel actif par identité, 8 appels actifs globaux. Identité commune à toutes écoles et captures, aucune donnée GPS dans le limiteur."
+      "$comment": "HTTP 200, Cache-Control no-store. Droits withActor relus avant et après moteur en deux transactions READ ONLY distinctes. Propriétaire personne et adhésion INSTRUCTOR active, auteur actuel de la leçon et affectation valide, capture AUTHORIZED privée, non expirée, non arrêtée, non révoquée, choix effectif ALLOWED. 400 paramètres invalides sans valeur sensible, 401 identité absente ou invalide, 403 accès scolaire absent, 404 capture non autorisée, 413 corps > 16 Kio, 429 cadence ou saturation avec Retry-After: 2. Limiteur par instance : 1024 empreintes d'identité au plus, inactivité 60 s, un appel par 2 s et un appel actif par identité, 8 appels actifs au total."
     }
   }
 }

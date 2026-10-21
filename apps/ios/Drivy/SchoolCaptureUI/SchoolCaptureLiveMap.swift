@@ -60,28 +60,29 @@ import SwiftUI
     }
 
     /// Results are checked again at the rendering boundary, against the current real fix.
-    /// Clearing a suggestion glides back to prediction rather than jumping off the road.
+    /// Clearing a suggestion glides back to prediction rather than jumping off the road. With Reduce Motion the
+    /// road place is still used; only the glide becomes an instant placement.
     func showRoadMatch(_ response: SchoolLiveMatchResponse?, segment: SchoolCaptureMapSegment?) {
-        guard !reduceMotion, let response, response.status == .matched,
+        let maximum = segment?.lastPoint.map { SchoolLiveMatchWindow.maximumCorrection($0.accuracyMeters) } ?? 0
+        guard let response, response.status == .matched,
               let segment, let last = segment.lastPoint,
               response.segmentId == segment.id, response.sequence == last.sequence,
               response.elapsedMs == last.elapsedMs, target?.segmentID == segment.id,
               target?.elapsedMs == last.elapsedMs, let position = response.position, position.isValid,
-              let confidence = response.confidence, confidence.isFinite, (0.8...1).contains(confidence),
-              let distance = response.distanceMeters, distance.isFinite,
-              (0...min(20, max(5, last.accuracyMeters))).contains(distance),
-              segment.liveFix?.speedMetersPerSecond.map({ $0 >= 2 }) ?? true,
+              let confidence = response.confidence, confidence.isFinite, (SchoolLiveMatchWindow.minimumConfidence...1).contains(confidence),
+              let distance = response.distanceMeters, distance.isFinite, (0...maximum).contains(distance),
               SchoolTrackGeometry.meters(latitude1: last.latitude, longitude1: last.longitude,
-                  latitude2: position.latitude, longitude2: position.longitude) <= min(20, max(5, last.accuracyMeters)) else {
+                  latitude2: position.latitude, longitude2: position.longitude) <= maximum else {
             if roadMatch != nil {
                 roadMatch = nil
-                predictor.clearRoadCorrection(at: CACurrentMediaTime())
+                predictor.clearRoadCorrection(at: CACurrentMediaTime(), instant: reduceMotion)
                 wake?()
             }
             return
         }
         guard response != roadMatch else { return }
-        if predictor.correctRoadPosition(latitude: position.latitude, longitude: position.longitude, at: CACurrentMediaTime()) {
+        if predictor.correctRoadPosition(latitude: position.latitude, longitude: position.longitude, at: CACurrentMediaTime(),
+                                         instant: reduceMotion) {
             roadMatch = response
             wake?()
         }
@@ -118,6 +119,8 @@ struct SchoolCaptureLiveMap: View {
     /// Départ sans position enregistrée : la position de l’appareil selon Plans, affichée et jamais enregistrée.
     var showsDevicePosition = false
     var roadMatch: SchoolLiveMatchResponse? = nil
+    /// Accepted road stretches of the trip being recorded: the line follows the road between their anchors.
+    var roadRoutes: [SchoolLiveRoadRoute] = []
     @Binding var followMode: DrivyMapFollowMode
     @State private var trace = SchoolLiveTrace()
     @State private var motion = SchoolLiveMapMotion()
@@ -154,7 +157,7 @@ struct SchoolCaptureLiveMap: View {
     }
 
     private func synchronize() {
-        trace.update(priorSegments + segments, liveFrom: priorSegments.count)
+        trace.update(priorSegments + segments, liveFrom: priorSegments.count, roads: roadRoutes)
         motion.followMode = followMode
         motion.reduceMotion = reduceMotion
         motion.show(trace.position, fix: liveSegment?.liveFix)

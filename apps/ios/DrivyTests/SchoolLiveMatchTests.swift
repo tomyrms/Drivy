@@ -7,10 +7,10 @@ struct SchoolLiveMatchTests {
     private let segment = UUID()
     private let metre = 180 / (.pi * 6_371_000.0)
 
-    private func point(_ sequence: Int, speed: Double? = 10) -> SchoolLiveMatchPoint {
+    private func point(_ sequence: Int, speed: Double? = 10, east: Double = 10) -> SchoolLiveMatchPoint {
         SchoolLiveMatchPoint(sequence: sequence, elapsedMs: sequence * 1_000,
             capturedAt: SchoolCaptureLocationTime.timestamp(Date(timeIntervalSince1970: 1_792_526_400 + Double(sequence))),
-            latitude: 0, longitude: Double(sequence) * 10 * metre, accuracyMeters: 8, speed: speed)
+            latitude: 0, longitude: Double(sequence) * east * metre, accuracyMeters: 8, speed: speed)
     }
 
     private func matched(_ request: SchoolLiveMatchRequest, north: Double = 4,
@@ -38,7 +38,7 @@ struct SchoolLiveMatchTests {
         window.append((4...100).map { point($0) })
         let boundedRequest = window.request(at: 5)
         let bounded = try #require(boundedRequest)
-        #expect(bounded.points == (81...100).map { point($0) })
+        #expect(bounded.points == (71...100).map { point($0) })
         let duplicate = window.request(at: 8)
         #expect(duplicate == nil) // Never resend the same fix.
     }
@@ -91,17 +91,85 @@ struct SchoolLiveMatchTests {
         window.append([point(0), point(1), point(2)])
         let candidate = window.request(at: 0)
         let request = try #require(candidate)
-        #expect(!window.accepts(matched(request, confidence: 0.79), for: request, sentAt: 0, now: 0.1))
+        #expect(!window.accepts(matched(request, confidence: 0.59), for: request, sentAt: 0, now: 0.1))
+        #expect(window.accepts(matched(request, confidence: 0.65), for: request, sentAt: 0, now: 0.1))
         #expect(!window.accepts(matched(request, distance: 30), for: request, sentAt: 0, now: 0.1))
         // Do not trust only the server's distance field.
         #expect(!window.accepts(matched(request, north: 40), for: request, sentAt: 0, now: 0.1))
-        var parking = SchoolLiveMatchWindow(segmentID: segment)
-        parking.append([point(0), point(1), point(2, speed: 0.5)])
-        let parkedRequest = parking.request(at: 0)
-        #expect(parkedRequest == nil)
+        // A slow fix is still sent: the school decides from the spacing of the fixes, not from the Doppler speed.
+        var slow = SchoolLiveMatchWindow(segmentID: segment)
+        slow.append([point(0), point(1), point(2, speed: 0.5)])
+        let slowRequest = slow.request(at: 0)
+        #expect(slowRequest != nil)
         let unavailable = SchoolLiveMatchResponse(status: .unavailable, segmentId: segment, sequence: 2, elapsedMs: 2_000,
             position: nil, confidence: nil, distanceMeters: nil)
         #expect(!window.accepts(unavailable, for: request, sentAt: 0, now: 0.1))
+    }
+
+    private func routed(_ request: SchoolLiveMatchRequest, anchors: [[Int]]? = nil, offset: Double = 3) -> SchoolLiveMatchResponse {
+        let points = request.points
+        let coordinates = points.map { [$0.latitude + offset * metre, $0.longitude] }
+        let last = points.last!
+        return .init(status: .matched, segmentId: request.segmentId, sequence: last.sequence, elapsedMs: last.elapsedMs,
+            position: .init(latitude: last.latitude + offset * metre, longitude: last.longitude), confidence: 0.9, distanceMeters: offset,
+            route: .init(coordinates: coordinates, anchors: anchors ?? points.enumerated().map { [$0.element.sequence, $0.offset] }))
+    }
+
+    @Test func aRoadStretchIsKeptOnlyWhenItIsAnchoredOnTheFixesThatWereSent() throws {
+        let request = SchoolLiveMatchRequest(segmentId: segment, points: (0...3).map { point($0, east: 25) })
+        let route = try #require(routed(request).roadRoute(for: request))
+        #expect(route.anchors.map(\.sequence) == [0, 1, 2, 3])
+        #expect(route.vertices.count == 4)
+        // A sequence that was not sent, out of order, off the last vertex or too far from its fix: refused.
+        #expect(routed(request, anchors: [[0, 0], [7, 1], [2, 2], [3, 3]]).roadRoute(for: request) == nil)
+        #expect(routed(request, anchors: [[0, 0], [2, 1], [1, 2], [3, 3]]).roadRoute(for: request) == nil)
+        #expect(routed(request, anchors: [[0, 0], [1, 1], [3, 2]]).roadRoute(for: request) == nil)
+        #expect(routed(request, offset: 40).roadRoute(for: request) == nil)
+        let unavailable = SchoolLiveMatchResponse(status: .unavailable, segmentId: segment, sequence: 3, elapsedMs: 3_000,
+            position: nil, confidence: nil, distanceMeters: nil)
+        #expect(unavailable.roadRoute(for: request) == nil)
+    }
+
+    @Test @MainActor func theLineFollowsTheRoadBetweenAnchorsButPositionsAndAnchorsStayMeasured() throws {
+        let measurements = (0...5).map { index in
+            SchoolCaptureMeasurement(capturedAt: "2026-10-20T20:00:0\(index)Z", elapsedMs: index * 1_000,
+                latitude: 0, longitude: Double(index) * 25 * metre, accuracyMeters: 8, speedMetersPerSecond: 25, courseDegrees: 90)
+        }
+        let mapSegment = SchoolCaptureMapSegment(id: segment, measurements: measurements)
+        let trace = SchoolLiveTrace()
+        trace.update([mapSegment])
+        let measured = trace.lines.filter { $0.style == .route }.flatMap(\.coordinates)
+        #expect(measured.allSatisfy { $0.latitude == 0 })
+        // A stretch from fix 1 to fix 4, three metres north with one road vertex between fixes 2 and 3.
+        let vertices: [SchoolLiveRoadRoute.Vertex] = [1, 2, 2.5, 3, 4].map { .init(latitude: 3 * metre, longitude: $0 * 25 * metre) }
+        let stretch = SchoolLiveRoadRoute(segmentID: segment, vertices: vertices, anchors: [(1, 0), (2, 1), (3, 3), (4, 4)])
+        trace.update([mapSegment], roads: [stretch])
+        let drawn = trace.lines.filter { $0.style == .route }.flatMap(\.coordinates)
+        #expect(drawn.count == 7)
+        #expect(drawn.first?.latitude == 0 && drawn.last?.latitude == 0)
+        #expect(drawn[1...5].allSatisfy { abs($0.latitude - 3 * metre) < 1e-12 })
+        // Fixes, current position and observation anchors are still the measurements.
+        #expect(trace.coordinate(segmentID: segment, sequence: 2)?.latitude == 0)
+        #expect(trace.position?.point.latitude == 0)
+        #expect(mapSegment.measurementCount == 6)
+        // Without stretches the measured line comes back unchanged.
+        trace.update([mapSegment], roads: [])
+        #expect(trace.lines.filter { $0.style == .route }.flatMap(\.coordinates).allSatisfy { $0.latitude == 0 })
+    }
+
+    @Test @MainActor func aStretchNeverCrossesASilence() {
+        var mapSegment = SchoolCaptureMapSegment(id: segment, measurements: [])
+        for (index, second, east) in [(0, 0.0, 0.0), (1, 1.0, 25.0), (2, 2.0, 50.0), (3, 40.0, 900.0), (4, 41.0, 925.0)] {
+            _ = index
+            mapSegment.appendDurable([SchoolCaptureMeasurement(capturedAt: SchoolCaptureLocationTime.timestamp(Date(timeIntervalSince1970: 1_792_526_400 + second)),
+                elapsedMs: Int(second * 1_000), latitude: 0, longitude: east * metre, accuracyMeters: 8)])
+        }
+        let across = SchoolLiveRoadRoute(segmentID: segment, vertices: [0, 25, 900, 925].map { .init(latitude: 3 * metre, longitude: $0 * metre) },
+            anchors: [(1, 0), (2, 1), (3, 2), (4, 3)])
+        let trace = SchoolLiveTrace()
+        trace.update([mapSegment], roads: [across])
+        #expect(trace.lines.filter { $0.style == .route }.flatMap(\.coordinates).allSatisfy { $0.latitude == 0 })
+        #expect(trace.hasGaps)
     }
 
     @Test @MainActor func roadDisplayNeverChangesTheTraceOrObservationAnchor() throws {
@@ -294,7 +362,7 @@ struct SchoolLiveMatchLifecycleTests {
         coordinator.stop()
     }
 
-    @Test(arguments: ["pause", "context", "newerFix"])
+    @Test(arguments: ["pause", "context"])
     func lifecycleChangesCancelAnInFlightRequest(_ change: String) async throws {
         let segment = UUID()
         let coordinator = SchoolLiveMatchCoordinator(now: { 0 })
@@ -324,13 +392,50 @@ struct SchoolLiveMatchLifecycleTests {
                 Issue.record("No measurement belongs to the new context yet")
                 throw CancellationError()
             })
-        case "newerFix": coordinator.measurementArrived(segmentID: segment, elapsedMs: 3_000)
         default: coordinator.stop()
         }
         _ = await eventsIterator.next() // The in-flight operation observed cancellation.
         #expect(coordinator.result == nil)
         coordinator.stop()
         continuation.finish()
+    }
+
+    /// A newer fix withdraws the marker correction but no longer cancels the request: its road stretch, which
+    /// describes fixes already drawn, is still kept when it comes back late (#90).
+    @Test func aLateAnswerAfterANewerFixKeepsItsStretchButNotTheMarker() async throws {
+        let metre = 180 / (.pi * 6_371_000.0)
+        let segment = UUID()
+        let coordinator = SchoolLiveMatchCoordinator(now: { 0 })
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        let (done, finished) = AsyncStream<Void>.makeStream()
+        var doneIterator = done.makeAsyncIterator()
+        coordinator.start(segmentID: segment, permits: { true }, send: { request in
+            var iterator = gate.makeAsyncIterator()
+            _ = await iterator.next()
+            defer { finished.yield(()) }
+            let last = request.points.last!
+            return .init(status: .matched, segmentId: request.segmentId, sequence: last.sequence, elapsedMs: last.elapsedMs,
+                position: .init(latitude: last.latitude + 2 * metre, longitude: last.longitude), confidence: 0.9, distanceMeters: 2,
+                route: .init(coordinates: request.points.map { [$0.latitude + 2 * metre, $0.longitude] },
+                    anchors: request.points.enumerated().map { [$0.element.sequence, $0.offset] }))
+        })
+        let measurements = (0...2).map { index in
+            SchoolCaptureMeasurement(capturedAt: "2026-10-20T20:00:0\(index)Z", elapsedMs: index * 1_000,
+                latitude: 0, longitude: Double(index) * 25 * metre, accuracyMeters: 8, speedMetersPerSecond: 25)
+        }
+        coordinator.appendDurable(measurements, startingAt: 0, segmentID: segment)
+        coordinator.measurementArrived(segmentID: segment, elapsedMs: 3_000)
+        release.yield(())
+        _ = await doneIterator.next()
+        for _ in 0..<100 where coordinator.roadRoutes.isEmpty { await Task.yield() }
+        #expect(coordinator.result == nil)
+        #expect(coordinator.roadRoutes.count == 1)
+        #expect(coordinator.roadRoutes.first?.anchors.map(\.sequence) == [0, 1, 2])
+        coordinator.stop()
+        #expect(coordinator.roadRoutes.count == 1)
+        coordinator.clearRoutes()
+        #expect(coordinator.roadRoutes.isEmpty)
+        release.finish(); finished.finish()
     }
 
     @Test func aLateResponseGetsOnlyTheRemainingDisplayLifetime() async throws {

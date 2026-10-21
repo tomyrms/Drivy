@@ -123,21 +123,22 @@ struct SchoolMapPredictor {
 
     /// Corrects the display towards a route position for the same fix, without resetting
     /// velocity, extrapolation time, or the real fix. Rejected offsets never teleport the marker.
+    /// `instant` (Reduce Motion) places the marker on the road at once instead of gliding there.
     @discardableResult
-    mutating func correctRoadPosition(latitude: Double, longitude: Double, at now: TimeInterval) -> Bool {
+    mutating func correctRoadPosition(latitude: Double, longitude: Double, at now: TimeInterval, instant: Bool = false) -> Bool {
         guard let fix, latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude),
               (-180...180).contains(longitude), let drawn = position(at: now) else { return false }
         let offset = Self.offset(from: (fix.latitude, fix.longitude), to: (latitude, longitude))
-        guard hypot(offset.east, offset.north) <= 20 else { return false }
+        guard hypot(offset.east, offset.north) <= 25 else { return false }
         roadOffset = offset
-        preserveDrawnPosition(drawn, at: now)
+        if instant { correction = (0, 0, now) } else { preserveDrawnPosition(drawn, at: now) }
         return true
     }
 
-    mutating func clearRoadCorrection(at now: TimeInterval) {
+    mutating func clearRoadCorrection(at now: TimeInterval, instant: Bool = false) {
         guard roadOffset.east != 0 || roadOffset.north != 0, let drawn = position(at: now) else { return }
         roadOffset = (0, 0)
-        preserveDrawnPosition(drawn, at: now)
+        if instant { correction = (0, 0, now) } else { preserveDrawnPosition(drawn, at: now) }
     }
 
     private mutating func preserveDrawnPosition(_ drawn: (latitude: Double, longitude: Double), at now: TimeInterval) {
