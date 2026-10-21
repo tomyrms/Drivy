@@ -6,8 +6,9 @@
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
 - Décision du porteur (21 octobre 2026) : pas de bascule, le proxy Cloudflare est conservé. La lenteur mesurée par Cloudflare reste ouverte.
 
-## 21 octobre 2026 : recalage direct sur la route (#90)
+## 21 octobre 2026 : recalage direct sur la route (#90), déployé
 
+- API 0c887e1 déployée sur CT114 (00:17 Zurich) après sauvegarde vérifiée `/root/drivy_refonte-before-0c887e1-20261021T221632Z.dump`. Sans migration. L'ancienne app ignore le champ `route` et reste compatible.
 - Ligne et marqueur en direct suivent la route (OSRM privé) : mesures espacées de 20 m, plus de garde de vitesse, tronçon routier ancré renvoyé par l'API (`live-match` v2), réponses tardives conservées pour la ligne, Réduire les animations garde le recalage. Détails et mesures : `recalage-direct-route-20261021.md`.
 - Exécuté : tests API (53, dont 26 sur PostgreSQL réelle), validation du vrai module sur CT114 contre CT117 (0 % → 25 à 67 % de fenêtres recalées en conduite synthétique, position p50 3 à 5 m, 0 % à pied hors route), compilation IPA.
 - À qualifier : conduite réelle, réseau mobile, iPad, VoiceOver ; tests Swift sur runner Apple non lancés.
