@@ -203,10 +203,15 @@ struct SchoolCaptureLiveView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 commandDock()
                 .frame(maxWidth: DrivyMapLayout.floatingPanelMaxWidth)
-                .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs).padding(.bottom, DrivySpacing.s)
+                .padding(.horizontal, DrivySpacing.m).padding(.top, DrivySpacing.xs)
+                // Sous le panneau, une bande de carte reste visible : la mention Apple Plans s’y lit en entier (#85).
+                .padding(.bottom, showsMap ? DrivyMapLayout.attributionStrip : DrivySpacing.s)
                 .frame(maxWidth: .infinity)
             }
     }
+
+    /// Une vraie carte MapKit est à l’écran (et donc sa mention native), pas l’écran d’attente.
+    private var showsMap: Bool { controller.hasDisplayedPosition || showsDevicePosition }
 
     private var wideContent: some View {
         HStack(spacing: 0) {

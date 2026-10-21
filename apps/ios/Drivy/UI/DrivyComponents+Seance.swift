@@ -880,4 +880,8 @@ enum DrivyMapLayout {
     /// Popover of « Signaler » anchored on the button in regular width (iPad): its width, and the tallest it gets.
     /// The palette's own height follows its tiles (`SchoolSignalGridLayout`).
     static let reportPopoverSize = CGSize(width: 480, height: 560)
+    /// Bande de carte laissée libre sous un panneau flottant, au-dessus de la zone du geste d’accueil : MapKit y pose
+    /// lui-même la mention Plans et « Légal » (marge de 8 pt plus le logo). Mesurée depuis la zone sûre, elle vaut
+    /// sur tous les iPhone ; la mention native n’est ni déplacée ni redessinée (#85).
+    static let attributionStrip: CGFloat = 30
 }
