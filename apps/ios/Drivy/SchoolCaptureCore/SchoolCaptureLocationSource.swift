@@ -80,6 +80,23 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
     private var startedBatteryMonitoring = false
     private(set) var discardedCallbackCount = 0
 
+    /// Mesures reçues dans le même lot qu’un trou de signal, à partir de la première mesure de reprise. Elles ne
+    /// sont jamais enregistrées ici : le segment suivant de la même capture, ouvert à l’instant même de cette
+    /// mesure, les rejoue par le même contrôle que tout callback (bail, permission, précision, ordre, âge).
+    private struct SignalRecovery {
+        let captureID: UUID
+        let scope: SchoolCommandScope
+        let locations: [CLLocation]
+        /// Repère du segment suivant : celui du segment interrompu décalé jusqu’à la première mesure de reprise.
+        let wallStartedAt: Date
+        let monotonicStartedAt: ContinuousClock.Instant
+        let mappedStartedAt: Date
+        let createdAt: ContinuousClock.Instant
+    }
+    private var signalRecovery: SignalRecovery?
+    /// Segment préparé sur ce repère : son démarrage rejouera les mesures de reprise.
+    private var preparedRecovery: SignalRecovery?
+
     override init() {
         super.init()
         permissionManager.delegate = self
@@ -205,6 +222,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         if changed {
             startGate.reset()
             preparedSegmentID = nil
+            signalRecovery = nil; preparedRecovery = nil
             diagnosticRequested = false
             lastDiagnostic = nil
             permissionManager.stopUpdatingLocation()
@@ -234,6 +252,22 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         let id = UUID()
         preparedSegmentID = id
         stoppedBoundary = nil
+        // Reprise après un trou de signal de cette même capture : le segment commence à la première mesure de reprise
+        // déjà reçue, pour la garder. Toute autre situation repart de maintenant.
+        preparedRecovery = nil
+        if let recovery = signalRecovery {
+            signalRecovery = nil
+            if recovery.captureID == capture.id, recovery.scope == scope,
+               SchoolCaptureLocationTime.seconds(recovery.createdAt.duration(to: now)) <= policy.maximumCallbackAgeSeconds,
+               recovery.monotonicStartedAt <= now, recovery.monotonicStartedAt < lease.collectionDeadline,
+               recovery.mappedStartedAt >= authorized, recovery.mappedStartedAt < expiry, recovery.mappedStartedAt <= mapped {
+                preparedRecovery = recovery
+                return SchoolCaptureLocationSegment(id: id, captureID: capture.id, scope: scope,
+                    startedAt: SchoolCaptureLocationTime.timestamp(recovery.mappedStartedAt), lease: lease, policy: policy,
+                    wallStartedAt: recovery.wallStartedAt, monotonicStartedAt: recovery.monotonicStartedAt,
+                    mappedStartedAt: recovery.mappedStartedAt)
+            }
+        }
         return SchoolCaptureLocationSegment(id: id, captureID: capture.id, scope: scope,
             startedAt: SchoolCaptureLocationTime.timestamp(mapped), lease: lease, policy: policy,
             wallStartedAt: Date(), monotonicStartedAt: now, mappedStartedAt: mapped)
@@ -282,21 +316,38 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         manager.showsBackgroundLocationIndicator = segment.policy.allowsBackground
         self.segment = segment; self.handle = handle; self.manager = manager
         preparedSegmentID = nil
-        armedWallTime = Date(); lastElapsedMs = nil; lastMappedMeasurement = nil; lastStorageCheck = now
+        let recovery = preparedRecovery.flatMap { $0.captureID == segment.captureID && $0.wallStartedAt == segment.wallStartedAt ? $0 : nil }
+        preparedRecovery = nil
+        // Segment de reprise : il est armé depuis la première mesure de reprise, qui est son instant de départ.
+        armedWallTime = recovery?.wallStartedAt ?? Date(); lastElapsedMs = nil; lastMappedMeasurement = nil; lastStorageCheck = now
         armDeadline(segment)
         armGap(segment, lastMeasurement: now)
         onEvent?(.signalChanged(.acquiring))
-        manager.startUpdatingLocation()
         if isForeground { startGate.didStartInForeground(captureID: segment.captureID, scope: segment.scope) }
+        guard let recovery else { manager.startUpdatingLocation(); return }
+        // Après le retour de `start` : l’appelant passe d’abord le trajet en collecte, puis ces mesures arrivent par
+        // le chemin ordinaire, avec ses contrôles. Le flux réel ne démarre qu’après elles : l’ordre des temps tient.
+        // Un arrêt ou un autre segment entre-temps les écarte, et ne démarre rien.
+        Task { @MainActor [weak self] in
+            guard let self, self.segment?.id == segment.id, let current = self.manager, current === manager else { return }
+            self.locationManager(current, didUpdateLocations: recovery.locations)
+            guard self.segment?.id == segment.id, self.manager === manager else { return }
+            manager.startUpdatingLocation()
+        }
     }
 
     @discardableResult
-    func stop() -> SchoolCaptureLocationStop? {
+    func stop() -> SchoolCaptureLocationStop? { stop(endingAt: nil) }
+
+    /// `endingAt` : borne d’un segment interrompu par un trou de signal, à la première mesure de reprise, pour que le
+    /// segment suivant commence là où celui-ci s’arrête. Sans elle, l’instant présent.
+    private func stop(endingAt: Date?) -> SchoolCaptureLocationStop? {
         let now = ContinuousClock.now
         let previous = manager, context = segment, previousHandle = handle
         // Barrière avant tout effet utilisateur : un callback ancien ne voit plus sa
         // source et la minuterie ne peut pas ressusciter sa génération.
         manager = nil; segment = nil; handle = nil; preparedSegmentID = nil; armedWallTime = nil; lastElapsedMs = nil
+        signalRecovery = nil; preparedRecovery = nil
         if startedBatteryMonitoring {
             UIDevice.current.isBatteryMonitoringEnabled = false
             startedBatteryMonitoring = false
@@ -310,7 +361,7 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         previous?.stopUpdatingLocation()
         previous?.delegate = nil
         guard let context, let previousHandle else { return stoppedBoundary }
-        var ended = context.mappedDate(at: min(now, context.lease.collectionDeadline))
+        var ended = endingAt ?? context.mappedDate(at: min(now, context.lease.collectionDeadline))
         // Une borne exclusive doit suivre le dernier point admis, même si l'arrêt
         // et le callback ont eu lieu dans la même milliseconde.
         if let last = lastMappedMeasurement { ended = max(ended, last.addingTimeInterval(0.001)) }
@@ -378,7 +429,8 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
         guard locations.count <= 1000 else { discard(locations.count); interrupt(.deviceFailure); return }
         var admitted: [SchoolCaptureMeasurement] = []
         var lastMeasurementInstant: ContinuousClock.Instant?
-        for location in locations.sorted(by: { $0.timestamp < $1.timestamp }) {
+        let ordered = locations.sorted(by: { $0.timestamp < $1.timestamp })
+        for (index, location) in ordered.enumerated() {
             let age = wall.timeIntervalSince(location.timestamp)
             guard Self.usableSource(location), location.timestamp >= armedWallTime, age >= 0,
                   age <= segment.policy.maximumCallbackAgeSeconds else { discard(1); continue }
@@ -388,8 +440,20 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
             guard lastElapsedMs.map({ elapsedMs > $0 }) ?? true else { discard(1); continue }
             if segment.policy.requiresNewSegment(previousElapsedMs: lastElapsedMs, nextElapsedMs: elapsedMs) {
                 if !admitted.isEmpty { onEvent?(.measurements(handle: handle, values: admitted)) }
-                discard(1)
-                interrupt(.signalLost)
+                // La mesure de reprise et la suite du lot ne prolongent pas ce segment : le suivant commence à elle,
+                // sur le même repère décalé, et les rejoue. Le trou reste entre les deux segments, rien n’y est inventé.
+                let resumedAt = segment.monotonicStartedAt.advanced(by: .milliseconds(elapsedMs))
+                let mappedResume = segment.mappedStartedAt.addingTimeInterval(Double(elapsedMs) / 1000)
+                if resumedAt <= now, resumedAt < segment.lease.collectionDeadline,
+                   let last = lastMappedMeasurement, mappedResume > last {
+                    let recovery = SignalRecovery(captureID: segment.captureID, scope: segment.scope,
+                        locations: Array(ordered[index...]), wallStartedAt: location.timestamp,
+                        monotonicStartedAt: resumedAt, mappedStartedAt: mappedResume, createdAt: now)
+                    interrupt(.signalLost, endingAt: mappedResume, recovery: recovery)
+                } else {
+                    discard(1)
+                    interrupt(.signalLost)
+                }
                 return
             }
             let measuredAt = segment.monotonicStartedAt.advanced(by: .milliseconds(elapsedMs))
@@ -434,6 +498,14 @@ final class SchoolCaptureLocationSource: NSObject, SchoolCaptureLocationProvidin
 
     private func interrupt(_ reason: SchoolCaptureLocationInterruption) {
         guard isRunning, let stopped = stop() else { return }
+        onEvent?(.interrupted(reason, stopped))
+    }
+
+    /// Trou de signal avec des mesures de reprise : le segment s’arrête à la première d’entre elles, gardées pour le
+    /// segment suivant de la même capture. Posées avant l’événement, qui lance la reprise.
+    private func interrupt(_ reason: SchoolCaptureLocationInterruption, endingAt: Date, recovery: SignalRecovery) {
+        guard isRunning, let stopped = stop(endingAt: endingAt) else { return }
+        signalRecovery = recovery
         onEvent?(.interrupted(reason, stopped))
     }
 

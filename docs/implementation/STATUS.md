@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 21 octobre 2026 : positions conservées après une coupure du signal (#46), non qualifié
+
+- Avant : quand un lot de positions iOS contenait une coupure de signal, la première position reçue après la coupure et le reste du lot étaient jetés. Le nouveau segment ne gardait que les positions arrivées ensuite.
+- Maintenant (`SchoolCaptureLocationSource`), le segment interrompu s'arrête exactement à la première position reçue après la coupure. Le segment suivant de la même capture commence à ce même instant, ce que le stockage local et le serveur acceptent : il commence au plus tôt à la fin du segment précédent, sans chevauchement.
+- Les positions gardées repassent par les contrôles habituels, avant le redémarrage du GPS (pour garder l'ordre des temps) : bail, permission, précision, âge, ordre. Rien n'est inventé pendant la coupure, qui reste visible entre les deux segments.
+- Un arrêt, un changement d'école ou de compte, ou une capture différente annulent cette reprise.
+- Pas de test automatisé ajouté : la source dépend d'un vrai `CLLocationManager`. Exécuté : compilation de l'IPA. Non exécuté : tests, recette sur appareil (perte puis retour du signal).
+
 ## 21 octobre 2026 : commandes de la carte GPS (#59), non qualifié
 
 Causes trouvées en lisant le code (le problème n'a pas été reproduit sur appareil) :
