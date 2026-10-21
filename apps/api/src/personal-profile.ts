@@ -44,6 +44,9 @@ export function registerPersonalProfile(app: FastifyInstance, options: { pool: P
       if (!link) throw new ApiError(403, 'IDENTITY_NOT_LINKED', 'Ce compte ne dispose pas encore d’un accès Drivy.');
       const personId = link.person_id;
       await db.query("SELECT set_config('app.person_id',$1,true)", [personId]);
+      // Même un rejeu connu est refusé une fois le compte suspendu.
+      const active = await db.query("SELECT 1 FROM drivy.person WHERE id=$1 AND status='ACTIVE'", [personId]);
+      if (!active.rowCount) throw forbidden();
       await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [personId + ':' + body.operationId]);
       const previous = (await db.query<Receipt>(
         'SELECT payload_hash,response_version,response_display_name,response_locale FROM drivy.personal_profile_operation WHERE person_id=$1 AND operation_id=$2',
