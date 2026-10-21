@@ -13,6 +13,7 @@ export async function captureHarness(pool:Pool,extra:Partial<Pick<Parameters<typ
   profiles:[{version:'SYNTHETIC-TEST-ONLY',platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',expiresAt:new Date(Date.now()+86400000).toISOString(),maxSampleAgeSeconds:5,maxHorizontalAccuracyMeters:50,minimumFreeBytes:1,requireBackground:true,requirePreciseLocation:true}],uploadHours:72};
  const app=buildApp({pool,cursorSecret:'capture-harness-secret-32-characters',capture:config,...extra,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'capture',alg:'RS256'}]}))});
  const base=`/v1/schools/${id.schoolA}`;
+ const token=(subject:string)=>new SignJWT({}).setProtectedHeader({alg:'RS256',kid:'capture'}).setIssuer(issuer).setSubject(subject).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(oidc.privateKey);
  async function call(method:'GET'|'POST'|'PUT',route:string,body?:any,version?:number,subject='demo-instructor'){
   const token=await new SignJWT({}).setProtectedHeader({alg:'RS256',kid:'capture'}).setIssuer(issuer).setSubject(subject).setAudience('drivy-api').setIssuedAt().setExpirationTime('5m').sign(oidc.privateKey);
   return app.inject({method,url:route.startsWith('/v1')?route:`${base}${route}`,headers:{authorization:`Bearer ${token}`,...(body?{'idempotency-key':body.operationId}:{}),...(version?{'if-match':`"${version}"`}:{})},...(body?{payload:body}:{})});
@@ -57,6 +58,6 @@ export async function captureHarness(pool:Pool,extra:Partial<Pick<Parameters<typ
  }
  /** Repère LIVE sans position (comme l'app tant qu'elle n'a pas d'ancre), à l'instant donné. */
  const marker=(observedAt:number,text='Repère synthétique')=>({operationId:randomUUID(),draftId:null,captureId:null,segmentId:null,pointSequence:null,competencyId:null,text,origin:'LIVE',observedAt:new Date(observedAt).toISOString(),eventKind:'MARKER',eventStatus:null});
- return {app,call,config,notice,policy,startTrip,uploadStopFinalize,pointTimes,marker};
+ return {app,call,config,notice,policy,startTrip,uploadStopFinalize,pointTimes,marker,token};
 }
 export type CaptureHarness=Awaited<ReturnType<typeof captureHarness>>;

@@ -1,23 +1,30 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:drivy:contract:self-profile:1",
-  "$comment": "Extension du 21 octobre 2026 (issue #64) : PATCH /v1/me/profile. La personne connectée modifie le nom affiché de son propre compte, quel que soit son rôle. OpenAPI canonique 3.11.0 conservé. If-Match obligatoire (version de la personne, celle de GET /v1/me). Rejouer le même nom répond 200 sans incrémenter la version. Refus : 412 VERSION_CONFLICT, 428 PRECONDITION_REQUIRED, 400 INVALID_REQUEST, 403 IDENTITY_NOT_LINKED.",
+  "$id": "urn:drivy:contract:self-profile:2",
+  "$comment": "Extension du 21 octobre 2026 (issue #64). Profil personnel de la personne connectée, quel que soit son rôle. OpenAPI canonique 3.11.0 conservé. GET /v1/me/profile ; PATCH /v1/me/profile (If-Match : version de la personne ; un renvoi identique répond 200 sans incrémenter) ; PUT /v1/me/profile/photo (corps image/jpeg, 64 à 1024 px par côté, 256 Kio au plus après nettoyage ; EXIF, XMP, ICC et commentaires retirés ; chiffré AES-256-GCM) ; DELETE /v1/me/profile/photo ; GET /v1/people/{personId}/photo (image/jpeg, soi-même ou membre actif d'une même école, sinon 404). Refus : 412 VERSION_CONFLICT, 428 PRECONDITION_REQUIRED, 400 INVALID_REQUEST, 415, 422 PHOTO_INVALID, 503 PHOTO_STORAGE_UNAVAILABLE, 403 IDENTITY_NOT_LINKED.",
   "$defs": {
     "SelfProfileUpdate": {
       "type": "object",
       "additionalProperties": false,
       "required": ["displayName"],
       "properties": {
-        "displayName": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Espaces de bord retirés, normalisé NFC, sans caractère de contrôle."}
+        "displayName": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Espaces de bord retirés, normalisé NFC, sans caractère de contrôle."},
+        "firstName": {"type": ["string", "null"], "maxLength": 150, "description": "Absent : inchangé. Chaîne vide ou null : effacé."},
+        "lastName": {"type": ["string", "null"], "maxLength": 150},
+        "contactPhone": {"type": ["string", "null"], "maxLength": 32, "pattern": "^[+0-9 ().\\-/]{3,32}$"}
       }
     },
     "SelfProfile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["personId", "displayName", "version"],
+      "required": ["personId", "displayName", "firstName", "lastName", "contactPhone", "photoVersion", "version"],
       "properties": {
         "personId": {"type": "string", "format": "uuid"},
         "displayName": {"type": "string", "minLength": 1, "maxLength": 200},
+        "firstName": {"type": ["string", "null"]},
+        "lastName": {"type": ["string", "null"]},
+        "contactPhone": {"type": ["string", "null"]},
+        "photoVersion": {"type": ["integer", "null"], "minimum": 1, "description": "null : aucune photo, les initiales s'affichent."},
         "version": {"type": "integer", "minimum": 1}
       }
     },

@@ -102,10 +102,12 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   // Un UUID se lit sans tenir compte de la casse (RFC 9562) : l'app iOS écrit en majuscules, PostgreSQL rend des minuscules.
   // Normaliser à l'entrée évite qu'une comparaison JavaScript refuse un identifiant pourtant identique.
   app.addHook('preValidation', async request => {
-    if (containsNul(request.params) || containsNul(request.query) || containsNul(request.body)) throw new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
+    // Une photo arrive en octets bruts : elle n'est ni du texte ni du JSON, et se valide dans sa route.
+    const binary = Buffer.isBuffer(request.body);
+    if (containsNul(request.params) || containsNul(request.query) || (!binary && containsNul(request.body))) throw new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
     request.params = lowercaseIds(request.params) as typeof request.params;
     request.query = lowercaseIds(request.query) as typeof request.query;
-    if (request.body !== undefined) request.body = lowercaseIds(request.body);
+    if (request.body !== undefined && !binary) request.body = lowercaseIds(request.body);
   });
   app.setErrorHandler((error, request, reply) => {
     const known = error instanceof ApiError ? error : error instanceof ZodError
