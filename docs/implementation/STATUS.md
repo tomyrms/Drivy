@@ -1,8 +1,12 @@
 # État de la réalisation
 
-## 21 octobre 2026 : signalements autonomes (#56), non déployé
+## 21 octobre 2026 : signalements autonomes (#56), déployé
 
-Branche `claude/signalements-autonomes-20261021`, commit `2e23999`, non fusionnée, non déployée. Décision et détail : [signalements-autonomes-20261021.md](signalements-autonomes-20261021.md). La palette « Signaler » ne dépend plus du référentiel de la formation : un signalement se qualifie par son thème et son statut, la compétence devient facultative. Migration `036_autonomous_signals.sql` (remplace deux contraintes de 009/026 sans les réécrire).
+Fusion en avance rapide dans `master` à la demande du porteur, puis **release `a70c17d` déployée à 02:18 Europe/Zurich**. Code serveur identique à `c1592b3`, dont la CI vérifications et navigateur est verte. Avant installation : sauvegarde privée CT113 `/root/drivy_refonte-before-a70c17d4b70a2c2de8bf224fb63067c20d9b196c-20261021T001819Z-7bfb2e5b1fba.dump`, root 0600, vérifiée par `pg_restore --file=/dev/null`. Pré-contrôle : aucune des 14 observations existantes ne contredit les nouvelles contraintes. Migration 036 appliquée, 36 empreintes conformes, contraintes `geo_observation_live_qualified` et `geo_observation_theme_key` présentes, 14 observations inchangées. API, web et identité actifs sur la release, readiness interne 200, routes publiques `/v1/me` et `/observation-themes` sans jeton 401, web 200, environnement API et configuration OSRM inchangés, aucune erreur API au contrôle du 21 octobre à 11:42.
+
+IPA à installer : build 290 (`39517398901`, commit `2e23999`, code de l’app identique à `a70c17d`), SHA-256 `fffb3e63816d28f4e05159775a60dfef908694af6aee0aac09b3086292424a6c`.
+
+Décision et détail : [signalements-autonomes-20261021.md](signalements-autonomes-20261021.md). La palette « Signaler » ne dépend plus du référentiel de la formation : un signalement se qualifie par son thème et son statut, la compétence devient facultative. Migration `036_autonomous_signals.sql` (remplace deux contraintes de 009/026 sans les réécrire).
 
 **Exécuté** : 557 tests API sur vraie PostgreSQL et Mailpit en local, 316 tests web ; CI vérifications `39517398912`, parcours navigateur `39517398907` et IPA d’essai `39517398901` verts (l’IPA prouve que l’app compile, pas que ses tests passent).
 
