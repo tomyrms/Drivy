@@ -187,10 +187,9 @@ describe('démarrage immédiat d’une leçon (start-now)',()=>{
    expect((await call('POST','/lessons',lessonBody(commercial,school.policy,43))).json().code).toBe('SLOT_UNAVAILABLE');
    const started=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining,meetingPoint:'Parking de la gare'});
    expect(started.statusCode,started.body).toBe(201);expect(started.json().data.meetingPoint).toBe('Parking de la gare');
-   // Une leçon démarrée ne s'annule plus (A2-11) : elle se termine, ce qui libère aussi le créneau pour les tests suivants.
-   expect((await cancelLesson(started.json().data,'demo-instructor')).json().code).toBe('LESSON_STARTED');
-   const done=await call('POST',`/lessons/${started.json().data.id}/complete`,{operationId:randomUUID(),actualStart:started.json().data.actualStart,actualEnd:new Date(Date.now()+1_000).toISOString(),anomalyReason:'Recette'},started.json().data.version);
-   expect(done.statusCode,done.body).toBe(200);
+   // #61 : une leçon démarrée s'annule ; l'annulation libère aussi le créneau pour les tests suivants.
+   const cancelled=await cancelLesson(started.json().data,'demo-instructor');
+   expect(cancelled.statusCode,cancelled.body).toBe(200);expect(cancelled.json().data).toMatchObject({status:'CANCELLED',actualStart:null});
   }finally{await pool.query('UPDATE drivy.availability_rule SET removed_at=NULL WHERE instructor_membership_id=$1',[id.instructorMember]);}
  });
 });

@@ -404,9 +404,12 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   const boundCommand={...body,lessonId};
   const data=await command(r,'CANCEL_LESSON',boundCommand,expected,{lessonId},async(db,_actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
-   // A2-11 : comme l'absence, une leçon commencée ne s'annule pas ; elle se termine (constat), puis se corrige au besoin.
-   if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Une leçon commencée ne peut pas être annulée. Terminez-la.');
-   const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='CANCELLED',version=version+1,cancel_reason_code=$3,cancel_comment=$4 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.reasonCode,body.comment??null])).rows[0]!;
+   // #61 (décision du porteur, 21 octobre 2026) : une leçon commencée mais pas terminée peut être annulée par son moniteur ;
+   // elle devient « Annulée » comme si elle n’avait pas eu lieu (début effacé). Un trajet actif est révoqué par le déclencheur
+   // capture_lesson_changed ; positions et signalements déjà reçus restent conservés, sans être supprimés. Une leçon terminée
+   // garde sa règle (A2-11) : elle se corrige, elle ne s’annule pas.
+   if(old.actual_end)throw new ApiError(409,'LESSON_STARTED','Une leçon terminée ne peut pas être annulée. Corrigez son résultat.');
+   const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='CANCELLED',version=version+1,cancel_reason_code=$3,cancel_comment=$4,actual_start=NULL WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.reasonCode,body.comment??null])).rows[0]!;
    await releaseFutureOccupations(db,school.id,lessonId);await openClosedAccount(db,row);await event(db,row,body.operationId,'LessonCancelled');
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonCancelled',changedFields:['status']};
   });reply.header('ETag',`"${data.version}"`);return envelope(data,r);

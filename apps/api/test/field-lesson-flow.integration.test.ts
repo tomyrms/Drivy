@@ -48,10 +48,9 @@ describe('essai terrain : proposer seulement une formation que ce moniteur peut 
    const r=await call('POST','/lessons/start-now',body);expect(r.statusCode,r.body).toBe(201);
    expect(Date.parse(r.json().data.plannedStart)).toBeGreaterThanOrEqual(before);
    expect((await call('POST','/lessons/start-now',body)).json().data).toEqual(r.json().data);
-   // Une leçon démarrée ne s'annule plus (A2-11) : elle se termine, ce qui libère le créneau pour les tests suivants.
-   expect((await call('POST',`/lessons/${r.json().data.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},r.json().data.version)).json().code).toBe('LESSON_STARTED');
-   const done=await call('POST',`/lessons/${r.json().data.id}/complete`,{operationId:randomUUID(),actualStart:r.json().data.actualStart,actualEnd:new Date(Date.now()+1_000).toISOString(),anomalyReason:'Recette'},r.json().data.version);
-   expect(done.statusCode,done.body).toBe(200);
+   // #61 : une leçon démarrée s'annule ; l'annulation libère le créneau pour les tests suivants.
+   const cancelled=await call('POST',`/lessons/${r.json().data.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},r.json().data.version);
+   expect(cancelled.statusCode,cancelled.body).toBe(200);expect(cancelled.json().data).toMatchObject({status:'CANCELLED',actualStart:null});
   }finally{await pool.query("UPDATE drivy.instructor_assignment SET valid_from='2026-01-01T00:00:00Z' WHERE id=$1",[id.assignment]);}
  });
 });

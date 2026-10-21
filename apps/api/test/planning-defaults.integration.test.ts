@@ -71,10 +71,9 @@ describe('lieu de rendez-vous facultatif et tarif préféré',()=>{
   expect((await call('PUT','/planning-defaults',preference({serviceProductKey:'preferred-50'}),4)).statusCode).toBe(200);
   const started=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining,meetingPoint:''});
   expect(started.statusCode,started.body).toBe(201);expect(started.json().data).toMatchObject({meetingPoint:'',priceCentsSnapshot:9500,commercialSelection:{serviceProductVersionId:product.json().data.id}});
-  // Une leçon démarrée ne s'annule plus (A2-11) : elle se termine, ce qui libère le créneau du départ suivant.
-  expect((await call('POST',`/lessons/${started.json().data.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},1)).json().code).toBe('LESSON_STARTED');
-  const done=await call('POST',`/lessons/${started.json().data.id}/complete`,{operationId:randomUUID(),actualStart:started.json().data.actualStart,actualEnd:new Date(Date.now()+1_000).toISOString(),anomalyReason:'Recette'},1);
-  expect(done.statusCode,done.body).toBe(200);
+  // #61 : une leçon démarrée s'annule ; l'annulation libère le créneau du départ suivant.
+  const cancelled=await call('POST',`/lessons/${started.json().data.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},1);
+  expect(cancelled.statusCode,cancelled.body).toBe(200);expect(cancelled.json().data.status).toBe('CANCELLED');
   await pool.query('UPDATE drivy.service_product_version SET enabled=false WHERE id=$1',[product.json().data.id]);
   const fallback=await call('POST','/lessons/start-now',{operationId:randomUUID(),trainingId:id.aliceTraining});
   expect(fallback.statusCode,fallback.body).toBe(201);expect(fallback.json().data.priceCentsSnapshot).toBe(9000);

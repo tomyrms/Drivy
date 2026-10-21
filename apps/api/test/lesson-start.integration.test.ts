@@ -193,15 +193,21 @@ describe('heure réelle du départ déclarée par l’appareil (A2-03)',()=>{
   expect(invalid.statusCode).toBe(400);expect(await read(lesson.id)).toMatchObject({actualStart:null,version:1});
  });
 
- it('une leçon commencée ne s’annule pas (A2-11) ; elle reste commencée et se termine',async()=>{
+ it('une leçon commencée s’annule comme si elle n’avait pas eu lieu (#61) ; une leçon terminée ne s’annule pas',async()=>{
   const lesson=await plan();await moveToNow(pool,lesson.id);
   const start=await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID()},lesson.version);expect(start.statusCode,start.body).toBe(200);
-  const started=start.json().data;
-  for(const subject of ['demo-instructor','demo-admin']){
-   const cancel=await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},started.version,subject);
-   expect(cancel.statusCode,cancel.body).toBe(409);expect(cancel.json().code).toBe('LESSON_STARTED');
-  }
-  expect(await read(lesson.id)).toMatchObject({status:'PLANNED',actualStart:started.actualStart,version:started.version});
+  const started=start.json().data,body={operationId:randomUUID(),reasonCode:'OTHER'};
+  const cancel=await call('POST',`/lessons/${lesson.id}/cancel`,body,started.version,'demo-instructor');
+  expect(cancel.statusCode,cancel.body).toBe(200);expect(cancel.json().data).toMatchObject({status:'CANCELLED',actualStart:null,actualEnd:null,version:started.version+1});
+  // Rejeu après une réponse perdue : même résultat, aucune seconde annulation.
+  expect((await call('POST',`/lessons/${lesson.id}/cancel`,body,started.version,'demo-instructor')).json().data).toEqual(cancel.json().data);
+  expect(await read(lesson.id)).toMatchObject({status:'CANCELLED',actualStart:null,version:started.version+1});
+  expect((await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},started.version+1,'demo-admin')).json().code).toBe('LESSON_CLOSED');
+  // Une leçon terminée garde son constat : elle se corrige, elle ne s’annule pas.
+  const other=await plan();await moveToNow(pool,other.id);
+  const begun=(await call('POST',`/lessons/${other.id}/start`,{operationId:randomUUID()},other.version)).json().data;
+  const done=await call('POST',`/lessons/${other.id}/complete`,completeBody(begun.actualStart),begun.version);expect(done.statusCode,done.body).toBe(200);
+  expect((await call('POST',`/lessons/${other.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},done.json().data.lesson.version,'demo-admin')).json().code).toBe('LESSON_CLOSED');
  });
 });
 
@@ -223,13 +229,8 @@ describe('cohérence des leçons encore ouvertes avec la formation et les affect
    }
    expect((await call('GET',`/trainings/${id.bobTraining}`,undefined,null,'demo-admin')).json().data).toMatchObject({status:'ACTIVE',version:before.version});
    const current=await read(lesson.id),cancel=await call('POST',`/lessons/${lesson.id}/cancel`,{operationId:randomUUID(),reasonCode:'OTHER'},current.version,'demo-admin');
-   // A2-11 (décision du 12 octobre 2026) : une leçon commencée ne s'annule plus ; elle se termine. L'ancienne version de ce test
-   // annulait aussi la leçon démarrée pour libérer la formation ; elle est maintenant close par son constat.
-   if(shouldStart){
-    expect(cancel.statusCode,cancel.body).toBe(409);expect(cancel.json().code).toBe('LESSON_STARTED');
-    const done=await call('POST',`/lessons/${lesson.id}/complete`,{...completeBody(current.actualStart),actualEnd:new Date(Date.now()+1_000).toISOString()},current.version);
-    expect(done.statusCode,done.body).toBe(200);
-   }else expect(cancel.statusCode,cancel.body).toBe(200);
+   // #61 : une leçon commencée s'annule aussi ; dans les deux cas l'annulation libère la formation.
+   expect(cancel.statusCode,cancel.body).toBe(200);
   }
   const waiting=await create();
   const ended=await call('POST',`/trainings/${id.bobTraining}/assignments/${assignment.json().data.id}/end`,{operationId:randomUUID(),reason:'Affectation de recette terminée'},assignment.json().data.version,'demo-admin');
