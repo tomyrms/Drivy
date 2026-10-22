@@ -7,8 +7,8 @@ enum SchoolLearnerProfileRoute: Hashable {
     case trips
 }
 
-/// L’onglet Profil de l’élève : qui il est et dans quelle école, ses permis en une liste, et l’accès à
-/// « Mon profil » et aux paramètres. Le détail vit ailleurs : les séances dans Leçons, les compétences dans
+/// L’onglet Profil de l’élève : qui il est et dans quelle école (le crayon de l’en-tête ouvre « Mon profil »), ses
+/// permis en une liste, et les paramètres. Le détail vit ailleurs : les séances dans Leçons, les compétences dans
 /// Progression, le compte dans Paramètres. Les formations sont celles des onglets Leçons et Progression (mêmes
 /// modèles partagés, toutes leçons lues) : rien n’est relu en double, et aucun chiffre n’est donné tant que
 /// l’historique n’est pas complet.
@@ -96,21 +96,13 @@ struct SchoolLearnerProfileTab: View {
 
     /// Identité, permis, puis seulement ce qui attend une réponse.
     @ViewBuilder private var content: some View {
-        // Le même en-tête que le Profil du moniteur : posé sur le fond, pas dans une cellule.
+        // Le même en-tête que le Profil du moniteur : posé sur le fond, pas dans une cellule. Le crayon ouvre « Mon profil ».
         Section {
-            SchoolAccountHeading(workspace: workspace, isAuthenticated: true, detail: schoolNote, showsRoles: false)
+            SchoolAccountHeading(workspace: workspace, isAuthenticated: true, detail: schoolNote, showsRoles: false,
+                edit: account?.openProfile)
         }
         .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: DrivySpacing.s, trailing: DrivySpacing.m))
         .drivyClearRow()
-        if let openProfile = account?.openProfile {
-            // « Mon profil » : la même page que dans Paramètres, compte Drivy et dossier de l’école réunis.
-            Section {
-                DrivyNavigationRow(title: "Mon profil", action: openProfile)
-                    .listRowInsets(rowInsets)
-                    .accessibilityIdentifier("profile-open-my-profile")
-            }
-            .drivyFormRows()
-        }
         Section {
             permits
         } header: {

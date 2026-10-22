@@ -26,7 +26,7 @@ La première livraison (7cf25a3, 42d4374) mettait les deux formulaires sur une m
 
 ## App
 
-- Une seule ligne « Mon profil » pour tout compte connecté (élève, moniteur, administration, rôles cumulés, sans école), qui ouvre `SchoolMyProfileView`.
+- Deux entrées pour la même page `SchoolMyProfileView`, pour tout compte connecté (élève, moniteur, administration, rôles cumulés) : le crayon à droite de l'en-tête de l'onglet Profil (`profile-edit`, VoiceOver « Modifier mon profil »), et la ligne « Mon profil » en tête de la section Compte des Paramètres (`open-my-profile`). L'onglet Profil ne porte plus de ligne « Mon profil » ; chez le moniteur, la section Compte du Profil n'est posée que si elle a encore une ligne (invitations, école, changement d'école).
 - Un seul formulaire et un seul enregistrement (`PATCH /v1/me/profile`) : photo, prénom, nom, nom affiché, e-mail, téléphone, date de naissance, adresse. Pour un élève, l'école ajoute en dessous ce qui lui appartient : prochaine étape, accueil à reprendre, « Pourquoi ces informations ? » et la notice. Aucun second jeu de champs.
 - Champ manquant demandé par l'école : la page s'ouvre sur ce champ, avec son point.
 - Dossier d'un élève vu par l'école (`SchoolProfileView`) : mêmes champs, mêmes droits ; l'administration confirme avant d'enregistrer.

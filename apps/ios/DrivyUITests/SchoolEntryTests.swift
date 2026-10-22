@@ -59,7 +59,9 @@ import XCTest
         let profile = app.buttons.matching(identifier: "Profil").firstMatch
         XCTAssertTrue(profile.isHittable)
         profile.tap()
-        XCTAssertTrue(app.buttons["profile-open-my-profile"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.buttons["profile-edit"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(app.buttons["profile-edit"].label, "Modifier mon profil")
+        XCTAssertFalse(app.buttons["profile-open-my-profile"].exists)
         XCTAssertTrue(app.staticTexts["profile-no-permit"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(app.staticTexts["profile-no-permit"].label, "Aucune formation pour l’instant.")
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "account-heading").firstMatch.label.contains("Responsable exemple"))

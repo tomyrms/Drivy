@@ -7,6 +7,7 @@
 - Exécuté localement sur PostgreSQL 17 : 569 tests API passés, web 320 tests et typage passés. CI verte sur `d05ca59` : vérifications PostgreSQL et web, parcours navigateur Chromium · OIDC · BFF · API · PostgreSQL ; IPA 0.7.0 build 326 (`0730c3d`, run 39834157534, SHA-256 `ba8196b8…`).
 - **Déployé le 22 octobre 2026** à la demande du porteur : release `d05ca59` sur le homelab, sauvegarde vérifiée `/root/drivy_refonte-before-d05ca59…-20261022T191259Z-0286e6eb8b2d.dump` sur CT113, 41 migrations aux empreintes conformes (041 appliquée), API/web/identité actifs, environnement API et OSRM inchangés. Contrôles : plus aucune colonne d'identité sur `learner_profile`, les dossiers existants ont leurs noms sur le compte, `/app/` 200, `/refonte/v1/me` et `/refonte/v1/me/profile` 401 sans jeton.
 - Non exécuté : tests unitaires et UI Apple, captures iPhone/iPad, VoiceOver, Dynamic Type, essai sur appareil.
+- Suite demandée par le porteur (app seule, sans déploiement) : un crayon à droite de l'en-tête de l'onglet Profil ouvre « Mon profil » (VoiceOver « Modifier mon profil »), pour l'élève comme pour le moniteur ; la ligne « Mon profil » quitte l'onglet Profil pour la tête de la section Compte des Paramètres. Test UI `SchoolEntryTests` adapté, non exécuté ; seule la compilation `ipa-essai.yml` qualifie cette suite.
 
 ## 21 octobre 2026 : contourner le proxy Cloudflare (#93), non retenu
 

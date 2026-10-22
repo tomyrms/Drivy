@@ -23,7 +23,8 @@ struct SchoolAccountActions {
     }
 
     /// Le compte et l’école, sans le verrou ni la déconnexion : les Paramètres de l’élève les rangent par sujet.
-    /// `includesProfile` : faux quand l’écran voisin porte déjà la ligne « Mon profil » (Profil de l’élève).
+    /// `includesProfile` : faux sur le Profil du moniteur, où « Mon profil » s’ouvre par le crayon de l’en-tête
+    /// et vit dans Paramètres.
     @MainActor @ViewBuilder
     func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, includesProfile: Bool = true,
                      afterChangingSchool: @escaping () -> Void = {}) -> some View {
@@ -62,6 +63,12 @@ struct SchoolAccountActions {
             DrivyNavigationRow(title: "Rejoindre une école", action: openJoinSchool)
                 .accessibilityIdentifier("open-join-school")
         }
+    }
+
+    /// Ce que montre la section Compte sans « Mon profil » (passé dans Paramètres) : vide, elle n’est pas posée.
+    @MainActor func hasSchoolRows(workspace: SchoolWorkspace?) -> Bool {
+        workspace?.ownLearnerError != nil || resumeOnboarding != nil || openInvitations != nil || manageURL != nil
+            || ((workspace?.person?.memberships.count ?? 0) > 1 && !tripInProgress) || openJoinSchool != nil
     }
 
     /// « Ouvrir avec Face ID » ; rien sans verrou biométrique sur l’appareil.
@@ -110,7 +117,7 @@ private struct SchoolSignOutRow: View {
     }
 }
 
-/// Avatar, nom, école puis rôles : l’en-tête du compte.
+/// Avatar, nom, école puis rôles : l’en-tête du compte. `edit` pose à droite le crayon qui ouvre « Mon profil ».
 struct SchoolAccountHeading: View {
     let workspace: SchoolWorkspace?
     let isAuthenticated: Bool
@@ -118,10 +125,36 @@ struct SchoolAccountHeading: View {
     var detail: String? = nil
     /// Faux pour l’élève : son rôle ne lui apprend rien, seule l’école est dite (et `detail`, s’il y en a un).
     var showsRoles = true
+    /// Ouvre « Mon profil » ; absent, aucun crayon n’est montré.
+    var edit: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        // Même anatomie que l’en-tête du dossier d’un élève (DrivyLearnerIdentity, variante page).
+        HStack(alignment: .center, spacing: DrivySpacing.s) {
+            identity
+            if let edit, workspace?.person != nil {
+                Spacer(minLength: DrivySpacing.xs)
+                Button(action: edit) {
+                    Image(systemName: "pencil")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                        .background(DrivyTheme.surfaceRaised, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Modifier mon profil")
+                .accessibilityIdentifier("profile-edit")
+            }
+        }
+        .task(id: workspace?.person?.personId) {
+            // La photo du compte se lit dès l’en-tête, sans attendre l’ouverture de « Mon profil ».
+            if let workspace, workspace.person != nil, workspace.selfProfile == nil { _ = try? await workspace.loadSelfProfile() }
+        }
+    }
+
+    /// Même anatomie que l’en-tête du dossier d’un élève (DrivyLearnerIdentity, variante page), lue d’un seul tenant.
+    private var identity: some View {
         HStack(spacing: DrivySpacing.s) {
             if !typeSize.isAccessibilitySize {
                 DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: DrivyAvatar.pageSize, photo: workspace?.selfPhoto?.data)
@@ -146,10 +179,6 @@ struct SchoolAccountHeading: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("account-heading")
-        .task(id: workspace?.person?.personId) {
-            // La photo du compte se lit dès l’en-tête, sans attendre l’ouverture de « Mon profil ».
-            if let workspace, workspace.person != nil, workspace.selfProfile == nil { _ = try? await workspace.loadSelfProfile() }
-        }
     }
 }
 

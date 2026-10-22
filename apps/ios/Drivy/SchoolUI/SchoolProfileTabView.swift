@@ -70,7 +70,7 @@ struct SchoolProfileTabView: View {
     /// dans Paramètres, rangés dans le même ordre que ceux de l’élève.
     @ViewBuilder private var accountSections: some View {
         Section {
-            SchoolAccountHeading(workspace: workspace, isAuthenticated: true)
+            SchoolAccountHeading(workspace: workspace, isAuthenticated: true, edit: account?.openProfile)
         }
         .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: DrivySpacing.s, trailing: DrivySpacing.m))
         .drivyClearRow()
@@ -87,9 +87,10 @@ struct SchoolProfileTabView: View {
             }
             .drivyFormRows()
         }
-        if let account {
+        if let account, account.hasSchoolRows(workspace: workspace) {
+            // « Mon profil » vit dans Paramètres ; le crayon de l’en-tête y mène aussi.
             Section {
-                account.accountRows(workspace: workspace, openURL: openURL)
+                account.accountRows(workspace: workspace, openURL: openURL, includesProfile: false)
                     .listRowInsets(rowInsets)
             } header: {
                 Text("Compte").drivyFormSectionHeader()

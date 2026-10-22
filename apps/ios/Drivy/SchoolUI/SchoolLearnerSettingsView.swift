@@ -26,8 +26,8 @@ struct SchoolLearnerSettingsView: View {
     var body: some View {
         List {
             Section {
-                // « Mon profil » est la première ligne de l’onglet Profil : Paramètres ne la redit pas.
-                account.accountRows(workspace: workspace, openURL: openURL, includesProfile: false)
+                // « Mon profil » ouvre la ligne du compte ; le crayon de l’en-tête du Profil y mène aussi.
+                account.accountRows(workspace: workspace, openURL: openURL)
                     .listRowInsets(rowInsets)
             } header: {
                 Text("Compte").drivyFormSectionHeader()

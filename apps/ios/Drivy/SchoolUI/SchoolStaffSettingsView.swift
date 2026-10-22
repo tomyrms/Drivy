@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Profil → Paramètres (moniteur, administration) : préférences de leçon, signalements et leur classement, apparence,
-/// verrou de l’app et déconnexion. Mêmes lignes et même rangement que les Paramètres de l’élève
+/// Profil → Paramètres (moniteur, administration) : « Mon profil », préférences de leçon, signalements et leur
+/// classement, apparence, verrou de l’app et déconnexion. Mêmes lignes et même rangement que les Paramètres de l’élève
 /// (`SchoolLearnerSettingsView`) : rien n’est copié, chaque ligne vient de son écran ou de `SchoolAccountActions`.
-/// Le compte (informations, invitations, école) reste sur le Profil.
+/// Invitations et école restent sur le Profil.
 struct SchoolStaffSettingsView: View {
     let workspace: SchoolWorkspace
     let account: SchoolAccountActions?
@@ -34,6 +34,17 @@ struct SchoolStaffSettingsView: View {
 
     var body: some View {
         List {
+            if let account, let openProfile = account.openProfile, workspace.person != nil {
+                // « Mon profil » en tête des Paramètres, comme chez l’élève ; le crayon de l’en-tête du Profil y mène aussi.
+                Section {
+                    DrivyNavigationRow(title: "Mon profil", detail: workspace.person?.displayName, action: openProfile)
+                        .listRowInsets(rowInsets)
+                        .accessibilityIdentifier("open-my-profile")
+                } header: {
+                    Text("Compte").drivyFormSectionHeader()
+                }
+                .drivyFormRows()
+            }
             let planning = self.planning
             let themes = self.observationThemes
             if planning != nil || themes != nil {
