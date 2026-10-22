@@ -125,8 +125,6 @@ struct SchoolProfileView: View {
     }
 }
 
-}
-
 struct SchoolProfileStatusSections: View {
     @Bindable var model: SchoolProfileWorkspace
     var body: some View {

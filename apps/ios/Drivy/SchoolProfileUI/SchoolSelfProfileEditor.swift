@@ -17,7 +17,7 @@ final class SchoolSelfProfileEditor {
     private(set) var errorMessage: String?
     @ObservationIgnored private let workspace: SchoolWorkspace
 
-    static let emptyAddress = SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
+    nonisolated static let emptyAddress = SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
 
     init(workspace: SchoolWorkspace) { self.workspace = workspace }
 
