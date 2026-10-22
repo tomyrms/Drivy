@@ -295,9 +295,12 @@ actor ConsentServer: SchoolHTTPTransport {
         return problem("NOT_FOUND", status: 404)
     }
 
+    /// Identifiant stable entre deux lectures : `confirm` refuse d'écrire si le choix lu a changé entre-temps.
+    private let readChoiceID = UUID()
+
     private func choice(status: SchoolRecordingChoice.Status, notice: UUID, source: SchoolRecordingChoice.Source,
-                        id: UUID = UUID()) -> [String: Any] {
-        ["id": id.uuidString, "schoolId": scope.schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString,
+                        id: UUID? = nil) -> [String: Any] {
+        ["id": (id ?? readChoiceID).uuidString, "schoolId": scope.schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString,
          "lessonId": NSNull(), "status": status.rawValue, "noticeVersionId": notice.uuidString,
          "recordedBy": scope.membershipID.uuidString, "recordedAt": stamp, "source": source.rawValue]
     }
