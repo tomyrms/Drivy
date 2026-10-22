@@ -10,6 +10,8 @@ struct SchoolRecordingChoiceInline: View {
     /// Réponse montrée : celle donnée ici et pas encore enregistrée, sinon le choix enregistré.
     let answer: SchoolRecordingChoice.Status?
     var isEnabled = true
+    /// L’hôte rouvre la question même si un choix valide existe (« Modifier le choix GPS »).
+    var forcesQuestion = false
     let choose: (SchoolRecordingChoice.Status) -> Void
     @State private var editing = false
     @State private var reviewsPending = false
@@ -25,7 +27,7 @@ struct SchoolRecordingChoiceInline: View {
         if model.notice == nil { return model.isLoading || model.errorMessage == nil ? .loading : .unavailable }
         if model.accessRevoked { return .unavailable }
         if !model.relatedPending.isEmpty || model.hasOldScope { return .needsReview }
-        return editing || answer == nil ? .question : .answered
+        return editing || forcesQuestion || answer == nil ? .question : .answered
     }
 
     /// Un choix existe, mais pour une information de l’école qui a changé depuis : seul cas où une phrase s’ajoute.

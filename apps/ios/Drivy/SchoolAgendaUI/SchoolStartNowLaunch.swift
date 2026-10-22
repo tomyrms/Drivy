@@ -10,10 +10,28 @@ import UIKit
 @MainActor @Observable final class SchoolStartNowGPS {
     enum Device: Equatable { case ready, needsPermission, denied, approximate }
 
+    /// Ce que le récapitulatif doit montrer de l’accord GPS. Seul `.known` allège la présentation : la lecture en
+    /// cours et la panne de lecture ne passent jamais pour une absence de choix ni pour un accord acquis.
+    enum Display: Equatable {
+        case reading, unavailable, needsReview, question
+        case known(SchoolRecordingChoice.Status)
+
+        static func resolve(hasNotice: Bool, isLoading: Bool, hasError: Bool, accessRevoked: Bool,
+                            hasPendingOrOldScope: Bool, answer: SchoolRecordingChoice.Status?, isChanging: Bool) -> Display {
+            if !hasNotice { return isLoading || !hasError ? .reading : .unavailable }
+            if accessRevoked { return .unavailable }
+            if hasPendingOrOldScope { return .needsReview }
+            guard let answer, !isChanging else { return .question }
+            return .known(answer)
+        }
+    }
+
     let learnerID: UUID
     let consent: SchoolRecordingChoiceWorkspace
     /// Réponse donnée dans le récapitulatif quand elle diffère du choix enregistré.
     private(set) var selection: SchoolRecordingChoice.Status?
+    /// « Modifier le choix GPS » a été touché : la question se montre à nouveau, sans rien enregistrer.
+    private(set) var isChanging = false
     private(set) var device: Device
     @ObservationIgnored let source: any SchoolCaptureLocationProviding
     @ObservationIgnored private var released = false
@@ -47,10 +65,22 @@ import UIKit
     var answer: SchoolRecordingChoice.Status? { selection ?? recorded }
     /// Aucune demande d’accord en suspens ni droit retiré : sinon aucun trajet ne part d’ici.
     var consentIsClear: Bool {
-        consent.notice != nil && consent.relatedPending.isEmpty && !consent.hasOldScope && !consent.accessRevoked
+        consent.notice != nil && !consent.needsReload && consent.relatedPending.isEmpty && !consent.hasOldScope
+            && !consent.accessRevoked
     }
-    /// L’accord se lit encore (ni réponse ni erreur) : le départ attend, pour ne pas partir sans GPS par mégarde.
-    var isReading: Bool { consent.notice == nil && consent.errorMessage == nil && !consent.accessRevoked }
+    /// L’accord se lit encore (ni réponse ni erreur), ou se relit : le départ attend, pour ne pas partir sans GPS
+    /// par mégarde ni sur la foi d’un choix lu avant une relecture qui n’a pas abouti.
+    var isReading: Bool {
+        !consent.accessRevoked && consent.errorMessage == nil && (consent.notice == nil || consent.needsReload)
+    }
+    /// Un choix déjà lu ne vaut que tant que la dernière lecture a abouti. Pendant une relecture il reste affiché (pas de
+    /// saut de mise en page), mais le départ attend ; une relecture échouée ne laisse plus rien d’acquis.
+    var display: Display {
+        .resolve(hasNotice: consent.notice != nil && (!consent.needsReload || consent.isLoading), isLoading: consent.isLoading,
+            hasError: consent.errorMessage != nil,
+            accessRevoked: consent.accessRevoked, hasPendingOrOldScope: !consent.relatedPending.isEmpty || consent.hasOldScope,
+            answer: answer, isChanging: isChanging)
+    }
     /// Le trajet est voulu et cet appareil peut l’enregistrer (l’autorisation d’iOS peut encore être demandée).
     var wantsTrip: Bool { answer == .allowed && consentIsClear && (device == .ready || device == .needsPermission) }
 
@@ -59,7 +89,23 @@ import UIKit
         warmIfWanted()
     }
 
+    /// Lecture interrompue (ni réponse ni panne) : à reprendre, jamais à prendre pour une absence de choix.
+    var readWasInterrupted: Bool {
+        !consent.isLoading && consent.errorMessage == nil && !consent.accessRevoked && consent.needsReload
+    }
+
+    /// Retour au premier plan : le choix a pu changer ailleurs (compte de l’élève, autre appareil). Il se relit, et
+    /// ne vaut plus tant que la relecture n’a pas abouti. Aucune écriture, aucune collecte.
+    func refresh() async {
+        guard !released, !consent.isBusy, !consent.isLoading else { return }
+        await load()
+    }
+
+    /// Rouvre la question pour changer d’avis ; rien n’est envoyé avant une réponse et « Démarrer ».
+    func beginChanging() { isChanging = true }
+
     func select(_ status: SchoolRecordingChoice.Status) {
+        isChanging = false
         selection = status == recorded ? nil : status
         warmIfWanted()
     }
@@ -161,7 +207,11 @@ import UIKit
         if gps?.isReading == true { return "Démarrer la leçon" }
         return gps?.wantsTrip == true ? "Démarrer avec GPS" : "Démarrer sans GPS"
     }
-    var canLaunch: Bool { phase == .editing && !invalidated && form.canStart && gps?.isReading != true }
+    var canLaunch: Bool {
+        phase == .editing && !invalidated && form.canStart && gps?.isReading != true && gpsMatchesLearner
+    }
+    /// Le choix lu appartient bien à l’élève retenu : pendant un changement d’élève, rien du précédent ne vaut.
+    var gpsMatchesLearner: Bool { gps.map { $0.learnerID == form.learnerID } ?? true }
     var gpsUnavailableReason: SchoolGPSUnavailableReason? {
         SchoolLessonHubRules.capturePreparationUnavailableReason(school: workspace.school,
             hasController: controller != nil, controllerCanPrepare: controller?.canPrepareCapture == true)
@@ -346,6 +396,12 @@ import UIKit
         let value = SchoolStartNowGPS(learnerID: learnerID, consent: consent, source: makeLocationSource(), scope: form.scope)
         gps = value
         Task { await value.load() }
+    }
+
+    /// De retour dans l’app, le choix GPS se relit sans rien écrire.
+    func refreshConsent() {
+        guard phase == .editing, !invalidated, let gps else { return }
+        Task { await gps.refresh() }
     }
 
     func refreshGPSAvailability() {

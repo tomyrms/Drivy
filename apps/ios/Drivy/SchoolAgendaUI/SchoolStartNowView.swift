@@ -310,44 +310,47 @@ struct SchoolStartNowBody: Encodable, Sendable {
     }
 }
 
-/// La feuille « Démarrer une leçon » : élève, récapitulatif (formation, lieu, accord GPS), puis la leçon quand elle
-/// démarre sans trajet. Les étapes se remplacent sur place, sans pousser de page ni changer de hauteur ; le départ
-/// avec GPS passe sous le rideau de marque (`SchoolStartNowLaunch`).
+/// La fenêtre « Démarrer une leçon » : élève (liste en plein écran), récapitulatif (petite carte flottante centrée dont la
+/// hauteur suit le contenu), puis la leçon quand elle démarre sans trajet (plein écran, format normal). Les étapes se
+/// remplacent sur place dans une même présentation à fond transparent ; le départ avec GPS passe sous le rideau de
+/// marque (`SchoolStartNowLaunch`).
 struct SchoolStartNowView: View {
     @Bindable var launch: SchoolStartNowLaunch
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private var form: SchoolStartNowWorkspace { launch.form }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                switch launch.step {
-                case .learner:
-                    learnerStep.transition(stepTransition(from: .leading))
-                case .summary:
-                    summaryStep.transition(stepTransition(from: .trailing))
-                case .lesson(let lesson):
-                    lessonStep(lesson).transition(stepTransition(from: .trailing))
-                }
+        ZStack {
+            switch launch.step {
+            case .learner:
+                NavigationStack { learnerStep }
+                    .background(DrivyTheme.canvas.ignoresSafeArea())
+                    .transition(stepTransition(from: .leading))
+            case .summary:
+                summaryCard.transition(stepTransition(from: .trailing))
+            case .lesson(let lesson):
+                NavigationStack { lessonStep(lesson) }
+                    .background(DrivyTheme.canvas.ignoresSafeArea())
+                    .transition(stepTransition(from: .trailing))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(DrivyTheme.canvas)
         }
-        // Une seule hauteur pour tout le parcours : la liste en a besoin, et la feuille ne se redimensionne
-        // jamais pendant qu’une étape en remplace une autre.
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationSizing(.form)
-        .presentationBackground(DrivyTheme.canvas)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Fond transparent : l’écran d’origine reste visible, atténué par la carte. Les étapes plein écran portent le leur.
+        .presentationBackground(.clear)
         .tint(DrivyTheme.accent)
         .sensoryFeedback(.start, trigger: launch.launches)
         .task { await launch.open() }
         .onChange(of: launch.closesSheet) { _, closes in if closes { dismiss() } }
         .onChange(of: launch.workspace.school?.modules.gpsEnabled) { _, _ in launch.refreshGPSAvailability() }
         .onChange(of: launch.controller?.canPrepareCapture) { _, _ in launch.refreshGPSAvailability() }
+        // Retour d’arrière-plan : le choix a pu changer ailleurs, il se relit sans rien écrire.
+        .onChange(of: scenePhase) { _, phase in if phase == .active { launch.refreshConsent() } }
+        // Lecture interrompue (ni réponse ni panne) : elle reprend, elle ne passe pas pour une absence de choix.
+        .onChange(of: launch.gps?.readWasInterrupted ?? false) { _, interrupted in if interrupted { launch.refreshConsent() } }
         .onDisappear { launch.sheetClosed() }
     }
 
@@ -389,17 +392,18 @@ struct SchoolStartNowView: View {
                 }
             }
         }
+        .background(DrivyTheme.canvas)
         .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
         .toolbar { closeItem }
-        // Réglé par étape : la leçon ouverte sur place garde sa propre protection (bilan modifié).
-        .interactiveDismissDisabled(launch.isBusy)
     }
 
     // MARK: - Récapitulatif
 
-    private var summaryStep: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DrivySpacing.l) {
+    /// Carte flottante : seul ce que le cas demande s’y trouve. Un choix GPS connu n’y laisse que le bouton de départ
+    /// et une action discrète ; la question, longue, n’apparaît que sans choix applicable, et la carte défile alors.
+    private var summaryCard: some View {
+        DrivyFloatingCard(title: "Démarrer une leçon", isClosable: !launch.isBusy, close: { dismiss() }) {
+            VStack(alignment: .leading, spacing: DrivySpacing.m) {
                 notices
                 identity
                 if form.learnerID != nil {
@@ -407,24 +411,18 @@ struct SchoolStartNowView: View {
                     if let reason = launch.gpsUnavailableReason {
                         SchoolGPSUnavailableNotice(reason: reason, workspace: launch.workspace,
                             managementURL: AppConfiguration.fromBundle()?.gpsManagementURL(schoolID: form.scope.schoolID))
-                    } else if let gps = launch.gps {
+                    } else if let gps = launch.gps, launch.gpsMatchesLearner {
                         gpsSection(gps)
                     }
                 }
             }
-            .drivyPageContent(maxWidth: DrivyLayout.compactColumn)
             // Formation et lieu arrivent après la lecture : ils se posent sans pousser le reste d’un coup.
             .animation(DrivyMotion.reveal(reduceMotion), value: form.isLoading)
             .animation(DrivyMotion.reveal(reduceMotion), value: form.trainings.count)
+            .animation(DrivyMotion.reveal(reduceMotion), value: launch.gps?.display)
+        } footer: {
+            primaryAction
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            DrivyStickyActionBar(maxWidth: DrivyLayout.compactColumn) { primaryAction }
-        }
-        .navigationTitle("Démarrer une leçon").navigationBarTitleDisplayMode(.inline)
-        .toolbar { closeItem }
-        .interactiveDismissDisabled(launch.isBusy)
     }
 
     @ViewBuilder private var notices: some View {
@@ -528,11 +526,40 @@ struct SchoolStartNowView: View {
         .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
     }
 
-    /// Accord de l’élève, puis l’état de cet appareil seulement s’il empêchera l’enregistrement.
-    private func gpsSection(_ gps: SchoolStartNowGPS) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+    /// Le choix GPS, selon ce qui est réellement vérifié. Lecture ou panne ne valent ni absence de choix ni accord ;
+    /// un choix connu ne montre ni cartes ni panneau, seulement le bouton de départ et une action discrète.
+    @ViewBuilder private func gpsSection(_ gps: SchoolStartNowGPS) -> some View {
+        switch gps.display {
+        case .reading:
+            DrivySkeletonRow(lines: 1).drivySkeleton("Lecture de l’accord GPS…")
+        case .unavailable:
+            gpsUnavailable(gps)
+        case .needsReview, .question:
             SchoolRecordingChoiceInline(model: gps.consent, answer: gps.answer,
-                isEnabled: !launch.isBusy && form.pending == nil) { status in gps.select(status) }
+                isEnabled: !launch.isBusy && form.pending == nil, forcesQuestion: gps.isChanging) { status in gps.select(status) }
+                .padding(DrivySpacing.m)
+                .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        case .known:
+            knownChoice(gps)
+        }
+    }
+
+    private func gpsUnavailable(_ gps: SchoolStartNowGPS) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            DrivyInlineMessage(text: gps.consent.errorMessage ?? "L’accord GPS n’a pas pu être lu. La leçon peut démarrer sans GPS.",
+                tone: .warning)
+            if !gps.consent.accessRevoked {
+                Button { Task { await gps.load() } } label: { Label("Réessayer", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.drivyText)
+                    .disabled(gps.consent.isLoading || launch.isBusy)
+                    .accessibilityIdentifier("start-now-gps-retry")
+            }
+        }
+    }
+
+    /// Choix valide : rien à décider. L’état de cet appareil (autorisation d’iOS) reste expliqué quand il empêchera le trajet.
+    private func knownChoice(_ gps: SchoolStartNowGPS) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             if gps.answer == .allowed && gps.consentIsClear {
                 switch gps.device {
                 case .denied: deviceNotice("Localisation désactivée pour Drivy. La leçon démarrera sans GPS.")
@@ -540,9 +567,19 @@ struct SchoolStartNowView: View {
                 case .ready, .needsPermission: EmptyView()
                 }
             }
+            // Une réponse envoyée qui n’a pas abouti : le choix enregistré revient, avec la raison.
+            if !gps.consent.isBusy, let error = gps.consent.storageError ?? gps.consent.errorMessage {
+                DrivyInlineMessage(text: error, tone: .warning)
+            }
+            Button("Modifier le choix GPS") {
+                withAnimation(DrivyMotion.reveal(reduceMotion)) { gps.beginChanging() }
+            }
+            .buttonStyle(.drivyText)
+            .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
+            .disabled(launch.isBusy || form.pending != nil || gps.consent.isBusy)
+            .accessibilityIdentifier("start-now-gps-change")
         }
-        .padding(DrivySpacing.m)
-        .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .leading)
         .animation(DrivyMotion.reveal(reduceMotion), value: gps.device)
     }
 
@@ -580,7 +617,7 @@ struct SchoolStartNowView: View {
 
     // MARK: - Leçon
 
-    /// Leçon démarrée sans trajet : elle s’ouvre à la place du récapitulatif, dans la même feuille.
+    /// Leçon démarrée sans trajet : elle s’ouvre en plein écran, dans son format normal, à la place du récapitulatif.
     private func lessonStep(_ lesson: SchoolLesson) -> some View {
         SchoolLessonReportView(client: launch.agenda.reportClient, schoolWorkspace: launch.workspace, lessonID: lesson.id,
             learnerName: launch.learnerName(lesson), opensCompletion: false)
@@ -664,7 +701,7 @@ struct SchoolStartNowSheets: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onChange(of: scopeKey) { _, _ in presentation.reset() }
-            .sheet(item: $presentation.launch, onDismiss: { presentation.closed(workspace: workspace, agendaClient: agendaClient) }) { model in
+            .fullScreenCover(item: $presentation.launch, onDismiss: { presentation.closed(workspace: workspace, agendaClient: agendaClient) }) { model in
                 SchoolStartNowView(launch: model)
             }
             .sheet(item: $presentation.planning, onDismiss: { presentation.finished() }) { model in
