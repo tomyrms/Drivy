@@ -119,11 +119,11 @@ describe('G1A · droits réels et isolation', () => {
       SELECT person_id,'Dossier synthétique '||ordinality FROM unnest($1::uuid[]) WITH ORDINALITY AS persons(person_id,ordinality)`,[otherPersons]);
     await pool.query(`INSERT INTO drivy.membership(id,school_id,person_id,roles)
       SELECT gen_random_uuid(),$1,person_id,ARRAY['LEARNER'] FROM unnest($2::uuid[]) AS persons(person_id)`,[id.schoolA,otherPersons]);
-    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
-      SELECT gen_random_uuid(),$1,id,display_name,'2026-01-01T00:00:00Z' FROM drivy.person WHERE id=ANY($2::uuid[])`,[id.schoolA,otherPersons]);
+    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,created_at)
+      SELECT gen_random_uuid(),$1,id,'2026-01-01T00:00:00Z' FROM drivy.person WHERE id=ANY($2::uuid[])`,[id.schoolA,otherPersons]);
     const ownId=randomUUID();
-    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,created_at)
-      VALUES ($1,$2,$3,'Responsable élève','2026-02-01T00:00:00Z')`,[ownId,id.schoolA,id.admin]);
+    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,created_at)
+      VALUES ($1,$2,$3,'2026-02-01T00:00:00Z')`,[ownId,id.schoolA,id.admin]);
     const first=await get(`${school}/learners?limit=50`,'demo-admin');
     expect(first.statusCode).toBe(200);
     expect(first.json().data.items).toHaveLength(50);
@@ -145,8 +145,8 @@ describe('G1A · droits réels et isolation', () => {
   it('le filtre personnel ne remplace ni la personne authentifiée, ni l’école, ni les droits courants', async () => {
     expect((await get(`${school}/learners?status=ALL&own=true`,'demo-alice')).json().data.items.map((row:{id:string})=>row.id)).toEqual([id.aliceLearner]);
     const ownA=randomUUID(),ownB=randomUUID();
-    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name) VALUES
-      ($1,$2,$3,'Dossier personnel A'),($4,$5,$3,'Dossier personnel B')`,[ownA,id.schoolA,id.instructor,ownB,id.schoolB]);
+    await pool.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id) VALUES
+      ($1,$2,$3),($4,$5,$3)`,[ownA,id.schoolA,id.instructor,ownB,id.schoolB]);
     // Être affecté à Alice ne la rend pas personnelle et le filtre ne donne pas accès à son propre dossier sans rôle utile.
     expect((await get(`${school}/learners?status=ALL&own=true`)).json().data.items).toEqual([]);
     await pool.query("UPDATE drivy.membership SET roles=ARRAY['INSTRUCTOR','LEARNER'],access_epoch=access_epoch+1 WHERE id=$1",[id.instructorMember]);

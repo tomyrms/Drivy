@@ -9,7 +9,7 @@ import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
 import { getLearner,getTraining } from './queries.js';
 import { planningReadiness } from './lessons.js';
-import { missingRules,readinessOf,PLANNING_STAGES } from './profile-completeness.js';
+import { missingRules } from './profile-completeness.js';
 
 const empty=z.object({}).strict();const operation={operationId:z.uuid()};
 const text=(maximum:number)=>z.string().trim().refine(value=>[...value].length>0 && [...value].length<=maximum);
@@ -34,9 +34,11 @@ const onboardingCommand=z.object({...operation,kind:z.enum(kinds),currentStep:z.
 const completeCommand=z.object({...operation,kind:z.enum(kinds),policyVersionId:z.uuid()}).strict();
 interface PolicyRow { id:string;school_id:string;version:number;status:'DRAFT'|'PUBLISHED'|'RETIRED';effective_from:Date;fields:Rule[];notice_version_id:string;approved_by_membership_id:string|null;_createdAt?:string }
 interface ProfileRow {
-  id:string;school_id:string;person_id:string;profile_id:string;version:number;display_name:string;contact_email:string|null;contact_phone:string|null;archived_at:Date|null;
-  first_name:string|null;last_name:string|null;birthDate:string|null;postal_address:z.infer<typeof address>|null;profile_photo_document_id:string|null;
+  id:string;school_id:string;person_id:string;profile_id:string;version:number;archived_at:Date|null;
   administrative_policy_id:string|null;profile_updated_at:Date;entered_by_membership_id:string|null;entry_source:'SELF'|'STAFF_ASSISTED';
+  // Identité lue sur le compte de la personne (drivy.person), la même dans toutes ses écoles.
+  display_name:string;contact_email:string|null;contact_phone:string|null;first_name:string|null;last_name:string|null;birthDate:string|null;
+  postal_address:z.infer<typeof address>|null;person_version:number;
 }
 interface ProgressRow {id:string;school_id:string;person_id:string;membership_id:string;kind:Kind;version:number;current_step:string;skipped_optional_steps:string[];policy_version_id:string;
   last_saved_at:Date;completed_at:Date|null;return_destination_key:string|null;return_resource_id:string|null}
@@ -78,13 +80,16 @@ async function access(db:PoolClient,learnerId:string):Promise<'FULL'|'CONTACT'> 
   if(!value) throw notFound();return value;
 }
 async function profile(db:PoolClient,schoolId:string,learnerId:string,lock=false):Promise<ProfileRow> {
-  const row=(await db.query<ProfileRow>(`SELECT *,to_char(birth_date,'YYYY-MM-DD') AS "birthDate" FROM drivy.learner_profile WHERE school_id=$1 AND id=$2 ${lock?'FOR UPDATE':''}`,[schoolId,learnerId])).rows[0];
+  const row=(await db.query<ProfileRow>(`SELECT l.id,l.school_id,l.person_id,l.profile_id,l.version,l.archived_at,l.administrative_policy_id,l.profile_updated_at,
+      l.entered_by_membership_id,l.entry_source,p.display_name,p.contact_email,p.contact_phone,p.first_name,p.last_name,
+      to_char(p.birth_date,'YYYY-MM-DD') AS "birthDate",p.postal_address,p.version AS person_version
+    FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id WHERE l.school_id=$1 AND l.id=$2 ${lock?'FOR UPDATE OF l,p':''}`,[schoolId,learnerId])).rows[0];
   if(!row) throw notFound();return row;
 }
 function profileDTO(row:ProfileRow,policy:PolicyRow,level:'FULL'|'CONTACT') {
   const common={id:row.profile_id,schoolId:row.school_id,version:row.version,learnerId:row.id,firstName:row.first_name,lastName:row.last_name,
     contactEmail:row.contact_email,contactPhone:row.contact_phone,updatedAt:row.profile_updated_at.toISOString(),enteredByMembershipId:row.entered_by_membership_id!,entrySource:row.entry_source,policyVersionId:policy.id};
-  return level==='CONTACT'?common:{...common,birthDate:row.birthDate,postalAddress:row.postal_address,profilePhotoDocumentId:row.profile_photo_document_id};
+  return level==='CONTACT'?common:{...common,birthDate:row.birthDate,postalAddress:row.postal_address,profilePhotoDocumentId:null};
 }
 const writableFields=(body:object)=>Object.keys(body).filter(key=>!['operationId','policyVersionId','learnerId'].includes(key));
 function fieldPermission(level:'FULL'|'CONTACT',body:object) {
@@ -101,8 +106,10 @@ function identityDisplayName(row:ProfileRow,body:object):string|null {
 function activeSchool(school:SchoolRow) {if(school.status!=='ACTIVE') throw new ApiError(409,'SCHOOL_NOT_ACTIVE','Cette école doit être active pour modifier un profil.');}
 function profileGuards<T>(learnerId:string,body:object):CommandGuards<T> {
   return {
+    // Le compte de l’élève est verrouillé en écriture avant le verrou de l’école : deux écritures de la même identité
+    // (deux écoles, ou une commande voisine qui la lit) s’attendent sans interblocage, et la seconde voit la nouvelle version.
     additionalPersons:async db=>{await db.query("SELECT set_config('app.learner_id',$1,true)",[learnerId]);const person=(await db.query<{id:string|null}>('SELECT drivy.profile_target_person() AS id')).rows[0]?.id;
-      if(!person) throw notFound();return [person];},
+      if(!person) throw notFound();await db.query('SELECT id FROM drivy.person WHERE id=$1 FOR UPDATE',[person]);return [person];},
     authorize:async(db)=>{fieldPermission(await access(db,learnerId),body);},
     replay:async(db,_actor,data)=>{if(await access(db,learnerId)==='CONTACT' && typeof data==='object' && data!==null) {
       const sanitized={...data} as Record<string,unknown>;delete sanitized.birthDate;delete sanitized.postalAddress;delete sanitized.profilePhotoDocumentId;return sanitized as T;
@@ -126,17 +133,25 @@ async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,lea
   // Borne basse : une date antérieure à 1900 est une faute de saisie. ApiError 422 comme la règle voisine (un ZodError sort en 400).
   if('birthDate' in body && body.birthDate && body.birthDate<'1900-01-01')
     throw new ApiError(422,'INVALID_BIRTH_DATE','La date de naissance doit être postérieure au 1er janvier 1900.');
-  const map:Record<string,string>={displayName:'display_name',firstName:'first_name',lastName:'last_name',birthDate:'birth_date',postalAddress:'postal_address',contactEmail:'contact_email',contactPhone:'contact_phone',profilePhotoDocumentId:'profile_photo_document_id'};
-  const values:unknown[]=[learnerId,school.id,policy.id,actor.membershipId,row.person_id===actor.personId?'SELF':'STAFF_ASSISTED'];
-  const assignments=writableFields(body).map(field=>{values.push((body as Record<string,unknown>)[field]);return `${map[field]}=$${values.length}`;});
-  // Listes, leçons et trajets lisent display_name : il suit l’identité dès qu’AP176 l’écrit et qu’elle est complète.
-  // Seul l’accès FULL écrit un nom ; AP16 peut encore poser un nom d’affichage distinct, Person.displayName ne change pas.
+  const map:Record<string,string>={displayName:'display_name',firstName:'first_name',lastName:'last_name',birthDate:'birth_date',postalAddress:'postal_address',contactEmail:'contact_email',contactPhone:'contact_phone'};
+  // Une seule identité : les champs s’écrivent sur le compte de la personne (drivy.person), lu par toutes ses écoles.
+  // La politique d’écriture school_person_update (041) exige app.school_profile, posé seulement ici.
+  const values:unknown[]=[row.person_id];
+  const assignments=writableFields(body).filter(field=>field!=='profilePhotoDocumentId').map(field=>{
+    const value=(body as Record<string,unknown>)[field];values.push(field==='postalAddress' && value!==null?JSON.stringify(value):value);
+    return `${map[field]}=$${values.length}${field==='postalAddress'?'::jsonb':field==='birthDate'?'::date':''}`;});
+  // AP176 qui complète le prénom et le nom pose aussi le nom affiché ; AP16 peut encore en poser un distinct.
   const displayName=legacy?null:identityDisplayName(row,body);
   if(displayName!==null) {values.push(displayName);assignments.push(`display_name=$${values.length}`);}
-  await db.query(`UPDATE drivy.learner_profile SET ${assignments.join(',')},version=version+1,administrative_policy_id=$3,entered_by_membership_id=$4,entry_source=$5,profile_updated_at=now() WHERE id=$1 AND school_id=$2`,values);
+  if(assignments.length) {
+    await db.query("SELECT set_config('app.school_profile','true',true)");
+    const written=await db.query(`UPDATE drivy.person SET ${assignments.join(',')},version=version+1 WHERE id=$1`,values);
+    await db.query("SELECT set_config('app.school_profile','',true)");
+    if(written.rowCount!==1) throw forbidden();
+  }
+  await db.query(`UPDATE drivy.learner_profile SET version=version+1,administrative_policy_id=$3,entered_by_membership_id=$4,entry_source=$5,profile_updated_at=now() WHERE id=$1 AND school_id=$2`,
+    [learnerId,school.id,policy.id,actor.membershipId,row.person_id===actor.personId?'SELF':'STAFF_ASSISTED']);
   const updated=await profile(db,school.id,learnerId);
-  // Copie indicative : les lectures recalculent l’état depuis la politique applicable (profile-completeness.ts).
-  await db.query('UPDATE drivy.learner_profile SET profile_readiness=$2 WHERE id=$1',[learnerId,readinessOf(missingRules(updated,policy.fields,PLANNING_STAGES).map(rule=>rule.field))]);
   if(legacy) {
     const value=await getLearner(db,school.id,{personId:actor.personId,displayName:'',locale:'',version:1},{id:actor.membershipId,roles:actor.roles,grants:[],accessEpoch:1},learnerId);
     return {data:value,action:'LearnerUpdated',resourceType:'Learner',resourceId:learnerId,changedFields:writableFields(body)};

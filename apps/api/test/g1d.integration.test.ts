@@ -59,7 +59,7 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     const before=await counts();expect((await call('GET',profilePath)).json().code).toBe('PROFILE_POLICY_NOT_READY');
     expect((await call('GET',`${school}/my-onboarding?kind=STUDENT`,undefined,undefined,'demo-alice')).json().code).toBe('PROFILE_POLICY_NOT_READY');
     const page=await call('GET',`${school}/profile-field-policies`);conforms('ProfileFieldPolicyPageV3EnvelopeV3',page.json());expect(page.json().data.items).toEqual([]);
-    expect(await counts()).toEqual(before);expect((await pool.query('SELECT first_name,last_name FROM drivy.learner_profile WHERE id=$1',[id.aliceLearner])).rows[0]).toEqual({first_name:null,last_name:null});
+    expect(await counts()).toEqual(before);expect((await pool.query('SELECT first_name,last_name FROM drivy.person WHERE id=$1',[id.alice])).rows[0]).toEqual({first_name:null,last_name:null});
   });
   it('publication immédiate : sans brouillon ni date d’effet, la version s’applique aussitôt',async()=>{
     const noticeVersionId=await notice();const version=(await call('GET',school)).json().data.version;
@@ -157,8 +157,8 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     expect((await call('GET',`${school}/learners?q=${encodeURIComponent('Modèle')}`)).json().data.items.map((item:{id:string})=>item.id)).toEqual([id.aliceLearner]);
     expect((await call('GET',`${school}/learners?q=MODELE`)).json().data.items.map((item:{id:string})=>item.id)).toEqual([id.aliceLearner]);
     expect((await pool.query('SELECT changed_fields FROM drivy.audit_event WHERE operation_id=$1',[named.operationId])).rows[0].changed_fields).toEqual(['lastName','displayName']);
-    // L’identité de connexion reste celle de la personne ; le rejeu ne recompose rien une seconde fois.
-    expect((await pool.query('SELECT display_name FROM drivy.person WHERE id=$1',[id.alice])).rows[0].display_name).toBe('Alice Exemple');
+    // Une seule identité : le compte de la personne porte le nom composé, lu par toutes ses écoles (041).
+    expect((await pool.query('SELECT display_name,first_name,last_name FROM drivy.person WHERE id=$1',[id.alice])).rows[0]).toEqual({display_name:'Élodie Modèle',first_name:'Élodie',last_name:'Modèle'});
     expect((await call('PATCH',profilePath,named,3,'demo-alice')).json().data).toEqual(own.json().data);
     // Le moniteur affecté écrit encore les coordonnées sous RLS, et AP16 garde son nom d’affichage distinct.
     expect((await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,contactPhone:'021'},4,'demo-instructor')).statusCode).toBe(200);
@@ -233,21 +233,48 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     finally {await pool.query('DROP TRIGGER fail_g1d_audit ON drivy.audit_event');await pool.query('DROP FUNCTION drivy.fail_g1d_audit()');}
     expect(await counts()).toEqual(before);expect((await call('GET',profilePath)).json().data).toMatchObject({version:1,firstName:null});
   });
-  it('RLS SQL : un moniteur ne peut pas écrire un nom protégé, ni modifier une politique publiée',async()=>{
+  it('une seule identité (#94) : ce que l’élève saisit dans Mon profil est ce que l’école lit, et inversement',async()=>{
+    const policyVersionId=await publish();
+    const mine=async()=>(await call('GET','/v1/me/profile',undefined,null,'demo-alice')).json().data;
+    const postalAddress={line1:'Rue Unique 1',line2:null,postalCode:'2000',locality:'Neuchâtel',countryCode:'CH'};
+    // L’élève enregistre son compte une seule fois.
+    const saved=await call('PATCH','/v1/me/profile',{displayName:'Alice Unique',firstName:'Alice',lastName:'Unique',contactEmail:'alice@example.invalid',
+      contactPhone:'+41 79 000 00 00',birthDate:'2004-03-02',postalAddress},(await mine()).version,'demo-alice');
+    expect(saved.statusCode,saved.body).toBe(200);
+    // L’administration, le moniteur affecté et la liste lisent exactement ces valeurs : aucun second jeu de champs.
+    expect((await call('GET',profilePath,undefined,undefined,'demo-admin')).json().data).toMatchObject({firstName:'Alice',lastName:'Unique',
+      contactEmail:'alice@example.invalid',contactPhone:'+41 79 000 00 00',birthDate:'2004-03-02',postalAddress});
+    const contact=(await call('GET',profilePath,undefined,undefined,'demo-instructor')).json().data;
+    expect(contact).toMatchObject({firstName:'Alice',lastName:'Unique',contactEmail:'alice@example.invalid',contactPhone:'+41 79 000 00 00'});
+    expect(contact).not.toHaveProperty('birthDate');expect(contact).not.toHaveProperty('postalAddress');
+    expect((await call('GET',`${school}/learners/${id.aliceLearner}`,undefined,undefined,'demo-instructor')).json().data)
+      .toMatchObject({displayName:'Alice Unique',contactEmail:'alice@example.invalid'});
+    // L’administration corrige l’adresse : l’élève la retrouve dans son compte, sans copie à synchroniser.
+    const version=(await call('GET',profilePath,undefined,undefined,'demo-admin')).json().data.version;
+    const moved={...postalAddress,line1:'Rue Corrigée 2'};
+    expect((await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,postalAddress:moved},version,'demo-admin')).statusCode).toBe(200);
+    expect(await mine()).toMatchObject({postalAddress:moved,firstName:'Alice',displayName:'Alice Unique'});
+    // Le moniteur ne peut pas écrire un champ protégé du compte par la route du dossier.
+    const next=(await call('GET',profilePath,undefined,undefined,'demo-instructor')).json().data.version;
+    expect((await call('PATCH',profilePath,{operationId:randomUUID(),policyVersionId,lastName:'Interdit'},next,'demo-instructor')).json().code).toBe('PROFILE_FIELD_FORBIDDEN');
+    expect((await mine()).lastName).toBe('Unique');
+  });
+  it('RLS SQL : un moniteur ne peut écrire ni le compte d’un élève hors de la route du dossier, ni une politique publiée',async()=>{
     await publish();const db=await pool.connect();
     try {await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true),set_config('app.membership_id',$3,true)",[id.schoolA,id.instructor,id.instructorMember]);
-      await expect(db.query('UPDATE drivy.learner_profile SET first_name=$2,entered_by_membership_id=$3 WHERE id=$1',[id.aliceLearner,'Interdit',id.instructorMember])).rejects.toMatchObject({code:'42501'});await db.query('ROLLBACK');
+      // Sans app.school_profile (posé seulement par la route du dossier), aucune ligne du compte n’est modifiable.
+      expect((await db.query('UPDATE drivy.person SET first_name=$2 WHERE id=$1',[id.alice,'Interdit'])).rowCount).toBe(0);await db.query('ROLLBACK');
       await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true),set_config('app.membership_id',$3,true)",[id.schoolA,id.admin,id.adminMember]);
       await expect(db.query("UPDATE drivy.profile_field_policy SET fields='[]'::jsonb")).rejects.toMatchObject({code:'42501'});
     } finally {await db.query('ROLLBACK');db.release();}
   });
   it('RLS forcée sur chaque table et fonctions internes non exécutables par PUBLIC',async()=>{
     const tables=await pool.query("SELECT relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r'");expect(tables.rowCount).toBeGreaterThanOrEqual(20);expect(tables.rows.every(row=>row.relrowsecurity && row.relforcerowsecurity)).toBe(true);
-    const functions=await pool.query("SELECT prosecdef,proconfig,has_function_privilege('public',p.oid,'EXECUTE') exposed FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='drivy' AND proname IN('profile_access','initialize_profile_context','profile_target_person','profile_fields_writable')");
-    expect(functions.rowCount).toBe(4);expect(functions.rows.every(row=>row.prosecdef && !row.exposed && row.proconfig.includes('search_path=pg_catalog, drivy'))).toBe(true);
+    const functions=await pool.query("SELECT prosecdef,proconfig,has_function_privilege('public',p.oid,'EXECUTE') exposed FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='drivy' AND proname IN('profile_access','initialize_profile_context','profile_target_person','school_reads_person','school_writes_person')");
+    expect(functions.rowCount).toBe(5);expect(functions.rows.every(row=>row.prosecdef && !row.exposed && row.proconfig.includes('search_path=pg_catalog, drivy'))).toBe(true);
   });
   it('rejeu ADMIN devenu moniteur : réponse limitée aux champs encore lisibles',async()=>{
-    const policyVersionId=await publish();await pool.query("UPDATE drivy.learner_profile SET birth_date='2000-01-01' WHERE id=$1",[id.aliceLearner]);
+    const policyVersionId=await publish();await pool.query("UPDATE drivy.person SET birth_date='2000-01-01' WHERE id=$1",[id.alice]);
     const body={operationId:randomUUID(),policyVersionId,contactPhone:'021'};const response=await call('PATCH',profilePath,body,1);expect(response.statusCode,response.body).toBe(200);expect(response.json().data.birthDate).toBe('2000-01-01');
     await pool.query("UPDATE drivy.membership SET roles=ARRAY['INSTRUCTOR']::text[],access_epoch=access_epoch+1 WHERE id=$1",[id.adminMember]);
     await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,'2026-01-01')",[randomUUID(),id.schoolA,id.aliceTraining,id.adminMember]);
@@ -273,7 +300,7 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
     const token=(JSON.parse(Buffer.concat([cipher.update(mail.payload.subarray(28)),cipher.final()]).toString()) as {token:string}).token;
     const accepted=await call('POST','/v1/invitations/accept',{operationId:randomUUID(),token},undefined,'nouveau-g1d',{email:'entrant@example.invalid',email_verified:true});expect(accepted.statusCode,accepted.body).toBe(201);
     const onboarding=await call('GET',`${school}/my-onboarding?kind=STUDENT`,undefined,undefined,'nouveau-g1d');expect(onboarding.statusCode,onboarding.body).toBe(200);conforms('OnboardingProgressEnvelopeV3',onboarding.json());expect(onboarding.json().data).toMatchObject({policyVersionId,currentStep:'IDENTITY',status:'IN_PROGRESS'});
-    const rows=await pool.query('SELECT l.id,l.first_name,l.last_name,l.administrative_policy_id FROM drivy.learner_profile l JOIN drivy.identity_link i ON i.person_id=l.person_id WHERE i.subject=$1',['nouveau-g1d']);
+    const rows=await pool.query('SELECT l.id,p.first_name,p.last_name,l.administrative_policy_id FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id JOIN drivy.identity_link i ON i.person_id=l.person_id WHERE i.subject=$1',['nouveau-g1d']);
     expect(rows.rows[0]).toMatchObject({first_name:null,last_name:null,administrative_policy_id:policyVersionId});expect((await call('GET',`${school}/learners/${rows.rows[0].id}/administrative-profile`,undefined,undefined,'nouveau-g1d')).statusCode).toBe(200);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.training')).rows[0].n).toBe(3);
   });

@@ -13,10 +13,11 @@ type PageRow = QueryResultRow & { id: string; _createdAt: string };
 // Conserver les microsecondes PostgreSQL : Date JavaScript les tronquerait et répéterait la dernière ligne.
 const cursorTimestamp = (alias: string) => `to_char(${alias}.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 const learnerColumns = `l.id, l.school_id AS "schoolId", l.version, l.person_id AS "personId",
-  l.display_name AS "displayName", l.contact_email AS "contactEmail", l.contact_phone AS "contactPhone",
+  l_person.display_name AS "displayName", l_person.contact_email AS "contactEmail", l_person.contact_phone AS "contactPhone",
   l.archived_at AS "archivedAt", ${readinessSql} AS "profileReadiness"`;
 // L’état du dossier se calcule à la lecture, depuis la politique applicable : une politique publiée, un dossier saisi
 // ailleurs ou un champ devenu facultatif se lisent aussitôt, sans état stocké qui retarde (profile-completeness.ts).
+// Nom et coordonnées viennent du compte de la personne (`l_person`, joint par la même source) : une seule identité.
 const learnerSource = `drivy.learner_profile l ${missingProfileFieldsLateral('l')}`;
 const trainingColumns = `t.id, t.school_id AS "schoolId", t.version, t.learner_id AS "learnerId",
   t.offering_id AS "offeringId", o.category_code AS "categoryCode", t.status,
@@ -68,7 +69,7 @@ export async function listLearners(db: PoolClient, schoolId: string, actor: Acto
   // Un cumul de rôles ne transforme jamais « mon dossier » en la première page de l'annuaire administratif.
   if (filters.own) conditions.push('l.person_id=$2');
   if (filters.status !== 'ALL') conditions.push(`l.archived_at IS ${filters.status === 'ACTIVE' ? '' : 'NOT '}NULL`);
-  if (filters.q) conditions.push(`strpos(${foldedName('l.display_name')}, ${foldedName(bind(filters.q))}) > 0`);
+  if (filters.q) conditions.push(`strpos(${foldedName('l_person.display_name')}, ${foldedName(bind(filters.q))}) > 0`);
   if (filters.requiresAction !== undefined) conditions.push(`(cardinality(mp.fields)>0)=${bind(filters.requiresAction)}`);
   const trainingConditions = ['ft.school_id=$1', 'ft.learner_id=l.id', visibleTraining('ft')];
   if (filters.trainingStatus) trainingConditions.push(`ft.status=${bind(filters.trainingStatus)}`);

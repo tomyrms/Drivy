@@ -74,8 +74,8 @@ describe('F02 · contrat et entrée explicite',()=>{
     const body={operationId:randomUUID(),token:invitation.token};
     const response=await call('POST','/v1/invitations/accept',body,undefined,'new-person',claims);
     expect(response.statusCode,response.body).toBe(201);
-    const profile=async()=>(await pool.query(`SELECT l.first_name,l.last_name,l.display_name,l.contact_email,l.entry_source,l.entered_by_membership_id
-      FROM drivy.learner_profile l JOIN drivy.identity_link i ON i.person_id=l.person_id WHERE i.issuer=$1 AND i.subject='new-person'`,[issuer])).rows[0];
+    const profile=async()=>(await pool.query(`SELECT p.first_name,p.last_name,p.display_name,p.contact_email,l.entry_source,l.entered_by_membership_id
+      FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id JOIN drivy.identity_link i ON i.person_id=l.person_id WHERE i.issuer=$1 AND i.subject='new-person'`,[issuer])).rows[0];
     const saved=await profile();expect(saved).toEqual({first_name:'Élève Camille',last_name:'De la Tour-Roux',display_name:'Élève Camille De la Tour-Roux',
       contact_email:'new@example.invalid',entry_source:'SELF',entered_by_membership_id:response.json().data.membershipId});
     const replay=await call('POST','/v1/invitations/accept',body,undefined,'new-person',{...claims,given_name:'Autre',family_name:'Identité'});
@@ -86,7 +86,7 @@ describe('F02 · contrat et entrée explicite',()=>{
     const shown=await call('POST','/v1/invitations/preview',{token:invitation.token},undefined,'new-person',claims);
     expect(shown.json().data.profileIdentity).toBeUndefined();
     expect((await call('POST','/v1/invitations/accept',{operationId:randomUUID(),token:invitation.token},undefined,'new-person',claims)).statusCode).toBe(201);
-    expect((await pool.query(`SELECT first_name,last_name FROM drivy.learner_profile WHERE contact_email='new@example.invalid'`)).rows[0])
+    expect((await pool.query(`SELECT first_name,last_name FROM drivy.person WHERE contact_email='new@example.invalid'`)).rows[0])
       .toEqual({first_name:null,last_name:null});
     const staff=await invite('staff@example.invalid',['INSTRUCTOR']);
     const staffPreview=await call('POST','/v1/invitations/preview',{token:staff.token},undefined,'staff-person',{...verified('staff@example.invalid'),given_name:'Moniteur',family_name:'Exemple'});
@@ -194,7 +194,7 @@ describe('F02 · droits, versions, concurrence et rollback',()=>{
     const token=await secret(created.json().data.id);
     const accepted=await accept(token);expect(accepted.statusCode,accepted.body).toBe(201);
     const opened=async()=>(await pool.query(`SELECT t.status,t.offering_id,a.instructor_membership_id FROM drivy.training t JOIN drivy.learner_profile l ON l.id=t.learner_id
-      JOIN drivy.instructor_assignment a ON a.training_id=t.id WHERE l.contact_email='new@example.invalid'`)).rows;
+      JOIN drivy.person p ON p.id=l.person_id JOIN drivy.instructor_assignment a ON a.training_id=t.id WHERE p.contact_email='new@example.invalid'`)).rows;
     expect(await opened()).toEqual([{status:'ACTIVE',offering_id:id.offeringA,instructor_membership_id:id.instructorMember}]);
     // Le moniteur voit aussitôt son nouvel élève ; rejouer l'acceptation ne crée pas de seconde formation.
     const learners=await call('GET',`/v1/schools/${id.schoolA}/learners`,undefined,undefined,'demo-instructor');
@@ -204,7 +204,7 @@ describe('F02 · droits, versions, concurrence et rollback',()=>{
     const db=await pool.connect();
     try{
       await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');
-      const person=(await pool.query("SELECT person_id,id FROM drivy.learner_profile WHERE contact_email='new@example.invalid'")).rows[0];
+      const person=(await pool.query("SELECT l.person_id,l.id FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id WHERE p.contact_email='new@example.invalid'")).rows[0];
       await db.query("SELECT set_config('app.person_id',$1,true),set_config('app.school_id',$2,true)",[person.person_id,id.schoolA]);
       const key=(await pool.query('SELECT offering_key FROM drivy.offering_version WHERE id=$1',[id.offeringA])).rows[0].offering_key;
       await expect(db.query("INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status) VALUES(gen_random_uuid(),$1,$2,$3,$4,'ACTIVE')",[id.schoolA,id.aliceLearner,id.offeringA,key])).rejects.toThrow();
@@ -399,9 +399,10 @@ describe('Invitation par code · sans e-mail',()=>{
     expect(await personOf(subject)).toBeUndefined();
     const response=await acceptCode(invitation.code,subject,randomUUID(),claims);expect(response.statusCode,response.body).toBe(201);
     const personId=await personOf(subject);
-    const profile=async()=>(await pool.query('SELECT first_name,last_name,display_name,contact_email,contact_phone,version FROM drivy.learner_profile WHERE person_id=$1 AND school_id=$2',[personId,id.schoolA])).rows[0];
+    const profile=async()=>(await pool.query('SELECT p.first_name,p.last_name,p.display_name,p.contact_email,p.contact_phone FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id WHERE l.person_id=$1 AND l.school_id=$2',[personId,id.schoolA])).rows[0];
     expect(await profile()).toMatchObject({first_name:'Élève Camille',last_name:'De la Tour-Roux',display_name:'Élève Camille De la Tour-Roux',contact_email:null});
-    await pool.query("UPDATE drivy.learner_profile SET first_name='Prénom du dossier',last_name='Nom du dossier',contact_email='ecole@example.invalid',contact_phone='+41 21 000 00 00' WHERE person_id=$1",[personId]);
+    // Une valeur déjà saisie sur le compte n’est jamais réécrite par une nouvelle invitation.
+    await pool.query("UPDATE drivy.person SET first_name='Prénom du compte',last_name='Nom du compte',contact_email='compte@example.invalid',contact_phone='+41 21 000 00 00' WHERE id=$1",[personId]);
     const saved=await profile(),second=await issue();
     const joined=await acceptCode(second.code,subject,randomUUID(),{...claims,given_name:'Compte modifié'});
     expect(joined.statusCode,joined.body).toBe(201);expect(await profile()).toEqual(saved);
@@ -514,7 +515,7 @@ describe('Invitation par code · sans e-mail',()=>{
     expect(await counts()).toEqual({...before,persons:before.persons+1,members:before.members+1,learners:before.learners+1,trainings:before.trainings+1,operations:before.operations+1,audits:before.audits+1});
     const person=(await personOf(subject))!;
     expect((await pool.query('SELECT invitation_email,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2',[id.schoolA,person])).rows[0]).toEqual({invitation_email:null,roles:['LEARNER']});
-    expect((await pool.query('SELECT contact_email,profile_readiness FROM drivy.learner_profile WHERE person_id=$1',[person])).rows[0]).toEqual({contact_email:null,profile_readiness:'MINIMAL'});
+    expect((await pool.query('SELECT p.contact_email FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id WHERE l.person_id=$1',[person])).rows[0]).toEqual({contact_email:null});
     expect(await trainingsOf(subject)).toEqual([{status:'ACTIVE',offering_id:id.offeringA,instructor_membership_id:id.instructorMember}]);
     expect((await pool.query('SELECT status,accepted_by_person_id FROM drivy.invitation WHERE id=$1',[invitation.id])).rows[0]).toEqual({status:'ACCEPTED',accepted_by_person_id:person});
     expect((await call('GET','/v1/me',undefined,undefined,subject)).statusCode).toBe(200);
@@ -526,7 +527,7 @@ describe('Invitation par code · sans e-mail',()=>{
     const verifiedSubject=fresh(),plainSubject=fresh();
     const first=await issue();expect((await acceptCode(first.code,verifiedSubject,randomUUID(),{email:'Verifie@Example.invalid',email_verified:true})).statusCode).toBe(201);
     const second=await issue();expect((await acceptCode(second.code,plainSubject,randomUUID(),{email:'non.verifie@example.invalid',email_verified:false})).statusCode).toBe(201);
-    const stored=async(subject:string)=>(await pool.query('SELECT m.invitation_email,l.contact_email FROM drivy.membership m JOIN drivy.learner_profile l ON l.person_id=m.person_id AND l.school_id=m.school_id WHERE m.person_id=$1 AND m.school_id=$2',[await personOf(subject),id.schoolA])).rows[0];
+    const stored=async(subject:string)=>(await pool.query('SELECT m.invitation_email,p.contact_email FROM drivy.membership m JOIN drivy.learner_profile l ON l.person_id=m.person_id AND l.school_id=m.school_id JOIN drivy.person p ON p.id=m.person_id WHERE m.person_id=$1 AND m.school_id=$2',[await personOf(subject),id.schoolA])).rows[0];
     expect(await stored(verifiedSubject)).toEqual({invitation_email:'verifie@example.invalid',contact_email:'verifie@example.invalid'});
     expect(await stored(plainSubject)).toEqual({invitation_email:null,contact_email:null});
   });

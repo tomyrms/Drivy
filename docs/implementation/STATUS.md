@@ -1,11 +1,11 @@
 # État de la réalisation
 
-## 22 octobre 2026 : une seule page « Mon profil » (#94)
+## 22 octobre 2026 : une seule identité et une seule page « Mon profil » (#94)
 
-- « Mon profil » et « Mes informations » sont fusionnés dans `SchoolMyProfileView`, ouverte par une seule ligne pour tout compte connecté. Le compte Drivy (`/v1/me/profile`) et le dossier d’élève (`SchoolProfileWorkspace`) restent deux sources, deux droits et deux requêtes ; un échec partiel est dit comme tel. Détail, composants supprimés et conservés : [mon-profil-unifie-20261022.md](mon-profil-unifie-20261022.md).
-- Aucun changement serveur, base ou homelab.
-- Exécuté : compilation Release de l’IPA par `ipa-essai.yml` (voir l’issue #94 pour le lien de l’artefact).
-- Reste à qualifier : tests unitaires et UI Apple (non lancés à la demande du porteur), captures iPhone et iPad clair/sombre, VoiceOver, Dynamic Type, recette sur appareil pour élève, moniteur, administration, rôles cumulés, compte sans école et plusieurs écoles.
+- Décision du porteur : une seule donnée par information. Prénom, nom, nom affiché, e-mail, téléphone, naissance, adresse et photo vivent sur le compte (`drivy.person`), lu par toutes les écoles ; le dossier d'élève ne garde que ce qui appartient à l'école. Migration `041_single_person_identity.sql`. L'administration modifie après confirmation. Détail : [mon-profil-unifie-20261022.md](mon-profil-unifie-20261022.md).
+- La première livraison (deux formulaires sur une page, 7cf25a3) affichait les informations en double ; elle est remplacée.
+- Exécuté localement sur PostgreSQL 17 : 569 tests API passés, web 320 tests et typage passés. CI et IPA : voir l'issue #94.
+- Non exécuté : tests unitaires et UI Apple, captures iPhone/iPad, VoiceOver, Dynamic Type, appareil. Déploiement homelab en attente d'accord, avec sauvegarde préalable.
 
 ## 21 octobre 2026 : contourner le proxy Cloudflare (#93), non retenu
 

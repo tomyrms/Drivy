@@ -1,28 +1,39 @@
-# Page unique « Mon profil » (#94), 22 octobre 2026
+# Une seule identité et une seule page « Mon profil » (#94), 22 octobre 2026
 
-## Avant
+## Décision du porteur (22 octobre 2026)
 
-- Paramètres / Compte montrait deux lignes : « Mon profil » (`SchoolRenameSelfRow` → `SchoolSelfProfileSheet`, compte Drivy via `/v1/me/profile`) et « Mes informations » (`openProfile` → `SchoolProfileView`, dossier d’élève via `SchoolProfileWorkspace`, réservé au rôle LEARNER avec dossier).
-- Le Profil de l’élève ajoutait un volet « Mes informations » (`SchoolLearnerProfileSummary` en lecture, bouton « Modifier mes informations ») relu à chaque lecture du dossier (`learnerReadCount`).
-- Champs communs aux deux pages : prénom, nom, e-mail, téléphone, date de naissance, adresse. Propres au compte : photo, nom affiché. Propres au dossier : politique de l’école et explications, notice de confidentialité, prochaine étape (readiness), accueil à reprendre, photo associée au dossier, demande en attente, conflit de version, droits relus au serveur.
+- Une seule donnée par information : prénom, nom, nom affiché, e-mail, téléphone, date de naissance, adresse et photo vivent sur le compte Drivy de la personne (`drivy.person`). Le dossier d'élève (`drivy.learner_profile`) ne garde que ce qui appartient à l'école : politique acceptée, auteur et source de la saisie, archivage.
+- Un élève inscrit dans plusieurs écoles a les mêmes valeurs partout : une personne n'a qu'un prénom, qu'un nom, qu'une adresse.
+- L'administration peut modifier ces informations pour un élève, après une confirmation qui dit que le compte de l'élève change partout.
+- Les données en base sont des données d'essai : aucune reprise exigée. La migration complète seulement un compte vide avec ce que portait le dossier, sans rien écraser.
 
-## Après
+## Première version abandonnée
 
-- Une seule ligne « Mon profil » (identifiant `open-my-profile`, `profile-open-my-profile` dans l’onglet Profil de l’élève) pour tout compte connecté : élève, moniteur, administration, rôles cumulés, compte sans école. Elle ouvre `SchoolMyProfileView`. Paramètres de l’élève ne répète pas la ligne déjà en tête de son Profil.
-- `SchoolMyProfileView` : photo, identité (prénom, nom, nom affiché), contact, date de naissance, adresse du compte Drivy ; puis, seulement si l’élève a un dossier dans l’école ouverte (`ownProfileLearner`, rôle LEARNER, école active), la section « Dossier scolaire » avec le nom de l’école, l’état de la demande, les champs autorisés par le serveur, la prochaine étape, l’accueil, les explications et la notice. Sans dossier, aucun dossier n’est créé ni lu.
-- Doublons : un champ du dossier dont la valeur enregistrée est identique à celle du compte n’est pas répété. Il reste visible s’il est vide, modifié, invalide, demandé par l’école, ciblé par un chemin guidé, ou après « Afficher les champs identiques au compte ». Les deux valeurs gardent leur source : rien n’est recopié d’une source à l’autre.
-- Enregistrement : un seul bouton, deux requêtes distinctes et dans cet ordre, compte (`PATCH /v1/me/profile`, If-Match) puis dossier (file chiffrée, `saveProfileAfterConfirmation`). `SchoolMyProfileOutcome` dit le résultat de chacune ; un échec partiel est écrit dans la barre d’action et annoncé à VoiceOver, jamais un succès global. Chaque saisie échouée reste en place. Conflits : compte relu comme référence ; dossier conservé avec « Recharger les informations ».
-- Dossier d’un autre élève (moniteur affecté, administration) : `SchoolProfileView`, inchangé dans ses droits. Le dossier de l’administration qui est aussi élève, ouvert depuis Élèves, s’ouvre dans « Mon profil » avec le champ ciblé.
-- Accueil guidé : `SchoolOnboardingView` inchangé ; « Reprendre l’accueil » reste dans le compte et dans la section dossier.
+La première livraison (7cf25a3, 42d4374) mettait les deux formulaires sur une même page : compte, puis « Dossier scolaire » avec ses propres champs. Le porteur a constaté les informations en double. La cause était dans la base : deux jeux de colonnes pour les mêmes informations (#64 avait ajouté celles du compte). Remplacée par ce qui suit.
 
-## Code
+## Serveur
 
-- Nouveaux : `SchoolProfileUI/SchoolMyProfileView.swift`, `SchoolProfileUI/SchoolSelfProfileEditor.swift` (validation et sauvegarde du compte, reprises de l’ancienne feuille), `SchoolProfileUI/SchoolProfileFormSections.swift` (champs et contexte du dossier partagés avec `SchoolProfileView`, adresse et pays partagés avec le compte).
-- Supprimés : `SchoolRenameSelfRow`, `SchoolSelfProfileSheet`, la ligne « Mes informations », le volet « Mes informations » du Profil de l’élève et son modèle, `makeLearnerProfile` de `SchoolLearnerProfileTab`, `SchoolWorkspace.learnerReadCount`, `renameSelf` (workspace, protocole, client : aucun appelant), le doublon du sélecteur de pays.
-- Conservés car partagés : `SchoolProfileView`, `SchoolProfileWorkspace`, `SchoolLearnerProfileSummary` (dossier vu par le moniteur), `SchoolProfileStatusSections`, `SchoolProfileConflictNotice`, `SchoolProfileBlockers`, `SchoolProfilePhotoEncoder`.
-- Aucun changement serveur, base ou homelab.
+- Migration `041_single_person_identity.sql` : `lesson_learner_name` et `capture_trip_names` lisent le compte ; `profile_fields_writable` disparaît ; reprise sur le compte des valeurs que seul le dossier portait (sans écraser) ; suppression des colonnes `display_name`, `contact_email`, `contact_phone`, `first_name`, `last_name`, `birth_date`, `postal_address`, `profile_photo_document_id`, `profile_readiness` de `learner_profile`.
+- RLS de `drivy.person` : lecture par l'école de la personne derrière un dossier lisible (`school_reads_person`), écriture seulement par la route du dossier, qui pose `app.school_profile` (`school_writes_person`), et par la personne elle-même à l'acceptation d'une invitation (`school_person_self_update`).
+- `profiles.ts` : la route `administrative-profile` lit et écrit le compte ; les droits ne changent pas (accès complet pour l'administration et l'élève lui-même, coordonnées de contact pour le moniteur affecté, champs protégés absents de sa réponse). Le compte est verrouillé avant l'école : deux écritures concurrentes donnent 200 et 412, sans interblocage.
+- `queries.ts`, `profile-completeness.ts`, `lessons.ts`, `school-onboarding.ts` : listes, recherche, complétude et planification lisent le compte.
+- `invitations.ts` : l'acceptation crée le dossier et complète seulement les champs vides du compte (noms signés, e-mail vérifié) ; une valeur déjà saisie n'est jamais réécrite.
+- Formes des réponses inchangées (contrat OpenAPI), `profilePhotoDocumentId` vaut toujours `null`.
+
+## Web
+
+- `profile-completion.tsx` : avant d'enregistrer, une confirmation dit que ces informations sont celles du compte de l'élève, qu'il retrouvera dans Mon profil et que toute autre école lira les mêmes.
+
+## App
+
+- Une seule ligne « Mon profil » pour tout compte connecté (élève, moniteur, administration, rôles cumulés, sans école), qui ouvre `SchoolMyProfileView`.
+- Un seul formulaire et un seul enregistrement (`PATCH /v1/me/profile`) : photo, prénom, nom, nom affiché, e-mail, téléphone, date de naissance, adresse. Pour un élève, l'école ajoute en dessous ce qui lui appartient : prochaine étape, accueil à reprendre, « Pourquoi ces informations ? » et la notice. Aucun second jeu de champs.
+- Champ manquant demandé par l'école : la page s'ouvre sur ce champ, avec son point.
+- Dossier d'un élève vu par l'école (`SchoolProfileView`) : mêmes champs, mêmes droits ; l'administration confirme avant d'enregistrer.
+- Supprimés : `SchoolRenameSelfRow`, `SchoolSelfProfileSheet`, la ligne et le volet « Mes informations », `learnerReadCount`, `renameSelf`, le masquage des doublons et l'enregistrement en deux requêtes de la première version, la ligne « photo associée au dossier ».
 
 ## Vérification
 
-- Exécuté : relecture des références, compilation Release de l’IPA par le workflow `ipa-essai.yml` (résultat consigné dans STATUS).
-- Non exécuté : tests unitaires et UI Apple (dont le test ajouté `myProfileNeverAnnouncesAGlobalSuccessWhenOneSourceFailed` et `SchoolEntryTests` mis à jour), captures iPhone et iPad, VoiceOver, Dynamic Type, appareil physique.
+- Exécuté localement (PostgreSQL 17 en conteneur, même image que la CI) : suite API complète, 569 tests passés, dont le nouveau test « une seule identité » (l'élève saisit, l'administration et le moniteur lisent les mêmes valeurs, l'administration corrige l'adresse et l'élève la retrouve, le moniteur ne peut pas écrire un nom). Web : typage et 320 tests passés.
+- CI : `refonte-checks.yml` (PostgreSQL, web) et `ipa-essai.yml` (compilation Release et IPA) ; résultats consignés dans l'issue #94.
+- Non exécuté : tests unitaires et UI Apple, captures iPhone/iPad, VoiceOver, Dynamic Type, appareil physique. Déploiement homelab non fait : il attend l'accord du porteur, avec sauvegarde préalable de la base.

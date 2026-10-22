@@ -91,7 +91,8 @@ async function trainingContext(db:PoolClient,school:SchoolRow,trainingId:string,
  // Administrative fields are checked by need; no protected values are returned in errors.
  const policy=(await db.query<{fields:{field:string;requirement:string;stage:string}[]}>(`SELECT fields FROM drivy.profile_field_policy WHERE school_id=$1 AND status='PUBLISHED' AND effective_from<=now() ORDER BY effective_from DESC LIMIT 1`,[school.id])).rows[0];
  if(!policy)throw new ApiError(409,'PROFILE_POLICY_NOT_READY','Publiez la politique des informations nécessaires avant de planifier.');
- const profile=(await db.query<Record<string,unknown>>('SELECT first_name,last_name,birth_date,postal_address,contact_email,contact_phone FROM drivy.learner_profile WHERE school_id=$1 AND id=$2',[school.id,row.learner_id])).rows[0]!;
+ const profile=(await db.query<Record<string,unknown>>(`SELECT p.first_name,p.last_name,p.birth_date,p.postal_address,p.contact_email,p.contact_phone
+  FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id WHERE l.school_id=$1 AND l.id=$2`,[school.id,row.learner_id])).rows[0]!;
  if(missingRules(profile as unknown as ProfileValues,policy.fields,PLANNING_STAGES).length)throw new ApiError(409,'PROFILE_ACTION_REQUIRED','Complétez les informations requises du dossier avant de planifier.');
  return row;
 }

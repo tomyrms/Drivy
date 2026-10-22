@@ -205,7 +205,7 @@ it('les prochaines actions séparent configuration, dossier et première leçon 
   await prepared(true);const command=await completion();const result=(await call('POST',`${base}/complete`,command.body,command.version)).json().data;
   const availability=await call('POST',`/v1/schools/${id.schoolA}/availability-rules`,{operationId:randomUUID(),instructorMembershipId:id.instructorMember,weekdays:[1,2,3,4,5,6,7],localStart:'08:00',localEnd:'18:00',validFrom:'2020-01-01',validUntil:null});expect(availability.statusCode,availability.body).toBe(201);
   const profile=await call('GET',`${base}/next-actions`);expect(profile.json().data.planningReady).toBe(true);expect(profile.json().data.actions[0]).toMatchObject({code:'PROFILE_ACTION_REQUIRED',section:'eleves',query:{selection:id.aliceLearner}});
-  await pool.query("UPDATE drivy.learner_profile SET first_name='Alice',last_name='Exemple' WHERE id=$1",[id.aliceLearner]);
+  await pool.query("UPDATE drivy.person SET first_name='Alice',last_name='Exemple' WHERE id=$1",[id.alice]);
   const trainingId=randomUUID();await pool.query("INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE','2026-01-01')",[trainingId,id.schoolA,id.aliceLearner,result.applied.offeringIds[0],`setup-${(await getDraft()).content.formations[0]!.id}`]);
   expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('INSTRUCTOR_NOT_ASSIGNED');
   await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,'2020-01-01')",[randomUUID(),id.schoolA,trainingId,id.instructorMember]);
@@ -226,7 +226,7 @@ async function firstLearnerWithTraining(otherCategory=false) {
   }
   const command=await completion(),response=await call('POST',`${base}/complete`,command.body,command.version);expect(response.statusCode,response.body).toBe(200);
   const applied=response.json().data.applied;
-  await pool.query("UPDATE drivy.learner_profile SET first_name='Alice',last_name='Exemple' WHERE id=$1",[id.aliceLearner]);
+  await pool.query("UPDATE drivy.person SET first_name='Alice',last_name='Exemple' WHERE id=$1",[id.alice]);
   const training=await call('POST',`/v1/schools/${id.schoolA}/trainings`,{operationId:randomUUID(),learnerId:id.aliceLearner,offeringId:applied.offeringIds[0],assignCreator:false});
   expect(training.statusCode,training.body).toBe(201);
   const assigned=await call('POST',`/v1/schools/${id.schoolA}/trainings/${training.json().data.id}/assignments`,{operationId:randomUUID(),instructorMembershipId:id.instructorMember,validFrom:'2020-01-01T00:00:00Z',validUntil:null});

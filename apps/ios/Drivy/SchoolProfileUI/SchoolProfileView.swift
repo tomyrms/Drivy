@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Le dossier d’un élève vu par l’école : le moniteur affecté (coordonnées) ou l’administration (tout le dossier).
-/// L’élève lit et modifie le sien dans « Mon profil » (`SchoolMyProfileView`), avec son compte Drivy.
+/// Le dossier d’un élève vu par l’école : le moniteur affecté (coordonnées) ou l’administration (toutes les informations).
+/// Une seule identité (#94) : ces champs sont ceux du compte Drivy de l’élève ; l’élève les modifie dans « Mon profil ».
 struct SchoolProfileView: View {
     @Bindable var model: SchoolProfileWorkspace
     var loadsOnAppear = true
@@ -17,6 +17,8 @@ struct SchoolProfileView: View {
     @State private var showsGuidedWelcome = false
     @State private var confirmsDiscard = false
     @State private var attemptedSave = false
+    /// Une seule identité (#94) : l’administration qui modifie l’élève modifie son compte, lu par toutes ses écoles.
+    @State private var confirmsSave = false
 
     var body: some View {
         NavigationStack {
@@ -36,6 +38,12 @@ struct SchoolProfileView: View {
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 } message: {
                     Text("Une demande déjà envoyée reste conservée sur cet appareil jusqu’à confirmation.")
+                }
+                .alert("Modifier le profil de l’élève ?", isPresented: $confirmsSave) {
+                    Button("Enregistrer pour l’élève") { send() }
+                    Button("Annuler", role: .cancel) {}
+                } message: {
+                    Text("Ces informations sont celles du compte Drivy de l’élève. Il les retrouvera dans Mon profil, et toute autre école qui le suit lira les mêmes.")
                 }
         }
         .tint(DrivyTheme.accent)
@@ -77,7 +85,8 @@ struct SchoolProfileView: View {
                 DrivyFormActionBar(hint: saveHint.text, hintTone: saveHint.tone) {
                     Button {
                         attemptedSave = true
-                        Task { _ = await model.saveProfileAfterConfirmation() }
+                        // Le moniteur n’écrit que les coordonnées de contact ; tout changement d’identité se confirme.
+                        if model.isOwnProfile { send() } else { confirmsSave = true }
                     } label: {
                         // Même indicateur de l’envoi jusqu’à la relecture qui en applique la réponse.
                         DrivyBusyLabel(title: "Enregistrer les modifications", isBusy: model.isSavingProfile)
@@ -89,6 +98,8 @@ struct SchoolProfileView: View {
         }
         .scrollDismissesKeyboard(.interactively)
     }
+
+    private func send() { Task { _ = await model.saveProfileAfterConfirmation() } }
 
     private var saveHint: (text: String?, tone: DrivyTone) {
         if attemptedSave, let error = model.errorMessage { return (error, .danger) }

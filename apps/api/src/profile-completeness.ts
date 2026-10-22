@@ -34,17 +34,18 @@ export function readinessOf(missing:readonly string[]):'MINIMAL'|'ACTION_REQUIRE
 
 /**
  * La même règle pour une ligne `drivy.learner_profile` d’alias `l` : `mp.fields`, les champs manquants dans l’ordre de
- * la politique applicable (aucune politique : rien n’est exigé). À joindre avec `LEFT JOIN LATERAL … mp ON true`.
+ * la politique applicable (aucune politique : rien n’est exigé). Les valeurs sont celles du compte de la personne
+ * (`drivy.person`, alias `{l}_person`, joint ici) : une seule identité, lue par toutes ses écoles.
  */
-export const missingProfileFieldsLateral=(alias:string)=>`LEFT JOIN LATERAL (
+export const missingProfileFieldsLateral=(alias:string)=>`JOIN drivy.person ${alias}_person ON ${alias}_person.id=${alias}.person_id LEFT JOIN LATERAL (
   SELECT coalesce(array_agg(r.rule->>'field' ORDER BY r.ord),'{}'::text[]) AS fields
   FROM drivy.profile_field_policy pol CROSS JOIN LATERAL jsonb_array_elements(pol.fields) WITH ORDINALITY AS r(rule,ord)
   WHERE pol.id=drivy.applicable_profile_policy(${alias}.school_id) AND r.rule->>'requirement'='REQUIRED'
     AND r.rule->>'stage' IN (${PLANNING_STAGES.map(stage=>`'${stage}'`).join(',')})
     AND CASE r.rule->>'field'
-      WHEN 'firstName' THEN nullif(${alias}.first_name,'') IS NULL WHEN 'lastName' THEN nullif(${alias}.last_name,'') IS NULL
-      WHEN 'birthDate' THEN ${alias}.birth_date IS NULL WHEN 'postalAddress' THEN ${alias}.postal_address IS NULL
-      WHEN 'contactEmail' THEN nullif(${alias}.contact_email,'') IS NULL WHEN 'contactPhone' THEN nullif(trim(${alias}.contact_phone),'') IS NULL
+      WHEN 'firstName' THEN nullif(${alias}_person.first_name,'') IS NULL WHEN 'lastName' THEN nullif(${alias}_person.last_name,'') IS NULL
+      WHEN 'birthDate' THEN ${alias}_person.birth_date IS NULL WHEN 'postalAddress' THEN ${alias}_person.postal_address IS NULL
+      WHEN 'contactEmail' THEN nullif(${alias}_person.contact_email,'') IS NULL WHEN 'contactPhone' THEN nullif(trim(${alias}_person.contact_phone),'') IS NULL
       ELSE false END
 ) mp ON true`;
 

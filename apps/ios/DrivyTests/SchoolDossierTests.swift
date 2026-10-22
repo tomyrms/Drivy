@@ -39,18 +39,6 @@ struct SchoolDossierTests {
         #expect(!SchoolLearnerRecordedName.repeats("", displayedName: "Camille Exemple"))
     }
 
-    /// « Mon profil » enregistre le compte et le dossier par deux requêtes : un échec n’est jamais annoncé comme un succès.
-    @Test func myProfileNeverAnnouncesAGlobalSuccessWhenOneSourceFailed() {
-        #expect(SchoolMyProfileOutcome(account: true, dossier: true).partialFailure == nil)
-        #expect(SchoolMyProfileOutcome(account: true, dossier: nil).partialFailure == nil)
-        #expect(SchoolMyProfileOutcome(account: nil, dossier: true).partialFailure == nil)
-        #expect(SchoolMyProfileOutcome(account: true, dossier: false).partialFailure?.contains("n’a pas été enregistré") == true)
-        #expect(SchoolMyProfileOutcome(account: false, dossier: true).announcement.contains("Le compte Drivy n’a pas été enregistré"))
-        #expect(SchoolMyProfileOutcome(account: false, dossier: false).partialFailure != nil)
-        #expect(SchoolMyProfileOutcome(account: nil, dossier: false).announcement == "Le dossier de l’école n’a pas été enregistré.")
-        #expect(SchoolMyProfileOutcome(account: true, dossier: true).announcement == "Compte Drivy et dossier de l’école enregistrés")
-    }
-
     // MARK: Ligne de leçon
 
     @MainActor @Test func aDossierLessonRowIsTitledByItsDayAndNeverShowsTheMeetingPoint() {

@@ -39,10 +39,19 @@ export async function seedFixtures(pool: Pool, issuer: string): Promise<void> {
       [id.otherInstructorMember,id.schoolA,id.otherInstructor,['INSTRUCTOR']],
       [id.foreignMember,id.schoolB,id.foreign,['LEARNER']], [id.instructorMemberB,id.schoolB,id.instructor,['ADMIN']]
     ]) await client.query('INSERT INTO drivy.membership(id,school_id,person_id,roles) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [memberId,schoolId,personId,roles]);
+    // Les fixtures s’appliquent juste après 001 (recette) ou sur le schéma courant (démonstration) : depuis 041,
+    // le dossier ne porte plus d’identité, elle vit sur le compte (drivy.person).
+    const legacyDossier=(await client.query("SELECT 1 FROM information_schema.columns WHERE table_schema='drivy' AND table_name='learner_profile' AND column_name='display_name'")).rowCount!==0;
     for (const [learnerId,schoolId,personId,name] of [
       [id.aliceLearner,id.schoolA,id.alice,'Alice Exemple'], [id.bobLearner,id.schoolA,id.bob,'Noé Exemple'],
       [id.foreignLearner,id.schoolB,id.foreign,'Sacha Autre-école']
-    ]) await client.query("INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,created_at) VALUES ($1,$2,$3,$4,'eleve@example.invalid','2026-01-01T00:00:00Z') ON CONFLICT DO NOTHING", [learnerId,schoolId,personId,name]);
+    ]) {
+      if (legacyDossier) await client.query("INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,created_at) VALUES ($1,$2,$3,$4,'eleve@example.invalid','2026-01-01T00:00:00Z') ON CONFLICT DO NOTHING", [learnerId,schoolId,personId,name]);
+      else {
+        await client.query("INSERT INTO drivy.learner_profile(id,school_id,person_id,created_at) VALUES ($1,$2,$3,'2026-01-01T00:00:00Z') ON CONFLICT DO NOTHING", [learnerId,schoolId,personId]);
+        await client.query("UPDATE drivy.person SET contact_email='eleve@example.invalid' WHERE id=$1 AND contact_email IS NULL", [personId]);
+      }
+    }
     for (const [offeringId,schoolId] of [[id.offeringA,id.schoolA],[id.offeringB,id.schoolB]]) {
       await client.query("INSERT INTO drivy.offering_version(id,school_id,offering_key,category_code,version) VALUES ($1,$2,'category-b','B',1) ON CONFLICT DO NOTHING", [offeringId,schoolId]);
     }

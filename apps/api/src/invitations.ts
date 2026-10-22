@@ -38,12 +38,21 @@ const normalizeEmail=(email:string)=>email.trim().normalize('NFC').toLowerCase()
 /** Identité du compte montrée avant de rejoindre l'école ; jamais lue dans le dossier d'une autre école. */
 const profileIdentity=(identity:Identity,roles:readonly string[])=>roles.includes('LEARNER') && identity.firstName && identity.lastName
   ? {profileIdentity:{firstName:identity.firstName,lastName:identity.lastName}} : {};
-/** Les noms structurés sont repris uniquement à la création. Une réinvitation ne réécrit aucun dossier existant. */
+/**
+ * Le dossier de l'école ne porte plus d'identité : elle vit sur le compte de la personne (041). À l'acceptation, les noms
+ * signés et l'e-mail vérifié complètent seulement ce que le compte n'a pas encore ; une invitation ne réécrit jamais
+ * une valeur déjà saisie, ni dans cette école ni dans une autre.
+ */
 async function createLearnerProfile(db:PoolClient,schoolId:string,personId:string,email:string|null,identity:Identity) {
   const names=profileIdentity(identity,['LEARNER']).profileIdentity;
-  await db.query(`INSERT INTO drivy.learner_profile(id,school_id,person_id,display_name,contact_email,profile_readiness,first_name,last_name)
-    SELECT $1,$2,id,COALESCE($5,display_name),$3,'MINIMAL',$6,$7 FROM drivy.person WHERE id=$4`,
-    [randomUUID(),schoolId,email,personId,names?`${names.firstName} ${names.lastName}`:null,names?.firstName ?? null,names?.lastName ?? null]);
+  await db.query('INSERT INTO drivy.learner_profile(id,school_id,person_id) VALUES($1,$2,$3)',[randomUUID(),schoolId,personId]);
+  await db.query("SELECT set_config('app.school_profile','true',true)");
+  await db.query(`UPDATE drivy.person SET first_name=COALESCE(first_name,$2),last_name=COALESCE(last_name,$3),contact_email=COALESCE(contact_email,$4),
+      display_name=CASE WHEN first_name IS NULL AND last_name IS NULL AND $2::text IS NOT NULL AND $3::text IS NOT NULL THEN $2||' '||$3 ELSE display_name END,
+      version=version+1
+    WHERE id=$1 AND ((first_name IS NULL AND $2::text IS NOT NULL) OR (last_name IS NULL AND $3::text IS NOT NULL) OR (contact_email IS NULL AND $4::text IS NOT NULL))`,
+    [personId,names?.firstName ?? null,names?.lastName ?? null,email]);
+  await db.query("SELECT set_config('app.school_profile','',true)");
 }
 interface InvitationRow {
   id:string;school_id:string;email:string|null;delivery:'EMAIL'|'CODE';roles:string[];token_hash:string;status:'PENDING'|'ACCEPTED'|'REVOKED';version:number;

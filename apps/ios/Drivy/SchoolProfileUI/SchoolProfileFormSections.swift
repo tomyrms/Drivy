@@ -1,28 +1,22 @@
 import SwiftUI
 
-/// Les champs du dossier scolaire, tels que les droits relus par le serveur les ouvrent : partagés par le formulaire
-/// du dossier vu par l’école (`SchoolProfileView`) et par la page « Mon profil » de l’élève.
+/// Les champs d’un élève tels que les droits relus par le serveur les ouvrent, dans le dossier vu par l’école
+/// (`SchoolProfileView`). Une seule identité (#94) : ces valeurs sont celles du compte Drivy de l’élève.
 struct SchoolProfileFieldSections: View {
     @Bindable var model: SchoolProfileWorkspace
     var focusedField: FocusState<SchoolProfileField?>.Binding
     /// Informations requises qui manquaient à l’ouverture ; chacune garde son point tant qu’elle reste vide.
     var missingFields: Set<SchoolProfileField> = []
-    /// Sur « Mon profil », les sections du dossier se nomment par l’école : elles suivent celles du compte Drivy.
-    var dossierTitle: String? = nil
-    /// Champs dont la valeur enregistrée redit celle du compte Drivy : « Mon profil » ne les répète pas.
-    var hiddenFields: Set<SchoolProfileField> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if let profile = model.profile {
-            if shows(.firstName) || shows(.lastName) { identitySection(profile) }
+            identitySection(profile)
             contactSection
-            if model.editableFields.contains(.birthDate), shows(.birthDate) { birthSection }
-            if model.editableFields.contains(.postalAddress), shows(.postalAddress) { addressSection }
+            if model.editableFields.contains(.birthDate) { birthSection }
+            if model.editableFields.contains(.postalAddress) { addressSection }
         }
     }
-
-    private func shows(_ field: SchoolProfileField) -> Bool { !hiddenFields.contains(field) }
 
     private func isMissing(_ field: SchoolProfileField) -> Bool {
         missingFields.contains(field) && model.draft.isEmpty(field)
@@ -30,28 +24,24 @@ struct SchoolProfileFieldSections: View {
 
     private func identitySection(_ profile: SchoolAdministrativeProfile) -> some View {
         Section {
-            if shows(.firstName) {
-                if model.editableFields.contains(.firstName) {
+            if model.editableFields.contains(.firstName) {
                 profileField("Prénom", text: $model.draft.firstName, identifier: "profile-first-name", field: .firstName).textContentType(.givenName)
                     .id(SchoolProfileField.firstName)
                 fieldExplanation(.firstName)
             } else { LabeledContent("Prénom", value: profile.firstName ?? "À compléter") }
-            }
-            if shows(.lastName) {
-                if model.editableFields.contains(.lastName) {
+            if model.editableFields.contains(.lastName) {
                 profileField("Nom", text: $model.draft.lastName, identifier: "profile-last-name", field: .lastName).textContentType(.familyName)
                     .id(SchoolProfileField.lastName)
                 fieldExplanation(.lastName)
             } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
-            }
-        } header: { Text(dossierTitle ?? "Identité scolaire").drivyFormSectionHeader() }
+        } header: { Text("Identité").drivyFormSectionHeader() }
             .drivyFormRows()
         .disabled(!model.acceptsInput)
     }
 
     @ViewBuilder private var contactSection: some View {
-        let email = model.editableFields.contains(.contactEmail) && shows(.contactEmail)
-        let phone = model.editableFields.contains(.contactPhone) && shows(.contactPhone)
+        let email = model.editableFields.contains(.contactEmail)
+        let phone = model.editableFields.contains(.contactPhone)
         if email || phone {
             Section {
                 if email {
@@ -67,7 +57,7 @@ struct SchoolProfileFieldSections: View {
                         .id(SchoolProfileField.contactPhone)
                     fieldExplanation(.contactPhone)
                 }
-            } header: { Text(dossierTitle == nil ? "Contacts" : "Coordonnées du dossier").drivyFormSectionHeader() }
+            } header: { Text("Contact").drivyFormSectionHeader() }
                 .drivyFormRows()
             .disabled(!model.acceptsInput)
         }
@@ -85,7 +75,7 @@ struct SchoolProfileFieldSections: View {
             .padding(.vertical, DrivySpacing.xxs)
             .id(SchoolProfileField.birthDate)
             fieldExplanation(.birthDate)
-        } header: { sectionHeader(dossierTitle == nil ? "Date de naissance" : "Date de naissance du dossier", field: .birthDate) }
+        } header: { sectionHeader("Date de naissance", field: .birthDate) }
             .drivyFormRows()
         .disabled(!model.acceptsInput)
     }
@@ -99,7 +89,7 @@ struct SchoolProfileFieldSections: View {
                 SchoolPostalAddressFields(address: $model.draft.address, focus: focusedField, countryIdentifier: "profile-country")
             }
             fieldExplanation(.postalAddress)
-        } header: { sectionHeader(dossierTitle == nil ? "Adresse postale" : "Adresse du dossier", field: .postalAddress) }
+        } header: { sectionHeader("Adresse postale", field: .postalAddress) }
             .drivyFormRows()
         .disabled(!model.acceptsInput)
     }
@@ -143,23 +133,14 @@ struct SchoolProfileFieldSections: View {
     }
 }
 
-/// Ce que le dossier dit autour de ses champs : photo associée, prochaine étape, accueil, explications et notice.
+/// Ce que l’école dit autour des informations : prochaine étape, accueil, explications et notice.
 struct SchoolProfileContextSections: View {
     @Bindable var model: SchoolProfileWorkspace
     /// Rouvre l’accueil guidé ; la feuille appartient à l’écran qui porte ces sections.
     let resumeOnboarding: () -> Void
 
     var body: some View {
-        if let profile = model.profile {
-            if profile.profilePhotoDocumentId != nil {
-                Section {
-                    Label("Une photo est associée au dossier", systemImage: "person.crop.circle")
-                        .foregroundStyle(DrivyTheme.muted)
-                } header: { Text("Photo du dossier").drivyFormSectionHeader() }
-                    .drivyFormRows()
-            }
-            readinessSection
-        }
+        if model.profile != nil { readinessSection }
         if let status = model.onboarding?.status, status != "COMPLETED" { onboardingSection }
         explanationsSection
     }
@@ -228,7 +209,7 @@ struct SchoolProfileContextSections: View {
     }
 }
 
-/// Rue, complément, code postal, localité et pays : la même saisie pour le compte Drivy et pour le dossier.
+/// Rue, complément, code postal, localité et pays : la même saisie dans « Mon profil » et dans le dossier vu par l’école.
 struct SchoolPostalAddressFields: View {
     @Binding var address: SchoolPostalAddress
     /// Le point d’une adresse requise se lit sur l’en-tête de sa section, pas sur la rue.

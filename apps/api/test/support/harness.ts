@@ -54,8 +54,10 @@ export async function prepareSchool(pool:Pool){
  await pool.query(`INSERT INTO drivy.school_data_policy(school_id,version,notice_text,retention_text,contact_email,approved_by,approved_at,notice_version_id) VALUES($1,2,'Notice synthétique','Conservation synthétique','recette@example.invalid',$2,now(),$3)`,[id.schoolA,id.adminMember,notice]);
  await pool.query(`INSERT INTO drivy.profile_field_policy(school_id,status,effective_from,fields,notice_version_id,approved_by_membership_id,approved_at,created_by_membership_id)
   VALUES($1,'PUBLISHED',now()-interval '1 day',$2,$3,$4,now(),$4)`,[id.schoolA,JSON.stringify([{field:'firstName',requirement:'REQUIRED',stage:'JOIN',purposeCode:'IDENTIFICATION'},{field:'lastName',requirement:'REQUIRED',stage:'JOIN',purposeCode:'IDENTIFICATION'}]),notice,id.adminMember]);
- await pool.query(`UPDATE drivy.learner_profile SET first_name='Alice',last_name='Exemple' WHERE id=$1`,[id.aliceLearner]);
- await pool.query(`UPDATE drivy.learner_profile SET first_name='Noé',last_name='Exemple' WHERE id=$1`,[id.bobLearner]);
+ // Depuis 041, l’identité vit sur le compte ; une recette de migration prépare encore un schéma antérieur.
+ const legacy=(await pool.query("SELECT 1 FROM information_schema.columns WHERE table_schema='drivy' AND table_name='learner_profile' AND column_name='first_name'")).rowCount!==0;
+ for(const [learner,person,first] of [[id.aliceLearner,id.alice,'Alice'],[id.bobLearner,id.bob,'Noé']] as const)
+  await pool.query(legacy?`UPDATE drivy.learner_profile SET first_name=$2,last_name='Exemple' WHERE id=$1`:`UPDATE drivy.person SET first_name=$2,last_name='Exemple' WHERE id=$1`,[legacy?learner:person,first]);
  await pool.query(`UPDATE drivy.membership SET grants='{CONFIGURE_CATALOG}' WHERE id=$1`,[id.adminMember]);
  return {policy,curriculum,competency,competency2,notice};
 }

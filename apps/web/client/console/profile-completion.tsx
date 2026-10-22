@@ -3,7 +3,7 @@ import { createCommand, isCivilDate, isEmail } from '../command-core';
 import { civilDateIn } from '../agenda-model';
 import { useCommandSnapshot } from '../command-store';
 import { administrativeProfileSchema, learnerReadinessSchema, readSchool, type Learner } from '../school-api';
-import { Loading, Notice, SelectField, Symbol, TextField } from '../ui';
+import { ConfirmDialog, Loading, Notice, SelectField, Symbol, TextField } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { OutcomeNotice, ReadRetry } from './layout';
 import { countries, labels, missingCount, profileBody, type Draft, type MissingField } from './profile-completion-model';
@@ -17,6 +17,8 @@ export function ProfileCompletion({ schoolId, learner, canEdit }: { schoolId: st
   const { revision } = useCommandSnapshot();
   const [draft, setDraft] = useState<Draft>({});
   const [submitted, setSubmitted] = useState(false);
+  // Une seule identité (#94) : ce que l’école saisit modifie le compte de l’élève, lu par toutes ses écoles.
+  const [confirming, setConfirming] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   const runner = useCommandRunner(() => { setDraft({}); setSubmitted(false); });
   useUnsavedChanges(Object.keys(draft).length > 0 && !runner.busy && !runner.pending);
@@ -50,12 +52,18 @@ export function ProfileCompletion({ schoolId, learner, canEdit }: { schoolId: st
   };
   const invalid = data.fields.some(field => field === 'postalAddress' ? Object.values(address).some(value => !value.trim()) : fieldProblem(field) !== null);
 
-  async function save() {
+  function review() {
     setSubmitted(true);
     if (!data || !body || disabled || invalid) {
       if (!disabled) window.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
       return;
     }
+    setConfirming(true);
+  }
+
+  async function save() {
+    setConfirming(false);
+    if (!data || !body || disabled || invalid) return;
     await runner.run(createCommand({ schoolId, kind: 'updateAdministrativeProfile', path: `learners/${learner.id}/administrative-profile`,
       ifMatch: data.profile.version, resourceId: data.profile.id, resourceVersion: data.profile.version,
       body: { policyVersionId: data.profile.policyVersionId, ...body } }), 'Le profil de l’élève est à jour.');
@@ -68,7 +76,7 @@ export function ProfileCompletion({ schoolId, learner, canEdit }: { schoolId: st
         <span className="row-meta">{missingCount(data.fields.length)}</span>
       </div>
       <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />
-      <form ref={form} className="form-grid profile-completion-fields" noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
+      <form ref={form} className="form-grid profile-completion-fields" noValidate onSubmit={event => { event.preventDefault(); review(); }}>
         {data.fields.map(field => field === 'postalAddress'
           ? <fieldset key={field} className="form-grid"><legend className="field-label">{labels[field]}</legend>
               <TextField label="Rue et numéro" value={address.line1} disabled={disabled} autoComplete="address-line1" maxLength={200}
@@ -94,6 +102,10 @@ export function ProfileCompletion({ schoolId, learner, canEdit }: { schoolId: st
           ? <button type="submit" className="button primary" disabled={disabled} aria-busy={runner.busy}><Symbol kind="check" bare />Enregistrer le profil</button>
           : <p className="caption">À compléter par l’administration.</p>}
       </form>
+      <ConfirmDialog open={confirming} busy={runner.busy} title="Modifier le profil de l’élève ?" confirmLabel="Enregistrer pour l’élève"
+        onCancel={() => setConfirming(false)} onConfirm={() => void save()}>
+        <p>Ces informations sont celles du compte Drivy de l’élève. Il les retrouvera dans Mon profil, et toute autre école qui le suit lira les mêmes.</p>
+      </ConfirmDialog>
     </section>
   );
 }
