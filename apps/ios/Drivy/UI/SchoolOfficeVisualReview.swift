@@ -16,7 +16,7 @@ struct SchoolOfficeVisualReview: View {
             if let models {
                 switch screen {
                 case "planning": SchoolPlanningView(model: models.planning)
-                case "start-now", "start-now-gps-disabled", "start-now-gps-permission": SchoolStartNowView(launch: models.startNowLaunch)
+                case "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known": SchoolStartNowView(launch: models.startNowLaunch)
                 case "planning-settings":
                     NavigationStack {
                         SchoolPlanningSettingsView(scope: models.planning.scope, client: models.agenda.planningClient,
@@ -54,7 +54,7 @@ struct SchoolOfficeVisualReview: View {
             guard models == nil else { return }
             do {
                 let loaded = try SchoolOfficeVisualModels(context: context, permitWarning: screen == "lesson-permit",
-                    testsStartNowGPS: screen == "start-now-gps-disabled" || screen == "start-now-gps-permission")
+                    testsStartNowGPS: screen == "start-now-gps-disabled" || screen == "start-now-gps-permission" || screen == "start-now-gps-known")
                 await loaded.prepare(screen: screen)
                 models = loaded
                 if screen == "lesson-finish" || screen == "lesson-permit" { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }

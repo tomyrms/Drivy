@@ -23,7 +23,7 @@ struct SchoolVisualReview: View {
                 switch screen {
                 case "gps-choice", "signal", "signal-all", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
+                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled", "lesson-competencies", "lesson-route",
                      "learner-lesson", "learner-lesson-planned":
@@ -519,7 +519,7 @@ struct SchoolVisualShell: View {
             "contactEmail": "contact@example.invalid", "approvedAt": time]
         objects["\(root)/learners/\(learnerID.uuidString)/recording-choice"] = ["id": identifier(92).uuidString,
             "schoolId": schoolID.uuidString, "version": 1, "learnerId": learnerID.uuidString, "lessonId": null,
-            "status": "UNKNOWN", "noticeVersionId": identifier(91).uuidString, "recordedBy": membershipID.uuidString,
+            "status": ProcessInfo.processInfo.environment["DRIVY_VISUAL_SCREEN"] == "start-now-gps-known" ? "ALLOWED" : "UNKNOWN", "noticeVersionId": identifier(91).uuidString, "recordedBy": membershipID.uuidString,
             "recordedAt": time, "source": "RECORDED_VERBAL"]
         objects["\(root)/captures"] = page(syntheticTrips())
         objects["\(root)/captures/\(captureID.uuidString)"] = syntheticCapture(captureID)

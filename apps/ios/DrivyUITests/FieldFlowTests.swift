@@ -48,6 +48,38 @@ import XCTest
         XCTAssertFalse(app.buttons["capture-signal-observation"].exists)
     }
 
+    func testAKnownGPSChoiceIsReusedInACompactCardWithoutTheQuestion() {
+        continueAfterFailure = false
+        let app = launch("start-now-gps-known")
+        let start = app.buttons["start-now-confirm"]
+        XCTAssertTrue(start.waitForExistence(timeout: 20), app.debugDescription)
+        waitUntilEnabled(start, in: app)
+        // Choix général valide déjà enregistré : ni cartes de choix ni panneau « Accord GPS », le bouton l’annonce.
+        XCTAssertEqual(start.label, "Démarrer avec GPS")
+        XCTAssertFalse(app.buttons["Avec GPS"].exists)
+        XCTAssertFalse(app.buttons["Sans GPS"].exists)
+        XCTAssertFalse(app.staticTexts["Accord GPS"].exists)
+        let change = app.buttons["start-now-gps-change"]
+        XCTAssertTrue(change.exists, app.debugDescription)
+        XCTAssertEqual(change.label, "Modifier le choix GPS")
+        // Carte flottante : la carte ne remplit pas l’écran.
+        let close = app.buttons["floating-card-close"]
+        XCTAssertTrue(close.exists, app.debugDescription)
+        XCTAssertLessThan(start.frame.maxY - close.frame.minY, app.frame.height * 0.7)
+        capture(app, name: "start-now-gps-known")
+
+        // Changer d’avis reste possible et n’enregistre rien avant le départ.
+        change.tap()
+        let refuse = app.buttons["Sans GPS"]
+        XCTAssertTrue(refuse.waitForExistence(timeout: 5), app.debugDescription)
+        for _ in 0..<3 where !refuse.isHittable { app.swipeUp() }
+        refuse.tap()
+        waitUntilEnabled(start, in: app)
+        XCTAssertEqual(start.label, "Démarrer sans GPS")
+        XCTAssertTrue(change.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["lesson-complete"].exists)
+    }
+
     func testChoosingGPSRequestsPermissionAndExplainsItsRefusal() {
         continueAfterFailure = false
         let app = launch("start-now-gps-permission")
