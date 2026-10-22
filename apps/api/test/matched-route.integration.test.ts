@@ -9,7 +9,7 @@ import {captureHarness,type CaptureHarness} from './support/capture-harness.js';
 import {canonicalCaptureJSON,trackContentHash} from '../src/capture-crypto.js';
 import {encryptRoute} from '../src/matched-routes.js';
 import {MapMatchingError} from '../src/map-matching-client.js';
-import {decodePolyline,type MatcherPoint,type MatcherResult} from '../src/track-matching.js';
+import {decodePolyline,TRACK_MATCHING_ALGORITHM_VERSION,type MatcherPoint,type MatcherResult} from '../src/track-matching.js';
 
 /** Couche recalée d'un trajet privé (extension GET …/matched-route), sur PostgreSQL réel avec un moteur factice. */
 const M=1/111_320;
@@ -72,7 +72,7 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
   expect(Object.keys(data).sort()).toEqual(['algorithmVersion','captureId','generatedAt','provider','reconstructionVersion','spans','status']);
   // L'arrêt et la finalisation ont déjà fait avancer la version des mesures : seule la base la connaît.
   const version=(await pool.query<{reconstruction_version:number}>('SELECT reconstruction_version FROM drivy.capture_session WHERE id=$1',[trip.capture.id])).rows[0]!.reconstruction_version;
-  expect(data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:2,reconstructionVersion:version});
+  expect(data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:TRACK_MATCHING_ALGORITHM_VERSION,reconstructionVersion:version});
   expect(data.spans).toHaveLength(1);
   const span=data.spans[0];expect(span).toMatchObject({segmentId:segment,firstSequence:0,lastSequence:59,confidence:0.92});
   const geometry=decodePolyline(span.geometry);expect(geometry.length).toBeGreaterThanOrEqual(2);
@@ -142,15 +142,15 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
    retry_after=CASE WHEN $2='FAILED' THEN now()+interval '1 day' END WHERE capture_id=$1`,[trip.capture.id,status,provider]);
   const response=await get(trip.capture.id);
   expect(response.json().data).toMatchObject({status:'PENDING',provider:null,spans:[]});
-  expect((await settled(trip.capture.id)).json().data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:2});
+  expect((await settled(trip.capture.id)).json().data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:TRACK_MATCHING_ALGORITHM_VERSION});
   expect(calls).toBe(before+1);
   expect((await pool.query('SELECT * FROM drivy.capture_chunk WHERE capture_id=$1 ORDER BY segment_index,chunk_index',[trip.capture.id])).rows).toEqual(chunks.rows);
  });
- it('un cache OSRM de version 1 est recalculé à la version 2',async()=>{
+ it('un cache OSRM d’une version antérieure est recalculé à la version courante',async()=>{
   const before=calls;
   await pool.query('UPDATE drivy.capture_matched_route SET algorithm_version=1 WHERE capture_id=$1',[trip.capture.id]);
   expect((await get(trip.capture.id)).json().data).toMatchObject({status:'PENDING',provider:null,spans:[]});
-  expect((await settled(trip.capture.id)).json().data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:2});
+  expect((await settled(trip.capture.id)).json().data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:TRACK_MATCHING_ALGORITHM_VERSION});
   expect(calls).toBe(before+1);
  });
  it('un ancien bail sans provider est remplacé et ne peut compléter après le recalcul',async()=>{
@@ -193,10 +193,10 @@ describe('recalage non configuré',()=>{
   expect(response.json().data).toMatchObject({status:'UNAVAILABLE',provider:null,spans:[]});expect(validate(response.json().data)).toBe(true);
   expect((await barePool.query('SELECT 1 FROM drivy.capture_matched_route')).rowCount).toBe(0);
   // Même un cache valide ne doit plus être servi lorsque le moteur est désactivé.
-  await barePool.query("INSERT INTO drivy.capture_matched_route(capture_id,school_id,reconstruction_version,algorithm_version,status,provider) SELECT id,school_id,reconstruction_version,2,'EMPTY','osrm' FROM drivy.capture_session WHERE id=$1",[plain.capture.id]);
+  await barePool.query("INSERT INTO drivy.capture_matched_route(capture_id,school_id,reconstruction_version,algorithm_version,status,provider) SELECT id,school_id,reconstruction_version,$2,'EMPTY','osrm' FROM drivy.capture_session WHERE id=$1",[plain.capture.id,TRACK_MATCHING_ALGORITHM_VERSION]);
   expect((await bare.call('GET',`/captures/${plain.capture.id}/matched-route`)).json().data).toMatchObject({status:'UNAVAILABLE',provider:null,spans:[]});
   const version=(await barePool.query('SELECT reconstruction_version FROM drivy.capture_session WHERE id=$1',[plain.capture.id])).rows[0].reconstruction_version;
-  const encrypted=encryptRoute(bare.config,[],Buffer.from(canonicalCaptureJSON({schoolId:id.schoolA,captureId:plain.capture.id,kind:'matched-route',reconstructionVersion:version,algorithmVersion:2})));
+  const encrypted=encryptRoute(bare.config,[],Buffer.from(canonicalCaptureJSON({schoolId:id.schoolA,captureId:plain.capture.id,kind:'matched-route',reconstructionVersion:version,algorithmVersion:TRACK_MATCHING_ALGORITHM_VERSION})));
   await barePool.query("UPDATE drivy.capture_matched_route SET status='READY',encrypted_route=$2,key_id=$3 WHERE capture_id=$1",[plain.capture.id,encrypted,bare.config.encryptionKeyId]);
   expect((await bare.call('GET',`/captures/${plain.capture.id}/matched-route`)).json().data).toMatchObject({status:'UNAVAILABLE',provider:null,spans:[]});
   expect((await bare.call('GET',`/captures/${plain.capture.id}/matched-route`,undefined,undefined,'demo-other-instructor')).statusCode).toBe(404);
