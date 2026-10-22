@@ -134,6 +134,23 @@ describe('assemblage des tronçons recalés',()=>{
   const unsure=async(points:MatcherPoint[])=>{const r=await road()(points);r.matchings[0]!.confidence=0.2;return r;};
   expect(await matchTrack([{segmentId:SEGMENT,points:straight(30)}],unsure,0.5)).toEqual([]);
  });
+ it('un passage difficile ne fait plus perdre tout le lot : le lot est recoupé et redemandé (#91)',async()=>{
+  // Le moteur doute de tout lot qui contient la mesure 50 (rond-point, demi-tour), confiant ailleurs.
+  const sizes:number[]=[];
+  const hard=async(points:MatcherPoint[])=>{sizes.push(points.length);const r=await road()(points);if(points.some(p=>p.sequence===50))r.matchings[0]!.confidence=0.2;return r;};
+  const spans=await matchTrack([{segmentId:SEGMENT,points:straight(100)}],hard,0.5);
+  expect(sizes[0]).toBe(100);expect(sizes.length).toBeGreaterThan(1);expect(Math.min(...sizes)).toBeGreaterThanOrEqual(24);
+  const covered=new Set<number>();for(const s of spans)for(let q=s.firstSequence;q<=s.lastSequence;q++)covered.add(q);
+  // Sans découpe, tout le lot (100 mesures) restait brut ; seul le voisinage du passage difficile le reste.
+  expect(covered.size).toBeGreaterThanOrEqual(50);
+  // Seule la petite zone autour du passage difficile reste mesurée ; les tronçons ne se chevauchent pas.
+  expect(spans.some(s=>s.firstSequence<=50&&s.lastSequence>=50)).toBe(false);
+  for(let i=1;i<spans.length;i++)expect(spans[i]!.firstSequence).toBeGreaterThanOrEqual(spans[i-1]!.lastSequence);
+  // Un trajet où tout est douteux ne déclenche pas une découpe sans fin.
+  let calls=0;const doubt=async(points:MatcherPoint[])=>{calls++;const r=await road()(points);r.matchings[0]!.confidence=0.2;return r;};
+  expect(await matchTrack([{segmentId:SEGMENT,points:straight(100)}],doubt,0.5)).toEqual([]);
+  expect(calls).toBeLessThanOrEqual(15);
+ });
  it('parking ou zone non couverte : les points sans route coupent le tronçon, la mesure reste',async()=>{
   const partial=async(points:MatcherPoint[])=>{const r=await road()(points);r.tracepoints=r.tracepoints.map((t,i)=>i>=10&&i<15?null:t);return r;};
   const spans=await matchTrack([{segmentId:SEGMENT,points:straight(30)}],partial,0.5);

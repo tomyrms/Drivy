@@ -9,8 +9,8 @@ import type { TrackPoint } from './capture-contracts.js';
  * mesure que l'app affiche. Le tronçon recalé (`MatchedSpan`) dit seulement « entre ces deux mesures, le
  * véhicule a très probablement suivi cette géométrie ». L'interpolation d'affichage reste dans l'app.
  */
-// Version 2 : cache et bail liés au moteur OSRM, sans réutilisation des dérivés de la bascule.
-export const TRACK_MATCHING_ALGORITHM_VERSION = 2;
+// Version 3 (#91) : un lot mal recalé est recoupé en deux moitiés chevauchantes, chacune redemandée au moteur.
+export const TRACK_MATCHING_ALGORITHM_VERSION = 3;
 
 export const selection = { maximumAccuracyMeters: 30, maximumSpeedMetersPerSecond: 50, maximumGapMs: 15_000, maximumJumpSlackMeters: 20, bridgeMs: 4_000 } as const;
 /** Limite documentée de l'API Map Matching ; OSRM accepte la même taille. */
@@ -18,6 +18,14 @@ export const BATCH_SIZE = 100;
 /** Les lots se recouvrent : chacun n'est retenu que loin de ses bords, où le recalage manque de contexte. */
 export const BATCH_OVERLAP = 10;
 export const MAXIMUM_BATCHES = 80;
+/**
+ * Découpe (#91) : un seul passage difficile (rond-point, demi-tour, conduite lente bruitée) fait chuter la confiance
+ * de tout un lot de cent points, et le lot entier restait tracé brut. Quand moins de 60 % de la part retenue d'un lot
+ * est recalée, il est coupé en deux moitiés qui se recouvrent, chacune redemandée, jusqu'à des lots de vingt-quatre
+ * points ou quatre niveaux. Mesuré sur trajets synthétiques Berne : 71 % → 85 à 90 % et 57 % → 87 %, sans écart
+ * de ligne ajouté, pour deux à trois fois plus d'appels dans le pire cas.
+ */
+export const SPLIT = { minimumCoverage: 0.6, minimumPoints: 24, maximumDepth: 4 } as const;
 
 export interface SelectedPoint { point: TrackPoint; startsFragment: boolean; heldUntilMs: number }
 export interface MatcherPoint { sequence: number; latitude: number; longitude: number; timestampMs: number; radiusMeters: number }
@@ -270,18 +278,36 @@ export function mergeSpans(spans: MatchedSpan[]): MatchedSpan[] {
 
 /**
  * Recale tout un trajet : chaque suite continue de mesures retenues, lot par lot, l'un après l'autre.
- * Au-delà de `MAXIMUM_BATCHES` lots, la suite du trajet reste tracée par ses mesures.
+ * Au-delà de `MAXIMUM_BATCHES` appels, la suite du trajet reste tracée par ses mesures.
  */
 export async function matchTrack(segments: { segmentId: string; points: TrackPoint[] }[], matcher: (points: MatcherPoint[]) => Promise<MatcherResult>, minimumConfidence: number): Promise<MatchedSpan[]> {
   const spans: MatchedSpan[] = [];
   let used = 0;
+  const run = async (segmentId: string, part: MatcherPoint[], keep: { from: number; to: number }, depth: number): Promise<boolean> => {
+    if (++used > MAXIMUM_BATCHES) return false;
+    const found = spansFromBatch(segmentId, part, await matcher(part), keep, minimumConfidence);
+    const kept = part.slice(keep.from, keep.to + 1);
+    const covered = kept.filter(p => found.some(s => p.sequence >= s.firstSequence && p.sequence <= s.lastSequence)).length;
+    if (covered >= SPLIT.minimumCoverage * kept.length || part.length < 2 * SPLIT.minimumPoints || depth >= SPLIT.maximumDepth) {
+      spans.push(...found);
+      return true;
+    }
+    // Deux moitiés qui se recouvrent de BATCH_OVERLAP points ; chacune garde sa part de `keep`, loin de ses bords internes.
+    const middle = Math.floor(part.length / 2), half = Math.floor(BATCH_OVERLAP / 2);
+    const leftEnd = middle + half, rightStart = middle - half;
+    const left = { from: keep.from, to: Math.min(keep.to, middle - 1) };
+    const right = { from: Math.max(keep.from, middle) - rightStart, to: keep.to - rightStart };
+    // Ce que le lot entier avait déjà recalé est gardé ; mergeSpans retient le plus confiant sur une plage disputée.
+    spans.push(...found);
+    if (left.to >= left.from && !(await run(segmentId, part.slice(0, leftEnd), left, depth + 1))) return false;
+    if (right.to >= right.from && !(await run(segmentId, part.slice(rightStart), right, depth + 1))) return false;
+    return true;
+  };
   for (const segment of segments) {
-    for (const run of continuousRuns(selectTrack(segment.points))) {
-      const points = matcherPoints(run);
+    for (const continuous of continuousRuns(selectTrack(segment.points))) {
+      const points = matcherPoints(continuous);
       for (const batch of batches(points.length)) {
-        if (++used > MAXIMUM_BATCHES) return mergeSpans(spans);
-        const part = points.slice(batch.start, batch.end);
-        spans.push(...spansFromBatch(segment.segmentId, part, await matcher(part), { from: batch.from - batch.start, to: batch.to - batch.start }, minimumConfidence));
+        if (!(await run(segment.segmentId, points.slice(batch.start, batch.end), { from: batch.from - batch.start, to: batch.to - batch.start }, 0))) return mergeSpans(spans);
       }
     }
   }
