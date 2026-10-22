@@ -1,9 +1,10 @@
 # État de la réalisation
 
-## 22 octobre 2026 : démarrage compact et choix GPS réutilisé (#95), branche `claude/95-demarrage-compact-20261022`
+## 22 octobre 2026 : démarrage compact et choix GPS réutilisé (#95), intégré dans `master`
 
-- « Démarrer une leçon » : le récapitulatif est une carte flottante centrée, hauteur au contenu, fond atténué (plus de `.large`). Un choix GPS valide (accord ou refus) n'affiche plus ni cartes ni panneau « Accord GPS » : le bouton annonce Avec/Sans GPS, « Modifier le choix GPS » reste accessible. Chargement et panne de lecture ne passent ni pour une absence de choix ni pour un accord. Détail : [demarrage-compact-gps-95.md](demarrage-compact-gps-95.md). Aucun changement API, OpenAPI ni base, aucun déploiement.
-- Écrit, non exécuté : `SchoolStartNowConsentTests` (états de consentement), test UI `testAKnownGPSChoiceIsReusedInACompactCardWithoutTheQuestion`, écran de contrôle `start-now-gps-known`. Les résultats de l'IPA d'essai et des tests ciblés sont consignés dans la PR.
+- « Démarrer une leçon » : le récapitulatif est une carte flottante centrée, hauteur au contenu, fond flouté (plus de `.large`). Un choix GPS valide (accord ou refus) n'affiche plus ni cartes ni panneau « Accord GPS » : le bouton annonce Avec/Sans GPS, « Modifier le choix GPS » reste accessible. Chargement et panne de lecture ne passent ni pour une absence de choix ni pour un accord. Détail : [demarrage-compact-gps-95.md](demarrage-compact-gps-95.md). Aucun changement API, OpenAPI ni base, aucun déploiement.
+- Exécuté : IPA d'essai compilée sur `525779d` ([run 39863074618](https://github.com/tomyrms/Drivy/actions/runs/39863074618)). Sur `ce7e3a8`, parcours UI iPhone et iPad réussis ([run 39860421236](https://github.com/tomyrms/Drivy/actions/runs/39860421236)) ; tests métier : 728 tests, un seul échec, `aChangedChoiceIsWrittenOnlyAtDeparture` ([run 39860417871](https://github.com/tomyrms/Drivy/actions/runs/39860417871)), causé par le serveur synthétique du test. Il a été corrigé dans `1826c04` (test seul), mais pas relancé : le porteur a demandé d'arrêter les tests. Nouvelle exécution rattachée à #84.
+- Dossier d'essai sur le homelab : élève fictif « Lucas Moreau » ajouté à Ramos Auto ecole (formation A1, moniteur affecté, aucun choix GPS), après sauvegarde `drivy_refonte-before-add-learner-20261022T220253Z.dump`.
 - À qualifier sur appareil : rendu de la carte, clavier, grandes tailles de texte, iPad, paysage, VoiceOver, Réduire les animations, GPS réel. Campagne complète réservée à #84.
 
 ## 22 octobre 2026 : une seule identité et une seule page « Mon profil » (#94)

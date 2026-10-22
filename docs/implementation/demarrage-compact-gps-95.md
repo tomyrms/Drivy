@@ -28,7 +28,7 @@ Un état pur et testé, `reading / unavailable / needsReview / question / known(
 
 ### Carte flottante (`DrivyFloatingCard`)
 
-- `SchoolStartNowSheets` présente le parcours en `fullScreenCover` à fond transparent (`presentationBackground(.clear)`). Le récapitulatif est une carte centrée, fond atténué (noir 40 %), largeur au plus `compactColumn`, hauteur au contenu (`DrivyFittingScrollLayout`), plafonnée à la zone sûre moins des marges, avec défilement au-delà.
+- `SchoolStartNowSheets` présente le parcours en `fullScreenCover` à fond transparent (`presentationBackground(.clear)`). Le récapitulatif est une carte centrée, fond flouté à la demande du porteur (22 octobre 2026 : matériau `.ultraThinMaterial` et voile noir 15 %), largeur au plus `compactColumn`, hauteur au contenu (`DrivyFittingScrollLayout`), plafonnée à la zone sûre moins des marges, avec défilement au-delà.
 - En-tête (titre, « Fermer ») et bouton de départ restent hors du défilement. Aux tailles d'accessibilité, le bouton rejoint le défilement pour ne jamais être coupé. Le fond ne ferme pas la carte (aucune saisie perdue par un geste de travers).
 - Recherche d'élève et fiche leçon restent en plein écran (`NavigationStack` à fond opaque dans la même présentation). Ouverture depuis un dossier élève : récapitulatif direct (`presetLearnerID`, inchangé).
 - Une seule présentation pour tout le parcours : lieu et formation (état de `SchoolStartNowWorkspace`) sont conservés entre recherche et récapitulatif, sans rechargement ni second `load()` (optimisations #86 intactes). Transitions en fondu sous Réduire les animations.
