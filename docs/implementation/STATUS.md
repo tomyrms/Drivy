@@ -9,7 +9,7 @@
 ## 22 octobre 2026 : replay en zigzag, cause et recette propre (#91)
 
 - Cause des zigzags partout : 7d20d3a avait passé l'algorithme de recalage en version 3, alors que l'app installée n'affiche que la version 2. L'app retombait donc sur les mesures brutes pour tout le trajet. Corrigé dans 49121c0 : le serveur reste en version 2 (même format), la migration `040_matched_route_resplit.sql` purge une fois les anciens caches pour qu'ils soient recalculés avec la découpe des lots, et l'app accepte désormais toute version OSRM >= 2.
-- Recette : à la demande du porteur, les 37 autres leçons de Dania Badoni (28 trajets) sont supprimées. Il reste une leçon « Test : trajet simulé » du 21.10 à 08:00 : boucle de 7,1 km à Kirchenfeld sans demi-tour, 767 mesures, bruit GPS corrélé, deux arrêts aux feux, 5 signalements. Contrôle visuel de la ligne du replay contre la route : 100 % recalé, 4 virages parasites sur 735 segments.
+- Recette : à la demande du porteur, les 37 autres leçons de Dania Badoni (28 trajets) sont supprimées. Il reste une leçon « Test : trajet simulé » du 21.10 à 08:00 : boucle de 7,1 km à Kirchenfeld sans demi-tour, 767 mesures, bruit GPS corrélé, deux arrêts aux feux, 5 signalements. Contrôle visuel de la ligne du replay contre la route : 100 % recalé, 4 virages parasites sur 735 segments. Bilan complet publié (révision 1, partagé avec l'élève) : travaillé, observations, prochaine étape et 5 compétences (3 autonome, 1 guidé, 1 découverte) ; les 5 signalements portent leur compétence. Progression de la formation vérifiée.
 - Sauvegarde préalable `/root/drivy_refonte-before-49121c0-20261022T005410Z.dump`.
 
 ## 22 octobre 2026 : replay, découpe des lots mal recalés (#91), déployé
