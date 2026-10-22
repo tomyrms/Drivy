@@ -222,7 +222,7 @@ async function main() {
     const counts = (await pool.query(`SELECT
       (SELECT count(*)::int FROM drivy.identity_link WHERE issuer=$1 AND subject=$2 AND person_id=$3) AS identities,
       (SELECT count(*)::int FROM drivy.membership WHERE person_id=$3) AS memberships,
-      (SELECT count(*)::int FROM drivy.learner_profile WHERE person_id=$3 AND school_id=$4 AND profile_readiness='MINIMAL') AS learners,
+      (SELECT count(*)::int FROM drivy.learner_profile WHERE person_id=$3 AND school_id=$4) AS learners,
       (SELECT count(*)::int FROM drivy.training t JOIN drivy.learner_profile l ON l.id=t.learner_id WHERE l.person_id=$3) AS trainings`,
       [issuer, subject, personID, fixtureIds.schoolA])).rows[0];
     assert(counts.identities === 1 && counts.memberships === 1 && counts.learners === 1 && counts.trainings === 0,

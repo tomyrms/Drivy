@@ -556,6 +556,16 @@ describe('Invitation par code · sans e-mail',()=>{
     const after=await counts();expect(after.persons).toBe(before.persons);expect(after.members).toBe(before.members+1);expect(after.learners).toBe(before.learners+1);
     expect((await pool.query('SELECT person_id FROM drivy.identity_link WHERE issuer=$1 AND subject=$2',[issuer,'demo-foreign'])).rows[0].person_id).toBe(id.foreign);
   });
+  it('un membre du personnel qui accepte un code élève garde ses rôles et reçoit un seul dossier, ses noms sur le compte',async()=>{
+    const invitation=await issue();
+    const response=await acceptCode(invitation.code,'demo-admin',randomUUID(),{given_name:'Responsable',family_name:'Synthétique'});
+    expect(response.statusCode,response.body).toBe(201);
+    const me=(await call('GET','/v1/me',undefined,undefined,'demo-admin')).json().data;
+    const membership=me.memberships.find((m:{schoolId:string})=>m.schoolId===id.schoolA);
+    expect(membership.roles).toEqual(expect.arrayContaining(['ADMIN','LEARNER']));
+    expect((await pool.query('SELECT p.first_name,p.last_name FROM drivy.learner_profile l JOIN drivy.person p ON p.id=l.person_id WHERE l.school_id=$1 AND l.person_id=$2',[id.schoolA,id.admin])).rows)
+      .toEqual([{first_name:'Responsable',last_name:'Synthétique'}]);
+  });
   it('« Nouveau code » : le renvoi remplace le code, l’ancien échoue aussitôt, le nouveau n’apparaît que dans cette réponse',async()=>{
     const invitation=await issue();const operationId=randomUUID();
     const resent=await call('POST',`${path}/${invitation.id}/resend`,{operationId},1,'demo-instructor');expect(resent.statusCode,resent.body).toBe(200);conforms('InvitationEnvelope',resent.json());

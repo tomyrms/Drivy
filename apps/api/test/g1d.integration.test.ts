@@ -235,7 +235,7 @@ describe('G1D1 · politique versionnée et profil minimal',()=>{
   });
   it('une seule identité (#94) : ce que l’élève saisit dans Mon profil est ce que l’école lit, et inversement',async()=>{
     const policyVersionId=await publish();
-    const mine=async()=>(await call('GET','/v1/me/profile',undefined,null,'demo-alice')).json().data;
+    const mine=async()=>(await call('GET','/v1/me/profile',undefined,undefined,'demo-alice')).json().data;
     const postalAddress={line1:'Rue Unique 1',line2:null,postalCode:'2000',locality:'Neuchâtel',countryCode:'CH'};
     // L’élève enregistre son compte une seule fois.
     const saved=await call('PATCH','/v1/me/profile',{displayName:'Alice Unique',firstName:'Alice',lastName:'Unique',contactEmail:'alice@example.invalid',

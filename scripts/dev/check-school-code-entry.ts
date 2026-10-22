@@ -101,11 +101,13 @@ export async function verifySchoolCodeEntry(options:{browser:Browser;origin:stri
       assert(meResponse.ok()&&membership?.roles.includes('LEARNER')
         &&(fresh?membership.roles.length===1:membership.roles.includes('ADMIN')&&membership.roles.includes('INSTRUCTOR')),
         'La relecture du même compte retrouve l’école rejointe et préserve ses rôles existants');
-      const profiles=(await administration.query(`SELECT id,profile_id,first_name,last_name,display_name FROM drivy.learner_profile WHERE school_id=$1 AND person_id=$2`,[schoolId,me.personId])).rows;
+      // Une seule identité (#94) : les noms vivent sur le compte de la personne, le dossier n'en porte plus.
+      const profiles=(await administration.query(`SELECT l.id,l.profile_id,p.first_name,p.last_name,p.display_name FROM drivy.learner_profile l
+        JOIN drivy.person p ON p.id=l.person_id WHERE l.school_id=$1 AND l.person_id=$2`,[schoolId,me.personId])).rows;
       const profile=profiles[0];
-      step('noms structurés du dossier durable');
-      assert(profiles.length===1&&profile.first_name===firstName&&profile.last_name===lastName&&profile.display_name===`${firstName} ${lastName}`,
-        'Le compte rejoint par code possède un seul dossier avec ses noms structurés exacts');
+      step('noms structurés du compte, un seul dossier');
+      assert(profiles.length===1&&profile.first_name===firstName&&profile.last_name===lastName&&(fresh?profile.display_name===`${firstName} ${lastName}`:true),
+        'Le compte rejoint par code possède un seul dossier, et ses noms structurés exacts sont ceux du compte');
       if(signedIn) {
         step('dossier existant conservé sans réécriture');
         const currentProfile=(await administration.query('SELECT to_jsonb(l) AS profile FROM drivy.learner_profile l WHERE school_id=$1 AND person_id=$2',[schoolId,me.personId])).rows[0]?.profile;
