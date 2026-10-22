@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 22 octobre 2026 : démarrage compact et choix GPS réutilisé (#95), branche `claude/95-demarrage-compact-20261022`
+
+- « Démarrer une leçon » : le récapitulatif est une carte flottante centrée, hauteur au contenu, fond atténué (plus de `.large`). Un choix GPS valide (accord ou refus) n'affiche plus ni cartes ni panneau « Accord GPS » : le bouton annonce Avec/Sans GPS, « Modifier le choix GPS » reste accessible. Chargement et panne de lecture ne passent ni pour une absence de choix ni pour un accord. Détail : [demarrage-compact-gps-95.md](demarrage-compact-gps-95.md). Aucun changement API, OpenAPI ni base, aucun déploiement.
+- Écrit, non exécuté : `SchoolStartNowConsentTests` (états de consentement), test UI `testAKnownGPSChoiceIsReusedInACompactCardWithoutTheQuestion`, écran de contrôle `start-now-gps-known`. Les résultats de l'IPA d'essai et des tests ciblés sont consignés dans la PR.
+- À qualifier sur appareil : rendu de la carte, clavier, grandes tailles de texte, iPad, paysage, VoiceOver, Réduire les animations, GPS réel. Campagne complète réservée à #84.
+
 ## 22 octobre 2026 : une seule identité et une seule page « Mon profil » (#94)
 
 - Décision du porteur : une seule donnée par information. Prénom, nom, nom affiché, e-mail, téléphone, naissance, adresse et photo vivent sur le compte (`drivy.person`), lu par toutes les écoles ; le dossier d'élève ne garde que ce qui appartient à l'école. Migration `041_single_person_identity.sql`. L'administration modifie après confirmation. Détail : [mon-profil-unifie-20261022.md](mon-profil-unifie-20261022.md).
