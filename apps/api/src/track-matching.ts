@@ -9,8 +9,10 @@ import type { TrackPoint } from './capture-contracts.js';
  * mesure que l'app affiche. Le tronçon recalé (`MatchedSpan`) dit seulement « entre ces deux mesures, le
  * véhicule a très probablement suivi cette géométrie ». L'interpolation d'affichage reste dans l'app.
  */
-// Version 3 (#91) : un lot mal recalé est recoupé en deux moitiés chevauchantes, chacune redemandée au moteur.
-export const TRACK_MATCHING_ALGORITHM_VERSION = 3;
+// Version 2 conservée (#91) : l'app jusqu'au build du 22 octobre n'affiche que la version 2, et la découpe des lots
+// garde le même format de tronçons. Monter ce numéro seulement quand toutes les apps installées acceptent « >= 2 ».
+// Les caches calculés avant la découpe sont purgés une fois par la migration 040.
+export const TRACK_MATCHING_ALGORITHM_VERSION = 2;
 
 export const selection = { maximumAccuracyMeters: 30, maximumSpeedMetersPerSecond: 50, maximumGapMs: 15_000, maximumJumpSlackMeters: 20, bridgeMs: 4_000 } as const;
 /** Limite documentée de l'API Map Matching ; OSRM accepte la même taille. */

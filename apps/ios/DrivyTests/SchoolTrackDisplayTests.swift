@@ -425,6 +425,11 @@ struct SchoolTrackDisplayTests {
         let missing = try JSONDecoder().decode(SchoolMatchedRoute.self,
             from: Data("{\"captureId\":\"\(UUID())\",\"status\":\"READY\",\"spans\":[]}".utf8))
         #expect(!missing.isUsable)
+        // A newer OSRM algorithm on the school keeps the same span format: still drawn on the road (#91).
+        let newer = matchedRoute(segment: segment, first: 0, last: 20, north: 3, fromEast: 0, toEast: 200,
+            anchors: [[0, 0], [20, 200]], provider: "osrm", algorithmVersion: 3)
+        #expect(newer.isUsable)
+        #expect(replay(points, segmentID: segment, matched: newer).usesMatchedRoute)
     }
 
     @Test func anIncoherentMatchedRouteIsIgnoredAndTheMeasuredReplayStillWorks() {

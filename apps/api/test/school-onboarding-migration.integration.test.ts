@@ -69,7 +69,7 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     await migrate(migration);
     expect(await snapshot()).toEqual(before);
     expect((await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations WHERE name=ANY($1::text[]) ORDER BY name',[oldNames])).rows).toEqual(history);
-    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql','034_withdrawal_reason_staff_only.sql','035_osrm_matched_route.sql','036_autonomous_signals.sql','037_self_profile.sql','038_self_profile_details.sql','039_self_profile_contact.sql']);
+    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql','034_withdrawal_reason_staff_only.sql','035_osrm_matched_route.sql','036_autonomous_signals.sql','037_self_profile.sql','038_self_profile_details.sql','039_self_profile_contact.sql','040_matched_route_resplit.sql']);
     // 033 ajoute seulement le nom facultatif d'un parcours : aucune ligne existante ne reçoit de nom déduit.
     expect((await pool.query('SELECT count(*)::int AS named FROM drivy.offering_version WHERE label IS NOT NULL')).rows[0].named).toBe(0);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_opening_link')).rows[0].n).toBe(0);
@@ -135,7 +135,9 @@ it('035 purge Mapbox et tous les anciens calculs en cours sans toucher aux chunk
     expect(chunks.length).toBeGreaterThan(0);
     const retained=(await pool.query("SELECT * FROM drivy.capture_matched_route WHERE provider='osrm' AND status<>'PROCESSING' ORDER BY capture_id")).rows;
     await migrate(migration);
-    expect((await pool.query('SELECT * FROM drivy.capture_matched_route ORDER BY capture_id')).rows).toEqual(retained);
+    // 035 gardait les résultats OSRM terminés ; 040 (#91) les purge ensuite tous pour les recalculer avec la découpe.
+    expect(retained.length).toBe(3);
+    expect((await pool.query('SELECT * FROM drivy.capture_matched_route ORDER BY capture_id')).rows).toEqual([]);
     expect(await snapshot('capture_chunk')).toEqual(chunks);expect(await snapshot('capture_session')).toEqual(sessions);expect(await snapshot('school_data_policy')).toEqual(notices);
     expect((await pool.query("SELECT to_regprocedure('drivy.claim_matched_route(uuid,integer,integer,integer)') AS old_claim")).rows[0].old_claim).toBeNull();
     const query=async(sql:string,values:unknown[])=>{

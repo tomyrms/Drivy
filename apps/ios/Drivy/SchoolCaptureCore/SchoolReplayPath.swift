@@ -23,10 +23,12 @@ struct SchoolMatchedRoute: Decodable, Sendable, Equatable {
     let spans: [Span]
 
     /// The school is computing it: worth asking again shortly.
-    var isPending: Bool { status == "PENDING" && algorithmVersion == 2 && spans.isEmpty }
+    var isPending: Bool { status == "PENDING" && (algorithmVersion ?? 0) >= 2 && spans.isEmpty }
 
+    /// Any OSRM generation from version 2 on keeps the same span format: a newer algorithm on the school must never
+    /// make the app fall back to the raw fixes (#91, version 3 had done exactly that).
     var isUsable: Bool {
-        status == "READY" && provider == "osrm" && algorithmVersion == 2
+        status == "READY" && provider == "osrm" && (algorithmVersion ?? 0) >= 2
             && spans.count <= 2_000 && spans.allSatisfy { span in
             span.firstSequence >= 0 && span.lastSequence > span.firstSequence && span.confidence.isFinite
                 && span.geometry.utf8.count <= 400_000 && span.anchors.count >= 2 && span.anchors.count <= 20_000
