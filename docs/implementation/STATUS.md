@@ -6,6 +6,12 @@
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
 - Décision du porteur (21 octobre 2026) : pas de bascule, le proxy Cloudflare est conservé. La lenteur mesurée par Cloudflare reste ouverte.
 
+## 22 octobre 2026 : replay, découpe des lots mal recalés (#91), déployé
+
+- Un lot de 100 points dont la confiance tombe (rond-point, demi-tour, conduite lente bruitée) restait entièrement brut. Il est maintenant recoupé en deux moitiés chevauchantes redemandées au moteur, jusqu'à 24 points ou 4 niveaux (`track-matching.ts`, algorithme v3 : les caches v2 sont recalculés à la prochaine lecture).
+- Mesuré (vrais modules sur CT114) : leçon de recette de Dania 71 % → 82 % du trajet recalé ; trajets synthétiques Berne 71 % → 85-90 %, 57 % → 87 %, sans écart de ligne ajouté (p99 0,1 m), au plus trois fois plus d'appels.
+- Tests : 48 (unitaires + intégration PostgreSQL). Déployé 7d20d3a après sauvegarde `/root/drivy_refonte-before-7d20d3a-20261022T002745Z.dump`.
+
 ## 21 octobre 2026 : recalage direct sur la route (#90), déployé
 
 - Donnée de recette (22.10, 00:25) : leçon terminée « Test : trajet simulé » du 21.10 à 08:00 pour Dania Badoni (Ramos Auto ecole), trajet synthétique de 1 000 points (17 min, ~9 km dans Berne, trois arrêts), chiffré avec la clé de capture, sans aucune position réelle. Sauvegarde préalable `/root/drivy_refonte-before-test-lesson-20261021T222437Z.dump`. Déchiffrement et recalage du replay vérifiés (71 % du trajet recalé). À supprimer après la recette.
