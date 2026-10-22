@@ -4,8 +4,9 @@
 
 - Décision du porteur : une seule donnée par information. Prénom, nom, nom affiché, e-mail, téléphone, naissance, adresse et photo vivent sur le compte (`drivy.person`), lu par toutes les écoles ; le dossier d'élève ne garde que ce qui appartient à l'école. Migration `041_single_person_identity.sql`. L'administration modifie après confirmation. Détail : [mon-profil-unifie-20261022.md](mon-profil-unifie-20261022.md).
 - La première livraison (deux formulaires sur une page, 7cf25a3) affichait les informations en double ; elle est remplacée.
-- Exécuté localement sur PostgreSQL 17 : 569 tests API passés, web 320 tests et typage passés. CI et IPA : voir l'issue #94.
-- Non exécuté : tests unitaires et UI Apple, captures iPhone/iPad, VoiceOver, Dynamic Type, appareil. Déploiement homelab en attente d'accord, avec sauvegarde préalable.
+- Exécuté localement sur PostgreSQL 17 : 569 tests API passés, web 320 tests et typage passés. CI verte sur `d05ca59` : vérifications PostgreSQL et web, parcours navigateur Chromium · OIDC · BFF · API · PostgreSQL ; IPA 0.7.0 build 326 (`0730c3d`, run 39834157534, SHA-256 `ba8196b8…`).
+- **Déployé le 22 octobre 2026** à la demande du porteur : release `d05ca59` sur le homelab, sauvegarde vérifiée `/root/drivy_refonte-before-d05ca59…-20261022T191259Z-0286e6eb8b2d.dump` sur CT113, 41 migrations aux empreintes conformes (041 appliquée), API/web/identité actifs, environnement API et OSRM inchangés. Contrôles : plus aucune colonne d'identité sur `learner_profile`, les dossiers existants ont leurs noms sur le compte, `/app/` 200, `/refonte/v1/me` et `/refonte/v1/me/profile` 401 sans jeton.
+- Non exécuté : tests unitaires et UI Apple, captures iPhone/iPad, VoiceOver, Dynamic Type, essai sur appareil.
 
 ## 21 octobre 2026 : contourner le proxy Cloudflare (#93), non retenu
 
