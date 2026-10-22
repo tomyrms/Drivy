@@ -6,6 +6,12 @@
 - Mesuré (Wi-Fi, médiane de 5) : découverte OIDC 3,8 s par Cloudflare contre 20 ms en direct ; `/app/` 1,4 s contre 17 ms. Certificat vérifié en direct, chemins internes en 404.
 - Décision du porteur (21 octobre 2026) : pas de bascule, le proxy Cloudflare est conservé. La lenteur mesurée par Cloudflare reste ouverte.
 
+## 22 octobre 2026 : replay en zigzag, cause et recette propre (#91)
+
+- Cause des zigzags partout : 7d20d3a avait passé l'algorithme de recalage en version 3, alors que l'app installée n'affiche que la version 2. L'app retombait donc sur les mesures brutes pour tout le trajet. Corrigé dans 49121c0 : le serveur reste en version 2 (même format), la migration `040_matched_route_resplit.sql` purge une fois les anciens caches pour qu'ils soient recalculés avec la découpe des lots, et l'app accepte désormais toute version OSRM >= 2.
+- Recette : à la demande du porteur, les 37 autres leçons de Dania Badoni (28 trajets) sont supprimées. Il reste une leçon « Test : trajet simulé » du 21.10 à 08:00 : boucle de 7,1 km à Kirchenfeld sans demi-tour, 767 mesures, bruit GPS corrélé, deux arrêts aux feux, 5 signalements. Contrôle visuel de la ligne du replay contre la route : 100 % recalé, 4 virages parasites sur 735 segments.
+- Sauvegarde préalable `/root/drivy_refonte-before-49121c0-20261022T005410Z.dump`.
+
 ## 22 octobre 2026 : replay, découpe des lots mal recalés (#91), déployé
 
 - Un lot de 100 points dont la confiance tombe (rond-point, demi-tour, conduite lente bruitée) restait entièrement brut. Il est maintenant recoupé en deux moitiés chevauchantes redemandées au moteur, jusqu'à 24 points ou 4 niveaux (`track-matching.ts`, algorithme v3 : les caches v2 sont recalculés à la prochaine lecture).
