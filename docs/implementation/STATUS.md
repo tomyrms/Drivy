@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 22 octobre 2026 : une seule page « Mon profil » (#94)
+
+- « Mon profil » et « Mes informations » sont fusionnés dans `SchoolMyProfileView`, ouverte par une seule ligne pour tout compte connecté. Le compte Drivy (`/v1/me/profile`) et le dossier d’élève (`SchoolProfileWorkspace`) restent deux sources, deux droits et deux requêtes ; un échec partiel est dit comme tel. Détail, composants supprimés et conservés : [mon-profil-unifie-20261022.md](mon-profil-unifie-20261022.md).
+- Aucun changement serveur, base ou homelab.
+- Exécuté : compilation Release de l’IPA par `ipa-essai.yml` (voir l’issue #94 pour le lien de l’artefact).
+- Reste à qualifier : tests unitaires et UI Apple (non lancés à la demande du porteur), captures iPhone et iPad clair/sombre, VoiceOver, Dynamic Type, recette sur appareil pour élève, moniteur, administration, rôles cumulés, compte sans école et plusieurs écoles.
+
 ## 21 octobre 2026 : contourner le proxy Cloudflare (#93), non retenu
 
 - Inventaire en lecture seule et procédure : [contournement-cloudflare-20261021.md](contournement-cloudflare-20261021.md). Caddy CT109 a déjà un certificat Let's Encrypt valide pour `drivy.shulker.ch` sans défi DNS, seuls 80/443 sont joignables, aucun filtrage « IP Cloudflare » n'existe : passer l'enregistrement `drivy` en « DNS only » suffit, sans changement Caddy ni IPA.

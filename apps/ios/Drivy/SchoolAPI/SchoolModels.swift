@@ -164,11 +164,10 @@ protocol SchoolAPI: AnyObject {
     /// Les dossiers actifs de toute l’école auxquels manque une information requise (filtre `requiresAction`),
     /// toutes pages lues ; `nil` quand ce client ne sait pas les lire.
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]?
-    /// Renomme le compte connecté (`PATCH /v1/me/profile`). `version` : celle de la personne lue par `me()`.
-    func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile
     /// Profil personnel complet (`GET /v1/me/profile`).
     func selfProfile() async throws -> SchoolSelfProfile
-    /// Enregistre nom affiché, prénom, nom et téléphone (`PATCH /v1/me/profile`).
+    /// Enregistre le compte Drivy : nom affiché, prénom, nom, contact, naissance et adresse (`PATCH /v1/me/profile`).
+    /// `version` : celle de la personne lue par `me()` ou par `selfProfile()`.
     func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile
     /// Remplace la photo (JPEG carré) ; `nil` la retire.
     func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile
@@ -248,7 +247,6 @@ extension SchoolAPI {
         try await learners(schoolID: schoolID, query: "", cursor: nil)
     }
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? { nil }
-    func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
     func selfProfile() async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
     func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
     func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }

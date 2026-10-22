@@ -195,13 +195,6 @@ final class DrivyAPIClient: SchoolAPI {
         try await send(path, query: query, method: "GET", body: nil, ifMatch: nil)
     }
 
-    func renameSelf(displayName: String, version: Int) async throws -> SchoolSelfProfile {
-        let current = try await selfProfile()
-        var edit = SchoolSelfProfileEdit(current)
-        edit.displayName = displayName
-        return try await saveSelfProfile(edit, version: version)
-    }
-
     func selfProfile() async throws -> SchoolSelfProfile {
         do { return try await read(["v1", "me", "profile"]) }
         catch SchoolAPIError.notFound { throw SchoolSelfProfileFailure.unsupported }

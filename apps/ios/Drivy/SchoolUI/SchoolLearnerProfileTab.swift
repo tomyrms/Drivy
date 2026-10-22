@@ -7,8 +7,8 @@ enum SchoolLearnerProfileRoute: Hashable {
     case trips
 }
 
-/// L’onglet Profil de l’élève : qui il est et dans quelle école, ses permis en une liste, et l’accès à ses
-/// informations et aux paramètres. Le détail vit ailleurs : les séances dans Leçons, les compétences dans
+/// L’onglet Profil de l’élève : qui il est et dans quelle école, ses permis en une liste, et l’accès à
+/// « Mon profil » et aux paramètres. Le détail vit ailleurs : les séances dans Leçons, les compétences dans
 /// Progression, le compte dans Paramètres. Les formations sont celles des onglets Leçons et Progression (mêmes
 /// modèles partagés, toutes leçons lues) : rien n’est relu en double, et aucun chiffre n’est donné tant que
 /// l’historique n’est pas complet.
@@ -26,8 +26,6 @@ struct SchoolLearnerProfileTab: View {
     var openTraining: ((UUID, SchoolHomeTab) -> Void)? = nil
     /// Relit le dossier quand il n’a pas pu être lu.
     var retryDossier: (() -> Void)? = nil
-    /// Le profil administratif de l’élève, lu seulement quand il déplie « Mes informations ».
-    var makeLearnerProfile: ((SchoolLearner) -> SchoolProfileWorkspace?)? = nil
     /// L’accord GPS général de l’élève, tenu par les onglets : le point de Profil s’allume avant que la page soit
     /// ouverte, et la page relit le même modèle. Le Profil n’en dit que ce qui attend une réponse.
     @Binding var consent: SchoolRecordingChoiceWorkspace?
@@ -38,8 +36,6 @@ struct SchoolLearnerProfileTab: View {
     /// Affectations de chaque formation ; une lecture refusée ou en panne n’affiche simplement pas de moniteur.
     @State private var assignments: [UUID: [SchoolAssignment]] = [:]
     @State private var path: [SchoolLearnerProfileRoute] = []
-    @State private var showsInformation = false
-    @State private var information: SchoolProfileWorkspace?
 
     private var accountKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
@@ -76,13 +72,7 @@ struct SchoolLearnerProfileTab: View {
         }
         .id(accountKey)
         .task(id: scopeKey) { await prepare() }
-        .onChange(of: accountKey) { _, _ in
-            path = []; showsInformation = false; information?.invalidate(); information = nil
-        }
-        // Informations modifiées depuis leur feuille : le dossier est relu, le détail déplié le suit.
-        .onChange(of: workspace.learnerReadCount) { _, _ in
-            if showsInformation, let learner { Task { await loadInformation(learner) } }
-        }
+        .onChange(of: accountKey) { _, _ in path = [] }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await refresh(olderThan: 30) } }
         }
@@ -112,25 +102,12 @@ struct SchoolLearnerProfileTab: View {
         }
         .listRowInsets(EdgeInsets(top: DrivySpacing.s, leading: DrivySpacing.m, bottom: DrivySpacing.s, trailing: DrivySpacing.m))
         .drivyClearRow()
-        if (learner != nil && makeLearnerProfile != nil) || account?.openProfile != nil {
+        if let openProfile = account?.openProfile {
+            // « Mon profil » : la même page que dans Paramètres, compte Drivy et dossier de l’école réunis.
             Section {
-                if let learner, makeLearnerProfile != nil {
-                    // Comme dans le dossier vu par le moniteur : les informations attendent repliées, sur place.
-                    DisclosureGroup(isExpanded: $showsInformation) {
-                        informationDetails(learner)
-                    } label: {
-                        Text("Mes informations")
-                            .foregroundStyle(DrivyTheme.text)
-                            .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
-                    }
-                    .disclosureGroupStyle(.drivy)
+                DrivyNavigationRow(title: "Mon profil", action: openProfile)
                     .listRowInsets(rowInsets)
-                    .accessibilityIdentifier("profile-my-information")
-                } else if let openProfile = account?.openProfile {
-                    DrivyNavigationRow(title: "Mes informations", action: openProfile)
-                        .listRowInsets(rowInsets)
-                        .accessibilityIdentifier("profile-open-my-information")
-                }
+                    .accessibilityIdentifier("profile-open-my-profile")
             }
             .drivyFormRows()
         }
@@ -162,33 +139,6 @@ struct SchoolLearnerProfileTab: View {
             }
             .drivyFormRows()
         }
-    }
-
-    /// Coordonnées, date de naissance et adresse en lecture ; « Modifier » ouvre la feuille existante.
-    private func informationDetails(_ learner: SchoolLearner) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            if let information, information.profile != nil {
-                SchoolLearnerProfileSummary(model: information, displayedName: workspace.person?.displayName ?? learner.displayName)
-            } else if let error = information?.errorMessage {
-                SchoolErrorNotice(message: error, retry: { Task { await loadInformation(learner) } })
-            } else {
-                DrivySkeletonRows(count: 2, lines: 1).drivySkeleton("Chargement de tes informations…")
-            }
-            if let openProfile = account?.openProfile {
-                Button("Modifier mes informations", action: openProfile)
-                    .buttonStyle(.drivyText)
-                    .accessibilityIdentifier("profile-open-my-information")
-            }
-        }
-        .padding(.top, DrivySpacing.xxs)
-        .padding(.bottom, DrivySpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .task { await loadInformation(learner) }
-    }
-
-    private func loadInformation(_ learner: SchoolLearner) async {
-        if information == nil { information = makeLearnerProfile?(learner) }
-        await information?.load(preserveDraft: false)
     }
 
     /// Les rangées partagées portent leur espacement vertical : la liste ne le double pas.

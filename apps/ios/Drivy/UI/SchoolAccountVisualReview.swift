@@ -44,6 +44,9 @@ struct SchoolAccountVisualReview: View {
                 if screen.hasPrefix("onboarding-") {
                     SchoolOnboardingView(model: profileModel, trainings: context?.workspace.trainings ?? [],
                         loadsOnAppear: false, startsWithInformation: screen == "onboarding-information")
+                } else if let context, profileModel.isOwnProfile {
+                    // L’élève lit son dossier dans « Mon profil », sous son compte Drivy.
+                    SchoolMyProfileView(workspace: context.workspace, dossier: profileModel, loadsDossierOnAppear: false)
                 } else { SchoolProfileView(model: profileModel, loadsOnAppear: false) }
             } else if let context, screen == "account" {
                 SchoolAccountView(isAuthenticated: true, workspace: context.workspace, manageURL: nil,

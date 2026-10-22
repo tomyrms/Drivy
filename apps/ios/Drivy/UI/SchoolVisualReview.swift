@@ -147,7 +147,7 @@ struct SchoolVisualShell: View {
 
     var body: some View {
         SchoolHomeView(workspace: context.workspace, openAccount: {},
-            account: SchoolAccountActions(manageURL: nil, openProfile: nil, openInvitations: {}, openJoinSchool: {}, signOut: {},
+            account: SchoolAccountActions(manageURL: nil, openProfile: {}, openInvitations: {}, openJoinSchool: {}, signOut: {},
                 resumeOnboarding: { showsWelcome = true }),
             inviteLearner: {},
             openProfile: { _ in }, makeLearnerProfile: { context.makeLearnerProfile($0) },
@@ -460,6 +460,9 @@ struct SchoolVisualShell: View {
         let agendaKey = "\(root)/lessons" + SchoolVisualTransport.agendaSuffix
         var objects: [String: Any] = [
             "/v1/me": person, root: school,
+            "/v1/me/profile": ["personId": (learnerRole ? identifier(11) : personID).uuidString,
+                "displayName": learnerRole ? "Camille Perret" : "Julien Rey", "firstName": learnerRole ? "Camille" : "Julien",
+                "lastName": learnerRole ? "Perret" : "Rey", "contactEmail": "camille@example.invalid", "version": 1] as [String: Any],
             "\(root)/planning-defaults": ["id": membershipID.uuidString, "schoolId": schoolID.uuidString,
                 "version": 1, "trainingCategoryCode": NSNull(), "serviceProductKey": NSNull()],
             "\(root)/learners": page(learnerObjects), "\(root)/learners/\(learnerID.uuidString)": learnerObject,

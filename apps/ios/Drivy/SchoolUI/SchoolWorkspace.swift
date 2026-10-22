@@ -20,9 +20,6 @@ final class SchoolWorkspace {
     private(set) var learner: SchoolLearner?
     private(set) var trainings: [SchoolTraining] = []
     private(set) var selectedLearnerID: UUID?
-    /// Lectures réussies du dossier sélectionné. Une relecture silencieuse ne passe par aucun indicateur de
-    /// chargement : les écrans qui suivent le dossier observent ce compteur.
-    private(set) var learnerReadCount = 0
     private(set) var searchText = ""
     private(set) var nextLearnersCursor: String?
     private(set) var nextTrainingsCursor: String?
@@ -165,15 +162,6 @@ final class SchoolWorkspace {
             if !invalidateAccess(for: error) { accountReadAt = previousReadAt }
             return false
         }
-    }
-
-    /// Renomme le compte connecté. Le nom enregistré remplace aussitôt celui de l’écran ; un conflit relit le compte.
-    /// Rien n’est affiché comme enregistré avant la réponse de l’école.
-    func renameSelf(_ name: String) async throws {
-        guard let profile = try? await loadSelfProfile() else { throw SchoolSelfProfileFailure.unsupported }
-        var edit = SchoolSelfProfileEdit(profile)
-        edit.displayName = name
-        try await saveSelfProfile(edit)
     }
 
     /// Profil personnel complet, relu auprès de l’école ; sa photo est relue si sa version a changé.
@@ -519,7 +507,6 @@ final class SchoolWorkspace {
             guard scope == schoolScope, request == learnerRequest, selectedLearnerID == id else { return }
             guard result.id == id, result.schoolId == schoolID else { throw SchoolAPIError.invalidResponse }
             learner = result
-            learnerReadCount += 1
             // La liste Élèves porte le même élève : sa ligne suit le dossier relu (nom, coordonnées) sans attendre sa
             // propre relecture. Ni l’ordre ni la pagination ne changent, et un élève absent de la liste n’y est pas ajouté.
             if let row = learners.firstIndex(where: { $0.id == result.id }) { learners[row] = result }

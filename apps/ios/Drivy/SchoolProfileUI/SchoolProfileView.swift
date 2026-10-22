@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Le dossier d’un élève vu par l’école : le moniteur affecté (coordonnées) ou l’administration (tout le dossier).
+/// L’élève lit et modifie le sien dans « Mon profil » (`SchoolMyProfileView`), avec son compte Drivy.
 struct SchoolProfileView: View {
     @Bindable var model: SchoolProfileWorkspace
     var loadsOnAppear = true
@@ -19,7 +21,7 @@ struct SchoolProfileView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle(model.learnerID == nil ? "Mon accueil" : (model.isOwnProfile ? "Mes informations" : "Profil de l’élève"))
+                .navigationTitle("Profil de l’élève")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -59,30 +61,12 @@ struct SchoolProfileView: View {
         focusedField = focus
     }
 
-    private func isMissing(_ field: SchoolProfileField) -> Bool {
-        missingFields.contains(field) && model.draft.isEmpty(field)
-    }
-
     private var form: some View {
         Form {
             SchoolProfileStatusSections(model: model)
-            if let profile = model.profile {
-                heading(profile)
-                identitySection(profile)
-                contactSection
-                if model.editableFields.contains(.birthDate) { birthSection }
-                if model.editableFields.contains(.postalAddress) { addressSection }
-                if profile.profilePhotoDocumentId != nil {
-                    Section {
-                        Label("Une photo est associée au dossier", systemImage: "person.crop.circle")
-                            .foregroundStyle(DrivyTheme.muted)
-                    } header: { Text("Photo").drivyFormSectionHeader() }
-                        .drivyFormRows()
-                }
-                readinessSection
-            }
-            if let onboarding = model.onboarding, onboarding.status != "COMPLETED" { onboardingSection(onboarding) }
-            explanationsSection
+            if let profile = model.profile { heading(profile) }
+            SchoolProfileFieldSections(model: model, focusedField: $focusedField, missingFields: missingFields)
+            SchoolProfileContextSections(model: model, resumeOnboarding: { showsGuidedWelcome = true })
         }
         .scrollContentBackground(.hidden)
         .frame(maxWidth: DrivyLayout.formColumn)
@@ -139,200 +123,8 @@ struct SchoolProfileView: View {
             }
         }
     }
+}
 
-    private func identitySection(_ profile: SchoolAdministrativeProfile) -> some View {
-        Section {
-            if model.editableFields.contains(.firstName) {
-                profileField("Prénom", text: $model.draft.firstName, identifier: "profile-first-name", field: .firstName).textContentType(.givenName)
-                    .id(SchoolProfileField.firstName)
-                fieldExplanation(.firstName)
-            } else { LabeledContent("Prénom", value: profile.firstName ?? "À compléter") }
-            if model.editableFields.contains(.lastName) {
-                profileField("Nom", text: $model.draft.lastName, identifier: "profile-last-name", field: .lastName).textContentType(.familyName)
-                    .id(SchoolProfileField.lastName)
-                fieldExplanation(.lastName)
-            } else { LabeledContent("Nom", value: profile.lastName ?? "À compléter") }
-        } header: { Text("Identité scolaire").drivyFormSectionHeader() }
-            .drivyFormRows()
-        .disabled(!model.acceptsInput)
-    }
-
-    @ViewBuilder private var contactSection: some View {
-        if model.editableFields.contains(.contactEmail) || model.editableFields.contains(.contactPhone) {
-            Section {
-                if model.editableFields.contains(.contactEmail) {
-                    profileField("E-mail", text: $model.draft.contactEmail, prompt: "nom@exemple.ch", identifier: "profile-email", field: .contactEmail)
-                        .textContentType(.emailAddress).keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .id(SchoolProfileField.contactEmail)
-                    fieldExplanation(.contactEmail)
-                }
-                if model.editableFields.contains(.contactPhone) {
-                    profileField("Téléphone", text: $model.draft.contactPhone, identifier: "profile-phone", field: .contactPhone)
-                        .textContentType(.telephoneNumber).keyboardType(.phonePad)
-                        .id(SchoolProfileField.contactPhone)
-                    fieldExplanation(.contactPhone)
-                }
-            } header: { Text("Contacts").drivyFormSectionHeader() }
-                .drivyFormRows()
-            .disabled(!model.acceptsInput)
-        }
-    }
-    private var birthSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                TextField("JJ.MM.AAAA", text: $model.draft.birthDate).keyboardType(.numbersAndPunctuation)
-                    .focused($focusedField, equals: .birthDate)
-                    .accessibilityLabel("Date de naissance, jour point mois point année")
-                    .accessibilityValue(isMissing(.birthDate) ? "À renseigner" : "")
-                    .accessibilityIdentifier("profile-birth-date")
-            }
-            .padding(.vertical, DrivySpacing.xxs)
-            .id(SchoolProfileField.birthDate)
-            fieldExplanation(.birthDate)
-        } header: { sectionHeader("Date de naissance", field: .birthDate) }
-            .drivyFormRows()
-        .disabled(!model.acceptsInput)
-    }
-    private var addressSection: some View {
-        Section {
-            Toggle("Renseigner une adresse", isOn: $model.draft.hasAddress)
-                .drivyControlTint()
-                .id(SchoolProfileField.postalAddress)
-            if model.draft.hasAddress {
-                profileField("Rue et numéro", text: $model.draft.address.line1, field: .postalAddress).textContentType(.streetAddressLine1)
-                profileField("Complément · facultatif", text: Binding(get: { model.draft.address.line2 ?? "" }, set: { model.draft.address.line2 = $0.isEmpty ? nil : $0 }))
-                    .textContentType(.streetAddressLine2)
-                profileField("Code postal", text: $model.draft.address.postalCode).textContentType(.postalCode)
-                profileField("Localité", text: $model.draft.address.locality).textContentType(.addressCity)
-                countryPicker
-            }
-            fieldExplanation(.postalAddress)
-        } header: { sectionHeader("Adresse postale", field: .postalAddress) }
-            .drivyFormRows()
-        .disabled(!model.acceptsInput)
-    }
-    /// Le serveur attend un code à deux lettres : la personne choisit un pays, elle ne tape pas un code.
-    /// Le pays de la région de l’appareil vient en tête ; rien n’est présélectionné. Un code déjà enregistré
-    /// mais absent de la liste garde sa ligne, pour ne jamais afficher une sélection vide.
-    private var countryPicker: some View {
-        let code = model.draft.address.countryCode
-        let local = SchoolProfileCountry.local
-        return Picker("Pays", selection: $model.draft.address.countryCode) {
-            if !SchoolProfileCountry.all.contains(where: { $0.code == code }) {
-                Text(code.isEmpty ? "Choisir" : code).tag(code)
-            }
-            if let local {
-                Text(local.name).tag(local.code)
-                Divider()
-            }
-            ForEach(SchoolProfileCountry.all.filter { $0.code != local?.code }) { country in
-                Text(country.name).tag(country.code)
-            }
-        }
-        .frame(minHeight: DrivyLayout.tapTarget)
-        .accessibilityIdentifier("profile-country")
-    }
-    @ViewBuilder private func fieldExplanation(_ field: SchoolProfileField) -> some View {
-        if model.hasEdits, model.invalidFields.contains(field) {
-            Label(fieldError(field), systemImage: "exclamationmark.triangle.fill")
-                .font(.footnote).foregroundStyle(DrivyTheme.danger)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-    private func fieldError(_ field: SchoolProfileField) -> String {
-        switch field {
-        case .firstName: "Renseigne le prénom, limité à 150 caractères."
-        case .lastName: "Renseigne le nom, limité à 150 caractères."
-        case .contactEmail: "Vérifie le format de l’adresse e-mail."
-        case .contactPhone: "Le téléphone est limité à 32 caractères."
-        case .birthDate: "Utilise JJ.MM.AAAA pour une date réelle, non future."
-        case .postalAddress: "Renseigne la rue, le code postal, la localité et le pays."
-        case .profilePhotoDocumentId: "Vérifie la photo du profil."
-        }
-    }
-    /// `field` : l’information que la saisie renseigne, pour son point et pour l’ouverture au clavier.
-    private func profileField(_ title: String, text: Binding<String>, prompt: String? = nil, identifier: String? = nil,
-                              field: SchoolProfileField? = nil) -> some View {
-        DrivyFormField(label: title, text: text, prompt: prompt, identifier: identifier,
-                       isMissing: field.map { $0 != .postalAddress && isMissing($0) } ?? false,
-                       focus: field.map { _ in $focusedField }, focusValue: field)
-    }
-
-    /// En-tête d’une section d’une seule information : le point la précède tant qu’elle manque.
-    private func sectionHeader(_ title: String, field: SchoolProfileField) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
-            if isMissing(field) { DrivyActionDot().transition(.opacity) }
-            Text(title).drivyFormSectionHeader()
-        }
-        .animation(DrivyMotion.feedback(reduceMotion), value: isMissing(field))
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(isMissing(field) ? "À renseigner" : "")
-    }
-    @ViewBuilder private var readinessSection: some View {
-        if let readiness = model.readiness, !readiness.ready {
-            Section {
-                Label("Accès à l’espace scolaire à préparer", systemImage: "list.bullet.clipboard")
-                    .font(.headline)
-                    .foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                SchoolProfileBlockers(blockers: readiness.blockers)
-            } header: { Text("Prochaine étape").drivyFormSectionHeader() }
-                .drivyFormRows()
-        }
-    }
-    /// The welcome itself is the guided flow (SchoolOnboardingView); this screen
-    /// only says where it stands and reopens it. No step is chosen from a list here.
-    private func onboardingSection(_ onboarding: SchoolOnboarding) -> some View {
-        let completed = onboarding.status == "COMPLETED"
-        return Section {
-            Label(completed ? "Accueil terminé" : "Accueil à terminer",
-                systemImage: completed ? "checkmark.circle.fill" : "figure.wave")
-                .font(.headline)
-                .foregroundStyle(completed ? DrivyTheme.accent : DrivyTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
-            if !completed {
-                Button("Reprendre l’accueil") { showsGuidedWelcome = true }
-                    .frame(minHeight: DrivyLayout.tapTarget)
-                    .disabled(model.isBusy || model.hasEdits)
-                    .accessibilityIdentifier("onboarding-resume")
-                if model.hasEdits {
-                    Text("Enregistre d’abord tes modifications.")
-                        .font(.footnote).foregroundStyle(DrivyTheme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        } header: { Text("Accueil dans l’école").drivyFormSectionHeader() }
-            .drivyFormRows()
-    }
-    /// Les deux explications (champs demandés, usage des données) forment un seul groupe :
-    /// deux lignes séparées d’un filet plutôt que deux pastilles isolées.
-    @ViewBuilder private var explanationsSection: some View {
-        let policy = model.applicablePolicy
-        let notice = model.notice.flatMap { $0.status == "APPROVED" ? $0 : nil }
-        if policy != nil || notice != nil {
-            Section {
-                if let policy {
-                    DisclosureGroup("Pourquoi ces informations ?") {
-                        ForEach(policy.fields) { rule in
-                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                Text(rule.field.label).font(.subheadline.weight(.semibold))
-                                Text(rule.requirement == .optional ? "Facultatif" : "\(rule.requirement.label) · \(rule.stage.label)")
-                                    .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                                Text(rule.explanation).font(.footnote).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-                if let notice {
-                    // Same wording and content as the notice sheet of the guided welcome.
-                    SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
-                        addressesLearner: model.isOwnProfile, identifier: "profile-privacy-link")
-                }
-            }
-            .drivyFormRows()
-        }
-    }
 }
 
 struct SchoolProfileStatusSections: View {

@@ -712,7 +712,7 @@ private struct DrivyPageContent: ViewModifier {
     }
 }
 
-/// Content that unfolds in place (« Informations personnelles », « Mes informations »): the label, then a chevron
+/// Content that unfolds in place (« Informations personnelles » of a learner's dossier): the label, then a chevron
 /// pointing down that turns as it opens, the same glyph as a competency row of Progression. A forward chevron
 /// means « opens elsewhere »; this one never looks like it. Under Reduce Motion the symbol swaps instead of turning
 /// and the content fades in.

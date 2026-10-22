@@ -734,20 +734,17 @@ struct SchoolWorkspaceTests {
         #expect(!SchoolOnboardingDeferral.isDeferred(UUID(), now: now, defaults: defaults))
     }
 
-    @Test func rereadingTheOpenDossierAdvancesItsReadCountOnlyOnSuccess() async {
+    @Test func rereadingTheOpenDossierKeepsItWithoutALoadingState() async {
         let api = WorkspaceAPIStub()
         let workspace = SchoolWorkspace(api: api)
         await workspace.loadAccount()
         workspace.selectLearner(WorkspaceFixture.learnerID)
         await workspace.loadSelectedLearner()
-        #expect(workspace.learnerReadCount == 1)
-        // Relecture silencieuse du même dossier : aucun indicateur de chargement, mais le compteur avance.
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
+        // Relecture silencieuse du même dossier : aucun indicateur de chargement, le dossier reste à l’écran.
         await workspace.loadSelectedLearner()
-        #expect(workspace.learnerReadCount == 2)
         #expect(!workspace.isLoadingLearner)
-        api.learnerHandler = { _, _ in throw SchoolAPIError.unavailable }
-        await workspace.loadSelectedLearner()
-        #expect(workspace.learnerReadCount == 2)
+        #expect(workspace.learner?.id == WorkspaceFixture.learnerID)
     }
 
     @Test func silentLearnerRefreshKeepsSelectionAndLoadedPagesAndShowsANewLearner() async {

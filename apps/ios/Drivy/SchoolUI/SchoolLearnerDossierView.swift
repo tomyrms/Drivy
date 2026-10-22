@@ -62,8 +62,14 @@ struct SchoolLearnerDossierView: View {
         }
         .task(id: scopeKey) { await reload() }
         .sheet(item: $editingProfile, onDismiss: { editingFocus = nil; Task { await reload() } }) { model in
-            SchoolProfileView(model: model, loadsOnAppear: false, focus: editingFocus,
-                missingFields: Set(missingFields.compactMap(SchoolProfileField.init(rawValue:))))
+            let missing = Set(missingFields.compactMap(SchoolProfileField.init(rawValue:)))
+            // Son propre dossier (administration qui est aussi élève) s’ouvre dans « Mon profil », avec son compte Drivy.
+            if model.isOwnProfile {
+                SchoolMyProfileView(workspace: workspace, dossier: model, loadsDossierOnAppear: false,
+                    focus: editingFocus, missingFields: missing)
+            } else {
+                SchoolProfileView(model: model, loadsOnAppear: false, focus: editingFocus, missingFields: missing)
+            }
         }
         .onChange(of: profileModel?.accessFailure) { _, failure in
             guard let failure else { return }

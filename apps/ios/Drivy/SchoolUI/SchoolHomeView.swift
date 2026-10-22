@@ -367,7 +367,7 @@ struct SchoolHomeView: View {
             SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
                 agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
                 openTraining: { training, tab in chosenPermit = training; selectedTab = tab },
-                retryDossier: { retryLearner() }, makeLearnerProfile: makeLearnerProfile, consent: $learnerConsent)
+                retryDossier: { retryLearner() }, consent: $learnerConsent)
                 .tabItem { tabLabel("Profil", systemImage: "person.crop.circle", tab: .profile) }
                 .tag(SchoolHomeTab.profile)
         }

@@ -4,19 +4,17 @@ import SwiftUI
 /// Réponses fictives en mémoire pour la garde d'entrée ; aucune identité ou écriture réseau.
 struct SchoolEntryVisualReview: View {
     static let screenNames: Set<String> = ["school-entry-draft-admin", "school-entry-draft-member", "school-entry-management", "school-entry-archived", "school-entry-resume", "school-entry-learner-admin"]
-    private let showsPersonalProfile: Bool
     @State private var workspace: SchoolWorkspace
     @State private var selectedTab: SchoolHomeTab = .session
 
     init(screen: String) {
-        showsPersonalProfile = screen == "school-entry-learner-admin"
         _workspace = State(initialValue: SchoolWorkspace(api: SchoolEntryVisualAPI(screen: screen)))
     }
 
     var body: some View {
         SchoolHomeView(workspace: workspace, openAccount: {},
             account: SchoolAccountActions(manageURL: URL(string: "https://visual.drivy.invalid/app/gestion/\(SchoolEntryVisualAPI.schoolID.uuidString.lowercased())/apercu"),
-                openProfile: showsPersonalProfile ? {} : nil, openInvitations: nil, openJoinSchool: nil, signOut: {}), selectedTab: $selectedTab)
+                openProfile: {}, openInvitations: nil, openJoinSchool: nil, signOut: {}), selectedTab: $selectedTab)
             .task { await workspace.loadAccount() }
     }
 }

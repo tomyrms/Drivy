@@ -1,10 +1,11 @@
-import PhotosUI
 import SwiftUI
+import UIKit
 
 /// Ce que le compte permet de faire, partagé entre la feuille « Compte » (élève, compte sans école)
 /// et l’onglet Profil (moniteur, administration). Une action absente n’est pas affichée.
 struct SchoolAccountActions {
     let manageURL: URL?
+    /// Ouvre « Mon profil », la seule page du compte Drivy et, pour un élève, de son dossier dans l’école ouverte.
     let openProfile: (() -> Void)?
     let openInvitations: (() -> Void)?
     let openJoinSchool: (() -> Void)?
@@ -22,14 +23,13 @@ struct SchoolAccountActions {
     }
 
     /// Le compte et l’école, sans le verrou ni la déconnexion : les Paramètres de l’élève les rangent par sujet.
+    /// `includesProfile` : faux quand l’écran voisin porte déjà la ligne « Mon profil » (Profil de l’élève).
     @MainActor @ViewBuilder
-    func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, afterChangingSchool: @escaping () -> Void = {}) -> some View {
+    func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, includesProfile: Bool = true,
+                     afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
-        if let workspace, workspace.person != nil {
-            SchoolRenameSelfRow(workspace: workspace)
-        }
-        if let openProfile {
-            DrivyNavigationRow(title: "Mes informations", action: openProfile)
+        if includesProfile, let openProfile, let person = workspace?.person {
+            DrivyNavigationRow(title: "Mon profil", detail: person.displayName, action: openProfile)
                 .accessibilityIdentifier("open-my-profile")
         }
         if let workspace, let error = workspace.ownLearnerError {
@@ -153,252 +153,6 @@ struct SchoolAccountHeading: View {
     }
 }
 
-/// « Mon profil » : chaque compte (moniteur, administration, élève) tient le sien, sans passer par le web (#64).
-/// Le dossier d’élève reste dans « Mes informations » ; ceci est le compte Drivy de la personne.
-private struct SchoolRenameSelfRow: View {
-    let workspace: SchoolWorkspace
-    @State private var editing = false
-
-    var body: some View {
-        DrivyNavigationRow(title: "Mon profil", detail: workspace.person?.displayName, action: { editing = true })
-            .accessibilityIdentifier("rename-self")
-            .sheet(isPresented: $editing) { SchoolSelfProfileSheet(workspace: workspace) }
-    }
-}
-
-private struct SchoolSelfProfileSheet: View {
-    let workspace: SchoolWorkspace
-    @Environment(\.dismiss) private var dismiss
-    @State private var edit = SchoolSelfProfileEdit(displayName: "", firstName: "", lastName: "", contactPhone: "")
-    @State private var loaded: SchoolSelfProfileEdit?
-    @State private var hasAddress = false
-    @State private var address = SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
-    @State private var isLoading = true
-    @State private var isSaving = false
-    @State private var isSavingPhoto = false
-    @State private var pickedPhoto: PhotosPickerItem?
-    @State private var confirmsRemoval = false
-    @State private var error: String?
-
-    private func clean(_ value: String) -> String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var cleanAddress: SchoolPostalAddress? {
-        guard hasAddress else { return nil }
-        let line2 = clean(address.line2 ?? "")
-        return SchoolPostalAddress(line1: clean(address.line1), line2: line2.isEmpty ? nil : line2, postalCode: clean(address.postalCode),
-            locality: clean(address.locality), countryCode: address.countryCode)
-    }
-    private var trimmed: SchoolSelfProfileEdit {
-        SchoolSelfProfileEdit(displayName: clean(edit.displayName), firstName: clean(edit.firstName),
-            lastName: clean(edit.lastName), contactPhone: clean(edit.contactPhone), contactEmail: clean(edit.contactEmail),
-            birthDate: edit.birthDate, postalAddress: cleanAddress)
-    }
-    private var phoneValid: Bool {
-        let phone = trimmed.contactPhone
-        return phone.isEmpty || (phone.count >= 3 && phone.count <= 32 && phone.allSatisfy { "+0123456789 ().-/".contains($0) })
-    }
-    private var emailValid: Bool {
-        let email = trimmed.contactEmail
-        return email.isEmpty || (email.count <= 254 && email.range(of: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", options: .regularExpression) != nil)
-    }
-    private var addressValid: Bool { cleanAddress?.isValid ?? true }
-    private var valid: Bool {
-        !trimmed.displayName.isEmpty && trimmed.displayName.count <= 200 && trimmed.firstName.count <= 150
-            && trimmed.lastName.count <= 150 && phoneValid && emailValid && addressValid
-    }
-    private var unchanged: Bool { trimmed == loaded }
-    private var busy: Bool { isSaving || isSavingPhoto || isLoading }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section { photoRow }
-                Section {
-                    TextField("Prénom", text: $edit.firstName)
-                        .textContentType(.givenName).textInputAutocapitalization(.words).autocorrectionDisabled()
-                        .accessibilityIdentifier("self-first-name")
-                    TextField("Nom", text: $edit.lastName)
-                        .textContentType(.familyName).textInputAutocapitalization(.words).autocorrectionDisabled()
-                        .accessibilityIdentifier("self-last-name")
-                }
-                Section("Nom affiché") {
-                    TextField("Nom affiché", text: $edit.displayName)
-                        .textContentType(.name).textInputAutocapitalization(.words).autocorrectionDisabled()
-                        .accessibilityIdentifier("rename-self-field")
-                }
-                Section("Contact") {
-                    TextField("E-mail", text: $edit.contactEmail)
-                        .textContentType(.emailAddress).keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .accessibilityIdentifier("self-email")
-                    if !emailValid { DrivyFormMessage(text: "Vérifie le format de l’adresse e-mail.", tone: .danger) }
-                    TextField("Téléphone", text: $edit.contactPhone)
-                        .textContentType(.telephoneNumber).keyboardType(.phonePad)
-                        .accessibilityIdentifier("self-phone")
-                    if !phoneValid { DrivyFormMessage(text: "Ce numéro contient un caractère inattendu.", tone: .danger) }
-                }
-                Section("Date de naissance") { birthRow }
-                Section {
-                    Toggle("Renseigner une adresse", isOn: $hasAddress.animation())
-                        .drivyControlTint()
-                        .accessibilityIdentifier("self-address-toggle")
-                    if hasAddress {
-                        TextField("Rue et numéro", text: $address.line1).textContentType(.streetAddressLine1)
-                        TextField("Complément · facultatif", text: Binding(get: { address.line2 ?? "" }, set: { address.line2 = $0.isEmpty ? nil : $0 }))
-                            .textContentType(.streetAddressLine2)
-                        TextField("Code postal", text: $address.postalCode).textContentType(.postalCode)
-                        TextField("Localité", text: $address.locality).textContentType(.addressCity)
-                        countryPicker
-                        if !addressValid, !clean(address.line1).isEmpty || !address.countryCode.isEmpty {
-                            DrivyFormMessage(text: "Complète la rue, le code postal, la localité et le pays.", tone: .danger)
-                        }
-                    }
-                } header: { Text("Adresse") } footer: {
-                    if let error { DrivyFormMessage(text: error, tone: .danger) }
-                    else if trimmed.displayName.count > 200 { DrivyFormMessage(text: "Raccourcis le nom affiché à 200 caractères.", tone: .danger) }
-                }
-            }
-            .disabled(busy)
-            .overlay { if isLoading { ProgressView().accessibilityLabel("Chargement du profil") } }
-            .navigationTitle("Mon profil").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() }.disabled(isSaving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isSaving { ProgressView().accessibilityLabel("Enregistrement…") }
-                    else { Button("Enregistrer") { save() }.disabled(!valid || unchanged || busy) }
-                }
-            }
-            .interactiveDismissDisabled(isSaving || isSavingPhoto)
-            .confirmationDialog("Retirer la photo ?", isPresented: $confirmsRemoval, titleVisibility: .visible) {
-                Button("Retirer la photo", role: .destructive) { upload(nil) }
-            }
-        }
-        .tint(DrivyTheme.accent)
-        .task { await load() }
-        .onChange(of: pickedPhoto) { _, item in
-            guard let item else { return }
-            pickedPhoto = nil
-            Task { await prepare(item) }
-        }
-    }
-
-    /// Date civile choisie avec le sélecteur natif ; aucune date n’est posée tant que la personne n’en choisit pas.
-    @ViewBuilder private var birthRow: some View {
-        if let date = Self.civil.date(from: edit.birthDate) {
-            DatePicker("Date de naissance", selection: Binding(get: { date }, set: { edit.birthDate = Self.civil.string(from: $0) }),
-                in: Self.earliest...Date(), displayedComponents: .date)
-                .environment(\.locale, Locale(identifier: "fr_CH"))
-                .accessibilityIdentifier("self-birth-date")
-            Button("Retirer la date", role: .destructive) { edit.birthDate = "" }
-                .accessibilityIdentifier("self-birth-date-clear")
-        } else {
-            Button("Ajouter la date de naissance") {
-                edit.birthDate = Self.civil.string(from: Calendar(identifier: .gregorian).date(byAdding: .year, value: -18, to: Date()) ?? Date())
-            }
-            .accessibilityIdentifier("self-birth-date-add")
-        }
-    }
-    private static let civil: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = TimeZone(identifier: "Europe/Zurich"); f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
-        return f
-    }()
-    private static let earliest = civil.date(from: "1900-01-01") ?? .distantPast
-
-    private var countryPicker: some View {
-        let code = address.countryCode, local = SchoolProfileCountry.local
-        return Picker("Pays", selection: $address.countryCode) {
-            if !SchoolProfileCountry.all.contains(where: { $0.code == code }) { Text(code.isEmpty ? "Choisir" : code).tag(code) }
-            if let local { Text(local.name).tag(local.code); Divider() }
-            ForEach(SchoolProfileCountry.all.filter { $0.code != local?.code }) { Text($0.name).tag($0.code) }
-        }
-        .accessibilityIdentifier("self-country")
-    }
-
-    private var photoRow: some View {
-        HStack(spacing: DrivySpacing.m) {
-            ZStack {
-                DrivyAvatar(name: trimmed.displayName.isEmpty ? (workspace.person?.displayName ?? "") : trimmed.displayName,
-                    size: 72, photo: workspace.selfPhoto?.data)
-                if isSavingPhoto { ProgressView().accessibilityLabel("Envoi de la photo…") }
-            }
-            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-                PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
-                    Text(workspace.selfPhoto == nil ? "Ajouter une photo" : "Changer la photo")
-                }
-                .accessibilityIdentifier("self-photo-pick")
-                if workspace.selfProfile?.photoVersion != nil {
-                    Button("Retirer la photo", role: .destructive) { confirmsRemoval = true }
-                        .accessibilityIdentifier("self-photo-remove")
-                }
-            }
-            .buttonStyle(.borderless)
-        }
-        .padding(.vertical, DrivySpacing.xxs)
-    }
-
-    private func load() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let profile = try await workspace.loadSelfProfile()
-            fill(from: profile)
-        } catch {
-            // Le nom du compte reste modifiable même si le profil complet ne se lit pas.
-            if let person = workspace.person {
-                fill(from: SchoolSelfProfile(personId: person.personId, displayName: person.displayName, version: person.version))
-            }
-            self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
-        }
-    }
-
-    private func fill(from profile: SchoolSelfProfile) {
-        let value = SchoolSelfProfileEdit(profile)
-        edit = value; loaded = value
-        hasAddress = profile.postalAddress != nil
-        address = profile.postalAddress ?? SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
-    }
-
-    private func save() {
-        guard valid, !unchanged, !busy else { return }
-        isSaving = true; error = nil
-        let value = trimmed
-        Task {
-            do {
-                try await workspace.saveSelfProfile(value)
-                isSaving = false
-                UIAccessibility.post(notification: .announcement, argument: "Profil enregistré")
-                dismiss()
-            } catch {
-                isSaving = false
-                if case SchoolSelfProfileFailure.changed = error, let profile = workspace.selfProfile { loaded = SchoolSelfProfileEdit(profile) }
-                // La saisie reste en place : elle se corrige ou se renvoie telle quelle.
-                self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
-            }
-        }
-    }
-
-    private func prepare(_ item: PhotosPickerItem) async {
-        error = nil
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let jpeg = await Task.detached(priority: .userInitiated, operation: { SchoolProfilePhotoEncoder.squareJPEG(from: data) }).value
-        else { error = SchoolSelfProfileFailure.invalidPhoto.localizedDescription; return }
-        upload(jpeg)
-    }
-
-    private func upload(_ jpeg: Data?) {
-        guard !isSavingPhoto else { return }
-        isSavingPhoto = true; error = nil
-        Task {
-            do {
-                try await workspace.setSelfPhoto(jpeg)
-                UIAccessibility.post(notification: .announcement, argument: jpeg == nil ? "Photo retirée" : "Photo enregistrée")
-            } catch {
-                self.error = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
-            }
-            isSavingPhoto = false
-        }
-    }
-}
 
 /// Recadre au centre en carré, réduit à 512 px au plus et réencode en JPEG : aucune métadonnée de la photo
 /// d’origine (position, appareil) ne part, et l’envoi reste sous la limite de l’école.

@@ -563,7 +563,7 @@ struct SchoolOnboardingView: View {
         }
     }
     /// L’accueil ne demande que les coordonnées citées par la politique de l’école. Les droits en ouvrent
-    /// davantage ; le reste se complète ensuite dans « Mes informations ».
+    /// davantage ; le reste se complète ensuite dans « Mon profil ».
     private func asks(_ field: SchoolProfileField) -> Bool {
         model.editableFields.contains(field) && model.requestedFields.contains(field)
     }

@@ -11,6 +11,13 @@ private struct SchoolWorkspaceSheet<Model: AnyObject>: Identifiable {
 /// Ce que le compte ouvre une fois sa feuille fermée : une seule feuille à la fois.
 private enum AccountFollowUp { case join, invitations, profile, onboarding }
 
+/// La feuille de profil : l’accueil guidé, « Mon profil » (compte Drivy et, pour un élève, son dossier) ou le dossier
+/// d’un autre élève. Le modèle du dossier voyage avec la feuille ; « Mon profil » sans dossier n’en a pas.
+private struct ProfileSheet: Identifiable {
+    let id = UUID()
+    let model: SchoolProfileWorkspace?
+}
+
 struct SchoolRootView: View {
     let configuration: AppConfiguration?
     @Bindable var identity: IdentitySession
@@ -26,7 +33,7 @@ struct SchoolRootView: View {
     @State private var invitationsRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
     @State private var inviteRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
     @State private var profileWorkspace: SchoolProfileWorkspace?
-    @State private var profileRoute: SchoolWorkspaceSheet<SchoolProfileWorkspace>?
+    @State private var profileRoute: ProfileSheet?
     @State private var joinWorkspace: SchoolJoinWorkspace?
     @State private var joinRoute: SchoolWorkspaceSheet<SchoolJoinWorkspace>?
     @State private var codeJoinWorkspace: SchoolCodeJoinWorkspace?
@@ -167,7 +174,7 @@ struct SchoolRootView: View {
     private var accountLayer: some View {
         observedContent.sheet(isPresented: $showsAccount, onDismiss: accountDismissed) {
             SchoolAccountView(isAuthenticated: identity.isAuthenticated, workspace: workspace, manageURL: manageURL,
-                openProfile: followUp(.profile, when: ownProfileLearner != nil),
+                openProfile: followUp(.profile, when: canOpenMyProfile),
                 openInvitations: followUp(.invitations, when: canManageInvitations),
                 openJoinSchool: followUp(.join, when: canJoinSchool),
                 signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding))
@@ -201,10 +208,10 @@ struct SchoolRootView: View {
 
     private var profileLayer: some View {
         invitationLayer.sheet(item: $profileRoute, onDismiss: profileDismissed) { route in
-            profileContent(route.model)
+            profileContent(route)
                 .disabled(isCheckingSchoolAccess)
                 .overlay { accessCheckOverlay }
-                .onChange(of: route.model.accessFailure) { _, failure in
+                .onChange(of: route.model?.accessFailure) { _, failure in
                     // Seul un retrait d’accès ferme la feuille. Un dossier introuvable (archivé entre-temps, service
                     // de l’école plus ancien que l’app) n’en est pas un : la feuille reste sur son message, avec « Fermer ».
                     if failure == .unauthorized || failure == .forbidden {
@@ -239,9 +246,14 @@ struct SchoolRootView: View {
             }
     }
 
-    @ViewBuilder private func profileContent(_ model: SchoolProfileWorkspace) -> some View {
-        if model.id == onboardingWorkspaceID { SchoolOnboardingView(model: model, trainings: workspace?.trainings ?? []) }
-        else { SchoolProfileView(model: model) }
+    @ViewBuilder private func profileContent(_ route: ProfileSheet) -> some View {
+        if let model = route.model, model.id == onboardingWorkspaceID {
+            SchoolOnboardingView(model: model, trainings: workspace?.trainings ?? [])
+        } else if let model = route.model, !model.isOwnProfile {
+            SchoolProfileView(model: model)
+        } else if let workspace {
+            SchoolMyProfileView(workspace: workspace, dossier: route.model)
+        }
     }
 
     @ViewBuilder
@@ -275,7 +287,7 @@ struct SchoolRootView: View {
         case .join:
             if pendingJoinLink != nil { openJoin() } else { openCodeJoin() }
         case .invitations: openInvitations(creation: false)
-        case .profile: if let learner = ownProfileLearner { openProfile(learner) }
+        case .profile: openMyProfile()
         case .onboarding: if canResumeOnboarding && !presentsSheet { openOnboarding() }
         }
     }
@@ -283,7 +295,7 @@ struct SchoolRootView: View {
     /// Les actions du compte, pour l’onglet Profil du moniteur et de l’administration.
     private var accountActions: SchoolAccountActions {
         SchoolAccountActions(manageURL: manageURL,
-            openProfile: followUp(.profile, when: ownProfileLearner != nil),
+            openProfile: followUp(.profile, when: canOpenMyProfile),
             openInvitations: followUp(.invitations, when: canManageInvitations),
             openJoinSchool: followUp(.join, when: canJoinSchool),
             signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding),
@@ -310,6 +322,9 @@ struct SchoolRootView: View {
         guard workspace?.school?.status != "ARCHIVED" else { return nil }
         return configuration.managementURL(schoolID: membership.schoolId, preparation: workspace?.school?.status == "DRAFT")
     }
+
+    /// « Mon profil » existe pour tout compte Drivy connecté, élève, moniteur, administration ou sans école.
+    private var canOpenMyProfile: Bool { identity.isAuthenticated && workspace?.person != nil }
 
     private var ownProfileLearner: SchoolLearner? {
         guard workspace?.school?.status == "ACTIVE", let person = workspace?.person,
@@ -591,14 +606,22 @@ struct SchoolRootView: View {
     private func openProfile(_ learner: SchoolLearner) {
         guard let model = makeProfileWorkspace(learner: learner) else { return }
         onboardingWorkspaceID = nil
-        profileWorkspace = model; profileRoute = SchoolWorkspaceSheet(model: model)
+        profileWorkspace = model; profileRoute = ProfileSheet(model: model)
+    }
+    /// Le compte Drivy, et le dossier de l’élève dans l’école ouverte quand l’école l’a ouvert. Aucun dossier n’est
+    /// créé ni lu pour un compte qui n’en a pas : la page ne montre alors que le compte.
+    private func openMyProfile() {
+        guard canOpenMyProfile, !presentsSheet else { return }
+        let model = ownProfileLearner.flatMap { makeProfileWorkspace(learner: $0) }
+        onboardingWorkspaceID = nil
+        profileWorkspace = model; profileRoute = ProfileSheet(model: model)
     }
     private func openOnboarding() {
         guard SchoolEntryDestination.allowsPersonalOnboarding(schoolStatus: workspace?.school?.status,
             roles: workspace?.membership?.roles ?? []) else { return }
         guard let model = makeProfileWorkspace(onboardingOnly: true) else { return }
         onboardingWorkspaceID = model.id
-        profileWorkspace = model; profileRoute = SchoolWorkspaceSheet(model: model)
+        profileWorkspace = model; profileRoute = ProfileSheet(model: model)
     }
     private func closeProfile() { profileWorkspace?.invalidate(); profileRoute = nil }
     private func profileDismissed() {
