@@ -28,8 +28,8 @@ struct DrivyFittingScroll<Content: View>: View {
     }
 }
 
-/// Carte modale centrée, à poser dans une présentation au fond transparent : l'écran d'origine reste visible et
-/// atténué, la hauteur suit le contenu et ne dépasse jamais la zone sûre (clavier compris). En-tête et action
+/// Carte modale centrée, à poser dans une présentation au fond transparent : l'écran d'origine reste visible,
+/// flouté et légèrement atténué (opaque si « Réduire la transparence »), la hauteur suit le contenu et ne dépasse jamais la zone sûre (clavier compris). En-tête et action
 /// principale restent hors du défilement, sauf aux très grandes tailles de texte où l'action rejoint le défilement.
 struct DrivyFloatingCard<Content: View, Footer: View>: View {
     let title: String
@@ -43,8 +43,10 @@ struct DrivyFloatingCard<Content: View, Footer: View>: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                // Fond atténué : un toucher à côté ne ferme rien, un geste de travers ne perd aucune saisie.
-                Color.black.opacity(0.4)
+                // Fond flouté : un toucher à côté ne ferme rien, un geste de travers ne perd aucune saisie.
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Color.black.opacity(0.15))
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
                 card
