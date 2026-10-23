@@ -16,9 +16,11 @@ enum MessagingDevelopmentEntry {
               currentScope() == scope else { return nil }
         let http = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: tokenSource,
                                                 transport: transport, currentScope: currentScope)
+        let relay = MessagingCryptoHTTPRelay.using(baseURL: baseURL, tokenSource: tokenSource,
+                                                   transport: transport, currentScope: currentScope)
         let scopeID = "\(scope.accountID.uuidString)|\(scope.schoolID.uuidString)|\(scope.accessEpoch)|\(scope.apiBaseURL)"
         return SchoolMessagingEntry(scopeID: scopeID, makeView: { peerID in
-            AnyView(MessagingDevelopmentContainer(scope: scope, http: http,
+            AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay,
                 currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID))
         })
     }
@@ -27,6 +29,7 @@ enum MessagingDevelopmentEntry {
 private struct MessagingDevelopmentContainer: View {
     let scope: MessagingScope
     let http: MessagingHTTPTransport
+    let relay: MessagingCryptoHTTPRelay
     let currentScope: @MainActor @Sendable () -> MessagingScope?
     let photoLoader: @Sendable (UUID) async -> Data?
     let initialPeerID: UUID?
@@ -50,8 +53,9 @@ private struct MessagingDevelopmentContainer: View {
             do {
                 // Ouverture du Keychain et des fichiers uniquement après ouverture de la sheet.
                 let store = try MessagingProtectedStore(scope: scope)
+                let cryptography = try MatrixMessagingCryptography(scope: scope, relay: relay)
                 workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
-                    cryptography: UnavailableMessagingCryptography(), outbox: store, drafts: store,
+                    cryptography: cryptography, outbox: store, drafts: store,
                     directory: http, actions: http,
                     // Sans historique scellé disponible, la recherche se limite à la mémoire : pas de repli en clair.
                     history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
