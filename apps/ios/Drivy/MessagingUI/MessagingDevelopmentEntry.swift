@@ -50,7 +50,7 @@ private struct MessagingDevelopmentContainer: View {
                 let store = try MessagingProtectedStore(scope: scope)
                 workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
                     cryptography: UnavailableMessagingCryptography(), outbox: store, drafts: store,
-                    directory: http, currentScope: currentScope, revocationStore: store)
+                    directory: http, currentScope: currentScope)
             } catch { failure = .protectionUnavailable }
         }
     }

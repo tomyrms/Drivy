@@ -111,6 +111,25 @@ final class MessagingCoreTests: XCTestCase {
         XCTAssertEqual(pending.count, 3)
     }
 
+    func testInaccessiblePrivateThreadDoesNotDiscardOrBlockGeneralMessage() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let outbox = MemoryCiphertextOutbox()
+        let privateID = UUID(), generalID = UUID()
+        let service = OneInaccessibleThreadService(inaccessibleID: privateID)
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: service,
+            cryptography: SyntheticCipher(), outbox: outbox, currentScope: { scope })
+        let first = MessagingPending(clientMessageID: UUID(), conversationID: privateID,
+            ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: Data([1])))
+        let second = MessagingPending(clientMessageID: UUID(), conversationID: generalID,
+            ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: Data([2])))
+        try await outbox.put(first, scope: scope)
+        try await outbox.put(second, scope: scope)
+        let results = await coordinator.flushPending(currentScope: scope)
+        XCTAssertEqual(results.count, 2)
+        let remaining = try await outbox.entries(scope: scope)
+        XCTAssertEqual(remaining.map(\.clientMessageID), [first.clientMessageID])
+    }
+
     @MainActor func testOutOfOrderReadStateNeverRestoresOldMuteOrLowersProgress() {
         let oldMute = Date(timeIntervalSince1970: 1_000)
         let previous = MessagingReadState(lastReadSequence: 9, mutedUntil: nil, version: 5)
@@ -124,6 +143,18 @@ final class MessagingCoreTests: XCTestCase {
         XCTAssertEqual(merged.version, 6)
         XCTAssertEqual(merged.lastReadSequence, 9)
         XCTAssertEqual(merged.mutedUntil, oldMute)
+    }
+}
+
+private actor OneInaccessibleThreadService: MessagingService {
+    let inaccessibleID: UUID
+    init(inaccessibleID: UUID) { self.inaccessibleID = inaccessibleID }
+    func conversations(scope: MessagingScope, cursor: String?) throws -> MessagingPage<MessagingConversation> { throw MessagingFailure.unavailable }
+    func messages(scope: MessagingScope, conversationID: UUID, before: String?) throws -> MessagingPage<MessagingWireMessage> { throw MessagingFailure.unavailable }
+    func send(scope: MessagingScope, pending: MessagingPending) throws -> MessagingAcknowledgement {
+        if pending.conversationID == inaccessibleID { throw MessagingFailure.conversationUnavailable }
+        return MessagingAcknowledgement(clientMessageID: pending.clientMessageID, serverMessageID: UUID(),
+            conversationID: pending.conversationID, schoolID: scope.schoolID, acceptedAt: Date(), senderID: scope.accountID)
     }
 }
 
@@ -177,9 +208,16 @@ private struct SyntheticCipher: MessagingCryptography {
 
 private actor MemoryCiphertextOutbox: MessagingProtectedOutbox {
     private var entriesByID: [UUID: MessagingPending] = [:]
-    func put(_ entry: MessagingPending, scope: MessagingScope) throws { entriesByID[entry.clientMessageID] = entry }
-    func entries(scope: MessagingScope) throws -> [MessagingPending] { Array(entriesByID.values) }
-    func remove(clientMessageID: UUID, scope: MessagingScope) throws { entriesByID.removeValue(forKey: clientMessageID) }
+    private var insertionOrder: [UUID] = []
+    func put(_ entry: MessagingPending, scope: MessagingScope) throws {
+        if entriesByID[entry.clientMessageID] == nil { insertionOrder.append(entry.clientMessageID) }
+        entriesByID[entry.clientMessageID] = entry
+    }
+    func entries(scope: MessagingScope) throws -> [MessagingPending] { insertionOrder.compactMap { entriesByID[$0] } }
+    func remove(clientMessageID: UUID, scope: MessagingScope) throws {
+        entriesByID.removeValue(forKey: clientMessageID)
+        insertionOrder.removeAll { $0 == clientMessageID }
+    }
 }
 
 private actor ResponseLostService: MessagingService {

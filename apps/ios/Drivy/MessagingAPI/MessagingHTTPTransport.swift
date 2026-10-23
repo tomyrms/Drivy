@@ -219,7 +219,8 @@ actor MessagingHTTPTransport: MessagingAPITransport {
                 if await invalidate(bearer) { bearer = try await token(); continue }
             }
             if response.status == 409 { throw MessagingFailure.stateConflict }
-            if response.status == 401 || response.status == 403 || response.status == 404 { throw MessagingFailure.accessChanged }
+            if response.status == 404 { throw MessagingFailure.conversationUnavailable }
+            if response.status == 401 || response.status == 403 { throw MessagingFailure.accessChanged }
             guard (200...299).contains(response.status) else { throw MessagingFailure.unavailable }
             guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw MessagingFailure.invalidResponse }
             do {

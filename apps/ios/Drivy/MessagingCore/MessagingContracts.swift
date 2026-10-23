@@ -59,11 +59,12 @@ struct MessagingAcknowledgement: Sendable {
 }
 
 enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
-    case protectionUnavailable, accessChanged, unavailable, invalidResponse, contextChanged, stateConflict
+    case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
         case .accessChanged: "L'accès à cette conversation a changé."
+        case .conversationUnavailable: "Cette conversation n'est plus accessible. Les autres messages en attente sont conservés."
         case .unavailable: "Messages est momentanément indisponible. Réessaie plus tard."
         case .invalidResponse: "La réponse de Messages est invalide."
         case .contextChanged: "Le compte ou l'école a changé. Recharge Messages."

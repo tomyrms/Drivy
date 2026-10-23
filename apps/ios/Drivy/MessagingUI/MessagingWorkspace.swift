@@ -10,7 +10,6 @@ import Observation
     private let directory: any MessagingDirectoryService
     private let drafts: any MessagingProtectedDrafts
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
-    private let revocationStore: MessagingProtectedStore?
     let outbox: MessagingOutboxCoordinator
     private(set) var contacts: [MessagingContact] = []
     private(set) var generalMembers: [MessagingContact] = []
@@ -31,15 +30,13 @@ import Observation
          outbox: any MessagingProtectedOutbox = UnavailableMessagingOutbox(),
          drafts: any MessagingProtectedDrafts = UnavailableMessagingDrafts(),
          directory: any MessagingDirectoryService = UnavailableMessagingDirectory(),
-         currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil },
-         revocationStore: MessagingProtectedStore? = nil) {
+         currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil }) {
         self.scope = scope
         self.service = service
         self.crypto = cryptography
         self.drafts = drafts
         self.directory = directory
         self.currentScope = currentScope
-        self.revocationStore = revocationStore
         self.outbox = MessagingOutboxCoordinator(scope: scope, service: service,
             cryptography: cryptography, outbox: outbox, currentScope: currentScope)
     }
@@ -210,12 +207,7 @@ import Observation
 
     private func recordFailure(_ failure: MessagingFailure) {
         if failure == .accessChanged || failure == .contextChanged {
-            if failure == .accessChanged, let revocationStore {
-                Task {
-                    do { try await revocationStore.purge(scope: scope) }
-                    catch { self.error = .protectionUnavailable }
-                }
-            }
+            // Effacer uniquement la mémoire affichée. La file et les brouillons scellés restent intacts.
             contacts = []
             generalMembers = []
             conversations = []
