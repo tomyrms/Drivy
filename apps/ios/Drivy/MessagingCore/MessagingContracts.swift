@@ -83,6 +83,15 @@ protocol MessagingCryptography: Sendable {
     func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext
     func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data
+    /// Megolm authentifie l'expéditeur : préférer cette forme qui transmet l'enveloppe complète.
+    func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data
+}
+
+extension MessagingCryptography {
+    func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data {
+        guard let ciphertext = message.ciphertext else { throw MessagingFailure.protectionUnavailable }
+        return try await decrypt(ciphertext, scope: scope, conversationID: message.conversationID)
+    }
 }
 
 /// Implémentation par défaut volontairement inutilisable avant validation de #67.
