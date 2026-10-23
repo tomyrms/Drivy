@@ -32,7 +32,7 @@ CREATE TABLE drivy.messaging_general_admin (
 CREATE TABLE drivy.messaging_general_audit (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, school_id uuid NOT NULL REFERENCES drivy.school(id),
   actor_person_id uuid NOT NULL REFERENCES drivy.person(id), target_person_id uuid NOT NULL REFERENCES drivy.person(id),
-  action text NOT NULL CHECK(action IN('ADMIN_GRANTED','ADMIN_REVOKED','MEMBER_REMOVED')),
+  action text NOT NULL CHECK(action IN('ADMIN_GRANTED','ADMIN_REVOKED','MEMBER_REMOVED','MEMBER_REINSTATED')),
   occurred_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -75,6 +75,7 @@ CREATE TABLE drivy.messaging_poll_vote (
 );
 
 -- 8. Signalements : seulement les messages choisis, rechiffrés pour les administrateurs de l'école.
+-- La copie rechiffrée est une preuve : elle reste même si le message est ensuite supprimé pour tout le monde.
 CREATE TABLE drivy.messaging_report (
   id uuid PRIMARY KEY, school_id uuid NOT NULL REFERENCES drivy.school(id), conversation_id uuid NOT NULL,
   reporter_person_id uuid NOT NULL REFERENCES drivy.person(id), client_report_id uuid NOT NULL,
@@ -136,6 +137,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
 $$;
 
 -- Applique les arrivées, départs et retours. Coupure = dernière séquence acceptée avant la synchronisation.
+-- Arrivée (première ou retour) : comme WhatsApp, seuls les messages postérieurs sont lisibles (readable_after = last_sequence).
 -- Toute écriture synchronise sous le verrou de la conversation avant d'allouer la séquence suivante :
 -- aucun message postérieur à la fin du lien n'entre dans la plage lisible d'un ancien membre.
 CREATE FUNCTION drivy.messaging_sync_links(school uuid, target uuid) RETURNS bigint
@@ -164,7 +166,7 @@ BEGIN
   WHERE EXISTS(SELECT 1 FROM drivy.messaging_member_link l WHERE l.school_id=school AND l.conversation_id=target AND l.person_id=e.person_id)
     AND NOT EXISTS(SELECT 1 FROM drivy.messaging_member_link l WHERE l.school_id=school AND l.conversation_id=target AND l.person_id=e.person_id AND l.cut_sequence IS NULL);
  INSERT INTO drivy.messaging_member_link(school_id,conversation_id,person_id,link_number,readable_after)
-  SELECT school,target,e.person_id,COALESCE(max(l.link_number),0)+1,CASE WHEN count(l.link_number)=0 THEN 0 ELSE last END
+  SELECT school,target,e.person_id,COALESCE(max(l.link_number),0)+1,last
   FROM drivy.messaging_eligible_members(school,target) e
   LEFT JOIN drivy.messaging_member_link l ON l.school_id=school AND l.conversation_id=target AND l.person_id=e.person_id
   GROUP BY e.person_id HAVING bool_and(l.cut_sequence IS NOT NULL) OR count(l.link_number)=0;
@@ -192,6 +194,12 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
  SELECT actor=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_member(school,actor)
    AND EXISTS(SELECT 1 FROM drivy.messaging_member_link l WHERE l.school_id=school AND l.conversation_id=target AND l.person_id=actor
      AND seq>l.readable_after AND (l.cut_sequence IS NULL OR seq<=l.cut_sequence))
+$$;
+-- Message dans la plage lisible de l'acteur (même supprimé pour tout le monde) : borne réactions, votes, masquage.
+CREATE FUNCTION drivy.messaging_message_readable(school uuid, actor uuid, target uuid, message uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ SELECT EXISTS(SELECT 1 FROM drivy.messaging_message m WHERE m.school_id=school AND m.conversation_id=target AND m.id=message
+   AND drivy.messaging_readable_sequence(school,actor,target,m.sequence))
 $$;
 -- Message lisible par l'acteur et non supprimé pour tout le monde.
 CREATE FUNCTION drivy.messaging_message_open(school uuid, actor uuid, target uuid, message uuid) RETURNS boolean
@@ -227,15 +235,17 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
  WHERE actor=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_member(school,actor)
    AND m.school_id=school AND m.status='ACTIVE' AND p.status='ACTIVE' AND drivy.messaging_general_participant(school,p.id)
 $$;
--- Accusés de lecture visibles (décision 7), plafonnés à ce que l'acteur peut lui-même lire.
+-- Accusés de lecture visibles (décision 7), bornés à la plage lisible de l'acteur : rien d'antérieur à son arrivée.
 CREATE FUNCTION drivy.messaging_read_receipts(school uuid, actor uuid, target uuid) RETURNS TABLE(person_id uuid, last_read_sequence bigint)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
- WITH cap AS (SELECT CASE WHEN bool_or(l.cut_sequence IS NULL) THEN c.last_sequence ELSE max(l.cut_sequence) END AS value
+ WITH cap AS (SELECT CASE WHEN bool_or(l.cut_sequence IS NULL) THEN c.last_sequence ELSE max(l.cut_sequence) END AS value,
+     min(l.readable_after) AS floor
    FROM drivy.messaging_conversation c JOIN drivy.messaging_member_link l ON l.school_id=c.school_id AND l.conversation_id=c.id AND l.person_id=actor
    WHERE c.school_id=school AND c.id=target GROUP BY c.last_sequence)
  SELECT s.person_id,LEAST(s.last_read_sequence,cap.value) FROM drivy.messaging_read_state s CROSS JOIN cap
  WHERE drivy.messaging_conversation_allowed(school,actor,target) AND s.school_id=school AND s.conversation_id=target
-   AND s.person_id<>actor AND s.last_read_sequence>0
+   AND s.person_id<>actor AND LEAST(s.last_read_sequence,cap.value)>cap.floor
+   AND drivy.messaging_readable_sequence(school,actor,target,LEAST(s.last_read_sequence,cap.value))
    AND EXISTS(SELECT 1 FROM drivy.messaging_member_link l WHERE l.school_id=school AND l.conversation_id=target AND l.person_id=s.person_id AND l.cut_sequence IS NULL)
 $$;
 
@@ -284,7 +294,8 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $
 DECLARE actor uuid := nullif(current_setting('app.person_id',true),'')::uuid; target_membership uuid; remaining integer;
 BEGIN
  IF school IS DISTINCT FROM nullif(current_setting('app.school_id',true),'')::uuid THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
- -- Le général sérialise toutes les décisions de groupe de l'école.
+ -- Ordre de la fondation : sources de droits, puis conversation. Le général sérialise les décisions de groupe.
+ PERFORM drivy.messaging_lock_rights(school,actor,target_person);
  PERFORM 1 FROM drivy.messaging_conversation WHERE school_id=school AND kind='GENERAL' FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'missing' USING ERRCODE='DV404'; END IF;
  IF NOT drivy.messaging_is_group_admin(school,actor) THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
@@ -307,6 +318,7 @@ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $
 DECLARE actor uuid := nullif(current_setting('app.person_id',true),'')::uuid; general uuid; target_membership uuid; remaining integer;
 BEGIN
  IF school IS DISTINCT FROM nullif(current_setting('app.school_id',true),'')::uuid THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ PERFORM drivy.messaging_lock_rights(school,actor,target_person);
  SELECT id INTO general FROM drivy.messaging_conversation WHERE school_id=school AND kind='GENERAL' FOR UPDATE;
  IF general IS NULL THEN RAISE EXCEPTION 'missing' USING ERRCODE='DV404'; END IF;
  IF NOT drivy.messaging_is_group_admin(school,actor) OR target_person=actor THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
@@ -323,6 +335,34 @@ BEGIN
  INSERT INTO drivy.messaging_general_audit(school_id,actor_person_id,target_person_id,action) VALUES(school,actor,target_person,'MEMBER_REMOVED');
  PERFORM drivy.messaging_sync_links(school,general);
 END $$;
+-- Réintégration (décision du 23 octobre) : un administrateur du groupe rouvre le lien ; la personne ne lit que
+-- ce qui suit (nouveau lien, readable_after = last_sequence) et l'époque des membres augmente de 1. Idempotent.
+CREATE FUNCTION drivy.messaging_reinstate_general_member(school uuid, target_person uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+DECLARE actor uuid := nullif(current_setting('app.person_id',true),'')::uuid; general uuid; target_membership uuid;
+BEGIN
+ IF school IS DISTINCT FROM nullif(current_setting('app.school_id',true),'')::uuid THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ PERFORM drivy.messaging_lock_rights(school,actor,target_person);
+ SELECT id INTO general FROM drivy.messaging_conversation WHERE school_id=school AND kind='GENERAL' FOR UPDATE;
+ IF general IS NULL THEN RAISE EXCEPTION 'missing' USING ERRCODE='DV404'; END IF;
+ IF NOT drivy.messaging_is_group_admin(school,actor) THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ SELECT m.id INTO target_membership FROM drivy.membership m WHERE m.school_id=school AND m.person_id=target_person AND m.status='ACTIVE' FOR SHARE;
+ IF target_membership IS NULL OR NOT drivy.messaging_member(school,target_person) THEN RAISE EXCEPTION 'missing' USING ERRCODE='DV404'; END IF;
+ IF drivy.messaging_general_participant(school,target_person) THEN RETURN; END IF;
+ DELETE FROM drivy.messaging_general_removal WHERE school_id=school AND membership_id=target_membership;
+ INSERT INTO drivy.messaging_general_audit(school_id,actor_person_id,target_person_id,action) VALUES(school,actor,target_person,'MEMBER_REINSTATED');
+ PERFORM drivy.messaging_sync_links(school,general);
+END $$;
+-- Variantes liées à l'acteur du contexte : les versions à argument « personne » ne sont plus accordées à drivy_app.
+CREATE FUNCTION drivy.messaging_actor_is_group_admin(school uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ SELECT drivy.messaging_is_group_admin(school,nullif(current_setting('app.person_id',true),'')::uuid)
+$$;
+CREATE FUNCTION drivy.messaging_actor_school_admin(school uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ SELECT school=nullif(current_setting('app.school_id',true),'')::uuid
+   AND drivy.messaging_school_admin(school,nullif(current_setting('app.person_id',true),'')::uuid)
+$$;
 
 -- Votes : remplace l'ensemble des choix de l'acteur sous le verrou du sondage (vide = retrait).
 -- Fonction plutôt que politique : un votant n'a pas le droit de verrouiller la ligne du sondage.
@@ -357,11 +397,14 @@ BEGIN
 END $$;
 
 DO $$ DECLARE fn text; BEGIN
- FOREACH fn IN ARRAY ARRAY['messaging_pair_eligible(uuid,uuid,uuid)','messaging_eligible_members(uuid,uuid)'] LOOP
+ -- Fonctions qui renseignent sur une personne quelconque : réservées aux fonctions SECURITY DEFINER.
+ FOREACH fn IN ARRAY ARRAY['messaging_pair_eligible(uuid,uuid,uuid)','messaging_eligible_members(uuid,uuid)',
+   'messaging_general_participant(uuid,uuid)','messaging_is_group_admin(uuid,uuid)','messaging_school_admin(uuid,uuid)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION drivy.%s FROM PUBLIC',fn);
  END LOOP;
- FOREACH fn IN ARRAY ARRAY['messaging_general_participant(uuid,uuid)','messaging_is_group_admin(uuid,uuid)','messaging_school_admin(uuid,uuid)',
+ FOREACH fn IN ARRAY ARRAY['messaging_actor_is_group_admin(uuid)','messaging_actor_school_admin(uuid)',
    'messaging_sync_links(uuid,uuid)','messaging_can_write(uuid,uuid,uuid)','messaging_readable_sequence(uuid,uuid,uuid,bigint)',
+   'messaging_message_readable(uuid,uuid,uuid,uuid)','messaging_reinstate_general_member(uuid,uuid)',
    'messaging_message_open(uuid,uuid,uuid,uuid)','messaging_conversation_members(uuid,uuid,uuid)','messaging_general_directory(uuid,uuid)',
    'messaging_read_receipts(uuid,uuid,uuid)','messaging_delete_for_everyone(uuid,uuid,uuid)','messaging_set_pinned(uuid,uuid,uuid,boolean)',
    'messaging_set_group_admin(uuid,uuid,boolean)','messaging_remove_general_member(uuid,uuid)',
@@ -408,10 +451,10 @@ CREATE POLICY messaging_hidden_own ON drivy.messaging_hidden_message FOR SELECT 
    AND school_id=nullif(current_setting('app.school_id',true),'')::uuid);
 CREATE POLICY messaging_hidden_insert ON drivy.messaging_hidden_message FOR INSERT TO drivy_app
  WITH CHECK(person_id=nullif(current_setting('app.person_id',true),'')::uuid
-   AND EXISTS(SELECT 1 FROM drivy.messaging_message m WHERE m.school_id=messaging_hidden_message.school_id
-     AND m.conversation_id=messaging_hidden_message.conversation_id AND m.id=messaging_hidden_message.message_id));
+   AND drivy.messaging_message_readable(school_id,person_id,conversation_id,message_id));
+-- Réactions, sondages et votes : bornés à la plage lisible du lecteur, comme les messages.
 CREATE POLICY messaging_reaction_read ON drivy.messaging_reaction FOR SELECT TO drivy_app
- USING(drivy.messaging_conversation_allowed(school_id,nullif(current_setting('app.person_id',true),'')::uuid,conversation_id));
+ USING(drivy.messaging_message_readable(school_id,nullif(current_setting('app.person_id',true),'')::uuid,conversation_id,message_id));
 CREATE POLICY messaging_reaction_insert ON drivy.messaging_reaction FOR INSERT TO drivy_app
  WITH CHECK(person_id=nullif(current_setting('app.person_id',true),'')::uuid
    AND drivy.messaging_can_write(school_id,person_id,conversation_id)
@@ -419,27 +462,25 @@ CREATE POLICY messaging_reaction_insert ON drivy.messaging_reaction FOR INSERT T
 CREATE POLICY messaging_reaction_delete ON drivy.messaging_reaction FOR DELETE TO drivy_app
  USING(person_id=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_can_write(school_id,person_id,conversation_id));
 CREATE POLICY messaging_poll_read ON drivy.messaging_poll FOR SELECT TO drivy_app
- USING(drivy.messaging_conversation_allowed(school_id,nullif(current_setting('app.person_id',true),'')::uuid,conversation_id));
+ USING(drivy.messaging_message_readable(school_id,nullif(current_setting('app.person_id',true),'')::uuid,conversation_id,message_id));
 CREATE POLICY messaging_poll_insert ON drivy.messaging_poll FOR INSERT TO drivy_app
  WITH CHECK(creator_person_id=nullif(current_setting('app.person_id',true),'')::uuid AND closed_at IS NULL
    AND EXISTS(SELECT 1 FROM drivy.messaging_message m WHERE m.school_id=messaging_poll.school_id AND m.conversation_id=messaging_poll.conversation_id
      AND m.id=messaging_poll.message_id AND m.sender_person_id=messaging_poll.creator_person_id));
-CREATE POLICY messaging_poll_close ON drivy.messaging_poll FOR UPDATE TO drivy_app
- USING(creator_person_id=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_can_write(school_id,creator_person_id,conversation_id))
- WITH CHECK(creator_person_id=nullif(current_setting('app.person_id',true),'')::uuid AND closed_at IS NOT NULL);
+-- Clôture et votes passent par messaging_close_poll et messaging_set_poll_votes : aucune écriture directe accordée.
 CREATE POLICY messaging_vote_read ON drivy.messaging_poll_vote FOR SELECT TO drivy_app
- USING(drivy.messaging_conversation_allowed(school_id,nullif(current_setting('app.person_id',true),'')::uuid,conversation_id));
+ USING(drivy.messaging_message_readable(school_id,nullif(current_setting('app.person_id',true),'')::uuid,conversation_id,message_id));
+-- Défense en profondeur si une insertion directe était un jour accordée : choix unique si le sondage n'est pas multiple.
 CREATE POLICY messaging_vote_insert ON drivy.messaging_poll_vote FOR INSERT TO drivy_app
  WITH CHECK(person_id=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_can_write(school_id,person_id,conversation_id)
    AND drivy.messaging_message_open(school_id,person_id,conversation_id,message_id)
    AND EXISTS(SELECT 1 FROM drivy.messaging_poll p WHERE p.message_id=messaging_poll_vote.message_id AND p.closed_at IS NULL
-     AND messaging_poll_vote.option_index<p.option_count));
-CREATE POLICY messaging_vote_delete ON drivy.messaging_poll_vote FOR DELETE TO drivy_app
- USING(person_id=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_can_write(school_id,person_id,conversation_id)
-   AND EXISTS(SELECT 1 FROM drivy.messaging_poll p WHERE p.message_id=messaging_poll_vote.message_id AND p.closed_at IS NULL));
+     AND messaging_poll_vote.option_index<p.option_count
+     AND (p.multiple OR NOT EXISTS(SELECT 1 FROM drivy.messaging_poll_vote v WHERE v.message_id=messaging_poll_vote.message_id
+       AND v.person_id=messaging_poll_vote.person_id AND v.option_index<>messaging_poll_vote.option_index))));
 CREATE POLICY messaging_report_read ON drivy.messaging_report FOR SELECT TO drivy_app
  USING(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND (reporter_person_id=nullif(current_setting('app.person_id',true),'')::uuid
-   OR drivy.messaging_school_admin(school_id,nullif(current_setting('app.person_id',true),'')::uuid)));
+   OR drivy.messaging_actor_school_admin(school_id)));
 CREATE POLICY messaging_report_insert ON drivy.messaging_report FOR INSERT TO drivy_app
  WITH CHECK(reporter_person_id=nullif(current_setting('app.person_id',true),'')::uuid
    AND drivy.messaging_conversation_allowed(school_id,reporter_person_id,conversation_id));
@@ -453,7 +494,6 @@ CREATE POLICY messaging_report_item_insert ON drivy.messaging_report_item FOR IN
 
 GRANT SELECT ON drivy.messaging_member_link,drivy.messaging_hidden_message,drivy.messaging_reaction,drivy.messaging_poll,
   drivy.messaging_poll_vote,drivy.messaging_report,drivy.messaging_report_item TO drivy_app;
-GRANT INSERT ON drivy.messaging_hidden_message,drivy.messaging_reaction,drivy.messaging_poll,drivy.messaging_poll_vote,
+GRANT INSERT ON drivy.messaging_hidden_message,drivy.messaging_reaction,drivy.messaging_poll,
   drivy.messaging_report,drivy.messaging_report_item TO drivy_app;
-GRANT DELETE ON drivy.messaging_reaction,drivy.messaging_poll_vote TO drivy_app;
-GRANT UPDATE(closed_at) ON drivy.messaging_poll TO drivy_app;
+GRANT DELETE ON drivy.messaging_reaction TO drivy_app;

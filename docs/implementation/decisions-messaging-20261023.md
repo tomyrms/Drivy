@@ -17,6 +17,8 @@ Le porteur délègue le choix technique. Choix retenu : **protocole Matrix Olm/M
 - **Fin du lien** (fin d'affectation moniteur, départ de l'école, retrait du général) : la personne garde la lecture de l'historique **jusqu'au dernier message antérieur à la fin du lien**. Elle ne voit rien de ce qui suit et ne peut plus écrire. Les clés Megolm sont renouvelées à son départ.
 - **Contacts privés d'un élève** : uniquement le ou les moniteurs qui lui sont attribués. Pas de contact administrateur dédié dans l'app.
 - **Général** : chaque membre est affiché par **son nom et sa photo de profil** (si visible selon #64). Un appui ouvre son profil. Aucune autre donnée.
+- **Arrivée** (décision coordinateur, comme WhatsApp) : un nouveau membre (entrée dans le général, nouveau moniteur attribué) ne voit que les messages postérieurs à son arrivée : `readable_after` = `last_sequence` de la conversation au moment de l'entrée. Même borne pour les réactions, sondages, votes et accusés de lecture.
+- **Réintégration** : un administrateur du général peut réintégrer un membre retiré (`PUT /general/members/{personId}`). La personne ne voit que ce qui suit sa réintégration ; `membersEpoch` +1 (rotation Megolm).
 
 ## 3. Navigation (#66)
 
@@ -32,7 +34,7 @@ Comme les groupes WhatsApp :
 
 - Le général a des **administrateurs de groupe**. Par défaut, les administrateurs de l'école. Un administrateur peut nommer ou retirer d'autres administrateurs de groupe et retirer un membre du général.
 - Chacun peut **supprimer son message pour lui ou pour tout le monde**. Une suppression pour tout le monde laisse « Message supprimé » visible de tous. Un administrateur de groupe peut supprimer pour tout le monde le message d'un autre membre.
-- Les **signalements vont aux administrateurs de l'école**. Le signalement ne transmet que les messages choisis par l'auteur du signalement, rechiffrés pour les administrateurs.
+- Les **signalements vont aux administrateurs de l'école**. Le signalement ne transmet que les messages choisis par l'auteur du signalement, rechiffrés pour les administrateurs. Ces copies rechiffrées sont **conservées comme preuve** même si le message est ensuite supprimé pour tout le monde (décision coordinateur).
 
 ## 6. Données (#68)
 

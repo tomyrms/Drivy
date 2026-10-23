@@ -126,7 +126,7 @@ async function access(db: PoolClient, actor: MessagingActor, conversationId: str
     drivy.messaging_can_write($1,$2,$3) AS "canWrite",
     (SELECT CASE WHEN bool_or(l.cut_sequence IS NULL) THEN NULL ELSE max(l.cut_sequence) END FROM drivy.messaging_member_link l
       WHERE l.school_id=$1 AND l.conversation_id=$3 AND l.person_id=$2) AS "readableUntilSequence",
-    (c.kind='GENERAL' AND drivy.messaging_is_group_admin($1,$2)) AS "isGroupAdmin"
+    (c.kind='GENERAL' AND drivy.messaging_actor_is_group_admin($1)) AS "isGroupAdmin"
     FROM drivy.messaging_conversation c WHERE c.school_id=$1 AND c.id=$3`, [actor.schoolId, actor.personId, conversationId]);
   const row = result.rows[0];
   if (!row) throw notFound();
@@ -165,25 +165,40 @@ async function messageById(db: PoolClient, actor: MessagingActor, conversationId
   if (!result.rows[0]) throw notFound();
   return toView(result.rows[0]);
 }
+/**
+ * Ordre des verrous de la fondation pour toute écriture : sources de droits (messaging_lock_rights), puis
+ * conversation (messaging_sync_links la verrouille si des liens changent). Aucun verrou de conversation avant
+ * celui des droits, sinon deux écritures concurrentes peuvent s'interbloquer.
+ */
+export async function lockRights(db: PoolClient, actor: MessagingActor, conversationId: string, mentions: string[] = []): Promise<void> {
+  assertContext(actor);
+  const target = await db.query<{ peerPersonId: string | null }>(`SELECT CASE WHEN kind='PRIVATE'
+    THEN CASE WHEN person_low=$3 THEN person_high ELSE person_low END ELSE NULL END AS "peerPersonId"
+    FROM drivy.messaging_conversation WHERE school_id=$1 AND id=$2`, [actor.schoolId, conversationId, actor.personId]);
+  if (!target.rows[0]) throw notFound();
+  await db.query('SELECT drivy.messaging_lock_rights($1,$2,$3,$4::uuid[])',
+    [actor.schoolId, actor.personId, target.rows[0].peerPersonId, mentions]);
+}
+/** Droits verrouillés, liens synchronisés, puis lecture (404) et écriture (403) recontrôlées. */
+async function lockForWrite(db: PoolClient, actor: MessagingActor, conversationId: string, mentions: string[] = [], write = true) {
+  const visible = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
+  if (visible.rows[0]?.allowed !== true) throw notFound();
+  await lockRights(db, actor, conversationId, mentions);
+  await syncLinks(db, actor.schoolId, conversationId);
+  const check = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
+  if (check.rows[0]?.allowed !== true) throw notFound();
+  if (write) await canWrite(db, actor, conversationId);
+}
 export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conversationId: string,
   intentId: string, envelope: OpaqueEnvelope, mentionPersonIds: string[] = [],
   replyToMessageId: string | null = null, poll: PollCreation | null = null): Promise<StoredMessage> {
-  await canRead(db, actor, conversationId);
   if (mentionPersonIds.length > 8 || new Set(mentionPersonIds.map(id => id.toLowerCase())).size !== mentionPersonIds.length)
     throw new ApiError(400, 'INVALID_REQUEST', 'Mentions invalides.');
   if (!uuidPattern.test(intentId) || !validEnvelope(envelope)) throw new ApiError(400, 'INVALID_ENVELOPE', 'Enveloppe invalide.');
   if ((replyToMessageId !== null && !uuidPattern.test(replyToMessageId))
     || (poll && (!Number.isSafeInteger(poll.optionCount) || poll.optionCount < 2 || poll.optionCount > 12 || typeof poll.multiple !== 'boolean')))
     throw new ApiError(400, 'INVALID_REQUEST', 'Message invalide.');
-  const target = await db.query<{ peerPersonId: string | null }>(`SELECT CASE WHEN kind='PRIVATE'
-    THEN CASE WHEN person_low=$3 THEN person_high ELSE person_low END ELSE NULL END AS "peerPersonId"
-    FROM drivy.messaging_conversation WHERE school_id=$1 AND id=$2`, [actor.schoolId, conversationId, actor.personId]);
-  if (!target.rows[0]) throw notFound();
-  // Ordre des verrous : sources de droits, puis conversation (comme la fondation).
-  await db.query('SELECT drivy.messaging_lock_rights($1,$2,$3,$4::uuid[])',
-    [actor.schoolId, actor.personId, target.rows[0].peerPersonId, mentionPersonIds]);
-  await syncLinks(db, actor.schoolId, conversationId);
-  await canWrite(db, actor, conversationId);
+  await lockForWrite(db, actor, conversationId, mentionPersonIds);
   const canonical = JSON.stringify(envelope);
   const fingerprint = createHash('sha256').update(JSON.stringify([envelope, mentionPersonIds.map(id => id.toLowerCase()),
     replyToMessageId?.toLowerCase() ?? null, poll ? [poll.optionCount, poll.multiple] : null])).digest('hex');
@@ -233,10 +248,11 @@ export async function conversationMembers(db: PoolClient, actor: MessagingActor,
 }
 
 export async function deleteMessage(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, scope: 'me' | 'everyone') {
-  await canRead(db, actor, conversationId);
   if (scope === 'everyone') {
+    await lockForWrite(db, actor, conversationId, [], false);
     await db.query('SELECT drivy.messaging_delete_for_everyone($1,$2,$3)', [actor.schoolId, conversationId, messageId]);
   } else {
+    await canRead(db, actor, conversationId);
     // Supprimer pour soi reste possible en lecture seule : cela ne touche que sa propre vue.
     const inserted = await db.query(`INSERT INTO drivy.messaging_hidden_message(school_id,conversation_id,message_id,person_id)
       SELECT $1,$2,$3,$4 WHERE EXISTS(SELECT 1 FROM drivy.messaging_message m WHERE m.school_id=$1 AND m.conversation_id=$2 AND m.id=$3)
@@ -252,8 +268,7 @@ export async function deleteMessage(db: PoolClient, actor: MessagingActor, conve
 
 export async function setReaction(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, emoji: string, active: boolean) {
   if (!(reactionPalette as readonly string[]).includes(emoji)) throw new ApiError(400, 'INVALID_REQUEST', 'Réaction invalide.');
-  await canRead(db, actor, conversationId);
-  await canWrite(db, actor, conversationId);
+  await lockForWrite(db, actor, conversationId);
   const open = await db.query<{ open: boolean }>('SELECT drivy.messaging_message_open($1,$2,$3,$4) AS open',
     [actor.schoolId, actor.personId, conversationId, messageId]);
   if (open.rows[0]?.open !== true) throw notFound();
@@ -264,19 +279,19 @@ export async function setReaction(db: PoolClient, actor: MessagingActor, convers
   return { messageId, emoji, active };
 }
 export async function setPinned(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, pinned: boolean) {
-  await canRead(db, actor, conversationId);
+  await lockForWrite(db, actor, conversationId);
   await db.query('SELECT drivy.messaging_set_pinned($1,$2,$3,$4)', [actor.schoolId, conversationId, messageId, pinned]);
   return { messageId, pinned };
 }
 export async function setPollVotes(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, optionIndexes: number[]) {
   if (optionIndexes.length > 12 || optionIndexes.some(index => !Number.isSafeInteger(index) || index < 0 || index > 11)
     || new Set(optionIndexes).size !== optionIndexes.length) throw new ApiError(400, 'INVALID_REQUEST', 'Vote invalide.');
-  await canRead(db, actor, conversationId);
+  await lockForWrite(db, actor, conversationId);
   await db.query('SELECT drivy.messaging_set_poll_votes($1,$2,$3,$4::integer[])', [actor.schoolId, conversationId, messageId, optionIndexes]);
   return { messageId, optionIndexes: [...optionIndexes].sort((a, b) => a - b) };
 }
 export async function closePoll(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string) {
-  await canRead(db, actor, conversationId);
+  await lockForWrite(db, actor, conversationId);
   await db.query('SELECT drivy.messaging_close_poll($1,$2,$3)', [actor.schoolId, conversationId, messageId]);
   return { messageId, closed: true };
 }
@@ -291,6 +306,12 @@ export async function removeGeneralMember(db: PoolClient, actor: MessagingActor,
   assertContext(actor);
   await db.query('SELECT drivy.messaging_remove_general_member($1,$2)', [actor.schoolId, personId]);
   return { personId, removed: true };
+}
+/** Réintégration : nouveau lien, lecture limitée à ce qui suit, époque des membres +1. */
+export async function reinstateGeneralMember(db: PoolClient, actor: MessagingActor, personId: string) {
+  assertContext(actor);
+  await db.query('SELECT drivy.messaging_reinstate_general_member($1,$2)', [actor.schoolId, personId]);
+  return { personId, removed: false };
 }
 
 export interface ReportItemInput { messageId: string; ciphertext: OpaqueEnvelope }
@@ -328,7 +349,7 @@ export async function createReport(db: PoolClient, actor: MessagingActor, client
 export async function listReports(db: PoolClient, actor: MessagingActor, limit = 50, before?: string) {
   assertContext(actor);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
-  const admin = await db.query<{ admin: boolean }>('SELECT drivy.messaging_school_admin($1,$2) AS admin', [actor.schoolId, actor.personId]);
+  const admin = await db.query<{ admin: boolean }>('SELECT drivy.messaging_actor_school_admin($1) AS admin', [actor.schoolId]);
   if (admin.rows[0]?.admin !== true) throw forbidden();
   const result = await db.query<{ id: string; conversationId: string; reporterPersonId: string; createdAt: string;
     items: { messageId: string; ciphertext: OpaqueEnvelope }[] }>(`SELECT r.id,r.conversation_id AS "conversationId",

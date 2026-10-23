@@ -20,8 +20,14 @@ registerMessaging(app, { pool, verifyToken: async authorization => {
   return { issuer, subject: authorization.slice(7) };
 }, mode: 'test-synthetic' });
 const path = `/v1/schools/${id.schoolA}/messaging`;
+const newcomer = '20000000-0000-4000-8000-0000000000aa';
+async function addNewcomer() {
+  await pool.query("INSERT INTO drivy.person(id,display_name) VALUES($1,'Arrivée Exemple')", [newcomer]);
+  await pool.query('INSERT INTO drivy.identity_link(issuer,subject,person_id) VALUES($1,$2,$3)', [issuer, 'demo-newcomer', newcomer]);
+  await pool.query("INSERT INTO drivy.membership(id,school_id,person_id,roles) VALUES('30000000-0000-4000-8000-0000000000aa',$1,$2,ARRAY['LEARNER'])", [id.schoolA, newcomer]);
+}
 const subjects: Record<string, string> = { 'demo-admin': id.admin, 'demo-instructor': id.instructor,
-  'demo-alice': id.alice, 'demo-bob': id.bob, 'demo-other-instructor': id.otherInstructor };
+  'demo-alice': id.alice, 'demo-bob': id.bob, 'demo-other-instructor': id.otherInstructor, 'demo-newcomer': newcomer };
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 const req = (subject: string, method: Method, target: string, payload?: object) => app.inject({ method, url: target,
   headers: { authorization: `Bearer ${subject}`, 'x-drivy-expected-person-id': subjects[subject]!, 'x-drivy-expected-access-epoch': '1' },
@@ -117,6 +123,59 @@ describe('messagerie v2, général', () => {
   });
 });
 
+describe('messagerie v2, arrivée et réintégration (comme WhatsApp)', () => {
+  it('un nouveau membre ne voit ni messages, ni réactions, ni votes, ni lectures antérieurs', async () => {
+    const general = await openGeneral();
+    const before = await send('demo-alice', general, { poll: { optionCount: 2, multiple: false } });
+    expect((await req('demo-bob', 'PUT', `${path}/conversations/${general}/messages/${before.id}/reactions/${encodeURIComponent('👍')}`)).statusCode).toBe(200);
+    expect((await req('demo-bob', 'PUT', `${path}/conversations/${general}/messages/${before.id}/poll/votes`, { optionIndexes: [0] })).statusCode).toBe(200);
+    expect((await req('demo-bob', 'PUT', `${path}/conversations/${general}/read-state`, { lastReadSequence: 1 })).statusCode).toBe(200);
+    await addNewcomer();
+    const page = (await req('demo-newcomer', 'GET', `${path}/conversations/${general}/messages`)).json().data;
+    expect(page.items).toEqual([]);
+    expect(page.readStates).toEqual([]);
+    expect((await req('demo-newcomer', 'PUT', `${path}/conversations/${general}/messages/${before.id}/reactions/${encodeURIComponent('👍')}`)).statusCode).toBe(404);
+    // La RLS borne aussi la lecture directe des réactions, sondages et votes à la plage lisible.
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SET LOCAL ROLE drivy_app');
+      await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)", [id.schoolA, newcomer]);
+      for (const table of ['messaging_reaction', 'messaging_poll', 'messaging_poll_vote'])
+        expect((await db.query(`SELECT 1 FROM drivy.${table} WHERE message_id=$1`, [before.id])).rowCount, table).toBe(0);
+    } finally { await db.query('ROLLBACK'); db.release(); }
+    const after = await send('demo-alice', general);
+    expect((await req('demo-newcomer', 'GET', `${path}/conversations/${general}/messages`)).json().data.items.map((m: { id: string }) => m.id)).toEqual([after.id]);
+  });
+  it('nouveau moniteur attribué : historique privé antérieur invisible', async () => {
+    const conversationId = await openPrivate();
+    await send('demo-instructor', conversationId);
+    await endAssignment();
+    await pool.query(`INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from)
+      VALUES('70000000-0000-4000-8000-0000000000aa',$1,$2,$3,now()-interval '1 minute')`, [id.schoolA, id.aliceTraining, id.otherInstructorMember]);
+    const opened = await req('demo-other-instructor', 'PUT', `${path}/private/${id.alice}`);
+    expect(opened.statusCode, opened.body).toBe(200);
+    expect((await req('demo-other-instructor', 'GET', `${path}/conversations/${opened.json().data.conversationId}/messages`)).json().data.items).toEqual([]);
+  });
+  it('réintègre un membre retiré : rien de l’intervalle, époque +1, audit', async () => {
+    const general = await openGeneral();
+    await send('demo-bob', general);
+    expect((await req('demo-admin', 'DELETE', `${path}/general/members/${id.bob}`)).statusCode).toBe(200);
+    const gap = await send('demo-admin', general);
+    const epoch = (await req('demo-admin', 'GET', `${path}/conversations/${general}/members`)).json().data.membersEpoch as number;
+    expect((await req('demo-alice', 'PUT', `${path}/general/members/${id.bob}`)).statusCode).toBe(403);
+    expect((await req('demo-admin', 'PUT', `${path}/general/members/${id.bob}`)).statusCode).toBe(200);
+    expect((await req('demo-admin', 'PUT', `${path}/general/members/${id.bob}`)).statusCode).toBe(200);
+    expect((await req('demo-admin', 'GET', `${path}/conversations/${general}/members`)).json().data.membersEpoch).toBe(epoch + 1);
+    const back = await send('demo-bob', general);
+    const seen = (await req('demo-bob', 'GET', `${path}/conversations/${general}/messages`)).json().data.items.map((m: { id: string }) => m.id);
+    expect(seen).not.toContain(gap.id);
+    expect(seen).toContain(back.id);
+    const audit = await pool.query('SELECT action FROM drivy.messaging_general_audit WHERE school_id=$1 ORDER BY id', [id.schoolA]);
+    expect(audit.rows.map(row => row.action)).toEqual(['MEMBER_REMOVED', 'MEMBER_REINSTATED']);
+  });
+});
+
 describe('messagerie v2, messages', () => {
   it('supprime pour moi ou pour tout le monde avec tombstone', async () => {
     const general = await openGeneral();
@@ -189,5 +248,8 @@ describe('messagerie v2, signalements', () => {
     const inbox = (await req('demo-admin', 'GET', `${path}/reports`)).json().data.reports;
     expect(inbox).toHaveLength(1);
     expect(inbox[0].items).toEqual([{ messageId: message.id, ciphertext: ciphertext('BBBB') }]);
+    // Preuve conservée après suppression pour tout le monde.
+    expect((await req('demo-instructor', 'DELETE', `${path}/conversations/${conversationId}/messages/${message.id}?scope=everyone`)).statusCode).toBe(200);
+    expect((await req('demo-admin', 'GET', `${path}/reports`)).json().data.reports[0].items).toEqual([{ messageId: message.id, ciphertext: ciphertext('BBBB') }]);
   });
 });

@@ -7,7 +7,7 @@ import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
 import { eligibleContacts, generalMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
   resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, conversationMembers, deleteMessage, setReaction, setPinned,
-  setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, createReport, listReports, reactionPalette, type MessagingActor } from './messaging.js';
+  setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, reinstateGeneralMember, createReport, listReports, reactionPalette, type MessagingActor } from './messaging.js';
 import { mapDatabaseError } from './messaging-view.js';
 
 const id = z.uuid();
@@ -145,6 +145,11 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
   app.delete(`${path}/general/members/:personId`, request => {
     const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);
     return execute(request.headers, request.id, schoolId, (db, actor) => removeGeneralMember(db, actor, personId).then(data => ({ data })));
+  });
+  // Réintégration par un administrateur du groupe : ne voit que ce qui suit.
+  app.put(`${path}/general/members/:personId`, request => {
+    const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);
+    return execute(request.headers, request.id, schoolId, (db, actor) => reinstateGeneralMember(db, actor, personId).then(data => ({ data })));
   });
   // 50 enveloppes de 12 000 caractères au plus : au-delà de la limite commune de 16 Kio.
   app.post(`${path}/reports`, { bodyLimit: 655_360 }, request => {
