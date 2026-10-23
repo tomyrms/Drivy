@@ -13,6 +13,40 @@ private extension ObservationStatus {
     }
 }
 
+/// Coverage of rendered intervals, not a count of the spans advertised by the server.
+struct SchoolReplayMatchingCoverage: Equatable {
+    enum State: Equatable { case none, partial, full }
+    private(set) var matchedIntervals = 0
+    private(set) var measuredIntervals = 0
+    var totalIntervals: Int { matchedIntervals + measuredIntervals }
+    var state: State {
+        matchedIntervals == 0 ? .none : measuredIntervals == 0 ? .full : .partial
+    }
+
+    /// Count only rendered intervals, split at accepted anchor boundaries. Gaps and lone fixes are excluded.
+    mutating func include(sequences: [Int], matched ranges: [ClosedRange<Int>]) {
+        var merged: [ClosedRange<Int>] = []
+        for range in ranges {
+            if let last = merged.last, range.lowerBound <= last.upperBound {
+                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, range.upperBound)
+            } else { merged.append(range) }
+        }
+        var index = 0
+        for (from, to) in zip(sequences, sequences.dropFirst()) {
+            var cursor = from
+            while index < merged.count, merged[index].upperBound <= cursor { index += 1 }
+            while index < merged.count, merged[index].lowerBound < to {
+                let lower = max(cursor, merged[index].lowerBound), upper = min(to, merged[index].upperBound)
+                if lower > cursor { measuredIntervals += 1 }
+                if upper > lower { matchedIntervals += 1 }
+                cursor = max(cursor, upper)
+                if merged[index].upperBound <= to { index += 1 } else { break }
+            }
+            if cursor < to { measuredIntervals += 1 }
+        }
+    }
+}
+
 /// Timeline of a private school replay, built once per loaded page set. Offsets are
 /// seconds since the authorization; each fragment stays a separate polyline and the
 /// time between fragments is a gap, never an interpolated route.
@@ -68,6 +102,8 @@ struct SchoolReplayTimeline {
     let timedItems: [Item]
     /// Part of the drawn route follows road-matched geometry.
     let usesMatchedRoute: Bool
+    /// Coverage of the geometry actually accepted by the renderer, unrelated to upload quality.
+    let matchingCoverage: SchoolReplayMatchingCoverage
     /// Prepared once for the map: nothing is rebuilt while the playhead moves.
     let mapLines: [DrivyRouteMapLine]
 
@@ -107,6 +143,7 @@ struct SchoolReplayTimeline {
         var previousSource: SchoolCapturePoint?
         var previousDisplayed: SchoolCapturePoint?
         var usesMatched = false
+        var coverage = SchoolReplayMatchingCoverage()
         for fragment in orderedSource {
             // One date parse per fragment; the other points follow their monotonic elapsed time.
             guard let first = fragment.points.min(by: { $0.sequence < $1.sequence }),
@@ -155,6 +192,7 @@ struct SchoolReplayTimeline {
                 // Span whose geometry is laid on the path; a refused span leaves its fixes measured.
                 var laidSpan = -1, triedSpan = -1
                 var matchedCoordinates: [Int: CLLocationCoordinate2D] = [:]
+                var renderedMatchedRanges: [ClosedRange<Int>] = []
                 for sample in run {
                     let point = sample.point
                     let coordinate = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
@@ -166,9 +204,10 @@ struct SchoolReplayTimeline {
                     let within = spanIndex < usable.count && usable[spanIndex].firstSequence <= point.sequence
                     if within, triedSpan != spanIndex {
                         triedSpan = spanIndex
-                        if Self.append(usable[spanIndex], to: &path, offsetOf: { elapsedBySequence[$0].map(offset) }) {
+                        if let rendered = Self.append(usable[spanIndex], to: &path, offsetOf: { elapsedBySequence[$0].map(offset) }) {
                             laidSpan = spanIndex
                             usesMatched = true
+                            renderedMatchedRanges.append(rendered)
                         }
                     }
                     if within, laidSpan == spanIndex {
@@ -183,6 +222,7 @@ struct SchoolReplayTimeline {
                     }
                     coordinateByKey["\(fragment.segmentID.uuidString):\(point.sequence)"] = matchedCoordinates[point.sequence] ?? coordinate
                 }
+                coverage.include(sequences: run.map { $0.point.sequence }, matched: renderedMatchedRanges)
                 // Every measured fix of this stretch gives the timetable, not only the kept vertices.
                 var fixes: [SchoolReplayPath.Fix] = []
                 fixes.reserveCapacity(max(0, upper - lower + 1))
@@ -261,6 +301,7 @@ struct SchoolReplayTimeline {
         self.items = orderedItems
         timedItems = orderedItems.filter { $0.offset != nil }
         usesMatchedRoute = usesMatched
+        matchingCoverage = coverage
         var lines = mapGaps.map {
             DrivyRouteMapLine(id: "gap:\($0.id)", revision: 0, style: .gap, coordinates: [
                 CLLocationCoordinate2D(latitude: $0.start.latitude, longitude: $0.start.longitude),
@@ -277,19 +318,23 @@ struct SchoolReplayTimeline {
     /// Lays the matched geometry of a span on the path, with the timetable of its anchors.
     /// Refused as a whole when it is not coherent: the measured fixes are then drawn instead.
     private static func append(_ span: SchoolMatchedRoute.Span, to path: inout SchoolReplayPath,
-                               offsetOf: (Int) -> TimeInterval?) -> Bool {
+                               offsetOf: (Int) -> TimeInterval?) -> ClosedRange<Int>? {
         let geometry = SchoolEncodedPolyline.decode(span.geometry)
-        guard geometry.count >= 2 else { return false }
-        var knots: [(offset: TimeInterval, meters: Double)] = []
+        guard geometry.count >= 2 else { return nil }
+        var knots: [(sequence: Int, offset: TimeInterval, meters: Double)] = []
+        var joinedSequence: Int?
         for anchor in span.anchors {
             let sequence = Int(anchor[0])
-            guard sequence >= span.firstSequence, sequence <= span.lastSequence, let offset = offsetOf(sequence) else { return false }
+            guard sequence >= span.firstSequence, sequence <= span.lastSequence, let offset = offsetOf(sequence) else { return nil }
             // The vehicle may still have been held on the previous measured fix at that instant.
-            if let last = path.knots.last, offset <= last.offset { continue }
+            if let last = path.knots.last, offset <= last.offset {
+                if offset == last.offset && anchor[1] == 0 { joinedSequence = sequence }
+                continue
+            }
             if let last = knots.last, offset <= last.offset || anchor[1] < last.meters { continue }
-            knots.append((offset, anchor[1]))
+            knots.append((sequence, offset, anchor[1]))
         }
-        guard knots.count >= 2 else { return false }
+        guard knots.count >= 2, let first = knots.first, let last = knots.last, last.sequence > first.sequence else { return nil }
         // The first vertex joins the previous measured fix to the road; distances along the
         // geometry start there.
         path.addVertex(latitude: geometry[0].latitude, longitude: geometry[0].longitude)
@@ -297,7 +342,13 @@ struct SchoolReplayTimeline {
         for vertex in geometry.dropFirst() { path.addVertex(latitude: vertex.latitude, longitude: vertex.longitude) }
         let length = path.length - base
         for knot in knots { path.addKnot(offset: knot.offset, meters: base + min(length, knot.meters)) }
-        return true
+        return (joinedSequence ?? first.sequence)...last.sequence
+    }
+
+    /// Stable IDs survive a geometry refresh even when the observation's displayed coordinate changes.
+    func retainedSelection(_ selectedID: UUID?) -> UUID? {
+        guard let selectedID, items.contains(where: { $0.id == selectedID }) else { return nil }
+        return selectedID
     }
 
     /// Measured position at an instant: the last sample at most `maxPointAge` old (binary search).
