@@ -377,7 +377,8 @@ struct SchoolAgendaView: View {
             courseEditor = SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
                 timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series)
         } else {
-            courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series)
+            courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series,
+                learners: workspace.learners)
         }
     }
     private func newCourseEditor() -> SchoolCourseEditorWorkspace? {

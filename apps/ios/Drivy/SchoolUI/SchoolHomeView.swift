@@ -443,6 +443,10 @@ struct SchoolHomeView: View {
             .navigationBarTitleDisplayMode(.large)
             // Le compte vit dans l’onglet Profil, comme pour le moniteur : seule l’école reste dans la barre.
             .toolbar { staffToolbar }
+            // Cours collectifs (#39-#41) : entrée et places proposées, dans Leçons seulement.
+            .schoolLearnerCourses(client: section == .lessons && workspace.school?.status == "ACTIVE" ? agendaClient?.courseClient : nil,
+                schoolID: section == .lessons ? workspace.membership?.schoolId : nil,
+                timeZone: workspace.school?.timeZone ?? "Europe/Zurich")
         }
     }
 

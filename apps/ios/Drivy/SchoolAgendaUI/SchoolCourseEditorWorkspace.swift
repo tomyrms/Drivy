@@ -302,9 +302,14 @@ struct SchoolAgendaCourseItem: Identifiable, Equatable {
     private(set) var isBusy = false
     var errorMessage: String?
     @ObservationIgnored private var pending: (capacity: Int, version: Int, operation: UUID)?
+    /// Inscrits et file, seulement pour qui gère un cours publié.
+    let roster: SchoolCourseRosterWorkspace?
 
-    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries) {
+    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = []) {
         self.schoolID = schoolID; self.client = client; self.series = series; capacity = series.capacity
+        roster = series.canManage && series.status == .published
+            ? SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: series.id, client: client, learners: learners) : nil
+        roster?.onChange = { [weak self] in await self?.refresh() }
     }
     var minimumCapacity: Int { min(200, max(1, series.seatsTaken, series.minParticipants ?? 1)) }
     var canChangeCapacity: Bool {

@@ -105,6 +105,111 @@ struct SchoolCourseSeriesBody: Encodable, Sendable, Equatable {
     }
 }
 
+// Inscriptions (#39), file prioritaire (#40), annulations (#41) : contrat de apps/api/src/course-enrollments.ts.
+
+struct SchoolCourseEnrollment: Codable, Sendable, Equatable, Identifiable {
+    enum Status: String, Codable, Sendable { case active = "ACTIVE", cancelled = "CANCELLED" }
+    let id: UUID, seriesId: UUID, learnerId: UUID
+    let version: Int
+    let status: Status
+    let source: String
+    let policyVersion: Int
+    let selfCancelHours: Int
+    let selfCancelDeadline: String
+    let canSelfCancel: Bool
+    let createdAt: String
+    let cancelledAt: String?
+    let cancelKind: String?
+    let cancelReason: String?
+    var deadline: Date? { SchoolLesson.date(selfCancelDeadline) }
+}
+
+struct SchoolCourseOffer: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID, seriesId: UUID
+    let expiresAt: String
+    let status: String
+    var expiry: Date? { SchoolLesson.date(expiresAt) }
+}
+
+/// État personnel de l’élève appelant pour une série : jamais de liste nominative.
+struct SchoolCourseLearnerState: Codable, Sendable, Equatable {
+    enum State: String, Codable, Sendable {
+        case available = "AVAILABLE", full = "FULL", enrolled = "ENROLLED", waiting = "WAITING", offered = "OFFERED"
+        case completed = "COMPLETED", cancelled = "CANCELLED", closed = "CLOSED"
+    }
+    let learnerId: UUID?
+    let state: State
+    let enrollment: SchoolCourseEnrollment?
+    let offer: SchoolCourseOffer?
+    let waitlistPosition: Int?
+    let waitlistEnabled: Bool
+    let contactEmail: String?
+}
+
+/// Réponse de la lecture `me` et de chaque commande de l’élève.
+struct SchoolCourseLearnerReply: Codable, Sendable, Equatable {
+    let series: SchoolCourseSeries
+    let me: SchoolCourseLearnerState
+}
+
+/// Inscriptions et propositions actives de l’élève dans l’école.
+struct SchoolCourseMine: Codable, Sendable, Equatable {
+    let items: [SchoolCourseEnrollment]
+    let offers: [SchoolCourseOffer]
+}
+
+/// Ligne nominative réservée au personnel habilité.
+struct SchoolCourseRosterEnrollment: Decodable, Sendable, Equatable, Identifiable {
+    let enrollment: SchoolCourseEnrollment
+    let learnerDisplayName: String
+    var id: UUID { enrollment.id }
+    private enum CodingKeys: String, CodingKey { case learnerDisplayName }
+    init(enrollment: SchoolCourseEnrollment, learnerDisplayName: String) {
+        self.enrollment = enrollment; self.learnerDisplayName = learnerDisplayName
+    }
+    init(from decoder: any Decoder) throws {
+        enrollment = try SchoolCourseEnrollment(from: decoder)
+        learnerDisplayName = try decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .learnerDisplayName)
+    }
+}
+
+struct SchoolCourseWaitlistEntry: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID, learnerId: UUID
+    let learnerDisplayName: String
+    let position: Int
+    let status: String
+    let queuedAt: String
+    let offerExpiresAt: String?
+}
+
+struct SchoolCourseRoster: Decodable, Sendable, Equatable {
+    let items: [SchoolCourseRosterEnrollment]
+    let waitlist: [SchoolCourseWaitlistEntry]
+    var active: [SchoolCourseRosterEnrollment] { items.filter { $0.enrollment.status == .active } }
+}
+
+/// Commandes de l’élève ; toutes rendent `{series, me}`.
+enum SchoolCourseLearnerAction: Equatable, Sendable {
+    case enroll, joinWaitlist, leaveWaitlist
+    case accept(offerID: UUID), decline(offerID: UUID)
+    case cancel(enrollmentID: UUID, version: Int)
+
+    /// Clé stable d’une même intention : une nouvelle tentative reprend la même opération.
+    var key: String {
+        switch self {
+        case .enroll: "enroll"
+        case .joinWaitlist: "waitlist"
+        case .leaveWaitlist: "waitlist-leave"
+        case .accept(let id): "accept|\(id)"
+        case .decline(let id): "decline|\(id)"
+        case .cancel(let id, let version): "cancel|\(id)|\(version)"
+        }
+    }
+}
+
+struct SchoolCourseStaffEnrollBody: Encodable, Sendable, Equatable { let operationId: UUID; let learnerId: UUID }
+struct SchoolCourseStaffCancelBody: Encodable, Sendable, Equatable { let operationId: UUID; let reason: String }
+
 struct SchoolCourseTypeBody: Encodable, Sendable, Equatable { let operationId: UUID; let title: String; let description: String }
 struct SchoolCoursePublishBody: Encodable, Sendable, Equatable { let operationId: UUID }
 struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationId: UUID; let capacity: Int }
@@ -163,6 +268,53 @@ struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationI
         return result
     }
 
+    // MARK: Inscriptions
+
+    /// État de l’élève appelant ; la lecture fait aussi avancer la file côté serveur.
+    func learnerView(schoolID: UUID, seriesID: UUID) async throws -> SchoolCourseLearnerReply {
+        let result: SchoolCourseLearnerReply = try await request(schoolID, ["course-series", seriesID.uuidString, "me"])
+        guard result.series.id == seriesID, Self.valid(result.series, schoolID: schoolID) else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
+    func mine(schoolID: UUID) async throws -> SchoolCourseMine {
+        try await request(schoolID, ["course-enrollments", "me"])
+    }
+    /// `seriesID` : la série visée (celle de la proposition pour accepter ou refuser).
+    func act(_ action: SchoolCourseLearnerAction, schoolID: UUID, seriesID: UUID, operationID: UUID) async throws -> SchoolCourseLearnerReply {
+        let body = SchoolCoursePublishBody(operationId: operationID)
+        let path: [String], expected: Int, version: Int?
+        switch action {
+        case .enroll: path = ["course-series", seriesID.uuidString, "enroll"]; expected = 201; version = nil
+        case .joinWaitlist: path = ["course-series", seriesID.uuidString, "waitlist"]; expected = 201; version = nil
+        case .leaveWaitlist: path = ["course-series", seriesID.uuidString, "waitlist", "leave"]; expected = 200; version = nil
+        case .accept(let offer): path = ["course-offers", offer.uuidString, "accept"]; expected = 201; version = nil
+        case .decline(let offer): path = ["course-offers", offer.uuidString, "decline"]; expected = 200; version = nil
+        case .cancel(let enrollment, let current): path = ["course-enrollments", enrollment.uuidString, "cancel"]; expected = 200; version = current
+        }
+        let result: SchoolCourseLearnerReply = try await command(schoolID, path, method: "POST", body: body, operation: operationID,
+            version: version, expected: expected)
+        guard result.series.id == seriesID, Self.valid(result.series, schoolID: schoolID) else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
+    /// Inscrits et file, nominatifs : personnel habilité seulement (relu par le serveur).
+    func roster(schoolID: UUID, seriesID: UUID) async throws -> SchoolCourseRoster {
+        let result: SchoolCourseRoster = try await request(schoolID, ["course-series", seriesID.uuidString, "enrollments"])
+        guard result.items.allSatisfy({ $0.enrollment.seriesId == seriesID }) else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
+    func staffEnroll(schoolID: UUID, seriesID: UUID, learnerID: UUID, operationID: UUID) async throws -> SchoolCourseEnrollment {
+        let result: SchoolCourseEnrollment = try await command(schoolID, ["course-series", seriesID.uuidString, "enrollments"], method: "POST",
+            body: SchoolCourseStaffEnrollBody(operationId: operationID, learnerId: learnerID), operation: operationID, version: nil, expected: 201)
+        guard result.seriesId == seriesID, result.learnerId == learnerID else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
+    func staffCancel(schoolID: UUID, enrollmentID: UUID, version: Int, reason: String, operationID: UUID) async throws -> SchoolCourseEnrollment {
+        let result: SchoolCourseEnrollment = try await command(schoolID, ["course-enrollments", enrollmentID.uuidString, "staff-cancel"], method: "POST",
+            body: SchoolCourseStaffCancelBody(operationId: operationID, reason: reason), operation: operationID, version: version, expected: 200)
+        guard result.id == enrollmentID, result.status == .cancelled else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
+
     static func valid(_ series: SchoolCourseSeries, schoolID: UUID) -> Bool {
         guard series.schoolId == schoolID, series.version > 0, (1...200).contains(series.capacity),
               series.seatsTaken >= 0, series.remainingSeats >= 0, !series.occurrences.isEmpty else { return false }
@@ -186,7 +338,21 @@ struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationI
             "COURSE_CAPACITY_BELOW_TAKEN": "La capacité ne peut pas descendre sous les places déjà prises.",
             "COURSE_CAPACITY_BELOW_MINIMUM": "La capacité doit rester au moins égale au minimum.",
             "INSTRUCTOR_NOT_ACTIVE": "Choisis un moniteur actif de l’école.",
-            "RESPONSIBLE_NOT_ACTIVE": "Choisis un responsable actif de l’école."
+            "RESPONSIBLE_NOT_ACTIVE": "Choisis un responsable actif de l’école.",
+            "COURSE_ALREADY_COMPLETED": "Ce cours est déjà effectué.",
+            "COURSE_ALREADY_ENROLLED": "Déjà inscrit à ce cours.",
+            "COURSE_EQUIVALENT_ENROLLED": "Déjà inscrit à une autre session de ce cours.",
+            "COURSE_NOT_OPEN": "Ce cours n’accepte plus d’inscriptions.",
+            "COURSE_STARTED": "Ce cours a déjà commencé.",
+            "COURSE_FULL": "Ce cours est complet.",
+            "COURSE_OFFER_EXPIRED": "Cette place n’est plus disponible.",
+            "COURSE_WAITLIST_DISABLED": "La liste d’attente n’est pas ouverte.",
+            "COURSE_SEATS_AVAILABLE": "Des places sont libres : l’inscription est directe.",
+            "COURSE_ENROLLMENT_CLOSED": "Cette inscription est déjà annulée.",
+            "COURSE_SELF_CANCEL_CLOSED": "Le délai d’annulation est passé.",
+            "COURSE_REASON_REQUIRED": "Indique le motif.",
+            "COURSE_NOT_PUBLISHED": "Ce cours n’est pas publié.",
+            "COURSE_SCHEDULE_CONFLICT": "Un rendez-vous existe déjà pendant une séance de ce cours."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         return SchoolPlanningClient.failure(status, code, title: title)
@@ -200,11 +366,11 @@ struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationI
         try await send(schoolID, path, query: query, method: "GET", body: nil, operation: nil, version: nil, expected: 200)
     }
     private func command<Value: Decodable, Body: Encodable>(_ schoolID: UUID, _ path: [String], method: String, body: Body,
-                                                            operation: UUID, version: Int?) async throws -> Value {
+                                                            operation: UUID, version: Int?, expected expectedStatus: Int? = nil) async throws -> Value {
         let data: Data
         do { data = try JSONEncoder().encode(body) } catch { throw SchoolPlanningFailure.invalidResponse }
         // Une création répond 201, une commande sur une ressource existante 200 ; la rejouer rend la même réponse.
-        let expected = method == "POST" && version == nil ? 201 : 200
+        let expected = expectedStatus ?? (method == "POST" && version == nil ? 201 : 200)
         return try await send(schoolID, path, query: [], method: method, body: data, operation: operation, version: version, expected: expected)
     }
     private func send<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem], method: String, body: Data?,

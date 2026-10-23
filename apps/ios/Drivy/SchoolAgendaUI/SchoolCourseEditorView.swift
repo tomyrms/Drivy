@@ -271,6 +271,7 @@ struct SchoolCourseDetailView: View {
                     }
                 } header: { Text("Inscriptions").drivyFormSectionHeader() }
                     .drivyFormRows()
+                if let roster = model.roster { SchoolCourseRosterSection(model: roster) }
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)

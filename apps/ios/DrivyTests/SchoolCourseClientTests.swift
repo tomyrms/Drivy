@@ -97,6 +97,109 @@ import Testing
         #expect(SchoolCourseClient.failure(412, "VERSION_CONFLICT") == .conflict)
     }
 
+    // MARK: Inscriptions (#39-#41)
+
+    private let enrollmentID = UUID(uuidString: "77777777-7777-4777-8777-777777777777")!
+    private let learnerID = UUID(uuidString: "88888888-8888-4888-8888-888888888888")!
+    private let offerID = UUID(uuidString: "99999999-9999-4999-8999-999999999999")!
+
+    private func enrollmentJSON(status: String = "ACTIVE", canSelfCancel: Bool = true) -> String {
+        """
+        {"id":"\(enrollmentID.uuidString.lowercased())","seriesId":"\(seriesID.uuidString.lowercased())","learnerId":"\(learnerID.uuidString.lowercased())",
+         "version":2,"status":"\(status)","source":"SELF","policyVersion":1,"selfCancelHours":24,"selfCancelDeadline":"2030-03-03T17:00:00.000Z",
+         "canSelfCancel":\(canSelfCancel),"createdAt":"2030-01-02T08:00:00.000Z","cancelledAt":null,"cancelKind":null,"cancelReason":null}
+        """
+    }
+    private func replyJSON(state: String, enrollment: String = "null", offer: String = "null", position: String = "null",
+                           waitlist: Bool = true, email: String = "\"ecole@example.ch\"") -> Data {
+        let series = String(decoding: seriesJSON(status: "PUBLISHED", publishedAt: "2030-01-01T08:00:00.000Z"), as: UTF8.self)
+        return Data("""
+        {"series":\(series),"me":{"learnerId":"\(learnerID.uuidString.lowercased())","state":"\(state)","enrollment":\(enrollment),
+         "offer":\(offer),"waitlistPosition":\(position),"waitlistEnabled":\(waitlist),"contactEmail":\(email)}}
+        """.utf8)
+    }
+
+    @Test func decodesEveryLearnerState() throws {
+        let decoder = JSONDecoder()
+        let states: [(String, SchoolCourseLearnerState.State)] = [("AVAILABLE", .available), ("FULL", .full), ("COMPLETED", .completed),
+            ("CANCELLED", .cancelled), ("CLOSED", .closed)]
+        for (raw, state) in states {
+            let reply = try decoder.decode(SchoolCourseLearnerReply.self, from: replyJSON(state: raw))
+            #expect(reply.me.state == state && reply.series.id == seriesID && reply.me.enrollment == nil)
+            #expect(SchoolCourseClient.valid(reply.series, schoolID: schoolID))
+        }
+        let enrolled = try decoder.decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "ENROLLED", enrollment: enrollmentJSON(canSelfCancel: false)))
+        let enrollment = try #require(enrolled.me.enrollment)
+        #expect(enrolled.me.state == .enrolled && enrollment.id == enrollmentID && enrollment.version == 2)
+        #expect(enrollment.status == .active && !enrollment.canSelfCancel && enrollment.deadline == SchoolLesson.date("2030-03-03T17:00:00Z"))
+        #expect(enrolled.me.contactEmail == "ecole@example.ch")
+
+        let waiting = try decoder.decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "WAITING", position: "3"))
+        #expect(waiting.me.state == .waiting && waiting.me.waitlistPosition == 3)
+        #expect(SchoolCourseEnrollmentFormat.status(waiting.me, zone: "Europe/Zurich") == "En attente (rang 3)")
+
+        let offer = "{\"id\":\"\(offerID.uuidString.lowercased())\",\"seriesId\":\"\(seriesID.uuidString.lowercased())\",\"expiresAt\":\"2030-03-01T17:30:00.000Z\",\"status\":\"ACTIVE\"}"
+        let offered = try decoder.decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "OFFERED", offer: offer, email: "null"))
+        #expect(offered.me.state == .offered && offered.me.offer?.id == offerID && offered.me.contactEmail == nil)
+        // 17:30 UTC = 18:30 à Zurich en hiver : l’heure suit le fuseau de l’école.
+        let sameDay = try #require(SchoolLesson.date("2030-03-01T08:00:00Z"))
+        #expect(SchoolCourseEnrollmentFormat.status(offered.me, zone: "Europe/Zurich", now: sameDay) == "Place proposée jusqu’à 18:30")
+
+        let words: [(SchoolCourseLearnerState.State, String)] = [(.available, "Disponible"), (.full, "Complet"), (.enrolled, "Inscrit"),
+            (.completed, "Déjà effectué"), (.cancelled, "Annulé")]
+        for (state, word) in words {
+            let me = SchoolCourseLearnerState(learnerId: learnerID, state: state, enrollment: nil, offer: nil, waitlistPosition: nil,
+                waitlistEnabled: false, contactEmail: nil)
+            #expect(SchoolCourseEnrollmentFormat.status(me, zone: "Europe/Zurich") == word)
+        }
+    }
+
+    @Test func decodesMineAndTheStaffRoster() throws {
+        let mine = try JSONDecoder().decode(SchoolCourseMine.self, from: Data("""
+        {"items":[\(enrollmentJSON())],"offers":[]}
+        """.utf8))
+        #expect(mine.items.map(\.id) == [enrollmentID] && mine.offers.isEmpty)
+        let roster = try JSONDecoder().decode(SchoolCourseRoster.self, from: Data("""
+        {"items":[{\(enrollmentJSON().dropFirst().dropLast()),"learnerDisplayName":"Alex Exemple"},
+                  {\(enrollmentJSON(status: "CANCELLED").dropFirst().dropLast()),"learnerDisplayName":"Sam Exemple"}],
+         "waitlist":[{"id":"\(offerID.uuidString.lowercased())","learnerId":"\(learnerID.uuidString.lowercased())","learnerDisplayName":"Lou",
+           "position":1,"status":"WAITING","queuedAt":"2030-01-03T08:00:00.000Z","offerExpiresAt":null}]}
+        """.utf8))
+        #expect(roster.items.count == 2 && roster.active.map(\.learnerDisplayName) == ["Alex Exemple"])
+        #expect(roster.waitlist.first?.position == 1 && roster.waitlist.first?.offerExpiresAt == nil)
+    }
+
+    @Test func encodesEnrollmentCommands() throws {
+        let operation = UUID()
+        let plain = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(SchoolCoursePublishBody(operationId: operation))) as? [String: Any])
+        #expect(Set(plain.keys) == ["operationId"])
+        let enroll = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            SchoolCourseStaffEnrollBody(operationId: operation, learnerId: learnerID))) as? [String: Any])
+        #expect(Set(enroll.keys) == ["operationId", "learnerId"])
+        #expect((enroll["learnerId"] as? String).flatMap(UUID.init(uuidString:)) == learnerID)
+        let cancel = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            SchoolCourseStaffCancelBody(operationId: operation, reason: "Malade"))) as? [String: Any])
+        #expect(Set(cancel.keys) == ["operationId", "reason"] && cancel["reason"] as? String == "Malade")
+    }
+
+    @Test func retriesKeepTheSameOperation() {
+        var memory = SchoolCourseOperationMemory()
+        let first = memory.operation(for: SchoolCourseLearnerAction.enroll.key)
+        memory.fail(SchoolPlanningFailure.unavailable)
+        #expect(memory.operation(for: SchoolCourseLearnerAction.enroll.key) == first)
+        memory.fail(SchoolPlanningFailure.rejected("Ce cours est complet."))
+        #expect(memory.operation(for: SchoolCourseLearnerAction.enroll.key) != first)
+        #expect(SchoolCourseLearnerAction.cancel(enrollmentID: enrollmentID, version: 2).key
+            != SchoolCourseLearnerAction.cancel(enrollmentID: enrollmentID, version: 3).key)
+        #expect(SchoolCourseClient.failure(409, "COURSE_SELF_CANCEL_CLOSED") == .rejected("Le délai d’annulation est passé."))
+    }
+
+    @Test func contactMailNeedsARealAddress() {
+        #expect(SchoolCourseEnrollmentFormat.mailURL(nil, courseTitle: "Cours")  == nil)
+        #expect(SchoolCourseEnrollmentFormat.mailURL("  ", courseTitle: "Cours") == nil)
+        #expect(SchoolCourseEnrollmentFormat.mailURL("ecole@example.ch", courseTitle: "Cours")?.scheme == "mailto")
+    }
+
     @Test func agendaListsOnlyTheSessionsOfTheDay() throws {
         let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
