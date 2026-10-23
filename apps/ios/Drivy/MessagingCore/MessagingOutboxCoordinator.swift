@@ -32,7 +32,7 @@ actor MessagingOutboxCoordinator {
     func enqueue(text: String, conversationID: UUID, mentions: [UUID] = [], currentScope: MessagingScope) async throws -> MessagingPending {
         guard currentScope == scope else { throw MessagingFailure.contextChanged }
         guard await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
-        guard await cryptography.isAvailable(scope: scope, conversationID: conversationID) else { throw MessagingFailure.protectionUnavailable }
+        if let failure = await cryptography.availabilityFailure(scope: scope, conversationID: conversationID) { throw failure }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               text.utf8.count <= 16_384, mentions.count <= 8,
               Set(mentions).count == mentions.count else { throw MessagingFailure.invalidResponse }
@@ -50,7 +50,7 @@ actor MessagingOutboxCoordinator {
     func enqueue(content: MessagingPlainContent, conversationID: UUID, mentions: [UUID] = [],
                  replyTo: UUID? = nil, pollAllowsMultiple: Bool = false, currentScope: MessagingScope) async throws -> MessagingPending {
         guard currentScope == scope, await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
-        guard await cryptography.isAvailable(scope: scope, conversationID: conversationID) else { throw MessagingFailure.protectionUnavailable }
+        if let failure = await cryptography.availabilityFailure(scope: scope, conversationID: conversationID) { throw failure }
         let hasText = !(content.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasText != (content.poll != nil), mentions.count <= 8, Set(mentions).count == mentions.count else {
             throw MessagingFailure.invalidResponse
@@ -80,7 +80,7 @@ actor MessagingOutboxCoordinator {
         guard currentScope == scope else { return .failed(.contextChanged) }
         guard await self.currentScope() == scope else { return .failed(.contextChanged) }
         guard Self.validEnvelope(entry.ciphertext) else { return .failed(.invalidResponse) }
-        guard await cryptography.isAvailable(scope: scope, conversationID: entry.conversationID) else { return .failed(.protectionUnavailable) }
+        if let failure = await cryptography.availabilityFailure(scope: scope, conversationID: entry.conversationID) { return .failed(failure) }
         guard !active.contains(entry.clientMessageID) else { return .waiting }
         active.insert(entry.clientMessageID)
         defer { active.remove(entry.clientMessageID) }
@@ -110,7 +110,7 @@ actor MessagingOutboxCoordinator {
             let result = await retry(entry, currentScope: currentScope)
             results.append(result)
             if case .failed(let failure) = result,
-               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable { break }
+               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached { break }
         }
         return results
     }

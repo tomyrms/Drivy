@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 23 octobre 2026 : messagerie iOS, plafond d'appareils et réintégration (#65)
+
+- `409 DEVICE_LIMIT_REACHED` du relais crypto devient `MessagingFailure.deviceLimitReached` (« Trop d'appareils… Retire un appareil… ») ; composition, file et reprise s'arrêtent, aucun repli non chiffré.
+- Membres du général : un administrateur voit les personnes retirées pendant la session (section « Retirés ») et peut les réintégrer (`PUT general/members/:p`) après confirmation ; libellés VoiceOver « Réintégrer {nom} ». L'annuaire serveur ne liste pas les retirés : rien n'est proposé pour un retrait antérieur à la session.
+- Arrivée (`readable_after`) : fil vide accepté sans erreur, aucun curseur, écriture permise.
+- XCTest (`MessagingThreadTests`) et UI (`testAdminReinstatesRemovedMemberAfterConfirmation`) écrits, **non exécutés** (#84). Build IPA : voir rapport du run `ipa-essai.yml`.
+
 ## 23 octobre 2026 : messagerie API, corrections de revue (#65)
 
 - Arrivée comme WhatsApp (plage lisible après `last_sequence` à l'entrée, réactions/sondages/votes/accusés compris), réintégration `PUT /general/members/{personId}` (époque +1), preuve des signalements conservée après suppression. RLS de lecture des réactions/sondages/votes bornée à la plage lisible. Ordre des verrous droits puis conversation pour envoi, réactions, votes, épinglage, suppression. Appareils : plafond de 10 actifs, création liée à la session OIDC, repli d'autrui modifiable seulement sur `used`, suivi (`messaging_device_tracking`) privé. `sendToDevice` concurrent idempotent. Fonctions sur une personne quelconque retirées de `drivy_app`, écritures directes sur votes et clôture retirées.

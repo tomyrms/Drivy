@@ -66,6 +66,14 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         do { _ = try await open(); return true } catch { return false }
     }
 
+    func availabilityFailure(scope: MessagingScope, conversationID: UUID) async -> MessagingFailure? {
+        guard scope == self.scope else { return .contextChanged }
+        do { _ = try await open(); return nil }
+        catch MessagingCryptoRelayFailure.deviceLimitReached { return .deviceLimitReached }
+        catch MessagingFailure.deviceLimitReached { return .deviceLimitReached }
+        catch { return .protectionUnavailable }
+    }
+
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         try guardScope(scope)
         guard let text = String(data: plaintext, encoding: .utf8), !text.isEmpty else { throw MessagingFailure.invalidResponse }
@@ -230,6 +238,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         catch let failure as MessagingFailure { throw failure }
         catch is CancellationError { throw CancellationError() }
         catch MessagingCryptoRelayFailure.backupVersionConflict { throw MessagingFailure.stateConflict }
+        catch MessagingCryptoRelayFailure.deviceLimitReached { throw MessagingFailure.deviceLimitReached }
         catch { throw MessagingFailure.protectionUnavailable }
     }
 

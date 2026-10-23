@@ -5,6 +5,7 @@ struct MessagingMembersView: View {
     let workspace: MessagingWorkspace
     @State private var profile: MessagingMember?
     @State private var pendingRemoval: MessagingMember?
+    @State private var pendingReinstatement: MessagingMember?
 
     private var isAdmin: Bool { workspace.members.first { $0.id == workspace.scope.accountID }?.isGroupAdmin ?? false }
 
@@ -46,6 +47,23 @@ struct MessagingMembersView: View {
                     }
                 }
             }
+            if isAdmin && !workspace.removedMembers.isEmpty {
+                Section("Retirés") {
+                    ForEach(workspace.removedMembers) { member in
+                        HStack(spacing: 12) {
+                            DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
+                            Text(member.displayName).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Réintégrer") { pendingReinstatement = member }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Réintégrer \(member.displayName)")
+                                .accessibilityIdentifier("messaging.members.reinstate")
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("\(member.displayName), retiré du général")
+                    }
+                }
+            }
         }
         .navigationTitle("Membres")
         .accessibilityIdentifier("messaging.members")
@@ -59,6 +77,13 @@ struct MessagingMembersView: View {
                             presenting: pendingRemoval) { member in
             Button("Retirer \(member.displayName)", role: .destructive) {
                 Task { await workspace.removeMember(member.id) }
+            }
+        }
+        .confirmationDialog("Réintégrer dans le général ?", isPresented: Binding(get: { pendingReinstatement != nil },
+                                                                                 set: { if !$0 { pendingReinstatement = nil } }),
+                            presenting: pendingReinstatement) { member in
+            Button("Réintégrer \(member.displayName)") {
+                Task { await workspace.reinstateMember(member.id) }
             }
         }
     }

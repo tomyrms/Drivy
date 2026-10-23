@@ -16,6 +16,8 @@ import Observation
     private let photoLoader: @Sendable (UUID) async -> Data?
     let outbox: MessagingOutboxCoordinator
     private(set) var members: [MessagingMember] = []
+    /// Retirés pendant la session, en mémoire seulement.
+    private(set) var removedMembers: [MessagingMember] = []
     private(set) var photos: [UUID: Data] = [:]
     private var photoRequested: Set<UUID> = []
     private(set) var accessByConversation: [UUID: MessagingConversationAccess] = [:]
@@ -95,7 +97,7 @@ import Observation
         let results = await outbox.flushPending(currentScope: scope)
         for result in results {
             if case .failed(let failure) = result,
-               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable {
+               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached {
                 recordFailure(failure)
                 return
             }
@@ -257,6 +259,7 @@ import Observation
             contacts = []
             generalMembers = []
             members = []
+            removedMembers = []
             photos = [:]
             photoRequested = []
             accessByConversation = [:]
@@ -312,6 +315,7 @@ import Observation
             let result = try await actions.members(scope: scope)
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
             members = result.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            removedMembers.removeAll { removed in members.contains { $0.id == removed.id } }
             error = nil
         } catch let failure as MessagingFailure { recordFailure(failure) }
         catch { self.error = .unavailable }
@@ -387,7 +391,17 @@ import Observation
     }
 
     func removeMember(_ personID: UUID) async {
+        let removed = members.first { $0.id == personID }
         if await perform(nil, { try await actions.removeGeneralMember(scope: scope, personID: personID) }) {
+            // L'annuaire ne liste que les participants : le retiré reste proposé à la réintégration pour cette session.
+            if let removed, !removedMembers.contains(where: { $0.id == personID }) { removedMembers.append(removed) }
+            await loadMembers()
+        }
+    }
+
+    func reinstateMember(_ personID: UUID) async {
+        if await perform(nil, { try await actions.reinstateGeneralMember(scope: scope, personID: personID) }) {
+            removedMembers.removeAll { $0.id == personID }
             await loadMembers()
         }
     }

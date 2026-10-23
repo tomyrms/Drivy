@@ -3,7 +3,7 @@ import Foundation
 /// Relais de clés Olm/Megolm par l'API Drivy (docs/implementation/messaging-api-v2.md, section crypto).
 /// Les corps sont des JSON Matrix opaques produits par matrix-sdk-crypto ; ce module ne les lit pas.
 enum MessagingCryptoRelayFailure: Error, Equatable, Sendable {
-    case notFound, backupVersionConflict
+    case notFound, backupVersionConflict, deviceLimitReached
 }
 
 protocol MessagingCryptoRelay: Sendable {
@@ -95,9 +95,12 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
             guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw MessagingFailure.invalidResponse }
             if response.status == 401 && attempt == 0, await invalidate(bearer) { bearer = try await token(); continue }
             if response.status == 409 {
-                if String(decoding: response.data.prefix(4_096), as: UTF8.self).contains("BACKUP_VERSION_CONFLICT") {
+                let code = String(decoding: response.data.prefix(4_096), as: UTF8.self)
+                if code.contains("BACKUP_VERSION_CONFLICT") {
                     throw MessagingCryptoRelayFailure.backupVersionConflict
                 }
+                // Enregistrement refusé : aucun repli, l'appareil reste sans clé et rien ne part.
+                if code.contains("DEVICE_LIMIT_REACHED") { throw MessagingCryptoRelayFailure.deviceLimitReached }
                 throw MessagingFailure.stateConflict
             }
             if response.status == 404 { throw MessagingCryptoRelayFailure.notFound }

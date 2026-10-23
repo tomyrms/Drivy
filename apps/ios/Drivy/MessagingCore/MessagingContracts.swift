@@ -64,7 +64,7 @@ struct MessagingAcknowledgement: Sendable {
 }
 
 enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
-    case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict
+    case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict, deviceLimitReached
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
@@ -74,6 +74,7 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
         case .invalidResponse: "La réponse de Messages est invalide."
         case .contextChanged: "Le compte ou l'école a changé. Recharge Messages."
         case .stateConflict: "Cette conversation a changé sur un autre appareil. Actualise avant de réessayer."
+        case .deviceLimitReached: "Trop d'appareils utilisent Messages sur ce compte. Retire un appareil puis réessaie. Rien n'a été envoyé."
         }
     }
 }
@@ -85,12 +86,18 @@ protocol MessagingCryptography: Sendable {
     func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data
     /// Megolm authentifie l'expéditeur : préférer cette forme qui transmet l'enveloppe complète.
     func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data
+    /// Raison précise de l'indisponibilité, `nil` si la protection est prête.
+    func availabilityFailure(scope: MessagingScope, conversationID: UUID) async -> MessagingFailure?
 }
 
 extension MessagingCryptography {
     func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data {
         guard let ciphertext = message.ciphertext else { throw MessagingFailure.protectionUnavailable }
         return try await decrypt(ciphertext, scope: scope, conversationID: message.conversationID)
+    }
+
+    func availabilityFailure(scope: MessagingScope, conversationID: UUID) async -> MessagingFailure? {
+        await isAvailable(scope: scope, conversationID: conversationID) ? nil : .protectionUnavailable
     }
 }
 

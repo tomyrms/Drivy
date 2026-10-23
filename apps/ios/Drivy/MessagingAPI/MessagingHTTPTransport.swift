@@ -317,6 +317,11 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         let _: Done = try await request(scope: scope, method: "DELETE", path: ["general", "members", personID.uuidString])
     }
 
+    /// Idempotent : la personne ne lit que ce qui suit sa réintégration.
+    func reinstateGeneralMember(scope: MessagingScope, personID: UUID) async throws {
+        let _: Done = try await request(scope: scope, method: "PUT", path: ["general", "members", personID.uuidString])
+    }
+
     func members(scope: MessagingScope) async throws -> [MessagingMember] {
         var cursor: UUID?
         var members: [MessagingMember] = []

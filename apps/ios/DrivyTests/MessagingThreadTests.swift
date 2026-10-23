@@ -134,6 +134,7 @@ final class MessagingThreadTests: XCTestCase {
         try await client.closePoll(scope: scope, conversationID: conversation, messageID: message)
         try await client.setGroupAdmin(scope: scope, personID: person, admin: true)
         try await client.removeGeneralMember(scope: scope, personID: person)
+        try await client.reinstateGeneralMember(scope: scope, personID: person)
         let reportID = UUID()
         try await client.report(scope: scope, conversationID: conversation, clientReportID: reportID,
             items: [MessagingReportItem(messageID: message, ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data([1])))])
@@ -147,11 +148,12 @@ final class MessagingThreadTests: XCTestCase {
             "POST \(m)/poll/close",
             "PUT \(prefix)/general/admins/\(person.uuidString)",
             "DELETE \(prefix)/general/members/\(person.uuidString)",
+            "PUT \(prefix)/general/members/\(person.uuidString)",
             "POST \(prefix)/reports",
         ])
         let vote = try JSONSerialization.jsonObject(with: log.bodies[3]!) as! [String: Any]
         XCTAssertEqual(vote["optionIndexes"] as? [Int], [0, 1])
-        let report = try JSONSerialization.jsonObject(with: log.bodies[7]!) as! [String: Any]
+        let report = try JSONSerialization.jsonObject(with: log.bodies[8]!) as! [String: Any]
         XCTAssertEqual(report["clientReportId"] as? String, reportID.uuidString)
         XCTAssertEqual((report["items"] as? [[String: Any]])?.count, 1)
     }
@@ -212,6 +214,87 @@ final class MessagingThreadTests: XCTestCase {
         let second = workspace.visibleMessages(conversation)[1]
         XCTAssertEqual(workspace.readers(of: second), [LimitedTransport.reader])
     }
+
+    /// Arrivée (readable_after = last_sequence) : le serveur ne renvoie rien d'antérieur, le client affiche un fil vide sans erreur.
+    func testArrivalWithEmptyHistoryShowsNoError() async throws {
+        let body = envelope(#"{"items":[],"nextCursor":null,"access":{"canWrite":true,"readableUntilSequence":null,"isGroupAdmin":false},"readStates":[]}"#)
+        let http = transport { _ in body }
+        let page = try await MessagingAPIClient(transport: http).messages(scope: scope, conversationID: conversation, before: nil)
+        XCTAssertTrue(page.items.isEmpty)
+        XCTAssertNil(page.nextCursor)
+        let workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http), currentScope: { [scope] in scope })
+        await workspace.loadMessages(conversation)
+        XCTAssertNil(workspace.error)
+        XCTAssertTrue(workspace.visibleMessages(conversation).isEmpty)
+        XCTAssertFalse(workspace.canLoadMoreMessages(conversation))
+        XCTAssertTrue(workspace.access(for: conversation).canWrite)
+    }
+
+    func testDeviceLimitBlocksEnqueueWithoutPlaintextFallback() async {
+        let outbox = MessagingOutboxCoordinator(scope: scope, service: LimitedService(school: school, conversation: conversation),
+            cryptography: DeviceLimitedCipher(), outbox: UnavailableMessagingOutbox(), currentScope: { [scope] in scope })
+        do {
+            _ = try await outbox.enqueue(content: .init(text: "bonjour"), conversationID: conversation, currentScope: scope)
+            XCTFail("Aucun envoi sans appareil enregistré")
+        } catch MessagingFailure.deviceLimitReached {
+        } catch { XCTFail("\(error)") }
+        XCTAssertTrue(MessagingFailure.deviceLimitReached.localizedDescription.contains("Retire un appareil"))
+    }
+
+    func testRelayMapsDeviceLimitConflict() async throws {
+        let scope = scope
+        let relay = MessagingCryptoHTTPRelay.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: ThreadRecordingHTTP { request in
+                SchoolHTTPResponse(data: Data(#"{"error":{"code":"DEVICE_LIMIT_REACHED"}}"#.utf8), status: 409,
+                                   url: request.url!, contentType: "application/json")
+            }, currentScope: { scope })
+        do {
+            _ = try await relay.call(scope: scope, deviceID: "SYNTHDEVICE01", method: "POST", path: ["keys", "upload"], query: [], body: Data("{}".utf8))
+            XCTFail("409 attendu")
+        } catch MessagingCryptoRelayFailure.deviceLimitReached {}
+    }
+
+    func testReinstateOffersRemovedMemberThenClearsIt() async {
+        let actions = MembersActions(admin: account)
+        let workspace = MessagingWorkspace(scope: scope, actions: actions, currentScope: { [scope] in scope })
+        await workspace.loadMembers()
+        let target = MembersActions.other
+        await workspace.removeMember(target)
+        XCTAssertEqual(workspace.removedMembers.map(\.id), [target])
+        await workspace.reinstateMember(target)
+        XCTAssertTrue(workspace.removedMembers.isEmpty)
+        XCTAssertTrue(workspace.members.contains { $0.id == target })
+        let calls = await actions.calls
+        XCTAssertEqual(calls, ["DELETE \(target)", "PUT \(target)"])
+    }
+}
+
+private struct DeviceLimitedCipher: MessagingCryptography {
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { false }
+    func availabilityFailure(scope: MessagingScope, conversationID: UUID) async -> MessagingFailure? { .deviceLimitReached }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext { throw MessagingFailure.deviceLimitReached }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data { throw MessagingFailure.deviceLimitReached }
+}
+
+private actor MembersActions: MessagingThreadActions {
+    static let other = UUID()
+    let admin: UUID
+    private var removed = false
+    private(set) var calls: [String] = []
+    init(admin: UUID) { self.admin = admin }
+    func delete(scope: MessagingScope, conversationID: UUID, messageID: UUID, for deletion: MessagingDeletionScope) async throws {}
+    func setReaction(scope: MessagingScope, conversationID: UUID, messageID: UUID, emoji: String, active: Bool) async throws {}
+    func setPinned(scope: MessagingScope, conversationID: UUID, messageID: UUID, pinned: Bool) async throws {}
+    func vote(scope: MessagingScope, conversationID: UUID, messageID: UUID, optionIDs: [String]) async throws {}
+    func closePoll(scope: MessagingScope, conversationID: UUID, messageID: UUID) async throws {}
+    func setGroupAdmin(scope: MessagingScope, personID: UUID, admin: Bool) async throws {}
+    func removeGeneralMember(scope: MessagingScope, personID: UUID) async throws { removed = true; calls.append("DELETE \(personID)") }
+    func reinstateGeneralMember(scope: MessagingScope, personID: UUID) async throws { removed = false; calls.append("PUT \(personID)") }
+    func members(scope: MessagingScope) async throws -> [MessagingMember] {
+        [MessagingMember(id: admin, displayName: "Admin", hasPhoto: false, isGroupAdmin: true)]
+            + (removed ? [] : [MessagingMember(id: Self.other, displayName: "Léa", hasPhoto: false, isGroupAdmin: false)])
+    }
+    func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws {}
 }
 
 // MARK: Substituts synthétiques

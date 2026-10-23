@@ -26,6 +26,30 @@ final class MessagingThreadUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["messaging.member.profile"].waitForExistence(timeout: 5))
     }
 
+    /// Administrateur seulement : retirer puis réintégrer, chaque fois après confirmation.
+    func testAdminReinstatesRemovedMemberAfterConfirmation() throws {
+        let app = launch()
+        let entry = app.buttons["messages-entry"]
+        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        entry.tap()
+        app.buttons["messaging.members.open"].tap()
+        let list = app.descendants(matching: .any)["messaging.members"]
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        let row = list.buttons.element(boundBy: 1)
+        guard row.waitForExistence(timeout: 5) else { throw XCTSkip("Un seul membre") }
+        row.press(forDuration: 1)
+        let remove = app.buttons["Retirer du général"]
+        guard remove.waitForExistence(timeout: 3) else { throw XCTSkip("Compte non administrateur du groupe") }
+        remove.tap()
+        app.sheets.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Retirer '")).firstMatch.tap()
+        let reinstate = app.buttons["messaging.members.reinstate"]
+        XCTAssertTrue(reinstate.waitForExistence(timeout: 5))
+        XCTAssertTrue(reinstate.label.hasPrefix("Réintégrer "))
+        reinstate.tap()
+        app.sheets.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Réintégrer '")).firstMatch.tap()
+        XCTAssertTrue(reinstate.waitForNonExistence(timeout: 5))
+    }
+
     func testPollComposerRequiresQuestionAndTwoOptions() throws {
         let app = launch()
         let entry = app.buttons["messages-entry"]
