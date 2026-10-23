@@ -177,13 +177,8 @@ export async function claimKeys(db: PoolClient, actor: KeyActor, body: unknown) 
     const personId = personOf(target.user);
     if (!personId || !people.has(personId)) continue;
     // Une clé à usage unique est supprimée dans la même instruction qui la sélectionne : jamais distribuée deux fois.
-    const claimed = await db.query<{ keyId: string; key: unknown }>(`DELETE FROM drivy.messaging_one_time_key k
-      WHERE (k.school_id,k.person_id,k.device_id,k.key_id)=(SELECT o.school_id,o.person_id,o.device_id,o.key_id
-        FROM drivy.messaging_one_time_key o JOIN drivy.messaging_device d ON d.school_id=o.school_id AND d.person_id=o.person_id
-          AND d.device_id=o.device_id AND d.revoked_at IS NULL
-        WHERE o.school_id=$1 AND o.person_id=$2 AND o.device_id=$3 AND o.algorithm=$4
-        ORDER BY o.key_id LIMIT 1 FOR UPDATE OF o SKIP LOCKED)
-      RETURNING k.key_id AS "keyId",k.key`, [actor.schoolId, personId, target.deviceId, target.algorithm]);
+    const claimed = await db.query<{ keyId: string; key: unknown }>(`SELECT key_id AS "keyId",key
+      FROM drivy.messaging_claim_one_time_key($1,$2,$3,$4)`, [actor.schoolId, personId, target.deviceId, target.algorithm]);
     let found = claimed.rows[0];
     if (!found) {
       const fallback = await db.query<{ keyId: string; key: unknown }>(`SELECT key_id AS "keyId",key
@@ -389,8 +384,11 @@ export async function createBackupVersion(db: PoolClient, actor: KeyActor, body:
   await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`messaging.backup|${actor.schoolId}|${actor.personId}`]);
   const last = await db.query<{ version: string }>('SELECT COALESCE(max(version),0) AS version FROM drivy.messaging_key_backup WHERE school_id=$1 AND person_id=$2',
     [actor.schoolId, actor.personId]);
-  const version = safeId(last.rows[0]?.version ?? 0) + 1;
-  await db.query('UPDATE drivy.messaging_key_backup SET current=false WHERE school_id=$1 AND person_id=$2 AND current', [actor.schoolId, actor.personId]);
+  // POST est une création, pas une rotation : préserver la clé de récupération et
+  // l'historique existants, y compris après une réponse perdue ou depuis un autre appareil.
+  if (safeId(last.rows[0]?.version ?? 0) > 0)
+    throw new ApiError(409, 'BACKUP_ALREADY_EXISTS', 'Une sauvegarde existe déjà. Restaurez-la avec votre clé de récupération.');
+  const version = 1;
   await db.query(`INSERT INTO drivy.messaging_key_backup(school_id,person_id,version,algorithm,auth_data) VALUES($1,$2,$3,$4,$5)`,
     [actor.schoolId, actor.personId, version, input.algorithm, input.auth_data]);
   return { version: String(version) };

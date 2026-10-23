@@ -2,7 +2,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {readFile,readdir} from 'node:fs/promises';
 import {Pool} from 'pg';
 import {expect,it} from 'vitest';
-import {migrate} from '../scripts/migrations.js';
+import {migrate,migrationFilePattern} from '../scripts/migrations.js';
 import {seedFixtures} from '../scripts/fixtures.js';
 import {defaultProfileFields,setupDraftSchema} from '../src/school-onboarding-model.js';
 import {harness,id,issuer,prepareSchool,prepareCommercial} from './support/harness.js';
@@ -76,7 +76,10 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     expect(await snapshot()).toEqual(before);
     expect(await identities()).toEqual(namesBefore);
     expect((await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations WHERE name=ANY($1::text[]) ORDER BY name',[oldNames])).rows).toEqual(history);
-    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(['031_school_opening.sql','032_school_setup_draft.sql','033_formation_programme_label.sql','034_withdrawal_reason_staff_only.sql','035_osrm_matched_route.sql','036_autonomous_signals.sql','037_self_profile.sql','038_self_profile_details.sql','039_self_profile_contact.sql','040_matched_route_resplit.sql','041_single_person_identity.sql']);
+    const newNames=(await readdir(directory)).filter(name=>migrationFilePattern.test(name)&&!oldNames.includes(name)).sort();
+    expect(newNames).toContain('031_school_opening.sql');
+    expect(newNames).toContain('032_school_setup_draft.sql');
+    expect((await pool.query('SELECT name FROM public.drivy_migrations WHERE NOT(name=ANY($1::text[])) ORDER BY name',[oldNames])).rows.map(row=>row.name)).toEqual(newNames);
     // 033 ajoute seulement le nom facultatif d'un parcours : aucune ligne existante ne reçoit de nom déduit.
     expect((await pool.query('SELECT count(*)::int AS named FROM drivy.offering_version WHERE label IS NOT NULL')).rows[0].named).toBe(0);
     expect((await pool.query('SELECT count(*)::int n FROM drivy.school_opening_link')).rows[0].n).toBe(0);

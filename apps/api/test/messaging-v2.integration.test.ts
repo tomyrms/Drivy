@@ -1,9 +1,9 @@
-// Écrit, NON exécuté : PostgreSQL de test à qualifier en #84.
+// PostgreSQL synthétique réel, migrations sous propriétaire non privilégié (#78/#84).
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
-import { migrate } from '../scripts/migrations.js';
+import { freshDatabase } from './support/harness.js';
 import { seedFixtures, fixtureIds as id } from '../scripts/fixtures.js';
 import { registerMessaging } from '../src/messaging-routes.js';
 import { ApiError } from '../src/errors.js';
@@ -52,7 +52,7 @@ async function openGeneral(subject = 'demo-admin') {
 const endAssignment = () => pool.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
 const restoreAssignment = () => pool.query('UPDATE drivy.instructor_assignment SET valid_until=NULL WHERE id=$1', [id.assignment]);
 
-beforeAll(async () => { await migrate(pool); });
+beforeAll(async () => { const database = await freshDatabase(); await database.end(); });
 beforeEach(async () => { await pool.query('TRUNCATE drivy.person,drivy.school CASCADE'); await seedFixtures(pool, issuer); });
 afterAll(async () => { await app.close(); await pool.end(); });
 

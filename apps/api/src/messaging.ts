@@ -172,7 +172,7 @@ export async function resumeEnvelopes(db: PoolClient, actor: MessagingActor, con
 }
 async function messageById(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string): Promise<MessageView> {
   const result = await db.query<MessageView>(`SELECT ${messageColumns} FROM drivy.messaging_message m
-    WHERE m.school_id=$1 AND m.conversation_id=$3 AND m.id=$4`, [actor.schoolId, actor.personId, conversationId, messageId]);
+    WHERE m.school_id=$1 AND m.conversation_id=$2 AND m.id=$3`, [actor.schoolId, conversationId, messageId]);
   if (!result.rows[0]) throw notFound();
   return toView(result.rows[0]);
 }

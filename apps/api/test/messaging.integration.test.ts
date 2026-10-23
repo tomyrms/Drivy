@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
-import { migrate } from '../scripts/migrations.js';
+import { freshDatabase } from './support/harness.js';
 import { seedFixtures, fixtureIds as id } from '../scripts/fixtures.js';
 import { registerMessaging } from '../src/messaging-routes.js';
 import { ApiError } from '../src/errors.js';
+import { findOrCreateGeneral, sendEnvelope } from '../src/messaging.js';
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url || new URL(url).pathname !== '/drivy_test') throw new Error('TEST_DATABASE_URL vers drivy_test isolée obligatoire.');
@@ -26,11 +27,39 @@ const req = (subject: string, method: 'GET'|'POST'|'PUT', url: string, payload?:
   headers: { authorization: `Bearer ${subject}`, 'x-drivy-expected-person-id': expectedPersonId ?? subjects[subject]!,
     'x-drivy-expected-access-epoch': '1' }, ...(payload ? { payload } : {}) });
 
-beforeAll(async () => { await migrate(pool); });
+beforeAll(async () => { const database = await freshDatabase(); await database.end(); });
 beforeEach(async () => { await pool.query('TRUNCATE drivy.person,drivy.school CASCADE'); await seedFixtures(pool, issuer); });
 afterAll(async () => { await app.close(); await pool.end(); });
 
 describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
+  it('creates one private pair and one general conversation under concurrent requests', async () => {
+    const privateResponses = await Promise.all([
+      req('demo-instructor', 'PUT', `${path}/private/${id.alice}`),
+      req('demo-alice', 'PUT', `${path}/private/${id.instructor}`)
+    ]);
+    for (const response of privateResponses) expect(response.statusCode, response.body).toBe(200);
+    expect(new Set(privateResponses.map(response => response.json().data.conversationId)).size).toBe(1);
+    const generalResponses = await Promise.all(['demo-admin', 'demo-alice', 'demo-bob'].map(subject => req(subject, 'PUT', `${path}/general`)));
+    for (const response of generalResponses) expect(response.statusCode, response.body).toBe(200);
+    expect(new Set(generalResponses.map(response => response.json().data.conversationId)).size).toBe(1);
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_conversation WHERE school_id=$1', [id.schoolA])).rows[0].count).toBe(2);
+    const privateId = privateResponses[0]!.json().data.conversationId;
+    expect((await req('demo-admin', 'GET', `${path}/conversations/${privateId}/messages`)).statusCode).toBe(404);
+  });
+  it('creates a general conversation under the application role with forced RLS', async () => {
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SET LOCAL ROLE drivy_app');
+      await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true),set_config('app.membership_id',$3,true)",
+        [id.schoolA, id.admin, id.adminMember]);
+      const conversationId = await findOrCreateGeneral(db, { schoolId: id.schoolA, personId: id.admin, membershipId: id.adminMember });
+      expect((await db.query('SELECT id FROM drivy.messaging_conversation WHERE id=$1', [conversationId])).rowCount).toBe(1);
+      const sent = await sendEnvelope(db, { schoolId: id.schoolA, personId: id.admin, membershipId: id.adminMember },
+        conversationId, randomUUID(), { scheme: 'synthetic', keyId: 'fixture', payload: 'AAAA' });
+      expect(sent.sequence).toBe(1);
+    } finally { await db.query('ROLLBACK'); db.release(); }
+  });
   it('limits contacts to current assignment, not universal admin or other school', async () => {
     const instructor = await req('demo-instructor', 'GET', `${path}/contacts`);
     expect(instructor.statusCode, instructor.body).toBe(200);
@@ -64,13 +93,19 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect(JSON.stringify(page.json())).not.toContain('plaintext');
     expect((await req('demo-other-instructor', 'GET', `${path}/conversations/${conversationId}/messages`)).statusCode).toBe(404);
     await pool.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
-    expect((await req('demo-instructor', 'GET', `${path}/conversations/${conversationId}/messages`)).statusCode).toBe(404);
-    expect((await req('demo-instructor', 'GET', `${path}/conversations/${conversationId}/events?afterSequence=0`)).statusCode).toBe(404);
+    // Décision du 23 octobre : l'historique antérieur reste lisible, aucune écriture après coupure.
+    const retained = await req('demo-instructor', 'GET', `${path}/conversations/${conversationId}/messages`);
+    expect(retained.statusCode, retained.body).toBe(200);
+    expect(retained.json().data.items.map((item: { id: string }) => item.id)).toEqual([first.json().data.id]);
+    expect(retained.json().data.access).toMatchObject({ canWrite: false, readableUntilSequence: 1 });
+    const events = await req('demo-instructor', 'GET', `${path}/conversations/${conversationId}/events?afterSequence=0`);
+    expect(events.statusCode, events.body).toBe(200);
+    expect(events.json().data.messages.map((item: { id: string }) => item.id)).toEqual([first.json().data.id]);
     expect((await req('demo-instructor', 'PUT', `${path}/conversations/${conversationId}/read-state`,
-      { lastReadSequence: 1 })).statusCode).toBe(404);
-    expect((await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`, body)).statusCode).toBe(404);
+      { lastReadSequence: 1 })).statusCode).toBe(200);
+    expect((await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`, body)).statusCode).toBe(403);
     expect((await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`,
-      { ...body, clientMessageId: randomUUID() })).statusCode).toBe(404);
+      { ...body, clientMessageId: randomUUID() })).statusCode).toBe(403);
   });
   it('keeps general school-scoped and does not grant learner-to-learner private chat', async () => {
     const general = await req('demo-admin', 'PUT', `${path}/general`);
@@ -226,5 +261,35 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     const rows = (await req('demo-alice', 'GET', `${path}/conversations/${conversationId}/events`)).json().data.messages;
     expect(rows).toHaveLength(1);
     expect(rows[0].sequence).toBe(1);
+  });
+  it('waits for assignment revocation and refuses the pending message without consuming a sequence', async () => {
+    const opened = await req('demo-instructor', 'PUT', `${path}/private/${id.alice}`);
+    expect(opened.statusCode, opened.body).toBe(200);
+    const conversationId = opened.json().data.conversationId as string;
+    const updater = await pool.connect();
+    let pending: ReturnType<typeof req> | undefined;
+    try {
+      const updaterPid = (await updater.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+      await updater.query('BEGIN');
+      await updater.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
+      pending = req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`,
+        { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AAAA' } });
+      let blocked = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const observed = await pool.query<{ blocked: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity a
+          WHERE a.datname=current_database() AND a.wait_event_type='Lock'
+            AND $1::int=ANY(pg_blocking_pids(a.pid))) AS blocked`, [updaterPid]);
+        if (observed.rows[0]?.blocked) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, 'la commande attend la source de droit avant son écriture').toBe(true);
+      await updater.query('COMMIT');
+      expect((await pending).statusCode).toBe(403);
+      expect((await pool.query('SELECT last_sequence FROM drivy.messaging_conversation WHERE id=$1', [conversationId])).rows[0].last_sequence).toBe('0');
+      expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0].count).toBe(0);
+    } finally {
+      await updater.query('ROLLBACK'); updater.release();
+      if (pending) await pending.catch(() => undefined);
+    }
   });
 });

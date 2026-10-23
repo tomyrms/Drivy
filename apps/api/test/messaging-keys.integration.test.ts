@@ -1,12 +1,13 @@
-// Écrit, NON exécuté (#84) : demande TEST_DATABASE_URL vers drivy_test et la migration 20261023b.
+// PostgreSQL synthétique réel, migrations sous propriétaire non privilégié (#78/#84).
 import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
-import { migrate } from '../scripts/migrations.js';
+import { freshDatabase } from './support/harness.js';
 import { seedFixtures, fixtureIds as id } from '../scripts/fixtures.js';
 import { registerMessaging } from '../src/messaging-routes.js';
 import { registerMessagingKeys } from '../src/messaging-keys-routes.js';
 import { ApiError } from '../src/errors.js';
+import { claimKeys } from '../src/messaging-keys.js';
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url || new URL(url).pathname !== '/drivy_test') throw new Error('TEST_DATABASE_URL vers drivy_test isolée obligatoire.');
@@ -32,11 +33,28 @@ const deviceKeys = (person: string, device: string) => ({ user_id: user(person),
   algorithms: ['m.olm.v1.curve25519-aes-sha2', 'm.megolm.v1.aes-sha2'],
   keys: { [`curve25519:${device}`]: `c${device}`, [`ed25519:${device}`]: `e${device}` }, signatures: {} });
 
-beforeAll(async () => { await migrate(pool); });
+beforeAll(async () => { const database = await freshDatabase(); await database.end(); });
 beforeEach(async () => { await pool.query('TRUNCATE drivy.person,drivy.school CASCADE'); await seedFixtures(pool, issuer); });
 afterAll(async () => { await app.close(); await pool.end(); });
 
 describe('relais de clés Matrix, PostgreSQL', () => {
+  it('refuse une réclamation directe hors périmètre et ne permet pas de modifier les clés du pair', async () => {
+    const uploaded = await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, {
+      one_time_keys: { 'signed_curve25519:AAAA': { key: 'synthetic-key' } }
+    });
+    expect(uploaded.statusCode, uploaded.body).toBe(200);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SET LOCAL ROLE drivy_app');
+      await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)", [id.schoolA, id.otherInstructor]);
+      expect((await db.query("SELECT has_table_privilege(current_user,'drivy.messaging_one_time_key','UPDATE') AS allowed")).rows[0].allowed).toBe(false);
+      expect((await db.query("SELECT * FROM drivy.messaging_claim_one_time_key($1,$2,'ALICEDEV01','signed_curve25519')", [id.schoolA, id.alice])).rows).toEqual([]);
+      await db.query("SELECT set_config('app.person_id',$1,true)", [id.instructor]);
+      expect((await db.query("SELECT * FROM drivy.messaging_claim_one_time_key($1,$2,'ALICEDEV01','signed_curve25519')", [id.schoolB, id.alice])).rows).toEqual([]);
+    } finally { await db.query('ROLLBACK'); db.release(); }
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_one_time_key')).rows[0].count).toBe(1);
+  });
   it('publie, interroge et distribue une clé à usage unique une seule fois, puis la clé de repli', async () => {
     const up = await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, { device_keys: deviceKeys(id.alice, 'ALICEDEV01'),
       one_time_keys: { 'signed_curve25519:AAAA': { key: 'k1' }, 'signed_curve25519:AAAB': { key: 'k2' } },
@@ -44,10 +62,20 @@ describe('relais de clés Matrix, PostgreSQL', () => {
     expect(up.statusCode, up.body).toBe(200);
     expect(up.json().data.one_time_key_counts).toEqual({ signed_curve25519: 2 });
     expect(up.json().context.actorPersonId).toBe(id.alice);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SET LOCAL ROLE drivy_app');
+      await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)", [id.schoolA, id.instructor]);
+      const claimed = await claimKeys(db, { schoolId: id.schoolA, personId: id.instructor, membershipId: id.instructorMember, deviceId: 'INSTRDEV01' },
+        { one_time_keys: { [user(id.alice)]: { ALICEDEV01: 'signed_curve25519' } } });
+      expect(Object.keys(claimed.one_time_keys[user(id.alice)]!.ALICEDEV01!)).toHaveLength(1);
+    } finally { await db.query('ROLLBACK'); db.release(); }
     const query = await req('demo-instructor', 'INSTRDEV01', 'POST', `${crypto}/keys/query`, { device_keys: { [user(id.alice)]: [] } });
     expect(Object.keys(query.json().data.device_keys[user(id.alice)])).toEqual(['ALICEDEV01']);
     const claims = await Promise.all([0, 1, 2].map(() => req('demo-instructor', 'INSTRDEV01', 'POST', `${crypto}/keys/claim`,
       { one_time_keys: { [user(id.alice)]: { ALICEDEV01: 'signed_curve25519' } } })));
+    for (const claim of claims) expect(claim.statusCode, claim.body).toBe(200);
     const ids = claims.map(c => Object.keys(c.json().data.one_time_keys[user(id.alice)]?.ALICEDEV01 ?? {})[0]);
     expect(new Set(ids.filter(k => k !== 'signed_curve25519:FB01')).size).toBe(2);
     expect(ids.filter(k => k === 'signed_curve25519:FB01')).toHaveLength(1);
@@ -89,7 +117,7 @@ describe('relais de clés Matrix, PostgreSQL', () => {
     await req('demo-instructor', 'INSTRDEV01', 'PUT', `${crypto}/sendToDevice/m.room.encrypted/txn2`, send);
     expect((await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/sync`)).json().data.to_device.events).toHaveLength(0);
   });
-  it('sauvegarde chiffrée avec CAS sur la version', async () => {
+  it('préserve K1 et ses sessions face à une seconde création, un autre appareil ou une réponse perdue', async () => {
     const auth = { algorithm: 'm.megolm_backup.v1.curve25519-aes-sha2', auth_data: { public_key: 'pk1' } };
     expect((await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/room_keys/version`)).statusCode).toBe(404);
     const v1 = (await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/room_keys/version`, auth)).json().data.version;
@@ -97,13 +125,27 @@ describe('relais de clés Matrix, PostgreSQL', () => {
     const rooms = { rooms: { [room]: { sessions: { S1: { first_message_index: 0, forwarded_count: 0, is_verified: false,
       session_data: { ephemeral: 'e', ciphertext: 'c', mac: 'm' } } } } } };
     expect((await req('demo-alice', 'ALICEDEV01', 'PUT', `${crypto}/room_keys/keys?version=${v1}`, rooms)).json().data.count).toBe(1);
-    const v2 = (await req('demo-alice', 'ALICEDEV02', 'POST', `${crypto}/room_keys/version`, { ...auth, auth_data: { public_key: 'pk2' } })).json().data.version;
-    const stale = await req('demo-alice', 'ALICEDEV01', 'PUT', `${crypto}/room_keys/keys?version=${v1}`, rooms);
+    for (const [device, data] of [['ALICEDEV02', { ...auth, auth_data: { public_key: 'pk2' } }], ['ALICEDEV01', auth]] as const) {
+      const conflict = await req('demo-alice', device, 'POST', `${crypto}/room_keys/version`, data);
+      expect(conflict.statusCode, conflict.body).toBe(409);
+      expect(conflict.json().code).toBe('BACKUP_ALREADY_EXISTS');
+    }
+    const stale = await req('demo-alice', 'ALICEDEV01', 'PUT', `${crypto}/room_keys/keys?version=999`, rooms);
     expect(stale.statusCode).toBe(409);
     expect(stale.body).toContain('BACKUP_VERSION_CONFLICT');
-    expect((await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/room_keys/version`)).json().data).toMatchObject({ version: v2, auth_data: { public_key: 'pk2' } });
-    expect((await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/room_keys/keys?version=${v1}`)).json().data.rooms[room].sessions.S1).toBeDefined();
+    expect((await req('demo-alice', 'ALICEDEV03', 'GET', `${crypto}/room_keys/version`)).json().data).toMatchObject({ version: v1, auth_data: { public_key: 'pk1' }, count: 1 });
+    expect((await req('demo-alice', 'ALICEDEV03', 'GET', `${crypto}/room_keys/keys?version=${v1}`)).json().data.rooms).toEqual(rooms.rooms);
+    expect((await req('demo-alice', 'ALICEDEV01', 'PUT', `${crypto}/room_keys/keys?version=${v1}`, rooms)).statusCode).toBe(200);
     expect((await req('demo-instructor', 'INSTRDEV01', 'GET', `${crypto}/room_keys/keys?version=${v1}`)).statusCode).toBe(404);
+  });
+  it('ne crée qu’une sauvegarde courante lors de créations concurrentes sur deux appareils', async () => {
+    const responses = await Promise.all(['ALICEDEV01', 'ALICEDEV02'].map((device, index) => req('demo-alice', device, 'POST', `${crypto}/room_keys/version`,
+      { algorithm: 'm.megolm_backup.v1.curve25519-aes-sha2', auth_data: { public_key: `synthetic-pk${index}` } })));
+    expect(responses.map(response => response.statusCode).sort()).toEqual([200, 409]);
+    const winner = responses.findIndex(response => response.statusCode === 200);
+    const current = await req('demo-alice', 'ALICEDEV03', 'GET', `${crypto}/room_keys/version`);
+    expect(current.json().data).toMatchObject({ version: '1', auth_data: { public_key: `synthetic-pk${winner}` } });
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_key_backup WHERE school_id=$1 AND person_id=$2', [id.schoolA, id.alice])).rows[0].count).toBe(1);
   });
   it('plafonne les appareils actifs, lie l’appareil à la session, protège repli et suivi d’autrui', async () => {
     for (let i = 0; i < 10; i++) expect((await req('demo-alice', `ALICEDEV${String(i).padStart(2, '0')}`, 'GET', `${crypto}/sync`)).statusCode).toBe(200);
