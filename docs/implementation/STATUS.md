@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 24 octobre 2026 : cours collectifs, inscription (#39), liste d'attente (#40), annulations (#41)
+
+Branche `vague/cours-collectifs`, non fusionnée, aucun déploiement. Commits `3d911b8`, `af10b48`, `4d9c4ae`, `9109b74`. Contrat : [cours-collectifs-inscriptions-39-41.md](cours-collectifs-inscriptions-39-41.md).
+- Migration 043 : inscription à toute la série (élève ou personnel habilité), liste d'attente prioritaire avec proposition exclusive et place retenue, annulation autonome jusqu'à l'échéance (24 h par défaut), annulation tardive par le personnel avec motif, annulation de série, changement de dates sans mise à jour partielle. Un seul compteur de places, occupations dans `drivy.reservation` (conflits cours/leçon refusés dans les deux sens).
+- Valeurs provisoires non approuvées : expiration 2 h avant la séance, seuil 30 min ; le délai de réponse (12 h proposé) n'est pas appliqué tant que l'école ne le saisit pas.
+- Web (personnel) : inscrits et file, inscrire, annuler, annuler le cours, modifier les dates, réglages. iOS : fiche élève (statuts, inscription, file, proposition, annulation ou contact), bandeau des propositions, inscrits côté personnel habilité.
+- Exécuté : 29 tests API ciblés réussis en local (PostgreSQL 17 jetable, migrations 001 à 043) ; web : typage et 40 tests ciblés ; IPA compilée sur `9109b74` ([run 40039016177](https://github.com/tomyrms/Drivy/actions/runs/40039016177)). Ce ne sont pas des recettes.
+- Non exécuté : tests Swift, UI iPhone/iPad, navigateur, suite API complète en CI (campagne #84). Limites : pas de worker d'expiration autonome (la file avance à chaque commande ou lecture), abonnement « prochaines sessions » et push non livrés (#43, #44), motif perdu si l'annulation web échoue, mise en page web non vue.
+
 ## 23 octobre 2026 : cours collectifs, cadrage (#79), socle (#80), création et publication (#38)
 
 Branche `vague/cours-collectifs`, non fusionnée, aucun déploiement. Commits `7c3bcef`, `6877eea`, `efc6a85`.

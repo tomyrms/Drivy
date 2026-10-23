@@ -22,9 +22,9 @@ Une IPA compilée prouve la construction. Elle ne prouve ni le fonctionnement ni
 | --- | --- | --- | --- | --- | --- |
 | #37 | Epic cours collectifs | | | NOT_EXECUTED | Campagne finale |
 | #38 | Création et publication de séries | 7c3bcef, efc6a85 | API : 11 tests ciblés en local ; web : typage + 35 tests ; IPA compilée run 39940836151 | NOT_EXECUTED | Campagne finale |
-| #39 | Inscription à toute la série | | | NOT_EXECUTED | Campagne finale |
-| #40 | Liste d'attente prioritaire | | | NOT_EXECUTED | Activation `offerResponseMinutes` |
-| #41 | Annulation et délai | | | NOT_EXECUTED | Campagne finale |
+| #39 | Inscription à toute la série | 3d911b8, af10b48, 4d9c4ae, 9109b74 | API : tests ciblés en local ; web : typage + 40 tests ; IPA run 40039016177 | NOT_EXECUTED | Campagne finale |
+| #40 | Liste d'attente prioritaire | idem #39 | idem #39 | NOT_EXECUTED | Valeurs 2 h / 30 min / 12 h provisoires ; campagne finale |
+| #41 | Annulation et délai | idem #39 | idem #39 | NOT_EXECUTED | Changement d'heure à tester ; campagne finale |
 | #42 | Présences | | | NOT_EXECUTED | Campagne finale |
 | #43 | Rappels et alerte minimum | | | NOT_EXECUTED | Campagne finale |
 | #44 | Préférences push | | | NOT_EXECUTED | Campagne finale |
