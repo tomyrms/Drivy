@@ -89,7 +89,7 @@ export async function learnerState(db:PoolClient,schoolId:string,seriesId:string
  }
  if(entry){
   // Rang seulement : aucun nom ni nombre de personnes devant ou derrière n'est exposé au-delà de ce rang.
-  const rank=(await db.query<{n:number}>(`SELECT count(*)::int AS n FROM drivy.course_waitlist_entry WHERE series_id=$1 AND status IN('WAITING','OFFERED') AND (queued_at,seq)<=($2,$3::bigint)`,[seriesId,entry.queued_at,entry.seq])).rows[0]!.n;
+  const rank=(await db.query<{n:number}>('SELECT drivy.course_waitlist_rank($1) AS n',[entry.id])).rows[0]!.n;
   return {...base,state:'WAITING',waitlistPosition:rank};
  }
  const closed=series.status!=='PUBLISHED'||!series.first_start||series.first_start.getTime()<=Date.now();

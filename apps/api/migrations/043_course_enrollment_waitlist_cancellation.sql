@@ -111,6 +111,8 @@ BEGIN
  ELSIF source IN('SELF','OFFER') THEN
   IF NOT EXISTS(SELECT 1 FROM drivy.learner_profile l WHERE l.id=learner AND l.school_id=s.school_id AND l.person_id=actor.person_id) THEN PERFORM drivy.course_fail('COURSE_ACCESS_REQUIRED'); END IF;
  ELSE PERFORM drivy.course_fail('INVALID_REQUEST'); END IF;
+ -- Un brouillon n'existe pas pour l'élève (même règle que la lecture).
+ IF s.status='DRAFT' AND NOT drivy.can_manage_courses(s.school_id) THEN PERFORM drivy.course_fail('NOT_FOUND'); END IF;
  -- Propositions échues et passage au suivant d'abord : une place promise n'est jamais prise par une inscription directe.
  PERFORM drivy.course_queue_advance(series);
  SELECT * INTO s FROM drivy.course_series WHERE id=series;
@@ -285,6 +287,16 @@ BEGIN
  INSERT INTO drivy.course_event_outbox(school_id,series_id,series_version,event_type,operation_id) VALUES(s.school_id,series,s.version+1,'CourseSeriesRescheduled',gen_random_uuid());
  PERFORM drivy.course_queue_advance(series);
 END $$;
+
+-- Rang dans la file pour l'élève lui-même : un nombre, jamais les autres personnes (RLS les lui masque).
+CREATE FUNCTION drivy.course_waitlist_rank(entry uuid) RETURNS integer LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ SELECT count(*)::integer FROM drivy.course_waitlist_entry w JOIN drivy.course_waitlist_entry me ON me.id=entry AND me.series_id=w.series_id
+ JOIN drivy.learner_profile l ON l.id=me.learner_id
+ WHERE w.status IN('WAITING','OFFERED') AND (w.queued_at,w.seq)<=(me.queued_at,me.seq)
+  AND (l.person_id=nullif(current_setting('app.person_id',true),'')::uuid OR drivy.can_manage_courses(me.school_id))
+$$;
+REVOKE ALL ON FUNCTION drivy.course_waitlist_rank(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION drivy.course_waitlist_rank(uuid) TO drivy_app;
 
 DO $$ DECLARE f text; BEGIN
  FOREACH f IN ARRAY ARRAY['course_fail(text)','course_actor_membership(uuid)','course_learner_admissible(uuid,uuid)','course_first_start(uuid)','course_queue_advance(uuid)',
