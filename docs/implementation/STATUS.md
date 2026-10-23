@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 23 octobre 2026 : messagerie #65, bilan après décisions du porteur
+
+- Décisions du porteur appliquées ([decisions-messaging-20261023.md](decisions-messaging-20261023.md)) : E2EE Olm/Megolm via `matrix-sdk-crypto` 0.17.0 officiel, relais de clés sur l'API Drivy, sauvegarde par clé de récupération, fin du lien, arrivée et réintégration comme WhatsApp, contacts élève limités aux moniteurs attribués, général avec nom et photo, administrateurs du groupe, suppression pour moi ou pour tous, réactions, réponses, épinglage, recherche locale, accusés de lecture, sondages, signalements. Photos et fichiers renvoyés à #97.
+- Deux revues ciblées (chiffrement iOS, API) : constats P2/P3 corrigés. Risque de confiance au premier usage documenté et accepté.
+- Exécuté : `npm run typecheck` et `npm run build` ; dernière IPA non signée `ipa-essai` run `40030459842` sur `b39fce4`, compilation seulement.
+- **Non exécuté** (#84) : tests PostgreSQL (`messaging-v2`, `messaging-keys`), XCTest et UI, scénarios crypto, VoiceOver, appareils physiques. Migrations `20261023b/c/d` appliquées nulle part. Messages reste masqué en Release. Aucun déploiement, fusion ni clôture d'issue.
+- Limites connues : identifiant de signalement perdu si l'app redémarre pendant l'envoi ; vérification croisée des appareils sans écran dédié ; conservation et export des données non tranchés.
+
 ## 23 octobre 2026 : messagerie iOS, plafond d'appareils et réintégration (#65)
 
 - `409 DEVICE_LIMIT_REACHED` du relais crypto devient `MessagingFailure.deviceLimitReached` (« Trop d'appareils… Retire un appareil… ») ; composition, file et reprise s'arrêtent, aucun repli non chiffré.
