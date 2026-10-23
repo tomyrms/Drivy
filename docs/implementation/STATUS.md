@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 23 octobre 2026 : messagerie iOS v2 (#65), branche `openai/65-messagerie`
+
+- SwiftUI : annuaire du général avec nom et photo, profil limité au nom et à la photo, lecture seule après la fin du lien (composeur masqué), suppression pour moi et pour tout le monde, actions des administrateurs du groupe, réactions, réponse citée, bandeau des messages épinglés, recherche locale dans l'historique scellé AES-GCM, accusés de lecture, sondages, signalement de messages choisis. [Décisions](messaging-ios-v2-20261023.md).
+- Déchiffrement et scellement pour les administrateurs : interfaces de l'agent crypto. Les implémentations par défaut restent indisponibles et échouent fermé.
+- **Rien d'exécuté** : XCTest `MessagingThreadTests` et UI `MessagingThreadUITests` écrits, non compilés et non lancés (#84, pas de runner Apple ici). Aucun résultat VoiceOver ou Dynamic Type sur appareil revendiqué. `changes?afterChange` n'est pas encore consommé.
+
 ## 23 octobre 2026 : messagerie #65, livraison partielle sur branche isolée
 
 - Branche `openai/65-messagerie`, base `master` à `6d08b40`, PR **#96 en brouillon**. Aucun changement de notre part dans le worktree `vague/cours-collectifs`. [Périmètre, commits, tableau des issues et arbitrages](messaging-20261023.md), [matrice #78/#84](../qa/messaging-78-20261023.md), [revue ciblée](messaging-review-20261023.md).
