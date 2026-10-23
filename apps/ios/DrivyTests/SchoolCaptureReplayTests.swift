@@ -5,10 +5,12 @@ import Testing
 @MainActor struct SchoolCaptureReplayTests {
     @Test func retryBudgetBacksOffAndNeverShortensServerAdvice() {
         var budget = SchoolReplayRetryBudget()
-        #expect(budget.nextDelay(minimum: 1, elapsed: 0) == 2)
-        #expect(budget.nextDelay(minimum: 1, elapsed: 2) == 4)
-        #expect(budget.nextDelay(minimum: 20, elapsed: 6) == 20)
-        #expect(budget.nextDelay(minimum: 120, elapsed: 26) == nil)
+        // Evaluate mutating calls outside Testing macros, as with the rebuild pacer tests.
+        let adviceDelays = [budget.nextDelay(minimum: 1, elapsed: 0),
+            budget.nextDelay(minimum: 1, elapsed: 2),
+            budget.nextDelay(minimum: 20, elapsed: 6),
+            budget.nextDelay(minimum: 120, elapsed: 26)]
+        #expect(adviceDelays == [2, 4, 20, nil])
         var bounded = SchoolReplayRetryBudget()
         let delays = (0..<7).map { _ in bounded.nextDelay(minimum: 1, elapsed: 0) }
         #expect(delays == [2, 4, 8, 16, 30, 30, nil])
