@@ -50,3 +50,17 @@
   .agenda-day-heading { gap: .5rem; }
 }
 .agenda-freshness { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .75rem; }
+
+/* Cours collectifs (#38) */
+.course-add { position: relative; }
+.course-add-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 20; display: grid; min-width: 12rem; padding: 4px; border-radius: 12px; background: var(--surface, Canvas); box-shadow: 0 8px 24px rgb(0 0 0 / .14); }
+.course-add-menu .button { justify-content: flex-start; }
+.course-form, .course-fieldset { display: grid; gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.course-type-row, .course-capacity { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.course-numbers { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.course-sessions { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.course-session { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; padding-block-end: 12px; border-block-end: 1px solid var(--line, rgb(0 0 0 / .1)); }
+.course-session .field-error { grid-column: 1 / -1; }
+.course-preview-list { margin: 0; padding-inline-start: 1.2rem; display: grid; gap: 4px; }
+.course-editor-heading { display: flex; gap: 12px; align-items: center; }
+.course-editor-heading > .button { margin-inline-start: auto; }

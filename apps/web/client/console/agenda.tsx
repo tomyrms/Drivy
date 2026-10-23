@@ -12,6 +12,9 @@ import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
 import { useListState } from './list-state';
 import { distinctLabel, homonymReferences } from '../person-reference';
+import { AgendaAddMenu, CourseWorkspace, LessonInAppDialog, readCourseCatalogue } from './courses';
+import { courseSeriesListSchema, seriesByDay } from './course-model';
+import { readSchool } from '../school-api';
 import './agenda-studio.css';
 
 const agendaRefreshMs = 60_000;
@@ -68,11 +71,28 @@ export function AgendaSection() {
   }, [refreshLessons, refreshDirectory]);
   const refreshNow = () => { lastRead.current = Date.now(); loaded.reload(); directory.refresh?.(); };
   const data = loaded.data;
+  // Cours collectifs : catalogue (droit de gestion) et séries de la semaine. Une erreur ici ne bloque pas l'agenda des leçons.
+  const catalogue = useLoad(() => readCourseCatalogue(schoolId), [schoolId, revision]);
+  const courses = useLoad(async () => {
+    if (!bounds) return [];
+    return (await readSchool(schoolId, 'course-series', courseSeriesListSchema, { from: bounds.from, to: bounds.to })).items;
+  }, [schoolId, revision, bounds?.from, bounds?.to], `${schoolId}/${monday}`);
+  const [course, setCourse] = useState<{ id: string | null } | null>(null);
+  const [lessonHelp, setLessonHelp] = useState(false);
+  const courseDays = useMemo(() => bounds ? seriesByDay(courses.data ?? [], instant => civilDateIn(school.timeZone, Date.parse(instant)), Date.parse(bounds.from), Date.parse(bounds.to)) : new Map<string, ReturnType<typeof seriesByDay> extends Map<string, infer V> ? V : never>(),
+    [courses.data, bounds?.from, bounds?.to, school.timeZone]);
+  const reloadCourses = courses.reload;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
   const instructorReferences = useMemo(() => homonymReferences(instructors.map(item => ({ id: item.id, label: item.displayName }))), [instructors]);
   const searchQuery = agendaSearchQuery(directory, search);
-  const days = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchQuery), school.timeZone),
+  const lessonDays = useMemo(() => groupByDay(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchQuery), school.timeZone),
     [data, directory.data, searchQuery, school.timeZone]);
+  // Les cours s'ajoutent aux jours de leçons ; une recherche d'élève ne montre que les leçons.
+  const days = useMemo(() => {
+    if (searchQuery || instructor) return lessonDays;
+    const all = new Set([...lessonDays.map(day => day.day), ...courseDays.keys()]);
+    return [...all].sort().map(day => ({ day, items: lessonDays.find(item => item.day === day)?.items ?? [] }));
+  }, [lessonDays, courseDays, searchQuery, instructor]);
   const lessonCount = days.reduce((total, day) => total + day.items.length, 0);
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
@@ -82,10 +102,14 @@ export function AgendaSection() {
   return (
     <div className="section-stack agenda-studio">
       <SectionHeading context="Planning" title="Agenda" actions={<div className="agenda-freshness">
+        <AgendaAddMenu canCreateCourse={catalogue.data?.canManage === true} onLesson={() => setLessonHelp(true)} onCourse={() => setCourse({ id: null })} />
         {readAt !== undefined && <span className="caption">À jour à <time dateTime={new Date(readAt).toISOString()}>{formatClock(readAt, school.timeZone)}</time></span>}
         <button type="button" className="button quiet" onClick={refreshNow} disabled={loaded.status === 'loading'} aria-busy={loaded.status === 'loading'}>
           <Symbol kind="refresh" bare />Actualiser</button>
       </div>} />
+      <LessonInAppDialog open={lessonHelp} onClose={() => setLessonHelp(false)} />
+      {course && catalogue.data && <CourseWorkspace key={course.id ?? 'new'} seriesId={course.id} catalogue={catalogue.data}
+        onClose={() => setCourse(null)} onSaved={saved => { reloadCourses(); setCourse(saved ? { id: saved.id } : null); }} />}
       <PlanningReadinessBanner />
       <FirstLessonActions />
       <div className="agenda-studio-toolbar">
@@ -128,7 +152,26 @@ export function AgendaSection() {
               <h2 id={`day-${day.day}`} className="section-title agenda-day-date"><span className="agenda-day-name">{weekday}</span>{' '}<time className="agenda-day-number" dateTime={day.day}>{date.join(' ')}</time></h2>
               <span className="agenda-day-count">{day.items.length} {day.items.length === 1 ? 'leçon' : 'leçons'}</span>
             </div>
-            <ul className="row-list">{day.items.map(lesson => {
+            {!searchQuery && !instructor && (courseDays.get(day.day)?.length ?? 0) > 0 && <ul className="row-list agenda-courses" aria-label="Cours collectifs">
+              {courseDays.get(day.day)!.map(({ series, occurrence }) => {
+                const [start, end] = formatTimeRange(occurrence.startsAt, occurrence.endsAt, school.timeZone).split('–');
+                return <li key={occurrence.id} className={series.status === 'CANCELLED' ? 'muted-row' : undefined}>
+                  <button type="button" className="agenda-lesson" onClick={() => setCourse({ id: series.id })}>
+                    <span className="agenda-time"><time dateTime={occurrence.startsAt}>{start}</time><span className="visually-hidden"> à </span><time dateTime={occurrence.endsAt}>{end}</time></span>
+                    <span className="agenda-identity">
+                      <span className="agenda-identity-top"><span className="row-title">{series.title}</span>
+                        {series.status === 'DRAFT' && <StatusBadge tone="neutral" symbol="edit">Brouillon</StatusBadge>}
+                        {series.status === 'CANCELLED' && <StatusBadge tone="neutral" symbol="ban">Annulé</StatusBadge>}
+                      </span>
+                      <span className="row-meta agenda-lesson-meta"><span>{occurrence.instructorDisplayName}</span><span>{series.seatsTaken} / {series.capacity}</span>{series.location && <span>{series.location}</span>}</span>
+                    </span>
+                    <span className="agenda-open-indicator flip"><Symbol kind="back" bare /></span>
+                    <span className="visually-hidden">Ouvrir le cours</span>
+                  </button>
+                </li>;
+              })}
+            </ul>}
+            {day.items.length > 0 && <ul className="row-list">{day.items.map(lesson => {
               const phase = lessonPhase(lesson, now);
               const state = lessonState[phase];
               const [start, end] = formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone).split('–');
@@ -149,7 +192,7 @@ export function AgendaSection() {
                   <span className="visually-hidden">Ouvrir le dossier</span>
                 </button>
               </li>;
-            })}</ul>
+            })}</ul>}
           </section>; })}</div>}
       </>}</LoadState>
     </div>

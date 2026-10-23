@@ -27,6 +27,12 @@ struct SchoolAgendaView: View {
     @State private var dayIndex: [Date: [SchoolLesson]] = [:]
     /// Administration qui enseigne aussi : ses leçons par défaut, toute l’école sur demande.
     @State private var wholeSchool = false
+    /// Cours collectifs (#38) : séances de la fenêtre lue, catalogue pour savoir qui peut en créer.
+    @State private var courses: [SchoolCourseSeries] = []
+    @State private var coursesScope: SchoolAgendaScope?
+    @State private var courseCatalogue: SchoolCourseCatalogue?
+    @State private var courseEditor: SchoolCourseEditorWorkspace?
+    @State private var courseDetail: SchoolCourseDetailWorkspace?
 
     private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
     private var mayPlan: Bool { workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true && workspace.school?.status == "ACTIVE" }
@@ -74,6 +80,13 @@ struct SchoolAgendaView: View {
         return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
     }
     private var emptyPresentation: SchoolAgendaEmptyPresentation { SchoolAgendaEmptyPresentation(mayPlan: mayPlan) }
+    private var schoolTimeZone: String { calendar.timeZone.identifier }
+    private var mayCreateCourse: Bool { mayPlan && courseCatalogue?.canManage == true }
+    /// Séances de cours du jour choisi, dans l’ordre.
+    private var dailyCourses: [SchoolAgendaCourseItem] {
+        guard let coursesScope, coursesScope.prefix == scopePrefix, coursesScope.range.contains(calendar.startOfDay(for: selectedDate)) else { return [] }
+        return SchoolAgendaCourseItem.items(courses, on: selectedDate, calendar: calendar)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -116,6 +129,8 @@ struct SchoolAgendaView: View {
         // Réapparition de l’onglet : la période affichée reste en place pendant la relecture, et une feuille
         // ouverte n’est jamais refermée par elle. Un changement de compte ou de filtre repart de zéro (`loaded`).
         .task(id: currentScope) { await loadAgenda(keepingCurrent: true, navigating: true) }
+        .task(id: currentScope) { await loadCourses() }
+        .task(id: identityScope) { await loadCourseCatalogue() }
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
             if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }
             // La fermeture de la feuille relira déjà l’agenda ; ne pas ajouter de requête concurrente.
@@ -137,8 +152,15 @@ struct SchoolAgendaView: View {
         }) { model in
             SchoolPlanningView(model: model, onConfirmedLesson: { planningReturn.receive($0) })
         }
+        .sheet(item: $courseEditor, onDismiss: { Task { await loadCourses() } }) { model in
+            SchoolCourseEditorView(model: model)
+        }
+        .sheet(item: $courseDetail, onDismiss: { Task { await loadCourses() } }) { model in
+            SchoolCourseDetailView(model: model, timeZone: schoolTimeZone)
+        }
         .onChange(of: identityScope) { _, _ in
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
+            courseEditor = nil; courseDetail = nil; courses = []; coursesScope = nil; courseCatalogue = nil
             planningReturn = SchoolAgendaPlanningReturn(); freshness.reset()
         }
         // Retour au premier plan : la période se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
@@ -193,7 +215,7 @@ struct SchoolAgendaView: View {
             }
             if !isLoaded(selectedDate) && error == nil {
                 DrivySkeletonRows(count: 3, leading: .time).drivySkeleton("Chargement de l’agenda…")
-            } else if isLoaded(selectedDate) && dailyLessons.isEmpty {
+            } else if isLoaded(selectedDate) && dailyLessons.isEmpty && dailyCourses.isEmpty {
                 // Qui planifie a déjà « Planifier une leçon » dans l’en-tête du jour : pas de second bouton identique.
                 DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
                     symbol: "calendar", actionTitle: emptyPresentation.nextDayActionTitle) {
@@ -207,6 +229,12 @@ struct SchoolAgendaView: View {
                         }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint("Ouvre la leçon")
+                    }
+                    ForEach(dailyCourses) { item in
+                        Button { open(item.series) } label: { courseRow(item) }
+                            .buttonStyle(DrivyRowButtonStyle())
+                            .accessibilityHint(item.series.isDraft && item.series.canManage ? "Ouvre le brouillon" : "Ouvre le cours")
+                            .accessibilityIdentifier("agenda-course-occurrence")
                     }
                 }
             }
@@ -321,10 +349,55 @@ struct SchoolAgendaView: View {
             }
         }
     }
-    private var planButton: some View {
-        Button { planningModel = newPlanningModel() } label: { Label("Planifier une leçon", systemImage: "plus") }
-            .buttonStyle(.drivyText)
-            .accessibilityIdentifier("agenda-plan-lesson")
+    @ViewBuilder private var planButton: some View {
+        if mayCreateCourse {
+            // Qui gère les cours choisit : une leçon (parcours inchangé) ou un cours collectif.
+            Menu {
+                Button { planningModel = newPlanningModel() } label: { Label("Leçon", systemImage: "car") }
+                    .accessibilityIdentifier("agenda-plan-lesson")
+                Button { courseEditor = newCourseEditor() } label: { Label("Cours collectif", systemImage: "person.3") }
+                    .accessibilityIdentifier("agenda-plan-course")
+            } label: { Label("Ajouter", systemImage: "plus") }
+                .buttonStyle(.drivyText)
+                .accessibilityIdentifier("agenda-add")
+        } else {
+            Button { planningModel = newPlanningModel() } label: { Label("Planifier une leçon", systemImage: "plus") }
+                .buttonStyle(.drivyText)
+                .accessibilityIdentifier("agenda-plan-lesson")
+        }
+    }
+    private func courseRow(_ item: SchoolAgendaCourseItem) -> some View {
+        let details = [item.series.typeTitle, item.series.location].filter { !$0.isEmpty }
+        return DrivyLessonRow(start: time(item.occurrence.start), end: time(item.occurrence.end), title: item.series.title,
+            details: details, note: item.series.isDraft ? DrivyRowNote(text: "Brouillon") : nil)
+    }
+    private func open(_ series: SchoolCourseSeries) {
+        guard let membership = workspace.membership else { return }
+        if series.isDraft && series.canManage {
+            courseEditor = SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
+                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series)
+        } else {
+            courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series)
+        }
+    }
+    private func newCourseEditor() -> SchoolCourseEditorWorkspace? {
+        guard let membership = workspace.membership, mayCreateCourse else { return nil }
+        return SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
+            timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, day: selectedDate)
+    }
+    /// Séances de la fenêtre affichée ; un échec garde ce qui est déjà lu (les leçons portent l’erreur de l’agenda).
+    @MainActor private func loadCourses() async {
+        let wanted = currentScope
+        guard let schoolID = workspace.membership?.schoolId, workspace.school?.status == "ACTIVE" else { return }
+        guard let items = try? await client.courseClient.series(schoolID: schoolID, from: wanted.range.start, to: wanted.range.end),
+              !Task.isCancelled, currentScope == wanted else { return }
+        courses = items; coursesScope = wanted
+    }
+    @MainActor private func loadCourseCatalogue() async {
+        guard mayPlan, let schoolID = workspace.membership?.schoolId else { courseCatalogue = nil; return }
+        let wanted = identityScope
+        guard let catalogue = try? await client.courseClient.catalogue(schoolID: schoolID), !Task.isCancelled, identityScope == wanted else { return }
+        courseCatalogue = catalogue
     }
     @ViewBuilder private var dayPicker: some View {
         if typeSize.isAccessibilitySize { compactDayPicker }

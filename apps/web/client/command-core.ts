@@ -17,7 +17,8 @@ export type CommandKind =
   | 'updateModules' | 'recordPermitCheck'
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
-  | 'createFormation' | 'saveFormationProgramme' | 'saveTariff';
+  | 'createFormation' | 'saveFormationProgramme' | 'saveTariff'
+  | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -68,6 +69,12 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   createFormation: { operationType: 'CREATE_FORMATION', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une formation' },
   saveFormationProgramme: { operationType: 'UPDATE_FORMATION_PROGRAMME', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Modification d’une formation' },
   saveTariff: { operationType: 'SAVE_TARIFF', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un tarif' },
+  // Cours collectifs (#38).
+  createCourseType: { operationType: 'CREATE_COURSE_TYPE', resourceType: 'CourseType', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’un type de cours' },
+  createCourseSeries: { operationType: 'CREATE_COURSE_SERIES', resourceType: 'CourseSeries', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un cours' },
+  updateCourseSeries: { operationType: 'UPDATE_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Enregistrement d’un cours' },
+  publishCourseSeries: { operationType: 'PUBLISH_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Publication d’un cours' },
+  changeCourseCapacity: { operationType: 'CHANGE_COURSE_CAPACITY', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement de capacité d’un cours' },
 };
 
 export interface SchoolCommand {
@@ -265,6 +272,21 @@ export function commandMessage(code: string): string {
     TARIFF_CHANGED: 'Ce tarif a été modifié entre-temps. Votre saisie est conservée : rechargez la fiche, relisez la version actuelle, puis enregistrez.',
     TARIFF_UNCHANGED: 'Aucune modification à enregistrer.',
     TARIFF_SCHEDULING_UNSUPPORTED: 'Une modification de tarif s’applique dès aujourd’hui ; une date future laisserait ce tarif sans prix applicable.',
+    COURSE_ACCESS_REQUIRED: 'Vos accès ne permettent pas de gérer les cours.',
+    COURSE_INSTRUCTOR_CONFLICT: 'Un moniteur est déjà pris pendant une séance. Le brouillon est conservé.',
+    COURSE_OCCURRENCES_OVERLAP: 'Deux séances se chevauchent.',
+    COURSE_OCCURRENCES_REQUIRED: 'Ajoutez au moins une séance.',
+    COURSE_IN_PAST: 'La première séance est déjà passée.',
+    COURSE_NOT_DRAFT: 'Ce cours est déjà publié.',
+    COURSE_NOT_PUBLISHED: 'Ce cours n’est pas publié.',
+    COURSE_CAPACITY_BELOW_TAKEN: 'La capacité ne peut pas descendre sous les places prises.',
+    COURSE_CAPACITY_BELOW_MINIMUM: 'La capacité doit rester au moins égale au minimum.',
+    COURSE_TYPE_EXISTS: 'Ce type de cours existe déjà.',
+    COURSE_TYPE_UNKNOWN: 'Ce type de cours n’est plus disponible.',
+    COURSE_TYPE_PREDEFINED: 'Les types prédéfinis ne se modifient pas.',
+    COURSE_CONFLICT: 'Ce changement entre en conflit avec l’agenda.',
+    INSTRUCTOR_NOT_ACTIVE: 'Un moniteur n’est plus actif.',
+    RESPONSIBLE_NOT_ACTIVE: 'Le responsable n’est plus actif.',
     REQUEST_FAILED: 'L’école a refusé cette demande.',
   };
   return messages[code] ?? 'La demande n’a pas pu être confirmée. Vérifiez son résultat auprès de l’école avant de continuer.';

@@ -101,6 +101,23 @@ describe('Liste blanche des routes de gestion', () => {
     expect(themesWrite?.route.ifMatch).toBe(true);
     expect(themesWrite?.route.bodyLimit).toBeGreaterThan(1_000);
     expect(themesWrite?.route.bodyLimit).toBeLessThanOrEqual(8_192);
+    // Cours collectifs : écritures versionnées là où l'API exige If-Match, corps bornés.
+    const series = training;
+    for (const [method, path, ifMatch, limit] of [
+      ['POST', `/schools/${school}/course-types`, false, 8_192], ['PATCH', `/schools/${school}/course-types/${series}`, true, 8_192],
+      ['PUT', `/schools/${school}/course-policy`, true, 2_048], ['POST', `/schools/${school}/course-series`, false, 64_000],
+      ['PUT', `/schools/${school}/course-series/${series}`, true, 64_000], ['POST', `/schools/${school}/course-series/${series}/publish`, true, 1_024],
+      ['POST', `/schools/${school}/course-series/${series}/capacity`, true, 1_024],
+    ] as const) {
+      const match = matchSchoolRoute(method, path, '');
+      expect(match?.route.ifMatch === true, `${method} ${path}`).toBe(ifMatch);
+      expect(match?.route.bodyLimit, `${method} ${path}`).toBe(limit);
+    }
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-catalogue`, '')?.path).toBe(`/v1/schools/${school}/course-catalogue`);
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-series`, '?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&status=DRAFT')).toBeDefined();
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-series`, '?status=OPEN')).toBeUndefined();
+    expect(matchSchoolRoute('DELETE', `/schools/${school}/course-series/${series}`, '')).toBeUndefined();
+    expect(matchSchoolRoute('PUT', `/schools/${school}/course-series`, '')).toBeUndefined();
     expect(matchSchoolRoute('GET', `/schools/${school}/lessons`, `?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`)?.query)
       .toBe(`?from=2026-09-28T00%3A00%3A00Z&to=2026-10-05T00%3A00%3A00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`);
     for (const [method, path, search] of [

@@ -98,6 +98,17 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   // Signalements configurables : un réglage d'école versionné (ordre et affichage des quinze thèmes).
   { method: 'GET', segments: ['observation-themes'] },
   { method: 'PUT', segments: ['observation-themes'], ifMatch: true, bodyLimit: 4_096 },
+  // Cours collectifs (#38) : catalogue, types, conditions d'annulation, séries brouillon puis publiées.
+  { method: 'GET', segments: ['course-catalogue'] },
+  { method: 'POST', segments: ['course-types'], bodyLimit: 8_192 },
+  { method: 'PATCH', segments: ['course-types', ':id'], ifMatch: true, bodyLimit: 8_192 },
+  { method: 'PUT', segments: ['course-policy'], ifMatch: true, bodyLimit: 2_048 },
+  { method: 'GET', segments: ['course-series'], query: ['from', 'to', 'status'] },
+  { method: 'GET', segments: ['course-series', ':id'] },
+  { method: 'POST', segments: ['course-series'], bodyLimit: 64_000 },
+  { method: 'PUT', segments: ['course-series', ':id'], ifMatch: true, bodyLimit: 64_000 },
+  { method: 'POST', segments: ['course-series', ':id', 'publish'], ifMatch: true, bodyLimit: 1_024 },
+  { method: 'POST', segments: ['course-series', ':id', 'capacity'], ifMatch: true, bodyLimit: 1_024 },
   // Lectures seules : agenda de l'école, progression et bilans publiés.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
   { method: 'GET', segments: ['captures'], query: list },
@@ -115,7 +126,8 @@ const queryRules: Record<QueryKey, RegExp> = {
   noticeVersionId: uuid,
   learnerId: uuid,
   action: /^(?:ENTER|PLAN_LESSON)$/,
-  status: /^(?:ACTIVE|ARCHIVED|ALL)$/,
+  // Dossiers (ACTIVE, ARCHIVED, ALL) et séries de cours (DRAFT, PUBLISHED, CANCELLED, CLOSED) ; l'API relit chaque valeur.
+  status: /^(?:ACTIVE|ARCHIVED|ALL|DRAFT|PUBLISHED|CANCELLED|CLOSED)$/,
   trainingId: uuid,
   instructorMembershipId: uuid,
   from: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
