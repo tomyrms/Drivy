@@ -121,6 +121,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     const updater = await pool.connect();
     try {
       await updater.query('BEGIN');
+      await updater.query('UPDATE drivy.school SET version=version+1 WHERE id=$1', [id.schoolA]);
       await updater.query('UPDATE drivy.membership SET access_epoch=access_epoch+1 WHERE id=$1', [id.adminMember]);
       const pending = req('demo-admin', 'POST', `${path}/conversations/${conversationId}/messages`,
         { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } });

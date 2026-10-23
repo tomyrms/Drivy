@@ -29,6 +29,8 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     let broken = false;
     try {
       await db.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      await db.query("SET LOCAL lock_timeout='5s'");
+      await db.query("SET LOCAL statement_timeout='10s'");
       await db.query('SET LOCAL ROLE drivy_app');
       await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject',$2,true),set_config('app.school_id',$3,true)",
         [identity.issuer, identity.subject, schoolId]);
@@ -37,8 +39,13 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
       const personId = link.rows[0].personId;
       if (personId.toLowerCase() !== expectedActor.toLowerCase()) throw forbidden();
       await db.query("SELECT set_config('app.person_id',$1,true)", [personId]);
+      // Match schoolCommand: person, school, then membership, with epoch checked under lock.
+      const person = await db.query('SELECT id FROM drivy.person WHERE id=$1 AND status=\'ACTIVE\' FOR SHARE', [personId]);
+      if (!person.rows[0]) throw forbidden();
+      const school = await db.query('SELECT id FROM drivy.school WHERE id=$1 AND status=\'ACTIVE\' FOR SHARE', [schoolId]);
+      if (!school.rows[0]) throw forbidden();
       const member = await db.query<{ id: string; accessEpoch: number }>(`SELECT m.id,m.access_epoch AS "accessEpoch" FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
-        WHERE m.school_id=$1 AND m.person_id=$2 AND m.status='ACTIVE' AND p.status='ACTIVE' FOR SHARE OF m,p`, [schoolId, personId]);
+        WHERE m.school_id=$1 AND m.person_id=$2 AND m.status='ACTIVE' AND p.status='ACTIVE' FOR SHARE OF m`, [schoolId, personId]);
       if (!member.rows[0] || member.rows[0].accessEpoch !== expectedEpoch) throw forbidden();
       await db.query("SELECT set_config('app.membership_id',$1,true)", [member.rows[0].id]);
       const result = await work(db, { schoolId, personId, membershipId: member.rows[0].id });
