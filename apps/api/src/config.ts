@@ -7,6 +7,9 @@ const schema = z.object({
   OIDC_AUDIENCE: z.string().min(1),
   OIDC_JWKS_URL: z.url(),
   CURSOR_SECRET: z.string().min(32),
+  MESSAGING_MODE: z.enum(['disabled', 'qualification']).default('disabled'),
+  MESSAGING_QUALIFICATION_SCHOOL_IDS: z.string().default('').transform(value => value.trim() === '' ? [] : value.split(',').map(id => id.trim().toLowerCase()))
+    .pipe(z.array(z.uuid()).max(100)).transform(ids => [...new Set(ids)]),
   // Facultatif : clé propre aux codes d'invitation. Sans elle, la clé se dérive de CURSOR_SECRET (HKDF, étiquette dédiée).
   INVITATION_CODE_SECRET: z.string().min(32).optional(),
   // Facultatif : adresses du proxy public (liste séparée par des virgules) dont l'en-tête X-Forwarded-For est cru.
@@ -22,6 +25,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Configuration API manquante/invalide : ${parsed.error.issues.map(issue => issue.path.join('.')).join(', ')}`);
   }
   const config = parsed.data;
+  if (config.MESSAGING_MODE === 'qualification' && config.MESSAGING_QUALIFICATION_SCHOOL_IDS.length === 0) {
+    throw new Error('MESSAGING_QUALIFICATION_SCHOOL_IDS doit contenir une école autorisée en mode qualification.');
+  }
   for (const name of ['OIDC_ISSUER', 'OIDC_JWKS_URL'] as const) {
     const url = new URL(config[name]);
     if (url.username || url.password || (url.protocol !== 'https:' &&

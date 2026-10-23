@@ -41,6 +41,7 @@ import Observation
     private var resuming = false
     private var loadedConversations = false
     private var loadedMessages: Set<UUID> = []
+    private var visibleMessageConversationID: UUID?
 
     init(scope: MessagingScope, service: any MessagingService = UnavailableMessagingService(),
          cryptography: any MessagingCryptography = UnavailableMessagingCryptography(),
@@ -92,6 +93,7 @@ import Observation
 
     func refreshVisible(conversationID: UUID? = nil) async {
         guard !resuming, currentScope() == scope else { return }
+        if let conversationID { visibleMessageConversationID = conversationID }
         resuming = true
         defer { resuming = false; resumeGeneration += 1 }
         let results = await outbox.flushPending(currentScope: scope)
@@ -104,10 +106,12 @@ import Observation
         }
         guard currentScope() == scope else { recordFailure(.contextChanged); return }
         await loadConversations()
-        if let conversationID { await loadMessages(conversationID) }
+        if let conversationID, visibleMessageConversationID == conversationID { await loadMessages(conversationID) }
     }
 
     func loadMessages(_ conversationID: UUID, more: Bool = false) async {
+        visibleMessageConversationID = conversationID
+        if error == .membersChanged { error = nil }
         guard !loading, !more || messageCursors[conversationID] != nil else { return }
         loading = true; defer { loading = false }
         do {
@@ -134,6 +138,9 @@ import Observation
             }
             loadedMessages.insert(conversationID)
             error = nil
+            let membersChanged = await outbox.hasMembersConflict(conversationID: conversationID, currentScope: scope)
+            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            if visibleMessageConversationID == conversationID, membersChanged { error = .membersChanged }
         } catch let failure as MessagingFailure { recordFailure(failure) }
         catch { self.error = .unavailable }
     }

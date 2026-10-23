@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import type { IncomingHttpHeaders } from 'node:http';
 import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
+import { messagingSchoolGate, type MessagingAccessOptions } from './messaging-access.js';
 import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
 import { eligibleContacts, generalMembers, generalRemovedMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
@@ -16,16 +17,17 @@ const conversation = base.extend({ conversationId: id });
 const envelope = z.object({ scheme: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/), keyId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
   payload: z.string().min(4).max(12000).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }).strict();
 const message = z.object({ clientMessageId: id, ciphertext: envelope, mentionPersonIds: z.array(id).max(8).default([]),
+  expectedMembersEpoch: z.number().int().min(0).safe().optional(),
   replyToMessageId: id.nullable().optional(),
   poll: z.object({ optionCount: z.number().int().min(2).max(12), multiple: z.boolean().default(false) }).strict().nullable().optional() }).strict();
 const directoryQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), cursor: id.optional() }).strict();
 
-/** Synthetic mode is only injectable in a test process; no production fallback enables messages. */
-export function registerMessaging(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier; mode?: 'disabled' | 'test-synthetic' }) {
-  const enabled = options.mode === 'test-synthetic' && process.env.NODE_ENV === 'test';
+/** Qualification explicite par école, identité OIDC et droits serveur toujours obligatoires. */
+export function registerMessaging(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier } & MessagingAccessOptions) {
+  const enabled = messagingSchoolGate(options);
   async function execute<T>(headers: IncomingHttpHeaders, requestId: string,
     schoolId: string, work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>): Promise<T> {
-    if (!enabled) throw messagingUnavailable();
+    if (!enabled(schoolId)) throw messagingUnavailable();
     const expectedActor = id.parse(headers['x-drivy-expected-person-id']);
     const expectedEpoch = z.coerce.number().int().positive().safe().parse(headers['x-drivy-expected-access-epoch']);
     const identity = await options.verifyToken(headers.authorization);
@@ -103,7 +105,8 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     const { schoolId, conversationId } = conversation.parse(request.params);
     const body = message.parse(request.body);
     return execute(request.headers, request.id, schoolId, (db, actor) => sendEnvelope(db, actor, conversationId,
-      body.clientMessageId, body.ciphertext, body.mentionPersonIds, body.replyToMessageId ?? null, body.poll ?? null).then(data => ({ data })));
+      body.clientMessageId, body.ciphertext, body.mentionPersonIds, body.replyToMessageId ?? null, body.poll ?? null,
+      body.expectedMembersEpoch).then(data => ({ data })));
   });
   app.put(`${path}/conversations/:conversationId/read-state`, request => {
     const { schoolId, conversationId } = conversation.parse(request.params);

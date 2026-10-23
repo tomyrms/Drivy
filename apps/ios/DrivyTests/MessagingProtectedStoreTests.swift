@@ -9,7 +9,8 @@ final class MessagingProtectedStoreTests: XCTestCase {
         let store = try MessagingProtectedStore(scope: scope)
         let conversation = UUID()
         let pending = MessagingPending(clientMessageID: UUID(), conversationID: conversation,
-            ciphertext: MessagingCiphertext(scheme: "TEST_ONLY:1", keyID: "fixture", payload: Data([9, 8, 7])))
+            ciphertext: MessagingCiphertext(scheme: "TEST_ONLY:1", keyID: "fixture", payload: Data([9, 8, 7]), expectedMembersEpoch: 13),
+            recoveryContent: Data("synthetic-recovery-private".utf8))
         try await store.saveDraft("synthetic-draft-private", conversationID: conversation, scope: scope)
         try await store.put(pending, scope: scope)
         let restarted = try MessagingProtectedStore(scope: scope)
@@ -17,6 +18,23 @@ final class MessagingProtectedStoreTests: XCTestCase {
         let queued = try await restarted.entries(scope: scope)
         XCTAssertEqual(draft, "synthetic-draft-private")
         XCTAssertEqual(queued.map(\.clientMessageID), [pending.clientMessageID])
+        XCTAssertEqual(queued.first?.ciphertext.expectedMembersEpoch, 13)
+        XCTAssertEqual(queued.first?.recoveryContent, pending.recoveryContent)
+        for replacement in [
+            MessagingPending(clientMessageID: pending.clientMessageID, conversationID: conversation,
+                ciphertext: MessagingCiphertext(scheme: "TEST_ONLY:1", keyID: "fixture", payload: Data([9, 8, 7]), expectedMembersEpoch: 14),
+                recoveryContent: pending.recoveryContent),
+            MessagingPending(clientMessageID: pending.clientMessageID, conversationID: conversation,
+                ciphertext: pending.ciphertext, recoveryContent: Data("autre contenu".utf8))
+        ] {
+            do {
+                try await restarted.put(replacement, scope: scope)
+                XCTFail("Une intention durable ne change ni d'époque ni de contenu")
+            } catch MessagingFailure.invalidResponse {}
+        }
+        let unchanged = try await restarted.entries(scope: scope)
+        XCTAssertEqual(unchanged.first?.ciphertext, pending.ciphertext)
+        XCTAssertEqual(unchanged.first?.recoveryContent, pending.recoveryContent)
 
         let descriptor = "\(scope.accountID.uuidString.lowercased())|\(scope.schoolID.uuidString.lowercased())|\(scope.accessEpoch)|\(scope.apiBaseURL)"
         let fingerprint = SHA256.hash(data: Data(descriptor.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -24,6 +42,7 @@ final class MessagingProtectedStoreTests: XCTestCase {
             appropriateFor: nil, create: false).appendingPathComponent("MessagingProtected")
         let bytes = try Data(contentsOf: directory.appendingPathComponent(fingerprint + ".sealed"))
         XCTAssertFalse(bytes.range(of: Data("synthetic-draft-private".utf8)) != nil)
+        XCTAssertNil(bytes.range(of: Data("synthetic-recovery-private".utf8)))
 
         let other = MessagingScope(accountID: UUID(), schoolID: scope.schoolID,
                                    accessEpoch: scope.accessEpoch, apiBaseURL: scope.apiBaseURL)

@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import type { IncomingHttpHeaders } from 'node:http';
 import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
+import { messagingSchoolGate, type MessagingAccessOptions } from './messaging-access.js';
 import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
 import { messagingUnavailable } from './messaging.js';
@@ -15,11 +16,11 @@ const base = z.object({ schoolId: id });
 const versionQuery = z.object({ version: z.string().regex(/^[1-9][0-9]{0,14}$/) }).strict();
 
 /** Relais de clés Matrix : même garde que la messagerie, plus l'appareil déclaré par X-Drivy-Device-Id. */
-export function registerMessagingKeys(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier; mode?: 'disabled' | 'test-synthetic' }) {
-  const enabled = options.mode === 'test-synthetic' && process.env.NODE_ENV === 'test';
+export function registerMessagingKeys(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier } & MessagingAccessOptions) {
+  const enabled = messagingSchoolGate(options);
   async function execute(headers: IncomingHttpHeaders, requestId: string, schoolId: string,
     work: (db: PoolClient, actor: KeyActor) => Promise<object>, register = true): Promise<object> {
-    if (!enabled) throw messagingUnavailable();
+    if (!enabled(schoolId)) throw messagingUnavailable();
     const expectedActor = id.parse(headers['x-drivy-expected-person-id']);
     const expectedEpoch = z.coerce.number().int().positive().safe().parse(headers['x-drivy-expected-access-epoch']);
     const deviceId = z.string().regex(deviceIdPattern).parse(headers['x-drivy-device-id']);

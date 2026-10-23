@@ -154,10 +154,90 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         let first = try await a.encrypt(Data("Un".utf8), mentions: [], scope: aScope, conversationID: conversation)
         let steady = try await a.encrypt(Data("Deux".utf8), mentions: [], scope: aScope, conversationID: conversation)
         XCTAssertEqual(first.keyID, steady.keyID)
+        XCTAssertEqual(first.expectedMembersEpoch, 0)
+        XCTAssertEqual(steady.expectedMembersEpoch, 0)
         await relay.setMembers(conversation, [alice])
         await relay.setMembers(conversation, [alice, bob])
         let after = try await a.encrypt(Data("Trois".utf8), mentions: [], scope: aScope, conversationID: conversation)
         XCTAssertNotEqual(steady.keyID, after.keyID)
+        XCTAssertEqual(after.expectedMembersEpoch, 2)
+    }
+
+    /// B ne chiffre jamais de message : sa sauvegarde doit inclure la clé reçue d'A.
+    func testReadOnlyRecipientBacksUpReceivedKeyAndNewDeviceRestores() async throws {
+        let relay = InMemoryRelay()
+        let alice = UUID(), bob = UUID()
+        await relay.setMembers(conversation, [alice, bob])
+        let aScope = MessagingScope(accountID: alice, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let bScope = MessagingScope(accountID: bob, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let a = try makeDevice(aScope, relay: relay)
+        let b = try makeDevice(bScope, relay: relay)
+        let recovery = try await b.enableBackup(scope: bScope)
+        let encrypted = try await a.encrypt(Data("Lecture seule".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: alice,
+                                           acceptedAt: Date(), ciphertext: encrypted)
+        let clear = try await b.decrypt(message, scope: bScope)
+        XCTAssertEqual(clear, Data("Lecture seule".utf8))
+        let pending = await b.backupPending(scope: bScope)
+        XCTAssertFalse(pending)
+        let b2 = try makeDevice(bScope, relay: relay)
+        do {
+            _ = try await b2.restoreBackup(recoveryKey: BackupRecoveryKey().toBase58(), scope: bScope)
+            XCTFail("Une autre clé ne doit pas restaurer la sauvegarde")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        let restored = try await b2.restoreBackup(recoveryKey: recovery, scope: bScope)
+        XCTAssertEqual(restored.imported, 1)
+        XCTAssertEqual(restored.failed, 0)
+        let restoredClear = try await b2.decrypt(message, scope: bScope)
+        XCTAssertEqual(restoredClear, clear)
+    }
+
+    func testReceivedKeyBackupFailureRemainsSealedAndResumesWhenDeviceReopens() async throws {
+        let relay = InMemoryRelay()
+        let alice = UUID(), bob = UUID()
+        await relay.setMembers(conversation, [alice, bob])
+        let aScope = MessagingScope(accountID: alice, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let bScope = MessagingScope(accountID: bob, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let vault = try MessagingCryptoVault(scope: bScope, root: root, keychain: FlakyKeychain())
+        let a = try makeDevice(aScope, relay: relay)
+        var b: MatrixMessagingCryptography? = try MatrixMessagingCryptography(scope: bScope, relay: relay.view(bob), vault: vault)
+        let recovery = try await b!.enableBackup(scope: bScope)
+        await relay.setBackupUnavailable(true)
+        let encrypted = try await a.encrypt(Data("À sauvegarder".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: alice,
+                                           acceptedAt: Date(), ciphertext: encrypted)
+        let clear = try await b!.decrypt(message, scope: bScope)
+        XCTAssertEqual(clear, Data("À sauvegarder".utf8), "La panne de sauvegarde ne bloque pas la lecture locale")
+        let pending = await b!.backupPending(scope: bScope)
+        XCTAssertTrue(pending)
+        XCTAssertTrue(try vault.load().backupPending, "L'intention de sauvegarde survit dans state.sealed")
+        b = nil
+        await relay.setBackupUnavailable(false)
+        let reopened = try MatrixMessagingCryptography(scope: bScope, relay: relay.view(bob), vault: vault)
+        let pendingBeforeOpen = await reopened.backupPending(scope: bScope)
+        XCTAssertTrue(pendingBeforeOpen, "Un nouveau modèle lit l'état scellé avant toute ouverture réseau")
+        let available = await reopened.isAvailable(scope: bScope, conversationID: conversation)
+        XCTAssertTrue(available)
+        let resumedPending = await reopened.backupPending(scope: bScope)
+        XCTAssertFalse(resumedPending)
+        XCTAssertFalse(try vault.load().backupPending)
+        let b2 = try makeDevice(bScope, relay: relay)
+        do {
+            _ = try await b2.restoreBackup(recoveryKey: BackupRecoveryKey().toBase58(), scope: bScope)
+            XCTFail("Une autre clé ne doit pas restaurer la sauvegarde")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        let restored = try await b2.restoreBackup(recoveryKey: recovery, scope: bScope)
+        XCTAssertEqual(restored.imported, 1)
+        XCTAssertEqual(restored.failed, 0)
+        let restoredClear = try await b2.decrypt(message, scope: bScope)
+        XCTAssertEqual(restoredClear, clear)
+    }
+
+    private func makeDevice(_ scope: MessagingScope, relay: InMemoryRelay) throws -> MatrixMessagingCryptography {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        return try MatrixMessagingCryptography(scope: scope, relay: relay.view(scope.accountID),
+            vault: MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain()))
     }
 
     func testCiphertextOnlyDecryptIsRefused() async throws {
@@ -189,7 +269,19 @@ private actor InMemoryRelay {
     private var deviceKeys: [String: [String: Any]] = [:]
     private var oneTimeKeys: [String: [String: [String: Any]]] = [:]
     private var inbox: [String: [[String: Any]]] = [:]
+    private var deliveredTransactions: Set<String> = []
     private var members: [UUID: [UUID]] = [:]
+    private struct Backup {
+        let version: String
+        let algorithm: String
+        let authData: [String: Any]
+        var rooms: [String: [String: [String: Any]]] = [:]
+        var etag = 0
+        var count: Int { rooms.values.reduce(0) { $0 + $1.count } }
+    }
+    private var backups: [String: Backup] = [:]
+    private var backupUnavailable = false
+    func setBackupUnavailable(_ value: Bool) { backupUnavailable = value }
 
     nonisolated func view(_ person: UUID) -> View { View(relay: self, person: person) }
     func setMembers(_ id: UUID, _ value: [UUID]) {
@@ -205,7 +297,9 @@ private actor InMemoryRelay {
         let relay: InMemoryRelay
         let person: UUID
         func call(scope: MessagingScope, deviceID: String, method: String, path: [String], query: [URLQueryItem], body: Data?) async throws -> Data {
-            try await relay.handle(user: MatrixMessagingCryptography.userID(person), device: deviceID, path: path, body: body)
+            guard scope.accountID == person else { throw MessagingFailure.contextChanged }
+            return try await relay.handle(user: MatrixMessagingCryptography.userID(person), school: scope.schoolID,
+                device: deviceID, method: method, path: path, query: query, body: body)
         }
         func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers {
             await relay.memberList(conversationID)
@@ -219,10 +313,49 @@ private actor InMemoryRelay {
         MessagingConversationMembers(members: members[id] ?? [], membersEpoch: epochs[id] ?? 0)
     }
 
-    func handle(user: String, device: String, path: [String], body: Data?) throws -> Data {
+    func handle(user: String, school: UUID, device: String, method: String, path: [String], query: [URLQueryItem], body: Data?) throws -> Data {
         let input = (body.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]
         var output: [String: Any] = [:]
+        let backupOwner = "\(school)|\(user)"
         switch path.joined(separator: "/") {
+        case "room_keys/version":
+            if method == "POST" {
+                guard backups[backupOwner] == nil else { throw MessagingCryptoRelayFailure.backupVersionConflict }
+                guard let algorithm = input["algorithm"] as? String,
+                      let auth = input["auth_data"] as? [String: Any], auth["public_key"] is String else {
+                    throw MessagingFailure.invalidResponse
+                }
+                backups[backupOwner] = Backup(version: "1", algorithm: algorithm, authData: auth)
+                output = ["version": "1"]
+            } else if method == "GET" {
+                guard let backup = backups[backupOwner] else { throw MessagingCryptoRelayFailure.notFound }
+                output = ["version": backup.version, "algorithm": backup.algorithm, "auth_data": backup.authData,
+                          "count": backup.count, "etag": String(backup.etag)]
+            } else { throw MessagingFailure.invalidResponse }
+        case "room_keys/keys":
+            guard var backup = backups[backupOwner], query.first(where: { $0.name == "version" })?.value == backup.version else {
+                throw MessagingCryptoRelayFailure.backupVersionConflict
+            }
+            if method == "GET" {
+                output = ["rooms": backup.rooms.mapValues { ["sessions": $0] }]
+            } else if method == "PUT" {
+                if backupUnavailable { throw MessagingFailure.unavailable }
+                guard let rooms = input["rooms"] as? [String: [String: Any]] else { throw MessagingFailure.invalidResponse }
+                var changed = false
+                for (room, value) in rooms {
+                    guard let sessions = value["sessions"] as? [String: [String: Any]] else { throw MessagingFailure.invalidResponse }
+                    for (id, data) in sessions {
+                        guard let sealed = data["session_data"] as? [String: Any], sealed["ephemeral"] is String,
+                              sealed["mac"] is String, sealed["ciphertext"] is String else { throw MessagingFailure.invalidResponse }
+                        if let existing = backup.rooms[room]?[id], !Self.betterBackup(data, than: existing) { continue }
+                        backup.rooms[room, default: [:]][id] = data
+                        changed = true
+                    }
+                }
+                if changed { backup.etag += 1 }
+                backups[backupOwner] = backup
+                output = ["etag": String(backup.etag), "count": backup.count]
+            } else { throw MessagingFailure.invalidResponse }
         case "keys/upload":
             if let keys = input["device_keys"] as? [String: Any] { deviceKeys["\(user)|\(device)"] = keys }
             var mine = oneTimeKeys["\(user)|\(device)"] ?? [:]
@@ -250,6 +383,10 @@ private actor InMemoryRelay {
             }
             output = ["one_time_keys": result, "failures": [String: Any]()]
         case let route where route.hasPrefix("sendToDevice/"):
+            guard method == "PUT", path.count == 3 else { throw MessagingFailure.invalidResponse }
+            let transaction = "\(school)|\(user)|\(device)|\(path[2])"
+            if deliveredTransactions.contains(transaction) { break }
+            deliveredTransactions.insert(transaction)
             let type = path[1]
             for (target, devices) in (input["messages"] as? [String: [String: Any]]) ?? [:] {
                 for (targetDevice, content) in devices {
@@ -257,13 +394,29 @@ private actor InMemoryRelay {
                 }
             }
         case "sync":
-            let events = inbox.removeValue(forKey: "\(user)|\(device)") ?? []
+            guard method == "GET" else { throw MessagingFailure.invalidResponse }
+            let queued = inbox["\(user)|\(device)"] ?? []
+            let since = query.first(where: { $0.name == "since" })?.value ?? "0"
+            guard let offset = Int(since), (0...queued.count).contains(offset) else { throw MessagingFailure.invalidResponse }
+            // Une réponse perdue peut être rejouée : seule la progression de since change la page.
+            let events = Array(queued.dropFirst(offset).prefix(100))
             output = ["to_device": ["events": events], "device_lists": ["changed": [String](), "left": [String]()],
                       "device_one_time_keys_count": ["signed_curve25519": oneTimeKeys["\(user)|\(device)"]?.count ?? 0],
-                      "next_batch": UUID().uuidString]
+                      "next_batch": String(offset + events.count)]
         default:
-            output = [:]
+            throw MessagingFailure.invalidResponse
         }
         return try JSONSerialization.data(withJSONObject: output)
+    }
+
+    /// Même priorité que putBackupKeys : vérifiée, premier index, nombre de transferts.
+    private static func betterBackup(_ next: [String: Any], than previous: [String: Any]) -> Bool {
+        let verified = next["is_verified"] as? Bool ?? false
+        let oldVerified = previous["is_verified"] as? Bool ?? false
+        if verified != oldVerified { return verified }
+        let index = next["first_message_index"] as? Int ?? Int.max
+        let oldIndex = previous["first_message_index"] as? Int ?? Int.max
+        if index != oldIndex { return index < oldIndex }
+        return (next["forwarded_count"] as? Int ?? Int.max) < (previous["forwarded_count"] as? Int ?? Int.max)
     }
 }

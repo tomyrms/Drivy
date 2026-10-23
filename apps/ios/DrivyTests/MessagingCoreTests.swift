@@ -5,6 +5,102 @@ final class MessagingCoreTests: XCTestCase {
     private let school = UUID()
     private let account = UUID()
 
+    func testEnqueuePersistsEncryptionEpochAndRecoveryContent() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let outbox = MemoryCiphertextOutbox()
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: UnavailableMessagingService(),
+            cryptography: SyntheticCipher(), outbox: outbox, currentScope: { scope })
+        let entry = try await coordinator.enqueue(text: "contenu à conserver", conversationID: UUID(), currentScope: scope)
+        XCTAssertEqual(entry.ciphertext.expectedMembersEpoch, 7)
+        XCTAssertEqual(entry.recoveryContent, Data("contenu à conserver".utf8))
+        let restored = try JSONDecoder().decode(MessagingPending.self, from: JSONEncoder().encode(entry))
+        XCTAssertEqual(restored.ciphertext.expectedMembersEpoch, 7)
+        XCTAssertEqual(restored.recoveryContent, entry.recoveryContent)
+    }
+
+    func testLegacyPendingWithoutEpochOrRecoveryStillDecodes() throws {
+        let raw = """
+        {"clientMessageID":"\(UUID())","conversationID":"\(UUID())","ciphertext":{"scheme":"TEST_ONLY","keyId":"fixture","payload":"AQID"}}
+        """
+        let entry = try JSONDecoder().decode(MessagingPending.self, from: Data(raw.utf8))
+        XCTAssertNil(entry.ciphertext.expectedMembersEpoch)
+        XCTAssertNil(entry.recoveryContent)
+        XCTAssertEqual(entry.ciphertext.payload, Data([1, 2, 3]))
+    }
+
+    func testStaleMembersEpochKeepsOriginalEnvelopeAndProtectedRecoveryContent() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let outbox = MemoryCiphertextOutbox()
+        let service = StaleEpochService()
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: service,
+            cryptography: SyntheticCipher(), outbox: outbox, currentScope: { scope })
+        let content = MessagingPlainContent(text: "à renvoyer volontairement")
+        let entry = try await coordinator.enqueue(content: content, conversationID: UUID(), currentScope: scope)
+        for _ in 0..<2 {
+            if case .failed(.membersChanged) = await coordinator.retry(entry, currentScope: scope) {} else {
+                XCTFail("Une époque périmée ne doit jamais être présentée comme un succès")
+            }
+        }
+        let remaining = try await outbox.entries(scope: scope)
+        XCTAssertEqual(remaining.map(\.clientMessageID), [entry.clientMessageID])
+        XCTAssertEqual(remaining.first?.ciphertext, entry.ciphertext)
+        XCTAssertEqual(remaining.first?.recoveryContent, try content.encoded())
+        let sent = await service.sentEpochs()
+        XCTAssertEqual(sent, [7, 7])
+    }
+
+    func testNewEnqueueWithoutEncryptionEpochFailsBeforePersistence() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let outbox = MemoryCiphertextOutbox()
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: UnavailableMessagingService(),
+            cryptography: MissingEpochCipher(), outbox: outbox, currentScope: { scope })
+        do {
+            _ = try await coordinator.enqueue(text: "à conserver", conversationID: UUID(), currentScope: scope)
+            XCTFail("Une nouvelle enveloppe exige l'époque utilisée pour chiffrer")
+        } catch MessagingFailure.protectionUnavailable {}
+        let pending = try await outbox.entries(scope: scope)
+        XCTAssertTrue(pending.isEmpty)
+    }
+
+    @MainActor
+    func testAutomaticEpochFailureIsScopedToItsConversation() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let first = UUID(), other = UUID()
+        let store = MemoryCiphertextOutbox()
+        let workspace = MessagingWorkspace(scope: scope, service: StaleEpochService(),
+            cryptography: SyntheticCipher(), outbox: store, currentScope: { scope })
+        _ = try await workspace.outbox.enqueue(text: "conservé", conversationID: first, currentScope: scope)
+        await workspace.refreshVisible(conversationID: other)
+        XCTAssertNil(workspace.error)
+        await workspace.refreshVisible(conversationID: first)
+        XCTAssertEqual(workspace.error, .membersChanged)
+        await workspace.loadMessages(other)
+        XCTAssertNil(workspace.error)
+        let pending = try await store.entries(scope: scope)
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.recoveryContent, Data("conservé".utf8))
+    }
+
+    @MainActor
+    func testLateEpochFailureAfterAccountChangeIsNotReinjected() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let context = OutboxCurrentScope(scope)
+        let service = SuspendedAcknowledgementService(failure: .membersChanged)
+        let store = MemoryCiphertextOutbox()
+        let workspace = MessagingWorkspace(scope: scope, service: service,
+            cryptography: SyntheticCipher(), outbox: store, currentScope: { context.value })
+        let conversation = UUID()
+        _ = try await workspace.outbox.enqueue(text: "conservé", conversationID: conversation, currentScope: scope)
+        let refresh = Task { await workspace.refreshVisible(conversationID: conversation) }
+        await service.waitUntilSending()
+        context.value = nil
+        await service.releaseResponse()
+        await refresh.value
+        XCTAssertEqual(workspace.error, .contextChanged)
+        let pending = try await store.entries(scope: scope)
+        XCTAssertEqual(pending.count, 1)
+    }
+
     func testDefaultProtectionRefusesPlaintextAndDoesNotCreateOutboxEntry() async throws {
         let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
         let coordinator = MessagingOutboxCoordinator(scope: scope, service: UnavailableMessagingService(),
@@ -203,6 +299,8 @@ private final class OutboxCurrentScope {
 }
 
 private actor SuspendedAcknowledgementService: MessagingService {
+    private let failure: MessagingFailure?
+    init(failure: MessagingFailure? = nil) { self.failure = failure }
     private var attempts = 0
     private var started: CheckedContinuation<Void, Never>?
     private var response: CheckedContinuation<Void, Never>?
@@ -215,13 +313,14 @@ private actor SuspendedAcknowledgementService: MessagingService {
     func attemptCount() -> Int { attempts }
     func conversations(scope: MessagingScope, cursor: String?) throws -> MessagingPage<MessagingConversation> { throw MessagingFailure.unavailable }
     func messages(scope: MessagingScope, conversationID: UUID, before: String?) throws -> MessagingPage<MessagingWireMessage> { throw MessagingFailure.unavailable }
-    func send(scope: MessagingScope, pending: MessagingPending) async -> MessagingAcknowledgement {
+    func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement {
         attempts += 1
         await withCheckedContinuation { continuation in
             response = continuation
             started?.resume()
             started = nil
         }
+        if let failure { throw failure }
         return MessagingAcknowledgement(clientMessageID: pending.clientMessageID, serverMessageID: UUID(),
             conversationID: pending.conversationID, schoolID: scope.schoolID, acceptedAt: Date(), senderID: scope.accountID)
     }
@@ -282,9 +381,28 @@ private actor WrongSenderService: MessagingService {
 private struct SyntheticCipher: MessagingCryptography {
     func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: Data([1, 2, 3]), expectedMembersEpoch: 7)
+    }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data { Data() }
+}
+
+private struct MissingEpochCipher: MessagingCryptography {
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: Data([1, 2, 3]))
     }
     func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data { Data() }
+}
+
+private actor StaleEpochService: MessagingService {
+    private var epochs: [Int?] = []
+    func sentEpochs() -> [Int?] { epochs }
+    func conversations(scope: MessagingScope, cursor: String?) throws -> MessagingPage<MessagingConversation> { MessagingPage(items: [], nextCursor: nil) }
+    func messages(scope: MessagingScope, conversationID: UUID, before: String?) throws -> MessagingPage<MessagingWireMessage> { MessagingPage(items: [], nextCursor: nil) }
+    func send(scope: MessagingScope, pending: MessagingPending) throws -> MessagingAcknowledgement {
+        epochs.append(pending.ciphertext.expectedMembersEpoch)
+        throw MessagingFailure.membersChanged
+    }
 }
 
 private actor MemoryCiphertextOutbox: MessagingProtectedOutbox {

@@ -202,7 +202,10 @@ async function lockForWrite(db: PoolClient, actor: MessagingActor, conversationI
 }
 export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conversationId: string,
   intentId: string, envelope: OpaqueEnvelope, mentionPersonIds: string[] = [],
-  replyToMessageId: string | null = null, poll: PollCreation | null = null): Promise<StoredMessage> {
+  replyToMessageId: string | null = null, poll: PollCreation | null = null,
+  expectedMembersEpoch?: number): Promise<StoredMessage> {
+  if (expectedMembersEpoch !== undefined && (!Number.isSafeInteger(expectedMembersEpoch) || expectedMembersEpoch < 0))
+    throw new ApiError(400, 'INVALID_REQUEST', 'Époque de chiffrement invalide.');
   if (mentionPersonIds.length > 8 || new Set(mentionPersonIds.map(id => id.toLowerCase())).size !== mentionPersonIds.length)
     throw new ApiError(400, 'INVALID_REQUEST', 'Mentions invalides.');
   if (!uuidPattern.test(intentId) || !validEnvelope(envelope)) throw new ApiError(400, 'INVALID_ENVELOPE', 'Enveloppe invalide.');
@@ -218,7 +221,7 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
     WHERE school_id=$1 AND id=$2 FOR UPDATE`, [actor.schoolId, conversationId]);
   if (!conversation.rows[0]) throw forbidden();
   // Revérifie après l'attente : une fin de lien pendant la contention n'autorise pas une écriture tardive.
-  await syncLinks(db, actor.schoolId, conversationId);
+  const membersEpoch = await syncLinks(db, actor.schoolId, conversationId);
   await canWrite(db, actor, conversationId);
   const prior = await db.query<{ id: string; fingerprint: string }>(`SELECT id,fingerprint FROM drivy.messaging_message
     WHERE school_id=$1 AND conversation_id=$2 AND sender_person_id=$3 AND intent_id=$4`,
@@ -227,6 +230,11 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
     if (prior.rows[0].fingerprint !== fingerprint) throw new ApiError(409, 'INTENT_CONFLICT', 'Cet envoi a déjà été utilisé avec un autre contenu.');
     return messageById(db, actor, conversationId, prior.rows[0].id);
   }
+  // Une réponse perdue déjà acceptée reste idempotente, même pour une archive sans époque.
+  // Une intention nouvelle doit correspondre à la même liste de membres que son chiffrement.
+  // Le verrou de conversation est conservé jusqu'au COMMIT : aucun départ ne peut s'intercaler.
+  if (expectedMembersEpoch === undefined || expectedMembersEpoch !== membersEpoch)
+    throw new ApiError(409, 'MESSAGING_MEMBERS_CHANGED', 'Les participants ont changé. Le message n’a pas été envoyé.');
   if (replyToMessageId) {
     const open = await db.query<{ open: boolean }>('SELECT drivy.messaging_message_open($1,$2,$3,$4) AS open',
       [actor.schoolId, actor.personId, conversationId, replyToMessageId]);
@@ -250,12 +258,15 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
 /** Membres en écriture et époque, pour la rotation Megolm (+1 à chaque départ et retour). */
 export async function conversationMembers(db: PoolClient, actor: MessagingActor, conversationId: string) {
   await canRead(db, actor, conversationId);
-  const members = await db.query<{ personId: string }>(`SELECT person_id AS "personId"
-    FROM drivy.messaging_conversation_members($1,$2,$3) ORDER BY person_id`, [actor.schoolId, actor.personId, conversationId]);
-  const epoch = await db.query<{ membersEpoch: string }>(`SELECT members_epoch AS "membersEpoch" FROM drivy.messaging_conversation
-    WHERE school_id=$1 AND id=$2`, [actor.schoolId, conversationId]);
-  if (!epoch.rows[0]) throw notFound();
-  return { members: members.rows, membersEpoch: safeSequence(epoch.rows[0].membersEpoch) };
+  // Une seule instruction fournit le même snapshot MVCC aux destinataires et à leur époque.
+  const snapshot = await db.query<{ members: { personId: string }[]; membersEpoch: string }>(`SELECT
+    c.members_epoch AS "membersEpoch",
+    COALESCE((SELECT json_agg(json_build_object('personId', m.person_id) ORDER BY m.person_id)
+      FROM drivy.messaging_conversation_members($1,$2,$3) m), '[]'::json) AS members
+    FROM drivy.messaging_conversation c WHERE c.school_id=$1 AND c.id=$3`,
+  [actor.schoolId, actor.personId, conversationId]);
+  if (!snapshot.rows[0]) throw notFound();
+  return { members: snapshot.rows[0].members, membersEpoch: safeSequence(snapshot.rows[0].membersEpoch) };
 }
 
 export async function deleteMessage(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, scope: 'me' | 'everyone') {

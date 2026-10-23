@@ -16,6 +16,8 @@ actor MessagingOutboxCoordinator {
     private let outbox: any MessagingProtectedOutbox
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
     private var active: Set<UUID> = []
+    /// Échecs observés dans cette instance de scope, indexés par intention puis conversation.
+    private var membersConflicts: [UUID: UUID] = [:]
 
     init(scope: MessagingScope, service: any MessagingService,
          cryptography: any MessagingCryptography = UnavailableMessagingCryptography(),
@@ -40,8 +42,9 @@ actor MessagingOutboxCoordinator {
             scope: scope, conversationID: conversationID)
         guard await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
         guard Self.validEnvelope(ciphertext) else { throw MessagingFailure.invalidResponse }
+        guard Self.hasEncryptionEpoch(ciphertext) else { throw MessagingFailure.protectionUnavailable }
         let entry = MessagingPending(clientMessageID: UUID(), conversationID: conversationID,
-            ciphertext: ciphertext, mentionPersonIDs: mentions)
+            ciphertext: ciphertext, mentionPersonIDs: mentions, recoveryContent: Data(text.utf8))
         try await outbox.put(entry, scope: scope)
         return entry
     }
@@ -60,13 +63,16 @@ actor MessagingOutboxCoordinator {
                 throw MessagingFailure.invalidResponse
             }
         }
-        let ciphertext = try await cryptography.encrypt(try content.encoded(), mentions: mentions,
+        let recoveryContent = try content.encoded()
+        let ciphertext = try await cryptography.encrypt(recoveryContent, mentions: mentions,
             scope: scope, conversationID: conversationID)
         guard await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
         guard Self.validEnvelope(ciphertext) else { throw MessagingFailure.invalidResponse }
+        guard Self.hasEncryptionEpoch(ciphertext) else { throw MessagingFailure.protectionUnavailable }
         let entry = MessagingPending(clientMessageID: UUID(), conversationID: conversationID,
             ciphertext: ciphertext, mentionPersonIDs: mentions, replyToMessageID: replyTo,
-            poll: content.poll.map { MessagingPollDraftMeta(allowsMultiple: pollAllowsMultiple, optionIDs: $0.options.map(\.id)) })
+            poll: content.poll.map { MessagingPollDraftMeta(allowsMultiple: pollAllowsMultiple, optionIDs: $0.options.map(\.id)) },
+            recoveryContent: recoveryContent)
         try await outbox.put(entry, scope: scope)
         return entry
     }
@@ -85,7 +91,9 @@ actor MessagingOutboxCoordinator {
         active.insert(entry.clientMessageID)
         defer { active.remove(entry.clientMessageID) }
         do {
-            // Un appel réseau unique. Une réponse perdue garde le même identifiant lors du prochain essai.
+            // Même identifiant, octets et époque, y compris pour une archive ancienne sans époque.
+            // Seul le serveur peut distinguer réponse perdue déjà acceptée et intention nouvelle périmée.
+            // Un refus conserve aussi le contenu de récupération dans le snapshot protégé.
             let acknowledgement = try await service.send(scope: scope, pending: entry)
             guard await self.currentScope() == scope else { return .failed(.contextChanged) }
             guard acknowledgement.clientMessageID == entry.clientMessageID,
@@ -93,9 +101,19 @@ actor MessagingOutboxCoordinator {
                   acknowledgement.schoolID == scope.schoolID,
                   acknowledgement.senderID == scope.accountID else { return .failed(.invalidResponse) }
             try await outbox.remove(clientMessageID: entry.clientMessageID, scope: scope)
+            membersConflicts.removeValue(forKey: entry.clientMessageID)
             return .accepted(acknowledgement)
-        } catch let failure as MessagingFailure { return .failed(failure) }
+        } catch let failure as MessagingFailure {
+            guard await self.currentScope() == scope else { return .failed(.contextChanged) }
+            if failure == .membersChanged { membersConflicts[entry.clientMessageID] = entry.conversationID }
+            return .failed(failure)
+        }
         catch { return .failed(.unavailable) }
+    }
+
+    func hasMembersConflict(conversationID: UUID, currentScope: MessagingScope) async -> Bool {
+        guard currentScope == scope, await self.currentScope() == scope else { return false }
+        return membersConflicts.values.contains(conversationID)
     }
 
     /// Une reprise par événement, au plus vingt requêtes, sans boucle réseau ni nouveau chiffrement.
@@ -121,5 +139,10 @@ actor MessagingOutboxCoordinator {
               !value.payload.isEmpty, value.payload.base64EncodedString().utf8.count <= 12_000 else { return false }
         return scheme.allSatisfy { ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57) || $0 == 46 || $0 == 95 || $0 == 45 }
             && key.allSatisfy { ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57) || $0 == 46 || $0 == 95 || $0 == 45 || $0 == 58 }
+    }
+
+    private static func hasEncryptionEpoch(_ value: MessagingCiphertext) -> Bool {
+        guard let epoch = value.expectedMembersEpoch else { return false }
+        return epoch >= 0 && epoch <= 9_007_199_254_740_991
     }
 }

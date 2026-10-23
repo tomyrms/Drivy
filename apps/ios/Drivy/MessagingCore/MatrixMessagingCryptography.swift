@@ -42,6 +42,8 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     private var state = MessagingCryptoVault.State()
     /// Un seul sync en vol, partagé par tous les appels concurrents.
     private var syncing: Task<Void, any Error>?
+    /// Les écritures de sauvegarde partagent une seule boucle, comme le sync.
+    private var backingUp: Task<Void, any Error>?
     private var lastKeySync: ContinuousClock.Instant?
     /// Fenêtre pendant laquelle un lot de messages sans clé ne relance pas de sync.
     static let keySyncWindow: Duration = .seconds(5)
@@ -104,8 +106,10 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             try vault.save(state)
             let content = try Self.messageContent(text: text, mentions: mentions)
             let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
-            await backupOrMarkPending(machine)
-            return try Self.envelope(fromEncryptedContent: encrypted)
+            try await backupOrMarkPending(machine)
+            let envelope = try Self.envelope(fromEncryptedContent: encrypted)
+            return MessagingCiphertext(scheme: envelope.scheme, keyID: envelope.keyID, payload: envelope.payload,
+                                       expectedMembersEpoch: listed.membersEpoch)
         }
     }
 
@@ -152,11 +156,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                   !version.isEmpty else { throw MessagingFailure.invalidResponse }
             try machine.enableBackupV1(key: publicKey, version: version)
             try machine.saveRecoveryKey(key: key, version: version)
-            state.backupPending = true
-            try vault.save(state)
-            try await backup(machine)
-            state.backupPending = false
-            try vault.save(state)
+            try await backupOrMarkPending(machine)
             return key.toBase58()
         }
     }
@@ -186,6 +186,8 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
 
     func backupPending(scope: MessagingScope) async -> Bool {
         guard scope == self.scope else { return false }
+        // Ne pas afficher un faux état à jour avant l'ouverture de la machine.
+        if machine == nil { return (try? vault.load().backupPending) ?? true }
         return state.backupPending
     }
 
@@ -258,8 +260,13 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         try vault.protectStore()
         deviceID = secrets.deviceID
         state = try vault.load()
+        // Le SDK persiste la clé de récupération, pas l'activation en mémoire du backup.
+        if !created.backupEnabled(), let saved = try created.getBackupKeys() {
+            try created.enableBackupV1(key: saved.recoveryKey().megolmV1PublicKey(), version: saved.backupVersion())
+        }
         try await flush(created)
-        if state.backupPending { await backupOrMarkPending(created) }
+        // Inspecter aussi les clés non sauvegardées du SDK après un arrêt avant l'écriture de notre état.
+        try await backupOrMarkPending(created)
         return created
     }
 
@@ -291,6 +298,11 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             let query = state.syncToken.map { [URLQueryItem(name: "since", value: $0)] } ?? []
             let raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["sync"], query: query, body: nil)
             let page = try Self.syncPage(raw)
+            // Write-ahead : la réception SDK et son curseur ne précèdent jamais l'intention durable de backup.
+            if machine.backupEnabled() {
+                state.backupPending = true
+                try vault.save(state)
+            }
             _ = try machine.receiveSyncChanges(events: page.events, deviceChanges: DeviceLists(changed: page.changed, left: page.left),
                 keyCounts: page.counts, unusedFallbackKeys: page.fallback, nextBatchToken: page.next,
                 decryptionSettings: DecryptionSettings(senderDeviceTrustRequirement: .untrusted))
@@ -304,21 +316,38 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             try await flush(machine)
             if !advanced || page.eventCount < 100 { break }
         }
-        if state.backupPending { await backupOrMarkPending(machine) }
+        try await backupOrMarkPending(machine)
     }
 
-    /// L'envoi n'échoue pas pour une sauvegarde en retard : l'état est mémorisé et retenté.
-    private func backupOrMarkPending(_ machine: OlmMachine) async {
-        let pending: Bool
-        do { try await backup(machine); pending = false } catch { pending = true }
-        guard pending != state.backupPending else { return }
-        state.backupPending = pending
-        try? vault.save(state)
+    /// La panne réseau ne bloque pas la lecture/envoi. L'intention scellée précède toute tentative.
+    /// Une panne du coffre reste une erreur fermée : elle ne peut pas fabriquer un état durable.
+    private func backupOrMarkPending(_ machine: OlmMachine) async throws {
+        guard machine.backupEnabled() else { return }
+        if let backingUp { return try await backingUp.value }
+        let task = Task { try await self.performBackup(machine) }
+        backingUp = task
+        defer { backingUp = nil }
+        try await task.value
+    }
+
+    private func performBackup(_ machine: OlmMachine) async throws {
+        state.backupPending = true
+        try vault.save(state)
+        do { try await backup(machine) }
+        catch { return } // pending reste vrai, y compris dans le coffre, pour la prochaine ouverture/sync.
+        state.backupPending = false
+        do { try vault.save(state) }
+        catch { state.backupPending = true; throw error }
     }
 
     private func backup(_ machine: OlmMachine) async throws {
-        guard machine.backupEnabled() else { return }
-        for _ in 0..<20 { guard let request = try machine.backupRoomKeys() else { return }; try await dispatch(request, machine) }
+        guard machine.backupEnabled() else { throw MessagingFailure.protectionUnavailable }
+        for _ in 0..<20 {
+            guard let request = try machine.backupRoomKeys() else { return }
+            try await dispatch(request, machine)
+        }
+        // Une boucle bornée n'est pas une preuve que toutes les clés ont été sauvegardées.
+        if try machine.backupRoomKeys() != nil { throw MessagingFailure.unavailable }
     }
 
     private func dispatch(_ request: Request, _ machine: OlmMachine) async throws {

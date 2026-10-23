@@ -71,6 +71,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     private struct MemberList: Decodable { let members: [Contact]; let nextCursor: UUID? }
     private struct ConversationID: Decodable { let conversationId: UUID }
     private struct ReadState: Decodable { let lastReadSequence: Int; let mutedUntil: String?; let readStateVersion: Int }
+    private struct FailureCode: Decodable { let code: String }
 
     func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPageDTO<MessagingConversationDTO> {
         var query = [URLQueryItem(name: "limit", value: "50")]
@@ -119,14 +120,15 @@ actor MessagingHTTPTransport: MessagingAPITransport {
 
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO {
         let payload = try JSONEncoder().encode(SendBody(clientMessageId: body.clientMessageId,
-            ciphertext: body.ciphertext, mentionPersonIds: body.mentionPersonIds,
+            ciphertext: WireCiphertext(body.ciphertext), expectedMembersEpoch: body.ciphertext.expectedMembersEpoch,
+            mentionPersonIds: body.mentionPersonIds,
             replyToMessageId: body.replyToMessageId,
             poll: body.poll.map { SendBody.Poll(optionCount: $0.optionIDs.count, multiple: $0.allowsMultiple) }))
         let receipt: MessageReceipt = try await request(scope: scope, method: "POST",
             path: ["conversations", conversationID.uuidString, "messages"], body: payload)
         guard receipt.clientMessageId == body.clientMessageId, receipt.conversationId == conversationID,
               receipt.schoolId == scope.schoolID, receipt.senderId == scope.accountID,
-              receipt.ciphertext == body.ciphertext,
+              receipt.ciphertext.map(WireCiphertext.init) == WireCiphertext(body.ciphertext),
               receipt.mentionPersonIds == body.mentionPersonIds else {
             throw MessagingFailure.invalidResponse
         }
@@ -137,10 +139,21 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     private struct SendBody: Encodable {
         struct Poll: Encodable { let optionCount: Int; let multiple: Bool }
         let clientMessageId: UUID
-        let ciphertext: MessagingCiphertext
+        let ciphertext: WireCiphertext
+        let expectedMembersEpoch: Int?
         let mentionPersonIds: [UUID]
         let replyToMessageId: UUID?
         let poll: Poll?
+    }
+
+    /// Le contrat opaque exclut les métadonnées de file locales, y compris pour les signalements.
+    private struct WireCiphertext: Encodable, Equatable {
+        let scheme: String
+        let keyId: String
+        let payload: Data
+        init(_ value: MessagingCiphertext) {
+            scheme = value.scheme; keyId = value.keyID; payload = value.payload
+        }
     }
 
     func contacts(scope: MessagingScope) async throws -> [MessagingContact] {
@@ -254,7 +267,12 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             if response.status == 401 && attempt == 0 {
                 if await invalidate(bearer) { bearer = try await token(); continue }
             }
-            if response.status == 409 { throw MessagingFailure.stateConflict }
+            if response.status == 409 {
+                if (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code == "MESSAGING_MEMBERS_CHANGED" {
+                    throw MessagingFailure.membersChanged
+                }
+                throw MessagingFailure.stateConflict
+            }
             if response.status == 404 { throw MessagingFailure.conversationUnavailable }
             if response.status == 401 || response.status == 403 { throw MessagingFailure.accessChanged }
             guard (200...299).contains(response.status) else { throw MessagingFailure.unavailable }
@@ -358,11 +376,11 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws {
-        struct Item: Encodable { let messageId: UUID; let ciphertext: MessagingCiphertext }
+        struct Item: Encodable { let messageId: UUID; let ciphertext: WireCiphertext }
         struct Body: Encodable { let clientReportId: UUID; let conversationId: UUID; let items: [Item] }
         guard (1...50).contains(items.count) else { throw MessagingFailure.invalidResponse }
         let body = try JSONEncoder().encode(Body(clientReportId: clientReportID, conversationId: conversationID,
-            items: items.map { Item(messageId: $0.messageID, ciphertext: $0.ciphertext) }))
+            items: items.map { Item(messageId: $0.messageID, ciphertext: WireCiphertext($0.ciphertext)) }))
         let _: Done = try await request(scope: scope, method: "POST", path: ["reports"], body: body)
     }
 

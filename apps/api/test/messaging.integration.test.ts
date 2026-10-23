@@ -56,7 +56,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
       const conversationId = await findOrCreateGeneral(db, { schoolId: id.schoolA, personId: id.admin, membershipId: id.adminMember });
       expect((await db.query('SELECT id FROM drivy.messaging_conversation WHERE id=$1', [conversationId])).rowCount).toBe(1);
       const sent = await sendEnvelope(db, { schoolId: id.schoolA, personId: id.admin, membershipId: id.adminMember },
-        conversationId, randomUUID(), { scheme: 'synthetic', keyId: 'fixture', payload: 'AAAA' });
+        conversationId, randomUUID(), { scheme: 'synthetic', keyId: 'fixture', payload: 'AAAA' }, [], null, null, 0);
       expect(sent.sequence).toBe(1);
     } finally { await db.query('ROLLBACK'); db.release(); }
   });
@@ -80,13 +80,13 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect((await req('demo-alice', 'PUT', `${path}/private/${id.instructor}`)).json().data.conversationId).toBe(conversationId);
     const listed = (await req('demo-instructor', 'GET', `${path}/conversations`)).json().data.items[0];
     expect(listed).toMatchObject({ peerPersonId: id.alice, title: 'Alice Exemple' });
-    const clientMessageId = randomUUID(), body = { clientMessageId, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
+    const clientMessageId = randomUUID(), body = { expectedMembersEpoch: 0, clientMessageId, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
     const first = await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`, body);
     expect(first.statusCode, first.body).toBe(200);
     const again = await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`, body);
     expect(again.json().data.id).toBe(first.json().data.id);
     const conflict = await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`,
-      { clientMessageId, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AQ==' } });
+      { expectedMembersEpoch: 0, clientMessageId, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AQ==' } });
     expect(conflict.statusCode).toBe(409);
     const page = await req('demo-alice', 'GET', `${path}/conversations/${conversationId}/messages?limit=1`);
     expect(page.json().data.items).toHaveLength(1);
@@ -113,14 +113,14 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect((await req('demo-alice', 'PUT', `${path}/general`)).json().data.conversationId).toBe(general.json().data.conversationId);
     expect((await req('demo-alice', 'PUT', `${path}/private/${id.bob}`)).statusCode).toBe(403);
     const crossSchoolMention = await req('demo-admin', 'POST', `${path}/conversations/${general.json().data.conversationId}/messages`,
-      { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' },
+      { expectedMembersEpoch: 0, clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' },
         mentionPersonIds: [id.foreign] });
     expect(crossSchoolMention.statusCode).toBe(403);
     expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1',
       [general.json().data.conversationId])).rows[0].count).toBe(0);
     expect((await req('demo-foreign', 'GET', `${path}/conversations/${general.json().data.conversationId}/messages`)).statusCode).toBe(403);
     expect((await req('demo-admin', 'POST', `${path}/conversations/${general.json().data.conversationId}/messages`,
-      { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } }, id.alice)).statusCode).toBe(403);
+      { expectedMembersEpoch: 0, clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } }, id.alice)).statusCode).toBe(403);
     await pool.query('UPDATE drivy.membership SET access_epoch=access_epoch+1 WHERE id=$1', [id.adminMember]);
     expect((await req('demo-admin', 'GET', `${path}/conversations`)).statusCode).toBe(403);
   });
@@ -129,7 +129,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     const conversationId = opened.json().data.conversationId as string;
     for (let index = 0; index < 3; index++) {
       const posted = await req('demo-admin', 'POST', `${path}/conversations/${conversationId}/messages`,
-        { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' },
+        { expectedMembersEpoch: 0, clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' },
           mentionPersonIds: index === 0 ? [id.alice] : [] });
       expect(posted.statusCode, posted.body).toBe(200);
     }
@@ -192,7 +192,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect(opened.statusCode, opened.body).toBe(200);
     const conversationId = opened.json().data.conversationId as string;
     const intent = randomUUID();
-    const body = { clientMessageId: intent, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
+    const body = { expectedMembersEpoch: 0, clientMessageId: intent, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
     const accepted = await req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`, body);
     expect(accepted.statusCode, accepted.body).toBe(200);
     const retry = await req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`, body);
@@ -228,7 +228,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
       await updater.query('BEGIN');
       await updater.query('UPDATE drivy.school SET version=version+1 WHERE id=$1', [id.schoolA]);
       pending = req('demo-admin', 'POST', `${path}/conversations/${conversationId}/messages`,
-        { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } });
+        { expectedMembersEpoch: 0, clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } });
       let blocked = false;
       for (let attempt = 0; attempt < 100; attempt++) {
         const observed = await pool.query<{ blocked: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity a
@@ -251,7 +251,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
   });
   it('serializes two devices retrying one intent without a second sequence', async () => {
     const conversationId = (await req('demo-alice', 'PUT', `${path}/general`)).json().data.conversationId as string;
-    const body = { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
+    const body = { expectedMembersEpoch: 0, clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
     const [a, b] = await Promise.all([
       req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`, body),
       req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`, body)
@@ -273,7 +273,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
       await updater.query('BEGIN');
       await updater.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
       pending = req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`,
-        { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AAAA' } });
+        { expectedMembersEpoch: 0, clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AAAA' } });
       let blocked = false;
       for (let attempt = 0; attempt < 100; attempt++) {
         const observed = await pool.query<{ blocked: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity a

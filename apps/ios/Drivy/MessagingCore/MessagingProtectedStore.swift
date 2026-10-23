@@ -45,7 +45,10 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
         if let index = snapshot.pending.firstIndex(where: { $0.clientMessageID == entry.clientMessageID }) {
             guard snapshot.pending[index].conversationID == entry.conversationID,
                   snapshot.pending[index].ciphertext == entry.ciphertext,
-                  snapshot.pending[index].mentionPersonIDs == entry.mentionPersonIDs else { throw MessagingFailure.invalidResponse }
+                  snapshot.pending[index].mentionPersonIDs == entry.mentionPersonIDs,
+                  snapshot.pending[index].replyToMessageID == entry.replyToMessageID,
+                  snapshot.pending[index].poll == entry.poll,
+                  snapshot.pending[index].recoveryContent == entry.recoveryContent else { throw MessagingFailure.invalidResponse }
         } else { snapshot.pending.append(entry) }
         try save(snapshot)
     }

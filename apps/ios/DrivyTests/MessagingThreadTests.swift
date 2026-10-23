@@ -356,7 +356,7 @@ private final class RequestLog: @unchecked Sendable {
 private struct ThreadSyntheticCipher: MessagingCryptography {
     func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
-        MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: plaintext)
+        MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: plaintext, expectedMembersEpoch: 0)
     }
     func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data { ciphertext.payload }
 }

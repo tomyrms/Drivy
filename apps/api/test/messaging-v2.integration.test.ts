@@ -34,8 +34,11 @@ const req = (subject: string, method: Method, target: string, payload?: object) 
   ...(payload ? { payload } : {}) });
 const ciphertext = (payload = 'AAAA') => ({ scheme: 'synthetic', keyId: 'fixture', payload });
 async function send(subject: string, conversationId: string, extra: object = {}) {
+  // Comme le client crypto : l'époque provient de la liste utilisée pour préparer l'enveloppe.
+  const members = await req(subject, 'GET', `${path}/conversations/${conversationId}/members`);
+  expect(members.statusCode, members.body).toBe(200);
   const response = await req(subject, 'POST', `${path}/conversations/${conversationId}/messages`,
-    { clientMessageId: randomUUID(), ciphertext: ciphertext(), ...extra });
+    { clientMessageId: randomUUID(), ciphertext: ciphertext(), expectedMembersEpoch: members.json().data.membersEpoch, ...extra });
   expect(response.statusCode, response.body).toBe(200);
   return response.json().data as { id: string; sequence: number };
 }
@@ -219,7 +222,7 @@ describe('messagerie v2, messages', () => {
     const first = await send('demo-instructor', conversationId);
     const reply = await send('demo-alice', conversationId, { replyToMessageId: first.id });
     expect((await req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`,
-      { clientMessageId: randomUUID(), ciphertext: ciphertext(), replyToMessageId: randomUUID() })).statusCode).toBe(404);
+      { clientMessageId: randomUUID(), ciphertext: ciphertext(), expectedMembersEpoch: 0, replyToMessageId: randomUUID() })).statusCode).toBe(404);
     const reaction = `${path}/conversations/${conversationId}/messages/${first.id}/reactions/${encodeURIComponent('👍')}`;
     expect((await req('demo-alice', 'PUT', reaction)).statusCode).toBe(200);
     expect((await req('demo-alice', 'PUT', reaction)).statusCode).toBe(200);

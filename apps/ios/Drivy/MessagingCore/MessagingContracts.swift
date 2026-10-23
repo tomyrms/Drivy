@@ -37,8 +37,15 @@ struct MessagingCiphertext: Codable, Sendable, Equatable {
     let scheme: String
     let keyID: String
     let payload: Data
+    /// Époque lue pour CE chiffrement. Métadonnée locale durable, jamais remplacée au retry.
+    /// nil conserve la lecture des anciennes files et permet de résoudre un envoi déjà accepté.
+    let expectedMembersEpoch: Int?
+    init(scheme: String, keyID: String, payload: Data, expectedMembersEpoch: Int? = nil) {
+        self.scheme = scheme; self.keyID = keyID; self.payload = payload
+        self.expectedMembersEpoch = expectedMembersEpoch
+    }
     enum CodingKeys: String, CodingKey {
-        case scheme, payload
+        case scheme, payload, expectedMembersEpoch
         case keyID = "keyId"
     }
 }
@@ -64,7 +71,7 @@ struct MessagingAcknowledgement: Sendable {
 }
 
 enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
-    case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict, deviceLimitReached
+    case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict, deviceLimitReached, membersChanged
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
@@ -75,6 +82,7 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
         case .contextChanged: "Le compte ou l'école a changé. Recharge Messages."
         case .stateConflict: "Cette conversation a changé sur un autre appareil. Actualise avant de réessayer."
         case .deviceLimitReached: "Trop d'appareils utilisent Messages sur ce compte. Retire un appareil puis réessaie. Rien n'a été envoyé."
+        case .membersChanged: "Les participants ont changé. Ce message n'a pas été envoyé et reste conservé sur cet appareil."
         }
     }
 }
@@ -123,11 +131,15 @@ struct MessagingPending: Codable, Sendable {
     let mentionPersonIDs: [UUID]
     let replyToMessageID: UUID?
     let poll: MessagingPollDraftMeta?
+    /// Contenu original pour une recomposition volontaire. Uniquement dans le snapshot scellé,
+    /// jamais transmis au serveur ni utilisé pour rechiffrer automatiquement une intention.
+    let recoveryContent: Data?
     init(clientMessageID: UUID, conversationID: UUID, ciphertext: MessagingCiphertext, mentionPersonIDs: [UUID] = [],
-         replyToMessageID: UUID? = nil, poll: MessagingPollDraftMeta? = nil) {
+         replyToMessageID: UUID? = nil, poll: MessagingPollDraftMeta? = nil, recoveryContent: Data? = nil) {
         self.clientMessageID = clientMessageID; self.conversationID = conversationID
         self.ciphertext = ciphertext; self.mentionPersonIDs = mentionPersonIDs
         self.replyToMessageID = replyToMessageID; self.poll = poll
+        self.recoveryContent = recoveryContent
     }
     // Les entrées v1 scellées n'ont pas ces clés : decodeIfPresent les garde lisibles.
     init(from decoder: Decoder) throws {
@@ -138,6 +150,7 @@ struct MessagingPending: Codable, Sendable {
         mentionPersonIDs = try c.decodeIfPresent([UUID].self, forKey: .mentionPersonIDs) ?? []
         replyToMessageID = try c.decodeIfPresent(UUID.self, forKey: .replyToMessageID)
         poll = try c.decodeIfPresent(MessagingPollDraftMeta.self, forKey: .poll)
+        recoveryContent = try c.decodeIfPresent(Data.self, forKey: .recoveryContent)
     }
 }
 

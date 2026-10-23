@@ -3,6 +3,73 @@ import XCTest
 
 @MainActor
 final class MessagingHTTPTransportTests: XCTestCase {
+    func testSendCarriesOriginalEpochOutsideCiphertextAndNeverRecoveryContent() async throws {
+        let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID(), message = UUID()
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            let raw = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: raw) as? [String: Any])
+            XCTAssertEqual(body["expectedMembersEpoch"] as? Int, 7)
+            let envelope = try XCTUnwrap(body["ciphertext"] as? [String: Any])
+            XCTAssertEqual(Set(envelope.keys), Set(["scheme", "keyId", "payload"]))
+            XCTAssertNil(body["recoveryContent"])
+            XCTAssertFalse(String(decoding: raw, as: UTF8.self).contains("sentinelle-récupération"))
+            XCTAssertFalse(String(decoding: raw, as: UTF8.self).contains(Data("sentinelle-récupération".utf8).base64EncodedString()))
+            let response = """
+            {"data":{"id":"\(message)","schoolId":"\(school)","conversationId":"\(conversation)","sequence":1,"clientMessageId":"\(intent)","senderId":"\(account)","ciphertext":{"scheme":"synthetic","keyId":"fixture","payload":"AQID"},"mentionPersonIds":[],"acceptedAt":"2026-10-23T00:00:00Z"},"context":{"schoolId":"\(school)","actorPersonId":"\(account)","accessEpoch":1}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+            transport: wire, currentScope: { scope })
+        let client = MessagingAPIClient(transport: transport)
+        let entry = MessagingPending(clientMessageID: intent, conversationID: conversation,
+            ciphertext: MessagingCiphertext(scheme: "synthetic", keyID: "fixture", payload: Data([1, 2, 3]), expectedMembersEpoch: 7),
+            recoveryContent: Data("sentinelle-récupération".utf8))
+        let ack = try await client.send(scope: scope, pending: entry)
+        XCTAssertEqual(ack.serverMessageID, message)
+    }
+
+    func testMembersEpochConflictHasSpecificFailureNotGenericRetryAdvice() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            SchoolHTTPResponse(data: Data("{\"code\":\"MESSAGING_MEMBERS_CHANGED\"}".utf8), status: 409,
+                               url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+            transport: wire, currentScope: { scope })
+        do {
+            _ = try await transport.send(scope: scope, conversationID: UUID(), body: MessagingSendDTO(
+                clientMessageId: UUID(), ciphertext: MessagingCiphertext(scheme: "synthetic", keyID: "fixture",
+                    payload: Data([1, 2, 3]), expectedMembersEpoch: 7), mentionPersonIds: []))
+            XCTFail("L'enveloppe périmée doit être refusée")
+        } catch MessagingFailure.membersChanged {}
+    }
+
+    func testReportsNeverLeakLocalEncryptionEpochIntoOpaqueEnvelope() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            let raw = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: raw) as? [String: Any])
+            let items = try XCTUnwrap(body["items"] as? [[String: Any]])
+            let envelope = try XCTUnwrap(items.first?["ciphertext"] as? [String: Any])
+            XCTAssertEqual(Set(envelope.keys), Set(["scheme", "keyId", "payload"]))
+            let response = """
+            {"data":{},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":1}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+            transport: wire, currentScope: { scope })
+        try await transport.report(scope: scope, conversationID: UUID(), clientReportID: UUID(), items: [
+            MessagingReportItem(messageID: UUID(), ciphertext: MessagingCiphertext(scheme: "synthetic", keyID: "fixture",
+                payload: Data([1, 2, 3]), expectedMembersEpoch: 9))
+        ])
+    }
+
     func testSchoolRouteBearerAndOpaqueMessageDecode() async throws {
         let school = UUID(), conversation = UUID(), sender = UUID(), message = UUID(), intent = UUID()
         let url = URL(string: "https://api.example.invalid/")!
