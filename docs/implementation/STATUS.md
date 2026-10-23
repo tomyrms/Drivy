@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 23 octobre 2026 : replay #91 fusionné, déployé et clôturé à la demande du porteur
+
+- Autorisations explicites reçues après la livraison sur branche : fusion, déploiement, puis clôture de #91. Fusion `36a3a70` dans `master`, sans changement du checkout des cours collectifs. Aucun workflow ni contrôle de secrets modifié ; les campagnes restent différées à #84.
+- Sauvegarde préalable CT113 : `/root/drivy_refonte-before-replay91-36a3a70-20261023T010832Z.dump`, 1 404 069 octets, mode 0600, fichier synchronisé et catalogue `pg_restore --list` vérifié. La base séparée `drivy_web` n'existe pas sur cet hôte. Aucune restauration d'essai revendiquée.
+- Release `36a3a70` active sur CT114. Installation verrouillée et compilation API/web sous Node 24.21.0, contrôles runtime/RLS de l'installateur réussis. Les 41 migrations appliquées correspondent aux empreintes du snapshot, sans nouvelle migration. Configurations API/web/migration inchangées, OSRM privé conservé.
+- Contrôles exécutés : répertoires réels des processus API/web et empreinte du source API conformes à la release, API/web/identité actifs, readiness interne réussie. HTTPS : web et découverte OIDC 200, `/me` et `matched-route` anonymes 401, santé interne et administration identité non exposées (404). [Preuves sans données métier](proofs/deployment-replay91-20261023.json).
+- #91 clôturée le 23 octobre à 01:10 UTC sur demande explicite, sans fermer #88. L'IPA `39880760958` reste celle du code iOS fusionné, identité des sources vérifiée ; signature et installation reviennent au porteur. La recette authentifiée du replay, les suites API/Swift/UI et les essais physiques restent à qualifier dans #84.
+
 ## 23 octobre 2026 : disponibilité et reprise du replay (#91), branche isolée
 
 - Branche `openai/91-replay-finalisation-20261023`, issue de `master` à `26297dd`. Contrat et API dans `2be1783` : motifs distincts pour synchronisation, calcul, résultat vide, moteur désactivé et erreurs ; délai de reprise serveur exposé sans modifier les trois statuts historiques. Algorithme serveur 2, compatibilité OSRM >= 2 et découpage des lots conservés. Aucun changement du direct, du démarrage #95, des cours collectifs ou des migrations.

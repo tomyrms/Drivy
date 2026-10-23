@@ -1,0 +1,53 @@
+{
+  "checkedAt": "2026-10-23T01:09:53Z",
+  "commit": "36a3a70d0996567da8015b8a616da610d9ea7ec0",
+  "previousCommit": "d05ca5959529af5e4480fa0677de31160ed5bfae",
+  "userAuthorizedMergeAndDeployment": true,
+  "sourceArchiveSHA256": "5418b6f1f34706ddcab0eb434acc60dd5f43a33dfa608a3824eba729295c9392",
+  "databaseBackup": {
+    "container": 113,
+    "database": "drivy_refonte",
+    "path": "/root/drivy_refonte-before-replay91-36a3a70-20261023T010832Z.dump",
+    "bytes": 1404069,
+    "mode": "0600",
+    "fileSynced": true,
+    "pgRestoreCatalogueVerified": true,
+    "restorationTest": "NOT_EXECUTED",
+    "separateWebDatabasePresent": false
+  },
+  "server": {
+    "container": 114,
+    "node": "v24.21.0",
+    "lockedInstallAndBuild": "PASSED",
+    "appliedMigrationCount": 41,
+    "appliedMigrationHashesMatchSource": true,
+    "migrationSourcesUnchanged": true,
+    "runtimeRLSChecks": "PASSED_BY_EXISTING_INSTALLER",
+    "apiAndWebProcessDirectoriesMatchCommit": true,
+    "apiSourceHashMatchesCommit": true,
+    "apiWebIdentityServicesActive": true,
+    "internalReadiness": "PASSED",
+    "configurationFingerprintsUnchanged": true
+  },
+  "httpsChecks": {
+    "web": 200,
+    "oidcDiscovery": 200,
+    "anonymousMe": 401,
+    "anonymousMatchedRouteSyntheticIDs": 401,
+    "privateHealth": 404,
+    "privateIdentityAdministration": 404
+  },
+  "ipa": {
+    "run": 39880760958,
+    "commit": "cc7295414671270c88ac152b1a554cac29ba47d1",
+    "applicationSourceMatchesMergedCommit": true,
+    "signedOrInstalledByAgent": false
+  },
+  "limitations": [
+    "No authenticated replay executed against real user data",
+    "API, Swift and UI behavioural suites remain deferred to issue 84",
+    "No physical GPS, battery or VoiceOver qualification",
+    "Initial preflight stopped before modification because optional web-migration.env was absent",
+    "Python urllib public probe received HTTP 403; curl HTTPS checks and internal web check returned expected status"
+  ]
+}

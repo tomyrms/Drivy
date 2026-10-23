@@ -1,5 +1,19 @@
 # Replay : disponibilité et reprise du recalage (#91)
 
+## Suite autorisée : fusion et déploiement
+
+Après la livraison sur branche, le porteur a demandé la fusion et le déploiement, puis la clôture de #91. Le merge `36a3a70` a été poussé sur `master` avec `[skip ci]` pour respecter la campagne différée #84, sans modifier les workflows, les protections ou les contrôles de secrets. La branche principale n'avait pas de règle de protection imposant des checks. Le checkout des cours collectifs est resté sur sa branche.
+
+Le 23 octobre 2026, sauvegarde de `drivy_refonte` dans CT113 avant changement : `/root/drivy_refonte-before-replay91-36a3a70-20261023T010832Z.dump`, mode 0600, 1 404 069 octets, synchronisation disque et catalogue `pg_restore --list` vérifiés. La base séparée `drivy_web` n'existe pas sur cet hôte. Le premier précontrôle s'était arrêté avant toute modification car le fichier facultatif `web-migration.env` n'existait pas ; la configuration réelle a été respectée, sans créer ce fichier.
+
+L'installateur existant a compilé API et web avec dépendances verrouillées sous Node 24.21.0, contrôlé les rôles/RLS et basculé `current` de `d05ca595` vers `36a3a70`. Les 41 empreintes de migrations appliquées en base ont été comparées au nouveau snapshot avant installation et sont identiques. API et web redémarrés, identité laissée active ; configurations inchangées, aucun nouveau calcul sur un trajet réel lancé par les contrôles.
+
+La revue parallèle `gpt-6-sol`, route `openai-oauth`, effort effectif `low`, a fait relever un défaut de protection dans le script opérateur temporaire : un échec de l'installateur après changement du lien devait aussi déclencher le retour arrière. Corrigé avant exécution, avec vérification de la release active pour ne pas écraser un autre déploiement. Aucun retour arrière n'a été nécessaire. L'ancienne release et la sauvegarde restent disponibles ; une restauration de base n'a pas été testée.
+
+Contrôles réels après déploiement : répertoires des processus API/web et empreinte source conformes au commit, services actifs, readiness interne réussie ; HTTPS via curl donne web/OIDC 200, accès anonymes `/me` et `matched-route` 401, santé privée et administration identité 404. Un premier contrôle Python urllib avait reçu 403 du chemin public ; les mêmes contrôles curl et le web interne ont donné les statuts attendus, sans changement de configuration. [Observations structurées](proofs/deployment-replay91-20261023.json).
+
+#91 clôturée à la demande explicite du porteur à 01:10 UTC, sans clôturer #88. Les sources applicatives iOS, dépendances et script IPA de `36a3a70` sont identiques à `cc72954` : l'IPA réussie `39880760958` reste valable, à signer et installer par le porteur. Cette clôture ne transforme pas les contrôles de déploiement en recette authentifiée du replay : les vérifications comportementales et physiques listées ci-dessous restent réservées à #84.
+
 ## Périmètre du 23 octobre 2026
 
 Base : `master` à `26297dd`. Branche isolée : `openai/91-replay-finalisation-20261023`.
