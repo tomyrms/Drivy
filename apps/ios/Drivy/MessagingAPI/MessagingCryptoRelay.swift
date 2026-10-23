@@ -10,8 +10,14 @@ protocol MessagingCryptoRelay: Sendable {
     /// Renvoie le JSON brut du champ `data` de la réponse, après vérification du contexte.
     func call(scope: MessagingScope, deviceID: String, method: String, path: [String],
               query: [URLQueryItem], body: Data?) async throws -> Data
-    /// Membres qui peuvent écrire dans la conversation (privée ou général).
-    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> [UUID]
+    /// Membres qui peuvent écrire dans la conversation (privée ou général) et époque de membres.
+    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers
+}
+
+/// `membersEpoch` augmente à chaque départ et à chaque retour d'un membre (absent : ancien serveur).
+struct MessagingConversationMembers: Sendable, Equatable {
+    let members: [UUID]
+    let membersEpoch: Int?
 }
 
 actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
@@ -42,14 +48,15 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
         try await request(scope: scope, deviceID: deviceID, method: method, path: ["crypto"] + path, query: query, body: body)
     }
 
-    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> [UUID] {
-        struct Members: Decodable { struct Member: Decodable { let personId: UUID }; let members: [Member] }
+    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers {
+        struct Members: Decodable { struct Member: Decodable { let personId: UUID }; let members: [Member]; let membersEpoch: Int? }
         let raw = try await request(scope: scope, deviceID: deviceID, method: "GET",
             path: ["conversations", conversationID.uuidString.lowercased(), "members"], query: [], body: nil)
-        guard let decoded = try? JSONDecoder().decode(Members.self, from: raw), decoded.members.count <= 5_000 else {
+        guard let decoded = try? JSONDecoder().decode(Members.self, from: raw), decoded.members.count <= 5_000,
+              (decoded.membersEpoch ?? 0) >= 0 else {
             throw MessagingFailure.invalidResponse
         }
-        return decoded.members.map(\.personId)
+        return MessagingConversationMembers(members: decoded.members.map(\.personId), membersEpoch: decoded.membersEpoch)
     }
 
     static func validDeviceID(_ value: String) -> Bool {

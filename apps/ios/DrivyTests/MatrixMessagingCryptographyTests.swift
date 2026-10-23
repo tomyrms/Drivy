@@ -25,6 +25,49 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         XCTAssertTrue(MatrixMessagingCryptography.someoneLeft(previous: [a, b], current: [a]))
     }
 
+    func testRotationWhenMembersEpochChanges() {
+        let a = UUID(), b = UUID()
+        XCTAssertTrue(MatrixMessagingCryptography.mustRotate(previous: [a, b], current: [a, b], previousEpoch: 1, currentEpoch: 2))
+        XCTAssertFalse(MatrixMessagingCryptography.mustRotate(previous: [a, b], current: [a, b], previousEpoch: 2, currentEpoch: 2))
+        XCTAssertFalse(MatrixMessagingCryptography.mustRotate(previous: [a, b], current: [a, b], previousEpoch: nil, currentEpoch: 3))
+        XCTAssertTrue(MatrixMessagingCryptography.mustRotate(previous: [a, b], current: [a], previousEpoch: nil, currentEpoch: nil))
+    }
+
+    func testLeftDevicesSelectAffectedConversations() {
+        let a = UUID(), b = UUID(), c1 = UUID(), c2 = UUID()
+        let members = [c1: [a, b], c2: [a]]
+        XCTAssertEqual(MatrixMessagingCryptography.conversationsAffected(byLeft: [MatrixMessagingCryptography.userID(b)], members: members), [c1])
+        XCTAssertEqual(MatrixMessagingCryptography.conversationsAffected(byLeft: [], members: members), [])
+        XCTAssertEqual(MatrixMessagingCryptography.conversationsAffected(byLeft: ["@x:matrix.org"], members: members), [])
+    }
+
+    func testStateDecodesWithoutNewFields() throws {
+        let state = try JSONDecoder().decode(MessagingCryptoVault.State.self, from: Data("{\"syncToken\":\"s\"}".utf8))
+        XCTAssertEqual(state.syncToken, "s"); XCTAssertFalse(state.backupPending); XCTAssertTrue(state.membersEpoch.isEmpty)
+    }
+
+    func testKeychainFailureDoesNotBlockNextAttempt() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let keychain = FlakyKeychain()
+        let vault = try MessagingCryptoVault(scope: scope, root: root, keychain: keychain)
+        keychain.failNextAdd()
+        XCTAssertThrowsError(try vault.secrets())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: vault.storePath))
+        let first = try vault.secrets()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: vault.storePath))
+        XCTAssertEqual(try vault.secrets().deviceID, first.deviceID)
+    }
+
+    func testEmptyStoreWithoutSecretIsRecreatedButFilledStoreIsRefused() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let vault = try MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain())
+        try FileManager.default.createDirectory(atPath: vault.storePath, withIntermediateDirectories: true)
+        XCTAssertNoThrow(try vault.secrets())
+        let other = try MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain())
+        try Data("x".utf8).write(to: URL(fileURLWithPath: other.storePath).appendingPathComponent("db"))
+        XCTAssertThrowsError(try other.secrets())
+    }
+
     func testRoutesMatchRelayContract() throws {
         let upload = try MatrixMessagingCryptography.route(.keysUpload(requestId: "r1", body: "{}"))
         XCTAssertEqual(upload.0, "POST"); XCTAssertEqual(upload.1, ["keys", "upload"])
@@ -100,6 +143,23 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
     }
 
+    /// Départ puis retour entre deux envois : la liste est identique, l'époque change, la clé doit changer.
+    func testLeaveAndReturnBetweenSendsRotates() async throws {
+        let relay = InMemoryRelay()
+        let alice = UUID(), bob = UUID()
+        await relay.setMembers(conversation, [alice, bob])
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let aScope = MessagingScope(accountID: alice, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let a = try MatrixMessagingCryptography(scope: aScope, relay: relay.view(alice), vault: MessagingCryptoVault(scope: aScope, root: root))
+        let first = try await a.encrypt(Data("Un".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        let steady = try await a.encrypt(Data("Deux".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        XCTAssertEqual(first.keyID, steady.keyID)
+        await relay.setMembers(conversation, [alice])
+        await relay.setMembers(conversation, [alice, bob])
+        let after = try await a.encrypt(Data("Trois".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        XCTAssertNotEqual(steady.keyID, after.keyID)
+    }
+
     func testCiphertextOnlyDecryptIsRefused() async throws {
         let relay = InMemoryRelay()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -107,6 +167,20 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         let envelope = MessagingCiphertext(scheme: "megolm.v1", keyID: "k", payload: Data("x".utf8))
         do { _ = try await crypto.decrypt(envelope, scope: scope, conversationID: conversation); XCTFail() }
         catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+    }
+}
+
+private final class FlakyKeychain: MessagingCryptoKeychain, @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String: Data] = [:]
+    private var failing = false
+    func failNextAdd() { lock.withLock { failing = true } }
+    func read(service: String, account: String) throws -> Data? { lock.withLock { items["\(service)|\(account)"] } }
+    func add(service: String, account: String, data: Data) throws {
+        try lock.withLock {
+            if failing { failing = false; throw MessagingFailure.protectionUnavailable }
+            items["\(service)|\(account)"] = data
+        }
     }
 }
 
@@ -118,7 +192,14 @@ private actor InMemoryRelay {
     private var members: [UUID: [UUID]] = [:]
 
     nonisolated func view(_ person: UUID) -> View { View(relay: self, person: person) }
-    func setMembers(_ id: UUID, _ value: [UUID]) { members[id] = value }
+    func setMembers(_ id: UUID, _ value: [UUID]) {
+        let old = Set(members[id] ?? []), new = Set(value)
+        let left = !old.subtracting(new).isEmpty
+        let returned = !new.subtracting(old).intersection(everMember[id] ?? []).isEmpty
+        if left || returned { epochs[id, default: 0] += 1 }
+        everMember[id, default: []].formUnion(new)
+        members[id] = value
+    }
 
     struct View: MessagingCryptoRelay {
         let relay: InMemoryRelay
@@ -126,12 +207,17 @@ private actor InMemoryRelay {
         func call(scope: MessagingScope, deviceID: String, method: String, path: [String], query: [URLQueryItem], body: Data?) async throws -> Data {
             try await relay.handle(user: MatrixMessagingCryptography.userID(person), device: deviceID, path: path, body: body)
         }
-        func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> [UUID] {
+        func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers {
             await relay.memberList(conversationID)
         }
     }
 
-    func memberList(_ id: UUID) -> [UUID] { members[id] ?? [] }
+    /// Comme le serveur : l'époque augmente à chaque départ et à chaque retour, pas à la première arrivée.
+    private var epochs: [UUID: Int] = [:]
+    private var everMember: [UUID: Set<UUID>] = [:]
+    func memberList(_ id: UUID) -> MessagingConversationMembers {
+        MessagingConversationMembers(members: members[id] ?? [], membersEpoch: epochs[id] ?? 0)
+    }
 
     func handle(user: String, device: String, path: [String], body: Data?) throws -> Data {
         let input = (body.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]) ?? [:]

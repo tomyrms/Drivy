@@ -8,7 +8,9 @@ protocol MessagingKeyManagement: Sendable {
     /// Crée une sauvegarde serveur. Renvoie la clé de récupération à montrer UNE fois à l'utilisateur.
     func enableBackup(scope: MessagingScope) async throws -> String
     /// Restaure l'historique sur un nouvel appareil avec la clé de récupération saisie.
-    func restoreBackup(recoveryKey: String, scope: MessagingScope) async throws -> Int
+    func restoreBackup(recoveryKey: String, scope: MessagingScope) async throws -> (imported: Int, failed: Int)
+    /// Vrai si des clés n'ont pas encore pu être envoyées à la sauvegarde (nouvel essai au prochain open/sync).
+    func backupPending(scope: MessagingScope) async -> Bool
     func ownDevices(scope: MessagingScope) async throws -> [MessagingOwnDevice]
     /// À appeler seulement après comparaison visuelle de l'empreinte affichée sur les deux appareils.
     func confirmOwnDevice(deviceID: String, fingerprint: String, scope: MessagingScope) async throws
@@ -38,6 +40,11 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     private var opening: Task<OlmMachine, any Error>?
     private var deviceID = ""
     private var state = MessagingCryptoVault.State()
+    /// Un seul sync en vol, partagé par tous les appels concurrents.
+    private var syncing: Task<Void, any Error>?
+    private var lastKeySync: ContinuousClock.Instant?
+    /// Fenêtre pendant laquelle un lot de messages sans clé ne relance pas de sync.
+    static let keySyncWindow: Duration = .seconds(5)
 
     init(scope: MessagingScope, relay: any MessagingCryptoRelay, vault: MessagingCryptoVault? = nil) throws {
         self.scope = scope
@@ -65,11 +72,13 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         return try await shielded {
             let machine = try await open()
             let room = Self.roomID(conversationID)
-            let members = try await relay.members(scope: scope, deviceID: deviceID, conversationID: conversationID)
+            let listed = try await relay.members(scope: scope, deviceID: deviceID, conversationID: conversationID)
+            let members = listed.members
             guard members.contains(scope.accountID) else { throw MessagingFailure.accessChanged }
             let users = Set(members).map(Self.userID).sorted()
-            // Départ d'un membre : la session de groupe sortante est jetée avant tout partage.
-            if Self.someoneLeft(previous: state.members[conversationID], current: members) {
+            // Départ (ou départ puis retour) d'un membre : la session de groupe sortante est jetée avant tout partage.
+            if Self.mustRotate(previous: state.members[conversationID], current: members,
+                               previousEpoch: state.membersEpoch[conversationID], currentEpoch: listed.membersEpoch) {
                 try machine.discardRoomKey(roomId: room)
             }
             try machine.updateTrackedUsers(users: users)
@@ -83,10 +92,11 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                 try await dispatch(request, machine)
             }
             state.members[conversationID] = members.sorted { $0.uuidString < $1.uuidString }
+            if let epoch = listed.membersEpoch { state.membersEpoch[conversationID] = epoch }
             try vault.save(state)
             let content = try Self.messageContent(text: text, mentions: mentions)
             let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
-            try? await backup(machine)
+            await backupOrMarkPending(machine)
             return try Self.envelope(fromEncryptedContent: encrypted)
         }
     }
@@ -108,9 +118,9 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             let decrypted: DecryptedEvent
             do { decrypted = try machine.decryptRoomEvent(event: event, roomId: room, handleVerificationEvents: false,
                                                           strictShields: false, decryptionSettings: settings) }
-            catch {
-                // Clé de session pas encore reçue : relever le relais une fois puis réessayer.
-                try await sync(machine)
+            catch DecryptionError.MissingRoomKey {
+                // Clé de salon pas encore reçue : un seul sync partagé par lot, puis un nouvel essai.
+                try await keySync(machine)
                 decrypted = try machine.decryptRoomEvent(event: event, roomId: room, handleVerificationEvents: false,
                                                          strictShields: false, decryptionSettings: settings)
             }
@@ -134,12 +144,16 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                   !version.isEmpty else { throw MessagingFailure.invalidResponse }
             try machine.enableBackupV1(key: publicKey, version: version)
             try machine.saveRecoveryKey(key: key, version: version)
+            state.backupPending = true
+            try vault.save(state)
             try await backup(machine)
+            state.backupPending = false
+            try vault.save(state)
             return key.toBase58()
         }
     }
 
-    func restoreBackup(recoveryKey: String, scope: MessagingScope) async throws -> Int {
+    func restoreBackup(recoveryKey: String, scope: MessagingScope) async throws -> (imported: Int, failed: Int) {
         try guardScope(scope)
         return try await shielded {
             let machine = try await open()
@@ -152,13 +166,19 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                   auth["public_key"] as? String == key.megolmV1PublicKey().publicKey else { throw MessagingFailure.protectionUnavailable }
             let raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["room_keys", "keys"],
                                            query: [URLQueryItem(name: "version", value: version)], body: nil)
-            let sessions = try Self.decryptBackup(raw, key: key)
-            let keys = String(decoding: try JSONSerialization.data(withJSONObject: sessions), as: UTF8.self)
+            let backup = try Self.decryptBackup(raw, key: key)
+            let keys = String(decoding: try JSONSerialization.data(withJSONObject: backup.sessions), as: UTF8.self)
             let result = try machine.importRoomKeysFromBackup(keys: keys, backupVersion: version, progressListener: SilentProgress())
             try machine.saveRecoveryKey(key: key, version: version)
             try machine.enableBackupV1(key: key.megolmV1PublicKey(), version: version)
-            return Int(result.imported)
+            let rejected = max(0, Int(result.total) - Int(result.imported))
+            return (imported: Int(result.imported), failed: backup.failed + rejected)
         }
+    }
+
+    func backupPending(scope: MessagingScope) async -> Bool {
+        guard scope == self.scope else { return false }
+        return state.backupPending
     }
 
     func ownDevices(scope: MessagingScope) async throws -> [MessagingOwnDevice] {
@@ -230,6 +250,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         deviceID = secrets.deviceID
         state = try vault.load()
         try await flush(created)
+        if state.backupPending { await backupOrMarkPending(created) }
         return created
     }
 
@@ -241,7 +262,22 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         }
     }
 
+    /// Sync déclenché par une clé manquante : pas de nouveau sync si un autre vient de finir pour ce lot.
+    private func keySync(_ machine: OlmMachine) async throws {
+        if syncing == nil, let last = lastKeySync, ContinuousClock.now - last < Self.keySyncWindow { return }
+        try await sync(machine)
+        lastKeySync = .now
+    }
+
     private func sync(_ machine: OlmMachine) async throws {
+        if let syncing { return try await syncing.value }
+        let task = Task { try await self.performSync(machine) }
+        syncing = task
+        defer { syncing = nil }
+        try await task.value
+    }
+
+    private func performSync(_ machine: OlmMachine) async throws {
         for _ in 0..<10 {
             let query = state.syncToken.map { [URLQueryItem(name: "since", value: $0)] } ?? []
             let raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["sync"], query: query, body: nil)
@@ -251,10 +287,24 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                 decryptionSettings: DecryptionSettings(senderDeviceTrustRequirement: .untrusted))
             let advanced = page.next != state.syncToken
             state.syncToken = page.next
+            // Appareil ou membre parti : toute session sortante qu'il a pu recevoir est jetée.
+            for conversation in Self.conversationsAffected(byLeft: page.left, members: state.members) {
+                try machine.discardRoomKey(roomId: Self.roomID(conversation))
+            }
             try vault.save(state)
             try await flush(machine)
-            if !advanced || page.eventCount < 100 { return }
+            if !advanced || page.eventCount < 100 { break }
         }
+        if state.backupPending { await backupOrMarkPending(machine) }
+    }
+
+    /// L'envoi n'échoue pas pour une sauvegarde en retard : l'état est mémorisé et retenté.
+    private func backupOrMarkPending(_ machine: OlmMachine) async {
+        let pending: Bool
+        do { try await backup(machine); pending = false } catch { pending = true }
+        guard pending != state.backupPending else { return }
+        state.backupPending = pending
+        try? vault.save(state)
     }
 
     private func backup(_ machine: OlmMachine) async throws {
@@ -295,6 +345,19 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     static func someoneLeft(previous: [UUID]?, current: [UUID]) -> Bool {
         guard let previous else { return false }
         return !Set(previous).isSubset(of: Set(current))
+    }
+
+    /// Rotation si cet appareil voit un départ, ou si l'époque de membres a changé (départ puis retour inclus).
+    static func mustRotate(previous: [UUID]?, current: [UUID], previousEpoch: Int?, currentEpoch: Int?) -> Bool {
+        if someoneLeft(previous: previous, current: current) { return true }
+        guard let previousEpoch, let currentEpoch else { return false }
+        return previousEpoch != currentEpoch
+    }
+
+    static func conversationsAffected(byLeft left: [String], members: [UUID: [UUID]]) -> [UUID] {
+        let gone = Set(left.compactMap(person(fromUserID:)))
+        guard !gone.isEmpty else { return [] }
+        return members.filter { !gone.isDisjoint(with: $0.value) }.map(\.key).sorted { $0.uuidString < $1.uuidString }
     }
 
     static func messageContent(text: String, mentions: [UUID]) throws -> String {
@@ -356,25 +419,51 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                         next: next, eventCount: events.count)
     }
 
-    static func decryptBackup(_ raw: Data, key: BackupRecoveryKey) throws -> [[String: Any]] {
+    static func decryptBackup(_ raw: Data, key: BackupRecoveryKey) throws -> (sessions: [[String: Any]], failed: Int) {
         guard let rooms = (try JSONSerialization.jsonObject(with: raw) as? [String: Any])?["rooms"] as? [String: Any] else {
             throw MessagingFailure.invalidResponse
         }
         var sessions: [[String: Any]] = []
+        var failed = 0
         for (room, value) in rooms {
-            guard let list = (value as? [String: Any])?["sessions"] as? [String: Any] else { continue }
+            guard let list = (value as? [String: Any])?["sessions"] as? [String: Any] else { failed += 1; continue }
             for (session, entry) in list {
                 guard let data = (entry as? [String: Any])?["session_data"] as? [String: Any],
                       let ephemeral = data["ephemeral"] as? String, let mac = data["mac"] as? String,
                       let ciphertext = data["ciphertext"] as? String,
                       let clear = try? key.decryptV1(ephemeralKey: ephemeral, mac: mac, ciphertext: ciphertext),
-                      var decoded = try? JSONSerialization.jsonObject(with: Data(clear.utf8)) as? [String: Any] else { continue }
+                      var decoded = try? JSONSerialization.jsonObject(with: Data(clear.utf8)) as? [String: Any] else { failed += 1; continue }
                 decoded["room_id"] = room
                 decoded["session_id"] = session
                 sessions.append(decoded)
             }
         }
-        return sessions
+        return (sessions, failed)
+    }
+}
+
+/// Accès Keychain injectable pour tester l'échec d'écriture.
+protocol MessagingCryptoKeychain: Sendable {
+    func read(service: String, account: String) throws -> Data?
+    func add(service: String, account: String, data: Data) throws
+}
+
+struct MessagingSystemKeychain: MessagingCryptoKeychain {
+    func read(service: String, account: String) throws -> Data? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else { throw MessagingFailure.protectionUnavailable }
+        return data
+    }
+
+    func add(service: String, account: String, data: Data) throws {
+        let insert: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account, kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
+        guard SecItemAdd(insert as CFDictionary, nil) == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
     }
 }
 
@@ -388,16 +477,29 @@ struct MessagingCryptoVault: Sendable {
     struct State: Codable, Equatable, Sendable {
         var syncToken: String?
         var members: [UUID: [UUID]] = [:]
+        var membersEpoch: [UUID: Int] = [:]
+        var backupPending = false
+
+        init() {}
+        init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            syncToken = try values.decodeIfPresent(String.self, forKey: .syncToken)
+            members = try values.decodeIfPresent([UUID: [UUID]].self, forKey: .members) ?? [:]
+            membersEpoch = try values.decodeIfPresent([UUID: Int].self, forKey: .membersEpoch) ?? [:]
+            backupPending = try values.decodeIfPresent(Bool.self, forKey: .backupPending) ?? false
+        }
     }
     struct Secrets: Sendable { let deviceID: String; let passphrase: String }
 
     static let service = "ch.drivy.messaging.crypto.v1"
     let folder: URL
     let fingerprint: String
+    let keychain: any MessagingCryptoKeychain
     var storePath: String { folder.appendingPathComponent("store", isDirectory: true).path }
     private var stateFile: URL { folder.appendingPathComponent("state.sealed") }
 
-    init(scope: MessagingScope, root: URL? = nil) throws {
+    init(scope: MessagingScope, root: URL? = nil, keychain: any MessagingCryptoKeychain = MessagingSystemKeychain()) throws {
+        self.keychain = keychain
         guard !scope.apiBaseURL.isEmpty else { throw MessagingFailure.contextChanged }
         // Une identité d'appareil par compte, école et serveur ; l'époque d'accès ne détruit pas les clés.
         let descriptor = "\(scope.accountID.uuidString.lowercased())|\(scope.schoolID.uuidString.lowercased())|\(scope.apiBaseURL)"
@@ -408,14 +510,21 @@ struct MessagingCryptoVault: Sendable {
     }
 
     func secrets() throws -> Secrets {
-        let storeExists = FileManager.default.fileExists(atPath: storePath)
+        let manager = FileManager.default
         if let existing = try read() { return existing }
-        guard !storeExists else { throw MessagingFailure.protectionUnavailable }
-        try FileManager.default.createDirectory(at: URL(fileURLWithPath: storePath), withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
-        try protectStore()
+        if manager.fileExists(atPath: storePath) {
+            // Store sans secret : vide (essai précédent interrompu) il est recréé, sinon erreur fermée.
+            guard (try? manager.contentsOfDirectory(atPath: storePath))?.isEmpty == true else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            try manager.removeItem(atPath: storePath)
+        }
+        // Le secret est durable avant toute création du store : un échec Keychain ne bloque pas l'essai suivant.
         let fresh = Secrets(deviceID: try Self.randomDeviceID(), passphrase: try Self.random(32).base64EncodedString())
         try write(fresh)
+        try manager.createDirectory(at: URL(fileURLWithPath: storePath), withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        try protectStore()
         return fresh
     }
 
@@ -452,13 +561,8 @@ struct MessagingCryptoVault: Sendable {
     }
 
     private func read() throws -> Secrets? {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: fingerprint, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data,
-              let pair = try? JSONDecoder().decode([String: String].self, from: data),
+        guard let data = try keychain.read(service: Self.service, account: fingerprint) else { return nil }
+        guard let pair = try? JSONDecoder().decode([String: String].self, from: data),
               let device = pair["deviceId"], let passphrase = pair["passphrase"],
               MessagingCryptoHTTPRelay.validDeviceID(device), Data(base64Encoded: passphrase)?.count == 32
         else { throw MessagingFailure.protectionUnavailable }
@@ -467,10 +571,7 @@ struct MessagingCryptoVault: Sendable {
 
     private func write(_ secrets: Secrets) throws {
         let data = try JSONEncoder().encode(["deviceId": secrets.deviceID, "passphrase": secrets.passphrase])
-        let insert: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: fingerprint, kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        guard SecItemAdd(insert as CFDictionary, nil) == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
+        try keychain.add(service: Self.service, account: fingerprint, data: data)
     }
 
     static func random(_ count: Int) throws -> Data {
