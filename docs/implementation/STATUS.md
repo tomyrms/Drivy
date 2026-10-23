@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 23 octobre 2026 : disponibilité et reprise du replay (#91), branche isolée
+
+- Branche `openai/91-replay-finalisation-20261023`, issue de `master` à `26297dd`. Contrat et API dans `2be1783` : motifs distincts pour synchronisation, calcul, résultat vide, moteur désactivé et erreurs ; délai de reprise serveur exposé sans modifier les trois statuts historiques. Algorithme serveur 2, compatibilité OSRM >= 2 et découpage des lots conservés. Aucun changement du direct, du démarrage #95, des cours collectifs ou des migrations.
+- Client iOS `cc72954` : erreurs explicites, synchronisation/calcul/résultat complet ou partiel/absence fiable/indisponibilité distincts, six reprises automatiques au plus avec espacement et conseil serveur, relance manuelle, annulation et rejet des réponses périmées. Les pages actualisées sont remplacées ensemble avant d'appliquer une géométrie confirmée ; vitesse, instant de lecture et sélection sont conservés. Préparation des assertions Swift complétée dans `1d5127a`.
+- Exécuté : typage et compilation TypeScript, contrôle du diff, revue ciblée API/iOS sans blocage P1/P2 confirmé. Node local 26.8.1 hors cible projet 24. Compilation Release, archive et IPA non signé réussis sur `cc72954`, run `39880760958` du 23 octobre 2026. Tests PostgreSQL et Swift préparés, non exécutés conformément à #84 ; les tests Swift ne sont pas compilés par ce workflow IPA. Détail et matrice de reprise : [replay-disponibilite-91-20261023.md](replay-disponibilite-91-20261023.md).
+- Aucun déploiement, aucune modification de données réelles, aucune fusion dans `master`. Les suites API/Swift/UI et la recette physique restent à exécuter dans #84. La stratégie CI a été coordonnée avec les cours : push `openai/**` sans campagnes, pas de PR vers `master`, IPA manuelle uniquement, workflows inchangés.
+
 ## 22 octobre 2026 : démarrage compact et choix GPS réutilisé (#95), intégré dans `master`
 
 - « Démarrer une leçon » : le récapitulatif est une carte flottante centrée, hauteur au contenu, fond flouté (plus de `.large`). Un choix GPS valide (accord ou refus) n'affiche plus ni cartes ni panneau « Accord GPS » : le bouton annonce Avec/Sans GPS, « Modifier le choix GPS » reste accessible. Chargement et panne de lecture ne passent ni pour une absence de choix ni pour un accord. Détail : [demarrage-compact-gps-95.md](demarrage-compact-gps-95.md). Aucun changement API, OpenAPI ni base, aucun déploiement.
