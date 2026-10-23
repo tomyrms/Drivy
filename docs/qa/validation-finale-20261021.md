@@ -21,7 +21,7 @@ Une IPA compilée prouve la construction. Elle ne prouve ni le fonctionnement ni
 | Issue | Critère | Commits | Preuve | Résultat | Point restant |
 | --- | --- | --- | --- | --- | --- |
 | #37 | Epic cours collectifs | | | NOT_EXECUTED | Campagne finale |
-| #38 | Création et publication de séries | 7c3bcef | API : 11 tests ciblés passés une fois en local (PostgreSQL 17 jetable), hors CI | NOT_EXECUTED | Campagne finale |
+| #38 | Création et publication de séries | 7c3bcef, efc6a85 | API : 11 tests ciblés en local ; web : typage + 35 tests ; IPA compilée run 39940836151 | NOT_EXECUTED | Campagne finale |
 | #39 | Inscription à toute la série | | | NOT_EXECUTED | Campagne finale |
 | #40 | Liste d'attente prioritaire | | | NOT_EXECUTED | Activation `offerResponseMinutes` |
 | #41 | Annulation et délai | | | NOT_EXECUTED | Campagne finale |

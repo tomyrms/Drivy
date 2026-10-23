@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 23 octobre 2026 : cours collectifs, cadrage (#79), socle (#80), création et publication (#38)
+
+Branche `vague/cours-collectifs`, non fusionnée, aucun déploiement. Commits `7c3bcef`, `6877eea`, `efc6a85`.
+- Cadrage : [cours-collectifs-cadrage-79.md](cours-collectifs-cadrage-79.md). Règles confirmées, propositions groupées (délai d'acceptation 12 h, non approuvé, file désactivée tant que l'école ne l'active pas), OAC art. 10 et 18 lus sur Fedlex (versions 2026 et 2027).
+- Socle : migration 042 et `apps/api/src/courses.ts` ([cours-collectifs-socle-80.md](cours-collectifs-socle-80.md)). Types, séries, séances, inscriptions, file, propositions avec retenue de place, présences, règlements sur place, accomplissements, conditions d'annulation versionnées (24 h par défaut). Occupation des formateurs dans `drivy.reservation`, donc conflits cours/leçon refusés dans les deux sens.
+- #38 : création, brouillon et publication depuis l'agenda web et iOS/iPadOS ; capacité modifiable après publication, jamais sous les places prises.
+- Exécuté : 11 tests API ciblés réussis une fois en local sur PostgreSQL 17 jetable (migrations 001 à 042) ; web : typage et 35 tests (`course-model`, `school-bff`) ; IPA d'essai compilée sur `efc6a85` ([run 39940836151](https://github.com/tomyrms/Drivy/actions/runs/39940836151)). Ce ne sont pas des recettes.
+- Non exécuté : suite API complète en CI, tests Swift (dont `SchoolCourseClientTests`), parcours UI, navigateur. Tout est différé à la campagne finale #84 ([manifeste](../qa/validation-finale-20261021.md)).
+- Restent : #39 à #43, #81, #82 (inscription, file, annulation, appel, règlement, validation) ; modification ou annulation d'une série publiée (#41). iOS : les séances de cours ne sont pas encore comptées dans la bande semaine et la grille du mois, une erreur de lecture des cours n'est pas affichée.
+
 ## 22 octobre 2026 : démarrage compact et choix GPS réutilisé (#95), intégré dans `master`
 
 - « Démarrer une leçon » : le récapitulatif est une carte flottante centrée, hauteur au contenu, fond flouté (plus de `.large`). Un choix GPS valide (accord ou refus) n'affiche plus ni cartes ni panneau « Accord GPS » : le bouton annonce Avec/Sans GPS, « Modifier le choix GPS » reste accessible. Chargement et panne de lecture ne passent ni pour une absence de choix ni pour un accord. Détail : [demarrage-compact-gps-95.md](demarrage-compact-gps-95.md). Aucun changement API, OpenAPI ni base, aucun déploiement.
