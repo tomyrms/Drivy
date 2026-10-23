@@ -1,4 +1,5 @@
 import { registerMessaging } from './messaging-routes.js';
+import { registerMessagingKeys } from './messaging-keys-routes.js';
 import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -221,5 +222,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   // #67/#68/#78 are not qualified: production composition never supplies synthetic mode.
   // Disabled messaging does not acquire a database connection or affect lesson routes.
   registerMessaging(app, { pool: options.pool, verifyToken: options.verifyToken });
+  registerMessagingKeys(app, { pool: options.pool, verifyToken: options.verifyToken });
   return app;
 }
