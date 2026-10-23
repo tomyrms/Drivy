@@ -35,6 +35,8 @@ packages:
   SQLCipher:
     url: https://github.com/sqlcipher/SQLCipher.swift.git
     exactVersion: 4.19.0
+  MatrixSDKCrypto:
+    path: Packages/MatrixSDKCrypto
 targets:
   Drivy:
     type: application
@@ -46,6 +48,7 @@ targets:
     dependencies:
       - package: AppAuth
       - package: SQLCipher
+      - package: MatrixSDKCrypto
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ch.drivy.qualification
@@ -67,6 +70,7 @@ targets:
       - target: Drivy
       - package: AppAuth
       - package: SQLCipher
+      - package: MatrixSDKCrypto
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

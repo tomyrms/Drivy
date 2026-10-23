@@ -1,5 +1,10 @@
 name: Refonte · ouverture école navigateur
 on:
+  workflow_call:
+    inputs:
+      qualification_sha:
+        required: true
+        type: string
   workflow_dispatch:
   push:
     branches: [master, 'codex/**', 'claude/**']
@@ -10,14 +15,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: school-opening-e2e-${{ github.ref }}
-  cancel-in-progress: true
+  group: school-opening-e2e-${{ inputs.qualification_sha || github.ref }}
+  cancel-in-progress: false
 jobs:
   browser:
     name: Chromium · OIDC · BFF · API · PostgreSQL
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     services:
       mailpit:
         image: axllent/mailpit:v1.31.2@sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d
@@ -33,9 +38,13 @@ jobs:
           --health-cmd "pg_isready -U drivy_test -d drivy_onboarding_e2e"
           --health-interval 5s --health-timeout 3s --health-retries 15
     env:
+      QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
       ONBOARDING_E2E_DATABASE_URL: postgres://drivy_test:test-only@127.0.0.1:5432/drivy_onboarding_e2e
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.qualification_sha || github.sha }}
+      - run: bash scripts/qualification/verify-checkout.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .node-version
@@ -60,13 +69,17 @@ jobs:
       - run: npm run build --prefix apps/web
       - name: Parcours complet sur données synthétiques
         run: npx tsx scripts/dev/check-school-opening.ts
+      - name: Vérifier les contrôles navigateur exécutés
+        if: always()
+        run: python3 scripts/qualification/evidence.py browser artifacts/onboarding-web-synthetic/result.json
       # Seulement les captures d'écrans métier sans lien secret et le bilan de contrôles.
       # Aucun journal réseau, cookie, trace Playwright, realm OIDC ou mot de passe n'est archivé.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: onboarding-web-synthetic
-          path: artifacts/onboarding-web-synthetic/
-          if-no-files-found: ignore
+          name: onboarding-web-synthetic-${{ inputs.qualification_sha || github.sha }}
+          path: |
+            artifacts/onboarding-web-synthetic/
+            artifacts/qualification/identity.json
+          if-no-files-found: error
           retention-days: 7
-

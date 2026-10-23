@@ -1,3 +1,6 @@
+import type { MessagingQualification } from './messaging-access.js';
+import { registerMessaging } from './messaging-routes.js';
+import { registerMessagingKeys } from './messaging-keys-routes.js';
 import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -94,7 +97,7 @@ export function clientError(error: unknown): ApiError | undefined {
   return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
+export function buildApp(options: { messaging?: MessagingQualification; pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
   // Derrière le proxy public, l'adresse du client sert de clé aux freins des routes sans connexion (codes, création de compte).
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384, ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}) });
   const cursors = new Cursors(options.cursorSecret);
@@ -217,5 +220,9 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerAdministration(app,options);
   registerObservationThemes(app,options);
   registerObservationRanking(app,options);
+  // Qualification physique explicite par école, jamais de mode synthétique en composition réelle.
+  // Désactivée ou hors liste : aucune connexion base, aucun effet sur les parcours leçon.
+  registerMessaging(app, { pool: options.pool, verifyToken: options.verifyToken, ...(options.messaging ? { qualification: options.messaging } : {}) });
+  registerMessagingKeys(app, { pool: options.pool, verifyToken: options.verifyToken, ...(options.messaging ? { qualification: options.messaging } : {}) });
   return app;
 }

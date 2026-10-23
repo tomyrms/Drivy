@@ -2,13 +2,15 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import type { Pool } from 'pg';
 
+export const migrationFilePattern = /^\d+[a-z]?_[a-z0-9_]+\.sql$/;
+
 export async function migrate(pool: Pool): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('SELECT pg_advisory_lock(172936,1)');
     await client.query('CREATE TABLE IF NOT EXISTS public.drivy_migrations (name text PRIMARY KEY, sha256 text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
     const dir = new URL('../migrations/', import.meta.url);
-    const names = (await readdir(dir)).filter(name => /^\d+_[a-z0-9_]+\.sql$/.test(name)).sort();
+    const names = (await readdir(dir)).filter(name => migrationFilePattern.test(name)).sort();
     for (const name of names) {
       const sql = await readFile(new URL(name, dir), 'utf8');
       const hash = createHash('sha256').update(sql).digest('hex');

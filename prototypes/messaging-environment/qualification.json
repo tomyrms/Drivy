@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "scope": "messaging-synthetic-environment",
+  "date": "2026-10-23",
+  "status": "NOT_QUALIFIED",
+  "configurationOnly": true,
+  "runtimeExecuted": false,
+  "testsExecuted": false,
+  "productionEnabled": false,
+  "validation": {
+    "javascriptSyntax": "passed-node-26.8.1",
+    "yamlSyntax": "passed-existing-yaml-package",
+    "sql": "manual-review-only",
+    "node24Runtime": "not-executed",
+    "composeRuntime": "not-executed"
+  },
+  "pending": [
+    { "requirement": "RES01", "evidence": "Localisation, copies hôte et accès support", "status": "not-qualified" },
+    { "requirement": "RES02", "evidence": "Isolation réseau effective source et cible", "status": "not-executed" },
+    { "requirement": "RES03", "evidence": "Absence de données dans logs et artefacts", "status": "not-executed" },
+    { "requirement": "RES04", "evidence": "Sauvegarde puis restauration cohérente des fixtures", "status": "not-executed" },
+    { "requirement": "RES05", "evidence": "Révocations et suppressions non ressuscitées", "status": "not-implemented" },
+    { "requirement": "RES06", "evidence": "Politique de conservation et nettoyage explicite", "status": "decision-required" }
+  ]
+}

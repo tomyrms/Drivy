@@ -1,5 +1,49 @@
 # État de la réalisation
 
+## 24 octobre 2026 : campagne #84 engagée sur la messagerie
+
+- Demande du porteur : tester puis afficher Messages une fois qualifié. Travail sur `openai/65-messagerie`, PR #96 en brouillon, checkout des cours collectifs préservé. [Rapport et limites](qualification-messagerie-84-20261024.md).
+- Candidat initial `e2657c4` : API/PostgreSQL run `40031983397`, **596 tests réussis et 21 échoués**. Navigateur OIDC/BFF/API/PostgreSQL run `40031985954` réussi. Apple run `40031925552` échoué à la compilation des tests : aucune suite XCTest/UI exécutée, aucune IPA produite par ce run.
+- Corrections et requalification en cours. Contrôles locaux complémentaires : web 320 tests, typage/build réussis sous Node 26 hors cible 24 ; scripts sélection 14 tests et captures 11 tests réussis après correction du harnais. Ces scripts simulent les commandes Apple.
+- **Messages reste masqué** : qualification automatisée incomplète, routes limitées au mode de test, recette physique et preuves d'exploitation encore requises. Les cours collectifs non intégrés restent dans le périmètre #84 comme non qualifiés. Aucun déploiement, fusion ni clôture d'issue.
+
+## 23 octobre 2026 : messagerie #65, bilan après décisions du porteur
+
+- Décisions du porteur appliquées ([decisions-messaging-20261023.md](decisions-messaging-20261023.md)) : E2EE Olm/Megolm via `matrix-sdk-crypto` 0.17.0 officiel, relais de clés sur l'API Drivy, sauvegarde par clé de récupération, fin du lien, arrivée et réintégration comme WhatsApp, contacts élève limités aux moniteurs attribués, général avec nom et photo, administrateurs du groupe, suppression pour moi ou pour tous, réactions, réponses, épinglage, recherche locale, accusés de lecture, sondages, signalements. Photos et fichiers renvoyés à #97.
+- Deux revues ciblées (chiffrement iOS, API) : constats P2/P3 corrigés. Risque de confiance au premier usage documenté et accepté.
+- Exécuté : `npm run typecheck` et `npm run build` ; dernière IPA non signée `ipa-essai` run `40030459842` sur `b39fce4`, compilation seulement.
+- **Non exécuté** (#84) : tests PostgreSQL (`messaging-v2`, `messaging-keys`), XCTest et UI, scénarios crypto, VoiceOver, appareils physiques. Migrations `20261023b/c/d` appliquées nulle part. Messages reste masqué en Release. Aucun déploiement, fusion ni clôture d'issue.
+- Limites connues : identifiant de signalement perdu si l'app redémarre pendant l'envoi ; vérification croisée des appareils sans écran dédié ; conservation et export des données non tranchés.
+
+## 23 octobre 2026 : messagerie iOS, plafond d'appareils et réintégration (#65)
+
+- `409 DEVICE_LIMIT_REACHED` du relais crypto devient `MessagingFailure.deviceLimitReached` (« Trop d'appareils… Retire un appareil… ») ; composition, file et reprise s'arrêtent, aucun repli non chiffré.
+- Membres du général : un administrateur voit les personnes retirées pendant la session (section « Retirés ») et peut les réintégrer (`PUT general/members/:p`) après confirmation ; libellés VoiceOver « Réintégrer {nom} ». L'annuaire serveur ne liste pas les retirés : rien n'est proposé pour un retrait antérieur à la session.
+- Arrivée (`readable_after`) : fil vide accepté sans erreur, aucun curseur, écriture permise.
+- XCTest (`MessagingThreadTests`) et UI (`testAdminReinstatesRemovedMemberAfterConfirmation`) écrits, **non exécutés** (#84). Build IPA : voir rapport du run `ipa-essai.yml`.
+
+## 23 octobre 2026 : messagerie API, corrections de revue (#65)
+
+- Arrivée comme WhatsApp (plage lisible après `last_sequence` à l'entrée, réactions/sondages/votes/accusés compris), réintégration `PUT /general/members/{personId}` (époque +1), preuve des signalements conservée après suppression. RLS de lecture des réactions/sondages/votes bornée à la plage lisible. Ordre des verrous droits puis conversation pour envoi, réactions, votes, épinglage, suppression. Appareils : plafond de 10 actifs, création liée à la session OIDC, repli d'autrui modifiable seulement sur `used`, suivi (`messaging_device_tracking`) privé. `sendToDevice` concurrent idempotent. Fonctions sur une personne quelconque retirées de `drivy_app`, écritures directes sur votes et clôture retirées.
+- Exécuté : `npm run typecheck` et `npm run build`. Tests PostgreSQL écrits, **non exécutés** (#84). Migrations 20261023b/c modifiées en place, appliquées nulle part.
+
+## 23 octobre 2026 : messagerie iOS v2 (#65), branche `openai/65-messagerie`
+
+- SwiftUI : annuaire du général avec nom et photo, profil limité au nom et à la photo, lecture seule après la fin du lien (composeur masqué), suppression pour moi et pour tout le monde, actions des administrateurs du groupe, réactions, réponse citée, bandeau des messages épinglés, recherche locale dans l'historique scellé AES-GCM, accusés de lecture, sondages, signalement de messages choisis. [Décisions](messaging-ios-v2-20261023.md).
+- Déchiffrement et scellement pour les administrateurs : interfaces de l'agent crypto. Les implémentations par défaut restent indisponibles et échouent fermé.
+- **Rien d'exécuté** : XCTest `MessagingThreadTests` et UI `MessagingThreadUITests` écrits, non compilés et non lancés (#84, pas de runner Apple ici). Aucun résultat VoiceOver ou Dynamic Type sur appareil revendiqué. `changes?afterChange` n'est pas encore consommé.
+
+## 23 octobre 2026 : messagerie #65, livraison partielle sur branche isolée
+
+- Branche `openai/65-messagerie`, base `master` à `6d08b40`, PR **#96 en brouillon**. Aucun changement de notre part dans le worktree `vague/cours-collectifs`. [Périmètre, commits, tableau des issues et arbitrages](messaging-20261023.md), [matrice #78/#84](../qa/messaging-78-20261023.md), [revue ciblée](messaging-review-20261023.md).
+- Code intégré : droits scolaires/RLS et migration nouvelle `20261023_messaging_foundation.sql`, contacts, privé/général, mentions, enveloppes durables, idempotence/pagination/événements, non-lus et sourdine versionnée. Swift : transport HTTP, coffre de brouillons/file AES-GCM/Keychain, reprise bornée indépendante du GPS, entrée réversible et dossier. Consommateur #44 sans stockage parallèle ni émission push. Une conversation refusée ne provoque plus la purge des autres intentions/brouillons. Ces comportements restent à qualifier.
+- **Pas de messagerie E2EE utilisable annoncée** : composition API réelle fermée, adaptateur cryptographique produit indisponible, présentation uniquement DEBUG simulateur avec argument explicite. L'IPA Release n'affiche pas Messages. Prototype Matrix officiel isolé au commit `60e845f`, quatre scénarios écrits et compilés, non exécutés. Aucun homeserver déployé ni appareil/clé produit raccordé.
+- Exécuté : installation verrouillée, `npm run typecheck` et `npm run build` réussis sur le dernier code le 23 octobre 2026, `git diff --check` réussi. Node local 26.8.1, hors cible projet Node 24. `cargo check --locked --offline --all-targets`, `cargo build --locked --offline --tests` et format réussis sans exécution des scénarios. Revue ciblée : constats identifiés corrigés statiquement, pas un audit ni une preuve de sécurité.
+- Apple : premier build `39885534839` échoué sur `797563a` (isolation MainActor et variable `error` masquée), corrections intégrées. Build `39886114549` réussi sur `53b564e`, archive Release et IPA non signé. Build final `39886599190` sur `ffa40d8` **réussi** : archive Release et IPA non signé incluant la correction anti-perte. Tests Swift non compilés par ce workflow IPA. Aucun test métier/Swift/UI/crypto exécuté conformément à #84.
+- CI : campagnes PR `39886245946` et `39886246040` **skipped**, pas des tests réussis ; GitGuardian Security Checks **SUCCESS** sur `ffa40d8`. Aucun workflow ni scanner modifié.
+- Complément de préparation : fixtures API étendues (annuaire exact sur plusieurs pages, conversations, reprise d'événements, acquittement ignoré, révocation et mentions inter-écoles) et script `scripts/messaging-build-for-testing.sh` sans exécution de suites. Typage et syntaxe Bash vérifiés ; compilation des tests Apple toujours non exécutée, aucun workflow partagé modifié. `prototypes/messaging-environment/` prépare PostgreSQL et une restauration séparée exclusivement synthétiques, image verrouillée existante, sans démarrage ni migration. Syntaxe JS/YAML vérifiée seulement, aucune preuve de restauration ou de résidence suisse.
+- Restent : approbation #66/#67 puis intégration E2EE/appareils/récupération, attribution ADMIN auditée, sondages/modération selon règles validées, raccord #44, photos de profils, temps réel si retenu, hébergement/restauration suisse et campagne #78/#84. #75/#76 non confirmées. Aucun déploiement, migration appliquée, fusion ou clôture d'issue ; aucune preuve physique GPS/batterie/VoiceOver revendiquée.
+
 ## 23 octobre 2026 : replay #91 fusionné, déployé et clôturé à la demande du porteur
 
 - Autorisations explicites reçues après la livraison sur branche : fusion, déploiement, puis clôture de #91. Fusion `36a3a70` dans `master`, sans changement du checkout des cours collectifs. Aucun workflow ni contrôle de secrets modifié ; les campagnes restent différées à #84.
