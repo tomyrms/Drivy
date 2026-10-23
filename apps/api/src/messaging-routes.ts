@@ -1,0 +1,101 @@
+import type { FastifyInstance } from 'fastify';
+import type { Pool } from 'pg';
+import type { IncomingHttpHeaders } from 'node:http';
+import { z } from 'zod';
+import type { TokenVerifier } from './auth.js';
+import { rollbackQuietly } from './database.js';
+import { forbidden } from './errors.js';
+import { eligibleContacts, generalMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
+  resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, type MessagingActor } from './messaging.js';
+
+const id = z.uuid();
+const base = z.object({ schoolId: id });
+const conversation = base.extend({ conversationId: id });
+const envelope = z.object({ scheme: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/), keyId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
+  payload: z.string().min(4).max(12000).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }).strict();
+const message = z.object({ clientMessageId: id, ciphertext: envelope, mentionPersonIds: z.array(id).max(8).default([]) }).strict();
+const directoryQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), cursor: id.optional() }).strict();
+
+/** Synthetic mode is only injectable in a test process; no production fallback enables messages. */
+export function registerMessaging(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier; mode?: 'disabled' | 'test-synthetic' }) {
+  const enabled = options.mode === 'test-synthetic' && process.env.NODE_ENV === 'test';
+  async function execute<T>(headers: IncomingHttpHeaders, requestId: string,
+    schoolId: string, work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>): Promise<T> {
+    if (!enabled) throw messagingUnavailable();
+    const expectedActor = id.parse(headers['x-drivy-expected-person-id']);
+    const expectedEpoch = z.coerce.number().int().positive().safe().parse(headers['x-drivy-expected-access-epoch']);
+    const identity = await options.verifyToken(headers.authorization);
+    const db = await options.pool.connect();
+    let broken = false;
+    try {
+      await db.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      await db.query('SET LOCAL ROLE drivy_app');
+      await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject',$2,true),set_config('app.school_id',$3,true)",
+        [identity.issuer, identity.subject, schoolId]);
+      const link = await db.query<{ personId: string }>('SELECT person_id AS "personId" FROM drivy.identity_link WHERE issuer=$1 AND subject=$2', [identity.issuer, identity.subject]);
+      if (!link.rows[0]) throw forbidden();
+      const personId = link.rows[0].personId;
+      if (personId.toLowerCase() !== expectedActor.toLowerCase()) throw forbidden();
+      await db.query("SELECT set_config('app.person_id',$1,true)", [personId]);
+      const member = await db.query<{ id: string; accessEpoch: number }>(`SELECT m.id,m.access_epoch AS "accessEpoch" FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
+        WHERE m.school_id=$1 AND m.person_id=$2 AND m.status='ACTIVE' AND p.status='ACTIVE' FOR SHARE OF m,p`, [schoolId, personId]);
+      if (!member.rows[0] || member.rows[0].accessEpoch !== expectedEpoch) throw forbidden();
+      await db.query("SELECT set_config('app.membership_id',$1,true)", [member.rows[0].id]);
+      const result = await work(db, { schoolId, personId, membershipId: member.rows[0].id });
+      await db.query('COMMIT');
+      return { ...(result as object), context: { schoolId, actorPersonId: personId, accessEpoch: member.rows[0].accessEpoch },
+        requestId, serverTime: new Date().toISOString() } as T;
+    } catch (error) { broken = !(await rollbackQuietly(db)); throw error; }
+    finally { db.release(broken); }
+  }
+  const path = '/v1/schools/:schoolId/messaging';
+  app.get(`${path}/contacts`, request => {
+    const { schoolId } = base.parse(request.params);
+    const query = directoryQuery.parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => eligibleContacts(db, actor, query.limit, query.cursor).then(data => ({ data })));
+  });
+  app.get(`${path}/general/members`, request => {
+    const { schoolId } = base.parse(request.params);
+    const query = directoryQuery.parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => generalMembers(db, actor, query.limit, query.cursor).then(data => ({ data })));
+  });
+  app.put(`${path}/private/:personId`, request => {
+    const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);
+    return execute(request.headers, request.id, schoolId, async (db, actor) => ({ data: { conversationId: await findOrCreatePrivate(db, actor, personId) } }));
+  });
+  app.put(`${path}/general`, request => {
+    const { schoolId } = base.parse(request.params);
+    return execute(request.headers, request.id, schoolId, async (db, actor) => ({ data: { conversationId: await findOrCreateGeneral(db, actor) } }));
+  });
+  app.get(`${path}/conversations`, request => {
+    const { schoolId } = base.parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), before: id.optional() }).strict().parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => listConversations(db, actor, query.limit, query.before).then(data => ({ data })));
+  });
+  app.get(`${path}/conversations/:conversationId/messages`, request => {
+    const { schoolId, conversationId } = conversation.parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().regex(/^[1-9][0-9]{0,15}$/).optional() }).strict().parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => pageEnvelopes(db, actor, conversationId, query.cursor ? Number(query.cursor) : undefined, query.limit).then(data => ({ data })));
+  });
+  app.get(`${path}/conversations/:conversationId/events`, request => {
+    const { schoolId, conversationId } = conversation.parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50),
+      afterSequence: z.coerce.number().int().min(0).safe().default(0) }).strict().parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => resumeEnvelopes(db, actor, conversationId, query.afterSequence, query.limit).then(data => ({ data })));
+  });
+  app.post(`${path}/conversations/:conversationId/messages`, request => {
+    const { schoolId, conversationId } = conversation.parse(request.params);
+    const body = message.parse(request.body);
+    return execute(request.headers, request.id, schoolId, (db, actor) => sendEnvelope(db, actor, conversationId,
+      body.clientMessageId, body.ciphertext, body.mentionPersonIds).then(data => ({ data })));
+  });
+  app.put(`${path}/conversations/:conversationId/read-state`, request => {
+    const { schoolId, conversationId } = conversation.parse(request.params);
+    const body = z.object({ lastReadSequence: z.number().int().min(0).safe(),
+      mutedUntil: z.iso.datetime({ offset: true }).nullable().optional(), expectedVersion: z.number().int().min(0).safe().optional() })
+      .strict().refine(value => value.mutedUntil === undefined || value.expectedVersion !== undefined).parse(request.body);
+    return execute(request.headers, request.id, schoolId, (db, actor) => updateReadState(db, actor, conversationId,
+      body.lastReadSequence, body.mutedUntil, body.expectedVersion).then(data => ({ data })));
+  });
+  // Deliberately no realtime, notifications, media or mention routes before #67/#66.
+}
