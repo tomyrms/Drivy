@@ -5,6 +5,7 @@ import SwiftUI
 enum MessagingDevelopmentEntry {
     static func make(scope: MessagingScope, baseURL: URL, tokenSource: any AccessTokenSource,
                      transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
+                     photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
                      currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) -> SchoolMessagingEntry? {
         #if DEBUG && targetEnvironment(simulator)
         let allowed = ProcessInfo.processInfo.arguments.contains("-messaging-development")
@@ -18,7 +19,7 @@ enum MessagingDevelopmentEntry {
         let scopeID = "\(scope.accountID.uuidString)|\(scope.schoolID.uuidString)|\(scope.accessEpoch)|\(scope.apiBaseURL)"
         return SchoolMessagingEntry(scopeID: scopeID, makeView: { peerID in
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http,
-                currentScope: currentScope, initialPeerID: peerID))
+                currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID))
         })
     }
 }
@@ -27,6 +28,7 @@ private struct MessagingDevelopmentContainer: View {
     let scope: MessagingScope
     let http: MessagingHTTPTransport
     let currentScope: @MainActor @Sendable () -> MessagingScope?
+    let photoLoader: @Sendable (UUID) async -> Data?
     let initialPeerID: UUID?
     @State private var workspace: MessagingWorkspace?
     @State private var failure: MessagingFailure?
@@ -50,7 +52,11 @@ private struct MessagingDevelopmentContainer: View {
                 let store = try MessagingProtectedStore(scope: scope)
                 workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
                     cryptography: UnavailableMessagingCryptography(), outbox: store, drafts: store,
-                    directory: http, currentScope: currentScope)
+                    directory: http, actions: http,
+                    // Sans historique scellé disponible, la recherche se limite à la mémoire : pas de repli en clair.
+                    history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
+                    photoLoader: photoLoader,
+                    currentScope: currentScope)
             } catch { failure = .protectionUnavailable }
         }
     }

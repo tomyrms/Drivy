@@ -650,7 +650,11 @@ struct SchoolRootView: View {
         let scope = MessagingScope(accountID: person.personId, schoolID: membership.schoolId,
             accessEpoch: membership.accessEpoch, apiBaseURL: baseURL.absoluteString)
         return MessagingDevelopmentEntry.make(scope: scope, baseURL: baseURL,
-            tokenSource: identity, transport: clients.messagingTransport, currentScope: {
+            tokenSource: identity, transport: clients.messagingTransport,
+            photoLoader: { [weak workspace] id in
+                await workspace?.loadPhoto(for: id)
+                return await workspace?.photo(for: id)
+            }, currentScope: {
                 guard identity.isAuthenticated, workspace.school?.status == "ACTIVE",
                       let person = workspace.person, let membership = workspace.membership else { return nil }
                 return MessagingScope(accountID: person.personId, schoolID: membership.schoolId,

@@ -10,7 +10,20 @@ import Observation
     private let directory: any MessagingDirectoryService
     private let drafts: any MessagingProtectedDrafts
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
+    private let actions: any MessagingThreadActions
+    private let history: any MessagingHistoryStore
+    private let reportSealing: any MessagingReportSealing
+    private let photoLoader: @Sendable (UUID) async -> Data?
     let outbox: MessagingOutboxCoordinator
+    private(set) var members: [MessagingMember] = []
+    private(set) var photos: [UUID: Data] = [:]
+    private var photoRequested: Set<UUID> = []
+    private(set) var accessByConversation: [UUID: MessagingConversationAccess] = [:]
+    private(set) var receipts: [UUID: [MessagingReadReceipt]] = [:]
+    /// Contenu déchiffré en mémoire, recopié dans l'historique scellé quand il est disponible.
+    private(set) var contents: [UUID: MessagingPlainContent] = [:]
+    private(set) var hiddenForMe: Set<UUID> = []
+    private(set) var actionError: MessagingFailure?
     private(set) var contacts: [MessagingContact] = []
     private(set) var generalMembers: [MessagingContact] = []
     private(set) var conversations: [MessagingConversation] = []
@@ -30,7 +43,15 @@ import Observation
          outbox: any MessagingProtectedOutbox = UnavailableMessagingOutbox(),
          drafts: any MessagingProtectedDrafts = UnavailableMessagingDrafts(),
          directory: any MessagingDirectoryService = UnavailableMessagingDirectory(),
+         actions: any MessagingThreadActions = UnavailableMessagingThreadActions(),
+         history: any MessagingHistoryStore = UnavailableMessagingHistory(),
+         reportSealing: any MessagingReportSealing = UnavailableMessagingReportSealing(),
+         photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil }) {
+        self.actions = actions
+        self.history = history
+        self.reportSealing = reportSealing
+        self.photoLoader = photoLoader
         self.scope = scope
         self.service = service
         self.crypto = cryptography
@@ -95,6 +116,18 @@ import Observation
             let existing = more ? (messages[conversationID] ?? []) : []
             messages[conversationID] = existing + page.items.filter { item in !existing.contains(where: { $0.id == item.id }) }
             messageCursors[conversationID] = page.nextCursor
+            if let pageAccess = page.access {
+                accessByConversation[conversationID] = pageAccess
+                if let limit = pageAccess.readableUntilSequence {
+                    try? await history.truncate(conversationID: conversationID, after: limit, scope: scope)
+                }
+            }
+            if !more { receipts[conversationID] = page.readReceipts }
+            let deleted = page.items.filter(\.meta.deletedForEveryone).map(\.id)
+            if !deleted.isEmpty {
+                for id in deleted { contents.removeValue(forKey: id) }
+                try? await history.remove(messageIDs: deleted, scope: scope)
+            }
             loadedMessages.insert(conversationID)
             error = nil
         } catch let failure as MessagingFailure { recordFailure(failure) }
@@ -102,11 +135,22 @@ import Observation
     }
 
     func text(for message: MessagingWireMessage) async -> String? {
+        await content(for: message)?.summary
+    }
+
+    /// Déchiffre via MessagingCryptography, puis recopie dans l'historique scellé pour la recherche.
+    func content(for message: MessagingWireMessage) async -> MessagingPlainContent? {
+        if let known = contents[message.id] { return known }
         guard message.schoolID == scope.schoolID else { error = .contextChanged; return nil }
+        guard message.ciphertext != nil, !message.meta.deletedForEveryone else { return nil }
         do {
-            let bytes = try await crypto.decrypt(message.ciphertext, scope: scope, conversationID: message.conversationID)
+            let bytes = try await crypto.decrypt(message, scope: scope)
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
-            guard let value = String(data: bytes, encoding: .utf8) else { throw MessagingFailure.invalidResponse }
+            guard let value = MessagingPlainContent.decode(bytes) else { throw MessagingFailure.invalidResponse }
+            contents[message.id] = value
+            try? await history.upsert([MessagingHistoryEntry(messageID: message.id, conversationID: message.conversationID,
+                sequence: message.meta.sequence, senderID: message.senderID, acceptedAt: message.acceptedAt,
+                content: value)], scope: scope)
             return value
         } catch let failure as MessagingFailure { recordFailure(failure); return nil }
         catch { recordFailure(.protectionUnavailable); return nil }
@@ -210,6 +254,13 @@ import Observation
             // Effacer uniquement la mémoire affichée. La file et les brouillons scellés restent intacts.
             contacts = []
             generalMembers = []
+            members = []
+            photos = [:]
+            photoRequested = []
+            accessByConversation = [:]
+            receipts = [:]
+            contents = [:]
+            hiddenForMe = []
             conversations = []
             messages = [:]
             readStates = [:]
@@ -222,6 +273,160 @@ import Observation
     }
 
     func hasLoadedMessages(_ id: UUID) -> Bool { loadedMessages.contains(id) }
+
+    // MARK: v2
+
+    func access(for conversationID: UUID) -> MessagingConversationAccess { accessByConversation[conversationID] ?? .full }
+
+    func visibleMessages(_ conversationID: UUID) -> [MessagingWireMessage] {
+        (messages[conversationID] ?? []).filter { !hiddenForMe.contains($0.id) }
+    }
+
+    func pinnedMessages(_ conversationID: UUID) -> [MessagingWireMessage] {
+        visibleMessages(conversationID).filter { $0.meta.pinned && !$0.meta.deletedForEveryone }
+    }
+
+    func message(_ id: UUID, in conversationID: UUID) -> MessagingWireMessage? {
+        messages[conversationID]?.first { $0.id == id }
+    }
+
+    func displayName(_ personID: UUID) -> String {
+        if personID == scope.accountID { return "Moi" }
+        return members.first { $0.id == personID }?.displayName
+            ?? contacts.first { $0.id == personID }?.displayName
+            ?? generalMembers.first { $0.id == personID }?.displayName
+            ?? "Membre"
+    }
+
+    /// Lu par : personnes autres que l'auteur dont la progression atteint ce message.
+    func readers(of message: MessagingWireMessage) -> [UUID] {
+        (receipts[message.conversationID] ?? [])
+            .filter { $0.personID != message.senderID && $0.lastReadSequence >= message.meta.sequence }
+            .map(\.personID)
+    }
+
+    func loadMembers() async {
+        do {
+            let result = try await actions.members(scope: scope)
+            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            members = result.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            error = nil
+        } catch let failure as MessagingFailure { recordFailure(failure) }
+        catch { self.error = .unavailable }
+    }
+
+    /// Photo #64 lue une fois par session, en mémoire uniquement. Absente : les initiales restent.
+    func loadPhoto(_ personID: UUID) async {
+        guard !photoRequested.contains(personID) else { return }
+        photoRequested.insert(personID)
+        if let data = await photoLoader(personID), currentScope() == scope { photos[personID] = data }
+    }
+
+    /// Exécute une action serveur puis relit la conversation : aucun état optimiste affiché comme acquis.
+    private func perform(_ conversationID: UUID?, _ work: () async throws -> Void) async -> Bool {
+        do {
+            try await work()
+            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            actionError = nil
+            if let conversationID { await loadMessages(conversationID) }
+            return true
+        } catch let failure as MessagingFailure {
+            if failure == .accessChanged || failure == .contextChanged { recordFailure(failure) }
+            actionError = failure; return false
+        } catch { actionError = .unavailable; return false }
+    }
+
+    func clearActionError() { actionError = nil }
+
+    @discardableResult
+    func delete(_ message: MessagingWireMessage, for deletion: MessagingDeletionScope) async -> Bool {
+        let ok = await perform(message.conversationID) {
+            try await actions.delete(scope: scope, conversationID: message.conversationID, messageID: message.id, for: deletion)
+        }
+        if ok {
+            if deletion == .me { hiddenForMe.insert(message.id) }
+            contents.removeValue(forKey: message.id)
+            try? await history.remove(messageIDs: [message.id], scope: scope)
+        }
+        return ok
+    }
+
+    func toggleReaction(_ emoji: String, on message: MessagingWireMessage) async {
+        let mine = message.meta.reactions.first { $0.emoji == emoji }?.personIDs.contains(scope.accountID) ?? false
+        _ = await perform(message.conversationID) {
+            try await actions.setReaction(scope: scope, conversationID: message.conversationID,
+                                          messageID: message.id, emoji: emoji, active: !mine)
+        }
+    }
+
+    func setPinned(_ message: MessagingWireMessage, pinned: Bool) async {
+        _ = await perform(message.conversationID) {
+            try await actions.setPinned(scope: scope, conversationID: message.conversationID, messageID: message.id, pinned: pinned)
+        }
+    }
+
+    func vote(_ message: MessagingWireMessage, optionIDs: Set<String>) async {
+        _ = await perform(message.conversationID) {
+            try await actions.vote(scope: scope, conversationID: message.conversationID,
+                                   messageID: message.id, optionIDs: optionIDs.sorted())
+        }
+    }
+
+    func closePoll(_ message: MessagingWireMessage) async {
+        _ = await perform(message.conversationID) {
+            try await actions.closePoll(scope: scope, conversationID: message.conversationID, messageID: message.id)
+        }
+    }
+
+    func setGroupAdmin(_ personID: UUID, admin: Bool) async {
+        if await perform(nil, { try await actions.setGroupAdmin(scope: scope, personID: personID, admin: admin) }) {
+            await loadMembers()
+        }
+    }
+
+    func removeMember(_ personID: UUID) async {
+        if await perform(nil, { try await actions.removeGeneralMember(scope: scope, personID: personID) }) {
+            await loadMembers()
+        }
+    }
+
+    /// Seuls les messages choisis sont rechiffrés pour les administrateurs de l'école puis transmis.
+    func report(_ selected: [MessagingWireMessage], conversationID: UUID) async -> Bool {
+        await perform(nil) {
+            var items: [MessagingReportItem] = []
+            for message in selected where message.conversationID == conversationID {
+                guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
+                let sealed = try await reportSealing.sealForSchoolAdmins(try content.encoded(), scope: scope,
+                                                                         conversationID: conversationID)
+                items.append(MessagingReportItem(messageID: message.id, ciphertext: sealed))
+            }
+            guard !items.isEmpty else { throw MessagingFailure.invalidResponse }
+            try await actions.report(scope: scope, conversationID: conversationID, items: items)
+        }
+    }
+
+    /// Recherche sur l'appareil : historique scellé, complété par la mémoire de la session.
+    func search(_ query: String, conversationID: UUID) async -> [MessagingHistoryEntry] {
+        var entries = (try? await history.entries(conversationID: conversationID, scope: scope)) ?? []
+        let known = Set(entries.map(\.messageID))
+        for message in messages[conversationID] ?? [] where !known.contains(message.id) {
+            if let content = contents[message.id] {
+                entries.append(MessagingHistoryEntry(messageID: message.id, conversationID: conversationID,
+                    sequence: message.meta.sequence, senderID: message.senderID, acceptedAt: message.acceptedAt, content: content))
+            }
+        }
+        let limit = accessByConversation[conversationID]?.readableUntilSequence
+        entries = entries.filter { !hiddenForMe.contains($0.messageID) && (limit == nil || $0.sequence <= limit!) }
+        guard currentScope() == scope else { return [] }
+        return MessagingHistorySearch.matches(entries, query: query)
+    }
+
+    func enqueue(content: MessagingPlainContent, conversationID: UUID, mentions: [UUID], replyTo: UUID?,
+                 pollAllowsMultiple: Bool = false) async throws -> MessagingPending {
+        guard access(for: conversationID).canWrite else { throw MessagingFailure.accessChanged }
+        return try await outbox.enqueue(content: content, conversationID: conversationID, mentions: mentions,
+            replyTo: replyTo, pollAllowsMultiple: pollAllowsMultiple, currentScope: scope)
+    }
     var hasLoadedConversations: Bool { loadedConversations }
 
     private func mergeReadState(_ incoming: MessagingReadState, conversationID: UUID) {
