@@ -1,7 +1,7 @@
 import Foundation
 
-/// Accès à l'historique tel que décidé par le serveur (décision 2 du 23 octobre).
-/// Après la fin du lien, lecture seule jusqu'à `readableUntilSequence` inclus.
+/// AccÃ¨s Ã  l'historique tel que dÃ©cidÃ© par le serveur (dÃ©cision 2 du 23 octobre).
+/// AprÃ¨s la fin du lien, lecture seule jusqu'Ã  `readableUntilSequence` inclus.
 struct MessagingConversationAccess: Sendable, Equatable {
     let canWrite: Bool
     let readableUntilSequence: Int?
@@ -20,7 +20,7 @@ struct MessagingReadReceipt: Sendable, Equatable {
     let lastReadSequence: Int
 }
 
-/// Votes nominatifs et état du sondage, visibles du serveur. Question et libellés restent chiffrés.
+/// Votes nominatifs et Ã©tat du sondage, visibles du serveur. Question et libellÃ©s restent chiffrÃ©s.
 struct MessagingPollState: Sendable, Equatable {
     struct Option: Sendable, Equatable { let optionID: String; let voterIDs: [UUID] }
     let allowsMultiple: Bool
@@ -29,7 +29,7 @@ struct MessagingPollState: Sendable, Equatable {
     let options: [Option]
 }
 
-/// Métadonnées visibles du serveur, acceptées par la décision 1.
+/// MÃ©tadonnÃ©es visibles du serveur, acceptÃ©es par la dÃ©cision 1.
 struct MessagingMessageMeta: Sendable, Equatable {
     var sequence: Int = 0
     var replyToMessageID: UUID? = nil
@@ -39,7 +39,7 @@ struct MessagingMessageMeta: Sendable, Equatable {
     var poll: MessagingPollState? = nil
 }
 
-/// Contenu clair, encodé AVANT chiffrement par MessagingCryptography. Jamais transmis tel quel.
+/// Contenu clair, encodÃ© AVANT chiffrement par MessagingCryptography. Jamais transmis tel quel.
 struct MessagingPlainContent: Codable, Sendable, Equatable {
     struct Poll: Codable, Sendable, Equatable {
         struct Option: Codable, Sendable, Equatable { let id: String; let label: String }
@@ -77,7 +77,7 @@ enum MessagingPollRules {
     static let maxOptions = 12
     static let maxLength = 200
 
-    /// Options vides retirées, doublons refusés, au moins deux options.
+    /// Options vides retirÃ©es, doublons refusÃ©s, au moins deux options.
     static func validated(question: String, options: [String]) -> MessagingPlainContent.Poll? {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         let labels = options.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -94,7 +94,7 @@ enum MessagingPollRules {
     }
 }
 
-/// Le serveur ne connaît que des indices d'option. Identifiant local : "o1" pour l'indice 0.
+/// Le serveur ne connaÃ®t que des indices d'option. Identifiant local : "o1" pour l'indice 0.
 enum MessagingPollIndex {
     static func id(_ index: Int) -> String { "o\(index + 1)" }
     static func index(_ id: String) -> Int? {
@@ -105,7 +105,7 @@ enum MessagingPollIndex {
 
 enum MessagingDeletionScope: String, Sendable { case me, everyone }
 
-/// Droits d'action dérivés des données serveur. L'interface ne fait que masquer : le serveur revalide.
+/// Droits d'action dÃ©rivÃ©s des donnÃ©es serveur. L'interface ne fait que masquer : le serveur revalide.
 enum MessagingPermissions {
     static func canDeleteForEveryone(senderID: UUID, account: UUID, access: MessagingConversationAccess) -> Bool {
         access.canWrite && (senderID == account || access.isGroupAdmin)
@@ -118,7 +118,7 @@ enum MessagingPermissions {
     }
 }
 
-/// Membre du général : nom et photo uniquement (décision 2).
+/// Membre du gÃ©nÃ©ral : nom et photo uniquement (dÃ©cision 2).
 struct MessagingMember: Identifiable, Sendable, Hashable {
     let id: UUID
     let displayName: String
@@ -126,13 +126,13 @@ struct MessagingMember: Identifiable, Sendable, Hashable {
     let isGroupAdmin: Bool
 }
 
-/// Élément transmis aux administrateurs de l'école, rechiffré pour eux.
+/// Ã‰lÃ©ment transmis aux administrateurs de l'Ã©cole, rechiffrÃ© pour eux.
 struct MessagingReportItem: Sendable, Equatable {
     let messageID: UUID
     let ciphertext: MessagingCiphertext
 }
 
-/// Fourni par l'agent crypto (Olm vers les appareils des administrateurs de l'école).
+/// Fourni par l'agent crypto (Olm vers les appareils des administrateurs de l'Ã©cole).
 protocol MessagingReportSealing: Sendable {
     func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext
 }
@@ -143,7 +143,7 @@ struct UnavailableMessagingReportSealing: MessagingReportSealing {
     }
 }
 
-/// Actions de conversation v2. Chaque appel est réautorisé par le serveur.
+/// Actions de conversation v2. Chaque appel est rÃ©autorisÃ© par le serveur.
 protocol MessagingThreadActions: Sendable {
     func delete(scope: MessagingScope, conversationID: UUID, messageID: UUID, for deletion: MessagingDeletionScope) async throws
     func setReaction(scope: MessagingScope, conversationID: UUID, messageID: UUID, emoji: String, active: Bool) async throws
@@ -154,6 +154,8 @@ protocol MessagingThreadActions: Sendable {
     func removeGeneralMember(scope: MessagingScope, personID: UUID) async throws
     func reinstateGeneralMember(scope: MessagingScope, personID: UUID) async throws
     func members(scope: MessagingScope) async throws -> [MessagingMember]
+    /// Retirés du général encore dans l'école (administrateurs du groupe).
+    func removedMembers(scope: MessagingScope) async throws -> [MessagingMember]
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws
 }
 
@@ -167,5 +169,6 @@ struct UnavailableMessagingThreadActions: MessagingThreadActions {
     func removeGeneralMember(scope: MessagingScope, personID: UUID) async throws { throw MessagingFailure.unavailable }
     func reinstateGeneralMember(scope: MessagingScope, personID: UUID) async throws { throw MessagingFailure.unavailable }
     func members(scope: MessagingScope) async throws -> [MessagingMember] { throw MessagingFailure.unavailable }
+    func removedMembers(scope: MessagingScope) async throws -> [MessagingMember] { throw MessagingFailure.unavailable }
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws { throw MessagingFailure.unavailable }
 }

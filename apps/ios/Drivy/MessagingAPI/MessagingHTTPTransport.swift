@@ -338,6 +338,25 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         return members
     }
 
+    /// Retirés du général : 403 si l'acteur n'administre pas le groupe. Date de retrait non affichée.
+    func removedMembers(scope: MessagingScope) async throws -> [MessagingMember] {
+        struct Removed: Decodable { let personId: UUID; let displayName: String; let photoVersion: Int? }
+        struct Page: Decodable { let members: [Removed]; let nextCursor: UUID? }
+        var cursor: UUID?
+        var members: [MessagingMember] = []
+        repeat {
+            var query = [URLQueryItem(name: "limit", value: "100")]
+            if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor.uuidString)) }
+            let result: Page = try await request(scope: scope, method: "GET", path: ["general", "removed-members"], query: query)
+            guard (cursor == nil || result.nextCursor != cursor), members.count + result.members.count <= 2_000 else { throw MessagingFailure.invalidResponse }
+            members += result.members.map { MessagingMember(id: $0.personId, displayName: $0.displayName,
+                hasPhoto: $0.photoVersion != nil, isGroupAdmin: false) }
+            cursor = result.nextCursor
+        } while cursor != nil
+        guard Set(members.map(\.id)).count == members.count else { throw MessagingFailure.invalidResponse }
+        return members
+    }
+
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws {
         struct Item: Encodable { let messageId: UUID; let ciphertext: MessagingCiphertext }
         struct Body: Encodable { let clientReportId: UUID; let conversationId: UUID; let items: [Item] }

@@ -315,10 +315,23 @@ import Observation
             let result = try await actions.members(scope: scope)
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
             members = result.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-            removedMembers.removeAll { removed in members.contains { $0.id == removed.id } }
             error = nil
+            await loadRemovedMembers()
         } catch let failure as MessagingFailure { recordFailure(failure) }
         catch { self.error = .unavailable }
+    }
+
+    /// Liste serveur des retirés, seulement pour un administrateur du groupe ; sinon elle reste vide.
+    func loadRemovedMembers() async {
+        guard members.first(where: { $0.id == scope.accountID })?.isGroupAdmin == true else { removedMembers = []; return }
+        do {
+            let result = try await actions.removedMembers(scope: scope)
+            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            removedMembers = result.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        } catch let failure as MessagingFailure {
+            removedMembers = []
+            if failure == .accessChanged || failure == .contextChanged { recordFailure(failure) }
+        } catch { removedMembers = [] }
     }
 
     /// Photo #64 lue une fois par session, en mémoire uniquement. Absente : les initiales restent.
@@ -391,17 +404,13 @@ import Observation
     }
 
     func removeMember(_ personID: UUID) async {
-        let removed = members.first { $0.id == personID }
         if await perform(nil, { try await actions.removeGeneralMember(scope: scope, personID: personID) }) {
-            // L'annuaire ne liste que les participants : le retiré reste proposé à la réintégration pour cette session.
-            if let removed, !removedMembers.contains(where: { $0.id == personID }) { removedMembers.append(removed) }
             await loadMembers()
         }
     }
 
     func reinstateMember(_ personID: UUID) async {
         if await perform(nil, { try await actions.reinstateGeneralMember(scope: scope, personID: personID) }) {
-            removedMembers.removeAll { $0.id == personID }
             await loadMembers()
         }
     }

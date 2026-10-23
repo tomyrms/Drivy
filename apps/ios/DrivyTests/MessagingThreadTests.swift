@@ -265,7 +265,29 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertTrue(workspace.removedMembers.isEmpty)
         XCTAssertTrue(workspace.members.contains { $0.id == target })
         let calls = await actions.calls
-        XCTAssertEqual(calls, ["DELETE \(target)", "PUT \(target)"])
+        XCTAssertEqual(calls.filter { !$0.hasPrefix("GET") }, ["DELETE \(target)", "PUT \(target)"])
+    }
+
+    /// Les retirés viennent du serveur, y compris ceux d'une session précédente.
+    func testRemovedSectionLoadsServerListForGroupAdmin() async {
+        let actions = MembersActions(admin: account)
+        let earlier = MessagingMember(id: UUID(), displayName: "Paul", hasPhoto: false, isGroupAdmin: false)
+        await actions.setServerRemoved([earlier])
+        let workspace = MessagingWorkspace(scope: scope, actions: actions, currentScope: { [scope] in scope })
+        await workspace.loadMembers()
+        XCTAssertEqual(workspace.removedMembers.map(\.id), [earlier.id])
+        let calls = await actions.calls
+        XCTAssertEqual(calls, ["GET removed"])
+    }
+
+    func testRemovedListNotRequestedForNonAdmin() async {
+        let actions = MembersActions(admin: UUID())
+        await actions.setServerRemoved([MessagingMember(id: UUID(), displayName: "Paul", hasPhoto: false, isGroupAdmin: false)])
+        let workspace = MessagingWorkspace(scope: scope, actions: actions, currentScope: { [scope] in scope })
+        await workspace.loadMembers()
+        XCTAssertTrue(workspace.removedMembers.isEmpty)
+        let calls = await actions.calls
+        XCTAssertTrue(calls.isEmpty)
     }
 }
 
@@ -280,6 +302,7 @@ private actor MembersActions: MessagingThreadActions {
     static let other = UUID()
     let admin: UUID
     private var removed = false
+    private var serverRemoved: [MessagingMember] = []
     private(set) var calls: [String] = []
     init(admin: UUID) { self.admin = admin }
     func delete(scope: MessagingScope, conversationID: UUID, messageID: UUID, for deletion: MessagingDeletionScope) async throws {}
@@ -294,6 +317,12 @@ private actor MembersActions: MessagingThreadActions {
         [MessagingMember(id: admin, displayName: "Admin", hasPhoto: false, isGroupAdmin: true)]
             + (removed ? [] : [MessagingMember(id: Self.other, displayName: "Léa", hasPhoto: false, isGroupAdmin: false)])
     }
+    func removedMembers(scope: MessagingScope) async throws -> [MessagingMember] {
+        calls.append("GET removed")
+        return (removed ? [MessagingMember(id: Self.other, displayName: "Léa", hasPhoto: false, isGroupAdmin: false)] : [])
+            + serverRemoved
+    }
+    func setServerRemoved(_ members: [MessagingMember]) { serverRemoved = members }
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws {}
 }
 

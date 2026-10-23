@@ -61,6 +61,7 @@ struct MessagingMembersView: View {
                         }
                         .accessibilityElement(children: .contain)
                         .accessibilityLabel("\(member.displayName), retiré du général")
+                        .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
                     }
                 }
             }
