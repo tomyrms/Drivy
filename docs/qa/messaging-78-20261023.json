@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "epic": 65,
+  "qualificationIssue": 78,
+  "campaignIssue": 84,
+  "baseCommit": "6d08b40",
+  "branch": "openai/65-messagerie",
+  "issues": [65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78],
+  "sharedDependencies": [44, 50, 64, 84],
+  "activation": "BLOCKED",
+  "activationReasons": ["PRODUCT_DECISIONS_PENDING", "E2EE_DECISION_AND_ADAPTER_PENDING", "SWISS_RESIDENCY_NOT_QUALIFIED", "MODERATION_POLICY_PENDING", "FINAL_QUALIFICATION_NOT_EXECUTED"],
+  "checks": [
+    { "id": "api-messaging", "files": ["apps/api/test/messaging.test.ts", "apps/api/test/messaging.integration.test.ts"], "status": "NOT_EXECUTED", "requires": "isolated PostgreSQL, final campaign #84" },
+    { "id": "activation", "files": ["apps/api/test/messaging-activation.test.ts"], "status": "NOT_EXECUTED" },
+    { "id": "notifications-contract", "files": ["apps/api/test/messaging-notifications.test.ts"], "status": "NOT_EXECUTED", "integration": "BLOCKED: shared #44 store and transport not integrated" },
+    { "id": "ios-messaging", "files": ["apps/ios/DrivyTests/MessagingCoreTests.swift", "apps/ios/DrivyTests/MessagingEntryTests.swift", "apps/ios/DrivyTests/MessagingHTTPTransportTests.swift", "apps/ios/DrivyTests/MessagingProtectedStoreTests.swift"], "status": "NOT_EXECUTED", "requires": "Apple runner, full DrivyTests selection" },
+    { "id": "crypto-prototype-scenarios", "files": ["prototypes/messaging-crypto/tests/scenarios.rs"], "status": "NOT_EXECUTED", "compilation": "PASSED: cargo check --locked --offline --all-targets and cargo build --locked --offline --tests", "scope": "synthetic SDK harness, no product integration" },
+    { "id": "e2ee", "status": "BLOCKED", "requires": "approved privacy architecture and integrated SDK" },
+    { "id": "swiss-residency-and-restoration", "status": "BLOCKED", "requires": "approved infrastructure operation and evidence" },
+    { "id": "voiceover-gps-battery", "status": "NOT_EXECUTED", "requires": "physical iPhone and iPad" },
+    { "id": "attachments-and-extras", "issues": [75, 76], "status": "DEFERRED", "requires": "explicit #66 scope selection" }
+  ],
+  "compilationEvidence": {
+    "typescript": "PASSED: npm run typecheck and npm run build on 2026-10-23, final code ffa40d8; local Node 26.8.1 outside required >=24 <25",
+    "swiftRelease": { "status": "PASSED", "runId": 39886599190, "commit": "ffa40d893a6ddb86234f582f31e9dc46d2ce1135", "artifact": "Drivy-essai-ffa40d893a6ddb86234f582f31e9dc46d2ce1135", "artifactId": 12473375819, "ipaSha256": "6dfc69dd256ef594e8cfe0f665c8695977b84e12e71776c427ee2f704b0e194d", "downloadedChecksumMatches": true, "messagingVisibleInRelease": false, "signed": false },
+    "swiftTests": "NOT_COMPILED"
+  },
+  "automaticTestSuitesTriggered": false,
+  "productionDeploymentPerformed": false,
+  "issuesClosed": []
+}
