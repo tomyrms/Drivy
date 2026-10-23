@@ -34,12 +34,13 @@ private struct MessagingDevelopmentContainer: View {
     let photoLoader: @Sendable (UUID) async -> Data?
     let initialPeerID: UUID?
     @State private var workspace: MessagingWorkspace?
+    @State private var keys: MatrixMessagingCryptography?
     @State private var failure: MessagingFailure?
 
     var body: some View {
         Group {
             if let workspace {
-                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID)
+                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys)
             } else if let failure {
                 ContentUnavailableView("Messages indisponibles", systemImage: "lock.shield",
                     description: Text(failure.localizedDescription))
@@ -54,6 +55,7 @@ private struct MessagingDevelopmentContainer: View {
                 // Ouverture du Keychain et des fichiers uniquement après ouverture de la sheet.
                 let store = try MessagingProtectedStore(scope: scope)
                 let cryptography = try MatrixMessagingCryptography(scope: scope, relay: relay)
+                keys = cryptography
                 workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
                     cryptography: cryptography, outbox: store, drafts: store,
                     directory: http, actions: http,

@@ -21,9 +21,12 @@ struct MessagingInboxView: View {
         let isGeneral: Bool
     }
 
-    init(workspace: MessagingWorkspace, initialPeerID: UUID? = nil) {
+    private let keys: (any MessagingKeyManagement)?
+
+    init(workspace: MessagingWorkspace, initialPeerID: UUID? = nil, keys: (any MessagingKeyManagement)? = nil) {
         _workspace = State(initialValue: workspace)
         self.initialPeerID = initialPeerID
+        self.keys = keys
     }
 
     var body: some View {
@@ -85,6 +88,16 @@ struct MessagingInboxView: View {
                 }
             }
             .navigationTitle("Messages")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        MessagingSettingsView(keys: keys, scope: workspace.scope)
+                    } label: {
+                        Label("Réglages", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("messaging.settings.open")
+                }
+            }
             .onAppear { connectivity.start() }
             .onDisappear { connectivity.stop() }
             .onChange(of: scenePhase) { _, phase in
