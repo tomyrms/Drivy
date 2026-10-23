@@ -225,6 +225,7 @@ struct MessagingConversationView: View {
                     .lineLimit(1...5)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Rédiger un message")
+                    .accessibilityIdentifier("messaging.compose.text")
                 Button("Envoyer", systemImage: "arrow.up.circle.fill") {
                     Task { _ = await send(MessagingPlainContent(text: draft)) }
                 }

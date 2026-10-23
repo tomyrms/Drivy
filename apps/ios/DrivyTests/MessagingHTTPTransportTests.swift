@@ -28,7 +28,8 @@ final class MessagingHTTPTransportTests: XCTestCase {
                                                   transport: wire, currentScope: { scope })
         let page = try await client.messages(scope: scope, conversationID: conversation, before: nil)
         XCTAssertEqual(page.items.count, 1)
-        XCTAssertEqual(page.items.first?.ciphertext.payload, Data([1, 2, 3]))
+        let ciphertext = try XCTUnwrap(page.items.first?.ciphertext)
+        XCTAssertEqual(ciphertext.payload, Data([1, 2, 3]))
         XCTAssertEqual(page.items.first?.schoolId, school)
     }
 

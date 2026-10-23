@@ -123,9 +123,10 @@ final class MessagingThreadTests: XCTestCase {
     func testActionRoutesAndBodies() async throws {
         let message = UUID(), person = UUID()
         let log = RequestLog()
+        let body = envelope("{}")
         let client = transport { request in
             log.append(request)
-            return self.envelope("{}")
+            return body
         }
         try await client.delete(scope: scope, conversationID: conversation, messageID: message, for: .everyone)
         try await client.setReaction(scope: scope, conversationID: conversation, messageID: message, emoji: "👍", active: false)
@@ -160,7 +161,8 @@ final class MessagingThreadTests: XCTestCase {
 
     func testUnknownReactionNeverLeavesDevice() async {
         let log = RequestLog()
-        let client = transport { request in log.append(request); return self.envelope("{}") }
+        let body = envelope("{}")
+        let client = transport { request in log.append(request); return body }
         do {
             try await client.setReaction(scope: scope, conversationID: conversation, messageID: UUID(), emoji: "x", active: true)
             XCTFail()

@@ -10,6 +10,7 @@ final class MessagingEntryTests: XCTestCase {
 
     func testDevelopmentEntryRequiresExplicitFlagAndActiveSchool() {
         XCTAssertFalse(SchoolMessagingDevelopment.permitted(arguments: [], schoolIsActive: true))
+        XCTAssertFalse(SchoolMessagingDevelopment.permitted(arguments: ["-messaging-ui-fixture"], schoolIsActive: true))
         XCTAssertFalse(SchoolMessagingDevelopment.permitted(arguments: ["-messaging-development"], schoolIsActive: false))
         #if DEBUG && targetEnvironment(simulator)
         XCTAssertTrue(SchoolMessagingDevelopment.permitted(arguments: ["-messaging-development"], schoolIsActive: true))

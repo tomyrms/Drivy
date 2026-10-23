@@ -1,13 +1,14 @@
 import XCTest
 
-/// Messagerie v2 (#65). Écrit, non exécuté (#84) : nécessite le simulateur, `-messaging-development`
-/// et l'environnement synthétique `prototypes/messaging-environment`. Aucun résultat VoiceOver physique n'en découle.
+/// Parcours UI synthétiques locaux (#78/#84), sans réseau, session réelle ni chiffrement simulé.
+/// Exécutables sur iPhone et iPad. Aucun résultat VoiceOver physique n'en découle.
+@MainActor
 final class MessagingThreadUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-messaging-development"]
+        app.launchArguments += ["-messaging-ui-fixture"]
         app.launch()
         return app
     }
@@ -15,54 +16,59 @@ final class MessagingThreadUITests: XCTestCase {
     func testGeneralMembersOpenProfileWithNameAndPhotoOnly() throws {
         let app = launch()
         let entry = app.buttons["messages-entry"]
-        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
         app.buttons["messaging.members.open"].tap()
         let list = app.descendants(matching: .any)["messaging.members"]
         XCTAssertTrue(list.waitForExistence(timeout: 5))
-        let first = list.buttons.firstMatch
+        let first = list.buttons["Léa Fixture"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         first.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["messaging.member.profile"].waitForExistence(timeout: 5))
+        let profile = app.descendants(matching: .any)["messaging.member.profile"].firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout: 5))
+        XCTAssertTrue(profile.label.contains("Léa Fixture"))
+        XCTAssertFalse(app.buttons["learner-send-message"].exists)
+        XCTAssertFalse(app.buttons["Appeler"].exists)
+        XCTAssertFalse(app.buttons["Envoyer un e-mail"].exists)
     }
 
     /// Administrateur seulement : retirer puis réintégrer, chaque fois après confirmation.
     func testAdminReinstatesRemovedMemberAfterConfirmation() throws {
         let app = launch()
         let entry = app.buttons["messages-entry"]
-        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
         app.buttons["messaging.members.open"].tap()
         let list = app.descendants(matching: .any)["messaging.members"]
         XCTAssertTrue(list.waitForExistence(timeout: 5))
-        let row = list.buttons.element(boundBy: 1)
-        guard row.waitForExistence(timeout: 5) else { throw XCTSkip("Un seul membre") }
+        let row = list.buttons["Léa Fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "La fixture contient deux membres")
         row.press(forDuration: 1)
         let remove = app.buttons["Retirer du général"]
-        guard remove.waitForExistence(timeout: 3) else { throw XCTSkip("Compte non administrateur du groupe") }
+        XCTAssertTrue(remove.waitForExistence(timeout: 3), "La fixture est administratrice du groupe")
         remove.tap()
-        app.sheets.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Retirer '")).firstMatch.tap()
+        app.buttons["messaging.members.confirmRemove"].tap()
         let reinstate = app.buttons["messaging.members.reinstate"]
         XCTAssertTrue(reinstate.waitForExistence(timeout: 5))
         XCTAssertTrue(reinstate.label.hasPrefix("Réintégrer "))
         reinstate.tap()
-        app.sheets.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Réintégrer '")).firstMatch.tap()
+        app.buttons["messaging.members.confirmReinstate"].tap()
         XCTAssertTrue(reinstate.waitForNonExistence(timeout: 5))
     }
 
     func testPollComposerRequiresQuestionAndTwoOptions() throws {
         let app = launch()
         let entry = app.buttons["messages-entry"]
-        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
         app.buttons["Général de l'école"].tap()
         let more = app.buttons["messaging.compose.more"]
-        guard more.waitForExistence(timeout: 5) else { throw XCTSkip("Conversation en lecture seule") }
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "La fixture autorise la composition")
         more.tap()
         app.buttons["Sondage"].tap()
         let send = app.buttons["messaging.poll.send"]
         XCTAssertFalse(send.isEnabled)
-        app.textFields["messaging.poll.question"].tap()
+        app.descendants(matching: .any)["messaging.poll.question"].firstMatch.tap()
         app.typeText("Créneau ?")
         app.textFields["messaging.poll.option.0"].tap(); app.typeText("Lundi")
         XCTAssertFalse(send.isEnabled)
@@ -73,7 +79,7 @@ final class MessagingThreadUITests: XCTestCase {
     func testSearchOpensFromConversation() throws {
         let app = launch()
         let entry = app.buttons["messages-entry"]
-        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
         app.buttons["Général de l'école"].tap()
         app.buttons["messaging.search.open"].tap()
@@ -82,10 +88,10 @@ final class MessagingThreadUITests: XCTestCase {
 
     func testKeyBackupReachableFromSettingsWithoutLateBadgeByDefault() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-messaging-development", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launchArguments += ["-messaging-ui-fixture", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
         let entry = app.buttons["messages-entry"]
-        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
         app.buttons["messaging.settings.open"].tap()
         let open = app.buttons["messaging.backup.open"]
@@ -96,17 +102,53 @@ final class MessagingThreadUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["messaging.backup.notRestored"].exists)
     }
 
+    func testReadOnlyConversationHasNoComposerOrSendAction() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-messaging-ui-fixture", "-messaging-ui-readonly"]
+        app.launch()
+        XCTAssertTrue(app.buttons["messages-entry"].waitForExistence(timeout: 10))
+        app.buttons["messages-entry"].tap()
+        XCTAssertTrue(app.buttons["Général de l'école"].waitForExistence(timeout: 5))
+        app.buttons["Général de l'école"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["messaging.readonly"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["messaging.compose.text"].exists)
+        XCTAssertFalse(app.buttons["Envoyer"].exists)
+        XCTAssertFalse(app.buttons["messaging.compose.more"].exists)
+    }
+
+    func testUnavailableProtectionPreservesDraftWithoutFalseReceipt() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["messages-entry"].waitForExistence(timeout: 10))
+        app.buttons["messages-entry"].tap()
+        XCTAssertTrue(app.buttons["Général de l'école"].waitForExistence(timeout: 5))
+        app.buttons["Général de l'école"].tap()
+        let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("Message de qualification")
+        let send = app.buttons["Envoyer"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+        send.tap()
+        let failure = app.staticTexts["messaging.delivery"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 5))
+        XCTAssertTrue(failure.label.contains("Aucun envoi en clair"))
+        XCTAssertEqual(composer.value as? String, "Message de qualification")
+        XCTAssertFalse(app.staticTexts["En attente d'envoi"].exists)
+    }
+
     func testDynamicTypeAccessibilitySizeKeepsComposerReachable() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-messaging-development", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launchArguments += ["-messaging-ui-fixture", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         app.launch()
         let entry = app.buttons["messages-entry"]
-        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
         app.buttons["Général de l'école"].tap()
-        let composer = app.textFields["Rédiger un message"]
+        let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         let readOnly = app.descendants(matching: .any)["messaging.readonly"]
-        XCTAssertTrue(composer.waitForExistence(timeout: 5) || readOnly.exists)
-        if composer.exists { XCTAssertTrue(composer.isHittable) }
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertFalse(readOnly.exists)
+        XCTAssertTrue(composer.isHittable)
     }
 }

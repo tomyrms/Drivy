@@ -130,6 +130,56 @@ final class MessagingCoreTests: XCTestCase {
         XCTAssertEqual(remaining.map(\.clientMessageID), [first.clientMessageID])
     }
 
+    func testConcurrentRetryDoesNotSendTwiceWhileFirstResponseIsPending() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let service = SuspendedAcknowledgementService()
+        let outbox = MemoryCiphertextOutbox()
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: service,
+            cryptography: SyntheticCipher(), outbox: outbox, currentScope: { scope })
+        let entry = try await coordinator.enqueue(text: "fixture", conversationID: UUID(), currentScope: scope)
+        let first = Task { await coordinator.retry(entry, currentScope: scope) }
+        await service.waitUntilSending()
+        let second = await coordinator.retry(entry, currentScope: scope)
+        if case .waiting = second {} else { XCTFail("Le second appui attend l'envoi en cours") }
+        await service.releaseResponse()
+        if case .accepted = await first.value {} else { XCTFail("Le premier accusé doit être accepté") }
+        let count = await service.attemptCount()
+        let remaining = try await outbox.entries(scope: scope)
+        XCTAssertEqual(count, 1)
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    @MainActor
+    func testAccountChangesDuringSendRejectsLateAcknowledgementAndKeepsPending() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let context = OutboxCurrentScope(scope)
+        let service = SuspendedAcknowledgementService()
+        let outbox = MemoryCiphertextOutbox()
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: service,
+            cryptography: SyntheticCipher(), outbox: outbox, currentScope: { context.value })
+        let entry = try await coordinator.enqueue(text: "fixture", conversationID: UUID(), currentScope: scope)
+        let pending = Task { await coordinator.retry(entry, currentScope: scope) }
+        await service.waitUntilSending()
+        context.value = MessagingScope(accountID: UUID(), schoolID: school, accessEpoch: 1)
+        await service.releaseResponse()
+        if case .failed(.contextChanged) = await pending.value {} else { XCTFail("Accusé d'un ancien compte refusé") }
+        let remaining = try await outbox.entries(scope: scope)
+        XCTAssertEqual(remaining.map(\.clientMessageID), [entry.clientMessageID])
+    }
+
+    func testUnavailableProtectedStorageNeverQueuesOrSends() async {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let service = CountingUnavailableService()
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: service,
+            cryptography: SyntheticCipher(), outbox: UnavailableMessagingOutbox(), currentScope: { scope })
+        do {
+            _ = try await coordinator.enqueue(text: "fixture", conversationID: UUID(), currentScope: scope)
+            XCTFail("Pas d'envoi avant écriture durable protégée")
+        } catch MessagingFailure.protectionUnavailable {} catch { XCTFail("Erreur inattendue : \(error)") }
+        let sent = await service.sentIDs()
+        XCTAssertTrue(sent.isEmpty)
+    }
+
     @MainActor func testOutOfOrderReadStateNeverRestoresOldMuteOrLowersProgress() {
         let oldMute = Date(timeIntervalSince1970: 1_000)
         let previous = MessagingReadState(lastReadSequence: 9, mutedUntil: nil, version: 5)
@@ -143,6 +193,37 @@ final class MessagingCoreTests: XCTestCase {
         XCTAssertEqual(merged.version, 6)
         XCTAssertEqual(merged.lastReadSequence, 9)
         XCTAssertEqual(merged.mutedUntil, oldMute)
+    }
+}
+
+@MainActor
+private final class OutboxCurrentScope {
+    var value: MessagingScope?
+    init(_ value: MessagingScope) { self.value = value }
+}
+
+private actor SuspendedAcknowledgementService: MessagingService {
+    private var attempts = 0
+    private var started: CheckedContinuation<Void, Never>?
+    private var response: CheckedContinuation<Void, Never>?
+
+    func waitUntilSending() async {
+        if attempts > 0 { return }
+        await withCheckedContinuation { started = $0 }
+    }
+    func releaseResponse() { response?.resume(); response = nil }
+    func attemptCount() -> Int { attempts }
+    func conversations(scope: MessagingScope, cursor: String?) throws -> MessagingPage<MessagingConversation> { throw MessagingFailure.unavailable }
+    func messages(scope: MessagingScope, conversationID: UUID, before: String?) throws -> MessagingPage<MessagingWireMessage> { throw MessagingFailure.unavailable }
+    func send(scope: MessagingScope, pending: MessagingPending) async -> MessagingAcknowledgement {
+        attempts += 1
+        await withCheckedContinuation { continuation in
+            response = continuation
+            started?.resume()
+            started = nil
+        }
+        return MessagingAcknowledgement(clientMessageID: pending.clientMessageID, serverMessageID: UUID(),
+            conversationID: pending.conversationID, schoolID: scope.schoolID, acceptedAt: Date(), senderID: scope.accountID)
     }
 }
 

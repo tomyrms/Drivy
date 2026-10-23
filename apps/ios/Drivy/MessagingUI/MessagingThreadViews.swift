@@ -79,6 +79,7 @@ struct MessagingMembersView: View {
             Button("Retirer \(member.displayName)", role: .destructive) {
                 Task { await workspace.removeMember(member.id) }
             }
+            .accessibilityIdentifier("messaging.members.confirmRemove")
         }
         .confirmationDialog("Réintégrer dans le général ?", isPresented: Binding(get: { pendingReinstatement != nil },
                                                                                  set: { if !$0 { pendingReinstatement = nil } }),
@@ -86,6 +87,7 @@ struct MessagingMembersView: View {
             Button("Réintégrer \(member.displayName)") {
                 Task { await workspace.reinstateMember(member.id) }
             }
+            .accessibilityIdentifier("messaging.members.confirmReinstate")
         }
     }
 }
