@@ -38,8 +38,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect((await req('demo-admin', 'GET', `${path}/contacts`)).json().data.contacts).toEqual([]);
     await pool.query(`INSERT INTO drivy.messaging_admin_contact(school_id,learner_person_id,admin_person_id,assigned_by_membership_id)
       VALUES($1,$2,$3,$4)`, [id.schoolA, id.alice, id.admin, id.adminMember]);
-    expect((await req('demo-admin', 'GET', `${path}/contacts`)).json().data.contacts).toEqual([{ personId: id.alice, displayName: 'Alice Exemple' }]);
-    await pool.query('UPDATE drivy.messaging_admin_contact SET revoked_at=now() WHERE school_id=$1 AND learner_person_id=$2', [id.schoolA,id.alice]);
+    // Décision 2 (23 octobre) : un contact ADMIN historique n'ouvre plus de conversation privée.
     expect((await req('demo-admin', 'GET', `${path}/contacts`)).json().data.contacts).toEqual([]);
     expect((await req('demo-alice', 'GET', `${path}/contacts`)).json().data.contacts.map((r: { personId: string }) => r.personId)).toEqual([id.instructor]);
     await pool.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
