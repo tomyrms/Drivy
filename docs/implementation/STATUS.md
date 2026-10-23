@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 24 octobre 2026 : campagne #84 engagée sur la messagerie
+
+- Demande du porteur : tester puis afficher Messages une fois qualifié. Travail sur `openai/65-messagerie`, PR #96 en brouillon, checkout des cours collectifs préservé. [Rapport et limites](qualification-messagerie-84-20261024.md).
+- Candidat initial `e2657c4` : API/PostgreSQL run `40031983397`, **596 tests réussis et 21 échoués**. Navigateur OIDC/BFF/API/PostgreSQL run `40031985954` réussi. Apple run `40031925552` échoué à la compilation des tests : aucune suite XCTest/UI exécutée, aucune IPA produite par ce run.
+- Corrections et requalification en cours. Contrôles locaux complémentaires : web 320 tests, typage/build réussis sous Node 26 hors cible 24 ; scripts sélection 14 tests et captures 11 tests réussis après correction du harnais. Ces scripts simulent les commandes Apple.
+- **Messages reste masqué** : qualification automatisée incomplète, routes limitées au mode de test, recette physique et preuves d'exploitation encore requises. Les cours collectifs non intégrés restent dans le périmètre #84 comme non qualifiés. Aucun déploiement, fusion ni clôture d'issue.
+
 ## 23 octobre 2026 : messagerie #65, bilan après décisions du porteur
 
 - Décisions du porteur appliquées ([decisions-messaging-20261023.md](decisions-messaging-20261023.md)) : E2EE Olm/Megolm via `matrix-sdk-crypto` 0.17.0 officiel, relais de clés sur l'API Drivy, sauvegarde par clé de récupération, fin du lien, arrivée et réintégration comme WhatsApp, contacts élève limités aux moniteurs attribués, général avec nom et photo, administrateurs du groupe, suppression pour moi ou pour tous, réactions, réponses, épinglage, recherche locale, accusés de lecture, sondages, signalements. Photos et fichiers renvoyés à #97.

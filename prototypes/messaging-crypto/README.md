@@ -1,5 +1,15 @@
 # Prototype synthétique Matrix crypto
 
+## Mise à jour de qualification, 23 octobre 2026 à 22:11 UTC
+
+Le mandat ciblé du porteur du 23 octobre à 22:10 UTC autorise désormais l'exécution ci-dessous. Les mentions « non exécuté » plus bas décrivent l'état historique initial, pas ce résultat.
+
+`cargo test --locked --offline --manifest-path prototypes/messaging-crypto/Cargo.toml` : code retour 0, **4 scénarios passés, 0 échec, 0 ignoré, 0 filtré**, 8,09 s pour les scénarios. Durée murale mesurée de la commande : 29,017546 s, préparation Cargo annoncée : 11,23 s. Les cibles bibliothèque et doctests découvrent chacune 0 test et ne constituent pas une preuve supplémentaire.
+
+Sources exécutées au HEAD `e2657c493029153d46f2ca4ae034ebe8d01304bd`, dernier commit du prototype `60e845f5275fcab822bb9ce335892dda9be5702b`, sans modification du code ou du lockfile. Environnement Windows x86_64, cargo/rustc 1.99.0. Aucun correctif requis. Les clés et messages synthétiques restent en mémoire.
+
+Ce résultat qualifie uniquement les quatre scénarios de primitives SDK 0.19.1. Il ne qualifie pas le binaire iOS FFI 0.17.0, la confiance réelle, les sauvegardes serveur, la persistance, les autorisations scolaires, la résidence suisse ni l'affichage de Messages. Rapport consolidé : `../../docs/qa/validation-finale-20261021.md`.
+
 Autorisation du coordinateur confirmée le 23 octobre 2026 à 01:26 UTC : extension du périmètre à `prototypes/messaging-crypto/**`. **Sources de scénarios écrites, aucun scénario exécuté**, conformément à #84. Aucune activation Drivy ni décision de confidentialité utilisateur n'en découle.
 
 ## Périmètre
