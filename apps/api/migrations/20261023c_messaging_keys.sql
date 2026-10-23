@@ -5,10 +5,19 @@ CREATE TABLE drivy.messaging_device (
   school_id uuid NOT NULL REFERENCES drivy.school(id), person_id uuid NOT NULL REFERENCES drivy.person(id),
   device_id text NOT NULL CHECK(device_id ~ '^[A-Z0-9]{10,32}$'),
   device_keys jsonb CHECK(device_keys IS NULL OR (jsonb_typeof(device_keys)='object' AND octet_length(device_keys::text)<=8192)),
-  -- Personnes dont cet appareil suit les appareils au dernier sync, pour calculer device_lists.left.
-  tracked_person_ids uuid[] NOT NULL DEFAULT '{}'::uuid[] CHECK(cardinality(tracked_person_ids)<=10000),
+  -- Session OIDC qui a créé l'appareil : relue du contexte de transaction, jamais du corps de requête.
+  created_by_issuer text NOT NULL, created_by_subject text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz,
   PRIMARY KEY(school_id,person_id,device_id)
+);
+CREATE INDEX messaging_device_active ON drivy.messaging_device(school_id,person_id) WHERE revoked_at IS NULL;
+-- Personnes suivies par un appareil au dernier sync (calcul de device_lists.left). Table séparée :
+-- la lecture des clés d'un pair ne doit pas révéler qui il suit.
+CREATE TABLE drivy.messaging_device_tracking (
+  school_id uuid NOT NULL, person_id uuid NOT NULL, device_id text NOT NULL,
+  tracked_person_ids uuid[] NOT NULL DEFAULT '{}'::uuid[] CHECK(cardinality(tracked_person_ids)<=10000),
+  PRIMARY KEY(school_id,person_id,device_id),
+  FOREIGN KEY(school_id,person_id,device_id) REFERENCES drivy.messaging_device(school_id,person_id,device_id) ON DELETE CASCADE
 );
 CREATE TABLE drivy.messaging_one_time_key (
   school_id uuid NOT NULL, person_id uuid NOT NULL, device_id text NOT NULL,
@@ -96,18 +105,57 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
  SELECT m.person_id FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
  WHERE m.school_id=school AND m.status='ACTIVE' AND p.status='ACTIVE' AND drivy.messaging_key_peer(school,m.person_id)
 $$;
-REVOKE ALL ON FUNCTION drivy.messaging_key_peer(uuid,uuid),drivy.messaging_key_peers(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION drivy.messaging_key_peer(uuid,uuid),drivy.messaging_key_peers(uuid) TO drivy_app;
+-- Plafond d'appareils actifs par personne, contrôlé sous verrou de la personne (sérialise les créations concurrentes).
+CREATE FUNCTION drivy.messaging_bind_device(school uuid, device text, max_active integer) RETURNS text
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+DECLARE actor uuid := nullif(current_setting('app.person_id',true),'')::uuid; existing record; active integer;
+BEGIN
+ IF school IS DISTINCT FROM nullif(current_setting('app.school_id',true),'')::uuid OR NOT drivy.messaging_member(school,actor)
+   OR NOT EXISTS(SELECT 1 FROM drivy.identity_link i WHERE i.person_id=actor
+     AND i.issuer=current_setting('app.issuer',true) AND i.subject=current_setting('app.subject',true)) THEN
+   RAISE EXCEPTION 'denied' USING ERRCODE='DV403';
+ END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('messaging.device|'||school||'|'||actor,0));
+ SELECT revoked_at IS NOT NULL AS revoked INTO existing FROM drivy.messaging_device
+  WHERE school_id=school AND person_id=actor AND device_id=device FOR UPDATE;
+ IF FOUND THEN RETURN CASE WHEN existing.revoked THEN 'REVOKED' ELSE 'ACTIVE' END; END IF;
+ SELECT count(*) INTO active FROM drivy.messaging_device WHERE school_id=school AND person_id=actor AND revoked_at IS NULL;
+ IF active>=max_active THEN RETURN 'LIMIT'; END IF;
+ INSERT INTO drivy.messaging_device(school_id,person_id,device_id,created_by_issuer,created_by_subject)
+  VALUES(school,actor,device,current_setting('app.issuer',true),current_setting('app.subject',true));
+ INSERT INTO drivy.messaging_device_tracking(school_id,person_id,device_id) VALUES(school,actor,device);
+ RETURN 'ACTIVE';
+END $$;
+-- Repli d'un pair : seul le drapeau used change ; la clé et son identifiant restent ceux du propriétaire.
+CREATE FUNCTION drivy.messaging_use_fallback_key(school uuid, target uuid, device text, algo text) RETURNS TABLE(key_id text, key jsonb)
+LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ UPDATE drivy.messaging_fallback_key f SET used=true,updated_at=now()
+  FROM drivy.messaging_device d WHERE drivy.messaging_key_peer(school,target)
+    AND d.school_id=f.school_id AND d.person_id=f.person_id AND d.device_id=f.device_id AND d.revoked_at IS NULL
+    AND f.school_id=school AND f.person_id=target AND f.device_id=device AND f.algorithm=algo
+  RETURNING f.key_id,f.key
+$$;
+REVOKE ALL ON FUNCTION drivy.messaging_key_peer(uuid,uuid),drivy.messaging_key_peers(uuid),
+  drivy.messaging_bind_device(uuid,text,integer),drivy.messaging_use_fallback_key(uuid,uuid,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION drivy.messaging_key_peer(uuid,uuid),drivy.messaging_key_peers(uuid),
+  drivy.messaging_bind_device(uuid,text,integer),drivy.messaging_use_fallback_key(uuid,uuid,text,text) TO drivy_app;
 
 DO $$ DECLARE table_name text; BEGIN
- FOREACH table_name IN ARRAY ARRAY['messaging_device','messaging_one_time_key','messaging_fallback_key','messaging_cross_signing',
+ FOREACH table_name IN ARRAY ARRAY['messaging_device','messaging_device_tracking','messaging_one_time_key','messaging_fallback_key','messaging_cross_signing',
    'messaging_device_list_change','messaging_to_device','messaging_to_device_txn','messaging_key_backup','messaging_key_backup_session'] LOOP
   EXECUTE format('ALTER TABLE drivy.%I ENABLE ROW LEVEL SECURITY',table_name);
   EXECUTE format('ALTER TABLE drivy.%I FORCE ROW LEVEL SECURITY',table_name);
  END LOOP;
+ EXECUTE format('CREATE POLICY messaging_owner_device ON drivy.messaging_device FOR ALL TO %I USING(true) WITH CHECK(true)',current_user);
+ EXECUTE format('CREATE POLICY messaging_owner_device_tracking ON drivy.messaging_device_tracking FOR ALL TO %I USING(true) WITH CHECK(true)',current_user);
+ EXECUTE format('CREATE POLICY messaging_owner_fallback ON drivy.messaging_fallback_key FOR ALL TO %I USING(true) WITH CHECK(true)',current_user);
 END $$;
 -- Propres lignes : appareil, file to-device, transactions, sauvegarde.
+-- Création seulement par messaging_bind_device (plafond, session) : pas d'INSERT direct accordé.
 CREATE POLICY messaging_device_own ON drivy.messaging_device FOR ALL TO drivy_app
+ USING(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid)
+ WITH CHECK(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid);
+CREATE POLICY messaging_device_tracking_own ON drivy.messaging_device_tracking FOR ALL TO drivy_app
  USING(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid)
  WITH CHECK(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid);
 CREATE POLICY messaging_device_peer_read ON drivy.messaging_device FOR SELECT TO drivy_app
@@ -122,8 +170,7 @@ CREATE POLICY messaging_fallback_own ON drivy.messaging_fallback_key FOR ALL TO 
  USING(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid)
  WITH CHECK(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid);
 CREATE POLICY messaging_fallback_peer_read ON drivy.messaging_fallback_key FOR SELECT TO drivy_app USING(drivy.messaging_key_peer(school_id,person_id));
-CREATE POLICY messaging_fallback_peer_use ON drivy.messaging_fallback_key FOR UPDATE TO drivy_app
- USING(drivy.messaging_key_peer(school_id,person_id)) WITH CHECK(drivy.messaging_key_peer(school_id,person_id));
+-- Pas de politique UPDATE pour les pairs : le repli passe par messaging_use_fallback_key (drapeau used seul).
 CREATE POLICY messaging_cross_signing_own ON drivy.messaging_cross_signing FOR ALL TO drivy_app
  USING(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid)
  WITH CHECK(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid);
@@ -147,8 +194,10 @@ CREATE POLICY messaging_key_backup_session_own ON drivy.messaging_key_backup_ses
  USING(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid)
  WITH CHECK(school_id=nullif(current_setting('app.school_id',true),'')::uuid AND person_id=nullif(current_setting('app.person_id',true),'')::uuid);
 
-GRANT SELECT,INSERT ON drivy.messaging_device TO drivy_app;
-GRANT UPDATE(device_keys,tracked_person_ids,revoked_at) ON drivy.messaging_device TO drivy_app;
+GRANT SELECT ON drivy.messaging_device TO drivy_app;
+GRANT UPDATE(device_keys,revoked_at) ON drivy.messaging_device TO drivy_app;
+GRANT SELECT ON drivy.messaging_device_tracking TO drivy_app;
+GRANT UPDATE(tracked_person_ids) ON drivy.messaging_device_tracking TO drivy_app;
 GRANT SELECT,INSERT,DELETE ON drivy.messaging_one_time_key TO drivy_app;
 GRANT SELECT,INSERT,DELETE ON drivy.messaging_fallback_key TO drivy_app;
 GRANT UPDATE(key_id,key,used,updated_at) ON drivy.messaging_fallback_key TO drivy_app;

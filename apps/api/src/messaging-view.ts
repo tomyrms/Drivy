@@ -42,6 +42,9 @@ export function mapDatabaseError(error: unknown): unknown {
   if (code === 'DV404') return notFound();
   if (code === '22023') return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
   if (code === 'DV409') return new ApiError(409, 'MESSAGING_STATE_CONFLICT', 'La conversation a changé. Actualisez avant de réessayer.');
+  // Course perdue sur une clé d'unicité : le renvoi de la même requête est idempotent.
+  if (code === '23505' || code === '40001' || code === '40P01')
+    return new ApiError(409, 'CONCURRENT_REQUEST', 'Une requête identique est en cours. Réessayez.');
   return error;
 }
 

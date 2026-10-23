@@ -6,6 +6,7 @@ import type { TokenVerifier } from './auth.js';
 import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
 import { messagingUnavailable } from './messaging.js';
+import { mapDatabaseError } from './messaging-view.js';
 import { bindDevice, claimKeys, createBackupVersion, deviceIdPattern, getBackupKeys, getBackupVersion, listOwnDevices, queryKeys,
   revokeDevice, sendToDevice, sync, uploadDeviceSigning, uploadKeys, uploadSignatures, putBackupKeys, type KeyActor } from './messaging-keys.js';
 
@@ -51,7 +52,7 @@ export function registerMessagingKeys(app: FastifyInstance, options: { pool: Poo
       await db.query('COMMIT');
       return { data, context: { schoolId, actorPersonId: personId, accessEpoch: member.rows[0].accessEpoch },
         requestId, serverTime: new Date().toISOString() };
-    } catch (error) { broken = !(await rollbackQuietly(db)); throw error; }
+    } catch (error) { broken = !(await rollbackQuietly(db)); throw mapDatabaseError(error); }
     finally { db.release(broken); }
   }
   const path = '/v1/schools/:schoolId/messaging/crypto';

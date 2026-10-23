@@ -15,7 +15,7 @@ export const deviceIdPattern = /^[A-Z0-9]{10,32}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const keyIdPattern = /^[A-Za-z0-9_.-]{1,64}:[A-Za-z0-9+/=_-]{1,64}$/;
 const algorithmPattern = /^[A-Za-z0-9_.-]{1,64}$/;
-export const limits = { oneTimeKeysPerUpload: 100, oneTimeKeysPerDevice: 200, queryUsers: 5000, claimDevices: 500,
+export const limits = { activeDevicesPerPerson: 10, oneTimeKeysPerUpload: 100, oneTimeKeysPerDevice: 200, queryUsers: 5000, claimDevices: 500,
   toDeviceRecipients: 500, toDeviceContentBytes: 16384, syncEvents: 100, backupSessionsPerPut: 500, backupSessionBytes: 8192 } as const;
 
 const invalid = (message = 'Requête de clés invalide.') => new ApiError(400, 'INVALID_REQUEST', message);
@@ -46,14 +46,15 @@ async function noteDeviceListChange(db: PoolClient, actor: KeyActor) {
   await db.query('INSERT INTO drivy.messaging_device_list_change(school_id,person_id) VALUES($1,$2)', [actor.schoolId, actor.personId]);
 }
 
-/** Enregistre l'appareil au premier appel, refuse un appareil révoqué. */
+/** Enregistre l'appareil au premier appel (lié à la session OIDC du contexte), refuse un appareil révoqué ou au-delà du plafond. */
 export async function bindDevice(db: PoolClient, actor: KeyActor): Promise<void> {
   if (!deviceIdPattern.test(actor.deviceId)) throw forbidden();
-  await db.query(`INSERT INTO drivy.messaging_device(school_id,person_id,device_id) VALUES($1,$2,$3)
-    ON CONFLICT DO NOTHING`, [actor.schoolId, actor.personId, actor.deviceId]);
-  const device = await db.query<{ revoked: boolean }>(`SELECT revoked_at IS NOT NULL AS revoked FROM drivy.messaging_device
-    WHERE school_id=$1 AND person_id=$2 AND device_id=$3 FOR UPDATE`, [actor.schoolId, actor.personId, actor.deviceId]);
-  if (!device.rows[0] || device.rows[0].revoked) throw forbidden();
+  const bound = await db.query<{ state: string }>('SELECT drivy.messaging_bind_device($1,$2,$3) AS state',
+    [actor.schoolId, actor.deviceId, limits.activeDevicesPerPerson]);
+  const state = bound.rows[0]?.state;
+  if (state === 'LIMIT') throw new ApiError(409, 'DEVICE_LIMIT_REACHED',
+    `Trop d’appareils actifs (${limits.activeDevicesPerPerson} au plus). Révoquez un ancien appareil.`);
+  if (state !== 'ACTIVE') throw forbidden();
 }
 
 async function oneTimeKeyCounts(db: PoolClient, actor: KeyActor): Promise<Record<string, number>> {
@@ -185,10 +186,8 @@ export async function claimKeys(db: PoolClient, actor: KeyActor, body: unknown) 
       RETURNING k.key_id AS "keyId",k.key`, [actor.schoolId, personId, target.deviceId, target.algorithm]);
     let found = claimed.rows[0];
     if (!found) {
-      const fallback = await db.query<{ keyId: string; key: unknown }>(`UPDATE drivy.messaging_fallback_key f SET used=true,updated_at=now()
-        FROM drivy.messaging_device d WHERE d.school_id=f.school_id AND d.person_id=f.person_id AND d.device_id=f.device_id AND d.revoked_at IS NULL
-          AND f.school_id=$1 AND f.person_id=$2 AND f.device_id=$3 AND f.algorithm=$4
-        RETURNING f.key_id AS "keyId",f.key`, [actor.schoolId, personId, target.deviceId, target.algorithm]);
+      const fallback = await db.query<{ keyId: string; key: unknown }>(`SELECT key_id AS "keyId",key
+        FROM drivy.messaging_use_fallback_key($1,$2,$3,$4)`, [actor.schoolId, personId, target.deviceId, target.algorithm]);
       found = fallback.rows[0];
     }
     if (found) ((result[target.user] ??= {})[target.deviceId] ??= {})[found.keyId] = found.key;
@@ -201,6 +200,9 @@ export async function sendToDevice(db: PoolClient, actor: KeyActor, eventType: s
   if (!/^[A-Za-z0-9._-]{1,64}$/.test(eventType) || !/^[A-Za-z0-9._~-]{1,64}$/.test(txnId)) throw invalid();
   if (!isObject(input.messages) || Object.keys(input).length !== 1) throw invalid();
   const fingerprint = createHash('sha256').update(JSON.stringify([eventType, input.messages])).digest('hex');
+  // Deux envois concurrents du même txnId : le second attend le premier puis rejoue sa réponse (pas de violation d'unicité).
+  await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+    [`messaging.txn|${actor.schoolId}|${actor.personId}|${actor.deviceId}|${txnId}`]);
   const replay = await db.query<{ fingerprint: string }>(`SELECT fingerprint FROM drivy.messaging_to_device_txn
     WHERE school_id=$1 AND person_id=$2 AND device_id=$3 AND txn_id=$4`, [actor.schoolId, actor.personId, actor.deviceId, txnId]);
   if (replay.rows[0]) {
@@ -257,7 +259,7 @@ export async function sync(db: PoolClient, actor: KeyActor, since: string | unde
   const peers = await db.query<{ personId: string }>('SELECT person_id AS "personId" FROM drivy.messaging_key_peers($1) LIMIT 10001', [actor.schoolId]);
   if (peers.rows.length > 10000) throw new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
   const current = new Set(peers.rows.map(row => row.personId.toLowerCase()));
-  const device = await db.query<{ tracked: string[] }>(`SELECT tracked_person_ids AS tracked FROM drivy.messaging_device
+  const device = await db.query<{ tracked: string[] }>(`SELECT tracked_person_ids AS tracked FROM drivy.messaging_device_tracking
     WHERE school_id=$1 AND person_id=$2 AND device_id=$3`, [actor.schoolId, actor.personId, actor.deviceId]);
   const left = position ? (device.rows[0]?.tracked ?? []).map(p => p.toLowerCase()).filter(p => !current.has(p)) : [];
   let changed: string[] = [];
@@ -269,7 +271,7 @@ export async function sync(db: PoolClient, actor: KeyActor, since: string | unde
     const before = new Set((device.rows[0]?.tracked ?? []).map(p => p.toLowerCase()));
     for (const person of current) if (!before.has(person) && !changed.includes(person)) changed.push(person);
   }
-  await db.query(`UPDATE drivy.messaging_device SET tracked_person_ids=$4::uuid[] WHERE school_id=$1 AND person_id=$2 AND device_id=$3`,
+  await db.query(`UPDATE drivy.messaging_device_tracking SET tracked_person_ids=$4::uuid[] WHERE school_id=$1 AND person_id=$2 AND device_id=$3`,
     [actor.schoolId, actor.personId, actor.deviceId, [...current]]);
   const lastEvent = events.rows.at(-1);
   const fallback = await db.query<{ algorithm: string }>(`SELECT algorithm FROM drivy.messaging_fallback_key
@@ -354,7 +356,9 @@ export async function revokeDevice(db: PoolClient, actor: KeyActor, deviceId: st
     WHERE school_id=$1 AND person_id=$2 AND device_id=$3 FOR UPDATE`, [actor.schoolId, actor.personId, deviceId]);
   if (!row.rows[0]) throw notFound();
   if (row.rows[0].revoked) return { deviceId, revoked: true };
-  await db.query(`UPDATE drivy.messaging_device SET revoked_at=now(),device_keys=NULL,tracked_person_ids='{}' WHERE school_id=$1 AND person_id=$2 AND device_id=$3`,
+  await db.query(`UPDATE drivy.messaging_device SET revoked_at=now(),device_keys=NULL WHERE school_id=$1 AND person_id=$2 AND device_id=$3`,
+    [actor.schoolId, actor.personId, deviceId]);
+  await db.query(`UPDATE drivy.messaging_device_tracking SET tracked_person_ids='{}' WHERE school_id=$1 AND person_id=$2 AND device_id=$3`,
     [actor.schoolId, actor.personId, deviceId]);
   for (const table of ['messaging_one_time_key', 'messaging_fallback_key', 'messaging_to_device_txn'])
     await db.query(`DELETE FROM drivy.${table} WHERE school_id=$1 AND person_id=$2 AND device_id=$3`, [actor.schoolId, actor.personId, deviceId]);

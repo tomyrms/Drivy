@@ -105,6 +105,37 @@ describe('relais de clés Matrix, PostgreSQL', () => {
     expect((await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/room_keys/keys?version=${v1}`)).json().data.rooms[room].sessions.S1).toBeDefined();
     expect((await req('demo-instructor', 'INSTRDEV01', 'GET', `${crypto}/room_keys/keys?version=${v1}`)).statusCode).toBe(404);
   });
+  it('plafonne les appareils actifs, lie l’appareil à la session, protège repli et suivi d’autrui', async () => {
+    for (let i = 0; i < 10; i++) expect((await req('demo-alice', `ALICEDEV${String(i).padStart(2, '0')}`, 'GET', `${crypto}/sync`)).statusCode).toBe(200);
+    const over = await req('demo-alice', 'ALICEDEV10', 'GET', `${crypto}/sync`);
+    expect(over.statusCode).toBe(409);
+    expect(over.body).toContain('DEVICE_LIMIT_REACHED');
+    expect((await req('demo-alice', 'ALICEDEV00', 'DELETE', `${crypto}/devices/ALICEDEV09`)).statusCode).toBe(200);
+    expect((await req('demo-alice', 'ALICEDEV10', 'GET', `${crypto}/sync`)).statusCode).toBe(200);
+    const bound = await pool.query('SELECT created_by_issuer,created_by_subject FROM drivy.messaging_device WHERE device_id=$1', ['ALICEDEV10']);
+    expect(bound.rows[0]).toEqual({ created_by_issuer: issuer, created_by_subject: 'demo-alice' });
+    await req('demo-alice', 'ALICEDEV00', 'POST', `${crypto}/keys/upload`, { fallback_keys: { 'signed_curve25519:FB01': { key: 'fb' } } });
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('SET LOCAL ROLE drivy_app');
+      await db.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)", [id.schoolA, id.instructor]);
+      const tampered = await db.query(`UPDATE drivy.messaging_fallback_key SET key='{"key":"evil"}'::jsonb,key_id='signed_curve25519:EVIL'
+        WHERE person_id=$1`, [id.alice]);
+      expect(tampered.rowCount).toBe(0);
+      expect((await db.query('SELECT 1 FROM drivy.messaging_device_tracking WHERE person_id=$1', [id.alice])).rowCount).toBe(0);
+      await expect(db.query("INSERT INTO drivy.messaging_device(school_id,person_id,device_id,created_by_issuer,created_by_subject) VALUES($1,$2,'INSTRDEV99','x','y')",
+        [id.schoolA, id.instructor])).rejects.toMatchObject({ code: '42501' });
+    } finally { await db.query('ROLLBACK'); db.release(); }
+  });
+  it('sendToDevice concurrent sur le même txnId : réponses idempotentes, un seul envoi', async () => {
+    await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/sync`);
+    await req('demo-instructor', 'INSTRDEV01', 'GET', `${crypto}/sync`);
+    const body = { messages: { [user(id.alice)]: { ALICEDEV01: { ciphertext: {} } } } };
+    const results = await Promise.all([0, 1, 2, 3].map(() => req('demo-instructor', 'INSTRDEV01', 'PUT', `${crypto}/sendToDevice/m.room.encrypted/race1`, body)));
+    expect(results.map(r => r.statusCode)).toEqual([200, 200, 200, 200]);
+    expect((await req('demo-alice', 'ALICEDEV01', 'GET', `${crypto}/sync`)).json().data.to_device.events).toHaveLength(1);
+  });
   it('révoque un appareil : plus de clés publiées ni d’accès', async () => {
     await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, { device_keys: deviceKeys(id.alice, 'ALICEDEV01') });
     await req('demo-alice', 'ALICEDEV02', 'GET', `${crypto}/sync`);
