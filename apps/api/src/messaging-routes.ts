@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
 import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
-import { eligibleContacts, generalMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
+import { eligibleContacts, generalMembers, generalRemovedMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
   resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, conversationMembers, deleteMessage, setReaction, setPinned,
   setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, reinstateGeneralMember, createReport, listReports, reactionPalette, type MessagingActor } from './messaging.js';
 import { mapDatabaseError } from './messaging-view.js';
@@ -69,6 +69,11 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     const { schoolId } = base.parse(request.params);
     const query = directoryQuery.parse(request.query);
     return execute(request.headers, request.id, schoolId, (db, actor) => generalMembers(db, actor, query.limit, query.cursor).then(data => ({ data })));
+  });
+  app.get(`${path}/general/removed-members`, request => {
+    const { schoolId } = base.parse(request.params);
+    const query = directoryQuery.parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => generalRemovedMembers(db, actor, query.limit, query.cursor).then(data => ({ data })));
   });
   app.put(`${path}/private/:personId`, request => {
     const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);

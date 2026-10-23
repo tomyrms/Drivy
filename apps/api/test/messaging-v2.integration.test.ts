@@ -174,6 +174,28 @@ describe('messagerie v2, arrivée et réintégration (comme WhatsApp)', () => {
     const audit = await pool.query('SELECT action FROM drivy.messaging_general_audit WHERE school_id=$1 ORDER BY id', [id.schoolA]);
     expect(audit.rows.map(row => row.action)).toEqual(['MEMBER_REMOVED', 'MEMBER_REINSTATED']);
   });
+  it('liste les retirés du général pour les seuls administrateurs du groupe', async () => {
+    await openGeneral();
+    const list = (actor: string, query = '') => req(actor, 'GET', `${path}/general/removed-members${query}`);
+    expect((await list('demo-admin')).json().data).toEqual({ members: [], nextCursor: null });
+    expect((await req('demo-admin', 'DELETE', `${path}/general/members/${id.bob}`)).statusCode).toBe(200);
+    expect((await req('demo-admin', 'DELETE', `${path}/general/members/${id.alice}`)).statusCode).toBe(200);
+    expect((await list('demo-bob')).statusCode).toBe(403);
+    const all = (await list('demo-admin')).json().data.members as { personId: string; displayName: string; removedAt: string; photoVersion: number | null }[];
+    expect(all.map(m => m.personId).sort()).toEqual([id.alice, id.bob].sort());
+    expect(all.every(m => typeof m.displayName === 'string' && !Number.isNaN(Date.parse(m.removedAt)))).toBe(true);
+    expect(Object.keys(all[0]!).sort()).toEqual(['displayName', 'personId', 'photoVersion', 'removedAt']);
+    const first = (await list('demo-admin', '?limit=1')).json().data;
+    expect(first.members).toHaveLength(1);
+    const second = (await list('demo-admin', `?limit=1&cursor=${first.nextCursor}`)).json().data;
+    expect(second.members[0].personId).not.toBe(first.members[0].personId);
+    expect(second.nextCursor).toBeNull();
+    expect((await req('demo-admin', 'PUT', `${path}/general/members/${id.bob}`)).statusCode).toBe(200);
+    expect((await list('demo-admin')).json().data.members.map((m: { personId: string }) => m.personId)).toEqual([id.alice]);
+    await pool.query(`UPDATE drivy.membership SET status='REVOKED' WHERE school_id=$1 AND person_id=$2`, [id.schoolA, id.alice]);
+    try { expect((await list('demo-admin')).json().data.members).toEqual([]); }
+    finally { await pool.query(`UPDATE drivy.membership SET status='ACTIVE' WHERE school_id=$1 AND person_id=$2`, [id.schoolA, id.alice]); }
+  });
 });
 
 describe('messagerie v2, messages', () => {

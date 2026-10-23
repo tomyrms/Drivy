@@ -54,6 +54,17 @@ export async function generalMembers(db: PoolClient, actor: MessagingActor, limi
     [actor.schoolId, actor.personId, afterPersonId ?? null, limit + 1]);
   return { members: result.rows.slice(0, limit), nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.personId : null };
 }
+/** Membres retirés du général (administrateurs du groupe) : droits relus et verrouillés dans la fonction SQL. */
+export async function generalRemovedMembers(db: PoolClient, actor: MessagingActor, limit = 50, afterPersonId?: string) {
+  assertContext(actor);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
+  const result = await db.query<MessagingContact & { photoVersion: number | null; removedAt: Date }>(
+    `SELECT person_id AS "personId",display_name AS "displayName",photo_version AS "photoVersion",removed_at AS "removedAt"
+    FROM drivy.messaging_general_removed_members($1,$2,$3)`,
+    [actor.schoolId, afterPersonId ?? null, limit + 1]);
+  const members = result.rows.slice(0, limit).map(row => ({ ...row, removedAt: new Date(row.removedAt).toISOString() }));
+  return { members, nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.personId : null };
+}
 export async function findOrCreatePrivate(db: PoolClient, actor: MessagingActor, peerId: string): Promise<string> {
   assertContext(actor);
   if (peerId.toLowerCase() === actor.personId.toLowerCase()) throw forbidden();
