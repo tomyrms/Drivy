@@ -119,12 +119,23 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
   it('rejects a stale epoch after a concurrent membership change commits', async () => {
     const conversationId = (await req('demo-admin', 'PUT', `${path}/general`)).json().data.conversationId as string;
     const updater = await pool.connect();
+    let pending: ReturnType<typeof req> | undefined;
     try {
+      const updaterPid = (await updater.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
       await updater.query('BEGIN');
       await updater.query('UPDATE drivy.school SET version=version+1 WHERE id=$1', [id.schoolA]);
-      await updater.query('UPDATE drivy.membership SET access_epoch=access_epoch+1 WHERE id=$1', [id.adminMember]);
-      const pending = req('demo-admin', 'POST', `${path}/conversations/${conversationId}/messages`,
+      pending = req('demo-admin', 'POST', `${path}/conversations/${conversationId}/messages`,
         { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } });
+      let blocked = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const observed = await pool.query<{ blocked: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity a
+          WHERE a.datname=current_database() AND a.wait_event_type='Lock' AND a.query LIKE '%drivy.school%'
+            AND $1::int=ANY(pg_blocking_pids(a.pid))) AS blocked`, [updaterPid]);
+        if (observed.rows[0]?.blocked) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, 'la requête doit attendre le verrou école avant révocation').toBe(true);
+      await updater.query('UPDATE drivy.membership SET access_epoch=access_epoch+1 WHERE id=$1', [id.adminMember]);
       await updater.query('COMMIT');
       const response = await pending;
       expect(response.statusCode).toBe(403);
@@ -132,6 +143,7 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     } finally {
       await updater.query('ROLLBACK');
       updater.release();
+      if (pending) await pending.catch(() => undefined);
     }
   });
   it('serializes two devices retrying one intent without a second sequence', async () => {
