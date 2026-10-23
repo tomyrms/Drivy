@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  courseErrorMessage, courseRosterSchema, enrollableLearners, policyBody, policyForm, policyProblems, reasonProblem, rescheduleBody, sourceLabel,
   cancellationLabel, capacityProblem, emptyForm, formFromSeries, formatHours, preview, seriesBody, seriesByDay, typeProblem, validate,
   type CourseSeries, type SeriesForm,
 } from '../client/console/course-model.js';
@@ -111,5 +112,43 @@ describe('cours collectifs : capacité, types et agenda', () => {
     ] } as unknown as CourseSeries;
     const days = seriesByDay([series], instant => instant.slice(0, 10), Date.parse('2026-11-02T00:00:00Z'), Date.parse('2026-11-09T00:00:00Z'));
     expect([...days.keys()]).toEqual(['2026-11-03']);
+  });
+});
+
+describe('cours collectifs : inscrits, dates et réglages', () => {
+  const occurrence = (position: number) => ({ id: type, position, startsAt: '2026-11-03T17:00:00Z', endsAt: '2026-11-03T19:00:00Z', timeZone: zone, instructorMembershipId: instructor, instructorDisplayName: 'A', attendanceRequired: true });
+  it('reprogramme avec le même nombre de séances, positions d’origine', () => {
+    const series = { occurrences: [occurrence(1), occurrence(2)] };
+    const body = rescheduleBody(series, form().sessions, zone);
+    expect(body?.occurrences).toEqual([
+      { position: 1, startsAt: '2026-11-03T17:00:00.000Z', endsAt: '2026-11-03T19:00:00.000Z', instructorMembershipId: instructor },
+      { position: 2, startsAt: '2026-11-05T17:00:00.000Z', endsAt: '2026-11-05T19:00:00.000Z', instructorMembershipId: instructor },
+    ]);
+    expect(rescheduleBody({ occurrences: [occurrence(1)] }, form().sessions, zone)).toBeNull();
+    expect(rescheduleBody(series, form({ sessions: [form().sessions[0]!, { ...form().sessions[1]!, start: '21:00' }] }).sessions, zone)).toBeNull();
+  });
+  it('exige un motif borné', () => {
+    expect(reasonProblem('  ')).toBe('Indiquez le motif.');
+    expect(reasonProblem('x'.repeat(1001))).not.toBeNull();
+    expect(reasonProblem('Maladie')).toBeNull();
+  });
+  it('propose seulement les élèves actifs ni inscrits ni en file', () => {
+    const learner = (id: string, displayName: string, archivedAt: string | null = null) => ({ id, displayName, archivedAt });
+    const roster = courseRosterSchema.parse({ items: [{ id: type, seriesId: type, learnerId: 'a1111111-1111-4111-8111-111111111111', version: 1, status: 'ACTIVE', source: 'STAFF', selfCancelDeadline: '2026-11-01T17:00:00Z', createdAt: '2026-10-01T17:00:00Z', cancelledAt: null, cancelKind: null, cancelReason: null, learnerDisplayName: 'Ana' }],
+      waitlist: [{ id: type, learnerId: 'b1111111-1111-4111-8111-111111111111', learnerDisplayName: 'Ben', position: 1, status: 'OFFERED', queuedAt: '2026-10-01T17:00:00Z', offerExpiresAt: '2026-10-02T05:00:00Z' }] });
+    const result = enrollableLearners([learner('a1111111-1111-4111-8111-111111111111', 'Ana'), learner('b1111111-1111-4111-8111-111111111111', 'Ben'), learner('c', 'Zoé'), learner('d', 'Élie'), learner('e', 'Old', '2026-01-01T00:00:00Z')], roster);
+    expect(result.map(item => item.displayName)).toEqual(['Élie', 'Zoé']);
+    expect(sourceLabel('OFFER')).toBe('Liste d’attente');
+  });
+  it('lit et valide les réglages ; vide désactive la liste d’attente', () => {
+    expect(policyForm({ selfCancelHours: 48, offerResponseMinutes: null })).toEqual({ selfCancelHours: '48', offerResponseMinutes: '' });
+    expect(policyBody({ selfCancelHours: '48', offerResponseMinutes: '' })).toEqual({ selfCancelHours: 48, offerResponseMinutes: null });
+    expect(policyBody({ selfCancelHours: '0', offerResponseMinutes: '720' })).toEqual({ selfCancelHours: 0, offerResponseMinutes: 720 });
+    expect(policyProblems({ selfCancelHours: '721', offerResponseMinutes: '10' })).toEqual({ selfCancelHours: 'Entre 0 et 720 heures.', offerResponseMinutes: 'Entre 15 et 10080 minutes.' });
+    expect(policyBody({ selfCancelHours: '', offerResponseMinutes: '' })).toBeNull();
+  });
+  it('traduit le conflit d’agenda des nouvelles dates', () => {
+    expect(courseErrorMessage('COURSE_SCHEDULE_CONFLICT')).toContain('rendez-vous');
+    expect(courseErrorMessage('COURSE_FULL')).toBe('Ce cours est complet.');
   });
 });

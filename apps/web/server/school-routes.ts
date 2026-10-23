@@ -109,6 +109,12 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'PUT', segments: ['course-series', ':id'], ifMatch: true, bodyLimit: 64_000 },
   { method: 'POST', segments: ['course-series', ':id', 'publish'], ifMatch: true, bodyLimit: 1_024 },
   { method: 'POST', segments: ['course-series', ':id', 'capacity'], ifMatch: true, bodyLimit: 1_024 },
+  // Inscriptions, file d'attente et annulations d'un cours publié (#39-#41) : réservé au personnel habilité.
+  { method: 'GET', segments: ['course-series', ':id', 'enrollments'] },
+  { method: 'POST', segments: ['course-series', ':id', 'enrollments'], bodyLimit: 1_024 },
+  { method: 'POST', segments: ['course-enrollments', ':id', 'staff-cancel'], ifMatch: true, bodyLimit: 2_048 },
+  { method: 'POST', segments: ['course-series', ':id', 'cancel'], ifMatch: true, bodyLimit: 2_048 },
+  { method: 'POST', segments: ['course-series', ':id', 'reschedule'], ifMatch: true, bodyLimit: 32_000 },
   // Lectures seules : agenda de l'école, progression et bilans publiés.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
   { method: 'GET', segments: ['captures'], query: list },

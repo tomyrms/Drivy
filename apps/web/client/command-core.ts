@@ -18,7 +18,8 @@ export type CommandKind =
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
   | 'createFormation' | 'saveFormationProgramme' | 'saveTariff'
-  | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity';
+  | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity'
+  | 'staffEnrollCourse' | 'staffCancelCourseEnrollment' | 'cancelCourseSeries' | 'rescheduleCourseSeries' | 'saveCoursePolicy';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -75,6 +76,11 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   updateCourseSeries: { operationType: 'UPDATE_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Enregistrement d’un cours' },
   publishCourseSeries: { operationType: 'PUBLISH_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Publication d’un cours' },
   changeCourseCapacity: { operationType: 'CHANGE_COURSE_CAPACITY', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement de capacité d’un cours' },
+  staffEnrollCourse: { operationType: 'STAFF_ENROLL_COURSE', resourceType: 'CourseEnrollment', target: 'created', method: 'POST', expectedStatus: 201, label: 'Inscription à un cours' },
+  staffCancelCourseEnrollment: { operationType: 'STAFF_CANCEL_COURSE_ENROLLMENT', resourceType: 'CourseEnrollment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Annulation d’une inscription' },
+  cancelCourseSeries: { operationType: 'CANCEL_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Annulation d’un cours' },
+  rescheduleCourseSeries: { operationType: 'RESCHEDULE_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement des dates d’un cours' },
+  saveCoursePolicy: { operationType: 'SAVE_COURSE_POLICY', resourceType: 'CoursePolicy', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Réglages des cours' },
 };
 
 export interface SchoolCommand {

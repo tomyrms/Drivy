@@ -1,12 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { createCommand, instantToSchoolTime } from '../command-core';
-import { readSchool } from '../school-api';
+import { learnerSchema, readAll, readSchool } from '../school-api';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice } from './layout';
 import {
-  LIMITS, cancellationLabel, capacityProblem, courseCatalogueSchema, courseErrorMessage, courseSeriesSchema, courseTypeSchema, emptyForm, emptySession,
+  LIMITS, REASON_LIMIT, courseRosterSchema, enrollableLearners, policyBody, policyForm, policyProblems, reasonProblem, rescheduleBody, sourceLabel,
+  type CourseEnrollment, type CourseRoster, type PolicyForm,
+  cancellationLabel, capacityProblem, courseCatalogueSchema, courseErrorMessage, courseSeriesSchema, courseTypeSchema, emptyForm, emptySession,
   formFromSeries, formatHours, hasProblems, languages, preview, seriesBody, typeProblem, validate,
   type CourseCatalogue, type CourseSeries, type SeriesForm, type SessionForm,
 } from './course-model';
@@ -294,5 +296,199 @@ function CourseSheet({ series, onClose, onSaved, reload }: { series: CourseSerie
       <TextField label="Capacité" value={capacity} onChange={value => { setError(null); setCapacity(value); }} inputMode="numeric" required error={problem} disabled={busy} />
       <button type="submit" className="button secondary" disabled={busy || problem !== null || capacity === String(series.capacity)} aria-busy={runner.busy}>Changer la capacité</button>
     </form>}
+    {series.canManage && series.status === 'PUBLISHED' && <>
+      <CourseRosterPanel series={series} />
+      <CourseDangerZone series={series} onSaved={onSaved} reload={reload} />
+    </>}
   </section>;
+}
+
+const formatInstant = (instant: string, timeZone: string) => new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(instant));
+
+/** Inscrits et file d'attente d'un cours publié ; inscription et annulation par le personnel. */
+function CourseRosterPanel({ series }: { series: CourseSeries }) {
+  const { schoolId, school } = useConsole();
+  const timeZone = school.timeZone;
+  const runner = useCommandRunner();
+  const [revision, setRevision] = useState(0);
+  const roster = useLoad(() => readSchool(schoolId, `course-series/${series.id}/enrollments`, courseRosterSchema), [schoolId, series.id, series.version, revision]);
+  const learners = useLoad(() => readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), [schoolId]);
+  const [learner, setLearner] = useState('');
+  const [cancelling, setCancelling] = useState<CourseEnrollment | null>(null);
+  const [reason, setReason] = useState('');
+  const [reasonTouched, setReasonTouched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busy = runner.busy || Boolean(runner.pending);
+  const refuse = (code: string, message: string) => { runner.clearOutcome(); setError(courseErrorMessage(code) ?? message); if (code === 'VERSION_CONFLICT') setRevision(value => value + 1); };
+
+  async function enroll() {
+    if (!learner || busy) return;
+    setError(null);
+    const command = createCommand({ schoolId, kind: 'staffEnrollCourse', path: `course-series/${series.id}/enrollments`, resourceVersion: 0, body: { learnerId: learner } });
+    const result = await runner.run(command, 'Élève inscrit.');
+    if (result.status === 'rejected') { refuse(result.code, result.message); return; }
+    if (result.status !== 'confirmed') return;
+    setLearner(''); setRevision(value => value + 1);
+  }
+
+  async function cancel() {
+    setReasonTouched(true);
+    if (!cancelling || reasonProblem(reason) || busy) return;
+    setError(null);
+    const command = createCommand({ schoolId, kind: 'staffCancelCourseEnrollment', path: `course-enrollments/${cancelling.id}/staff-cancel`, ifMatch: cancelling.version,
+      resourceId: cancelling.id, resourceVersion: cancelling.version, body: { reason: reason.trim() } });
+    const result = await runner.run(command, 'Inscription annulée.');
+    setCancelling(null); setReason(''); setReasonTouched(false);
+    if (result.status === 'rejected') { refuse(result.code, result.message); return; }
+    if (result.status === 'confirmed') setRevision(value => value + 1);
+  }
+
+  return <section className="section-stack" aria-label="Inscriptions">
+    <h3 className="section-title">Inscrits</h3>
+    {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
+    <OutcomeNotice outcome={runner.outcome} />
+    <LoadState loaded={roster} label="Lecture des inscrits…">{(value: CourseRoster) => {
+      const active = value.items.filter(item => item.status === 'ACTIVE');
+      const options = enrollableLearners(learners.data?.items ?? [], value).map(item => ({ value: item.id, label: item.displayName }));
+      return <>
+        {active.length === 0 ? <p className="row-meta">Aucun inscrit</p> : <ul className="row-list">{value.items.map(item => <li key={item.id} className={item.status === 'CANCELLED' ? 'muted-row' : undefined}>
+          <span className="row-title">{item.learnerDisplayName || 'Élève'}</span>{' '}
+          <span className="row-meta">{sourceLabel(item.source)} · annulation libre jusqu’au <time dateTime={item.selfCancelDeadline}>{formatInstant(item.selfCancelDeadline, timeZone)}</time></span>{' '}
+          {item.status === 'CANCELLED'
+            ? <StatusBadge tone="neutral" symbol="ban">Annulée</StatusBadge>
+            : <button type="button" className="button quiet" disabled={busy} onClick={() => { setError(null); setReason(''); setReasonTouched(false); setCancelling(item); }}>Annuler l’inscription</button>}
+        </li>)}</ul>}
+        {value.waitlist.length > 0 && <>
+          <h3 className="section-title">Liste d’attente</h3>
+          <ol className="row-list">{value.waitlist.map(entry => <li key={entry.id}>
+            <span className="row-meta">{entry.position}.</span>{' '}<span className="row-title">{entry.learnerDisplayName || 'Élève'}</span>
+            {entry.status === 'OFFERED' && <>{' '}<StatusBadge tone="accent" symbol="clock">Place proposée</StatusBadge>
+              {entry.offerExpiresAt && <span className="row-meta"> jusqu’au <time dateTime={entry.offerExpiresAt}>{formatInstant(entry.offerExpiresAt, timeZone)}</time></span>}</>}
+          </li>)}</ol>
+        </>}
+        <form className="course-capacity" noValidate onSubmit={event => { event.preventDefault(); void enroll(); }}>
+          <SelectField label="Élève" value={learner} onChange={value => { setError(null); setLearner(value); }} search
+            options={[{ value: '', label: learners.status === 'error' ? 'Élèves indisponibles' : 'Choisir un élève' }, ...options]} required={false} disabled={busy} />
+          <button type="submit" className="button secondary" disabled={busy || !learner} aria-busy={runner.busy}>Inscrire un élève</button>
+        </form>
+      </>;
+    }}</LoadState>
+    <ConfirmDialog open={cancelling !== null} busy={busy} title="Annuler l’inscription" confirmLabel="Annuler l’inscription"
+      onCancel={() => setCancelling(null)} onConfirm={() => void cancel()}>
+      <p>{cancelling?.learnerDisplayName || 'Élève'}</p>
+      <TextArea label="Motif" value={reason} onChange={setReason} maxLength={REASON_LIMIT} rows={3} required error={reasonTouched ? reasonProblem(reason) : null} />
+    </ConfirmDialog>
+  </section>;
+}
+
+type SheetDialog = 'cancel' | 'reschedule' | null;
+
+/** Annuler le cours ou déplacer ses séances (même nombre). */
+function CourseDangerZone({ series, onSaved, reload }: { series: CourseSeries; onSaved: (series: CourseSeries | null) => void; reload: () => void }) {
+  const { schoolId, school } = useConsole();
+  const timeZone = school.timeZone;
+  const runner = useCommandRunner();
+  const [dialog, setDialog] = useState<SheetDialog>(null);
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionForm[]>(() => formFromSeries(series, timeZone).sessions);
+  const instructors = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const item of series.occurrences) seen.set(item.instructorMembershipId, item.instructorDisplayName || 'Moniteur');
+    return [...seen].map(([value, label]) => ({ value, label }));
+  }, [series]);
+  const busy = runner.busy || Boolean(runner.pending);
+  const sessionProblems = touched ? validate({ ...formFromSeries(series, timeZone), sessions }, timeZone).sessions : {};
+
+  async function finish(result: Awaited<ReturnType<typeof runner.run>>) {
+    if (result.status === 'rejected') {
+      runner.clearOutcome(); setError(courseErrorMessage(result.code) ?? result.message);
+      if (result.code === 'VERSION_CONFLICT') reload();
+      return;
+    }
+    if (result.status !== 'confirmed') return;
+    setDialog(null);
+    const parsed = envelope(courseSeriesSchema).safeParse(result.body);
+    onSaved(parsed.success ? parsed.data.data : null);
+  }
+
+  async function cancelSeries() {
+    setTouched(true);
+    if (reasonProblem(reason) || busy) return;
+    setError(null);
+    await finish(await runner.run(createCommand({ schoolId, kind: 'cancelCourseSeries', path: `course-series/${series.id}/cancel`, ifMatch: series.version,
+      resourceId: series.id, resourceVersion: series.version, body: { reason: reason.trim() } }), 'Cours annulé.'));
+  }
+
+  async function reschedule() {
+    setTouched(true);
+    const body = rescheduleBody(series, sessions, timeZone);
+    if (!body || busy) return;
+    setError(null);
+    await finish(await runner.run(createCommand({ schoolId, kind: 'rescheduleCourseSeries', path: `course-series/${series.id}/reschedule`, ifMatch: series.version,
+      resourceId: series.id, resourceVersion: series.version, body }), 'Dates modifiées.'));
+  }
+
+  const open = (next: SheetDialog) => { setError(null); setTouched(false); setReason(''); setSessions(formFromSeries(series, timeZone).sessions); setDialog(next); };
+  const setSession = (key: string, patch: Partial<SessionForm>) => setSessions(previous => previous.map(item => item.key === key ? { ...item, ...patch } : item));
+
+  return <>
+    <div className="button-row compact">
+      <button type="button" className="button secondary" disabled={busy} onClick={() => open('reschedule')}>Modifier les dates</button>
+      <button type="button" className="button quiet danger" disabled={busy} onClick={() => open('cancel')}>Annuler le cours</button>
+    </div>
+    {error && dialog === null && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
+    <ConfirmDialog open={dialog === 'cancel'} busy={busy} title="Annuler le cours" confirmLabel="Annuler le cours"
+      onCancel={() => setDialog(null)} onConfirm={() => void cancelSeries()}>
+      <p>{series.seatsTaken} {series.seatsTaken === 1 ? 'inscrit sera prévenu' : 'inscrits seront prévenus'}.</p>
+      {error && <p className="field-error"><Symbol kind="alert" bare />{error}</p>}
+      <TextArea label="Motif" value={reason} onChange={setReason} maxLength={REASON_LIMIT} rows={3} required error={touched ? reasonProblem(reason) : null} />
+    </ConfirmDialog>
+    <ConfirmDialog open={dialog === 'reschedule'} busy={busy} title="Modifier les dates" confirmLabel="Enregistrer les dates"
+      onCancel={() => setDialog(null)} onConfirm={() => void reschedule()}>
+      {error && <p className="field-error"><Symbol kind="alert" bare />{error}</p>}
+      <ol className="course-sessions">{sessions.map((session, index) => {
+        const problem = sessionProblems[session.key];
+        return <li key={session.key} className={problem ? 'course-session invalid' : 'course-session'} aria-label={`Séance ${index + 1}`}>
+          <TextField label="Date" type="date" value={session.date} onChange={date => setSession(session.key, { date })} required />
+          <TextField label="Début" type="time" value={session.start} onChange={start => setSession(session.key, { start })} required />
+          <TextField label="Fin" type="time" value={session.end} onChange={end => setSession(session.key, { end })} required />
+          <SelectField label="Moniteur" value={session.instructor} onChange={instructor => setSession(session.key, { instructor })} options={instructors} required />
+          {problem && <p className="field-error"><Symbol kind="alert" bare />{problem}</p>}
+        </li>;
+      })}</ol>
+    </ConfirmDialog>
+  </>;
+}
+
+/** Réglages des cours de l'école : délai d'annulation autonome et délai de réponse de la liste d'attente. */
+export function CoursePolicyDialog({ open, catalogue, onClose, onSaved }: { open: boolean; catalogue: CourseCatalogue; onClose: () => void; onSaved: () => void }) {
+  const { schoolId } = useConsole();
+  const runner = useCommandRunner();
+  const [form, setForm] = useState<PolicyForm>(() => policyForm(catalogue.policy));
+  const [touched, setTouched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { if (open) { setForm(policyForm(catalogue.policy)); setTouched(false); setError(null); } }, [open, catalogue.policy.version]);
+  const problems = touched ? policyProblems(form) : {};
+  const busy = runner.busy || Boolean(runner.pending);
+
+  async function save() {
+    setTouched(true);
+    const body = policyBody(form);
+    if (!body || busy) return;
+    setError(null);
+    const result = await runner.run(createCommand({ schoolId, kind: 'saveCoursePolicy', path: 'course-policy', ifMatch: catalogue.policy.version,
+      resourceVersion: catalogue.policy.version, body }), 'Réglages enregistrés.');
+    if (result.status === 'rejected') { runner.clearOutcome(); setError(courseErrorMessage(result.code) ?? result.message); return; }
+    if (result.status === 'confirmed') { onSaved(); onClose(); }
+  }
+
+  return <ConfirmDialog open={open} busy={busy} title="Réglages des cours" confirmLabel="Enregistrer" onCancel={onClose} onConfirm={() => void save()}>
+    {error && <p className="field-error"><Symbol kind="alert" bare />{error}</p>}
+    <TextField label="Annulation autonome (heures avant le cours)" value={form.selfCancelHours} inputMode="numeric" required
+      onChange={selfCancelHours => setForm({ ...form, selfCancelHours })} error={problems.selfCancelHours} />
+    <TextField label="Réponse de la liste d’attente (minutes)" value={form.offerResponseMinutes} inputMode="numeric" required={false} placeholder="720"
+      hint="Vide : liste d’attente désactivée" onChange={offerResponseMinutes => setForm({ ...form, offerResponseMinutes })} error={problems.offerResponseMinutes} />
+  </ConfirmDialog>;
 }

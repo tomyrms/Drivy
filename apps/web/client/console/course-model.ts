@@ -217,6 +217,80 @@ export function courseErrorMessage(code: string): string | null {
     INVALID_INTERVAL: 'Une séance finit avant son début ou dure plus de 12 h.',
     INVALID_TIME_ZONE: 'Le fuseau de l’école a changé. Rechargez.',
     VERSION_CONFLICT: 'Ce cours a changé entre-temps. Rechargez.',
+    COURSE_SCHEDULE_CONFLICT: 'Un moniteur ou un inscrit a déjà un rendez-vous sur ces dates.',
+    COURSE_ALREADY_COMPLETED: 'Cet élève a déjà suivi ce cours.',
+    COURSE_ALREADY_ENROLLED: 'Cet élève est déjà inscrit.',
+    COURSE_EQUIVALENT_ENROLLED: 'Cet élève est inscrit à une autre session de ce cours.',
+    COURSE_NOT_OPEN: 'Ce cours n’accepte plus d’inscriptions.',
+    COURSE_STARTED: 'Ce cours a déjà commencé.',
+    COURSE_FULL: 'Ce cours est complet.',
+    COURSE_ENROLLMENT_CLOSED: 'Cette inscription est déjà annulée.',
+    COURSE_REASON_REQUIRED: 'Indiquez le motif.',
+    COURSE_OCCURRENCE_COUNT: 'Indiquez chaque séance du cours, une seule fois.',
+    NOT_FOUND: 'Introuvable. Rechargez.',
   };
   return messages[code] ?? null;
 }
+
+/* Inscriptions et file d'attente (#39-#41), vues par le personnel. */
+export const enrollmentSources = ['SELF', 'STAFF', 'OFFER'] as const;
+export const courseEnrollmentSchema = z.object({
+  id, seriesId: id, learnerId: id, version, status: z.enum(['ACTIVE', 'CANCELLED']), source: z.enum(enrollmentSources),
+  selfCancelDeadline: timestamp, createdAt: timestamp, cancelledAt: timestamp.nullable(), cancelKind: z.string().nullable(),
+  cancelReason: z.string().nullable(), learnerDisplayName: z.string().default(''),
+});
+export const waitlistEntrySchema = z.object({
+  id, learnerId: id, learnerDisplayName: z.string(), position: z.number().int().positive(), status: z.enum(['WAITING', 'OFFERED']),
+  queuedAt: timestamp, offerExpiresAt: timestamp.nullable(),
+});
+export const courseRosterSchema = z.object({ items: z.array(courseEnrollmentSchema).max(1000), waitlist: z.array(waitlistEntrySchema).max(1000) });
+export type CourseEnrollment = z.infer<typeof courseEnrollmentSchema>;
+export type WaitlistEntry = z.infer<typeof waitlistEntrySchema>;
+export type CourseRoster = z.infer<typeof courseRosterSchema>;
+
+export const sourceLabel = (source: CourseEnrollment['source']): string =>
+  source === 'SELF' ? 'Inscription en ligne' : source === 'STAFF' ? 'Par l’école' : 'Liste d’attente';
+
+/** Élèves inscriptibles : actifs, ni inscrits ni en file, triés par nom. */
+export function enrollableLearners<T extends { id: string; displayName: string; archivedAt: string | null }>(learners: readonly T[], roster: CourseRoster): T[] {
+  const taken = new Set([...roster.items.filter(item => item.status === 'ACTIVE').map(item => item.learnerId), ...roster.waitlist.map(item => item.learnerId)]);
+  return learners.filter(learner => !learner.archivedAt && !taken.has(learner.id)).sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr-CH'));
+}
+
+export const REASON_LIMIT = 1000;
+export function reasonProblem(reason: string): string | null {
+  if (!length(reason)) return 'Indiquez le motif.';
+  if (length(reason) > REASON_LIMIT) return `${REASON_LIMIT} caractères au plus.`;
+  return null;
+}
+
+/** Nouvelles dates : même nombre de séances, positions d'origine. Null si invalide. */
+export function rescheduleBody(series: Pick<CourseSeries, 'occurrences'>, sessions: readonly SessionForm[], timeZone: string): { occurrences: { position: number; startsAt: string; endsAt: string; instructorMembershipId: string }[] } | null {
+  if (sessions.length !== series.occurrences.length) return null;
+  const problems = validate({ typeId: 'x', title: 'x', description: '', location: '', conditions: '', language: '', responsible: 'x', capacity: '1', minimum: '', sessions: [...sessions] }, timeZone);
+  if (hasProblems(problems)) return null;
+  const ordered = [...series.occurrences].sort((a, b) => a.position - b.position);
+  return { occurrences: sessions.map((session, index) => {
+    const interval = sessionInterval(session, timeZone)!;
+    return { position: ordered[index]!.position, startsAt: new Date(interval.start).toISOString(), endsAt: new Date(interval.end).toISOString(), instructorMembershipId: session.instructor };
+  }) };
+}
+
+export interface PolicyForm { selfCancelHours: string; offerResponseMinutes: string }
+export const policyForm = (policy: Pick<z.infer<typeof coursePolicySchema>, 'selfCancelHours' | 'offerResponseMinutes'>): PolicyForm =>
+  ({ selfCancelHours: String(policy.selfCancelHours), offerResponseMinutes: policy.offerResponseMinutes === null ? '' : String(policy.offerResponseMinutes) });
+export function policyProblems(form: PolicyForm): { selfCancelHours?: string; offerResponseMinutes?: string } {
+  const problems: { selfCancelHours?: string; offerResponseMinutes?: string } = {};
+  const hours = whole(form.selfCancelHours);
+  if (hours === null || hours > 720) problems.selfCancelHours = 'Entre 0 et 720 heures.';
+  if (form.offerResponseMinutes.trim()) {
+    const minutes = /^\d{1,5}$/.test(form.offerResponseMinutes.trim()) ? Number(form.offerResponseMinutes.trim()) : null;
+    if (minutes === null || minutes < 15 || minutes > 10080) problems.offerResponseMinutes = 'Entre 15 et 10080 minutes.';
+  }
+  return problems;
+}
+export function policyBody(form: PolicyForm): { selfCancelHours: number; offerResponseMinutes: number | null } | null {
+  if (Object.keys(policyProblems(form)).length) return null;
+  return { selfCancelHours: Number(form.selfCancelHours.trim()), offerResponseMinutes: form.offerResponseMinutes.trim() ? Number(form.offerResponseMinutes.trim()) : null };
+}
+ 

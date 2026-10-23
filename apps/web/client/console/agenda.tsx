@@ -12,7 +12,7 @@ import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
 import { useListState } from './list-state';
 import { distinctLabel, homonymReferences } from '../person-reference';
-import { AgendaAddMenu, CourseWorkspace, LessonInAppDialog, readCourseCatalogue } from './courses';
+import { AgendaAddMenu, CoursePolicyDialog, CourseWorkspace, LessonInAppDialog, readCourseCatalogue } from './courses';
 import { courseSeriesListSchema, seriesByDay } from './course-model';
 import { readSchool } from '../school-api';
 import './agenda-studio.css';
@@ -79,6 +79,7 @@ export function AgendaSection() {
   }, [schoolId, revision, bounds?.from, bounds?.to], `${schoolId}/${monday}`);
   const [course, setCourse] = useState<{ id: string | null } | null>(null);
   const [lessonHelp, setLessonHelp] = useState(false);
+  const [coursePolicy, setCoursePolicy] = useState(false);
   const courseDays = useMemo(() => bounds ? seriesByDay(courses.data ?? [], instant => civilDateIn(school.timeZone, Date.parse(instant)), Date.parse(bounds.from), Date.parse(bounds.to)) : new Map<string, ReturnType<typeof seriesByDay> extends Map<string, infer V> ? V : never>(),
     [courses.data, bounds?.from, bounds?.to, school.timeZone]);
   const reloadCourses = courses.reload;
@@ -103,11 +104,13 @@ export function AgendaSection() {
     <div className="section-stack agenda-studio">
       <SectionHeading context="Planning" title="Agenda" actions={<div className="agenda-freshness">
         <AgendaAddMenu canCreateCourse={catalogue.data?.canManage === true} onLesson={() => setLessonHelp(true)} onCourse={() => setCourse({ id: null })} />
+        {catalogue.data?.canManage === true && <button type="button" className="button quiet" onClick={() => setCoursePolicy(true)}>Réglages des cours</button>}
         {readAt !== undefined && <span className="caption">À jour à <time dateTime={new Date(readAt).toISOString()}>{formatClock(readAt, school.timeZone)}</time></span>}
         <button type="button" className="button quiet" onClick={refreshNow} disabled={loaded.status === 'loading'} aria-busy={loaded.status === 'loading'}>
           <Symbol kind="refresh" bare />Actualiser</button>
       </div>} />
       <LessonInAppDialog open={lessonHelp} onClose={() => setLessonHelp(false)} />
+      {catalogue.data?.canManage === true && <CoursePolicyDialog open={coursePolicy} catalogue={catalogue.data} onClose={() => setCoursePolicy(false)} onSaved={catalogue.reload} />}
       {course && catalogue.data && <CourseWorkspace key={course.id ?? 'new'} seriesId={course.id} catalogue={catalogue.data}
         onClose={() => setCourse(null)} onSaved={saved => { reloadCourses(); setCourse(saved ? { id: saved.id } : null); }} />}
       <PlanningReadinessBanner />

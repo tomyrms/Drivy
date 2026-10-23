@@ -108,6 +108,10 @@ describe('Liste blanche des routes de gestion', () => {
       ['PUT', `/schools/${school}/course-policy`, true, 2_048], ['POST', `/schools/${school}/course-series`, false, 64_000],
       ['PUT', `/schools/${school}/course-series/${series}`, true, 64_000], ['POST', `/schools/${school}/course-series/${series}/publish`, true, 1_024],
       ['POST', `/schools/${school}/course-series/${series}/capacity`, true, 1_024],
+      ['POST', `/schools/${school}/course-series/${series}/enrollments`, false, 1_024],
+      ['POST', `/schools/${school}/course-enrollments/${series}/staff-cancel`, true, 2_048],
+      ['POST', `/schools/${school}/course-series/${series}/cancel`, true, 2_048],
+      ['POST', `/schools/${school}/course-series/${series}/reschedule`, true, 32_000],
     ] as const) {
       const match = matchSchoolRoute(method, path, '');
       expect(match?.route.ifMatch === true, `${method} ${path}`).toBe(ifMatch);
@@ -118,6 +122,12 @@ describe('Liste blanche des routes de gestion', () => {
     expect(matchSchoolRoute('GET', `/schools/${school}/course-series`, '?status=OPEN')).toBeUndefined();
     expect(matchSchoolRoute('DELETE', `/schools/${school}/course-series/${series}`, '')).toBeUndefined();
     expect(matchSchoolRoute('PUT', `/schools/${school}/course-series`, '')).toBeUndefined();
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-series/${series}/enrollments`, '')?.path).toBe(`/v1/schools/${school}/course-series/${series}/enrollments`);
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-series/${series}/enrollments`, '?limit=10')).toBeUndefined();
+    // Routes élève (inscription autonome, file, propositions) : réservées à l'app, absentes du bureau.
+    for (const path of [`course-series/${series}/enroll`, `course-series/${series}/waitlist`, `course-offers/${series}/accept`, `course-enrollments/${series}/cancel`]) {
+      expect(matchSchoolRoute('POST', `/schools/${school}/${path}`, ''), path).toBeUndefined();
+    }
     expect(matchSchoolRoute('GET', `/schools/${school}/lessons`, `?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`)?.query)
       .toBe(`?from=2026-09-28T00%3A00%3A00Z&to=2026-10-05T00%3A00%3A00Z&instructorMembershipId=${school}&trainingId=${training}&limit=100`);
     for (const [method, path, search] of [
