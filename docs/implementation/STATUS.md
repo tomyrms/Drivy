@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 23 octobre 2026 : messagerie API, corrections de revue (#65)
+
+- Arrivée comme WhatsApp (plage lisible après `last_sequence` à l'entrée, réactions/sondages/votes/accusés compris), réintégration `PUT /general/members/{personId}` (époque +1), preuve des signalements conservée après suppression. RLS de lecture des réactions/sondages/votes bornée à la plage lisible. Ordre des verrous droits puis conversation pour envoi, réactions, votes, épinglage, suppression. Appareils : plafond de 10 actifs, création liée à la session OIDC, repli d'autrui modifiable seulement sur `used`, suivi (`messaging_device_tracking`) privé. `sendToDevice` concurrent idempotent. Fonctions sur une personne quelconque retirées de `drivy_app`, écritures directes sur votes et clôture retirées.
+- Exécuté : `npm run typecheck` et `npm run build`. Tests PostgreSQL écrits, **non exécutés** (#84). Migrations 20261023b/c modifiées en place, appliquées nulle part.
+
 ## 23 octobre 2026 : messagerie iOS v2 (#65), branche `openai/65-messagerie`
 
 - SwiftUI : annuaire du général avec nom et photo, profil limité au nom et à la photo, lecture seule après la fin du lien (composeur masqué), suppression pour moi et pour tout le monde, actions des administrateurs du groupe, réactions, réponse citée, bandeau des messages épinglés, recherche locale dans l'historique scellé AES-GCM, accusés de lecture, sondages, signalement de messages choisis. [Décisions](messaging-ios-v2-20261023.md).
