@@ -5,6 +5,9 @@ on:
       qualification_sha:
         required: true
         type: string
+      messaging_qualification:
+        type: boolean
+        default: false
   push:
     branches: [master, 'codex/**', 'claude/**']
     paths:
@@ -13,7 +16,13 @@ on:
       - 'apps/ios/project.yml'
       - 'apps/ios/Package.resolved'
       - 'scripts/ios/build-ipa.sh'
+      - 'scripts/ios/messaging-qualification.sh'
   workflow_dispatch:
+    inputs:
+      messaging_qualification:
+        description: Inclure l'accès Messages de qualification physique, sans fixtures ni validation générale
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -26,6 +35,7 @@ jobs:
     timeout-minutes: 20
     env:
       QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
+      DRIVY_MESSAGING_QUALIFICATION: ${{ inputs.messaging_qualification && '1' || '0' }}
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
       DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
@@ -66,6 +76,8 @@ jobs:
           Drivy Essais — iPhone/iPad avec iOS/iPadOS 26 minimum.
           Importer Drivy.ipa dans iLoader pour le signer et l'installer.
           Ce workflow vérifie la compilation Release, l'archive Xcode et le paquet iOS non signé.
+          Voir messagingQualificationBuildRequested dans build-info.json pour l'accès Messages de qualification physique.
+          Cet accès n'est ni une validation générale de la messagerie ni un déploiement de son service.
           Les tests natifs s'exécutent séparément dans le workflow Refonte · iOS.
           L'IPA est fourni pour essai : sa production ne signifie pas que ces tests ont réussi.
           Qualification sur appareil physique : NOT_EXECUTED.

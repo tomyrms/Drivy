@@ -3,6 +3,7 @@ set -euo pipefail
 export LC_ALL=C
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
 cd "$root_dir"
+source scripts/ios/messaging-qualification.sh
 artifact_dir="$root_dir/artifacts/ios"
 if [[ -L "$root_dir/artifacts" || -L "$artifact_dir" ]]; then
   echo "Le dossier d'artefacts ne doit pas être un lien symbolique." >&2
@@ -44,6 +45,7 @@ xcodebuild archive \
   DRIVY_OIDC_ISSUER="${DRIVY_OIDC_ISSUER:-}" \
   DRIVY_OIDC_CLIENT_ID="${DRIVY_OIDC_CLIENT_ID:-}" \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+  ${messaging_build_options[@]+"${messaging_build_options[@]}"} \
   2>&1 | tee "$artifact_dir/device-build.log"
 mkdir -p "$staging_dir/Payload"
 ditto "$staging_dir/Drivy.xcarchive/Products/Applications/Drivy.app" "$staging_dir/Payload/Drivy.app"
@@ -176,6 +178,8 @@ info = {
     "schoolConnectionConfigured": all(plist.get(name, '') for name in ('DrivyAPIBaseURL', 'DrivyOIDCIssuer', 'DrivyOIDCClientID')),
     "physicalQualification": "NOT_EXECUTED"
 }
+info["messagingQualificationBuildRequested"] = os.environ.get("DRIVY_MESSAGING_QUALIFICATION", "0") == "1"
+info["messagingGeneralQualification"] = "NOT_CLAIMED"
 (stage / "build-info.json").write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 checksums = []
 for name in ("Drivy.ipa", "build-info.json", "Package.resolved"):

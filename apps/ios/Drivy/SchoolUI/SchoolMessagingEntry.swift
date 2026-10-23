@@ -1,10 +1,21 @@
 import SwiftUI
 
 enum SchoolMessagingDevelopment {
-    /// Présentation de développement uniquement. Ce garde n'autorise ni E2EE ni activation serveur.
+    /// Opt-in à la compilation de l'IPA de qualification, jamais un argument activable par l'utilisateur.
+    static var isQualificationBuild: Bool {
+        #if DRIVY_MESSAGING_QUALIFICATION
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Accès de qualification distinct d'une activation générale et des autorisations serveur.
     static func permitted(arguments: [String], schoolIsActive: Bool) -> Bool {
+        guard schoolIsActive else { return false }
+        if isQualificationBuild { return true }
         #if DEBUG && targetEnvironment(simulator)
-        return schoolIsActive && arguments.contains("-messaging-development")
+        return arguments.contains("-messaging-development")
         #else
         return false
         #endif
@@ -15,6 +26,7 @@ enum SchoolMessagingDevelopment {
 /// La fermeture fabrique une vue dans le contexte exact, jamais une conversation par nom d'élève.
 struct SchoolMessagingEntry: Sendable {
     let scopeID: String
+    var isQualification: Bool = false
     let makeView: @MainActor @Sendable (UUID?) -> AnyView
 }
 
@@ -46,8 +58,14 @@ struct SchoolMessagingEntryButton: View {
                 Button {
                     route = Route(id: entry.scopeID, entry: entry, peerID: peerID)
                 } label: {
-                    Label(peerID == nil ? "Messages" : "Envoyer un message", systemImage: "bubble.left.and.bubble.right")
+                    HStack(spacing: DrivySpacing.xs) {
+                        Label(peerID == nil ? "Messages" : "Envoyer un message", systemImage: "bubble.left.and.bubble.right")
+                        if entry.isQualification {
+                            DrivyStatusBadge(title: "Test", tone: .accent)
+                        }
+                    }
                 }
+                .accessibilityLabel((peerID == nil ? "Messages" : "Envoyer un message") + (entry.isQualification ? ", Test" : ""))
                 .accessibilityIdentifier(peerID == nil ? "messages-entry" : "learner-send-message")
             }
         }

@@ -1,17 +1,15 @@
 import SwiftUI
 
-/// Composition explicite et réversible du simulateur. Aucun onglet ajouté ni service activé implicitement.
+/// Composition réelle pour le simulateur de développement ou l'IPA explicite de qualification.
+/// Aucune fixture, aucun service serveur activé implicitement.
 @MainActor
 enum MessagingDevelopmentEntry {
     static func make(scope: MessagingScope, baseURL: URL, tokenSource: any AccessTokenSource,
                      transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
                      photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
+                     arguments: [String] = ProcessInfo.processInfo.arguments,
                      currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) -> SchoolMessagingEntry? {
-        #if DEBUG && targetEnvironment(simulator)
-        let allowed = ProcessInfo.processInfo.arguments.contains("-messaging-development")
-        #else
-        let allowed = false
-        #endif
+        let allowed = SchoolMessagingDevelopment.permitted(arguments: arguments, schoolIsActive: true)
         guard allowed, scope.apiBaseURL == baseURL.absoluteString, DrivyAPIClient.permits(baseURL),
               currentScope() == scope else { return nil }
         let http = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: tokenSource,
@@ -19,7 +17,8 @@ enum MessagingDevelopmentEntry {
         let relay = MessagingCryptoHTTPRelay.using(baseURL: baseURL, tokenSource: tokenSource,
                                                    transport: transport, currentScope: currentScope)
         let scopeID = "\(scope.accountID.uuidString)|\(scope.schoolID.uuidString)|\(scope.accessEpoch)|\(scope.apiBaseURL)"
-        return SchoolMessagingEntry(scopeID: scopeID, makeView: { peerID in
+        return SchoolMessagingEntry(scopeID: scopeID,
+            isQualification: SchoolMessagingDevelopment.isQualificationBuild, makeView: { peerID in
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay,
                 currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID))
         })
