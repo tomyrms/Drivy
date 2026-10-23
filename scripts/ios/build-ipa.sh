@@ -156,7 +156,9 @@ with zipfile.ZipFile(stage / "Drivy.ipa") as archive:
             raise SystemExit("Le binaire archivé diffère du binaire vérifié.")
 
 ipa_hash = hashlib.sha256((stage / "Drivy.ipa").read_bytes()).hexdigest()
-commit = os.environ.get("GITHUB_SHA") or run("git", "rev-parse", "HEAD").stdout.strip()
+commit = run("git", "rev-parse", "HEAD").stdout.strip()
+if os.environ.get("QUALIFICATION_SHA") and os.environ["QUALIFICATION_SHA"] != commit:
+    raise SystemExit("Le SHA du produit diffère du candidat de qualification.")
 info = {
     "commit": commit, "run": os.environ.get("GITHUB_RUN_ID"),
     "build": plist["CFBundleVersion"], "version": plist["CFBundleShortVersionString"],

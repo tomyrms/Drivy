@@ -1,5 +1,10 @@
 name: IPA d'essai · iLoader
 on:
+  workflow_call:
+    inputs:
+      qualification_sha:
+        required: true
+        type: string
   push:
     branches: [master, 'codex/**', 'claude/**']
     paths:
@@ -12,20 +17,24 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ipa-essai-${{ github.ref }}
-  cancel-in-progress: true
+  group: ipa-essai-${{ inputs.qualification_sha || github.ref }}
+  cancel-in-progress: false
 jobs:
   ipa:
     name: Compiler l'IPA d'essai
     runs-on: macos-26
     timeout-minutes: 20
     env:
+      QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
       DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
       DRIVY_OIDC_CLIENT_ID: ${{ vars.DRIVY_OIDC_CLIENT_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.qualification_sha || github.sha }}
+      - run: bash scripts/qualification/verify-checkout.sh
       - name: Installer XcodeGen vérifié
         shell: bash
         run: |
@@ -68,7 +77,7 @@ jobs:
       - name: Télécharger l'IPA d'essai
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Drivy-essai-${{ github.sha }}
+          name: Drivy-essai-${{ inputs.qualification_sha || github.sha }}
           path: |
             artifacts/ios/Drivy.ipa
             artifacts/ios/SHA256SUMS.txt
@@ -79,13 +88,14 @@ jobs:
             artifacts/ios/sdks.txt
             artifacts/ios/macos.txt
             artifacts/ios/swift.txt
+            artifacts/qualification/identity.json
           if-no-files-found: error
           retention-days: 14
       - name: Journal de compilation
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Drivy-essai-build-${{ github.sha }}
+          name: Drivy-essai-build-${{ inputs.qualification_sha || github.sha }}
           path: |
             artifacts/ios/device-build.log
             artifacts/ios/xcode.txt
