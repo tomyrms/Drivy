@@ -1,6 +1,11 @@
 name: Validation finale · backlog
 run-name: Qualification ${{ inputs.candidate_ref }}
 on:
+  workflow_call:
+    inputs:
+      candidate_ref:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       candidate_ref:
@@ -37,7 +42,7 @@ jobs:
           test -f scripts/qualification/verify-checkout.sh
   checks:
     needs: resolve
-    uses: ./.github/workflows/refonte-checks.yml
+    uses: ./.github/workflows/qualification-checks.yml
     with:
       qualification_sha: ${{ needs.resolve.outputs.sha }}
   browser:
@@ -84,6 +89,8 @@ jobs:
           set -euo pipefail
           test "$RUNNER_ENVIRONMENT" = github-hosted
           npm ci
+          node --test --test-reporter=tap scripts/qualification/test-workflows.mjs | tee artifacts/qualification/workflows.tap
+          python3 scripts/qualification/evidence.py tap artifacts/qualification/workflows.tap
           npm ci --prefix infra/dev --ignore-scripts
           node infra/dev/node_modules/playwright-core/cli.js install --with-deps msedge
           npx tsx scripts/dev/setup.ts

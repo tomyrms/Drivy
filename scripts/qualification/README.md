@@ -8,30 +8,38 @@ produit IPA vient de `git rev-parse HEAD`, jamais du SHA du workflow appelant.
 
 ## Amorçage sans fusionner les fonctionnalités
 
-Inspection distante du 23 octobre 2026 : `master` ne contenait que
-`ipa-essai.yml`, `refonte-checks.yml`, `refonte-ios.yml` et
-`school-opening-e2e.yml`. Le nouveau workflow doit être présent sur la branche
-par défaut avant son premier dispatch.
+Le 23 octobre 2026, le coordinateur a poussé le premier lot CI `5cbc051`, puis
+confirmé le refus HTTP 404 du dispatch direct de `validation-finale.yml`, absent
+de la branche par défaut. Aucune fusion dans `master` n'est nécessaire avec le
+point d'entrée suivant, déjà enregistré dans le dépôt :
 
-1. Faire relire puis intégrer une **PR CI seulement** sur `master`, avec les
-   cinq workflows, `scripts/qualification/` et le correctif de SHA dans
-   `scripts/ios/build-ipa.sh`. Aucun fichier applicatif de la branche messagerie
-   ni historique de l'ancien dépôt n'est nécessaire.
-2. Reporter ces mêmes changements CI dans le candidat de travail et figer son
-   SHA. Le candidat doit contenir les scripts de qualification. Une référence
-   ancienne sans ces scripts échoue explicitement.
-3. Le coordinateur choisit le workflow depuis la référence portant sa définition
-   relue. Les appels réutilisables locaux utilisent cette même définition CI.
-   Exemple à exécuter **uniquement sur décision du coordinateur** :
+```console
+gh workflow run refonte-checks.yml --repo tomyrms/Drivy --ref openai/65-messagerie -f final_campaign=true -f candidate_ref=<SHA_COMPLET_DU_CANDIDAT>
+```
 
-   ```console
-   gh workflow run validation-finale.yml --repo tomyrms/Drivy --ref master -f candidate_ref=<SHA_COMPLET_DU_CANDIDAT>
-   ```
+Commande réservée au coordinateur après commit/push du présent lot bootstrap.
+Le candidat doit contenir les scripts de qualification. Pour figer également la
+définition CI, remplacer la valeur de `--ref` par le même SHA candidat.
 
-   Pour qualifier également une nouvelle définition CI de la branche de travail,
-   utiliser son SHA dans `--ref` et `candidate_ref`, après l'amorçage sur `master`.
-   Ne jamais considérer le vert obtenu avec une autre définition CI comme sa
-   qualification. Aucun contournement des protections de branche n'est requis.
+Le workflow historique `refonte-checks.yml` est maintenant un wrapper :
+- push/PR et dispatch normal : appel de `qualification-checks.yml` ;
+- dispatch avec `final_campaign=true` : appel de `validation-finale.yml` ;
+- la finale appelle directement `qualification-checks.yml`, **jamais le wrapper**.
+
+Les trois jobs serveur/web/documentation sont déplacés sans modification dans
+`qualification-checks.yml`. Il n'existe ni copie divergente de suites, ni cycle
+récursif, ni double campagne API/web pour le lancement final. Les inputs requis,
+le graphe sans cycle et la conservation des déclencheurs sont testés dans
+`scripts/qualification/test-workflows.mjs`.
+
+Les appels locaux utilisent la définition CI de la référence dispatchée. La
+référence candidate est résolue une fois par la finale puis transmise sous forme
+de SHA à chaque suite. Aucun changement des protections de branches, aucune
+fusion feature et aucun bootstrap dans `master` ne sont effectués. Si des checks
+requis se basent sur le nom complet des jobs, leur compatibilité reste à relire,
+sans contourner les protections. Le dispatch direct de `validation-finale.yml`
+reste possible ultérieurement lorsqu'il aura été intégré normalement dans la
+branche par défaut.
 
 Les déclencheurs push/PR existants restent actifs hors branche de travail. Le
 motif `openai/**` n'est pas dans leurs push. La finale n'a aucun déclencheur
