@@ -65,3 +65,22 @@ Tests préparés, non exécutés conformément à #84 : `apps/api/test/matched-r
 Les tests Swift `SchoolCaptureReplayTests` et `SchoolTrackDisplayTests` préparent les cas attente puis résultat, panne transitoire, budget épuisé, conseil serveur, ancien serveur, réponse d'une autre capture, annulation pendant attente et pendant réponse, génération remplacée, compte invalidé, refus d'accès, versions de reconstruction successives, actualisation paginée et sélection, couverture complète/partielle/rejetée, conservation de la vitesse et de la lecture. Les fixtures sont synthétiques et passent par le vrai client HTTP avec un transport de test, sans réseau ni position réelle.
 
 Restent à exécuter dans #84 : tests API sur vraie PostgreSQL isolée et runtime cible, tests Swift/UI sur runner Apple, reprise après synchronisation/erreur et absence de résultat avant épuisement du budget, conservation de la lecture et de la sélection lors d'une géométrie tardive, changement de compte/capture/droits, compatibilité ancien serveur et ancienne app. Les essais physiques GPS, iPad, VoiceOver, autonomie et géométrie réelle ne sont pas déduits d'une compilation.
+
+## Contrôle supplémentaire de sélection et traçabilité
+
+La cible XcodeGen inclut le dossier `DrivyTests`, mais la liste explicite du mode GPS omettait `SchoolCaptureReplayTests`. Le contrôle existant `TestSelection.test_explicit_gps_matches_default`, avec l'attente corrigée, a échoué sur cette omission. Après ajout de la suite au vrai script `scripts/ios/test-selection.sh` dans `bb7d0fc`, `python -B scripts/ios/test_test_selection.py TestSelection` passe : sept contrôles de sélection, sans commandes Apple. Cette exécution vérifie les arguments réellement produits par le script de production. Elle ne simule pas une réussite de compilation ou d'exécution Swift. Les cas utilisant de fausses commandes Apple (`SimulatorArguments`) n'ont pas été lancés.
+
+La sélection GPS par défaut et explicite inclut désormais la nouvelle suite. Les sélections `all`, UI et visuelle restent inchangées ; les modes et entrées invalides sont refusés. Ce complément a été signalé au coordinateur des cours. Aucun workflow ni déclencheur n'a changé.
+
+| Exigence / sortie modifiée | Vérification prévue | Observation obtenue |
+| --- | --- | --- |
+| Régressions replay découvertes par la future recette GPS | Script de sélection réel et présence des noms de suites dans les sources | Échec reproduit, corrigé, contrôles ciblés réussis |
+| Budget, espacement et conseil serveur | `retryBudgetBacksOffAndNeverShortensServerAdvice`, `pendingForeverStopsAfterSixAutomaticRetries`, `serverDelayBeyondBudgetDefersWithoutAnotherRequest` | Code applicatif compilé dans l'IPA ; assertions Swift non exécutées |
+| Attente, erreur et résultat disponible sans réouverture | `pendingThenReadyKeepsMeasuredReplayAndAddsGeometry`, `transientFailureBetweenPendingAndReadyDoesNotEndPolling`, `waitingForSyncReloadsMeasurementsBeforeApplyingNewReconstruction` | Non observé en exécution |
+| Anciens serveurs, absence fiable et réponse invalide | `matchingAdviceDistinguishesLegacyPendingExplicitStopAndUnavailable`, cas legacy UNAVAILABLE, `readyWithNoReliableGeometryIsTerminalNotAnOutage`, `invalidMatchingResponseKeepsMeasurementsWithoutAutomaticRetry` | Non observé en exécution |
+| Arrêt et réponses périmées, autre compte/capture, refus d'accès | Tests d'annulation pendant attente/réponse, génération remplacée, compte invalidé, autre capture et refus 403 dans `SchoolCaptureReplayTests` | Non observé en exécution |
+| Remplacement atomique des pages et sélection | `refreshKeepsTheOldCompleteReplayUntilEveryNewPageArrives`, cas de reconstruction successive/régressive | Non observé en exécution |
+| Couverture complète, partielle, rejetée et raccords | Assertions `matchingCoverage` et deux nouveaux cas de tronçons rejetés/adjacents dans `SchoolTrackDisplayTests` | Code de couverture compilé dans l'IPA ; rendu non observé sur simulateur/appareil |
+| Vitesse, instant et lecture/pause après géométrie tardive | `lateMatchedGeometryPreservesPlaybackInstantSpeedAndPlayState` puis recette UI réelle | Non observé en exécution |
+
+Limite vérifiée : pas de compilateur Swift local. Le workflow Apple existant n'expose pas de mode « compiler seulement les tests » ; ses modes GPS/all exécutent des tests, son mode visuel lance des captures. Aucun de ces modes n'a été détourné ou lancé pour contourner #84. Les contrôles de sélection ci-dessus ne ferment donc pas la boucle de validation comportementale du replay.
