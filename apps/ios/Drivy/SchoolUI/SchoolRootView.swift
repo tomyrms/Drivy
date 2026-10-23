@@ -81,6 +81,7 @@ struct SchoolRootView: View {
                     account: accountActions, inviteLearner: inviteAction, openProfile: profileAction,
                     makeLearnerProfile: { makeProfileWorkspace(learner: $0) }, agendaClient: homeAgendaClient,
                     trainingClient: homeTrainingClient, captureController: captureController,
+                    messagingEntry: homeMessagingEntry,
                     joinSchool: joinByCodeAction, selectedTab: $selectedHomeTab)
             } else {
                 NavigationStack {
@@ -638,6 +639,24 @@ struct SchoolRootView: View {
     }
 
     // MARK: Clients de l’accueil
+
+    private var homeMessagingEntry: SchoolMessagingEntry? {
+        guard SchoolMessagingDevelopment.permitted(arguments: ProcessInfo.processInfo.arguments,
+                  schoolIsActive: workspace?.school?.status == "ACTIVE"),
+              let configuration, let clients, let workspace, let person = workspace.person,
+              let membership = workspace.membership else { return nil }
+        let baseURL = configuration.apiBaseURL
+        let identity = identity
+        let scope = MessagingScope(accountID: person.personId, schoolID: membership.schoolId,
+            accessEpoch: membership.accessEpoch, apiBaseURL: baseURL.absoluteString)
+        return MessagingDevelopmentEntry.make(scope: scope, baseURL: baseURL,
+            tokenSource: identity, transport: clients.messagingTransport, currentScope: {
+                guard identity.isAuthenticated, workspace.school?.status == "ACTIVE",
+                      let person = workspace.person, let membership = workspace.membership else { return nil }
+                return MessagingScope(accountID: person.personId, schoolID: membership.schoolId,
+                    accessEpoch: membership.accessEpoch, apiBaseURL: baseURL.absoluteString)
+            })
+    }
 
     private var homeAgendaClient: SchoolAgendaClient? { configuration == nil ? nil : clients?.agenda }
     private var homeTrainingClient: SchoolTrainingClient? { configuration == nil ? nil : clients?.training }

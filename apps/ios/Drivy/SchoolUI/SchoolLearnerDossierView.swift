@@ -34,6 +34,7 @@ struct SchoolLearnerDossierView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
+    @Environment(\.schoolMessagingEntry) private var messagingEntry
 
     private var scopeKey: String {
         "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(workspace.selectedLearnerID?.uuidString ?? "")"
@@ -53,6 +54,12 @@ struct SchoolLearnerDossierView: View {
                 .navigationTitle("Dossier")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    if messagingEntry != nil, let learner = workspace.learner, learner.archivedAt == nil,
+                       learner.personId != workspace.person?.personId {
+                        ToolbarItem(placement: .primaryAction) {
+                            SchoolMessagingEntryButton(peerID: learner.personId)
+                        }
+                    }
                     if let close {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Fermer", action: close).accessibilityIdentifier("dossier-close")

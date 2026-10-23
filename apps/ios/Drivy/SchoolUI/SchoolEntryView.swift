@@ -7,6 +7,7 @@ struct SchoolEntryView: View {
     let openAccount: () -> Void
     var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
+    @Environment(\.schoolMessagingEntry) private var messagingEntry
     @State private var portalError: String?
 
     private var destination: SchoolEntryDestination { workspace.entryDestination }
@@ -76,6 +77,9 @@ struct SchoolEntryView: View {
             .navigationTitle(workspace.school?.name ?? workspace.membership?.schoolName ?? "Drivy")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if destination == .management, messagingEntry != nil {
+                    ToolbarItem(placement: .primaryAction) { SchoolMessagingEntryButton() }
+                }
                 DrivyAccountToolbarItem(openAccount: openAccount)
                 if let chooseSchool {
                     DrivySchoolToolbarItem(schoolName: workspace.membership?.schoolName, chooseSchool: chooseSchool)
