@@ -56,6 +56,22 @@ final class MessagingThreadUITests: XCTestCase {
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
     }
 
+    func testKeyBackupReachableFromSettingsWithoutLateBadgeByDefault() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-messaging-development", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        let entry = app.buttons["messages-entry"]
+        guard entry.waitForExistence(timeout: 10) else { throw XCTSkip("Messagerie de développement indisponible") }
+        entry.tap()
+        app.buttons["messaging.settings.open"].tap()
+        let open = app.buttons["messaging.backup.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        open.tap()
+        XCTAssertTrue(app.buttons["messaging.backup.create"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["messaging.backup.restore"].isEnabled)
+        XCTAssertFalse(app.descendants(matching: .any)["messaging.backup.notRestored"].exists)
+    }
+
     func testDynamicTypeAccessibilitySizeKeepsComposerReachable() throws {
         let app = XCUIApplication()
         app.launchArguments += ["-messaging-development", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
