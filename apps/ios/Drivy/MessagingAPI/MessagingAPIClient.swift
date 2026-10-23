@@ -2,7 +2,7 @@ import Foundation
 
 /// Formes d'échange proposées, non canoniques tant que #69/#70 et OpenAPI ne les fixent pas.
 /// L'adaptateur HTTP est injecté afin de ne pas inventer des chemins ou activer un service réel.
-struct MessagingConversationDTO: Codable, Sendable {
+struct MessagingConversationDTO: Sendable {
     let id: UUID
     let schoolId: UUID
     let kind: String
@@ -15,24 +15,29 @@ struct MessagingConversationDTO: Codable, Sendable {
     let readStateVersion: Int
 }
 
-struct MessagingMessageDTO: Codable, Sendable {
+struct MessagingMessageDTO: Sendable {
     let id: UUID
     let conversationId: UUID
     let schoolId: UUID
     let senderId: UUID
     let acceptedAt: Date
-    let ciphertext: MessagingCiphertext
+    let ciphertext: MessagingCiphertext?
+    var meta = MessagingMessageMeta()
 }
 
-struct MessagingPageDTO<Item: Codable & Sendable>: Codable, Sendable {
+struct MessagingPageDTO<Item: Sendable>: Sendable {
     let items: [Item]
     let nextCursor: String?
+    var access: MessagingConversationAccess? = nil
+    var readReceipts: [MessagingReadReceipt] = []
 }
 
 struct MessagingSendDTO: Codable, Sendable {
     let clientMessageId: UUID
     let ciphertext: MessagingCiphertext
     let mentionPersonIds: [UUID]
+    var replyToMessageId: UUID? = nil
+    var poll: MessagingPollDraftMeta? = nil
 }
 
 struct MessagingAcknowledgementDTO: Codable, Sendable {
@@ -77,18 +82,23 @@ struct MessagingAPIClient: MessagingService {
     func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPage<MessagingWireMessage> {
         let page = try await transport.messages(scope: scope, conversationID: conversationID, before: before)
         guard page.nextCursor != before || before == nil,
-              page.items.allSatisfy({ $0.schoolId == scope.schoolID && $0.conversationId == conversationID }),
+              page.items.allSatisfy({ $0.schoolId == scope.schoolID && $0.conversationId == conversationID
+                  && ($0.ciphertext != nil || $0.meta.deletedForEveryone) }),
               Set(page.items.map(\.id)).count == page.items.count else { throw MessagingFailure.invalidResponse }
-        return MessagingPage(items: page.items.map {
+        // Lecture seule : rien au-delà de la limite n'est accepté, même si le serveur l'envoyait.
+        let limit = page.access?.readableUntilSequence
+        let items = page.items.filter { limit == nil || $0.meta.sequence <= limit! }
+        return MessagingPage(items: items.map {
             MessagingWireMessage(id: $0.id, conversationID: $0.conversationId, schoolID: $0.schoolId,
-                senderID: $0.senderId, acceptedAt: $0.acceptedAt, ciphertext: $0.ciphertext)
-        }, nextCursor: page.nextCursor)
+                senderID: $0.senderId, acceptedAt: $0.acceptedAt, ciphertext: $0.ciphertext, meta: $0.meta)
+        }, nextCursor: page.nextCursor, access: page.access, readReceipts: page.readReceipts)
     }
 
     func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement {
         let ack = try await transport.send(scope: scope, conversationID: pending.conversationID,
             body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
-                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs))
+                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
+                replyToMessageId: pending.replyToMessageID, poll: pending.poll))
         guard ack.clientMessageId == pending.clientMessageID, ack.conversationId == pending.conversationID,
               ack.schoolId == scope.schoolID, ack.senderId == scope.accountID else { throw MessagingFailure.invalidResponse }
         return MessagingAcknowledgement(clientMessageID: ack.clientMessageId, serverMessageID: ack.serverMessageId,

@@ -27,3 +27,20 @@ struct UnavailableMessagingDirectory: MessagingDirectoryService {
 }
 
 extension MessagingHTTPTransport: MessagingDirectoryService {}
+extension MessagingHTTPTransport: MessagingThreadActions {}
+
+/// Réactions proposées. Le serveur n'accepte que cette liste fermée (métadonnée visible).
+enum MessagingReactionPalette {
+    static let all = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+    static func label(_ emoji: String) -> String {
+        switch emoji {
+        case "👍": "Pouce levé"
+        case "❤️": "Cœur"
+        case "😂": "Rire"
+        case "😮": "Surprise"
+        case "😢": "Tristesse"
+        case "🙏": "Merci"
+        default: emoji
+        }
+    }
+}

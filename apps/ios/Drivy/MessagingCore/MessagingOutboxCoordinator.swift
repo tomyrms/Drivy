@@ -46,6 +46,31 @@ actor MessagingOutboxCoordinator {
         return entry
     }
 
+    /// v2 : texte ou sondage, réponse citée. Le contenu est encodé puis chiffré, jamais stocké en clair.
+    func enqueue(content: MessagingPlainContent, conversationID: UUID, mentions: [UUID] = [],
+                 replyTo: UUID? = nil, pollAllowsMultiple: Bool = false, currentScope: MessagingScope) async throws -> MessagingPending {
+        guard currentScope == scope, await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
+        guard await cryptography.isAvailable(scope: scope, conversationID: conversationID) else { throw MessagingFailure.protectionUnavailable }
+        let hasText = !(content.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasText != (content.poll != nil), mentions.count <= 8, Set(mentions).count == mentions.count else {
+            throw MessagingFailure.invalidResponse
+        }
+        if let poll = content.poll {
+            guard MessagingPollRules.validated(question: poll.question, options: poll.options.map(\.label)) != nil else {
+                throw MessagingFailure.invalidResponse
+            }
+        }
+        let ciphertext = try await cryptography.encrypt(try content.encoded(), mentions: mentions,
+            scope: scope, conversationID: conversationID)
+        guard await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
+        guard Self.validEnvelope(ciphertext) else { throw MessagingFailure.invalidResponse }
+        let entry = MessagingPending(clientMessageID: UUID(), conversationID: conversationID,
+            ciphertext: ciphertext, mentionPersonIDs: mentions, replyToMessageID: replyTo,
+            poll: content.poll.map { MessagingPollDraftMeta(allowsMultiple: pollAllowsMultiple, optionIDs: $0.options.map(\.id)) })
+        try await outbox.put(entry, scope: scope)
+        return entry
+    }
+
     func pending(currentScope: MessagingScope) async throws -> [MessagingPending] {
         guard currentScope == scope, await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
         return try await outbox.entries(scope: scope)

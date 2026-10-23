@@ -14,6 +14,9 @@ struct MessagingScope: Hashable, Sendable {
 struct MessagingPage<Element: Sendable>: Sendable {
     let items: [Element]
     let nextCursor: String?
+    /// Fourni avec les messages : lecture seule après la fin du lien, rôle d'administrateur du groupe.
+    var access: MessagingConversationAccess? = nil
+    var readReceipts: [MessagingReadReceipt] = []
 }
 
 struct MessagingConversation: Identifiable, Sendable {
@@ -46,7 +49,9 @@ struct MessagingWireMessage: Identifiable, Sendable {
     let schoolID: UUID
     let senderID: UUID
     let acceptedAt: Date
-    let ciphertext: MessagingCiphertext
+    /// nil uniquement pour un message supprimé pour tout le monde.
+    let ciphertext: MessagingCiphertext?
+    var meta = MessagingMessageMeta()
 }
 
 struct MessagingAcknowledgement: Sendable {
@@ -100,10 +105,30 @@ struct MessagingPending: Codable, Sendable {
     let conversationID: UUID
     let ciphertext: MessagingCiphertext
     let mentionPersonIDs: [UUID]
-    init(clientMessageID: UUID, conversationID: UUID, ciphertext: MessagingCiphertext, mentionPersonIDs: [UUID] = []) {
+    let replyToMessageID: UUID?
+    let poll: MessagingPollDraftMeta?
+    init(clientMessageID: UUID, conversationID: UUID, ciphertext: MessagingCiphertext, mentionPersonIDs: [UUID] = [],
+         replyToMessageID: UUID? = nil, poll: MessagingPollDraftMeta? = nil) {
         self.clientMessageID = clientMessageID; self.conversationID = conversationID
         self.ciphertext = ciphertext; self.mentionPersonIDs = mentionPersonIDs
+        self.replyToMessageID = replyToMessageID; self.poll = poll
     }
+    // Les entrées v1 scellées n'ont pas ces clés : decodeIfPresent les garde lisibles.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
+        conversationID = try c.decode(UUID.self, forKey: .conversationID)
+        ciphertext = try c.decode(MessagingCiphertext.self, forKey: .ciphertext)
+        mentionPersonIDs = try c.decodeIfPresent([UUID].self, forKey: .mentionPersonIDs) ?? []
+        replyToMessageID = try c.decodeIfPresent(UUID.self, forKey: .replyToMessageID)
+        poll = try c.decodeIfPresent(MessagingPollDraftMeta.self, forKey: .poll)
+    }
+}
+
+/// Partie visible du serveur d'un sondage à créer : identifiants d'options et mode de choix.
+struct MessagingPollDraftMeta: Codable, Sendable, Equatable {
+    let allowsMultiple: Bool
+    let optionIDs: [String]
 }
 
 protocol MessagingProtectedDrafts: Sendable {

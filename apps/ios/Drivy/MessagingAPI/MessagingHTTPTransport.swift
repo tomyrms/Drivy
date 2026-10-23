@@ -43,17 +43,28 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         let nextCursor: UUID?
     }
     private struct Messages: Decodable {
+        struct Reaction: Decodable { let emoji: String; let personIds: [UUID] }
+        struct Poll: Decodable {
+            struct Option: Decodable { let optionId: String; let voterIds: [UUID] }
+            let multiple: Bool; let closed: Bool; let creatorId: UUID; let options: [Option]
+        }
         struct Item: Decodable {
             let id: UUID; let schoolId: UUID; let conversationId: UUID; let sequence: Int
-            let clientMessageId: UUID; let senderId: UUID; let ciphertext: MessagingCiphertext
+            let clientMessageId: UUID; let senderId: UUID; let ciphertext: MessagingCiphertext?
             let mentionPersonIds: [UUID]; let acceptedAt: String
+            let replyToMessageId: UUID?; let deletedForEveryone: Bool?; let pinned: Bool?
+            let reactions: [Reaction]?; let poll: Poll?
         }
+        struct Access: Decodable { let canWrite: Bool; let readableUntilSequence: Int?; let isGroupAdmin: Bool? }
+        struct Receipt: Decodable { let personId: UUID; let lastReadSequence: Int }
         let items: [Item]
         let nextCursor: String?
+        let access: Access?
+        let readBy: [Receipt]?
     }
     private typealias MessageReceipt = Messages.Item
     private struct ContactList: Decodable { let contacts: [Contact]; let nextCursor: UUID? }
-    private struct Contact: Decodable { let personId: UUID; let displayName: String }
+    private struct Contact: Decodable { let personId: UUID; let displayName: String; let hasPhoto: Bool?; let isGroupAdmin: Bool? }
     private struct MemberList: Decodable { let members: [Contact]; let nextCursor: UUID? }
     private struct ConversationID: Decodable { let conversationId: UUID }
     private struct ReadState: Decodable { let lastReadSequence: Int; let mutedUntil: String?; let readStateVersion: Int }
@@ -81,14 +92,26 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             throw MessagingFailure.invalidResponse
         }
         return MessagingPageDTO(items: try data.items.map { item in
-            MessagingMessageDTO(id: item.id, conversationId: item.conversationId, schoolId: item.schoolId,
-                senderId: item.senderId, acceptedAt: try date(item.acceptedAt), ciphertext: item.ciphertext)
-        }, nextCursor: data.nextCursor)
+            let meta = MessagingMessageMeta(sequence: item.sequence, replyToMessageID: item.replyToMessageId,
+                deletedForEveryone: item.deletedForEveryone ?? false, pinned: item.pinned ?? false,
+                reactions: (item.reactions ?? []).map { MessagingReaction(emoji: $0.emoji, personIDs: $0.personIds) },
+                poll: item.poll.map { poll in MessagingPollState(allowsMultiple: poll.multiple, closed: poll.closed,
+                    creatorID: poll.creatorId, options: poll.options.map { .init(optionID: $0.optionId, voterIDs: $0.voterIds) }) })
+            // Un message supprimé pour tout le monde ne garde aucune enveloppe côté client.
+            return MessagingMessageDTO(id: item.id, conversationId: item.conversationId, schoolId: item.schoolId,
+                senderId: item.senderId, acceptedAt: try date(item.acceptedAt),
+                ciphertext: meta.deletedForEveryone ? nil : item.ciphertext, meta: meta)
+        }, nextCursor: data.nextCursor,
+           access: data.access.map { MessagingConversationAccess(canWrite: $0.canWrite,
+               readableUntilSequence: $0.readableUntilSequence, isGroupAdmin: $0.isGroupAdmin ?? false) },
+           readReceipts: (data.readBy ?? []).map { MessagingReadReceipt(personID: $0.personId, lastReadSequence: $0.lastReadSequence) })
     }
 
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO {
         let payload = try JSONEncoder().encode(SendBody(clientMessageId: body.clientMessageId,
-            ciphertext: body.ciphertext, mentionPersonIds: body.mentionPersonIds))
+            ciphertext: body.ciphertext, mentionPersonIds: body.mentionPersonIds,
+            replyToMessageId: body.replyToMessageId,
+            poll: body.poll.map { SendBody.Poll(multiple: $0.allowsMultiple, optionIds: $0.optionIDs) }))
         let receipt: MessageReceipt = try await request(scope: scope, method: "POST",
             path: ["conversations", conversationID.uuidString, "messages"], body: payload)
         guard receipt.clientMessageId == body.clientMessageId, receipt.conversationId == conversationID,
@@ -102,9 +125,12 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             senderId: receipt.senderId)
     }
     private struct SendBody: Encodable {
+        struct Poll: Encodable { let multiple: Bool; let optionIds: [String] }
         let clientMessageId: UUID
         let ciphertext: MessagingCiphertext
         let mentionPersonIds: [UUID]
+        let replyToMessageId: UUID?
+        let poll: Poll?
     }
 
     func contacts(scope: MessagingScope) async throws -> [MessagingContact] {
@@ -233,6 +259,73 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             catch { throw MessagingFailure.invalidResponse }
         }
         throw MessagingFailure.accessChanged
+    }
+
+    // MARK: Actions v2 (docs/implementation/messaging-api-v2.md)
+
+    /// Toute réponse `data` objet est acceptée : seul le statut et le contexte comptent.
+    private struct Done: Decodable {}
+
+    private func message(_ conversationID: UUID, _ messageID: UUID, _ tail: String...) -> [String] {
+        ["conversations", conversationID.uuidString, "messages", messageID.uuidString] + tail
+    }
+
+    func delete(scope: MessagingScope, conversationID: UUID, messageID: UUID, for deletion: MessagingDeletionScope) async throws {
+        let _: Done = try await request(scope: scope, method: "DELETE", path: message(conversationID, messageID),
+                                        query: [URLQueryItem(name: "scope", value: deletion.rawValue)])
+    }
+
+    func setReaction(scope: MessagingScope, conversationID: UUID, messageID: UUID, emoji: String, active: Bool) async throws {
+        guard MessagingReactionPalette.all.contains(emoji) else { throw MessagingFailure.invalidResponse }
+        let _: Done = try await request(scope: scope, method: active ? "PUT" : "DELETE",
+                                        path: message(conversationID, messageID, "reactions", emoji))
+    }
+
+    func setPinned(scope: MessagingScope, conversationID: UUID, messageID: UUID, pinned: Bool) async throws {
+        let _: Done = try await request(scope: scope, method: pinned ? "PUT" : "DELETE", path: message(conversationID, messageID, "pin"))
+    }
+
+    func vote(scope: MessagingScope, conversationID: UUID, messageID: UUID, optionIDs: [String]) async throws {
+        struct Body: Encodable { let optionIds: [String] }
+        let _: Done = try await request(scope: scope, method: "PUT", path: message(conversationID, messageID, "poll", "votes"),
+                                        body: try JSONEncoder().encode(Body(optionIds: optionIDs)))
+    }
+
+    func closePoll(scope: MessagingScope, conversationID: UUID, messageID: UUID) async throws {
+        let _: Done = try await request(scope: scope, method: "POST", path: message(conversationID, messageID, "poll", "close"))
+    }
+
+    func setGroupAdmin(scope: MessagingScope, personID: UUID, admin: Bool) async throws {
+        let _: Done = try await request(scope: scope, method: admin ? "PUT" : "DELETE", path: ["general", "admins", personID.uuidString])
+    }
+
+    func removeGeneralMember(scope: MessagingScope, personID: UUID) async throws {
+        let _: Done = try await request(scope: scope, method: "DELETE", path: ["general", "members", personID.uuidString])
+    }
+
+    func members(scope: MessagingScope) async throws -> [MessagingMember] {
+        var cursor: UUID?
+        var members: [MessagingMember] = []
+        repeat {
+            var query = [URLQueryItem(name: "limit", value: "100")]
+            if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor.uuidString)) }
+            let result: MemberList = try await request(scope: scope, method: "GET", path: ["general", "members"], query: query)
+            guard (cursor == nil || result.nextCursor != cursor), members.count + result.members.count <= 2_000 else { throw MessagingFailure.invalidResponse }
+            members += result.members.map { MessagingMember(id: $0.personId, displayName: $0.displayName,
+                hasPhoto: $0.hasPhoto ?? false, isGroupAdmin: $0.isGroupAdmin ?? false) }
+            cursor = result.nextCursor
+        } while cursor != nil
+        guard Set(members.map(\.id)).count == members.count else { throw MessagingFailure.invalidResponse }
+        return members
+    }
+
+    func report(scope: MessagingScope, conversationID: UUID, items: [MessagingReportItem]) async throws {
+        struct Item: Encodable { let messageId: UUID; let ciphertext: MessagingCiphertext }
+        struct Body: Encodable { let conversationId: UUID; let items: [Item] }
+        guard (1...50).contains(items.count) else { throw MessagingFailure.invalidResponse }
+        let body = try JSONEncoder().encode(Body(conversationId: conversationID,
+            items: items.map { Item(messageId: $0.messageID, ciphertext: $0.ciphertext) }))
+        let _: Done = try await request(scope: scope, method: "POST", path: ["reports"], body: body)
     }
 
     private func verifyCurrent(_ scope: MessagingScope) async throws {
