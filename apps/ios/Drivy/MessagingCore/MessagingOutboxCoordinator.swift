@@ -39,9 +39,7 @@ actor MessagingOutboxCoordinator {
         let ciphertext = try await cryptography.encrypt(Data(text.utf8), mentions: mentions,
             scope: scope, conversationID: conversationID)
         guard await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
-        guard !ciphertext.scheme.isEmpty, !ciphertext.keyID.isEmpty, !ciphertext.payload.isEmpty else {
-            throw MessagingFailure.protectionUnavailable
-        }
+        guard Self.validEnvelope(ciphertext) else { throw MessagingFailure.invalidResponse }
         let entry = MessagingPending(clientMessageID: UUID(), conversationID: conversationID,
             ciphertext: ciphertext, mentionPersonIDs: mentions)
         try await outbox.put(entry, scope: scope)
@@ -56,6 +54,7 @@ actor MessagingOutboxCoordinator {
     func retry(_ entry: MessagingPending, currentScope: MessagingScope) async -> Delivery {
         guard currentScope == scope else { return .failed(.contextChanged) }
         guard await self.currentScope() == scope else { return .failed(.contextChanged) }
+        guard Self.validEnvelope(entry.ciphertext) else { return .failed(.invalidResponse) }
         guard await cryptography.isAvailable(scope: scope, conversationID: entry.conversationID) else { return .failed(.protectionUnavailable) }
         guard !active.contains(entry.clientMessageID) else { return .waiting }
         active.insert(entry.clientMessageID)
@@ -72,5 +71,30 @@ actor MessagingOutboxCoordinator {
             return .accepted(acknowledgement)
         } catch let failure as MessagingFailure { return .failed(failure) }
         catch { return .failed(.unavailable) }
+    }
+
+    /// Une reprise par événement, au plus vingt requêtes, sans boucle réseau ni nouveau chiffrement.
+    func flushPending(currentScope: MessagingScope) async -> [Delivery] {
+        guard currentScope == scope, await self.currentScope() == scope else { return [.failed(.contextChanged)] }
+        let entries: [MessagingPending]
+        do { entries = try await outbox.entries(scope: scope) }
+        catch { return [.failed(.protectionUnavailable)] }
+        var results: [Delivery] = []
+        for entry in entries.prefix(20) {
+            guard await self.currentScope() == scope else { results.append(.failed(.contextChanged)); break }
+            let result = await retry(entry, currentScope: currentScope)
+            results.append(result)
+            if case .failed(let failure) = result,
+               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable { break }
+        }
+        return results
+    }
+
+    private static func validEnvelope(_ value: MessagingCiphertext) -> Bool {
+        let scheme = value.scheme.utf8, key = value.keyID.utf8
+        guard (1...80).contains(scheme.count), (1...128).contains(key.count),
+              !value.payload.isEmpty, value.payload.base64EncodedString().utf8.count <= 12_000 else { return false }
+        return scheme.allSatisfy { ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57) || $0 == 46 || $0 == 95 || $0 == 45 }
+            && key.allSatisfy { ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57) || $0 == 46 || $0 == 95 || $0 == 45 || $0 == 58 }
     }
 }

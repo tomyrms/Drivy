@@ -55,6 +55,28 @@ final class MessagingHTTPTransportTests: XCTestCase {
         XCTAssertNotNil(state.mutedUntil)
     }
 
+    func testClearingMuteEncodesExplicitNullWithExpectedVersion() async throws {
+        let account = UUID(), school = UUID(), conversation = UUID()
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 4,
+                                   apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            let json = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+            guard json["mutedUntil"] is NSNull, json["expectedVersion"] as? Int == 8,
+                  json["lastReadSequence"] as? Int == 2 else { throw MessagingFailure.invalidResponse }
+            let body = """
+            {"data":{"lastReadSequence":2,"mutedUntil":null,"readStateVersion":9},"context":{"schoolId":"\(school.uuidString)","actorPersonId":"\(account.uuidString)","accessEpoch":4}}
+            """
+            return SchoolHTTPResponse(data: Data(body.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let client = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                  transport: wire, currentScope: { scope })
+        let state = try await client.readState(scope: scope, conversationID: conversation,
+                                               sequence: 2, mutedUntil: nil, expectedVersion: 8)
+        XCTAssertNil(state.mutedUntil)
+        XCTAssertEqual(state.version, 9)
+    }
+
     func testDifferentAPIURLRejectedBeforeNetwork() async throws {
         let baseURL = URL(string: "https://api.example.invalid/")!
         let wire = RecordingMessagingHTTP { _ in throw MessagingFailure.invalidResponse }

@@ -65,7 +65,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         guard data.items.allSatisfy({ $0.schoolId == scope.schoolID }) else { throw MessagingFailure.invalidResponse }
         return MessagingPageDTO(items: try data.items.map { item in
             MessagingConversationDTO(id: item.id, schoolId: item.schoolId, kind: item.kind,
-                title: item.title, identityDetail: item.peerPersonId.map { "Identifiant : \($0.uuidString.prefix(8))" },
+                title: item.title, identityDetail: nil,
                 unreadCount: item.unreadCount, lastSequence: item.lastSequence,
                 lastReadSequence: item.lastReadSequence, mutedUntil: try item.mutedUntil.map(date),
                 readStateVersion: item.readStateVersion)
@@ -149,7 +149,8 @@ actor MessagingHTTPTransport: MessagingAPITransport {
 
     func readState(scope: MessagingScope, conversationID: UUID, sequence: Int,
                    mutedUntil: Date?, expectedVersion: Int?) async throws -> MessagingReadState {
-        guard sequence >= 0, (mutedUntil == nil && expectedVersion == nil) || (mutedUntil != nil && (expectedVersion ?? -1) >= 0) else {
+        guard sequence >= 0, (expectedVersion ?? 0) >= 0,
+              mutedUntil == nil || expectedVersion != nil else {
             throw MessagingFailure.invalidResponse
         }
         let body = try JSONEncoder().encode(ReadBody(lastReadSequence: sequence,
@@ -160,7 +161,22 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         return MessagingReadState(lastReadSequence: result.lastReadSequence,
             mutedUntil: try result.mutedUntil.map(date), version: result.readStateVersion)
     }
-    private struct ReadBody: Encodable { let lastReadSequence: Int; let mutedUntil: String?; let expectedVersion: Int? }
+    private struct ReadBody: Encodable {
+        let lastReadSequence: Int
+        let mutedUntil: String?
+        let expectedVersion: Int?
+
+        private enum CodingKeys: String, CodingKey { case lastReadSequence, mutedUntil, expectedVersion }
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(lastReadSequence, forKey: .lastReadSequence)
+            if let expectedVersion {
+                try container.encode(expectedVersion, forKey: .expectedVersion)
+                // Présent avec null = lever la sourdine. Absent = préserver la sourdine en marquant lu.
+                try container.encode(mutedUntil, forKey: .mutedUntil)
+            }
+        }
+    }
 
     private func date(_ text: String) throws -> Date {
         let withFraction = ISO8601DateFormatter(); withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -171,7 +187,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
 
     private func request<T: Decodable>(scope: MessagingScope, method: String, path: [String],
                                         query: [URLQueryItem] = [], body: Data? = nil) async throws -> T {
-        guard scope.apiBaseURL == baseURL.absoluteString, DrivyAPIClient.permits(baseURL),
+        guard scope.apiBaseURL == baseURL.absoluteString, await DrivyAPIClient.permits(baseURL),
               let origin = baseURL.host else { throw MessagingFailure.contextChanged }
         try await verifyCurrent(scope)
         var url = baseURL

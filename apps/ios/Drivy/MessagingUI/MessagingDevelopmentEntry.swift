@@ -7,8 +7,11 @@ enum MessagingDevelopmentEntry {
                      transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
                      currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) -> SchoolMessagingEntry? {
         #if DEBUG && targetEnvironment(simulator)
-        guard ProcessInfo.processInfo.arguments.contains("-messaging-development"),
-              scope.apiBaseURL == baseURL.absoluteString, DrivyAPIClient.permits(baseURL),
+        let allowed = ProcessInfo.processInfo.arguments.contains("-messaging-development")
+        #else
+        let allowed = false
+        #endif
+        guard allowed, scope.apiBaseURL == baseURL.absoluteString, DrivyAPIClient.permits(baseURL),
               currentScope() == scope else { return nil }
         let http = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: tokenSource,
                                                 transport: transport, currentScope: currentScope)
@@ -17,9 +20,6 @@ enum MessagingDevelopmentEntry {
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http,
                 currentScope: currentScope, initialPeerID: peerID))
         })
-        #else
-        return nil
-        #endif
     }
 }
 

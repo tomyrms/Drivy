@@ -21,6 +21,8 @@ import Observation
     private(set) var messageCursors: [UUID: String] = [:]
     private(set) var error: MessagingFailure?
     private(set) var loading = false
+    private(set) var resumeGeneration = 0
+    private var resuming = false
     private var loadedConversations = false
     private var loadedMessages: Set<UUID> = []
 
@@ -56,17 +58,31 @@ import Observation
                   Set(page.items.map(\.id)).count == page.items.count else { throw MessagingFailure.invalidResponse }
             conversations = more ? conversations + page.items.filter { item in !conversations.contains(where: { $0.id == item.id }) } : page.items
             for item in page.items {
-                let known = readStates[item.id]
-                if item.readStateVersion >= (known?.version ?? 0) {
-                    readStates[item.id] = MessagingReadState(lastReadSequence: item.lastReadSequence,
-                        mutedUntil: item.mutedUntil, version: item.readStateVersion)
-                }
+                mergeReadState(MessagingReadState(lastReadSequence: item.lastReadSequence,
+                    mutedUntil: item.mutedUntil, version: item.readStateVersion), conversationID: item.id)
             }
             conversationCursor = page.nextCursor
             loadedConversations = true
             error = nil
         } catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { error = .unavailable }
+        catch { self.error = .unavailable }
+    }
+
+    func refreshVisible(conversationID: UUID? = nil) async {
+        guard !resuming, currentScope() == scope else { return }
+        resuming = true
+        defer { resuming = false; resumeGeneration += 1 }
+        let results = await outbox.flushPending(currentScope: scope)
+        for result in results {
+            if case .failed(let failure) = result,
+               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable {
+                recordFailure(failure)
+                return
+            }
+        }
+        guard currentScope() == scope else { recordFailure(.contextChanged); return }
+        await loadConversations()
+        if let conversationID { await loadMessages(conversationID) }
     }
 
     func loadMessages(_ conversationID: UUID, more: Bool = false) async {
@@ -85,7 +101,7 @@ import Observation
             loadedMessages.insert(conversationID)
             error = nil
         } catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { error = .unavailable }
+        catch { self.error = .unavailable }
     }
 
     func text(for message: MessagingWireMessage) async -> String? {
@@ -106,7 +122,7 @@ import Observation
             contacts = result; error = nil
         }
         catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { error = .unavailable }
+        catch { self.error = .unavailable }
     }
 
     func loadGeneralMembers() async {
@@ -115,7 +131,7 @@ import Observation
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
             generalMembers = result; error = nil
         } catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { error = .unavailable }
+        catch { self.error = .unavailable }
     }
 
     func privateConversation(peerID: UUID) async -> UUID? {
@@ -125,7 +141,7 @@ import Observation
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
             error = nil; return id
         } catch let failure as MessagingFailure { recordFailure(failure); return nil }
-        catch { error = .unavailable; return nil }
+        catch { self.error = .unavailable; return nil }
     }
 
     func generalConversation() async -> UUID? {
@@ -135,7 +151,7 @@ import Observation
             error = nil; return id
         }
         catch let failure as MessagingFailure { recordFailure(failure); return nil }
-        catch { error = .unavailable; return nil }
+        catch { self.error = .unavailable; return nil }
     }
 
     func markRead(conversationID: UUID, sequence: Int) async {
@@ -143,11 +159,11 @@ import Observation
             let state = try await directory.readState(scope: scope, conversationID: conversationID,
                 sequence: sequence, mutedUntil: nil, expectedVersion: nil)
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
-            readStates[conversationID] = state
+            mergeReadState(state, conversationID: conversationID)
             error = nil
         }
         catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { error = .unavailable }
+        catch { self.error = .unavailable }
     }
 
     func silence(conversationID: UUID, fallbackSequence: Int, until: Date, fallbackVersion: Int) async {
@@ -157,12 +173,27 @@ import Observation
                 sequence: state?.lastReadSequence ?? fallbackSequence,
                 mutedUntil: until, expectedVersion: state?.version ?? fallbackVersion)
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
-            readStates[conversationID] = response
+            mergeReadState(response, conversationID: conversationID)
             error = nil
             await loadConversations()
         }
         catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { error = .unavailable }
+        catch { self.error = .unavailable }
+    }
+
+    func unsilence(conversationID: UUID, fallbackSequence: Int, fallbackVersion: Int) async {
+        do {
+            let state = readStates[conversationID]
+            let response = try await directory.readState(scope: scope, conversationID: conversationID,
+                sequence: state?.lastReadSequence ?? fallbackSequence,
+                mutedUntil: nil, expectedVersion: state?.version ?? fallbackVersion)
+            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            mergeReadState(response, conversationID: conversationID)
+            error = nil
+            await loadConversations()
+        }
+        catch let failure as MessagingFailure { recordFailure(failure) }
+        catch { self.error = .unavailable }
     }
 
     func loadDraft(_ conversationID: UUID) async throws -> String {
@@ -182,7 +213,7 @@ import Observation
             if failure == .accessChanged, let revocationStore {
                 Task {
                     do { try await revocationStore.purge(scope: scope) }
-                    catch { error = .protectionUnavailable }
+                    catch { self.error = .protectionUnavailable }
                 }
             }
             contacts = []
@@ -200,4 +231,16 @@ import Observation
 
     func hasLoadedMessages(_ id: UUID) -> Bool { loadedMessages.contains(id) }
     var hasLoadedConversations: Bool { loadedConversations }
+
+    private func mergeReadState(_ incoming: MessagingReadState, conversationID: UUID) {
+        readStates[conversationID] = Self.mergedReadState(previous: readStates[conversationID], incoming: incoming)
+    }
+
+    static func mergedReadState(previous: MessagingReadState?, incoming: MessagingReadState) -> MessagingReadState {
+        guard let previous else { return incoming }
+        guard incoming.version >= previous.version else { return previous }
+        return MessagingReadState(lastReadSequence: max(previous.lastReadSequence, incoming.lastReadSequence),
+            mutedUntil: incoming.version > previous.version ? incoming.mutedUntil : previous.mutedUntil,
+            version: incoming.version)
+    }
 }
