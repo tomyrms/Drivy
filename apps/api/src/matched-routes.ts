@@ -15,12 +15,19 @@ import { matchTrack, TRACK_MATCHING_ALGORITHM_VERSION, type MatchedSpan } from '
  *
  * Le replay (`…/replay`) n'est pas modifié et ne dépend jamais de cette route : elle ajoute une couche, calculée
  * une fois par trajet, à la première lecture par un compte qui a le droit de lire ce trajet. La réponse ne
- * bloque pas sur le calcul : `PENDING` pendant qu'il tourne, `READY` ensuite, `UNAVAILABLE` s'il n'y a rien à
- * proposer (recalage non configuré, trajet non finalisé, échec en attente d'un nouvel essai).
+ * bloque pas sur le calcul. Les trois statuts historiques restent compatibles ; `reason` distingue les
+ * attentes, l'absence de correspondance et les erreurs, `retryAfterSeconds` espace les lectures suivantes.
  * Aucune position, URL ou réponse du moteur n'est journalisée : seul un code d'échec est conservé.
  */
 const LEASE_SECONDS = 180;
-interface RouteRow { reconstruction_version: number; algorithm_version: number; status: 'PROCESSING' | 'READY' | 'EMPTY' | 'FAILED'; attempts: number; lease_until: Date | null; retry_after: Date | null; provider: string | null; encrypted_route: Buffer | null; key_id: string | null }
+interface RouteRow { reconstruction_version: number; algorithm_version: number; status: 'PROCESSING' | 'READY' | 'EMPTY' | 'FAILED'; attempts: number; lease_until: Date | null; retry_after: Date | null; failure_code: string | null; provider: string | null; encrypted_route: Buffer | null; key_id: string | null }
+const failureReasons = ['PROVIDER_UNAVAILABLE', 'RATE_LIMITED', 'PROVIDER_REFUSED', 'INVALID_RESPONSE', 'MATCHING_FAILED', 'ROUTE_TOO_LARGE'] as const;
+type FailureReason = typeof failureReasons[number];
+type RouteReason = FailureReason | 'WAITING_FOR_SYNC' | 'PROCESSING' | 'MATCHED' | 'NO_RELIABLE_MATCH' | 'MATCHING_DISABLED' | 'CACHE_UNREADABLE';
+// Ne jamais exposer une valeur arbitraire de la base comme diagnostic public.
+const publicFailure = (code: string | null): FailureReason => failureReasons.find(reason => reason === code) ?? 'MATCHING_FAILED';
+const retryDelay = (at: Date | null): number => Math.max(1, Math.min(604800, Math.ceil(((at?.getTime() ?? Date.now()) - Date.now()) / 1000)));
+const availability = (reason: RouteReason, retryAfterSeconds: number | null = null) => ({ reason, retryAfterSeconds });
 const stored = z.object({ spans: z.array(z.object({ segmentId: uuid, firstSequence: z.number().int().min(0), lastSequence: z.number().int().min(0), confidence: z.number().min(0).max(1), geometry: z.string().min(1).max(400_000), anchors: z.array(z.tuple([z.number().int().min(0), z.number().min(0)])).min(2).max(20_000) }).strict()).max(2000) }).strict();
 
 const routeAAD = (row: CaptureRow, algorithm: number) => Buffer.from(canonicalCaptureJSON({ schoolId: row.school_id, captureId: row.id, kind: 'matched-route', reconstructionVersion: row.reconstruction_version, algorithmVersion: algorithm }));
@@ -93,12 +100,15 @@ export function registerMatchedRoutes(app: FastifyInstance, options: { pool: Poo
         && route.algorithm_version === TRACK_MATCHING_ALGORITHM_VERSION ? route : undefined;
       if (current?.status === 'READY' && options.capture && current.encrypted_route && current.key_id) {
         const spans = decryptRoute(options.capture, current.encrypted_route, current.key_id, routeAAD(row, TRACK_MATCHING_ALGORITHM_VERSION));
-        if (spans) return { row, status: 'READY' as const, provider: current.provider, spans };
+        if (spans) return { row, status: 'READY' as const, provider: current.provider, spans, ...availability(spans.length ? 'MATCHED' : 'NO_RELIABLE_MATCH') };
       }
-      if (current?.status === 'EMPTY') return { row, status: 'READY' as const, provider: current.provider, spans: [] as MatchedSpan[] };
-      if (current?.status === 'PROCESSING' && current.lease_until && current.lease_until.getTime() > Date.now()) return { row, status: 'PENDING' as const, provider: null, spans: [] as MatchedSpan[] };
+      if (current?.status === 'READY') return { row, status: 'UNAVAILABLE' as const, provider: null, spans: [] as MatchedSpan[], ...availability('CACHE_UNREADABLE') };
+      if (current?.status === 'EMPTY') return { row, status: 'READY' as const, provider: current.provider, spans: [] as MatchedSpan[], ...availability('NO_RELIABLE_MATCH') };
+      if (current?.status === 'PROCESSING' && current.lease_until && current.lease_until.getTime() > Date.now()) return { row, status: 'PENDING' as const, provider: null, spans: [] as MatchedSpan[], ...availability('PROCESSING', 3) };
       const due = !current || current.status === 'PROCESSING' || (current.status === 'FAILED' && (!current.retry_after || current.retry_after.getTime() <= Date.now()));
-      if (!enabled || !due || !row.finalized_at || !['SYNCED', 'PARTIAL'].includes(row.sync_state)) return { row, status: 'UNAVAILABLE' as const, provider: null, spans: [] as MatchedSpan[] };
+      if (!enabled) return { row, status: 'UNAVAILABLE' as const, provider: null, spans: [] as MatchedSpan[], ...availability('MATCHING_DISABLED') };
+      if (!row.finalized_at || !['SYNCED', 'PARTIAL'].includes(row.sync_state)) return { row, status: 'UNAVAILABLE' as const, provider: null, spans: [] as MatchedSpan[], ...availability('WAITING_FOR_SYNC', 5) };
+      if (!due) return { row, status: 'UNAVAILABLE' as const, provider: null, spans: [] as MatchedSpan[], ...availability(publicFailure(current?.failure_code ?? null), retryDelay(current?.retry_after ?? null)) };
       // Les mesures sont relues ici, avec les droits du compte ; le calcul se fait ensuite hors transaction.
       const chunks = (await db.query<ChunkRow>('SELECT * FROM drivy.capture_chunk WHERE school_id=$1 AND capture_id=$2 AND encrypted_points IS NOT NULL ORDER BY segment_index,first_sequence', [row.school_id, row.id])).rows;
       const segments: { segmentId: string; points: TrackPoint[] }[] = [];
@@ -107,7 +117,7 @@ export function registerMatchedRoutes(app: FastifyInstance, options: { pool: Poo
         const last = segments.at(-1);
         if (last?.segmentId === chunk.segment_id) last.points.push(...points); else segments.push({ segmentId: chunk.segment_id, points: [...points] });
       }
-      return { row, status: 'START' as const, provider: null, spans: [] as MatchedSpan[], segments, attempts: (current?.attempts ?? 0) + 1 };
+      return { row, status: 'START' as const, provider: null, spans: [] as MatchedSpan[], segments, attempts: (current?.attempts ?? 0) + 1, ...availability('PROCESSING', 3) };
     });
     let status: 'READY' | 'PENDING' | 'UNAVAILABLE' = read.status === 'START' ? 'UNAVAILABLE' : read.status;
     if (read.status === 'START') {
@@ -119,6 +129,6 @@ export function registerMatchedRoutes(app: FastifyInstance, options: { pool: Poo
         running.add(job);
       }
     }
-    return { data: { captureId, status, provider: status === 'READY' ? read.provider : null, algorithmVersion: TRACK_MATCHING_ALGORITHM_VERSION, reconstructionVersion: read.row.reconstruction_version, spans: status === 'READY' ? read.spans : [], generatedAt: new Date().toISOString() }, requestId: r.id, serverTime: new Date().toISOString() };
+    return { data: { captureId, status, reason: read.reason, retryAfterSeconds: read.retryAfterSeconds, provider: status === 'READY' ? read.provider : null, algorithmVersion: TRACK_MATCHING_ALGORITHM_VERSION, reconstructionVersion: read.row.reconstruction_version, spans: status === 'READY' ? read.spans : [], generatedAt: new Date().toISOString() }, requestId: r.id, serverTime: new Date().toISOString() };
   });
 }

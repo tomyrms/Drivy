@@ -25,6 +25,23 @@ struct SchoolReplayRebuildPacer {
     }
 }
 
+enum SchoolReplayMatchingState: Equatable {
+    case idle, loading, waitingForSync, processing, matched, noReliableMatch
+    case unavailable(String?), retrying(String?), deferred(String?), failed
+}
+
+/// One screen visit has a finite retry budget. Server advice is a lower bound, never a target to shorten.
+struct SchoolReplayRetryBudget {
+    private var attempts = 0
+    mutating func nextDelay(minimum: Int, elapsed: TimeInterval) -> TimeInterval? {
+        guard attempts < 6 else { return nil }
+        let delay = max(Double(minimum), min(30, 2 * pow(2, Double(attempts))))
+        guard elapsed + delay <= 120 else { return nil }
+        attempts += 1
+        return delay
+    }
+}
+
 /// A private replay is reconstructed by the school. Neither local examples nor
 /// published-report geometry are substituted for unavailable private points.
 @MainActor @Observable final class SchoolCaptureReplayWorkspace: Identifiable {
@@ -42,12 +59,19 @@ struct SchoolReplayRebuildPacer {
     /// Tracé recalé sur la route, quand l’école en a calculé un. Jamais requis pour lire le trajet.
     private(set) var matchedRoute: SchoolMatchedRoute?
     private(set) var contentRevision = 0
+    private(set) var matchingState: SchoolReplayMatchingState = .idle
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private let now: @Sendable () -> TimeInterval
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     var isInvalidated: Bool { invalidated }
 
-    init(scope: SchoolCommandScope, client: SchoolCaptureClient, captureID: UUID) {
+    init(scope: SchoolCommandScope, client: SchoolCaptureClient, captureID: UUID,
+         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+         now: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.scope = scope; self.client = client; self.captureID = captureID
+        self.sleep = sleep; self.now = now
     }
 
     var pointCount: Int { fragments.reduce(0) { $0 + $1.points.count } }
@@ -60,20 +84,70 @@ struct SchoolReplayRebuildPacer {
     }
 
     func load() async {
-        guard !invalidated, !isLoading else { return }
-        let request = UUID(); generation = request
-        isLoading = true; isComplete = false; errorMessage = nil
-        defer { if current(request) { isLoading = false } }
+        guard !invalidated, loadTask == nil, !Task.isCancelled else { return }
+        let request = UUID()
+        generation = request
+        let task = Task { await performLoad(request) }
+        loadTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        if generation == request {
+            loadTask = nil
+            isLoading = false
+        }
+    }
+
+    /// Also cancels retries started from a button, which do not belong to SwiftUI's `.task`.
+    func stopLoading() {
+        loadTask?.cancel()
+        loadTask = nil
+        generation = UUID()
+        isLoading = false
+    }
+
+    private func performLoad(_ request: UUID) async {
+        guard current(request) else { return }
+        isLoading = true
+        errorMessage = nil
+        matchingState = .loading
+        var initial: SchoolMatchedRoute?
+        var initialFailure: SchoolCaptureFailure?
         do {
+            do {
+                initial = try await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                try Task.checkCancellation()
+                if Self.deniesAccess(error) { throw error }
+                initialFailure = (error as? SchoolCaptureFailure) ?? .invalidResponse
+                // A matching outage must not prevent the measured replay from opening.
+            }
+            guard current(request) else { return }
+            try await loadMeasurements(request, preserving: capture != nil)
+            guard current(request) else { return }
+            isLoading = false
+            if let initialFailure, initialFailure != .unavailable && initialFailure != .changed {
+                matchingState = .failed
+                return
+            }
+            await refreshMatching(request, initial: initial)
+        } catch is CancellationError {
+            // Leaving the screen is not a loading failure.
+        } catch {
+            guard current(request) else { return }
+            failMeasurements(error)
+        }
+    }
+
+    private func loadMeasurements(_ request: UUID, preserving: Bool) async throws {
             let currentCapture = try await client.capture(schoolID: scope.schoolID, captureID: captureID, scope: scope)
-            guard current(request) else { return }
+            guard current(request) else { throw CancellationError() }
             guard currentCapture.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
-            capture = currentCapture
-            // Demandé avant les pages : la carte se dessine d’emblée sur la route, sans se redessiner ensuite.
-            let matched = await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
-            guard current(request) else { return }
-            matchedRoute = matched?.isUsable == true ? matched : nil
-            var awaitsMatching = matched?.isPending == true
+            if !preserving { capture = currentCapture; isComplete = false }
             var cursor: String?, seenCursors = Set<String>(), pointKeys = Set<String>()
             var lastContinues = false
             var accumulated: [SchoolCaptureReplayFragment] = []
@@ -85,13 +159,13 @@ struct SchoolReplayRebuildPacer {
                 try Task.checkCancellation()
                 let page = try await client.privateReplayPage(schoolID: scope.schoolID, captureID: captureID,
                     cursor: cursor, scope: scope)
-                guard current(request) else { return }
+                guard current(request) else { throw CancellationError() }
                 guard page.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
                 pages += 1
                 guard pages <= 1000, !page.segments.isEmpty || page.nextCursor == nil else { throw SchoolCaptureFailure.invalidResponse }
                 if let loadedQuality, loadedQuality != page.quality { throw SchoolCaptureFailure.changed }
                 loadedQuality = page.quality
-                quality = page.quality
+                if !preserving { quality = page.quality }
                 for (index, segment) in page.segments.enumerated() {
                     guard let first = segment.points.first, let last = segment.points.last else { throw SchoolCaptureFailure.invalidResponse }
                     for point in segment.points {
@@ -137,53 +211,154 @@ struct SchoolReplayRebuildPacer {
                     if let previous = knownObservations[observation.id], previous != observation { throw SchoolCaptureFailure.changed }
                     knownObservations[observation.id] = observation
                 }
-                fragments = accumulated
-                observations = knownObservations.values.sorted {
-                    let lhs = $0.observedAt.flatMap(SchoolLesson.date) ?? .distantPast
-                    let rhs = $1.observedAt.flatMap(SchoolLesson.date) ?? .distantPast
-                    return lhs == rhs ? $0.id.uuidString < $1.id.uuidString : lhs < rhs
+                if !preserving {
+                    fragments = accumulated
+                    observations = Self.sortedObservations(knownObservations)
+                    if pacer.admits() { contentRevision += 1 }
                 }
-                // Chaque page reconstruisait toute la chronologie et redessinait tout le tracé : travail quadratique.
-                if pacer.admits() { contentRevision += 1 }
                 cursor = page.nextCursor
                 if let cursor, !seenCursors.insert(cursor).inserted { throw SchoolCaptureFailure.invalidResponse }
             } while cursor != nil
+            capture = currentCapture
+            fragments = accumulated
+            observations = Self.sortedObservations(knownObservations)
+            quality = loadedQuality
+            // A refresh swaps all pages together, never a shorter prefix that would clamp the player.
+            matchedRoute = nil
             isComplete = true
             contentRevision += 1
-            // Premier affichage d’un trajet : l’école le recale à cet instant. Le trajet mesuré est déjà à l’écran ;
-            // le tracé sur route le remplace s’il arrive dans les secondes qui suivent, sinon à la prochaine ouverture.
-            isLoading = false
-            var attempts = 0
-            while awaitsMatching, attempts < 5 {
-                attempts += 1
-                // Quitter l’écran pendant cette attente n’est pas une erreur de chargement.
-                do { try await Task.sleep(for: .seconds(3)) } catch { return }
-                let next = await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
-                guard current(request) else { return }
-                awaitsMatching = next?.isPending == true
-                if let next, next.isUsable, !next.spans.isEmpty {
-                    matchedRoute = next
-                    contentRevision += 1
-                }
-            }
-        } catch is CancellationError {
-            if current(request) { errorMessage = "Le chargement du trajet a été interrompu." }
-        } catch {
-            guard current(request) else { return }
-            if let failure = error as? SchoolCaptureFailure, failure != .unavailable {
-                fragments = []; observations = []; capture = nil; matchedRoute = nil
-                contentRevision += 1
-            }
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Le replay n’a pas pu être chargé."
+    }
+
+    private static func sortedObservations(_ values: [UUID: SchoolPrivateGeoObservation]) -> [SchoolPrivateGeoObservation] {
+        values.values.sorted {
+            let lhs = $0.observedAt.flatMap(SchoolLesson.date) ?? .distantPast
+            let rhs = $1.observedAt.flatMap(SchoolLesson.date) ?? .distantPast
+            return lhs == rhs ? $0.id.uuidString < $1.id.uuidString : lhs < rhs
         }
     }
 
+    private func refreshMatching(_ request: UUID, initial: SchoolMatchedRoute?) async {
+        var measuredVersion = initial?.reconstructionVersion
+        var highestVersion = measuredVersion
+        func checkVersion(_ value: SchoolMatchedRoute) throws {
+            guard let version = value.reconstructionVersion else { return }
+            if let highestVersion, version < highestVersion { throw SchoolCaptureFailure.changed }
+            highestVersion = version
+        }
+        var needsSynchronizedMeasurements = initial?.reason == "WAITING_FOR_SYNC"
+            || capture?.syncState == .uploading || capture?.syncState == .localOnly
+        var budget = SchoolReplayRetryBudget()
+        let started = now()
+        var first = initial
+        if initial == nil {
+            matchingState = .retrying(nil)
+            guard let delay = budget.nextDelay(minimum: 2, elapsed: now() - started) else {
+                matchingState = .deferred(nil)
+                return
+            }
+            do { try await sleep(.seconds(delay)) } catch { return }
+        }
+        while current(request) {
+            var minimum: Int?
+            var reason: String?
+            do {
+                var value: SchoolMatchedRoute
+                if let first {
+                    value = first
+                } else {
+                    value = try await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+                }
+                let confirmsInitialReady = first?.status == "READY"
+                first = nil
+                if confirmsInitialReady {
+                    value = try await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+                }
+                guard current(request) else { return }
+                try checkVersion(value)
+                if value.reconstructionVersion != measuredVersion
+                    || (needsSynchronizedMeasurements && value.reason != "WAITING_FOR_SYNC") {
+                    // Bracket refreshed measurements with matching reads from the same reconstruction.
+                    // A capture's business version is not its reconstruction version.
+                    try await loadMeasurements(request, preserving: true)
+                    guard current(request) else { return }
+                    measuredVersion = value.reconstructionVersion
+                    needsSynchronizedMeasurements = value.reason == "WAITING_FOR_SYNC"
+                    if value.status == "READY" {
+                        value = try await client.matchedRoute(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+                        guard current(request) else { return }
+                        try checkVersion(value)
+                    }
+                }
+                if value.reconstructionVersion != measuredVersion {
+                    matchingState = .retrying("WAITING_FOR_SYNC")
+                    minimum = value.status == "READY" ? 2 : value.suggestedRetryDelay
+                    reason = "WAITING_FOR_SYNC"
+                    if minimum == nil { matchingState = .deferred(reason) }
+                } else {
+                    needsSynchronizedMeasurements = needsSynchronizedMeasurements || value.reason == "WAITING_FOR_SYNC"
+                    reason = value.reason
+                    if value.status == "READY" {
+                        guard value.isUsable else { matchingState = .failed; return }
+                        matchedRoute = value
+                        matchingState = value.spans.isEmpty ? .noReliableMatch : .matched
+                        contentRevision += 1
+                        return
+                    }
+                    if value.reason == "WAITING_FOR_SYNC" { matchingState = .waitingForSync }
+                    else if value.isPending { matchingState = .processing }
+                    else { matchingState = .unavailable(value.reason) }
+                    minimum = value.suggestedRetryDelay
+                    if minimum == nil && (matchingState == .waitingForSync || matchingState == .processing) {
+                        matchingState = .deferred(reason)
+                    } else if minimum != nil && value.status == "UNAVAILABLE" && value.reason != "WAITING_FOR_SYNC" {
+                        matchingState = .retrying(reason)
+                    }
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard current(request) else { return }
+                if Self.deniesAccess(error) { failMeasurements(error); return }
+                if let failure = error as? SchoolCaptureFailure, failure == .unavailable || failure == .changed {
+                    matchingState = .retrying(nil)
+                    minimum = 2
+                    if failure == .changed { needsSynchronizedMeasurements = true }
+                } else {
+                    matchingState = .failed
+                    return
+                }
+            }
+            guard let minimum else { return }
+            guard let delay = budget.nextDelay(minimum: minimum, elapsed: now() - started) else {
+                matchingState = .deferred(reason)
+                return
+            }
+            do { try await sleep(.seconds(delay)) } catch { return }
+        }
+    }
+
+    private static func deniesAccess(_ error: any Error) -> Bool {
+        guard let failure = error as? SchoolCaptureFailure else { return false }
+        return failure == .unauthorized || failure == .forbidden || failure == .notFound
+    }
+
+    private func failMeasurements(_ error: any Error) {
+        if let failure = error as? SchoolCaptureFailure, failure != .unavailable {
+            fragments = []; observations = []; capture = nil; matchedRoute = nil; isComplete = false
+            contentRevision += 1
+        }
+        matchingState = .failed
+        errorMessage = (error as? LocalizedError)?.errorDescription ?? "Le replay n’a pas pu être chargé."
+    }
+
     func invalidate() {
-        invalidated = true; generation = UUID()
+        stopLoading()
+        invalidated = true
+        matchingState = .idle
         fragments = []; observations = []; capture = nil; matchedRoute = nil; isLoading = false; isComplete = false
         contentRevision += 1
         // Sans message, l’écran resterait sur « Ouverture du trajet… » sans fin.
         errorMessage = "Tes accès ont changé. Ferme le replay puis rouvre-le depuis la leçon."
     }
-    private func current(_ request: UUID) -> Bool { !invalidated && generation == request }
+    private func current(_ request: UUID) -> Bool { !invalidated && generation == request && !Task.isCancelled }
 }

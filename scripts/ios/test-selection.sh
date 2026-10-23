@@ -33,9 +33,9 @@ elif [[ "$unit_only" == 1 ]]; then
   if [[ "$unit_test_scope" == all ]]; then
     test_options=(-only-testing:DrivyTests)
   else
-    # Eight GPS feature files contain ten suites: transport and lifecycle are separate Swift suites.
+    # Nine GPS feature files contain eleven suites: transport and lifecycle are separate Swift suites.
     for suite in SchoolLiveMatchTests SchoolLiveMatchTransportTests SchoolLiveMatchLifecycleTests \
-      SchoolCaptureLifecycleTests SchoolCaptureInteropTests SchoolTrackDisplayTests \
+      SchoolCaptureLifecycleTests SchoolCaptureInteropTests SchoolCaptureReplayTests SchoolTrackDisplayTests \
       SchoolMapCourseTests SchoolMapRouteGapTests SchoolLiveHeadingTests SchoolReplayFormattingTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done

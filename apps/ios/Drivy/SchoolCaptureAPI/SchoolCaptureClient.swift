@@ -268,12 +268,15 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         }
     }
 
-    /// Couche recalée sur la route, calculée par l’école après la leçon. Elle complète le replay et ne lui est
-    /// jamais nécessaire : absente, en attente ou illisible, le trajet mesuré s’affiche seul.
-    func matchedRoute(schoolID: UUID, captureID: UUID, scope: SchoolCommandScope? = nil) async -> SchoolMatchedRoute? {
-        guard let value: SchoolMatchedRoute = try? await read(
-            schoolPath(schoolID, ["captures", captureID.uuidString, "matched-route"]), verifying: scope),
-            value.captureId == captureID, value.isPending || value.isUsable else { return nil }
+    /// Optional display layer, but its absence, retry advice and access failures are distinct.
+    func matchedRoute(schoolID: UUID, captureID: UUID, scope: SchoolCommandScope? = nil) async throws -> SchoolMatchedRoute {
+        if let scope, scope.schoolID != schoolID || scope.apiBaseURL != baseURL.absoluteString {
+            throw SchoolCaptureFailure.forbidden
+        }
+        let value: SchoolMatchedRoute = try await read(
+            schoolPath(schoolID, ["captures", captureID.uuidString, "matched-route"]), verifying: scope)
+        try Task.checkCancellation()
+        guard value.captureId == captureID, value.isValidResponse else { throw SchoolCaptureFailure.invalidResponse }
         return value
     }
 

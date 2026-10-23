@@ -13,13 +13,14 @@ import {decodePolyline,TRACK_MATCHING_ALGORITHM_VERSION,type MatcherPoint,type M
 
 /** Couche recalée d'un trajet privé (extension GET …/matched-route), sur PostgreSQL réel avec un moteur factice. */
 const M=1/111_320;
-let pool:Pool,h:CaptureHarness,calls=0,mode:'road'|'down'='road',validate:(value:unknown)=>boolean;
+let pool:Pool,h:CaptureHarness,calls=0,mode:'road'|'down'|'no-match'='road',validate:(value:unknown)=>boolean;
 type Trip=Awaited<ReturnType<CaptureHarness['startTrip']>>;
 let trip:Trip,segment:string,other:Trip;
 
 /** Route est-ouest à trois mètres au nord des mesures : le moteur factice y accroche chaque point. */
 const road=async(points:MatcherPoint[]):Promise<MatcherResult>=>{
  calls++;if(mode==='down')throw new MapMatchingError('PROVIDER_UNAVAILABLE');
+ if(mode==='no-match')return {matchings:[],tracepoints:points.map(()=>null)};
  const north=points[0]!.latitude+3*M;
  return {matchings:[{confidence:0.92,geometry:[[north,points[0]!.longitude],[north,points.at(-1)!.longitude]]}],tracepoints:points.map(p=>({matchingIndex:0,latitude:north,longitude:p.longitude}))};
 };
@@ -59,7 +60,7 @@ afterAll(async()=>{await h?.app.close();await pool?.end();});
 describe('tracé recalé sur la route (extension GET /captures/:id/matched-route)',()=>{
  it('avant la finalisation : rien à proposer, et rien n’est calculé',async()=>{
   const early=await get(trip.capture.id);expect(early.statusCode,early.body).toBe(200);
-  expect(early.json().data).toMatchObject({captureId:trip.capture.id,status:'UNAVAILABLE',provider:null,spans:[]});
+  expect(early.json().data).toMatchObject({captureId:trip.capture.id,status:'UNAVAILABLE',reason:'WAITING_FOR_SYNC',retryAfterSeconds:5,provider:null,spans:[]});
   expect(validate(early.json().data)).toBe(true);expect(calls).toBe(0);expect(await row(trip.capture.id)).toBeUndefined();
  });
  it('première lecture après la leçon : un seul calcul, même pour deux lectures simultanées, puis le résultat',async()=>{
@@ -69,10 +70,10 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
   expect([first.json().data.status,second.json().data.status].every(status=>['PENDING','READY'].includes(status))).toBe(true);
   const ready=await settled(trip.capture.id);expect(ready.statusCode,ready.body).toBe(200);
   const data=ready.json().data;expect(validate(data)).toBe(true);
-  expect(Object.keys(data).sort()).toEqual(['algorithmVersion','captureId','generatedAt','provider','reconstructionVersion','spans','status']);
+  expect(Object.keys(data).sort()).toEqual(['algorithmVersion','captureId','generatedAt','provider','reason','reconstructionVersion','retryAfterSeconds','spans','status']);
   // L'arrêt et la finalisation ont déjà fait avancer la version des mesures : seule la base la connaît.
   const version=(await pool.query<{reconstruction_version:number}>('SELECT reconstruction_version FROM drivy.capture_session WHERE id=$1',[trip.capture.id])).rows[0]!.reconstruction_version;
-  expect(data).toMatchObject({status:'READY',provider:'osrm',algorithmVersion:TRACK_MATCHING_ALGORITHM_VERSION,reconstructionVersion:version});
+  expect(data).toMatchObject({status:'READY',reason:'MATCHED',retryAfterSeconds:null,provider:'osrm',algorithmVersion:TRACK_MATCHING_ALGORITHM_VERSION,reconstructionVersion:version});
   expect(data.spans).toHaveLength(1);
   const span=data.spans[0];expect(span).toMatchObject({segmentId:segment,firstSequence:0,lastSequence:59,confidence:0.92});
   const geometry=decodePolyline(span.geometry);expect(geometry.length).toBeGreaterThanOrEqual(2);
@@ -111,7 +112,9 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
   await drive(other);
   mode='down';const before=calls;
   const failed=await settled(other.capture.id,'demo-other-instructor');expect(failed.statusCode,failed.body).toBe(200);
-  expect(failed.json().data).toMatchObject({status:'UNAVAILABLE',spans:[],provider:null});expect(validate(failed.json().data)).toBe(true);
+  expect(failed.json().data).toMatchObject({status:'UNAVAILABLE',reason:'PROVIDER_UNAVAILABLE',spans:[],provider:null});expect(validate(failed.json().data)).toBe(true);
+  expect(failed.json().data.retryAfterSeconds).toBeGreaterThan(0);
+  expect(failed.json().data.retryAfterSeconds).toBeLessThanOrEqual(60);
   expect(calls).toBe(before+1);
   const stored=await row(other.capture.id);
   expect(stored).toMatchObject({status:'FAILED',attempts:1,failure_code:'PROVIDER_UNAVAILABLE',span_count:0,encrypted_route:null});
@@ -129,9 +132,50 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
  it('un calcul abandonné en cours de route est repris après l’expiration de son bail',async()=>{
   await pool.query("UPDATE drivy.capture_matched_route SET status='PROCESSING',lease_id=gen_random_uuid(),lease_until=now()+interval '1 minute',encrypted_route=NULL,key_id=NULL,span_count=0 WHERE capture_id=$1",[other.capture.id]);
   const before=calls;
-  expect((await get(other.capture.id,'demo-other-instructor')).json().data.status).toBe('PENDING');expect(calls).toBe(before);
+  expect((await get(other.capture.id,'demo-other-instructor')).json().data).toMatchObject({status:'PENDING',reason:'PROCESSING',retryAfterSeconds:3});expect(calls).toBe(before);
   await pool.query("UPDATE drivy.capture_matched_route SET lease_until=now()-interval '1 second' WHERE capture_id=$1",[other.capture.id]);
   expect((await settled(other.capture.id,'demo-other-instructor')).json().data.status).toBe('READY');expect(calls).toBe(before+1);
+ });
+ it.each(['RATE_LIMITED','PROVIDER_REFUSED','INVALID_RESPONSE','MATCHING_FAILED','ROUTE_TOO_LARGE','UNRECOGNIZED_FAILURE'])('expose un motif borné pour %s sans court-circuiter le délai serveur',async failure=>{
+  const before=calls;
+  await pool.query("UPDATE drivy.capture_matched_route SET status='FAILED',encrypted_route=NULL,key_id=NULL,span_count=0,failure_code=$2,retry_after=now()+interval '1 hour' WHERE capture_id=$1",[other.capture.id,failure]);
+  const response=await get(other.capture.id,'demo-other-instructor');
+  expect(response.statusCode,response.body).toBe(200);
+  expect(response.json().data).toMatchObject({status:'UNAVAILABLE',reason:failure==='UNRECOGNIZED_FAILURE'?'MATCHING_FAILED':failure,provider:null,spans:[]});
+  expect(response.json().data.retryAfterSeconds).toBeGreaterThan(3500);
+  expect(response.json().data.retryAfterSeconds).toBeLessThanOrEqual(3600);
+  expect(validate(response.json().data)).toBe(true);
+  expect(calls).toBe(before);
+  expect((await get(other.capture.id,'demo-instructor')).statusCode).toBe(404);
+  await pool.query("UPDATE drivy.capture_matched_route SET retry_after=now()-interval '1 second' WHERE capture_id=$1",[other.capture.id]);
+  expect((await settled(other.capture.id,'demo-other-instructor')).json().data).toMatchObject({status:'READY',reason:'MATCHED'});
+ });
+ it('un dérivé illisible est une erreur explicite, pas une absence de route ni une boucle de calcul',async()=>{
+  const saved=(await pool.query('SELECT encrypted_route,key_id FROM drivy.capture_matched_route WHERE capture_id=$1',[other.capture.id])).rows[0];
+  const chunks=await pool.query('SELECT * FROM drivy.capture_chunk WHERE capture_id=$1 ORDER BY segment_index,chunk_index',[other.capture.id]);
+  const before=calls;
+  await pool.query("UPDATE drivy.capture_matched_route SET key_id='unavailable-test-key' WHERE capture_id=$1",[other.capture.id]);
+  const response=await get(other.capture.id,'demo-other-instructor');
+  expect(response.json().data).toMatchObject({status:'UNAVAILABLE',reason:'CACHE_UNREADABLE',retryAfterSeconds:null,spans:[]});
+  expect(validate(response.json().data)).toBe(true);expect(calls).toBe(before);
+  expect((await h.call('GET',`/captures/${other.capture.id}/replay`,undefined,undefined,'demo-other-instructor')).statusCode).toBe(200);
+  expect((await pool.query('SELECT * FROM drivy.capture_chunk WHERE capture_id=$1 ORDER BY segment_index,chunk_index',[other.capture.id])).rows).toEqual(chunks.rows);
+  await pool.query('UPDATE drivy.capture_matched_route SET encrypted_route=$2,key_id=$3 WHERE capture_id=$1',[other.capture.id,saved.encrypted_route,saved.key_id]);
+  expect((await get(other.capture.id,'demo-other-instructor')).json().data.reason).toBe('MATCHED');
+ });
+ it('aucune correspondance fiable reste distincte d’une panne et ne diagnostique pas la vitesse',async()=>{
+  const chunks=await pool.query('SELECT * FROM drivy.capture_chunk WHERE capture_id=$1 ORDER BY segment_index,chunk_index',[other.capture.id]);
+  await pool.query('UPDATE drivy.capture_matched_route SET algorithm_version=1 WHERE capture_id=$1',[other.capture.id]);
+  mode='no-match';
+  const empty=await settled(other.capture.id,'demo-other-instructor');
+  expect(empty.json().data).toMatchObject({status:'READY',reason:'NO_RELIABLE_MATCH',retryAfterSeconds:null,provider:'osrm',spans:[]});
+  expect(validate(empty.json().data)).toBe(true);
+  const before=calls;
+  expect((await get(other.capture.id,'demo-other-instructor')).json().data.reason).toBe('NO_RELIABLE_MATCH');expect(calls).toBe(before);
+  expect((await pool.query('SELECT * FROM drivy.capture_chunk WHERE capture_id=$1 ORDER BY segment_index,chunk_index',[other.capture.id])).rows).toEqual(chunks.rows);
+  mode='road';
+  await pool.query('UPDATE drivy.capture_matched_route SET algorithm_version=1 WHERE capture_id=$1',[other.capture.id]);
+  expect((await settled(other.capture.id,'demo-other-instructor')).json().data.reason).toBe('MATCHED');
  });
  it.each((['mapbox',null] as const).flatMap(provider=>(['READY','EMPTY','FAILED','PROCESSING'] as const).map(status=>({provider,status}))))('un ancien résultat $provider/$status est recalculé par OSRM sans modifier les chunks',async({provider,status})=>{
   const chunks=await pool.query('SELECT * FROM drivy.capture_chunk WHERE capture_id=$1 ORDER BY segment_index,chunk_index',[trip.capture.id]);
@@ -170,7 +214,7 @@ describe('tracé recalé sur la route (extension GET /captures/:id/matched-route
   expect(await row(trip.capture.id)).toBeUndefined();
   const after=await settled(trip.capture.id);expect(after.statusCode,after.body).toBe(200);
   // Le lot a été détruit : il ne reste aucune mesure à recaler, donc aucun tronçon.
-  expect(after.json().data).toMatchObject({status:'READY',reconstructionVersion:previous+1,spans:[]});expect(validate(after.json().data)).toBe(true);
+  expect(after.json().data).toMatchObject({status:'READY',reason:'NO_RELIABLE_MATCH',retryAfterSeconds:null,reconstructionVersion:previous+1,spans:[]});expect(validate(after.json().data)).toBe(true);
   expect(await row(trip.capture.id)).toMatchObject({status:'EMPTY',encrypted_route:null,span_count:0});
  });
  it('trajet retiré : la couche recalée disparaît avec lui',async()=>{
@@ -190,7 +234,7 @@ describe('recalage non configuré',()=>{
   const plain=await bare.startTrip({instructorSubject:'demo-instructor',instructorMember:id.instructorMember,learnerSubject:'demo-alice',learnerId:id.aliceLearner,learnerPerson:id.alice,trainingId:id.aliceTraining});
   await bare.uploadStopFinalize(plain);
   const response=await bare.call('GET',`/captures/${plain.capture.id}/matched-route`);expect(response.statusCode,response.body).toBe(200);
-  expect(response.json().data).toMatchObject({status:'UNAVAILABLE',provider:null,spans:[]});expect(validate(response.json().data)).toBe(true);
+  expect(response.json().data).toMatchObject({status:'UNAVAILABLE',reason:'MATCHING_DISABLED',retryAfterSeconds:null,provider:null,spans:[]});expect(validate(response.json().data)).toBe(true);
   expect((await barePool.query('SELECT 1 FROM drivy.capture_matched_route')).rowCount).toBe(0);
   // Même un cache valide ne doit plus être servi lorsque le moteur est désactivé.
   await barePool.query("INSERT INTO drivy.capture_matched_route(capture_id,school_id,reconstruction_version,algorithm_version,status,provider) SELECT id,school_id,reconstruction_version,$2,'EMPTY','osrm' FROM drivy.capture_session WHERE id=$1",[plain.capture.id,TRACK_MATCHING_ALGORITHM_VERSION]);
