@@ -37,6 +37,7 @@ import { registerSharing } from './sharing.js';
 import { registerAdministration } from './administration.js';
 import { registerObservationThemes } from './observation-themes.js';
 import { registerObservationRanking } from './observation-ranking.js';
+import { registerCourses } from './courses.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -217,5 +218,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerAdministration(app,options);
   registerObservationThemes(app,options);
   registerObservationRanking(app,options);
+  registerCourses(app,options);
   return app;
 }
