@@ -6,14 +6,18 @@ import type { TokenVerifier } from './auth.js';
 import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
 import { eligibleContacts, generalMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
-  resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, type MessagingActor } from './messaging.js';
+  resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, conversationMembers, deleteMessage, setReaction, setPinned,
+  setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, createReport, listReports, reactionPalette, type MessagingActor } from './messaging.js';
+import { mapDatabaseError } from './messaging-view.js';
 
 const id = z.uuid();
 const base = z.object({ schoolId: id });
 const conversation = base.extend({ conversationId: id });
 const envelope = z.object({ scheme: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/), keyId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
   payload: z.string().min(4).max(12000).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }).strict();
-const message = z.object({ clientMessageId: id, ciphertext: envelope, mentionPersonIds: z.array(id).max(8).default([]) }).strict();
+const message = z.object({ clientMessageId: id, ciphertext: envelope, mentionPersonIds: z.array(id).max(8).default([]),
+  replyToMessageId: id.nullable().optional(),
+  poll: z.object({ optionCount: z.number().int().min(2).max(12), multiple: z.boolean().default(false) }).strict().nullable().optional() }).strict();
 const directoryQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), cursor: id.optional() }).strict();
 
 /** Synthetic mode is only injectable in a test process; no production fallback enables messages. */
@@ -52,7 +56,7 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
       await db.query('COMMIT');
       return { ...(result as object), context: { schoolId, actorPersonId: personId, accessEpoch: member.rows[0].accessEpoch },
         requestId, serverTime: new Date().toISOString() } as T;
-    } catch (error) { broken = !(await rollbackQuietly(db)); throw error; }
+    } catch (error) { broken = !(await rollbackQuietly(db)); throw mapDatabaseError(error); }
     finally { db.release(broken); }
   }
   const path = '/v1/schools/:schoolId/messaging';
@@ -94,7 +98,7 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     const { schoolId, conversationId } = conversation.parse(request.params);
     const body = message.parse(request.body);
     return execute(request.headers, request.id, schoolId, (db, actor) => sendEnvelope(db, actor, conversationId,
-      body.clientMessageId, body.ciphertext, body.mentionPersonIds).then(data => ({ data })));
+      body.clientMessageId, body.ciphertext, body.mentionPersonIds, body.replyToMessageId ?? null, body.poll ?? null).then(data => ({ data })));
   });
   app.put(`${path}/conversations/:conversationId/read-state`, request => {
     const { schoolId, conversationId } = conversation.parse(request.params);
@@ -104,5 +108,55 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     return execute(request.headers, request.id, schoolId, (db, actor) => updateReadState(db, actor, conversationId,
       body.lastReadSequence, body.mutedUntil, body.expectedVersion).then(data => ({ data })));
   });
-  // Deliberately no realtime, notifications, media or mention routes before #67/#66.
+  const messagePath = `${path}/conversations/:conversationId/messages/:messageId`;
+  const messageParams = conversation.extend({ messageId: id });
+  app.get(`${path}/conversations/:conversationId/members`, request => {
+    const { schoolId, conversationId } = conversation.parse(request.params);
+    return execute(request.headers, request.id, schoolId, (db, actor) => conversationMembers(db, actor, conversationId).then(data => ({ data })));
+  });
+  app.delete(messagePath, request => {
+    const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
+    const { scope } = z.object({ scope: z.enum(['me', 'everyone']) }).strict().parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => deleteMessage(db, actor, conversationId, messageId, scope).then(data => ({ data })));
+  });
+  for (const active of [true, false]) {
+    (active ? app.put.bind(app) : app.delete.bind(app))(`${messagePath}/reactions/:emoji`, request => {
+      const { schoolId, conversationId, messageId, emoji } = messageParams.extend({ emoji: z.enum(reactionPalette) }).parse(request.params);
+      return execute(request.headers, request.id, schoolId, (db, actor) => setReaction(db, actor, conversationId, messageId, emoji, active).then(data => ({ data })));
+    });
+    (active ? app.put.bind(app) : app.delete.bind(app))(`${messagePath}/pin`, request => {
+      const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
+      return execute(request.headers, request.id, schoolId, (db, actor) => setPinned(db, actor, conversationId, messageId, active).then(data => ({ data })));
+    });
+    (active ? app.put.bind(app) : app.delete.bind(app))(`${path}/general/admins/:personId`, request => {
+      const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);
+      return execute(request.headers, request.id, schoolId, (db, actor) => setGroupAdmin(db, actor, personId, active).then(data => ({ data })));
+    });
+  }
+  app.put(`${messagePath}/poll/votes`, request => {
+    const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
+    const body = z.object({ optionIndexes: z.array(z.number().int().min(0).max(11)).max(12) }).strict().parse(request.body);
+    return execute(request.headers, request.id, schoolId, (db, actor) => setPollVotes(db, actor, conversationId, messageId, body.optionIndexes).then(data => ({ data })));
+  });
+  app.post(`${messagePath}/poll/close`, request => {
+    const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
+    return execute(request.headers, request.id, schoolId, (db, actor) => closePoll(db, actor, conversationId, messageId).then(data => ({ data })));
+  });
+  app.delete(`${path}/general/members/:personId`, request => {
+    const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);
+    return execute(request.headers, request.id, schoolId, (db, actor) => removeGeneralMember(db, actor, personId).then(data => ({ data })));
+  });
+  // 50 enveloppes de 12 000 caractères au plus : au-delà de la limite commune de 16 Kio.
+  app.post(`${path}/reports`, { bodyLimit: 655_360 }, request => {
+    const { schoolId } = base.parse(request.params);
+    const body = z.object({ clientReportId: id, conversationId: id,
+      items: z.array(z.object({ messageId: id, ciphertext: envelope }).strict()).min(1).max(50) }).strict().parse(request.body);
+    return execute(request.headers, request.id, schoolId, (db, actor) => createReport(db, actor, body.clientReportId, body.conversationId, body.items).then(data => ({ data })));
+  });
+  app.get(`${path}/reports`, request => {
+    const { schoolId } = base.parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), before: id.optional() }).strict().parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => listReports(db, actor, query.limit, query.before).then(data => ({ data })));
+  });
+  // Pas de temps réel, notifications ni médias avant #67/#66.
 }

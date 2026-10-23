@@ -1,13 +1,14 @@
 import type { PoolClient } from 'pg';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, forbidden, notFound } from './errors.js';
+import { messageColumns, notHiddenForActor, syncLinks, toView, type MessageView } from './messaging-view.js';
 
 /** Transport format only, not a cryptographic protocol or claim of E2EE. */
 export interface OpaqueEnvelope { scheme: string; keyId: string; payload: string }
 export interface MessagingActor { personId: string; schoolId: string; membershipId: string }
 export interface MessagingContact { personId: string; displayName: string }
-export interface StoredMessage { id: string; schoolId: string; conversationId: string; sequence: number;
-  clientMessageId: string; senderId: string; ciphertext: OpaqueEnvelope; mentionPersonIds: string[]; acceptedAt: string }
+export type StoredMessage = MessageView;
+export interface PollCreation { optionCount: number; multiple: boolean }
 
 export const messagingUnavailable = () => new ApiError(503, 'MESSAGING_NOT_ENABLED', 'La messagerie n’est pas encore disponible.');
 function safeSequence(value: string | number): number {
@@ -18,8 +19,12 @@ function safeSequence(value: string | number): number {
 function assertContext(actor: MessagingActor): void {
   if (!actor.schoolId || !actor.personId || !actor.membershipId) throw forbidden();
 }
-async function canRead(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
+/** Applique la fin du lien avant tout contrôle : un ancien membre garde sa plage lisible, sans écriture. */
+export async function canRead(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
   assertContext(actor);
+  const exists = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
+  if (exists.rows[0]?.allowed !== true) throw notFound();
+  await syncLinks(db, actor.schoolId, conversationId);
   const check = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
   if (check.rows[0]?.allowed !== true) throw notFound();
 }
@@ -32,11 +37,19 @@ export async function eligibleContacts(db: PoolClient, actor: MessagingActor, li
     [actor.schoolId, actor.personId, afterPersonId ?? null, limit + 1]);
   return { contacts: result.rows.slice(0, limit), nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.personId : null };
 }
+/** Écriture : lien ouvert après synchronisation, sinon 403 (lecture seule). */
+export async function canWrite(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
+  const check = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_can_write($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
+  if (check.rows[0]?.allowed !== true) throw forbidden();
+}
+/** Annuaire du général : nom, version de photo si visible (#64), administrateur du groupe. */
 export async function generalMembers(db: PoolClient, actor: MessagingActor, limit = 50, afterPersonId?: string) {
   assertContext(actor);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
-  const result = await db.query<MessagingContact>(`SELECT person_id AS "personId",display_name AS "displayName"
-    FROM drivy.messaging_general_members($1,$2)
+  const result = await db.query<MessagingContact & { photoVersion: number | null; hasPhoto: boolean; isGroupAdmin: boolean }>(
+    `SELECT person_id AS "personId",display_name AS "displayName",photo_version AS "photoVersion",
+      (photo_version IS NOT NULL) AS "hasPhoto",is_group_admin AS "isGroupAdmin"
+    FROM drivy.messaging_general_directory($1,$2)
     WHERE ($3::uuid IS NULL OR person_id>$3) ORDER BY person_id LIMIT $4`,
     [actor.schoolId, actor.personId, afterPersonId ?? null, limit + 1]);
   return { members: result.rows.slice(0, limit), nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.personId : null };
@@ -51,11 +64,13 @@ export async function findOrCreatePrivate(db: PoolClient, actor: MessagingActor,
   const result = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_conversation(id,school_id,kind,person_low,person_high)
     VALUES($1,$2,'PRIVATE',$3,$4) ON CONFLICT (school_id,person_low,person_high) WHERE kind='PRIVATE'
     DO NOTHING RETURNING id`, [randomUUID(), actor.schoolId, low, high]);
-  if (result.rows[0]) return result.rows[0].id;
-  const existing = await db.query<{ id: string }>(`SELECT id FROM drivy.messaging_conversation
+  const created = result.rows[0]?.id;
+  const existing = created ? undefined : await db.query<{ id: string }>(`SELECT id FROM drivy.messaging_conversation
     WHERE school_id=$1 AND kind='PRIVATE' AND person_low=$2 AND person_high=$3`, [actor.schoolId, low, high]);
-  if (!existing.rows[0]) throw notFound();
-  return existing.rows[0].id;
+  const conversationId = created ?? existing?.rows[0]?.id;
+  if (!conversationId) throw notFound();
+  await syncLinks(db, actor.schoolId, conversationId);
+  return conversationId;
 }
 export async function findOrCreateGeneral(db: PoolClient, actor: MessagingActor): Promise<string> {
   assertContext(actor);
@@ -63,17 +78,23 @@ export async function findOrCreateGeneral(db: PoolClient, actor: MessagingActor)
   const result = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_conversation(id,school_id,kind)
     VALUES($1,$2,'GENERAL') ON CONFLICT (school_id) WHERE kind='GENERAL'
     DO NOTHING RETURNING id`, [randomUUID(), actor.schoolId]);
-  if (result.rows[0]) return result.rows[0].id;
-  const existing = await db.query<{ id: string }>(`SELECT id FROM drivy.messaging_conversation
+  const created = result.rows[0]?.id;
+  const existing = created ? undefined : await db.query<{ id: string }>(`SELECT id FROM drivy.messaging_conversation
     WHERE school_id=$1 AND kind='GENERAL'`, [actor.schoolId]);
-  if (!existing.rows[0]) throw notFound();
-  return existing.rows[0].id;
+  const conversationId = created ?? existing?.rows[0]?.id;
+  if (!conversationId) throw notFound();
+  await syncLinks(db, actor.schoolId, conversationId);
+  // Un membre retiré du général n'y entre pas par cette commande.
+  await canWrite(db, actor, conversationId);
+  return conversationId;
 }
 export async function listConversations(db: PoolClient, actor: MessagingActor, limit: number, before?: string) {
   assertContext(actor);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
   const result = await db.query<{ id: string; schoolId: string; kind: string; lastSequence: number; peerPersonId: string | null;
-    title: string; lastReadSequence: string; mutedUntil: string | null; readStateVersion: number; unreadCount: number }>(`SELECT c.id,c.school_id AS "schoolId",c.kind,c.last_sequence AS "lastSequence",
+    title: string; lastReadSequence: string; mutedUntil: string | null; readStateVersion: number; unreadCount: number; membersEpoch: string }>(`SELECT c.id,c.school_id AS "schoolId",c.kind,
+    COALESCE((SELECT max(v.sequence) FROM drivy.messaging_message v WHERE v.school_id=c.school_id AND v.conversation_id=c.id),0) AS "lastSequence",
+    c.members_epoch AS "membersEpoch",
     CASE WHEN c.kind='PRIVATE' THEN CASE WHEN c.person_low=$2 THEN c.person_high ELSE c.person_low END ELSE NULL END AS "peerPersonId",
     CASE WHEN c.kind='GENERAL' THEN 'Général' ELSE COALESCE(peer.display_name,'Conversation privée') END AS title,
     COALESCE(s.last_read_sequence,0) AS "lastReadSequence",s.muted_until AS "mutedUntil",
@@ -88,89 +109,238 @@ export async function listConversations(db: PoolClient, actor: MessagingActor, l
     AND drivy.messaging_conversation_allowed($1,$2,c.id)
     ORDER BY c.id DESC LIMIT $4`, [actor.schoolId, actor.personId, before ?? null, limit + 1]);
   return { items: result.rows.slice(0, limit).map(row => ({ ...row,
-      lastSequence: safeSequence(row.lastSequence), lastReadSequence: safeSequence(row.lastReadSequence) })),
+      lastSequence: safeSequence(row.lastSequence), lastReadSequence: safeSequence(row.lastReadSequence), membersEpoch: safeSequence(row.membersEpoch) })),
     nextCursor: result.rows.length > limit ? result.rows[limit - 1]?.id ?? null : null };
+}
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const reactionPalette = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+
+function validEnvelope(envelope: OpaqueEnvelope | undefined): boolean {
+  return !!envelope && /^[A-Za-z0-9._-]{1,80}$/.test(envelope.scheme) && /^[A-Za-z0-9._:-]{1,128}$/.test(envelope.keyId)
+    && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(envelope.payload)
+    && envelope.payload.length >= 4 && envelope.payload.length <= 12000;
+}
+/** Droits de l'acteur dans la conversation, recalculés après synchronisation des liens. */
+async function access(db: PoolClient, actor: MessagingActor, conversationId: string) {
+  const result = await db.query<{ canWrite: boolean; readableUntilSequence: string | null; isGroupAdmin: boolean }>(`SELECT
+    drivy.messaging_can_write($1,$2,$3) AS "canWrite",
+    (SELECT CASE WHEN bool_or(l.cut_sequence IS NULL) THEN NULL ELSE max(l.cut_sequence) END FROM drivy.messaging_member_link l
+      WHERE l.school_id=$1 AND l.conversation_id=$3 AND l.person_id=$2) AS "readableUntilSequence",
+    (c.kind='GENERAL' AND drivy.messaging_is_group_admin($1,$2)) AS "isGroupAdmin"
+    FROM drivy.messaging_conversation c WHERE c.school_id=$1 AND c.id=$3`, [actor.schoolId, actor.personId, conversationId]);
+  const row = result.rows[0];
+  if (!row) throw notFound();
+  return { canWrite: row.canWrite, isGroupAdmin: row.isGroupAdmin,
+    readableUntilSequence: row.readableUntilSequence === null ? null : safeSequence(row.readableUntilSequence) };
 }
 export async function pageEnvelopes(db: PoolClient, actor: MessagingActor, conversationId: string, beforeSequence?: number, limit = 50) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || (beforeSequence !== undefined && (!Number.isSafeInteger(beforeSequence) || beforeSequence < 1)))
     throw new ApiError(400, 'INVALID_REQUEST', 'Pagination invalide.');
   await canRead(db, actor, conversationId);
-  const result = await db.query<StoredMessage>(`SELECT id,school_id AS "schoolId",conversation_id AS "conversationId",sequence,
-    intent_id AS "clientMessageId",sender_person_id AS "senderId",envelope AS ciphertext,
-    mention_person_ids AS "mentionPersonIds",created_at AS "acceptedAt"
-    FROM drivy.messaging_message WHERE school_id=$1 AND conversation_id=$2 AND ($3::bigint IS NULL OR sequence<$3)
-    ORDER BY sequence DESC LIMIT $4`, [actor.schoolId, conversationId, beforeSequence ?? null, limit + 1]);
-  return { items: result.rows.slice(0, limit).map(row => ({ ...row, sequence: safeSequence(row.sequence) })),
-    nextCursor: result.rows.length > limit ? String(safeSequence(result.rows[limit - 1]!.sequence)) : null };
+  // La RLS borne la lecture à la plage du lien (readable_after < sequence <= cut_sequence).
+  const result = await db.query<MessageView>(`SELECT ${messageColumns} FROM drivy.messaging_message m
+    WHERE m.school_id=$1 AND m.conversation_id=$3 AND ($4::bigint IS NULL OR m.sequence<$4) AND ${notHiddenForActor}
+    ORDER BY m.sequence DESC LIMIT $5`, [actor.schoolId, actor.personId, conversationId, beforeSequence ?? null, limit + 1]);
+  const receipts = await db.query<{ personId: string; lastReadSequence: string }>(`SELECT person_id AS "personId",
+    last_read_sequence AS "lastReadSequence" FROM drivy.messaging_read_receipts($1,$2,$3) ORDER BY person_id`,
+    [actor.schoolId, actor.personId, conversationId]);
+  return { items: result.rows.slice(0, limit).map(toView),
+    nextCursor: result.rows.length > limit ? String(safeSequence(result.rows[limit - 1]!.sequence)) : null,
+    access: await access(db, actor, conversationId),
+    readStates: receipts.rows.map(row => ({ personId: row.personId, lastReadSequence: safeSequence(row.lastReadSequence) })) };
 }
 export async function resumeEnvelopes(db: PoolClient, actor: MessagingActor, conversationId: string, afterSequence = 0, limit = 50) {
   if (!Number.isSafeInteger(afterSequence) || afterSequence < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100)
     throw new ApiError(400, 'INVALID_REQUEST', 'Pagination invalide.');
   await canRead(db, actor, conversationId);
-  const rows = await db.query<StoredMessage>(`SELECT id,school_id AS "schoolId",conversation_id AS "conversationId",sequence,
-    intent_id AS "clientMessageId",sender_person_id AS "senderId",envelope AS ciphertext,
-    mention_person_ids AS "mentionPersonIds",created_at AS "acceptedAt" FROM drivy.messaging_message
-    WHERE school_id=$1 AND conversation_id=$2 AND sequence>$3 ORDER BY sequence ASC LIMIT $4`,
-    [actor.schoolId, conversationId, afterSequence, limit + 1]);
-  const messages = rows.rows.slice(0, limit).map(row => ({ ...row, sequence: safeSequence(row.sequence) }));
+  const rows = await db.query<MessageView>(`SELECT ${messageColumns} FROM drivy.messaging_message m
+    WHERE m.school_id=$1 AND m.conversation_id=$3 AND m.sequence>$4 AND ${notHiddenForActor}
+    ORDER BY m.sequence ASC LIMIT $5`, [actor.schoolId, actor.personId, conversationId, afterSequence, limit + 1]);
+  const messages = rows.rows.slice(0, limit).map(toView);
   return { messages, nextAfterSequence: messages.at(-1)?.sequence ?? afterSequence, hasMore: rows.rows.length > limit };
 }
+async function messageById(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string): Promise<MessageView> {
+  const result = await db.query<MessageView>(`SELECT ${messageColumns} FROM drivy.messaging_message m
+    WHERE m.school_id=$1 AND m.conversation_id=$3 AND m.id=$4`, [actor.schoolId, actor.personId, conversationId, messageId]);
+  if (!result.rows[0]) throw notFound();
+  return toView(result.rows[0]);
+}
 export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conversationId: string,
-  intentId: string, envelope: OpaqueEnvelope, mentionPersonIds: string[] = []): Promise<StoredMessage> {
+  intentId: string, envelope: OpaqueEnvelope, mentionPersonIds: string[] = [],
+  replyToMessageId: string | null = null, poll: PollCreation | null = null): Promise<StoredMessage> {
   await canRead(db, actor, conversationId);
   if (mentionPersonIds.length > 8 || new Set(mentionPersonIds.map(id => id.toLowerCase())).size !== mentionPersonIds.length)
     throw new ApiError(400, 'INVALID_REQUEST', 'Mentions invalides.');
+  if (!uuidPattern.test(intentId) || !validEnvelope(envelope)) throw new ApiError(400, 'INVALID_ENVELOPE', 'Enveloppe invalide.');
+  if ((replyToMessageId !== null && !uuidPattern.test(replyToMessageId))
+    || (poll && (!Number.isSafeInteger(poll.optionCount) || poll.optionCount < 2 || poll.optionCount > 12 || typeof poll.multiple !== 'boolean')))
+    throw new ApiError(400, 'INVALID_REQUEST', 'Message invalide.');
   const target = await db.query<{ peerPersonId: string | null }>(`SELECT CASE WHEN kind='PRIVATE'
     THEN CASE WHEN person_low=$3 THEN person_high ELSE person_low END ELSE NULL END AS "peerPersonId"
     FROM drivy.messaging_conversation WHERE school_id=$1 AND id=$2`, [actor.schoolId, conversationId, actor.personId]);
   if (!target.rows[0]) throw notFound();
+  // Ordre des verrous : sources de droits, puis conversation (comme la fondation).
   await db.query('SELECT drivy.messaging_lock_rights($1,$2,$3,$4::uuid[])',
     [actor.schoolId, actor.personId, target.rows[0].peerPersonId, mentionPersonIds]);
-  await canRead(db, actor, conversationId);
-  const mentionsAllowed = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_mentions_allowed($1,$2,$3,$4::uuid[]) AS allowed',
-    [actor.schoolId, actor.personId, conversationId, mentionPersonIds]);
-  if (!mentionsAllowed.rows[0]?.allowed) throw forbidden();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(intentId)
-    || !envelope || !/^[A-Za-z0-9._-]{1,80}$/.test(envelope.scheme)
-    || !/^[A-Za-z0-9._:-]{1,128}$/.test(envelope.keyId)
-    || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(envelope.payload)
-    || envelope.payload.length < 4 || envelope.payload.length > 12000)
-    throw new ApiError(400, 'INVALID_ENVELOPE', 'Enveloppe invalide.');
+  await syncLinks(db, actor.schoolId, conversationId);
+  await canWrite(db, actor, conversationId);
   const canonical = JSON.stringify(envelope);
-  const fingerprint = createHash('sha256').update(JSON.stringify([envelope, mentionPersonIds.map(id => id.toLowerCase())])).digest('hex');
-  // Serialization on the conversation row makes sequence allocation atomic across concurrent senders.
-  const conversation = await db.query<{ lastSequence: number }>(`SELECT last_sequence AS "lastSequence" FROM drivy.messaging_conversation
+  const fingerprint = createHash('sha256').update(JSON.stringify([envelope, mentionPersonIds.map(id => id.toLowerCase()),
+    replyToMessageId?.toLowerCase() ?? null, poll ? [poll.optionCount, poll.multiple] : null])).digest('hex');
+  // Le verrou de la conversation rend l'allocation de séquence atomique ; la RLS de mise à jour exige un lien ouvert.
+  const conversation = await db.query<{ lastSequence: string }>(`SELECT last_sequence AS "lastSequence" FROM drivy.messaging_conversation
     WHERE school_id=$1 AND id=$2 FOR UPDATE`, [actor.schoolId, conversationId]);
-  if (!conversation.rows[0]) throw notFound();
-  // Recheck after waiting for a lock: revocation during contention must not authorize a late write.
-  await canRead(db, actor, conversationId);
-  const prior = await db.query<StoredMessage & { fingerprint: string }>(`SELECT id,school_id AS "schoolId",conversation_id AS "conversationId",sequence,
-    intent_id AS "clientMessageId",sender_person_id AS "senderId",envelope AS ciphertext,
-    mention_person_ids AS "mentionPersonIds",created_at AS "acceptedAt",fingerprint
-    FROM drivy.messaging_message WHERE school_id=$1 AND conversation_id=$2 AND sender_person_id=$3 AND intent_id=$4`,
+  if (!conversation.rows[0]) throw forbidden();
+  // Revérifie après l'attente : une fin de lien pendant la contention n'autorise pas une écriture tardive.
+  await syncLinks(db, actor.schoolId, conversationId);
+  await canWrite(db, actor, conversationId);
+  const prior = await db.query<{ id: string; fingerprint: string }>(`SELECT id,fingerprint FROM drivy.messaging_message
+    WHERE school_id=$1 AND conversation_id=$2 AND sender_person_id=$3 AND intent_id=$4`,
     [actor.schoolId, conversationId, actor.personId, intentId]);
   if (prior.rows[0]) {
     if (prior.rows[0].fingerprint !== fingerprint) throw new ApiError(409, 'INTENT_CONFLICT', 'Cet envoi a déjà été utilisé avec un autre contenu.');
-    const { fingerprint: _unused, ...message } = prior.rows[0]; return { ...message, sequence: safeSequence(message.sequence) };
+    return messageById(db, actor, conversationId, prior.rows[0].id);
+  }
+  if (replyToMessageId) {
+    const open = await db.query<{ open: boolean }>('SELECT drivy.messaging_message_open($1,$2,$3,$4) AS open',
+      [actor.schoolId, actor.personId, conversationId, replyToMessageId]);
+    if (open.rows[0]?.open !== true) throw notFound();
   }
   const next = safeSequence(conversation.rows[0].lastSequence) + 1;
   if (!Number.isSafeInteger(next)) throw new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
-  // Counter first: if rights disappear, UPDATE RETURNING yields no row and no message can be committed.
-  // A later denied INSERT rolls the counter back in the same transaction.
   const advanced = await db.query<{ sequence: string }>(`UPDATE drivy.messaging_conversation SET last_sequence=$3
     WHERE school_id=$1 AND id=$2 RETURNING last_sequence AS sequence`, [actor.schoolId, conversationId, next]);
-  if (!advanced.rows[0]) throw notFound();
-  const sequence = safeSequence(advanced.rows[0].sequence);
-  const inserted = await db.query<StoredMessage>(`INSERT INTO drivy.messaging_message(id,school_id,conversation_id,sequence,intent_id,sender_person_id,envelope,mention_person_ids,fingerprint)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,school_id AS "schoolId",conversation_id AS "conversationId",sequence,
-      intent_id AS "clientMessageId",sender_person_id AS "senderId",envelope AS ciphertext,
-      mention_person_ids AS "mentionPersonIds",created_at AS "acceptedAt"`,
-    [randomUUID(), actor.schoolId, conversationId, sequence, intentId, actor.personId, canonical, mentionPersonIds, fingerprint]);
-  if (!inserted.rows[0]) throw notFound();
-  return { ...inserted.rows[0], sequence: safeSequence(inserted.rows[0].sequence) };
+  if (!advanced.rows[0]) throw forbidden();
+  const messageId = randomUUID();
+  await db.query(`INSERT INTO drivy.messaging_message(id,school_id,conversation_id,sequence,intent_id,sender_person_id,envelope,
+    mention_person_ids,fingerprint,reply_to_message_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [messageId, actor.schoolId, conversationId, safeSequence(advanced.rows[0].sequence), intentId, actor.personId, canonical,
+      mentionPersonIds, fingerprint, replyToMessageId]);
+  if (poll) await db.query(`INSERT INTO drivy.messaging_poll(school_id,conversation_id,message_id,creator_person_id,option_count,multiple)
+    VALUES($1,$2,$3,$4,$5,$6)`, [actor.schoolId, conversationId, messageId, actor.personId, poll.optionCount, poll.multiple]);
+  return messageById(db, actor, conversationId, messageId);
 }
 
-/** Internal per-person reading progress, not a delivery receipt or a visible read receipt. */
+/** Membres en écriture et époque, pour la rotation Megolm (+1 à chaque départ et retour). */
+export async function conversationMembers(db: PoolClient, actor: MessagingActor, conversationId: string) {
+  await canRead(db, actor, conversationId);
+  const members = await db.query<{ personId: string }>(`SELECT person_id AS "personId"
+    FROM drivy.messaging_conversation_members($1,$2,$3) ORDER BY person_id`, [actor.schoolId, actor.personId, conversationId]);
+  const epoch = await db.query<{ membersEpoch: string }>(`SELECT members_epoch AS "membersEpoch" FROM drivy.messaging_conversation
+    WHERE school_id=$1 AND id=$2`, [actor.schoolId, conversationId]);
+  if (!epoch.rows[0]) throw notFound();
+  return { members: members.rows, membersEpoch: safeSequence(epoch.rows[0].membersEpoch) };
+}
+
+export async function deleteMessage(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, scope: 'me' | 'everyone') {
+  await canRead(db, actor, conversationId);
+  if (scope === 'everyone') {
+    await db.query('SELECT drivy.messaging_delete_for_everyone($1,$2,$3)', [actor.schoolId, conversationId, messageId]);
+  } else {
+    // Supprimer pour soi reste possible en lecture seule : cela ne touche que sa propre vue.
+    const inserted = await db.query(`INSERT INTO drivy.messaging_hidden_message(school_id,conversation_id,message_id,person_id)
+      SELECT $1,$2,$3,$4 WHERE EXISTS(SELECT 1 FROM drivy.messaging_message m WHERE m.school_id=$1 AND m.conversation_id=$2 AND m.id=$3)
+      ON CONFLICT DO NOTHING`, [actor.schoolId, conversationId, messageId, actor.personId]);
+    if (inserted.rowCount === 0) {
+      const hidden = await db.query('SELECT 1 FROM drivy.messaging_hidden_message WHERE school_id=$1 AND message_id=$2 AND person_id=$3',
+        [actor.schoolId, messageId, actor.personId]);
+      if (!hidden.rows[0]) throw notFound();
+    }
+  }
+  return { messageId, scope };
+}
+
+export async function setReaction(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, emoji: string, active: boolean) {
+  if (!(reactionPalette as readonly string[]).includes(emoji)) throw new ApiError(400, 'INVALID_REQUEST', 'Réaction invalide.');
+  await canRead(db, actor, conversationId);
+  await canWrite(db, actor, conversationId);
+  const open = await db.query<{ open: boolean }>('SELECT drivy.messaging_message_open($1,$2,$3,$4) AS open',
+    [actor.schoolId, actor.personId, conversationId, messageId]);
+  if (open.rows[0]?.open !== true) throw notFound();
+  if (active) await db.query(`INSERT INTO drivy.messaging_reaction(school_id,conversation_id,message_id,person_id,emoji)
+    VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, [actor.schoolId, conversationId, messageId, actor.personId, emoji]);
+  else await db.query(`DELETE FROM drivy.messaging_reaction WHERE school_id=$1 AND conversation_id=$2 AND message_id=$3
+    AND person_id=$4 AND emoji=$5`, [actor.schoolId, conversationId, messageId, actor.personId, emoji]);
+  return { messageId, emoji, active };
+}
+export async function setPinned(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, pinned: boolean) {
+  await canRead(db, actor, conversationId);
+  await db.query('SELECT drivy.messaging_set_pinned($1,$2,$3,$4)', [actor.schoolId, conversationId, messageId, pinned]);
+  return { messageId, pinned };
+}
+export async function setPollVotes(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, optionIndexes: number[]) {
+  if (optionIndexes.length > 12 || optionIndexes.some(index => !Number.isSafeInteger(index) || index < 0 || index > 11)
+    || new Set(optionIndexes).size !== optionIndexes.length) throw new ApiError(400, 'INVALID_REQUEST', 'Vote invalide.');
+  await canRead(db, actor, conversationId);
+  await db.query('SELECT drivy.messaging_set_poll_votes($1,$2,$3,$4::integer[])', [actor.schoolId, conversationId, messageId, optionIndexes]);
+  return { messageId, optionIndexes: [...optionIndexes].sort((a, b) => a - b) };
+}
+export async function closePoll(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string) {
+  await canRead(db, actor, conversationId);
+  await db.query('SELECT drivy.messaging_close_poll($1,$2,$3)', [actor.schoolId, conversationId, messageId]);
+  return { messageId, closed: true };
+}
+
+/** Administration du général : contrôle et audit dans la base, sous le verrou du général. */
+export async function setGroupAdmin(db: PoolClient, actor: MessagingActor, personId: string, admin: boolean) {
+  assertContext(actor);
+  await db.query('SELECT drivy.messaging_set_group_admin($1,$2,$3)', [actor.schoolId, personId, admin]);
+  return { personId, isGroupAdmin: admin };
+}
+export async function removeGeneralMember(db: PoolClient, actor: MessagingActor, personId: string) {
+  assertContext(actor);
+  await db.query('SELECT drivy.messaging_remove_general_member($1,$2)', [actor.schoolId, personId]);
+  return { personId, removed: true };
+}
+
+export interface ReportItemInput { messageId: string; ciphertext: OpaqueEnvelope }
+/** Signalement idempotent par clientReportId : seuls les messages choisis, rechiffrés pour les administrateurs de l'école. */
+export async function createReport(db: PoolClient, actor: MessagingActor, clientReportId: string, conversationId: string, items: ReportItemInput[]) {
+  if (!uuidPattern.test(clientReportId) || items.length < 1 || items.length > 50
+    || new Set(items.map(item => item.messageId.toLowerCase())).size !== items.length
+    || items.some(item => !uuidPattern.test(item.messageId) || !validEnvelope(item.ciphertext)))
+    throw new ApiError(400, 'INVALID_REQUEST', 'Signalement invalide.');
+  await canRead(db, actor, conversationId);
+  const normalized = [...items].sort((a, b) => a.messageId.toLowerCase().localeCompare(b.messageId.toLowerCase()));
+  const fingerprint = createHash('sha256').update(JSON.stringify([conversationId.toLowerCase(),
+    normalized.map(item => [item.messageId.toLowerCase(), item.ciphertext])])).digest('hex');
+  const reportId = randomUUID();
+  const inserted = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_report(id,school_id,conversation_id,reporter_person_id,client_report_id,fingerprint)
+    VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(school_id,reporter_person_id,client_report_id) DO NOTHING RETURNING id`,
+    [reportId, actor.schoolId, conversationId, actor.personId, clientReportId, fingerprint]);
+  if (!inserted.rows[0]) {
+    const prior = await db.query<{ id: string; fingerprint: string }>(`SELECT id,fingerprint FROM drivy.messaging_report
+      WHERE school_id=$1 AND reporter_person_id=$2 AND client_report_id=$3`, [actor.schoolId, actor.personId, clientReportId]);
+    if (!prior.rows[0]) throw notFound();
+    if (prior.rows[0].fingerprint !== fingerprint) throw new ApiError(409, 'REPORT_CONFLICT', 'Ce signalement a déjà été envoyé avec un autre contenu.');
+    return { reportId: prior.rows[0].id, itemCount: items.length };
+  }
+  for (const item of normalized) {
+    // La RLS n'accepte que les messages de la plage lisible du signalant.
+    const result = await db.query(`INSERT INTO drivy.messaging_report_item(school_id,report_id,message_id,envelope)
+      SELECT $1,$2,m.id,$4::jsonb FROM drivy.messaging_message m WHERE m.school_id=$1 AND m.conversation_id=$5 AND m.id=$3`,
+      [actor.schoolId, reportId, item.messageId, JSON.stringify(item.ciphertext), conversationId]);
+    if (result.rowCount !== 1) throw notFound();
+  }
+  return { reportId, itemCount: items.length };
+}
+/** Boîte des administrateurs de l'école. Contenu toujours chiffré. */
+export async function listReports(db: PoolClient, actor: MessagingActor, limit = 50, before?: string) {
+  assertContext(actor);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
+  const admin = await db.query<{ admin: boolean }>('SELECT drivy.messaging_school_admin($1,$2) AS admin', [actor.schoolId, actor.personId]);
+  if (admin.rows[0]?.admin !== true) throw forbidden();
+  const result = await db.query<{ id: string; conversationId: string; reporterPersonId: string; createdAt: string;
+    items: { messageId: string; ciphertext: OpaqueEnvelope }[] }>(`SELECT r.id,r.conversation_id AS "conversationId",
+    r.reporter_person_id AS "reporterPersonId",r.created_at AS "createdAt",
+    COALESCE((SELECT json_agg(json_build_object('messageId',i.message_id,'ciphertext',i.envelope) ORDER BY i.message_id)
+      FROM drivy.messaging_report_item i WHERE i.school_id=r.school_id AND i.report_id=r.id),'[]'::json) AS items
+    FROM drivy.messaging_report r WHERE r.school_id=$1 AND ($2::uuid IS NULL OR r.id<$2) ORDER BY r.id DESC LIMIT $3`,
+    [actor.schoolId, before ?? null, limit + 1]);
+  return { reports: result.rows.slice(0, limit), nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.id : null };
+}
+
+/** Progression personnelle ; visible des participants via readStates (décision 7), plafonnée à leur propre plage. */
 export async function updateReadState(db: PoolClient, actor: MessagingActor, conversationId: string,
   sequence: number, mutedUntil?: string | null, expectedVersion?: number) {
   if (!Number.isSafeInteger(sequence) || sequence < 0) throw new ApiError(400, 'INVALID_REQUEST', 'Progression invalide.');

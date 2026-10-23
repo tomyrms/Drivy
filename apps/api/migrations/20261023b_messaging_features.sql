@@ -220,7 +220,8 @@ CREATE FUNCTION drivy.messaging_general_directory(school uuid, actor uuid)
 RETURNS TABLE(person_id uuid, display_name text, photo_version integer, is_group_admin boolean)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
  SELECT p.id,p.display_name,
-   CASE WHEN drivy.person_photo_visible(p.id) THEN (SELECT ph.photo_version FROM drivy.person_photo ph WHERE ph.person_id=p.id) END,
+   -- person_photo a une RLS forcée réservée à drivy_app : la version publiée vient de person.photo_version.
+   CASE WHEN p.photo_version>0 AND drivy.person_photo_visible(p.id) THEN p.photo_version END,
    drivy.messaging_is_group_admin(school,p.id)
  FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
  WHERE actor=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.messaging_member(school,actor)
@@ -323,6 +324,38 @@ BEGIN
  PERFORM drivy.messaging_sync_links(school,general);
 END $$;
 
+-- Votes : remplace l'ensemble des choix de l'acteur sous le verrou du sondage (vide = retrait).
+-- Fonction plutôt que politique : un votant n'a pas le droit de verrouiller la ligne du sondage.
+CREATE FUNCTION drivy.messaging_set_poll_votes(school uuid, target uuid, message uuid, indexes integer[]) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+DECLARE actor uuid := nullif(current_setting('app.person_id',true),'')::uuid; poll record;
+BEGIN
+ IF school IS DISTINCT FROM nullif(current_setting('app.school_id',true),'')::uuid THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ SELECT p.option_count,p.multiple,p.closed_at INTO poll FROM drivy.messaging_poll p
+  WHERE p.school_id=school AND p.conversation_id=target AND p.message_id=message FOR UPDATE;
+ IF NOT FOUND OR NOT drivy.messaging_message_open(school,actor,target,message) THEN RAISE EXCEPTION 'missing' USING ERRCODE='DV404'; END IF;
+ IF NOT drivy.messaging_can_write(school,actor,target) THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ IF poll.closed_at IS NOT NULL THEN RAISE EXCEPTION 'closed' USING ERRCODE='DV409'; END IF;
+ IF cardinality(indexes)<>(SELECT count(DISTINCT i) FROM unnest(indexes) i) OR (NOT poll.multiple AND cardinality(indexes)>1)
+   OR EXISTS(SELECT 1 FROM unnest(indexes) i WHERE i IS NULL OR i<0 OR i>=poll.option_count) THEN
+   RAISE EXCEPTION 'invalid' USING ERRCODE='22023';
+ END IF;
+ DELETE FROM drivy.messaging_poll_vote v WHERE v.message_id=message AND v.person_id=actor AND NOT v.option_index=ANY(indexes);
+ INSERT INTO drivy.messaging_poll_vote(school_id,conversation_id,message_id,person_id,option_index)
+  SELECT school,target,message,actor,i FROM unnest(indexes) i ON CONFLICT DO NOTHING;
+END $$;
+CREATE FUNCTION drivy.messaging_close_poll(school uuid, target uuid, message uuid) RETURNS void
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+DECLARE actor uuid := nullif(current_setting('app.person_id',true),'')::uuid; poll record;
+BEGIN
+ IF school IS DISTINCT FROM nullif(current_setting('app.school_id',true),'')::uuid THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ SELECT p.creator_person_id,p.closed_at INTO poll FROM drivy.messaging_poll p
+  WHERE p.school_id=school AND p.conversation_id=target AND p.message_id=message FOR UPDATE;
+ IF NOT FOUND OR NOT drivy.messaging_message_open(school,actor,target,message) THEN RAISE EXCEPTION 'missing' USING ERRCODE='DV404'; END IF;
+ IF poll.creator_person_id<>actor OR NOT drivy.messaging_can_write(school,actor,target) THEN RAISE EXCEPTION 'denied' USING ERRCODE='DV403'; END IF;
+ IF poll.closed_at IS NULL THEN UPDATE drivy.messaging_poll SET closed_at=now() WHERE message_id=message; END IF;
+END $$;
+
 DO $$ DECLARE fn text; BEGIN
  FOREACH fn IN ARRAY ARRAY['messaging_pair_eligible(uuid,uuid,uuid)','messaging_eligible_members(uuid,uuid)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION drivy.%s FROM PUBLIC',fn);
@@ -331,7 +364,8 @@ DO $$ DECLARE fn text; BEGIN
    'messaging_sync_links(uuid,uuid)','messaging_can_write(uuid,uuid,uuid)','messaging_readable_sequence(uuid,uuid,uuid,bigint)',
    'messaging_message_open(uuid,uuid,uuid,uuid)','messaging_conversation_members(uuid,uuid,uuid)','messaging_general_directory(uuid,uuid)',
    'messaging_read_receipts(uuid,uuid,uuid)','messaging_delete_for_everyone(uuid,uuid,uuid)','messaging_set_pinned(uuid,uuid,uuid,boolean)',
-   'messaging_set_group_admin(uuid,uuid,boolean)','messaging_remove_general_member(uuid,uuid)'] LOOP
+   'messaging_set_group_admin(uuid,uuid,boolean)','messaging_remove_general_member(uuid,uuid)',
+   'messaging_set_poll_votes(uuid,uuid,uuid,integer[])','messaging_close_poll(uuid,uuid,uuid)'] LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION drivy.%s FROM PUBLIC',fn);
   EXECUTE format('GRANT EXECUTE ON FUNCTION drivy.%s TO drivy_app',fn);
  END LOOP;
