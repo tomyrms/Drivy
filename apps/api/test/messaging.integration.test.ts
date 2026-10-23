@@ -66,6 +66,10 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect((await req('demo-other-instructor', 'GET', `${path}/conversations/${conversationId}/messages`)).statusCode).toBe(404);
     await pool.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
     expect((await req('demo-instructor', 'GET', `${path}/conversations/${conversationId}/messages`)).statusCode).toBe(404);
+    expect((await req('demo-instructor', 'GET', `${path}/conversations/${conversationId}/events?afterSequence=0`)).statusCode).toBe(404);
+    expect((await req('demo-instructor', 'PUT', `${path}/conversations/${conversationId}/read-state`,
+      { lastReadSequence: 1 })).statusCode).toBe(404);
+    expect((await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`, body)).statusCode).toBe(404);
     expect((await req('demo-instructor', 'POST', `${path}/conversations/${conversationId}/messages`,
       { ...body, clientMessageId: randomUUID() })).statusCode).toBe(404);
   });
@@ -74,6 +78,12 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect(general.statusCode, general.body).toBe(200);
     expect((await req('demo-alice', 'PUT', `${path}/general`)).json().data.conversationId).toBe(general.json().data.conversationId);
     expect((await req('demo-alice', 'PUT', `${path}/private/${id.bob}`)).statusCode).toBe(403);
+    const crossSchoolMention = await req('demo-admin', 'POST', `${path}/conversations/${general.json().data.conversationId}/messages`,
+      { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' },
+        mentionPersonIds: [id.foreign] });
+    expect(crossSchoolMention.statusCode).toBe(403);
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1',
+      [general.json().data.conversationId])).rows[0].count).toBe(0);
     expect((await req('demo-foreign', 'GET', `${path}/conversations/${general.json().data.conversationId}/messages`)).statusCode).toBe(403);
     expect((await req('demo-admin', 'POST', `${path}/conversations/${general.json().data.conversationId}/messages`,
       { clientMessageId: randomUUID(), ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } }, id.alice)).statusCode).toBe(403);
@@ -109,6 +119,65 @@ describe('messaging foundation PostgreSQL, synthetic envelopes only', () => {
     expect((await req('demo-alice', 'PUT', `${path}/conversations/${conversationId}/read-state`,
       { lastReadSequence: 2, mutedUntil: null, expectedVersion: 1 })).statusCode).toBe(200);
     expect((await req('demo-admin', 'GET', `${path}/conversations`)).json().data.items[0].mutedUntil).toBeNull();
+  });
+  it('pages the general directory and conversation list with exclusive cursors', async () => {
+    const first = await req('demo-alice', 'GET', `${path}/general/members?limit=2`);
+    expect(first.statusCode, first.body).toBe(200);
+    const seen = new Set<string>();
+    let page = first.json().data as { members: { personId: string }[]; nextCursor: string | null };
+    for (let pageCount = 0; pageCount < 10; pageCount++) {
+      for (const member of page.members) {
+        expect(seen.has(member.personId)).toBe(false);
+        seen.add(member.personId);
+      }
+      if (!page.nextCursor) break;
+      const next = await req('demo-alice', 'GET', `${path}/general/members?limit=2&cursor=${page.nextCursor}`);
+      expect(next.statusCode, next.body).toBe(200);
+      page = next.json().data;
+    }
+    expect(page.nextCursor).toBeNull();
+    expect([...seen].sort()).toEqual([id.admin, id.instructor, id.alice, id.bob, id.otherInstructor].sort());
+    const general = await req('demo-alice', 'PUT', `${path}/general`);
+    expect(general.statusCode, general.body).toBe(200);
+    const privateConversation = await req('demo-alice', 'PUT', `${path}/private/${id.instructor}`);
+    expect(privateConversation.statusCode, privateConversation.body).toBe(200);
+    const firstConversations = await req('demo-alice', 'GET', `${path}/conversations?limit=1`);
+    expect(firstConversations.statusCode, firstConversations.body).toBe(200);
+    const conversations = firstConversations.json().data;
+    expect(conversations.items).toHaveLength(1);
+    expect(conversations.nextCursor).toBeTruthy();
+    const nextConversations = await req('demo-alice', 'GET', `${path}/conversations?limit=1&before=${conversations.nextCursor}`);
+    expect(nextConversations.statusCode, nextConversations.body).toBe(200);
+    const remaining = nextConversations.json().data;
+    expect(remaining.items).toHaveLength(1);
+    expect(remaining.items[0].id).not.toBe(conversations.items[0].id);
+    expect(remaining.nextCursor).toBeNull();
+  });
+  it('replays pull pages and deduplicates a retry after a lost response', async () => {
+    const opened = await req('demo-alice', 'PUT', `${path}/general`);
+    expect(opened.statusCode, opened.body).toBe(200);
+    const conversationId = opened.json().data.conversationId as string;
+    const intent = randomUUID();
+    const body = { clientMessageId: intent, ciphertext: { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' } };
+    const accepted = await req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`, body);
+    expect(accepted.statusCode, accepted.body).toBe(200);
+    const retry = await req('demo-alice', 'POST', `${path}/conversations/${conversationId}/messages`, body);
+    expect(retry.statusCode, retry.body).toBe(200);
+    expect(retry.json().data).toEqual(accepted.json().data);
+    const second = await req('demo-admin', 'POST', `${path}/conversations/${conversationId}/messages`,
+      { ...body, clientMessageId: randomUUID(), ciphertext: { ...body.ciphertext, payload: 'AQ==' } });
+    expect(second.statusCode, second.body).toBe(200);
+    const laterResponse = await req('demo-alice', 'GET', `${path}/conversations/${conversationId}/events?afterSequence=1&limit=1`);
+    const earlierResponse = await req('demo-alice', 'GET', `${path}/conversations/${conversationId}/events?afterSequence=0&limit=1`);
+    const replayResponse = await req('demo-alice', 'GET', `${path}/conversations/${conversationId}/events?afterSequence=0&limit=1`);
+    for (const response of [laterResponse, earlierResponse, replayResponse]) expect(response.statusCode, response.body).toBe(200);
+    const later = laterResponse.json().data, earlier = earlierResponse.json().data, replay = replayResponse.json().data;
+    expect(later.messages.map((message: { sequence: number }) => message.sequence)).toEqual([2]);
+    expect(earlier.messages.map((message: { sequence: number }) => message.sequence)).toEqual([1]);
+    expect(replay.messages).toEqual(earlier.messages);
+    expect(earlier.hasMore).toBe(true);
+    expect(later.hasMore).toBe(false);
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0].count).toBe(2);
   });
   it('keeps assignment direction for a learner who is also instructor', async () => {
     await pool.query("UPDATE drivy.membership SET roles=ARRAY['LEARNER','INSTRUCTOR'] WHERE id=$1", [id.instructorMember]);

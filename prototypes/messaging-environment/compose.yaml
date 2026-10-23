@@ -1,0 +1,53 @@
+name: drivy-messaging-synthetic
+
+# Fixture publique uniquement. Ne jamais utiliser ces identifiants en production.
+services:
+  fixtures:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    pull_policy: never
+    environment:
+      POSTGRES_USER: drivy_fixture
+      POSTGRES_PASSWORD: synthetic-public-fixture-only
+      POSTGRES_DB: drivy_test
+    ports:
+      - "127.0.0.1:55468:5432"
+    volumes:
+      - fixture-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/010-synthetic.sql:ro
+    networks: [fixtures-only]
+    command: ["postgres", "-c", "log_statement=none", "-c", "log_min_error_statement=panic"]
+    logging:
+      driver: none
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "drivy_fixture", "-d", "drivy_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  restore:
+    profiles: [restore]
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    pull_policy: never
+    environment:
+      POSTGRES_USER: drivy_fixture
+      POSTGRES_PASSWORD: synthetic-public-fixture-only
+      POSTGRES_DB: postgres
+    network_mode: none
+    volumes:
+      - restore-data:/var/lib/postgresql/data
+      - ./init-restore.sql:/docker-entrypoint-initdb.d/010-roles.sql:ro
+    command: ["postgres", "-c", "log_statement=none", "-c", "log_min_error_statement=panic"]
+    logging:
+      driver: none
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "drivy_fixture", "-d", "postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+networks:
+  fixtures-only:
+    internal: true
+volumes:
+  fixture-data:
+  restore-data:

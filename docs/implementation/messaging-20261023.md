@@ -10,21 +10,21 @@ Swift natif, API Fastify/PostgreSQL et identités existantes conservés. Aucun a
 
 ## Répartition et dépendances
 
-| Issue | Existant au départ | Travail restant | Dépendances | Responsable |
+| Issue | Existant sur la branche | Travail restant | Dépendances | Responsable |
 | --- | --- | --- | --- | --- |
-| #66 | Direction UI Drivy, dossiers et navigation | Parcours Messages réversible, arbitrages ci-dessous | #67 | Coordinateur + iOS |
-| #67 | Stockage local SQLCipher et clés protégées, pas E2EE chat | Comparaison officielle, recommandation, prototype et validation | #66 | Sécurité |
-| #68 | Infrastructure Drivy, pas environnement chat qualifié | Inventaire, configuration isolée, cycle de vie et preuves suisses | #67 | Sécurité + coordinateur |
-| #69 | Identités, adhésions, affectations pédagogiques et RLS | Contacts et droits chat dynamiques, administrateur explicitement attribué | #66/#67 | Backend |
-| #70 | Commandes métier existantes, pas file chat | Persistance opaque, idempotence, pagination, file indépendante et E2EE | #67–69 | Backend + iOS |
-| #71 | Dossiers élèves et profils | Liste et conversation natives, ouverture contextuelle | #66/#69/#70 | iOS + coordinateur |
-| #72 | Appartenances scolaires | Général unique, mentions stables et droits | #67/#69–71 | Backend + iOS |
-| #73 | Aucun moteur sondage chat | Règles à valider puis sondages chiffrés cohérents | #66/#67/#70 | Coordinateur |
-| #74 | #44 décrit, pas de stockage commun intégré | Contrat consommateur #44, non-lus/silence, livraison push conditionnée | #44/#67–73 | Coordinateur + backend |
-| #75 | Non confirmé | Formats et inclusion à arbitrer, pas d'activation | #66–71 | Porteur puis coordinateur |
-| #76 | Non confirmé | Sous-fonctions à arbitrer, pas d'activation | #66/#67/#70 | Porteur puis coordinateur |
-| #77 | Aucun rôle de modération chat validé | Partage volontaire de preuves, droits et retrait du général | #66/#67/#69/#70 | Sécurité + coordinateur |
-| #78 | Stratégie globale #84 | Fixtures, matrice, revue et preuves manuelles | Lots retenus | Coordinateur + revue |
+| #66 | Entrée secondaire réversible et dossier élève, masqués en Release | Validation navigation, identité exposée et politiques d'accès | #67 | Porteur + coordinateur |
+| #67 | Comparaison officielle et prototype SDK compilé, non exécuté | Validation architecture, intégration E2EE et cycle de vie des appareils/clés | #66 | Porteur + sécurité |
+| #68 | Cartographie résidence et procédures proposées | Environnement reproductible synthétique, configuration suisse approuvée et preuves de restauration | #67 | Sécurité + coordinateur |
+| #69 | Contacts minimaux, droits dynamiques, RLS et verrous implémentés | Attribution ADMIN auditée et qualification PostgreSQL | #66/#67/#84 | Backend |
+| #70 | API d'enveloppes, idempotence, pagination, coffre/file natifs et reprise bornée | E2EE produit, synchronisation complète et qualification | #67–69 | Backend + iOS |
+| #71 | Liste/historique natifs et ouverture dossier compilés | Activation après E2EE, profils photo autorisés et recette native | #66/#69/#70 | iOS + coordinateur |
+| #72 | Général unique, mentions UUID et annuaire autorisé implémentés | Validation métadonnées, chiffrement de groupe et qualification | #67/#69–71 | Backend + iOS |
+| #73 | Proposition de règles, aucun moteur sondage livré | Arbitrage puis création/vote/clôture/résultats chiffrés | #66/#67/#70 | Porteur + coordinateur |
+| #74 | Non-lus, lecture/silence CAS et politique consommatrice #44 | Raccord au socle commun et transport push après validation des flux | #44/#67–73 | Coordinateur + backend |
+| #75 | Aucun format confirmé ni pièce jointe active | Décider inclusion/formats avant réalisation | #66–71 | Porteur puis coordinateur |
+| #76 | Aucun enrichissement optionnel confirmé | Décider sous-fonctions avant réalisation | #66/#67/#70 | Porteur puis coordinateur |
+| #77 | Principes de signalement volontaire documentés, aucun accès universel ADMIN | Décider rôles/destinataires puis réaliser signalements et modération | #66/#67/#69/#70 | Porteur + sécurité |
+| #78 | Fixtures, matrice #84, revue statique et IPA compilée | Compiler les tests natifs, exécuter campagne et obtenir preuves physiques/infrastructure | Lots retenus | Coordinateur + revue |
 
 ## Arbitrages regroupés, non présentés comme validés
 

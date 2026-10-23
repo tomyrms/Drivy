@@ -25,6 +25,14 @@
     "swiftRelease": { "status": "PASSED", "runId": 39886599190, "commit": "ffa40d893a6ddb86234f582f31e9dc46d2ce1135", "artifact": "Drivy-essai-ffa40d893a6ddb86234f582f31e9dc46d2ce1135", "artifactId": 12473375819, "ipaSha256": "6dfc69dd256ef594e8cfe0f665c8695977b84e12e71776c427ee2f704b0e194d", "downloadedChecksumMatches": true, "messagingVisibleInRelease": false, "signed": false },
     "swiftTests": "NOT_COMPILED"
   },
+  "preparationEvidence": {
+    "swiftFixtureBuildCommand": "bash scripts/messaging-build-for-testing.sh",
+    "swiftFixtureBuildExecution": "NOT_EXECUTED",
+    "swiftFixtureBuildScriptSyntax": "PASSED: bash -n under local MSYS; not an Apple compilation",
+    "additionalApiScenarios": ["exact multi-page school directory", "conversation pagination", "replayed event cursors", "ignored acknowledgement retry", "revoked assignment read/event/state/retry refusal", "cross-school mention causes no write"],
+    "additionalApiScenariosExecution": "NOT_EXECUTED",
+    "networkFaultInjection": "NOT_IMPLEMENTED: ignored acknowledgement is only an idempotence fixture"
+  },
   "automaticTestSuitesTriggered": false,
   "productionDeploymentPerformed": false,
   "issuesClosed": []
