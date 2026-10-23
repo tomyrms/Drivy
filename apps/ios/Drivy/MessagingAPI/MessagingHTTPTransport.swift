@@ -333,11 +333,11 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         return members
     }
 
-    func report(scope: MessagingScope, conversationID: UUID, items: [MessagingReportItem]) async throws {
+    func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws {
         struct Item: Encodable { let messageId: UUID; let ciphertext: MessagingCiphertext }
         struct Body: Encodable { let clientReportId: UUID; let conversationId: UUID; let items: [Item] }
         guard (1...50).contains(items.count) else { throw MessagingFailure.invalidResponse }
-        let body = try JSONEncoder().encode(Body(clientReportId: UUID(), conversationId: conversationID,
+        let body = try JSONEncoder().encode(Body(clientReportId: clientReportID, conversationId: conversationID,
             items: items.map { Item(messageId: $0.messageID, ciphertext: $0.ciphertext) }))
         let _: Done = try await request(scope: scope, method: "POST", path: ["reports"], body: body)
     }

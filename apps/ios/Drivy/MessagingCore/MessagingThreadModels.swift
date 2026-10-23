@@ -153,7 +153,7 @@ protocol MessagingThreadActions: Sendable {
     func setGroupAdmin(scope: MessagingScope, personID: UUID, admin: Bool) async throws
     func removeGeneralMember(scope: MessagingScope, personID: UUID) async throws
     func members(scope: MessagingScope) async throws -> [MessagingMember]
-    func report(scope: MessagingScope, conversationID: UUID, items: [MessagingReportItem]) async throws
+    func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws
 }
 
 struct UnavailableMessagingThreadActions: MessagingThreadActions {
@@ -165,5 +165,5 @@ struct UnavailableMessagingThreadActions: MessagingThreadActions {
     func setGroupAdmin(scope: MessagingScope, personID: UUID, admin: Bool) async throws { throw MessagingFailure.unavailable }
     func removeGeneralMember(scope: MessagingScope, personID: UUID) async throws { throw MessagingFailure.unavailable }
     func members(scope: MessagingScope) async throws -> [MessagingMember] { throw MessagingFailure.unavailable }
-    func report(scope: MessagingScope, conversationID: UUID, items: [MessagingReportItem]) async throws { throw MessagingFailure.unavailable }
+    func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws { throw MessagingFailure.unavailable }
 }

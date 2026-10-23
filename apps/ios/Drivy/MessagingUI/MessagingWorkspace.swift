@@ -24,6 +24,8 @@ import Observation
     private(set) var contents: [UUID: MessagingPlainContent] = [:]
     private(set) var hiddenForMe: Set<UUID> = []
     private(set) var actionError: MessagingFailure?
+    /// Signalement validé mais pas encore accepté : même identifiant à chaque tentative.
+    private var pendingReports: [UUID: (messageIDs: Set<UUID>, clientReportID: UUID)] = [:]
     private(set) var contacts: [MessagingContact] = []
     private(set) var generalMembers: [MessagingContact] = []
     private(set) var conversations: [MessagingConversation] = []
@@ -392,7 +394,8 @@ import Observation
 
     /// Seuls les messages choisis sont rechiffrés pour les administrateurs de l'école puis transmis.
     func report(_ selected: [MessagingWireMessage], conversationID: UUID) async -> Bool {
-        await perform(nil) {
+        let clientReportID = reportIdentifier(for: selected, conversationID: conversationID)
+        let sent = await perform(nil) {
             var items: [MessagingReportItem] = []
             for message in selected where message.conversationID == conversationID {
                 guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
@@ -401,9 +404,22 @@ import Observation
                 items.append(MessagingReportItem(messageID: message.id, ciphertext: sealed))
             }
             guard !items.isEmpty else { throw MessagingFailure.invalidResponse }
-            try await actions.report(scope: scope, conversationID: conversationID, items: items)
+            try await actions.report(scope: scope, conversationID: conversationID, clientReportID: clientReportID, items: items)
         }
+        if sent { pendingReports[conversationID] = nil }
+        return sent
     }
+
+    /// L'identifiant naît à la première validation et survit aux échecs pour la même sélection.
+    func reportIdentifier(for selected: [MessagingWireMessage], conversationID: UUID) -> UUID {
+        let ids = Set(selected.filter { $0.conversationID == conversationID }.map(\.id))
+        if let pending = pendingReports[conversationID], pending.messageIDs == ids { return pending.clientReportID }
+        let id = UUID()
+        pendingReports[conversationID] = (ids, id)
+        return id
+    }
+
+    func abandonReport(conversationID: UUID) { pendingReports[conversationID] = nil }
 
     /// Recherche sur l'appareil : historique scellé, complété par la mémoire de la session.
     func search(_ query: String, conversationID: UUID) async -> [MessagingHistoryEntry] {

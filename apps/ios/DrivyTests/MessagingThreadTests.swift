@@ -134,7 +134,8 @@ final class MessagingThreadTests: XCTestCase {
         try await client.closePoll(scope: scope, conversationID: conversation, messageID: message)
         try await client.setGroupAdmin(scope: scope, personID: person, admin: true)
         try await client.removeGeneralMember(scope: scope, personID: person)
-        try await client.report(scope: scope, conversationID: conversation,
+        let reportID = UUID()
+        try await client.report(scope: scope, conversationID: conversation, clientReportID: reportID,
             items: [MessagingReportItem(messageID: message, ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data([1])))])
         let prefix = "/v1/schools/\(school.uuidString)/messaging"
         let m = "\(prefix)/conversations/\(conversation.uuidString)/messages/\(message.uuidString)"
@@ -151,7 +152,7 @@ final class MessagingThreadTests: XCTestCase {
         let vote = try JSONSerialization.jsonObject(with: log.bodies[3]!) as! [String: Any]
         XCTAssertEqual(vote["optionIndexes"] as? [Int], [0, 1])
         let report = try JSONSerialization.jsonObject(with: log.bodies[7]!) as! [String: Any]
-        XCTAssertNotNil(report["clientReportId"])
+        XCTAssertEqual(report["clientReportId"] as? String, reportID.uuidString)
         XCTAssertEqual((report["items"] as? [[String: Any]])?.count, 1)
     }
 
@@ -181,6 +182,16 @@ final class MessagingThreadTests: XCTestCase {
         let sent = await workspace.report([message], conversationID: conversation)
         XCTAssertFalse(sent)
         XCTAssertEqual(workspace.actionError, .protectionUnavailable)
+    }
+
+    func testReportRetryReusesClientReportID() {
+        let workspace = MessagingWorkspace(scope: scope, currentScope: { [scope] in scope })
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data([1])))
+        let first = workspace.reportIdentifier(for: [message], conversationID: conversation)
+        XCTAssertEqual(workspace.reportIdentifier(for: [message], conversationID: conversation), first)
+        workspace.abandonReport(conversationID: conversation)
+        XCTAssertNotEqual(workspace.reportIdentifier(for: [message], conversationID: conversation), first)
     }
 
     func testReadOnlyConversationRefusesEnqueue() async throws {
