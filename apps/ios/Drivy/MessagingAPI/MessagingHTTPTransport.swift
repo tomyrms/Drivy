@@ -44,9 +44,10 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
     private struct Messages: Decodable {
         struct Reaction: Decodable { let emoji: String; let personIds: [UUID] }
+        /// Contrat v2 : indices d'option en clair, libellés chiffrés. Index n <-> identifiant local "o(n+1)".
         struct Poll: Decodable {
-            struct Option: Decodable { let optionId: String; let voterIds: [UUID] }
-            let multiple: Bool; let closed: Bool; let creatorId: UUID; let options: [Option]
+            struct Vote: Decodable { let optionIndex: Int; let personIds: [UUID] }
+            let optionCount: Int; let multiple: Bool; let closed: Bool; let creatorId: UUID; let votes: [Vote]
         }
         struct Item: Decodable {
             let id: UUID; let schoolId: UUID; let conversationId: UUID; let sequence: Int
@@ -60,11 +61,13 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         let items: [Item]
         let nextCursor: String?
         let access: Access?
-        let readBy: [Receipt]?
+        let readStates: [Receipt]?
     }
     private typealias MessageReceipt = Messages.Item
     private struct ContactList: Decodable { let contacts: [Contact]; let nextCursor: UUID? }
-    private struct Contact: Decodable { let personId: UUID; let displayName: String; let hasPhoto: Bool?; let isGroupAdmin: Bool? }
+    private struct Contact: Decodable {
+        let personId: UUID; let displayName: String; let hasPhoto: Bool?; let photoVersion: Int?; let isGroupAdmin: Bool?
+    }
     private struct MemberList: Decodable { let members: [Contact]; let nextCursor: UUID? }
     private struct ConversationID: Decodable { let conversationId: UUID }
     private struct ReadState: Decodable { let lastReadSequence: Int; let mutedUntil: String?; let readStateVersion: Int }
@@ -95,8 +98,15 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             let meta = MessagingMessageMeta(sequence: item.sequence, replyToMessageID: item.replyToMessageId,
                 deletedForEveryone: item.deletedForEveryone ?? false, pinned: item.pinned ?? false,
                 reactions: (item.reactions ?? []).map { MessagingReaction(emoji: $0.emoji, personIDs: $0.personIds) },
-                poll: item.poll.map { poll in MessagingPollState(allowsMultiple: poll.multiple, closed: poll.closed,
-                    creatorID: poll.creatorId, options: poll.options.map { .init(optionID: $0.optionId, voterIDs: $0.voterIds) }) })
+                poll: try item.poll.map { poll in
+                    guard (2...12).contains(poll.optionCount),
+                          poll.votes.allSatisfy({ (0..<poll.optionCount).contains($0.optionIndex) }) else { throw MessagingFailure.invalidResponse }
+                    return MessagingPollState(allowsMultiple: poll.multiple, closed: poll.closed, creatorID: poll.creatorId,
+                        options: (0..<poll.optionCount).map { index in
+                            .init(optionID: MessagingPollIndex.id(index),
+                                  voterIDs: poll.votes.filter { $0.optionIndex == index }.flatMap(\.personIds))
+                        })
+                })
             // Un message supprimé pour tout le monde ne garde aucune enveloppe côté client.
             return MessagingMessageDTO(id: item.id, conversationId: item.conversationId, schoolId: item.schoolId,
                 senderId: item.senderId, acceptedAt: try date(item.acceptedAt),
@@ -104,14 +114,14 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         }, nextCursor: data.nextCursor,
            access: data.access.map { MessagingConversationAccess(canWrite: $0.canWrite,
                readableUntilSequence: $0.readableUntilSequence, isGroupAdmin: $0.isGroupAdmin ?? false) },
-           readReceipts: (data.readBy ?? []).map { MessagingReadReceipt(personID: $0.personId, lastReadSequence: $0.lastReadSequence) })
+           readReceipts: (data.readStates ?? []).map { MessagingReadReceipt(personID: $0.personId, lastReadSequence: $0.lastReadSequence) })
     }
 
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO {
         let payload = try JSONEncoder().encode(SendBody(clientMessageId: body.clientMessageId,
             ciphertext: body.ciphertext, mentionPersonIds: body.mentionPersonIds,
             replyToMessageId: body.replyToMessageId,
-            poll: body.poll.map { SendBody.Poll(multiple: $0.allowsMultiple, optionIds: $0.optionIDs) }))
+            poll: body.poll.map { SendBody.Poll(optionCount: $0.optionIDs.count, multiple: $0.allowsMultiple) }))
         let receipt: MessageReceipt = try await request(scope: scope, method: "POST",
             path: ["conversations", conversationID.uuidString, "messages"], body: payload)
         guard receipt.clientMessageId == body.clientMessageId, receipt.conversationId == conversationID,
@@ -125,7 +135,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             senderId: receipt.senderId)
     }
     private struct SendBody: Encodable {
-        struct Poll: Encodable { let multiple: Bool; let optionIds: [String] }
+        struct Poll: Encodable { let optionCount: Int; let multiple: Bool }
         let clientMessageId: UUID
         let ciphertext: MessagingCiphertext
         let mentionPersonIds: [UUID]
@@ -286,9 +296,13 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     func vote(scope: MessagingScope, conversationID: UUID, messageID: UUID, optionIDs: [String]) async throws {
-        struct Body: Encodable { let optionIds: [String] }
+        struct Body: Encodable { let optionIndexes: [Int] }
+        let indexes = try optionIDs.map { id -> Int in
+            guard let index = MessagingPollIndex.index(id) else { throw MessagingFailure.invalidResponse }
+            return index
+        }
         let _: Done = try await request(scope: scope, method: "PUT", path: message(conversationID, messageID, "poll", "votes"),
-                                        body: try JSONEncoder().encode(Body(optionIds: optionIDs)))
+                                        body: try JSONEncoder().encode(Body(optionIndexes: indexes.sorted())))
     }
 
     func closePoll(scope: MessagingScope, conversationID: UUID, messageID: UUID) async throws {
@@ -312,7 +326,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             let result: MemberList = try await request(scope: scope, method: "GET", path: ["general", "members"], query: query)
             guard (cursor == nil || result.nextCursor != cursor), members.count + result.members.count <= 2_000 else { throw MessagingFailure.invalidResponse }
             members += result.members.map { MessagingMember(id: $0.personId, displayName: $0.displayName,
-                hasPhoto: $0.hasPhoto ?? false, isGroupAdmin: $0.isGroupAdmin ?? false) }
+                hasPhoto: ($0.hasPhoto ?? false) || $0.photoVersion != nil, isGroupAdmin: $0.isGroupAdmin ?? false) }
             cursor = result.nextCursor
         } while cursor != nil
         guard Set(members.map(\.id)).count == members.count else { throw MessagingFailure.invalidResponse }
@@ -321,9 +335,9 @@ actor MessagingHTTPTransport: MessagingAPITransport {
 
     func report(scope: MessagingScope, conversationID: UUID, items: [MessagingReportItem]) async throws {
         struct Item: Encodable { let messageId: UUID; let ciphertext: MessagingCiphertext }
-        struct Body: Encodable { let conversationId: UUID; let items: [Item] }
+        struct Body: Encodable { let clientReportId: UUID; let conversationId: UUID; let items: [Item] }
         guard (1...50).contains(items.count) else { throw MessagingFailure.invalidResponse }
-        let body = try JSONEncoder().encode(Body(conversationId: conversationID,
+        let body = try JSONEncoder().encode(Body(clientReportId: UUID(), conversationId: conversationID,
             items: items.map { Item(messageId: $0.messageID, ciphertext: $0.ciphertext) }))
         let _: Done = try await request(scope: scope, method: "POST", path: ["reports"], body: body)
     }

@@ -94,6 +94,15 @@ enum MessagingPollRules {
     }
 }
 
+/// Le serveur ne connaît que des indices d'option. Identifiant local : "o1" pour l'indice 0.
+enum MessagingPollIndex {
+    static func id(_ index: Int) -> String { "o\(index + 1)" }
+    static func index(_ id: String) -> Int? {
+        guard id.hasPrefix("o"), let n = Int(id.dropFirst()), (1...MessagingPollRules.maxOptions).contains(n) else { return nil }
+        return n - 1
+    }
+}
+
 enum MessagingDeletionScope: String, Sendable { case me, everyone }
 
 /// Droits d'action dérivés des données serveur. L'interface ne fait que masquer : le serveur revalide.
