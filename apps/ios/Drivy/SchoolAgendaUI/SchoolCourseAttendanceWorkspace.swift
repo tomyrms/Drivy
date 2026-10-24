@@ -6,17 +6,21 @@ enum SchoolCourseSheetAction: Equatable, Sendable {
     case attendance(enrollmentID: UUID, occurrenceID: UUID, status: SchoolCourseAttendanceStatus, expectedVersion: Int?)
     case payment(enrollmentID: UUID, amountCents: Int64)
     case validate(enrollmentID: UUID)
+    case voidPayment(enrollmentID: UUID, paymentID: UUID, reason: String)
+    case revokeCompletion(enrollmentID: UUID, completionID: UUID, reason: String)
 
     var key: String {
         switch self {
         case .attendance(let e, let o, let s, let v): "attendance|\(e)|\(o)|\(s.rawValue)|\(v.map(String.init) ?? "new")"
         case .payment(let e, let cents): "payment|\(e)|\(cents)"
         case .validate(let e): "validate|\(e)"
+        case .voidPayment(_, let p, let r): "void|\(p)|\(r)"
+        case .revokeCompletion(_, let c, let r): "revoke|\(c)|\(r)"
         }
     }
     var enrollmentID: UUID {
         switch self {
-        case .attendance(let e, _, _, _), .payment(let e, _), .validate(let e): e
+        case .attendance(let e, _, _, _), .payment(let e, _), .validate(let e), .voidPayment(let e, _, _), .revokeCompletion(let e, _, _): e
         }
     }
 }
@@ -28,6 +32,11 @@ enum SchoolCourseSheetFormat {
         case .absent: "Absent"
         case .excused: "Excusé"
         }
+    }
+    /// Motif obligatoire, borné comme au serveur (1 à 1000 caractères après rognage).
+    static func reason(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty || trimmed.utf16.count > 1000 ? nil : trimmed
     }
     /// « 2 sur 3 séances obligatoires ».
     static func progress(_ requirements: SchoolCourseRequirements) -> String {
@@ -107,6 +116,12 @@ enum SchoolCourseSheetFormat {
                 fresh = try await client.validate(schoolID: schoolID, seriesID: seriesID, enrollmentID: e,
                     body: SchoolCourseValidateBody(operationId: operation, note: nil))
                 confirmation = "Cours validé pour \(learnerName)"
+            case .voidPayment(_, let p, let reason):
+                fresh = try await client.voidPayment(schoolID: schoolID, seriesID: seriesID, paymentID: p, reason: reason, operationID: operation)
+                confirmation = "Règlement annulé pour \(learnerName)"
+            case .revokeCompletion(_, let c, let reason):
+                fresh = try await client.revokeCompletion(schoolID: schoolID, seriesID: seriesID, completionID: c, reason: reason, operationID: operation)
+                confirmation = "Validation retirée pour \(learnerName)"
             }
             memory.settle(); apply(fresh)
             await onChange?()

@@ -286,6 +286,19 @@ import Testing
         #expect(absent.key != present.key && memory.operation(for: absent.key) != first)
         #expect(SchoolCourseSheetAction.payment(enrollmentID: enrollmentID, amountCents: 100).key
             != SchoolCourseSheetAction.payment(enrollmentID: enrollmentID, amountCents: 200).key)
+        let payment = UUID()
+        let void = SchoolCourseSheetAction.voidPayment(enrollmentID: enrollmentID, paymentID: payment, reason: "Erreur de saisie")
+        let firstVoid = memory.operation(for: void.key)
+        memory.fail(SchoolPlanningFailure.unavailable)
+        #expect(memory.operation(for: void.key) == firstVoid && void.enrollmentID == enrollmentID)
+        let revoke = SchoolCourseSheetAction.revokeCompletion(enrollmentID: enrollmentID, completionID: payment, reason: "Erreur de saisie")
+        #expect(revoke.key != void.key && memory.operation(for: revoke.key) != firstVoid)
+        #expect(SchoolCourseSheetFormat.reason("  Doublon \n") == "Doublon")
+        #expect(SchoolCourseSheetFormat.reason("   ") == nil)
+        #expect(SchoolCourseSheetFormat.reason(String(repeating: "a", count: 1001)) == nil)
+        let encoded = try? JSONEncoder().encode(SchoolCourseStaffCancelBody(operationId: firstVoid, reason: "Doublon"))
+        let body = encoded.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        #expect(Set(body.keys) == ["operationId", "reason"] && body["reason"] as? String == "Doublon")
         #expect(SchoolCourseClient.failure(409, "COURSE_REQUIREMENTS_MISSING") == .rejected("Des séances obligatoires manquent."))
         #expect(SchoolCourseClient.failure(409, "COURSE_OCCURRENCE_NOT_STARTED") == .rejected("Cette séance n’a pas encore commencé."))
     }

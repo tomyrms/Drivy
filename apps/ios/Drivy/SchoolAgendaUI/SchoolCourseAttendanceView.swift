@@ -8,6 +8,7 @@ struct SchoolCourseAttendanceView: View {
     @State private var paying: SchoolCourseSheetRow?
     @State private var amount = ""
     @State private var validating: SchoolCourseSheetRow?
+    @State private var reversal: SchoolCourseReversal?
 
     var body: some View {
         NavigationStack {
@@ -56,6 +57,9 @@ struct SchoolCourseAttendanceView: View {
                     Button("Valider") { Task { await model.perform(.validate(enrollmentID: row.enrollmentId), learnerName: name(row)) } }
                 }
                 Button("Annuler", role: .cancel) { validating = nil }
+            }
+            .sheet(item: $reversal) { target in
+                SchoolCourseReversalSheet(model: model, target: target)
             }
         }
         .interactiveDismissDisabled(model.isBusy)
@@ -120,14 +124,32 @@ struct SchoolCourseAttendanceView: View {
                 if paid > 0 {
                     Text("Payé : \(SchoolCatalogFormatting.price(paid))").font(.subheadline).monospacedDigit()
                 }
+                ForEach(row.payments.filter { $0.voidedAt == nil }) { payment in
+                    Button {
+                        reversal = SchoolCourseReversal(kind: .payment(payment.id, payment.amountCents), enrollmentID: row.enrollmentId, learnerName: name(row))
+                    } label: { Label("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents))", systemImage: "arrow.uturn.backward") }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .disabled(model.isBusy)
+                        .accessibilityLabel("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents)), \(name(row))")
+                        .accessibilityIdentifier("course-payment-void")
+                }
                 Button { amount = ""; paying = row } label: { Label("Payé sur place", systemImage: "banknote") }
                     .buttonStyle(DrivySecondaryButtonStyle())
                     .disabled(model.isBusy)
                     .accessibilityLabel("Payé sur place, \(name(row))")
                     .accessibilityIdentifier("course-payment")
             }
-            if row.completion != nil {
+            if let completion = row.completion {
                 Label("Cours validé", systemImage: "checkmark.seal.fill").font(.subheadline.weight(.semibold))
+                if rights?.canValidate == true && completion.revokedAt == nil {
+                    Button {
+                        reversal = SchoolCourseReversal(kind: .completion(completion.id), enrollmentID: row.enrollmentId, learnerName: name(row))
+                    } label: { Label("Retirer la validation", systemImage: "xmark.seal") }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .disabled(model.isBusy)
+                        .accessibilityLabel("Retirer la validation, \(name(row))")
+                        .accessibilityIdentifier("course-completion-revoke")
+                }
             } else if rights?.canValidate == true && row.requirements.required > 0 {
                 Button { validating = row } label: { Label("Valider le cours", systemImage: "checkmark.seal") }
                     .buttonStyle(DrivySecondaryButtonStyle())
@@ -168,6 +190,97 @@ struct SchoolCourseAttendanceView: View {
         case .present: "circle"
         case .absent: "xmark.circle"
         case .excused: "envelope"
+        }
+    }
+}
+
+/// Règlement à annuler ou validation à retirer, avec motif.
+struct SchoolCourseReversal: Identifiable {
+    enum Kind { case payment(UUID, Int64), completion(UUID) }
+    let id = UUID()
+    let kind: Kind
+    let enrollmentID: UUID
+    let learnerName: String
+
+    var title: String {
+        switch kind {
+        case .payment: "Annuler le règlement"
+        case .completion: "Retirer la validation"
+        }
+    }
+    var question: String {
+        switch kind {
+        case .payment(_, let cents): "Annuler le règlement de \(SchoolCatalogFormatting.price(cents)) pour \(learnerName) ?"
+        case .completion: "Retirer la validation pour \(learnerName) ?"
+        }
+    }
+    func action(reason: String) -> SchoolCourseSheetAction {
+        switch kind {
+        case .payment(let id, _): .voidPayment(enrollmentID: enrollmentID, paymentID: id, reason: reason)
+        case .completion(let id): .revokeCompletion(enrollmentID: enrollmentID, completionID: id, reason: reason)
+        }
+    }
+}
+
+/// Motif obligatoire puis confirmation ; une nouvelle tentative avec le même motif rejoue la même opération.
+struct SchoolCourseReversalSheet: View {
+    let model: SchoolCourseAttendanceWorkspace
+    let target: SchoolCourseReversal
+    @Environment(\.dismiss) private var dismiss
+    @State private var reason = ""
+    @State private var confirming = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let error {
+                    Section { DrivyFormMessage(text: error, tone: .danger) }.drivyFormRows()
+                }
+                Section {
+                    TextField("Motif", text: $reason, axis: .vertical)
+                        .lineLimit(2...5)
+                        .focused($focused)
+                        .disabled(model.isBusy)
+                        .accessibilityIdentifier("course-reversal-reason")
+                } header: { Text(target.learnerName).drivyFormSectionHeader() }
+                .drivyFormRows()
+                Section {
+                    Button(role: .destructive) { confirming = true } label: {
+                        HStack {
+                            Text(target.title)
+                            Spacer(minLength: 0)
+                            if model.isBusy { ProgressView().accessibilityLabel("Envoi en cours") }
+                        }
+                    }
+                    .disabled(model.isBusy || SchoolCourseSheetFormat.reason(reason) == nil)
+                    .accessibilityIdentifier("course-reversal-submit")
+                }
+                .drivyFormRows()
+            }
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
+            .navigationTitle(target.title).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
+            // L’annonce VoiceOver de l’erreur et de la confirmation vient de l’écran d’appel (model.errorMessage / confirmation).
+            .onAppear { focused = true }
+            .confirmationDialog(target.question, isPresented: $confirming, titleVisibility: .visible) {
+                Button(target.title, role: .destructive) { Task { await submit() } }
+                Button("Ne rien changer", role: .cancel) {}
+            }
+        }
+        .interactiveDismissDisabled(model.isBusy)
+        .tint(DrivyTheme.accent)
+    }
+
+    private func submit() async {
+        guard !model.isBusy, let clean = SchoolCourseSheetFormat.reason(reason) else { return }
+        error = nil
+        if await model.perform(target.action(reason: clean), learnerName: target.learnerName) {
+            dismiss()
+        } else {
+            error = model.errorMessage ?? "Échec de l’envoi. Réessayez."
         }
     }
 }
