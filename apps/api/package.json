@@ -15,7 +15,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "mail:worker": "node dist/invitation-mail-worker.js",
-    "mail:worker:dev": "tsx src/invitation-mail-worker.ts"
+    "mail:worker:dev": "tsx src/invitation-mail-worker.ts",
+    "course:worker": "node dist/course-worker.js"
   },
   "dependencies": {
     "fastify": "5.12.5",

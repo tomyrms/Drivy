@@ -40,6 +40,7 @@ import { registerObservationRanking } from './observation-ranking.js';
 import { registerCourses } from './courses.js';
 import { registerCourseEnrollments } from './course-enrollments.js';
 import { registerCourseFacts } from './course-facts.js';
+import { registerNotificationPreferences } from './notification-preferences.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
 const schoolParams = z.object({ schoolId: z.uuid() });
@@ -223,5 +224,6 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerCourses(app,options);
   registerCourseEnrollments(app,options);
   registerCourseFacts(app,options);
+  registerNotificationPreferences(app,options);
   return app;
 }

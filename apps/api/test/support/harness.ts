@@ -15,8 +15,8 @@ export async function freshDatabase(){
  const url=process.env.TEST_DATABASE_URL;if(!url||new URL(url).pathname!=='/drivy_test')throw new Error('Base de recette drivy_test requise.');
  const owner='drivy_harness_migrator',operator=new Pool({connectionString:url});
  try{
-  for(const role of [owner,'drivy_app','drivy_invitation_mailer'])await operator.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT; END IF; END $$`);
-  await operator.query(`GRANT CREATE ON DATABASE drivy_test TO ${owner}`);await operator.query(`GRANT drivy_app,drivy_invitation_mailer TO ${owner} WITH ADMIN OPTION`);
+  for(const role of [owner,'drivy_app','drivy_invitation_mailer','drivy_course_worker'])await operator.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT; END IF; END $$`);
+  await operator.query(`GRANT CREATE ON DATABASE drivy_test TO ${owner}`);await operator.query(`GRANT drivy_app,drivy_invitation_mailer,drivy_course_worker TO ${owner} WITH ADMIN OPTION`);
   await operator.query('DROP SCHEMA IF EXISTS drivy CASCADE');await operator.query('DROP TABLE IF EXISTS public.drivy_migrations');await operator.query(`GRANT USAGE,CREATE ON SCHEMA public TO ${owner}`);
  }finally{await operator.end();}
  const pool=new Pool({connectionString:url}),migration=new Pool({connectionString:url,options:`-c role=${owner}`});
