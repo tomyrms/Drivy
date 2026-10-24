@@ -312,7 +312,7 @@ struct MessagingConversationView: View {
             await retry(entry)
             return true
         } catch {
-            deliveryLabel = (error as? MessagingFailure ?? .protectionUnavailable).localizedDescription
+            deliveryLabel = MessagingDiagnostics.shared.describe(error as? MessagingFailure ?? .protectionUnavailable)
             return false
         }
     }
@@ -324,7 +324,7 @@ struct MessagingConversationView: View {
             deliveryLabel = nil
             queued.removeAll { $0.clientMessageID == entry.clientMessageID }
             await workspace.loadMessages(conversationID)
-        case .failed(let failure): deliveryLabel = "Échec : \(failure.localizedDescription)"
+        case .failed(let failure): deliveryLabel = "Échec : \(MessagingDiagnostics.shared.describe(failure))"
         }
     }
 }

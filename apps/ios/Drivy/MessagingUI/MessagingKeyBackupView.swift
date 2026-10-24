@@ -26,22 +26,26 @@ final class MessagingKeyBackupModel {
     private(set) var restored = false
     private(set) var failure: Failure?
     private(set) var working = false
+    /// Code court non sensible de la panne, affiché sous l'erreur de création.
+    private(set) var diagnosticCode: String?
+    private let diagnostics: MessagingDiagnostics
 
-    init(scope: MessagingScope, keys: any MessagingKeyManagement) {
+    init(scope: MessagingScope, keys: any MessagingKeyManagement, diagnostics: MessagingDiagnostics = .shared) {
         self.scope = scope
         self.keys = keys
+        self.diagnostics = diagnostics
     }
 
     func refresh() async { pending = await keys.backupPending(scope: scope) }
 
     func create() async {
         guard !working else { return }
-        working = true; failure = nil
+        working = true; failure = nil; diagnosticCode = nil
         defer { working = false }
         do { recoveryKey = try await keys.enableBackup(scope: scope) }
         catch MessagingFailure.stateConflict { failure = .existingBackup }
         catch MessagingFailure.contextChanged { failure = .contextChanged }
-        catch { failure = .createFailed }
+        catch { failure = .createFailed; diagnosticCode = diagnostics.last }
         await refresh()
     }
 
@@ -51,7 +55,7 @@ final class MessagingKeyBackupModel {
         let key = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { failure = .emptyKey; return }
         guard !working else { return }
-        working = true; failure = nil; notRestored = nil; restored = false
+        working = true; failure = nil; diagnosticCode = nil; notRestored = nil; restored = false
         defer { working = false }
         do {
             let result = try await keys.restoreBackup(recoveryKey: key, scope: scope)
@@ -114,6 +118,13 @@ struct MessagingKeyBackupView: View {
                         .foregroundStyle(.red)
                         .accessibilityIdentifier("messaging.backup.error")
                         .accessibilityFocused($errorFocused)
+                    if let code = model.diagnosticCode {
+                        Text("Code : \(code)")
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("messaging.error.code")
+                    }
                 }
             }
             Section("Nouvelle sauvegarde") {

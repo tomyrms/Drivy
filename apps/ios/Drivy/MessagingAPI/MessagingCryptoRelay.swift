@@ -4,6 +4,8 @@ import Foundation
 /// Les corps sont des JSON Matrix opaques produits par matrix-sdk-crypto ; ce module ne les lit pas.
 enum MessagingCryptoRelayFailure: Error, Equatable, Sendable {
     case notFound, backupVersionConflict, deviceLimitReached
+    /// 409 sans code connu : ce n'est pas une sauvegarde existante.
+    case conflict
 }
 
 protocol MessagingCryptoRelay: Sendable {
@@ -27,12 +29,16 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
     private let invalidate: @MainActor @Sendable (String) async -> Bool
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
 
+    private let diagnostics: MessagingDiagnostics
+
     init(baseURL: URL, transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
+         diagnostics: MessagingDiagnostics = .shared,
          token: @escaping @MainActor @Sendable () async throws -> String,
          invalidate: @escaping @MainActor @Sendable (String) async -> Bool,
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
         self.baseURL = baseURL; self.sendHTTP = transport; self.token = token
         self.invalidate = invalidate; self.currentScope = currentScope
+        self.diagnostics = diagnostics
     }
 
     @MainActor static func using(baseURL: URL, tokenSource: any AccessTokenSource,
@@ -89,11 +95,17 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
             if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
             let response: SchoolHTTPResponse
             do { response = try await sendHTTP.send(request) }
-            catch { throw error.unlessCancelled(MessagingFailure.unavailable) }
+            catch {
+                if !(error is CancellationError) { diagnostics.recordIfEmpty(MessagingDiagnostics.network(path)) }
+                throw error.unlessCancelled(MessagingFailure.unavailable)
+            }
             try Task.checkCancellation()
             try await verifyCurrent(scope)
             guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw MessagingFailure.invalidResponse }
             if response.status == 401 && attempt == 0, await invalidate(bearer) { bearer = try await token(); continue }
+            if !(200...299).contains(response.status), !(response.status == 401 && attempt == 0) {
+                diagnostics.recordIfEmpty(MessagingDiagnostics.http(path, response.status))
+            }
             if response.status == 409 {
                 let code = String(decoding: response.data.prefix(4_096), as: UTF8.self)
                 if code.contains("BACKUP_VERSION_CONFLICT") {
@@ -101,13 +113,20 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
                 }
                 // Enregistrement refusé : aucun repli, l'appareil reste sans clé et rien ne part.
                 if code.contains("DEVICE_LIMIT_REACHED") { throw MessagingCryptoRelayFailure.deviceLimitReached }
-                throw MessagingFailure.stateConflict
+                throw MessagingCryptoRelayFailure.conflict
             }
             if response.status == 404 { throw MessagingCryptoRelayFailure.notFound }
             if response.status == 401 || response.status == 403 { throw MessagingFailure.accessChanged }
             guard (200...299).contains(response.status) else { throw MessagingFailure.unavailable }
-            guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw MessagingFailure.invalidResponse }
-            return try Self.unwrap(response.data, scope: scope)
+            guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else {
+                diagnostics.recordIfEmpty("H-\(MessagingDiagnostics.route(path))-TYPE")
+                throw MessagingFailure.invalidResponse
+            }
+            do { return try Self.unwrap(response.data, scope: scope) }
+            catch {
+                diagnostics.recordIfEmpty("H-\(MessagingDiagnostics.route(path))-\(error as? MessagingFailure == .contextChanged ? "CTX" : "BODY")")
+                throw error
+            }
         }
         throw MessagingFailure.accessChanged
     }

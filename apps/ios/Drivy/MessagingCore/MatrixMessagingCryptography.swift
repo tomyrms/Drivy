@@ -48,11 +48,18 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     /// Fenêtre pendant laquelle un lot de messages sans clé ne relance pas de sync.
     static let keySyncWindow: Duration = .seconds(5)
 
-    init(scope: MessagingScope, relay: any MessagingCryptoRelay, vault: MessagingCryptoVault? = nil) throws {
+    private let diagnostics: MessagingDiagnostics
+
+    init(scope: MessagingScope, relay: any MessagingCryptoRelay, vault: MessagingCryptoVault? = nil,
+         diagnostics: MessagingDiagnostics = .shared) throws {
         self.scope = scope
         self.relay = relay
-        self.vault = try vault ?? MessagingCryptoVault(scope: scope)
+        self.diagnostics = diagnostics
+        self.vault = try vault ?? MessagingCryptoVault(scope: scope, diagnostics: diagnostics)
     }
+
+    /// Code court de la dernière panne, affiché sous l'erreur (jamais journalisé).
+    nonisolated var lastDiagnostic: String? { diagnostics.last }
 
     static func userID(_ person: UUID) -> String { "@\(person.uuidString.lowercased()):\(serverName)" }
     static func roomID(_ conversation: UUID) -> String { "!\(conversation.uuidString.lowercased()):\(serverName)" }
@@ -70,14 +77,20 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
 
     func availabilityFailure(scope: MessagingScope, conversationID: UUID) async -> MessagingFailure? {
         guard scope == self.scope else { return .contextChanged }
+        if machine == nil, opening == nil { diagnostics.clear() }
         do { _ = try await open(); return nil }
         catch MessagingCryptoRelayFailure.deviceLimitReached { return .deviceLimitReached }
         catch MessagingFailure.deviceLimitReached { return .deviceLimitReached }
-        catch { return .protectionUnavailable }
+        catch is MessagingFailure, is MessagingCryptoRelayFailure, is CancellationError { return .protectionUnavailable }
+        catch {
+            diagnostics.recordIfEmpty("SDK-\(MessagingDiagnostics.caseName(error))")
+            return .protectionUnavailable
+        }
     }
 
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         try guardScope(scope)
+        diagnostics.clear()
         guard let text = String(data: plaintext, encoding: .utf8), !text.isEmpty else { throw MessagingFailure.invalidResponse }
         return try await shielded {
             let machine = try await open()
@@ -144,6 +157,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
 
     func enableBackup(scope: MessagingScope) async throws -> String {
         try guardScope(scope)
+        diagnostics.clear()
         return try await shielded {
             let machine = try await open()
             let key = BackupRecoveryKey()
@@ -241,7 +255,12 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         catch is CancellationError { throw CancellationError() }
         catch MessagingCryptoRelayFailure.backupVersionConflict { throw MessagingFailure.stateConflict }
         catch MessagingCryptoRelayFailure.deviceLimitReached { throw MessagingFailure.deviceLimitReached }
-        catch { throw MessagingFailure.protectionUnavailable }
+        // 404 ou 409 sans code : jamais présenté comme sauvegarde existante (déjà diagnostiqué par le relais).
+        catch is MessagingCryptoRelayFailure { throw MessagingFailure.protectionUnavailable }
+        catch {
+            diagnostics.recordIfEmpty("SDK-\(MessagingDiagnostics.caseName(error))")
+            throw MessagingFailure.protectionUnavailable
+        }
     }
 
     private func open() async throws -> OlmMachine {
@@ -255,8 +274,14 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
 
     private func create() async throws -> OlmMachine {
         let secrets = try vault.secrets()
-        let created = try OlmMachine(userId: Self.userID(scope.accountID), deviceId: secrets.deviceID,
+        let created: OlmMachine
+        do {
+            created = try OlmMachine(userId: Self.userID(scope.accountID), deviceId: secrets.deviceID,
                                      path: vault.storePath, passphrase: secrets.passphrase)
+        } catch {
+            diagnostics.recordIfEmpty("SQL-\(MessagingDiagnostics.caseName(error))")
+            throw MessagingFailure.protectionUnavailable
+        }
         try vault.protectStore()
         deviceID = secrets.deviceID
         state = try vault.load()
@@ -493,7 +518,8 @@ struct MessagingSystemKeychain: MessagingCryptoKeychain {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data else { throw MessagingFailure.protectionUnavailable }
+        guard status == errSecSuccess else { throw MessagingKeychainError(operation: "R", status: status) }
+        guard let data = result as? Data else { throw MessagingKeychainError(operation: "R", status: 0) }
         return data
     }
 
@@ -501,8 +527,15 @@ struct MessagingSystemKeychain: MessagingCryptoKeychain {
         let insert: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: account, kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        guard SecItemAdd(insert as CFDictionary, nil) == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
+        let status = SecItemAdd(insert as CFDictionary, nil)
+        guard status == errSecSuccess else { throw MessagingKeychainError(operation: "A", status: status) }
     }
+}
+
+/// Statut Keychain numérique seulement, converti en diagnostic par le coffre.
+struct MessagingKeychainError: Error, Equatable, Sendable {
+    let operation: String
+    let status: OSStatus
 }
 
 private final class SilentProgress: ProgressListener, @unchecked Sendable {
@@ -533,11 +566,14 @@ struct MessagingCryptoVault: Sendable {
     let folder: URL
     let fingerprint: String
     let keychain: any MessagingCryptoKeychain
+    let diagnostics: MessagingDiagnostics
     var storePath: String { folder.appendingPathComponent("store", isDirectory: true).path }
     private var stateFile: URL { folder.appendingPathComponent("state.sealed") }
 
-    init(scope: MessagingScope, root: URL? = nil, keychain: any MessagingCryptoKeychain = MessagingSystemKeychain()) throws {
+    init(scope: MessagingScope, root: URL? = nil, keychain: any MessagingCryptoKeychain = MessagingSystemKeychain(),
+         diagnostics: MessagingDiagnostics = .shared) throws {
         self.keychain = keychain
+        self.diagnostics = diagnostics
         guard !scope.apiBaseURL.isEmpty else { throw MessagingFailure.contextChanged }
         // Une identité d'appareil par compte, école et serveur ; l'époque d'accès ne détruit pas les clés.
         let descriptor = "\(scope.accountID.uuidString.lowercased())|\(scope.schoolID.uuidString.lowercased())|\(scope.apiBaseURL)"
@@ -552,27 +588,37 @@ struct MessagingCryptoVault: Sendable {
         if let existing = try read() { return existing }
         if manager.fileExists(atPath: storePath) {
             // Store sans secret : vide (essai précédent interrompu) il est recréé, sinon erreur fermée.
+            // Typiquement : app re-signée (autre équipe) qui garde le conteneur mais perd l'accès au Keychain.
             guard (try? manager.contentsOfDirectory(atPath: storePath))?.isEmpty == true else {
+                diagnostics.recordIfEmpty("S-ORPHAN")
                 throw MessagingFailure.protectionUnavailable
             }
-            try manager.removeItem(atPath: storePath)
+            do { try manager.removeItem(atPath: storePath) }
+            catch { diagnostics.recordIfEmpty("S-RM"); throw MessagingFailure.protectionUnavailable }
         }
         // Le secret est durable avant toute création du store : un échec Keychain ne bloque pas l'essai suivant.
         let fresh = Secrets(deviceID: try Self.randomDeviceID(), passphrase: try Self.random(32).base64EncodedString())
         try write(fresh)
-        try manager.createDirectory(at: URL(fileURLWithPath: storePath), withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        do {
+            try manager.createDirectory(at: URL(fileURLWithPath: storePath), withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        } catch { diagnostics.recordIfEmpty("S-DIR"); throw MessagingFailure.protectionUnavailable }
         try protectStore()
         return fresh
     }
 
     func protectStore() throws {
-        let manager = FileManager.default
-        for url in [folder.deletingLastPathComponent(), folder, URL(fileURLWithPath: storePath)] where manager.fileExists(atPath: url.path) {
-            try Self.protect(url)
-        }
-        if let items = manager.enumerator(at: URL(fileURLWithPath: storePath), includingPropertiesForKeys: nil) {
-            for case let item as URL in items { try Self.protect(item) }
+        do {
+            let manager = FileManager.default
+            for url in [folder.deletingLastPathComponent(), folder, URL(fileURLWithPath: storePath)] where manager.fileExists(atPath: url.path) {
+                try Self.protect(url)
+            }
+            if let items = manager.enumerator(at: URL(fileURLWithPath: storePath), includingPropertiesForKeys: nil) {
+                for case let item as URL in items { try Self.protect(item) }
+            }
+        } catch {
+            diagnostics.recordIfEmpty("S-PROT-\((error as NSError).code)")
+            throw MessagingFailure.protectionUnavailable
         }
     }
 
@@ -581,7 +627,7 @@ struct MessagingCryptoVault: Sendable {
         do {
             let box = try AES.GCM.SealedBox(combined: try Data(contentsOf: stateFile))
             return try JSONDecoder().decode(State.self, from: try AES.GCM.open(box, using: try stateKey(), authenticating: Data(fingerprint.utf8)))
-        } catch { throw MessagingFailure.protectionUnavailable }
+        } catch { diagnostics.recordIfEmpty("S-STATE"); throw MessagingFailure.protectionUnavailable }
     }
 
     func save(_ state: State) throws {
@@ -590,7 +636,7 @@ struct MessagingCryptoVault: Sendable {
             guard let bytes = sealed.combined else { throw MessagingFailure.protectionUnavailable }
             try bytes.write(to: stateFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             try Self.protect(stateFile)
-        } catch { throw MessagingFailure.protectionUnavailable }
+        } catch { diagnostics.recordIfEmpty("S-SAVE"); throw MessagingFailure.protectionUnavailable }
     }
 
     private func stateKey() throws -> SymmetricKey {
@@ -599,17 +645,31 @@ struct MessagingCryptoVault: Sendable {
     }
 
     private func read() throws -> Secrets? {
-        guard let data = try keychain.read(service: Self.service, account: fingerprint) else { return nil }
+        let data: Data
+        do {
+            guard let found = try keychain.read(service: Self.service, account: fingerprint) else { return nil }
+            data = found
+        } catch { throw keychainFailure(error, operation: "R") }
         guard let pair = try? JSONDecoder().decode([String: String].self, from: data),
               let device = pair["deviceId"], let passphrase = pair["passphrase"],
               MessagingCryptoHTTPRelay.validDeviceID(device), Data(base64Encoded: passphrase)?.count == 32
-        else { throw MessagingFailure.protectionUnavailable }
+        else { diagnostics.recordIfEmpty("K-R-FORMAT"); throw MessagingFailure.protectionUnavailable }
         return Secrets(deviceID: device, passphrase: passphrase)
     }
 
     private func write(_ secrets: Secrets) throws {
         let data = try JSONEncoder().encode(["deviceId": secrets.deviceID, "passphrase": secrets.passphrase])
-        try keychain.add(service: Self.service, account: fingerprint, data: data)
+        do { try keychain.add(service: Self.service, account: fingerprint, data: data) }
+        catch { throw keychainFailure(error, operation: "A") }
+    }
+
+    private func keychainFailure(_ error: any Error, operation: String) -> MessagingFailure {
+        if let keychain = error as? MessagingKeychainError {
+            diagnostics.recordIfEmpty(MessagingDiagnostics.keychain(keychain.operation, keychain.status))
+        } else {
+            diagnostics.recordIfEmpty("K-\(operation)-X")
+        }
+        return .protectionUnavailable
     }
 
     static func random(_ count: Int) throws -> Data {
