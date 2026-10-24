@@ -216,6 +216,12 @@ struct SchoolCourseDetailView: View {
     @Bindable var model: SchoolCourseDetailWorkspace
     let timeZone: String
     @Environment(\.dismiss) private var dismiss
+    @State private var attendance: SchoolCourseAttendanceWorkspace?
+
+    /// L’appel s’ouvre dès qu’une séance a commencé ; les droits sont relus par le serveur.
+    private var canTakeAttendance: Bool {
+        series.status == .published && series.occurrences.contains { ($0.start ?? .distantFuture) <= Date() }
+    }
 
     private var series: SchoolCourseSeries { model.series }
 
@@ -271,7 +277,21 @@ struct SchoolCourseDetailView: View {
                     }
                 } header: { Text("Inscriptions").drivyFormSectionHeader() }
                     .drivyFormRows()
+                if canTakeAttendance {
+                    Section {
+                        Button {
+                            attendance = SchoolCourseAttendanceWorkspace(schoolID: model.schoolID, seriesID: series.id, timeZone: timeZone, client: model.client)
+                        } label: { Label("Faire l’appel", systemImage: "checklist") }
+                            .buttonStyle(DrivyPrimaryButtonStyle())
+                            .disabled(model.isBusy)
+                            .accessibilityIdentifier("course-take-attendance")
+                    }
+                    .drivyFormRows()
+                }
                 if let roster = model.roster { SchoolCourseRosterSection(model: roster) }
+            }
+            .sheet(item: $attendance, onDismiss: { Task { await model.refresh() } }) { sheet in
+                SchoolCourseAttendanceView(model: sheet)
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)

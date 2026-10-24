@@ -200,6 +200,96 @@ import Testing
         #expect(SchoolCourseEnrollmentFormat.mailURL("ecole@example.ch", courseTitle: "Cours")?.scheme == "mailto")
     }
 
+    // MARK: Appel, règlements, validation (#42, #81, #82)
+
+    private let paymentID = UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!
+    private let completionID = UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")!
+
+    private func sheetJSON(missing: Int = 0, attendanceVersion: String = "1") -> Data {
+        let series = String(decoding: seriesJSON(status: "PUBLISHED", publishedAt: "2030-01-01T08:00:00.000Z"), as: UTF8.self)
+        return Data("""
+        {"series":\(series),"rights":{"canTakeAttendance":true,"canRecordPayment":false,"canValidate":true},
+         "rows":[{"enrollmentId":"\(enrollmentID.uuidString.lowercased())","learnerId":"\(learnerID.uuidString.lowercased())",
+           "learnerDisplayName":"Alex Exemple","status":"ACTIVE","cancelledAt":null,
+           "attendance":[{"occurrenceId":"55555555-5555-4555-8555-555555555555","status":"PRESENT","version":\(attendanceVersion),"recordedAt":"2030-03-04T17:05:00.000Z"},
+                         {"occurrenceId":"66666666-6666-4666-8666-666666666666","status":null,"version":null,"recordedAt":null}],
+           "requirements":{"required":1,"present":\(1 - missing),"missing":\(missing)},
+           "payments":[{"id":"\(paymentID.uuidString.lowercased())","amountCents":4500,"recordedAt":"2030-03-04T17:10:00.000Z","note":null,"voidedAt":null,"voidReason":null}],
+           "completion":{"id":"\(completionID.uuidString.lowercased())","validatedAt":"2030-03-04T20:00:00.000Z","seriesId":"\(seriesID.uuidString.lowercased())","revokedAt":null}}]}
+        """.utf8)
+    }
+
+    @Test func decodesTheCourseSheet() throws {
+        let sheet = try JSONDecoder().decode(SchoolCourseSheet.self, from: sheetJSON())
+        #expect(sheet.rights.canTakeAttendance && !sheet.rights.canRecordPayment && sheet.rights.canValidate)
+        let row = try #require(sheet.active.first)
+        #expect(row.id == enrollmentID && row.learnerDisplayName == "Alex Exemple" && row.cancelledAt == nil)
+        let first = try #require(UUID(uuidString: "55555555-5555-4555-8555-555555555555"))
+        let second = try #require(UUID(uuidString: "66666666-6666-4666-8666-666666666666"))
+        #expect(row.mark(first)?.status == .present && row.mark(first)?.version == 1)
+        // Aucune saisie : l’état reste vide, jamais déduit.
+        #expect(row.mark(second)?.status == nil && row.mark(second)?.version == nil)
+        #expect(row.requirements == SchoolCourseRequirements(required: 1, present: 1, missing: 0))
+        #expect(row.payments.first?.amountCents == 4500 && row.completion?.id == completionID)
+        #expect(try SchoolCourseClient.checked(sheet, schoolID: schoolID, seriesID: seriesID) == sheet)
+        #expect(throws: SchoolPlanningFailure.invalidResponse) { try SchoolCourseClient.checked(sheet, schoolID: schoolID, seriesID: UUID()) }
+        // Un état sans version (ou l’inverse) est refusé.
+        let broken = try JSONDecoder().decode(SchoolCourseSheet.self, from: sheetJSON(attendanceVersion: "null"))
+        #expect(throws: SchoolPlanningFailure.invalidResponse) { try SchoolCourseClient.checked(broken, schoolID: schoolID, seriesID: seriesID) }
+        #expect(SchoolCourseSheetFormat.progress(row.requirements) == "1 sur 1 séance obligatoire")
+        #expect(SchoolCourseSheetFormat.progress(SchoolCourseRequirements(required: 3, present: 2, missing: 1)) == "2 sur 3 séances obligatoires")
+    }
+
+    @Test func decodesTheLearnerProgress() throws {
+        let progress = try JSONDecoder().decode(SchoolCourseProgress.self, from: Data("""
+        {"completions":[{"id":"\(completionID.uuidString.lowercased())","typeId":"\(typeID.uuidString.lowercased())","typeTitle":"Cours de sensibilisation",
+           "validatedAt":"2030-03-11T20:00:00.000Z","seriesId":null}],
+         "enrollments":[{"enrollmentId":"\(enrollmentID.uuidString.lowercased())","seriesId":"\(seriesID.uuidString.lowercased())",
+           "requirements":{"required":3,"present":2,"missing":1},
+           "attendance":[{"occurrenceId":"55555555-5555-4555-8555-555555555555","status":"EXCUSED"}]}]}
+        """.utf8))
+        #expect(progress.completions.first?.typeTitle == "Cours de sensibilisation" && progress.completions.first?.seriesId == nil)
+        let enrollment = try #require(progress.enrollments.first)
+        #expect(enrollment.seriesId == seriesID && enrollment.attendance.first?.status == .excused)
+        #expect(SchoolCourseClient.valid(enrollment.requirements))
+        #expect(!SchoolCourseClient.valid(SchoolCourseRequirements(required: 3, present: 2, missing: 0)))
+        let day = try #require(SchoolLesson.date(progress.completions[0].validatedAt))
+        #expect(SchoolCourseEnrollmentFormat.day(day, zone: "Europe/Zurich") == "11 mars 2030")
+    }
+
+    @Test func encodesSheetCommandsWithExplicitNulls() throws {
+        let operation = UUID()
+        let mark = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            SchoolCourseAttendanceBody(operationId: operation, status: .absent, expectedVersion: nil, note: nil))) as? [String: Any])
+        #expect(Set(mark.keys) == ["operationId", "status", "expectedVersion", "note"])
+        #expect(mark["status"] as? String == "ABSENT" && mark["expectedVersion"] is NSNull && mark["note"] is NSNull)
+        let correction = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            SchoolCourseAttendanceBody(operationId: operation, status: .present, expectedVersion: 2, note: nil))) as? [String: Any])
+        #expect(correction["expectedVersion"] as? Int == 2)
+        let payment = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            SchoolCoursePaymentBody(operationId: operation, amountCents: 4500, note: nil))) as? [String: Any])
+        #expect(Set(payment.keys) == ["operationId", "amountCents", "note"] && payment["amountCents"] as? Int == 4500 && payment["note"] is NSNull)
+        let validate = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            SchoolCourseValidateBody(operationId: operation, note: nil))) as? [String: Any])
+        #expect(Set(validate.keys) == ["operationId", "note"] && validate["note"] is NSNull)
+        #expect((validate["operationId"] as? String).flatMap(UUID.init(uuidString:)) == operation)
+    }
+
+    @Test func sheetRetriesKeepTheSameOperation() {
+        let occurrence = UUID()
+        let present = SchoolCourseSheetAction.attendance(enrollmentID: enrollmentID, occurrenceID: occurrence, status: .present, expectedVersion: nil)
+        var memory = SchoolCourseOperationMemory()
+        let first = memory.operation(for: present.key)
+        memory.fail(SchoolPlanningFailure.unavailable)
+        #expect(memory.operation(for: present.key) == first)
+        let absent = SchoolCourseSheetAction.attendance(enrollmentID: enrollmentID, occurrenceID: occurrence, status: .absent, expectedVersion: nil)
+        #expect(absent.key != present.key && memory.operation(for: absent.key) != first)
+        #expect(SchoolCourseSheetAction.payment(enrollmentID: enrollmentID, amountCents: 100).key
+            != SchoolCourseSheetAction.payment(enrollmentID: enrollmentID, amountCents: 200).key)
+        #expect(SchoolCourseClient.failure(409, "COURSE_REQUIREMENTS_MISSING") == .rejected("Des séances obligatoires manquent."))
+        #expect(SchoolCourseClient.failure(409, "COURSE_OCCURRENCE_NOT_STARTED") == .rejected("Cette séance n’a pas encore commencé."))
+    }
+
     @Test func agendaListsOnlyTheSessionsOfTheDay() throws {
         let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!

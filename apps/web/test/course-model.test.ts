@@ -3,6 +3,8 @@ import {
   courseErrorMessage, courseRosterSchema, enrollableLearners, policyBody, policyForm, policyProblems, reasonProblem, rescheduleBody, sourceLabel,
   cancellationLabel, capacityProblem, emptyForm, formFromSeries, formatHours, preview, seriesBody, seriesByDay, typeProblem, validate,
   type CourseSeries, type SeriesForm,
+  activePayments, attendanceBody, attendanceCell, canMarkAttendance, canValidateRow, courseSheetRowSchema, courseSheetSchema, paymentProblem, requirementLabel,
+  type CourseSheetRow,
 } from '../client/console/course-model.js';
 
 const zone = 'Europe/Zurich';
@@ -150,5 +152,57 @@ describe('cours collectifs : inscrits, dates et réglages', () => {
   it('traduit le conflit d’agenda des nouvelles dates', () => {
     expect(courseErrorMessage('COURSE_SCHEDULE_CONFLICT')).toContain('rendez-vous');
     expect(courseErrorMessage('COURSE_FULL')).toBe('Ce cours est complet.');
+  });
+});
+
+describe('cours collectifs : feuille du cours', () => {
+  const enrollment = 'e1111111-1111-4111-8111-111111111111', occurrence = 'f1111111-1111-4111-8111-111111111111';
+  const row = (patch: Partial<CourseSheetRow> = {}): CourseSheetRow => courseSheetRowSchema.parse({
+    enrollmentId: enrollment, learnerId: instructor, learnerDisplayName: 'Ana', status: 'ACTIVE', cancelledAt: null,
+    attendance: [], requirements: { required: 3, present: 2, missing: 1 }, payments: [], completion: null, ...patch,
+  });
+  const all = { rights: { canTakeAttendance: true, canRecordPayment: true, canValidate: true } };
+  it('laisse vide une cellule absente, jamais déduite', () => {
+    expect(attendanceCell(row(), occurrence)).toEqual({ occurrenceId: occurrence, status: null, version: null, recordedAt: null });
+  });
+  it('première saisie sans version, correction avec la version lue, rien si inchangé', () => {
+    expect(attendanceBody(attendanceCell(row(), occurrence), 'PRESENT')).toEqual({ status: 'PRESENT', expectedVersion: null, note: null });
+    const marked = row({ attendance: [{ occurrenceId: occurrence, status: 'ABSENT', version: 4, recordedAt: '2026-11-03T18:00:00Z' }] });
+    expect(attendanceBody(attendanceCell(marked, occurrence), 'EXCUSED')).toEqual({ status: 'EXCUSED', expectedVersion: 4, note: null });
+    expect(attendanceBody(attendanceCell(marked, occurrence), 'ABSENT')).toBeNull();
+  });
+  it('saisie seulement avec le droit, séance commencée et inscription active', () => {
+    const now = Date.parse('2026-11-03T18:00:00Z');
+    expect(canMarkAttendance(all, row(), { startsAt: '2026-11-03T17:00:00Z' }, now)).toBe(true);
+    expect(canMarkAttendance(all, row(), { startsAt: '2026-11-05T17:00:00Z' }, now)).toBe(false);
+    expect(canMarkAttendance({ rights: { ...all.rights, canTakeAttendance: false } }, row(), { startsAt: '2026-11-03T17:00:00Z' }, now)).toBe(false);
+    expect(canMarkAttendance(all, row({ status: 'CANCELLED' }), { startsAt: '2026-11-03T17:00:00Z' }, now)).toBe(false);
+  });
+  it('compte les séances obligatoires', () => {
+    expect(requirementLabel({ required: 3, present: 2, missing: 1 })).toBe('2 sur 3 séances obligatoires');
+    expect(requirementLabel({ required: 1, present: 0, missing: 1 })).toBe('0 sur 1 séance obligatoire');
+  });
+  it('valide seulement sans séance manquante, avec le droit, sans validation active', () => {
+    expect(canValidateRow(all, row())).toBe(false);
+    const complete = row({ requirements: { required: 3, present: 3, missing: 0 } });
+    expect(canValidateRow(all, complete)).toBe(true);
+    expect(canValidateRow({ rights: { ...all.rights, canValidate: false } }, complete)).toBe(false);
+    expect(canValidateRow(all, row({ ...complete, completion: { id: occurrence, validatedAt: '2026-11-05T19:00:00Z', seriesId: null, revokedAt: null } }))).toBe(false);
+    expect(canValidateRow(all, row({ requirements: { required: 0, present: 0, missing: 0 } }))).toBe(false);
+  });
+  it('ignore les règlements annulés et borne la note', () => {
+    const payments = [
+      { id: occurrence, amountCents: 12000, recordedAt: '2026-11-03T18:00:00Z', note: null, voidedAt: null, voidReason: null },
+      { id: enrollment, amountCents: 5000, recordedAt: '2026-11-03T18:05:00Z', note: null, voidedAt: '2026-11-03T18:10:00Z', voidReason: 'Erreur' },
+    ];
+    expect(activePayments(row({ payments })).map(item => item.amountCents)).toEqual([12000]);
+    expect(paymentProblem(null, '')).toContain('CHF');
+    expect(paymentProblem(12000, 'x'.repeat(501))).toBe('500 caractères au plus.');
+    expect(paymentProblem(12000, '')).toBeNull();
+  });
+  it('lit la feuille et traduit les refus', () => {
+    expect(courseSheetSchema.safeParse({ series: {}, rights: all.rights, rows: [] }).success).toBe(false);
+    expect(courseErrorMessage('COURSE_REQUIREMENTS_MISSING')).toBe('Des séances obligatoires manquent.');
+    expect(courseErrorMessage('COURSE_OCCURRENCE_NOT_STARTED')).toBe('Cette séance n’a pas encore commencé.');
   });
 });

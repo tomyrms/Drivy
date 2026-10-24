@@ -57,6 +57,12 @@
 .course-add-menu .button { justify-content: flex-start; }
 .course-form, .course-fieldset { display: grid; gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
 .course-type-row, .course-capacity { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.course-sheet-scroll { overflow-x: auto; }
+.course-sheet { border-collapse: collapse; min-width: 100%; }
+.course-sheet th, .course-sheet td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
+.course-sheet thead th { font-weight: 600; white-space: nowrap; }
+.course-sheet .course-sheet-group { border-left: 2px solid var(--line, rgba(127,127,127,.35)); }
+.course-sheet-choices { display: flex; gap: 4px; flex-wrap: nowrap; }
 .course-numbers { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
 .course-sessions { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .course-session { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; padding-block-end: 12px; border-block-end: 1px solid var(--line, rgb(0 0 0 / .1)); }

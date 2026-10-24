@@ -228,6 +228,12 @@ export function courseErrorMessage(code: string): string | null {
     COURSE_REASON_REQUIRED: 'Indiquez le motif.',
     COURSE_OCCURRENCE_COUNT: 'Indiquez chaque séance du cours, une seule fois.',
     NOT_FOUND: 'Introuvable. Rechargez.',
+    COURSE_OCCURRENCE_NOT_STARTED: 'Cette séance n’a pas encore commencé.',
+    COURSE_PAYMENT_VOIDED: 'Ce règlement est déjà annulé.',
+    COURSE_NO_REQUIRED_OCCURRENCE: 'Ce cours n’a aucune séance obligatoire.',
+    COURSE_REQUIREMENTS_MISSING: 'Des séances obligatoires manquent.',
+    COURSE_COMPLETION_REVOKED: 'Cette validation est déjà retirée.',
+    INVALID_REQUEST: 'Saisie refusée.',
   };
   return messages[code] ?? null;
 }
@@ -274,6 +280,62 @@ export function rescheduleBody(series: Pick<CourseSeries, 'occurrences'>, sessio
     const interval = sessionInterval(session, timeZone)!;
     return { position: ordered[index]!.position, startsAt: new Date(interval.start).toISOString(), endsAt: new Date(interval.end).toISOString(), instructorMembershipId: session.instructor };
   }) };
+}
+
+/* Feuille du cours (#42, #81, #82) : présences, règlements sur place et validation, trois faits indépendants. */
+export const attendanceStatuses = ['PRESENT', 'ABSENT', 'EXCUSED'] as const;
+export type AttendanceStatus = typeof attendanceStatuses[number];
+export const attendanceLabels: Record<AttendanceStatus, string> = { PRESENT: 'Présent', ABSENT: 'Absent', EXCUSED: 'Excusé' };
+const attendanceCellSchema = z.object({
+  occurrenceId: id, status: z.enum(attendanceStatuses).nullable(), version: version.nullable(), recordedAt: timestamp.nullable(),
+});
+const coursePaymentSchema = z.object({
+  id, amountCents: z.number().int().min(0), recordedAt: timestamp, note: z.string().nullable(), voidedAt: timestamp.nullable(), voidReason: z.string().nullable(),
+});
+const courseCompletionSchema = z.object({ id, validatedAt: timestamp, seriesId: id.nullable(), revokedAt: timestamp.nullable() });
+export const courseSheetRowSchema = z.object({
+  enrollmentId: id, learnerId: id, learnerDisplayName: z.string(), status: z.enum(['ACTIVE', 'CANCELLED']), cancelledAt: timestamp.nullable(),
+  attendance: z.array(attendanceCellSchema).max(64),
+  requirements: z.object({ required: z.number().int().min(0), present: z.number().int().min(0), missing: z.number().int().min(0) }),
+  payments: z.array(coursePaymentSchema).max(200), completion: courseCompletionSchema.nullable(),
+});
+export const courseSheetSchema = z.object({
+  series: courseSeriesSchema,
+  rights: z.object({ canTakeAttendance: z.boolean(), canRecordPayment: z.boolean(), canValidate: z.boolean() }),
+  rows: z.array(courseSheetRowSchema).max(1000),
+});
+export type CourseSheet = z.infer<typeof courseSheetSchema>;
+export type CourseSheetRow = z.infer<typeof courseSheetRowSchema>;
+export type AttendanceCell = z.infer<typeof attendanceCellSchema>;
+export type CoursePayment = z.infer<typeof coursePaymentSchema>;
+
+/** Une présence ne se saisit qu'une fois la séance commencée, pour une inscription active. */
+export const occurrenceStarted = (occurrence: Pick<CourseSeries['occurrences'][number], 'startsAt'>, now = Date.now()): boolean => Date.parse(occurrence.startsAt) <= now;
+export function canMarkAttendance(sheet: Pick<CourseSheet, 'rights'>, row: Pick<CourseSheetRow, 'status'>, occurrence: Pick<CourseSeries['occurrences'][number], 'startsAt'>, now = Date.now()): boolean {
+  return sheet.rights.canTakeAttendance && row.status === 'ACTIVE' && occurrenceStarted(occurrence, now);
+}
+/** Cellule absente de la réponse : vide, jamais déduite. */
+export function attendanceCell(row: Pick<CourseSheetRow, 'attendance'>, occurrenceId: string): AttendanceCell {
+  return row.attendance.find(cell => cell.occurrenceId === occurrenceId) ?? { occurrenceId, status: null, version: null, recordedAt: null };
+}
+/** Corps de PUT attendance : première saisie (expectedVersion null) ou correction de la version lue. Null si rien ne change. */
+export function attendanceBody(cell: AttendanceCell, status: AttendanceStatus): { status: AttendanceStatus; expectedVersion: number | null; note: null } | null {
+  if (cell.status === status) return null;
+  return { status, expectedVersion: cell.status === null ? null : cell.version, note: null };
+}
+export const requirementLabel = (requirements: CourseSheetRow['requirements']): string =>
+  requirements.required === 0 ? 'Aucune séance obligatoire'
+    : `${requirements.present} sur ${requirements.required} séance${requirements.required > 1 ? 's' : ''} obligatoire${requirements.required > 1 ? 's' : ''}`;
+export const activeCompletion = (row: Pick<CourseSheetRow, 'completion'>) => row.completion && !row.completion.revokedAt ? row.completion : null;
+export function canValidateRow(sheet: Pick<CourseSheet, 'rights'>, row: Pick<CourseSheetRow, 'status' | 'requirements' | 'completion'>): boolean {
+  return sheet.rights.canValidate && row.status === 'ACTIVE' && row.requirements.required > 0 && row.requirements.missing === 0 && !activeCompletion(row);
+}
+export const activePayments = (row: Pick<CourseSheetRow, 'payments'>): CoursePayment[] => row.payments.filter(payment => !payment.voidedAt);
+export const PAYMENT_NOTE_LIMIT = 500;
+export function paymentProblem(amount: number | null, note: string): string | null {
+  if (amount === null) return 'Indiquez un montant en CHF, par exemple 120 ou 120.50.';
+  if (length(note) > PAYMENT_NOTE_LIMIT) return `${PAYMENT_NOTE_LIMIT} caractères au plus.`;
+  return null;
 }
 
 export interface PolicyForm { selfCancelHours: string; offerResponseMinutes: string }

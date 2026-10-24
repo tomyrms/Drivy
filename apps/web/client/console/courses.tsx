@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
-import { createCommand, instantToSchoolTime } from '../command-core';
+import { createCommand, formatCents, instantToSchoolTime, parseCents, type SchoolCommand } from '../command-core';
 import { learnerSchema, readAll, readSchool } from '../school-api';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
@@ -11,6 +11,9 @@ import {
   cancellationLabel, capacityProblem, courseCatalogueSchema, courseErrorMessage, courseSeriesSchema, courseTypeSchema, emptyForm, emptySession,
   formFromSeries, formatHours, hasProblems, languages, preview, seriesBody, typeProblem, validate,
   type CourseCatalogue, type CourseSeries, type SeriesForm, type SessionForm,
+  PAYMENT_NOTE_LIMIT, activeCompletion, activePayments, attendanceBody, attendanceCell, attendanceLabels, attendanceStatuses, canMarkAttendance,
+  canValidateRow, courseSheetSchema, occurrenceStarted, paymentProblem, requirementLabel,
+  type AttendanceStatus, type CoursePayment, type CourseSheet as CourseSheetData, type CourseSheetRow,
 } from './course-model';
 
 const envelope = <T extends z.ZodTypeAny>(data: T) => z.object({ data });
@@ -296,6 +299,7 @@ function CourseSheet({ series, onClose, onSaved, reload }: { series: CourseSerie
       <TextField label="Capacité" value={capacity} onChange={value => { setError(null); setCapacity(value); }} inputMode="numeric" required error={problem} disabled={busy} />
       <button type="submit" className="button secondary" disabled={busy || problem !== null || capacity === String(series.capacity)} aria-busy={runner.busy}>Changer la capacité</button>
     </form>}
+    {series.status === 'PUBLISHED' && <CourseFactsSheet series={series} />}
     {series.canManage && series.status === 'PUBLISHED' && <>
       <CourseRosterPanel series={series} />
       <CourseDangerZone series={series} onSaved={onSaved} reload={reload} />
@@ -382,6 +386,155 @@ function CourseRosterPanel({ series }: { series: CourseSeries }) {
 }
 
 type SheetDialog = 'cancel' | 'reschedule' | null;
+
+type FactDialog =
+  | { kind: 'pay'; row: CourseSheetRow }
+  | { kind: 'void'; row: CourseSheetRow; payment: CoursePayment }
+  | { kind: 'revoke'; row: CourseSheetRow; completionId: string }
+  | null;
+
+/**
+ * Feuille du cours : élèves × séances (présence), règlement sur place, validation. Trois colonnes indépendantes,
+ * chacune affichée seulement si le serveur accorde le droit. Chaque réponse renvoie la feuille à jour.
+ */
+function CourseFactsSheet({ series }: { series: CourseSeries }) {
+  const { schoolId, school } = useConsole();
+  const timeZone = school.timeZone;
+  const runner = useCommandRunner();
+  const loaded = useLoad(() => readSchool(schoolId, `course-series/${series.id}/sheet`, courseSheetSchema), [schoolId, series.id, series.version]);
+  const [fresh, setFresh] = useState<CourseSheetData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<FactDialog>(null);
+  const [text, setText] = useState('');
+  const [amount, setAmount] = useState('');
+  const [touched, setTouched] = useState(false);
+  // Même intention renvoyée après un résultat incertain : même operationId.
+  const attempts = useRef(new Map<string, string>());
+  const busy = runner.busy || Boolean(runner.pending);
+  useEffect(() => { setFresh(null); }, [loaded.data]);
+
+  async function send(kind: SchoolCommand['kind'], path: string, body: Record<string, unknown>, resourceId: string | undefined, resourceVersion: number, success: string): Promise<boolean> {
+    if (busy) return false;
+    setError(null);
+    const intent = `${kind} ${path} ${JSON.stringify(body)}`;
+    const previous = attempts.current.get(intent);
+    const command = createCommand({ schoolId, kind, path, body, resourceVersion, ...(resourceId ? { resourceId } : {}), ...(previous ? { operationId: previous } : {}) });
+    attempts.current.set(intent, command.operationId);
+    const result = await runner.run(command, success);
+    if (result.status === 'pending') return false;
+    attempts.current.delete(intent);
+    if (result.status === 'rejected') {
+      runner.clearOutcome(); setError(courseErrorMessage(result.code) ?? result.message);
+      if (['VERSION_CONFLICT', 'NOT_FOUND', 'COURSE_PAYMENT_VOIDED', 'COURSE_COMPLETION_REVOKED', 'COURSE_ALREADY_COMPLETED'].includes(result.code)) loaded.reload();
+      return false;
+    }
+    runner.clearOutcome();
+    const parsed = envelope(courseSheetSchema).safeParse(result.body);
+    if (parsed.success) setFresh(parsed.data.data); else loaded.reload();
+    return true;
+  }
+
+  const mark = (row: CourseSheetRow, occurrenceId: string, status: AttendanceStatus) => {
+    const cell = attendanceCell(row, occurrenceId);
+    const body = attendanceBody(cell, status);
+    if (!body) return;
+    void send('recordCourseAttendance', `course-enrollments/${row.enrollmentId}/attendance/${occurrenceId}`, body, row.enrollmentId, cell.version ?? 0, 'Présence enregistrée.');
+  };
+  const validateRow = (row: CourseSheetRow) => void send('validateCourse', `course-enrollments/${row.enrollmentId}/validate`, { note: null }, undefined, 0, 'Cours validé.');
+
+  const open = (next: FactDialog) => { setError(null); setText(''); setAmount(''); setTouched(false); setDialog(next); };
+  const cents = parseCents(amount);
+  const dialogProblem = !dialog ? null : dialog.kind === 'pay' ? paymentProblem(cents, text) : reasonProblem(text);
+
+  async function confirm() {
+    setTouched(true);
+    if (!dialog || dialogProblem || busy) return;
+    const done = dialog.kind === 'pay'
+      ? await send('recordCoursePayment', `course-enrollments/${dialog.row.enrollmentId}/payments`, { amountCents: cents, note: text.trim() || null }, undefined, 0, 'Règlement enregistré.')
+      : dialog.kind === 'void'
+        ? await send('voidCoursePayment', `course-payments/${dialog.payment.id}/void`, { reason: text.trim() }, dialog.payment.id, 1, 'Règlement annulé.')
+        : await send('revokeCourseCompletion', `course-completions/${dialog.completionId}/revoke`, { reason: text.trim() }, dialog.completionId, 1, 'Validation retirée.');
+    if (done) setDialog(null);
+  }
+
+  const shortDay = (instant: string) => new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'short', timeZone }).format(new Date(instant));
+  const longDate = (instant: string) => new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', year: 'numeric', timeZone }).format(new Date(instant));
+
+  return <section className="section-stack" aria-label="Feuille du cours">
+    <h3 className="section-title">Feuille du cours</h3>
+    {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
+    <OutcomeNotice outcome={runner.outcome} />
+    <LoadState loaded={loaded} label="Lecture de la feuille…">{(read: CourseSheetData) => {
+      const sheet = fresh ?? read;
+      const occurrences = [...sheet.series.occurrences].sort((a, b) => a.position - b.position);
+      const rows = sheet.rows;
+      if (rows.length === 0) return <p className="row-meta">Aucun inscrit</p>;
+      const now = Date.now();
+      return <div className="course-sheet-scroll">
+        <table className="course-sheet">
+          <thead><tr>
+            <th scope="col">Élève</th>
+            {occurrences.map(item => <th scope="col" key={item.id}>
+              <time dateTime={item.startsAt}>{shortDay(item.startsAt)}</time>
+              {!item.attendanceRequired && <span className="row-meta"> · Facultative</span>}
+            </th>)}
+            <th scope="col">Séances</th>
+            {sheet.rights.canRecordPayment && <th scope="col" className="course-sheet-group">Règlement</th>}
+            {sheet.rights.canValidate && <th scope="col" className="course-sheet-group">Validation</th>}
+          </tr></thead>
+          <tbody>{rows.map(row => {
+            const name = row.learnerDisplayName || 'Élève';
+            const completion = activeCompletion(row);
+            return <tr key={row.enrollmentId} className={row.status === 'CANCELLED' ? 'muted-row' : undefined}>
+              <th scope="row">{name}{row.status === 'CANCELLED' && <>{' '}<StatusBadge tone="neutral" symbol="ban">Annulée</StatusBadge></>}</th>
+              {occurrences.map(item => {
+                const cell = attendanceCell(row, item.id);
+                const editable = canMarkAttendance(sheet, row, item, now);
+                return <td key={item.id}>
+                  {editable
+                    ? <div role="group" aria-label={`${name}, ${shortDay(item.startsAt)}`} className="course-sheet-choices">
+                      {attendanceStatuses.map(status => <button key={status} type="button" aria-pressed={cell.status === status}
+                        className={`button ${cell.status === status ? 'secondary' : 'quiet'}`} disabled={busy}
+                        onClick={() => mark(row, item.id, status)}>{attendanceLabels[status]}</button>)}
+                    </div>
+                    : cell.status ? <span>{attendanceLabels[cell.status]}</span>
+                      : <span className="row-meta" aria-label={occurrenceStarted(item, now) ? 'Non saisi' : 'À venir'}>{'·'}</span>}
+                </td>;
+              })}
+              <td>{requirementLabel(row.requirements)}</td>
+              {sheet.rights.canRecordPayment && <td className="course-sheet-group">
+                <ul className="row-list">{row.payments.map(payment => <li key={payment.id} className={payment.voidedAt ? 'muted-row' : undefined}>
+                  <span>Payé sur place {formatCents(payment.amountCents)}</span>
+                  {payment.voidedAt
+                    ? <>{' '}<StatusBadge tone="neutral" symbol="ban">Annulé</StatusBadge></>
+                    : <>{' '}<button type="button" className="button quiet" disabled={busy} onClick={() => open({ kind: 'void', row, payment })}>Annuler</button></>}
+                </li>)}</ul>
+                {row.status === 'ACTIVE' && <button type="button" className="button quiet" disabled={busy} onClick={() => open({ kind: 'pay', row })}>
+                  {activePayments(row).length ? 'Ajouter un règlement' : 'Enregistrer un règlement'}</button>}
+              </td>}
+              {sheet.rights.canValidate && <td className="course-sheet-group">
+                {completion
+                  ? <><span>Validé le <time dateTime={completion.validatedAt}>{longDate(completion.validatedAt)}</time></span>{' '}
+                    {completion.seriesId === sheet.series.id && <button type="button" className="button quiet" disabled={busy} onClick={() => open({ kind: 'revoke', row, completionId: completion.id })}>Retirer</button>}</>
+                  : row.status === 'ACTIVE' && <button type="button" className="button secondary" disabled={busy || !canValidateRow(sheet, row)} onClick={() => validateRow(row)}>Valider</button>}
+              </td>}
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>;
+    }}</LoadState>
+    <ConfirmDialog open={dialog !== null} busy={busy}
+      title={dialog?.kind === 'pay' ? 'Règlement sur place' : dialog?.kind === 'void' ? 'Annuler le règlement' : 'Retirer la validation'}
+      confirmLabel={dialog?.kind === 'pay' ? 'Enregistrer' : dialog?.kind === 'void' ? 'Annuler le règlement' : 'Retirer'}
+      onCancel={() => setDialog(null)} onConfirm={() => void confirm()}>
+      <p>{dialog?.row.learnerDisplayName || 'Élève'}{dialog?.kind === 'void' ? ` · ${formatCents(dialog.payment.amountCents)}` : ''}</p>
+      {dialog?.kind === 'pay' ? <>
+        <TextField label="Montant (CHF)" value={amount} onChange={setAmount} inputMode="decimal" required error={touched && cents === null ? paymentProblem(cents, '') : null} />
+        <TextArea label="Note" value={text} onChange={setText} maxLength={PAYMENT_NOTE_LIMIT} rows={2} error={touched && cents !== null ? dialogProblem : null} />
+      </> : <TextArea label="Motif" value={text} onChange={setText} maxLength={REASON_LIMIT} rows={3} required error={touched ? dialogProblem : null} />}
+    </ConfirmDialog>
+  </section>;
+}
 
 /** Annuler le cours ou déplacer ses séances (même nombre). */
 function CourseDangerZone({ series, onSaved, reload }: { series: CourseSeries; onSaved: (series: CourseSeries | null) => void; reload: () => void }) {

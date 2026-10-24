@@ -115,6 +115,13 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['course-enrollments', ':id', 'staff-cancel'], ifMatch: true, bodyLimit: 2_048 },
   { method: 'POST', segments: ['course-series', ':id', 'cancel'], ifMatch: true, bodyLimit: 2_048 },
   { method: 'POST', segments: ['course-series', ':id', 'reschedule'], ifMatch: true, bodyLimit: 32_000 },
+  // Feuille du cours : version de présence dans le corps (expectedVersion), pas d'If-Match.
+  { method: 'GET', segments: ['course-series', ':id', 'sheet'] },
+  { method: 'PUT', segments: ['course-enrollments', ':id', 'attendance', ':id'], bodyLimit: 2_048 },
+  { method: 'POST', segments: ['course-enrollments', ':id', 'payments'], bodyLimit: 2_048 },
+  { method: 'POST', segments: ['course-payments', ':id', 'void'], bodyLimit: 2_048 },
+  { method: 'POST', segments: ['course-enrollments', ':id', 'validate'], bodyLimit: 2_048 },
+  { method: 'POST', segments: ['course-completions', ':id', 'revoke'], bodyLimit: 2_048 },
   // Lectures seules : agenda de l'école, progression et bilans publiés.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
   { method: 'GET', segments: ['captures'], query: list },

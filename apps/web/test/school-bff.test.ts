@@ -112,6 +112,12 @@ describe('Liste blanche des routes de gestion', () => {
       ['POST', `/schools/${school}/course-enrollments/${series}/staff-cancel`, true, 2_048],
       ['POST', `/schools/${school}/course-series/${series}/cancel`, true, 2_048],
       ['POST', `/schools/${school}/course-series/${series}/reschedule`, true, 32_000],
+      // Feuille du cours : version de présence dans le corps, jamais d'If-Match.
+      ['PUT', `/schools/${school}/course-enrollments/${series}/attendance/${training}`, false, 2_048],
+      ['POST', `/schools/${school}/course-enrollments/${series}/payments`, false, 2_048],
+      ['POST', `/schools/${school}/course-payments/${series}/void`, false, 2_048],
+      ['POST', `/schools/${school}/course-enrollments/${series}/validate`, false, 2_048],
+      ['POST', `/schools/${school}/course-completions/${series}/revoke`, false, 2_048],
     ] as const) {
       const match = matchSchoolRoute(method, path, '');
       expect(match?.route.ifMatch === true, `${method} ${path}`).toBe(ifMatch);
@@ -124,6 +130,12 @@ describe('Liste blanche des routes de gestion', () => {
     expect(matchSchoolRoute('PUT', `/schools/${school}/course-series`, '')).toBeUndefined();
     expect(matchSchoolRoute('GET', `/schools/${school}/course-series/${series}/enrollments`, '')?.path).toBe(`/v1/schools/${school}/course-series/${series}/enrollments`);
     expect(matchSchoolRoute('GET', `/schools/${school}/course-series/${series}/enrollments`, '?limit=10')).toBeUndefined();
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-series/${series}/sheet`, '')?.path).toBe(`/v1/schools/${school}/course-series/${series}/sheet`);
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-series/${series}/sheet`, '?all=1')).toBeUndefined();
+    expect(matchSchoolRoute('PUT', `/schools/${school}/course-enrollments/${series}/attendance/not-a-uuid`, '')).toBeUndefined();
+    expect(matchSchoolRoute('POST', `/schools/${school}/course-enrollments/${series}/attendance/${training}`, '')).toBeUndefined();
+    expect(matchSchoolRoute('GET', `/schools/${school}/course-progress/me`, '')).toBeUndefined();
+    expect(matchSchoolRoute('POST', `/schools/${school}/course-payments/${series}`, '')).toBeUndefined();
     // Routes élève (inscription autonome, file, propositions) : réservées à l'app, absentes du bureau.
     for (const path of [`course-series/${series}/enroll`, `course-series/${series}/waitlist`, `course-offers/${series}/accept`, `course-enrollments/${series}/cancel`]) {
       expect(matchSchoolRoute('POST', `/schools/${school}/${path}`, ''), path).toBeUndefined();

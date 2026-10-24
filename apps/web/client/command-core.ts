@@ -19,7 +19,8 @@ export type CommandKind =
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
   | 'createFormation' | 'saveFormationProgramme' | 'saveTariff'
   | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity'
-  | 'staffEnrollCourse' | 'staffCancelCourseEnrollment' | 'cancelCourseSeries' | 'rescheduleCourseSeries' | 'saveCoursePolicy';
+  | 'staffEnrollCourse' | 'staffCancelCourseEnrollment' | 'cancelCourseSeries' | 'rescheduleCourseSeries' | 'saveCoursePolicy'
+  | 'recordCourseAttendance' | 'recordCoursePayment' | 'voidCoursePayment' | 'validateCourse' | 'revokeCourseCompletion';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -81,6 +82,12 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   cancelCourseSeries: { operationType: 'CANCEL_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Annulation d’un cours' },
   rescheduleCourseSeries: { operationType: 'RESCHEDULE_COURSE_SERIES', resourceType: 'CourseSeries', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Changement des dates d’un cours' },
   saveCoursePolicy: { operationType: 'SAVE_COURSE_POLICY', resourceType: 'CoursePolicy', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Réglages des cours' },
+  // Feuille du cours (#42, #81, #82) : chaque réponse renvoie la feuille à jour.
+  recordCourseAttendance: { operationType: 'RECORD_COURSE_ATTENDANCE', resourceType: 'CourseAttendance', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Saisie d’une présence' },
+  recordCoursePayment: { operationType: 'RECORD_COURSE_PAYMENT', resourceType: 'CoursePayment', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un règlement' },
+  voidCoursePayment: { operationType: 'VOID_COURSE_PAYMENT', resourceType: 'CoursePayment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Annulation d’un règlement' },
+  validateCourse: { operationType: 'VALIDATE_COURSE', resourceType: 'CourseCompletion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Validation d’un cours' },
+  revokeCourseCompletion: { operationType: 'REVOKE_COURSE_COMPLETION', resourceType: 'CourseCompletion', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une validation' },
 };
 
 export interface SchoolCommand {

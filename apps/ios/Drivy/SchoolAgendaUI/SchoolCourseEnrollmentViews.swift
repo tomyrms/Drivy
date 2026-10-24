@@ -191,6 +191,35 @@ struct SchoolLearnerCoursesView: View {
                         }
                     }
                 }
+                if let progress = model.progress, !progress.completions.isEmpty || !model.tracked.isEmpty {
+                    Section {
+                        ForEach(model.tracked) { enrollment in
+                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                Text(model.title(for: enrollment.seriesId) ?? "Cours collectif").font(.body.weight(.semibold))
+                                Text(SchoolCourseSheetFormat.progress(enrollment.requirements))
+                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("learner-course-progress")
+                        }
+                        ForEach(progress.completions) { completion in
+                            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+                                Image(systemName: "checkmark.seal.fill").foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                    Text(completion.typeTitle).font(.body.weight(.semibold))
+                                    if let date = SchoolLesson.date(completion.validatedAt) {
+                                        Text("Validé le \(SchoolCourseEnrollmentFormat.day(date, zone: model.timeZone))")
+                                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                    }
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("learner-course-completion")
+                        }
+                    } header: { Text("Mes cours") }
+                }
                 if !model.hasLoaded && model.errorMessage == nil {
                     DrivyLoadingState(title: "Chargement…")
                 } else if model.hasLoaded && model.courses.isEmpty {

@@ -214,6 +214,116 @@ struct SchoolCourseTypeBody: Encodable, Sendable, Equatable { let operationId: U
 struct SchoolCoursePublishBody: Encodable, Sendable, Equatable { let operationId: UUID }
 struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationId: UUID; let capacity: Int }
 
+// Appel (#42), règlements sur place (#81), validation (#82) : contrat de apps/api/src/course-facts.ts.
+
+enum SchoolCourseAttendanceStatus: String, Codable, Sendable, CaseIterable { case present = "PRESENT", absent = "ABSENT", excused = "EXCUSED" }
+
+struct SchoolCourseRequirements: Codable, Sendable, Equatable {
+    let required: Int, present: Int, missing: Int
+}
+
+struct SchoolCourseSheetRights: Codable, Sendable, Equatable {
+    let canTakeAttendance: Bool, canRecordPayment: Bool, canValidate: Bool
+}
+
+/// Présence d’un élève à une séance : `status == nil` tant que rien n’est saisi (jamais déduit).
+struct SchoolCourseAttendanceMark: Codable, Sendable, Equatable {
+    let occurrenceId: UUID
+    let status: SchoolCourseAttendanceStatus?
+    let version: Int?
+    let recordedAt: String?
+}
+
+struct SchoolCoursePayment: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID
+    let amountCents: Int64
+    let recordedAt: String
+    let note: String?
+    let voidedAt: String?
+    let voidReason: String?
+}
+
+struct SchoolCourseCompletion: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID
+    let validatedAt: String
+    let seriesId: UUID?
+    let revokedAt: String?
+}
+
+struct SchoolCourseSheetRow: Codable, Sendable, Equatable, Identifiable {
+    let enrollmentId: UUID, learnerId: UUID
+    let learnerDisplayName: String
+    let status: SchoolCourseEnrollment.Status
+    let cancelledAt: String?
+    let attendance: [SchoolCourseAttendanceMark]
+    let requirements: SchoolCourseRequirements
+    let payments: [SchoolCoursePayment]
+    let completion: SchoolCourseCompletion?
+    var id: UUID { enrollmentId }
+    func mark(_ occurrenceID: UUID) -> SchoolCourseAttendanceMark? { attendance.first { $0.occurrenceId == occurrenceID } }
+}
+
+/// Feuille du cours pour le personnel, droits de l’appelant relus par le serveur.
+struct SchoolCourseSheet: Codable, Sendable, Equatable {
+    let series: SchoolCourseSeries
+    let rights: SchoolCourseSheetRights
+    let rows: [SchoolCourseSheetRow]
+    var active: [SchoolCourseSheetRow] { rows.filter { $0.status == .active } }
+}
+
+/// Progression de l’élève appelant : ni règlement ni autre participant.
+struct SchoolCourseProgress: Codable, Sendable, Equatable {
+    struct Completion: Codable, Sendable, Equatable, Identifiable {
+        let id: UUID, typeId: UUID
+        let typeTitle: String
+        let validatedAt: String
+        let seriesId: UUID?
+    }
+    struct Mark: Codable, Sendable, Equatable { let occurrenceId: UUID; let status: SchoolCourseAttendanceStatus }
+    struct Enrollment: Codable, Sendable, Equatable, Identifiable {
+        let enrollmentId: UUID, seriesId: UUID
+        let requirements: SchoolCourseRequirements
+        let attendance: [Mark]
+        var id: UUID { enrollmentId }
+    }
+    let completions: [Completion]
+    let enrollments: [Enrollment]
+}
+
+/// `expectedVersion` et `note` partent en `null` explicite.
+struct SchoolCourseAttendanceBody: Encodable, Sendable, Equatable {
+    let operationId: UUID
+    let status: SchoolCourseAttendanceStatus
+    let expectedVersion: Int?
+    let note: String?
+    private enum CodingKeys: String, CodingKey { case operationId, status, expectedVersion, note }
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(operationId, forKey: .operationId); try values.encode(status, forKey: .status)
+        try values.encode(expectedVersion, forKey: .expectedVersion); try values.encode(note, forKey: .note)
+    }
+}
+struct SchoolCoursePaymentBody: Encodable, Sendable, Equatable {
+    let operationId: UUID
+    let amountCents: Int64
+    let note: String?
+    private enum CodingKeys: String, CodingKey { case operationId, amountCents, note }
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(operationId, forKey: .operationId); try values.encode(amountCents, forKey: .amountCents)
+        try values.encode(note, forKey: .note)
+    }
+}
+struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
+    let operationId: UUID
+    let note: String?
+    private enum CodingKeys: String, CodingKey { case operationId, note }
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(operationId, forKey: .operationId); try values.encode(note, forKey: .note)
+    }
+}
+
 @MainActor final class SchoolCourseClient {
     let baseURL: URL
     private let tokenSource: any AccessTokenSource
@@ -315,6 +425,62 @@ struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationI
         return result
     }
 
+    // MARK: Appel, règlements, validation
+
+    /// Feuille nominative : personnel habilité seulement ; les droits viennent du serveur.
+    func sheet(schoolID: UUID, seriesID: UUID) async throws -> SchoolCourseSheet {
+        let result: SchoolCourseSheet = try await request(schoolID, ["course-series", seriesID.uuidString, "sheet"])
+        return try Self.checked(result, schoolID: schoolID, seriesID: seriesID)
+    }
+    func recordAttendance(schoolID: UUID, seriesID: UUID, enrollmentID: UUID, occurrenceID: UUID,
+                          body: SchoolCourseAttendanceBody) async throws -> SchoolCourseSheet {
+        let result: SchoolCourseSheet = try await command(schoolID, ["course-enrollments", enrollmentID.uuidString, "attendance", occurrenceID.uuidString],
+            method: "PUT", body: body, operation: body.operationId, version: nil, expected: 200)
+        return try Self.checked(result, schoolID: schoolID, seriesID: seriesID)
+    }
+    func recordPayment(schoolID: UUID, seriesID: UUID, enrollmentID: UUID, body: SchoolCoursePaymentBody) async throws -> SchoolCourseSheet {
+        let result: SchoolCourseSheet = try await command(schoolID, ["course-enrollments", enrollmentID.uuidString, "payments"],
+            method: "POST", body: body, operation: body.operationId, version: nil, expected: 201)
+        return try Self.checked(result, schoolID: schoolID, seriesID: seriesID)
+    }
+    func voidPayment(schoolID: UUID, seriesID: UUID, paymentID: UUID, reason: String, operationID: UUID) async throws -> SchoolCourseSheet {
+        let result: SchoolCourseSheet = try await command(schoolID, ["course-payments", paymentID.uuidString, "void"],
+            method: "POST", body: SchoolCourseStaffCancelBody(operationId: operationID, reason: reason), operation: operationID, version: nil, expected: 200)
+        return try Self.checked(result, schoolID: schoolID, seriesID: seriesID)
+    }
+    func validate(schoolID: UUID, seriesID: UUID, enrollmentID: UUID, body: SchoolCourseValidateBody) async throws -> SchoolCourseSheet {
+        let result: SchoolCourseSheet = try await command(schoolID, ["course-enrollments", enrollmentID.uuidString, "validate"],
+            method: "POST", body: body, operation: body.operationId, version: nil, expected: 201)
+        return try Self.checked(result, schoolID: schoolID, seriesID: seriesID)
+    }
+    func revokeCompletion(schoolID: UUID, seriesID: UUID, completionID: UUID, reason: String, operationID: UUID) async throws -> SchoolCourseSheet {
+        let result: SchoolCourseSheet = try await command(schoolID, ["course-completions", completionID.uuidString, "revoke"],
+            method: "POST", body: SchoolCourseStaffCancelBody(operationId: operationID, reason: reason), operation: operationID, version: nil, expected: 200)
+        return try Self.checked(result, schoolID: schoolID, seriesID: seriesID)
+    }
+    /// Progression de l’élève appelant.
+    func progress(schoolID: UUID) async throws -> SchoolCourseProgress {
+        let result: SchoolCourseProgress = try await request(schoolID, ["course-progress", "me"])
+        guard result.enrollments.allSatisfy({ Self.valid($0.requirements) }),
+              result.completions.allSatisfy({ SchoolLesson.date($0.validatedAt) != nil }) else { throw SchoolPlanningFailure.invalidResponse }
+        return result
+    }
+
+    static func valid(_ requirements: SchoolCourseRequirements) -> Bool {
+        requirements.required >= 0 && requirements.present >= 0 && requirements.missing >= 0
+            && requirements.present + requirements.missing == requirements.required
+    }
+    static func checked(_ sheet: SchoolCourseSheet, schoolID: UUID, seriesID: UUID) throws -> SchoolCourseSheet {
+        let occurrences = Set(sheet.series.occurrences.map(\.id))
+        guard sheet.series.id == seriesID, valid(sheet.series, schoolID: schoolID),
+              Set(sheet.rows.map(\.enrollmentId)).count == sheet.rows.count,
+              sheet.rows.allSatisfy({ row in
+                  valid(row.requirements) && row.payments.allSatisfy { $0.amountCents >= 0 }
+                      && row.attendance.allSatisfy { occurrences.contains($0.occurrenceId) && ($0.status == nil) == ($0.version == nil) }
+              }) else { throw SchoolPlanningFailure.invalidResponse }
+        return sheet
+    }
+
     static func valid(_ series: SchoolCourseSeries, schoolID: UUID) -> Bool {
         guard series.schoolId == schoolID, series.version > 0, (1...200).contains(series.capacity),
               series.seatsTaken >= 0, series.remainingSeats >= 0, !series.occurrences.isEmpty else { return false }
@@ -352,7 +518,12 @@ struct SchoolCourseCapacityBody: Encodable, Sendable, Equatable { let operationI
             "COURSE_SELF_CANCEL_CLOSED": "Le délai d’annulation est passé.",
             "COURSE_REASON_REQUIRED": "Indique le motif.",
             "COURSE_NOT_PUBLISHED": "Ce cours n’est pas publié.",
-            "COURSE_SCHEDULE_CONFLICT": "Un rendez-vous existe déjà pendant une séance de ce cours."
+            "COURSE_SCHEDULE_CONFLICT": "Un rendez-vous existe déjà pendant une séance de ce cours.",
+            "COURSE_OCCURRENCE_NOT_STARTED": "Cette séance n’a pas encore commencé.",
+            "COURSE_PAYMENT_VOIDED": "Ce règlement est déjà annulé.",
+            "COURSE_NO_REQUIRED_OCCURRENCE": "Ce cours n’a aucune séance obligatoire.",
+            "COURSE_REQUIREMENTS_MISSING": "Des séances obligatoires manquent.",
+            "COURSE_COMPLETION_REVOKED": "Cette validation est déjà retirée."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         return SchoolPlanningClient.failure(status, code, title: title)

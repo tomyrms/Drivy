@@ -29,6 +29,10 @@ import Observation
     static func deadline(_ date: Date, zone: String) -> String {
         SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "EEEE d MMMM yyyy 'à' HH:mm")
     }
+    /// « 3 mars 2030 ».
+    static func day(_ date: Date, zone: String) -> String {
+        SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "d MMMM yyyy")
+    }
     static func sessions(_ count: Int) -> String { count == 1 ? "la séance" : "les \(count) séances" }
     static func mailURL(_ email: String?, courseTitle: String) -> URL? {
         guard let email = email?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty, email.contains("@"),
@@ -141,6 +145,10 @@ struct SchoolCourseOperationMemory {
     let client: SchoolCourseClient
     private(set) var courses: [SchoolCourseSeries] = []
     private(set) var mine: SchoolCourseMine?
+    /// Validations et progression personnelles ; aucun règlement.
+    private(set) var progress: SchoolCourseProgress?
+    /// Titres des cours déjà commencés, absents de la liste à venir.
+    private(set) var startedTitles: [UUID: String] = [:]
     private(set) var isLoading = false
     private(set) var hasLoaded = false
     var errorMessage: String?
@@ -156,7 +164,18 @@ struct SchoolCourseOperationMemory {
     func isEnrolled(_ seriesID: UUID) -> Bool {
         mine?.items.contains { $0.seriesId == seriesID && $0.status == .active } == true
     }
-    func title(for seriesID: UUID) -> String? { courses.first { $0.id == seriesID }?.title }
+    func title(for seriesID: UUID) -> String? { courses.first { $0.id == seriesID }?.title ?? startedTitles[seriesID] }
+    /// Inscriptions comptant des séances obligatoires.
+    var tracked: [SchoolCourseProgress.Enrollment] { (progress?.enrollments ?? []).filter { $0.requirements.required > 0 } }
+
+    /// La progression ne bloque pas la liste : une panne la laisse simplement absente.
+    func loadProgress() async {
+        guard let fresh = try? await client.progress(schoolID: schoolID), !Task.isCancelled else { return }
+        progress = fresh
+        for enrollment in fresh.enrollments where title(for: enrollment.seriesId) == nil {
+            if let series = try? await client.series(schoolID: schoolID, id: enrollment.seriesId) { startedTitles[series.id] = series.title }
+        }
+    }
 
     /// Propositions seulement : le bandeau se relit souvent, la liste à l’ouverture.
     func refreshOffers() async {
@@ -173,6 +192,7 @@ struct SchoolCourseOperationMemory {
             mine = personal; hasLoaded = true; errorMessage = nil
         } catch is CancellationError {
         } catch { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+        await loadProgress()
     }
 }
 
