@@ -64,8 +64,11 @@ async function oneTimeKeyCounts(db: PoolClient, actor: KeyActor): Promise<Record
 }
 
 export async function uploadKeys(db: PoolClient, actor: KeyActor, body: unknown) {
-  const input = object(body, 65536);
-  if (Object.keys(input).some(key => !['device_keys', 'one_time_keys', 'fallback_keys'].includes(key))) throw invalid();
+  const raw = object(body, 65536);
+  if (Object.keys(raw).some(key => !['device_keys', 'one_time_keys', 'fallback_keys'].includes(key))) throw invalid();
+  // La liaison FFI de matrix-sdk-crypto (iOS) envoie toujours les trois champs : `device_keys` vaut null
+  // dès que le compte est publié (json!({"device_keys": Option<..>, ...})). null signifie « rien à publier ».
+  const input = Object.fromEntries(Object.entries(raw).filter(([, value]) => value !== null)) as Json;
   if (input.device_keys !== undefined) {
     const keys = object(input.device_keys, 8192);
     if (keys.user_id !== userId(actor.personId) || keys.device_id !== actor.deviceId || !Array.isArray(keys.algorithms) || !isObject(keys.keys))

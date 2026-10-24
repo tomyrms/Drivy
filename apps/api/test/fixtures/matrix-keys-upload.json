@@ -1,0 +1,440 @@
+{
+ "sdk": "matrix-sdk-crypto-wasm 18.9.0",
+ "first": {
+  "device_keys": {
+   "algorithms": [
+    "m.olm.v1.curve25519-aes-sha2",
+    "m.megolm.v1.aes-sha2"
+   ],
+   "device_id": "ALICEDEV01",
+   "keys": {
+    "curve25519:ALICEDEV01": "kwuRbx4RDdFPvo+U/NnIBhPCOIM2AZ7jjIoQIfz3VWE",
+    "ed25519:ALICEDEV01": "g2KKxHZKMcRTGbUaHkoSMXpxgp0fGlHRiWvXl8hkv/4"
+   },
+   "signatures": {
+    "@20000000-0000-4000-8000-000000000003:drivy": {
+     "ed25519:ALICEDEV01": "fCoNO5YtFHPLSJ2S/I0kxN6MpCRVFfTZVQAyi455DMaxp2nhn1E2JbQXxcGxvfJK8SWBqMDHHscZsqHpozGkAA"
+    }
+   },
+   "user_id": "@20000000-0000-4000-8000-000000000003:drivy"
+  },
+  "one_time_keys": {
+   "signed_curve25519:AAAAAAAAAA0": {
+    "key": "q3P7Tro85Z83yDt2Vp+gh23ajYBthstfeiUazhUkWHc",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "GgUZKOD0rQMLybRyS5nxcEUBXzu7Q2sJRt5FeYMutzMOCE5LQ9kQrSZs+wTrvkimKSTlTpha5ZN5YXJPBhWxBA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAA4": {
+    "key": "ENu627y3r6PCHRbBEE8DgiyjJ2p6jvaHp2k6aqKukyI",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "f2YFmV8bQxbUoZxE+jQrvImr8Nnc0UuHvaA76JxyWGenCR0H3IPCNkN+u3djxXtDQNvK8fkZqlnDueIdtW+qCg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAA8": {
+    "key": "D7nm6b0GBqjLSNQSzFiuLvY+FaS8Ux9fXhjsadpR0nE",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "7BL17QA6tzDW10S+GW/2TVa2vE9deSYErUJG3R+t/W0ynmii5qczBHmTZTDsAZZDv2UZuZmN5+hEZIF20S6HCw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAA": {
+    "key": "cez7+1YYKBoMQa2WUBsrqVAx8XxRXyltLPJ8Z2eYRis",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "EFmAgOERdvKXwtDM2lEIAADfjI7pnc1XXVG85F6DhtAmyCQCbxPQWTKT56LR00WXW4kIjlJrQMBAmISR1BZ0Ag"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAE": {
+    "key": "HhZnBnomArMiinvV3sUfopejKifTCZbcaeARH2HmWyk",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "+4Xjx39eYuxsjx1gCtiaFoOcsvug8EQVgI/uVWn6XIHCMpj1v69q6GgXibw1wtUgxN9ndKCG0C/eo9ri+hbgBQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAI": {
+    "key": "9Q4WB4x2zMdqx90McYhkZo4DpkRMfG/k1MXBXQtQAy0",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "ZwJTNyD7elT88mCnzQOB31/62Njnk2LOwQOcQQDTW2wfRqZdDFqIPMMnUgrh/5dkrAzQSUt2b6SRqLScsHU7Cw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAM": {
+    "key": "RwCL0JE1C9+IsgsGFpaQY/pXewgYMZmmcBMDR+nHwmg",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "JwNmgOFvc9jXQzdMCXZ7AQmUPOS4SI4yop+EhTLUYWiL39AsFas+TR41VAGlJFotoSOOI55NbCeYgXij44VsDQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAQ": {
+    "key": "QKRP0DshIuXA+lCYvlgFieEZC8e85lfe2BkAjhekAwY",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "bsLPFjdAMp4rKDVIqxC4or3xgPQ5ldsyXjXJs5s9fzRWFpbXJyL6bXnifAgLL0zjL64GCwuiN28Lc2wod/goDQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAU": {
+    "key": "JsJZK50QLwgy7FMtTxCRiq7nNfI8WF138KOsn2eh/lc",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "CO9VTJ83UWG/CTAJRePIoE1r6pOdTh2PYzCJagCPvcWldkpHO5/oS8mQFV+31Zhc1pbsF6cIWkcBfBQI9JKkCw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAY": {
+    "key": "h9T+Uzza3Dst5J9UYRgGN+HaD0Cz/axM1hY5wwOYvj4",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "NbjA29ykfAAQ1/tU7gP+t+OtCI5LzkpJjhYo0oNiygkv2V822eATWnfROTb9BOaqLi0/rKDzRllAyjYZe6QfBw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAc": {
+    "key": "7aPV8MVwCD/BbLIli7bXlT0Vy5Y9oYAEbAYAOC4VJlA",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "toKLGQvBFd6MxAerFq7+aqVJ7sLNQ4+W68joZTdUW5P2ba9HbMxWeIMNG2eTsPzwBd0WPcjCofrYwWbPC8dTAg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAg": {
+    "key": "bnSuGHSwNvSZAlC4FIvc+Eu7CFbe/FAvKutehPbiCW0",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "ogX7+q9jsQcJsScH0k6C+SqbAESPqoJGPZYcbaZzIplDPEeYEo0Rlq/Q0JOt62l2JhWfzQHwtvetXcgaTcIBCg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAk": {
+    "key": "Qoer1mnrJmfQhju4Xdu3jqve0UUwBwoyhNGFsCO4PT0",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "+TVVP7KiT0zMDC5QGYKBGyZNF1jkkaKvHHusvK+YRLEW1pLnPTcTUZGeVc50oiQAip8vq5xcMVi8nG/MmguADg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAo": {
+    "key": "EMh0V8SKNrd+jZf0HUHLbiS5jhBYEQKVuVj7ScUQUCo",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "TiXv9CF4ZXPgjLw39Ii/W5yTYW0Q3zAH36JqzJepE8735+rOK7WKZ+NQ7XwFgRpZfWrYGt8ptEfqM5IgQjLgCg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAs": {
+    "key": "qjy9n15u0eye0ClQysdW/iueg6fXCR/sCnzW/tASPRo",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "3tviFctyQ/fyktuAooF+UPvR+GaSGDgqENd0bzCQ6RixoK5Yn3qNLLWzkHPMHVpxr5zFwzXPDtobJm9wXyCYCw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAAw": {
+    "key": "1lN3SHY12S3wy6FKInUra2weJdGJgM4jf3ga/dWwnBQ",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "ZsmLMGvpzy3o/XKrfFJO7tTATn6/SUwWXGSW8PCVfyGD2yKtEM5TM3t1u4eAqtPtUPraaPQicd6wB4DJ7zeVAw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAB0": {
+    "key": "B0fGXiHFbjAqQCxlmIHp6PThoX5c5+MrUT8dkCzZL3g",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "+H2Yx/qnIICiVYU5yVPpJCni8nVZr9gr7ZFECU0/g11YJmrI8TmU8Q4IUMv2bmmoeWd2AzJ68yBeksZqzK1CAw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAB4": {
+    "key": "krv6jm9pLttjOY8ODygi7x/kmkWtuCMIra1RRv60akk",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "kvl1hbDzjC/cgOIUxHhCqEbqR8jIi+NusYx3daR5VP9jBhvQn4tr2vOHWohh+RDbnUWLNfpzveltcJhzP+2ODw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAB8": {
+    "key": "3CLz0Omfx4hzLHoJTAZYZXEGYJjynvm1gsAGm+Fj4F4",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "RQFz6trW+h4RHXSM0rwbPEWS7aE5B35NpfWRmfwiD3O+z+i4YmZ9elvOQoPwUTfTw+W/L0JxmQgERGqkGvNMAw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABA": {
+    "key": "iz0OyCR/chz0csop2FbDh7HaICZ+ohq4Ct1y6qOLo3g",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "EGQJxiUQr5oHqO6E5REL6wwXWbrhMXmER22L21fkq5bV0FbaOYjXlpPPGHJt+8jBNBFSl7r9K8IGUhVz7xhLBg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABE": {
+    "key": "RRmj3dxJsFN1TSw8cm2Az/VDo0Pj/DN0jugnJ1aIeSo",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "7T6UMigfj3JLwuOsgdbqI6c+bjCTkaBdb8Zx8Deq9f+26qd/XFE+qkHkQV1+aBnCVuZyelhOqPcyI/ClmoKIDw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABI": {
+    "key": "1EAPeL9Eka8Xe8NcGvyWIdST7blD66dL9Kdru4QJJQs",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "OILf7xkmiCLL1O7EVLpD9IzLKFa3JqmPcy+71K+RQiPFn/4K9Nj8b9if9XAATKUlqjUrkHewEUVe2spNLu/RDw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABM": {
+    "key": "PjrqItNSgR4eJS6vZ9eVvbNA8WcL1n9eD17Ey87tH2w",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "t5T2WXhUxi2qzqADtDdqOVAtAhC7hEvzwL4Y8j1E4WwLK0Z2TLBSKEVlcy4BcQRA1ulY+VWnOqWwfuC6ePqAAQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABQ": {
+    "key": "f43OQsnYuNiClE2dZJrpsndMwOVusuTIEpQFYydyqkY",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "AQg6NtmzhVTeaqGl9vffVVXFTSVcFZvHkWdJ6CMf04HvYQJeMQtPd5s+lyMCoSyL3hMyhSrFJ77Cbpjww2DYDQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABU": {
+    "key": "9XQP0hr65BaSXWC1vL40JPowRQm9FOB7baY/7qqTywo",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "Wvk0zEF7kvydj8Ks9PhP4DquzkjMpesUyjrl2Taq02d6J7qh6ZwpCwH8VIqlrF2EQ0C4Pk0d9rfIBwUYgpLzCA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABY": {
+    "key": "kE5SlHyBW3MD2JSHCUi6RPROfhpjgPnNVQc3q8O4wTw",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "x+HvMT4GiAZ7qRIATrmCCvRHZX6rCYI+osTumK6BHK9plr5Z5Wc/CRFzMMsSVi6bskVgpvxBRonlnZfXYqAVDw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABc": {
+    "key": "SqlW8eeI/ZL1PeVXZdswtMFKaqgsR/Gc+VNX47RQ+hw",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "s2hKqTNb8xZfKP+/VPzylcknZdaQb9+4v8+HEXdxfuKifNmmQmXVN0y1TPv3srVTSDmXAi9MrVZPwda+41RuAA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABg": {
+    "key": "mwJFZ359YZSQSN6MQrijR7RVX35e+vDOEk8p2Y7yVAA",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "VJC+q0bppV/VsutxuA1igiUKoNB5v2vSueDXHLVMUM+VcSOi0aQ95xHOaNNOlmVudTvXMiSqVwePE+W6aiPuDA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABk": {
+    "key": "Ht1qWrZLqNBeBmjykvh9N3BTid1vEeYA9YmWLji6byA",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "8QhlIWkWTnDok+NRr2oKLb8UoYh4HfTOvV48sQYRnZeY0TXamVe7cQTLIypliV688A3cgaalrEWhAe2jrcKCCQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABo": {
+    "key": "Tq2sKXrQDG10WQsPBG4f2qc5MlIX1u+gIc5Yn/CgEFU",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "EQdN2njZjty9vxAVEotdEDrQzaOEA487ZSeTqSPn6C5vFNFMlirgziKaGY/IbqcMrKtZOfa82zbNduXWMU2uCA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABs": {
+    "key": "gMHX8ktLFiwSbEsasz67TOyJRDCuH1lxQUTO/KXiYnA",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "xHNxP6TdzWdxtVhYna9vLbHlmVPw6ek8m8i4f0N56KMn+IfNlS2iy2um5YWrIIbXD0aviVN3ACJFMoHUZL++Bw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAABw": {
+    "key": "RToDhycYQkcn7f4zNNteKpC63MEeUYwaSclgn0Kk4Gg",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "tpOxlehhAm7CbvLORlWTyF2PlUSra9JXT+DrjR0CrGBV96w7Fn8Xcaw6ZbzcGylDb5wlXwX7/Sm82kDdtKqbBg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAC0": {
+    "key": "r8GWxnz2tRtmxbzUwFCC8bNM2dfCbl2xXBKVFe/n4Tw",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "Q28WCzyyYpe0UruEkzdaDhyHmHpWcZVu3FraSqBsHfy7LcY/r7MDUQU5CZmd3RNFGn3FlVBC1Tl0Ufjdkz7SDQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAC4": {
+    "key": "kB8bpFH+EZE5g9Fm5yN8/Q4xBeRu9oYDj3vIrz+b7Cs",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "Tg3ONlHCJf999cYpGsi0P39QoDn7bwlvMPRSQylQwCOzcPISPRVT5QaJ2DPwPaAYa61ROGg88XMDhLdUVfm+Bg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAAC8": {
+    "key": "bJjC0++4g+dP3wgB2A5qqm0Ln3eY/1C0NazJ5rQe9Ck",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "SjLdVYerBs6wx+O+oOHFNXHYo/11oXEddRmS7ZI1wbxTl++03C/BpdE6g5YloX5vZlOI2YJYYYEx3mmO90dxBQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACA": {
+    "key": "9j7rsgugDysWYhmm53FDjJ4D/yiyC7Vp284Lw6Jy0w8",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "S3YTnhGOQZVR44eDTEiMAz3gM3FZoTzAtAfFs+VwzefE0uonUYyIXZrSWXm0kWeAsrnvY9eVO9TTTB7C/ZZNDQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACE": {
+    "key": "ZGtx3hRAhT98BdHmBdLCyVj2v/zAfe0SaI9RcFkg8nk",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "a83oZ0SoCRM+eQZ9gkc+LqbM9zekSwvaikHzp/1ZWLfSdfcvJJlpY7lbFtVhYK5AtTNNlZNhoaLwWtqCukN6BQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACI": {
+    "key": "ZlrG5eBkCiD3DESBS49ZOR8Ekn55x2FX+SeLoStnwWc",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "b5ExUAfzvCaPDcex71YZ+6UaHAqKH9V6iSSFFpjRPTADaez29L9g9wSkcObRu/LU0LN49OHrWmFlk0YZwKTkDA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACM": {
+    "key": "YMBmvpudhBSOQPM+RHldOTIowAdh/Xk4DWZLhTsZiDc",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "9SVFsAmu+2EIfyq6/2kIejzFGVlhL+Qwxu+V3SBN7ZvYT1eqESFSmsRQKbcyRBdScmvhPH+jUbEnIZfDN5r7Bw"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACQ": {
+    "key": "rkvEr3YJfEmPB9nriYV2NoDFFJx2pcDbe1CJnHA5GAY",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "cVmjXfnO4+/yeMkV4tr8B3JKtv5fRIfo27L5qF7T+jKSGdXo5le5gOQRqzx9YfTONbnTXJkfDePfhQx/X+eyBA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACU": {
+    "key": "T6SJ/AvIuGYKKMDCLZRxewSiT5Wc0d9fCq6wDa9gdHo",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "Q1MG7h+B5EAKlMn3DPLT0fVJJIp2TSxJK66mYZQiRRr8BBDP6NglXJVFcJntNb6Gg57sf8Ow4Gs+278rxBHoAg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACY": {
+    "key": "6FAyK4e/so3uSVh9yiV7JjmsB5YiVSbwMi7k+++3NjU",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "FunQFsSl3WHYbz1V9bxMj3tz/G5XZMWm4U7HjrnvLfbg+gGQKY6ZwwvcVnMaaxzGEGYdWoqgXyXADnJKnuCpAQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACc": {
+    "key": "J3+C8U0WqYDypVc/HaV40NCoRm2lwc98WRBs/L13llw",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "WcfPcfiesDlFNOc42XSicfmZewZ3cs55ZLOML0OzE4IysB64VAIWAiCRpFZA3GC41QCzznMK66nLupxrDWbRAg"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACg": {
+    "key": "9m4YeWyuHWoPRBaGbgwr96MEnY8Wv8aQWxWRh1DGTGM",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "rPjRd8BjxnUR27llFLFiUaMxeTP0MF5/dJu0nYNP/BKvahj8KEdhzQKPsxN37VE0PEfT1XanUQg/U8TOz2KICA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACk": {
+    "key": "CA8szThbiaJj6t154vWBnSKiPMwSLAJSzDsgVXxybTs",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "Ky4eG3ZEP5Hb9P2U3Ks6igqHF+fOqglgR2zOrSxHqk/r+9AAUVPdWa11vkZVHLtHkdnJHEft1rpSoO94/pQrCQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACo": {
+    "key": "urXXuTxXcCKQjdGCSsbDMFcpIjQPmt7i7KKPBzbd4jw",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "wPlG8Csky5BFQ2Bm86XhkWmItyi8FEIf1EK0c+N4VOsiCJZzb659+jXnCWBM5xZ2tHl7E+myLwT/ifSKVwoQCQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACs": {
+    "key": "ZDWhMPz9IlqgvCE0GgKMfh/n4yrBLU3egkH1WMhXQkY",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "c09OxJyWK9xR/xK808xgiIuTiRGZHDw5JLh+dc9+LwS1lujsgsM/87fpzsvCVHwIOfH7IMaGr4jff1VWRP7mBA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAACw": {
+    "key": "xEh0x4THJ+H43IRgEgvof1kuETsEyJ7BdRbbhJU+YyE",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "ziZeusPjZWPDJdwzugMAXqX0ps6pM5ygdN4uCo4gsFopcEgWWaINc1gx42Hrq/80n9XvlvtpcLalT8RBzfaoDQ"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAADA": {
+    "key": "6BbV72TAHxLkNnl/+9G36dl6DUvATC6VtMAAoNEuP08",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "Tt31fhx3NpxqeKfNh3zUYoTapcsFVu/Xij+C1CWmBKZJyxrbsTZZnKK6nltB0RlHgZhmr2TqMi7IWBdlqOUKCA"
+     }
+    }
+   },
+   "signed_curve25519:AAAAAAAAADE": {
+    "key": "wcxCIR7Iuo3LJhltRD84Tvfq4ZCz9hkZ33828Fu5U20",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "RUGN9tWuVAFUt7IFJfYMTW7t/pKnZyRt2L1itphDE+9doUI+L99VwjHCiQHYARaDDZkIPloQyovbKdO3iHymAw"
+     }
+    }
+   }
+  },
+  "fallback_keys": {}
+ },
+ "second": {
+  "device_keys": null,
+  "one_time_keys": {},
+  "fallback_keys": {
+   "signed_curve25519:AAAAAAAAAAA": {
+    "fallback": true,
+    "key": "lLOLGndHawgGyI2dapclGBvr58a2sIWI5pMsLrG/N28",
+    "signatures": {
+     "@20000000-0000-4000-8000-000000000003:drivy": {
+      "ed25519:ALICEDEV01": "wkE78lTZ74VmbqH5Cj1tge40PrYYSOM43gLKa8pFtd8MLJNLUwr1+uOMXE4CimhLoowJ8ibXS0TdULREf4iFBA"
+     }
+    }
+   }
+  }
+ }
+}

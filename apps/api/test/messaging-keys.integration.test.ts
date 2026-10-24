@@ -2,6 +2,7 @@
 import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
+import { readFileSync } from 'node:fs';
 import { freshDatabase } from './support/harness.js';
 import { seedFixtures, fixtureIds as id } from '../scripts/fixtures.js';
 import { registerMessaging } from '../src/messaging-routes.js';
@@ -38,6 +39,24 @@ beforeEach(async () => { await pool.query('TRUNCATE drivy.person,drivy.school CA
 afterAll(async () => { await app.close(); await pool.end(); });
 
 describe('relais de clés Matrix, PostgreSQL', () => {
+  it('accepte les corps /keys/upload réellement produits par matrix-sdk-crypto (null compris, qa84)', async () => {
+    // Corps générés par le SDK Rust (liaison wasm) pour alice/ALICEDEV01, mis à la forme exacte de la liaison FFI iOS 0.17 :
+    // le 2e envoi porte "device_keys": null. Avant correctif : 400 INVALID_REQUEST et aucun appareil enregistré.
+    const sdk = JSON.parse(readFileSync(new URL('./fixtures/matrix-keys-upload.json', import.meta.url), 'utf8'));
+    const first = await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, sdk.first);
+    expect(first.statusCode, first.body).toBe(200);
+    expect(first.json().data.one_time_key_counts).toEqual({ signed_curve25519: 50 });
+    const second = await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, sdk.second);
+    expect(second.statusCode, second.body).toBe(200);
+    expect(sdk.second.device_keys).toBeNull();
+    const stored = await pool.query(`SELECT device_keys->>'user_id' AS user, device_keys->'signatures' ? $2 AS signed FROM drivy.messaging_device
+      WHERE person_id=$1 AND device_id='ALICEDEV01'`, [id.alice, user(id.alice)]);
+    expect(stored.rows).toEqual([{ user: user(id.alice), signed: true }]);
+    expect((await pool.query('SELECT count(*)::int AS n FROM drivy.messaging_fallback_key WHERE person_id=$1', [id.alice])).rows[0].n).toBe(1);
+    // null n'ouvre pas de contournement : identité d'un autre appareil toujours refusée, champ inconnu aussi.
+    expect((await req('demo-alice', 'ALICEDEV02', 'POST', `${crypto}/keys/upload`, { ...sdk.first, one_time_keys: null, fallback_keys: null })).statusCode).toBe(400);
+    expect((await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, { ...sdk.second, extra: null })).statusCode).toBe(400);
+  });
   it('refuse une réclamation directe hors périmètre et ne permet pas de modifier les clés du pair', async () => {
     const uploaded = await req('demo-alice', 'ALICEDEV01', 'POST', `${crypto}/keys/upload`, {
       one_time_keys: { 'signed_curve25519:AAAA': { key: 'synthetic-key' } }
