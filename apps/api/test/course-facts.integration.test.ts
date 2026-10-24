@@ -75,6 +75,24 @@ describe('#81 règlement sur place',()=>{
  });
 });
 
+describe('migrations et corrections',()=>{
+ it('aucun fait présumé : sans saisie, aucune présence, aucun règlement, aucune validation',async()=>{
+  const c=await heldCourse();
+  for(const table of ['course_attendance','course_payment_record','course_completion'])
+   expect((await pool.query(`SELECT count(*)::int AS n FROM drivy.${table} t JOIN drivy.course_enrollment e ON e.learner_id=$1 WHERE ${table==='course_completion'?'t.learner_id=e.learner_id AND t.series_id=e.series_id':'t.enrollment_id=e.id'} AND e.id=$2`,[id.aliceLearner,c.enrollmentId])).rows[0].n).toBe(0);
+ });
+ it('corriger une présence après validation ne retire rien en silence et reste tracé',async()=>{
+  const c=await heldCourse();
+  await mark(c,c.occurrences[0]!.id,'PRESENT',null);await mark(c,c.occurrences[1]!.id,'PRESENT',null);
+  await call('POST',`/course-enrollments/${c.enrollmentId}/validate`,{operationId:randomUUID(),note:null},null,'demo-admin');
+  const after=(await mark(c,c.occurrences[1]!.id,'ABSENT',1)).json().data;
+  const r=row(after,c.enrollmentId);
+  expect(r.requirements.missing).toBe(1);
+  expect(r.completion).toBeTruthy();
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.course_attendance_history WHERE enrollment_id=$1',[c.enrollmentId])).rows[0].n).toBe(3);
+ });
+});
+
 describe('#82 validation',()=>{
  it('validée seulement après les séances obligatoires, par une personne habilitée ; bloque une nouvelle inscription ; retrait tracé',async()=>{
   const c=await heldCourse();

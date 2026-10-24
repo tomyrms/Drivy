@@ -175,6 +175,51 @@ describe('#40 file prioritaire',()=>{
  });
 });
 
+describe('#40 file : retrait, droits, confidentialité, perte de réponse, série annulée',()=>{
+ it('retrait volontaire et annulation de série : aucune place bloquée, proposition révoquée',async()=>{
+  await setPolicy(24,720);
+  const s=await published({capacity:1});
+  const holder=(await enroll(s.id,'demo-alice')).json().data.me.enrollment;
+  await call('POST',`/course-series/${s.id}/waitlist`,{operationId:randomUUID()},null,'demo-bob');
+  expect((await call('POST',`/course-series/${s.id}/waitlist/leave`,{operationId:randomUUID()},null,'demo-bob')).json().data.me.state).toBe('FULL');
+  await call('POST',`/course-series/${s.id}/waitlist`,{operationId:randomUUID()},null,'demo-bob');
+  await call('POST',`/course-enrollments/${holder.id}/cancel`,{operationId:randomUUID()},holder.version,'demo-alice');
+  const offer=(await me(s.id,'demo-bob')).json().data.me.offer;expect(offer).toBeTruthy();
+  const current=(await call('GET',`/course-series/${s.id}`,undefined,null,'demo-admin')).json().data;
+  expect((await call('POST',`/course-series/${s.id}/cancel`,{operationId:randomUUID(),reason:'Recette'},current.version,'demo-admin')).statusCode).toBe(200);
+  expect((await call('POST',`/course-offers/${offer.id}/accept`,{operationId:randomUUID()},null,'demo-bob')).statusCode).toBe(409);
+  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.course_seat_offer WHERE series_id=$1 AND status='ACTIVE'",[s.id])).rows[0].n).toBe(0);
+  await setPolicy(24,null);
+ });
+ it('un autre élève ne peut ni accepter ni voir la proposition ; la file ne donne aucun nom',async()=>{
+  await setPolicy(24,720);
+  const s=await published({capacity:1});
+  const holder=(await call('POST',`/course-series/${s.id}/enrollments`,{operationId:randomUUID(),learnerId:id.aliceLearner},null,'demo-admin')).json().data;
+  await call('POST',`/course-series/${s.id}/waitlist`,{operationId:randomUUID()},null,'demo-bob');
+  await call('POST',`/course-enrollments/${holder.id}/staff-cancel`,{operationId:randomUUID(),reason:'Recette'},holder.version,'demo-admin');
+  const view=(await me(s.id,'demo-bob')).json().data;
+  expect(JSON.stringify(view)).not.toContain('Alice');
+  expect((await call('POST',`/course-offers/${view.me.offer.id}/accept`,{operationId:randomUUID()},null,'demo-alice')).statusCode).toBe(404);
+  expect((await call('POST',`/course-offers/${view.me.offer.id}/decline`,{operationId:randomUUID()},null,'demo-admin')).statusCode).toBe(403);
+  // Réponse perdue : la même opération rejouée rend le même résultat, une seule inscription.
+  const op=randomUUID();
+  expect((await call('POST',`/course-offers/${view.me.offer.id}/accept`,{operationId:op},null,'demo-bob')).statusCode).toBe(201);
+  expect((await call('POST',`/course-offers/${view.me.offer.id}/accept`,{operationId:op},null,'demo-bob')).statusCode).toBe(201);
+  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.course_enrollment WHERE series_id=$1 AND status='ACTIVE'",[s.id])).rows[0].n).toBe(1);
+  await cancelAll(s.id);await setPolicy(24,null);
+ });
+ it('lectures concurrentes de la file : une seule proposition pour une place',async()=>{
+  await setPolicy(24,720);
+  const s=await published({capacity:1});
+  const holder=(await enroll(s.id,'demo-alice')).json().data.me.enrollment;
+  await call('POST',`/course-series/${s.id}/waitlist`,{operationId:randomUUID()},null,'demo-bob');
+  await pool.query(`UPDATE drivy.course_enrollment SET status='CANCELLED',cancelled_at=now(),cancel_kind='STAFF' WHERE id=$1`,[holder.id]);
+  await Promise.all([0,1,2,3].map(()=>me(s.id,'demo-bob')));
+  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.course_seat_offer WHERE series_id=$1",[s.id])).rows[0].n).toBe(1);
+  await setPolicy(24,null);
+ });
+});
+
 describe('#41 annulations et changements de dates',()=>{
  it('annulation autonome jusqu’à l’échéance, refusée après ; contact ne change rien',async()=>{
   const s=await published();
