@@ -25,15 +25,15 @@ Une IPA compilée prouve la construction. Elle ne prouve ni le fonctionnement ni
 | #39 | Inscription à toute la série | 3d911b8, af10b48, 4d9c4ae, 9109b74 | API : tests ciblés en local ; web : typage + 40 tests ; IPA run 40039016177 | NOT_EXECUTED | Campagne finale |
 | #40 | Liste d'attente prioritaire | idem #39 | idem #39 | NOT_EXECUTED | Valeurs 2 h / 30 min / 12 h provisoires ; campagne finale |
 | #41 | Annulation et délai | idem #39 | idem #39 | NOT_EXECUTED | Changement d'heure à tester ; campagne finale |
-| #42 | Présences | | | NOT_EXECUTED | Campagne finale |
+| #42 | Présences | 3056515, a419e90, f1f726f | API : tests ciblés en local ; web : typage + 47 tests ; IPA run 40118350531 | NOT_EXECUTED | Campagne finale |
 | #43 | Rappels et alerte minimum | | | NOT_EXECUTED | Campagne finale |
 | #44 | Préférences push | | | NOT_EXECUTED | Campagne finale |
 | #45 | Finance future | | | DEFERRED | Différée par sa description |
 | #63 | Audio IA premium | | | DEFERRED | Différée par sa description |
 | #79 | Cadrage cours | | `docs/implementation/cours-collectifs-cadrage-79.md` | NOT_EXECUTED | Revue du porteur |
 | #80 | Socle cours (migration 042) | 7c3bcef | Migrations 001 à 042 appliquées en local par le harnais | NOT_EXECUTED | Tests PostgreSQL |
-| #81 | Règlement sur place | | | NOT_EXECUTED | Campagne finale |
-| #82 | Validation finale explicite | | | NOT_EXECUTED | Campagne finale |
+| #81 | Règlement sur place | idem #42 | idem #42 | NOT_EXECUTED | Campagne finale |
+| #82 | Validation finale explicite | idem #42 | idem #42 | NOT_EXECUTED | Campagne finale |
 | #83 | Recette cours collectifs | | | NOT_EXECUTED | Campagne finale |
 | #85 | Attribution Apple Plans visible (fermée, reste couverte) | | | NOT_EXECUTED | Campagne finale |
 | #86 | Temps de démarrage par étape (fermée, reste couverte) | | | NOT_EXECUTED | Campagne finale |

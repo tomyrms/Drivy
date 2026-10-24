@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 24 octobre 2026 : cours collectifs, appel (#42), règlements sur place (#81), validation (#82)
+
+Branche `vague/cours-collectifs`, non fusionnée, aucun déploiement. Commits `3056515`, `a419e90`, `f1f726f`. Contrat : [cours-collectifs-faits-42-81-82.md](cours-collectifs-faits-42-81-82.md).
+- Migration 044 : présence par élève et séance (Présent, Absent, Excusé), versionnée avec historique et auteur, jamais déduite ; règlement « payé sur place » annulable avec motif, sans effet sur présence ni validation ; validation explicite par une personne habilitée seulement si toutes les séances obligatoires sont présentes, retrait avec motif, retrait de l'élève des listes d'attente du même type.
+- Web : feuille du cours (élèves × séances, règlement, validation selon les droits). iOS : appel du moniteur, règlement et validation selon les droits, « Mes cours » pour l'élève (validations, progression).
+- Exécuté : 34 tests API ciblés des cours réussis en local (PostgreSQL 17 jetable, migrations 001 à 044) ; web : typage et 47 tests ciblés ; IPA compilée sur `f1f726f` ([run 40118350531](https://github.com/tomyrms/Drivy/actions/runs/40118350531)). Pas une recette.
+- Non exécuté : tests Swift, UI, navigateur, suite complète (#84). Limites : iOS n'a pas d'écran pour annuler un règlement ou retirer une validation (web oui) ; une correction de présence après validation ne retire pas la validation automatiquement.
+
 ## 24 octobre 2026 : cours collectifs, inscription (#39), liste d'attente (#40), annulations (#41)
 
 Branche `vague/cours-collectifs`, non fusionnée, aucun déploiement. Commits `3d911b8`, `af10b48`, `4d9c4ae`, `9109b74`. Contrat : [cours-collectifs-inscriptions-39-41.md](cours-collectifs-inscriptions-39-41.md).
