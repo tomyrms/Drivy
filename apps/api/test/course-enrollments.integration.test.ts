@@ -122,10 +122,14 @@ describe('#39 inscription à toute la série',()=>{
 });
 
 describe('#40 file prioritaire',()=>{
- it('file désactivée par défaut',async()=>{
+ it('file active par défaut (12 h, décision du 24 octobre) ; désactivée seulement par un choix explicite de l’école',async()=>{
   const s=await published({capacity:1});await enroll(s.id,'demo-alice');
+  await setPolicy(24,null);
   expect((await call('POST',`/course-series/${s.id}/waitlist`,{operationId:randomUUID()},null,'demo-bob')).json().code).toBe('COURSE_WAITLIST_DISABLED');
-  await cancelAll(s.id);
+  await setPolicy(24,720);
+  expect((await call('POST',`/course-series/${s.id}/waitlist`,{operationId:randomUUID()},null,'demo-bob')).statusCode).toBe(201);
+  await call('POST',`/course-series/${s.id}/waitlist/leave`,{operationId:randomUUID()},null,'demo-bob');
+  await cancelAll(s.id);await setPolicy(24,null);
  });
  it('place proposée au premier seulement, acceptation convertit en inscription, réponse tardive refusée',async()=>{
   await setPolicy(24,720);
