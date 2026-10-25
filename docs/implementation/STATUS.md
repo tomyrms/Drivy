@@ -5,6 +5,9 @@
 - Run Apple `40203243767` sur `e210f7c` réussi : 135 XCTest sans échec sur simulateur iPhone, dont les 34 tests `MatrixMessagingCryptographyTests` (vérification croisée, refus partiels, cible révoquée, reprise du bootstrap), les 11 tests `MessagingOwnDevicesTests` et le scénario FFI → HTTPS → Fastify → PostgreSQL (`RELAY_EXECUTION_PASSED: 1 scenario, 0 skipped`).
 - Campagne complète `40199762381` sur `911739f` en échec. Passent sur iPhone et iPad : reprise durable des signalements, confirmation de retrait/réintégration d'un membre, thèmes du profil. Échouent : `FieldFlowTests` ligne 129 (sortie du live) et `READINESS` du relais (`-1001`, avant tout chiffrement, deuxième run consécutif, déjà vu sur `40199170223`). Les échecs « Mes appareils » de ce run portent sur la version antérieure à `e210f7c`.
 - Non qualifié : UI iPad et iPhone de « Mes appareils », bascule réelle de compte, signature croisée sur deux appareils physiques, VoiceOver. Aucun déploiement.
+- Run `40208270037` sur `8f6146f` (UI ciblée iPhone et iPad) : `FieldFlowTests` sortie du live réussi sur les deux appareils après correction du rôle bouton de la barre « Revenir au trajet en cours » (`58ea12a`). `MessagingOwnDevicesUITests` en échec : le tap XCUITest au centre de la ligne ne basculait pas l'interrupteur iOS 26 (valeur 0 lue dans la hiérarchie exportée). Défaut du test, pas du produit.
+- Run `40210771935` sur `4295172`, nouveau mode `ui_iphone_only` (`4318b96`, iPhone seul, sans iPad ni captures, contrôle intermédiaire uniquement) : `MessagingOwnDevicesUITests` réussi sur iPhone. L'iPad de ce scénario reste à rejouer dans la campagne finale.
+- Reste avant clôture : une campagne complète iPhone et iPad sur le dernier SHA. Puis recette physique « Mes appareils » sur deux appareils, VoiceOver et bascule réelle de compte.
 
 ## 25 octobre 2026 : vérification crypto de ses appareils, candidat non qualifié
 
