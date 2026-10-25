@@ -92,6 +92,8 @@ relay_url=https://127.0.0.1:18443
 relay_start() { echo RELAY_START; }
 relay_trust_simulator() { echo "TRUST_$1"; }
 relay_reset_fixture() { echo RELAY_RESET; }
+relay_mark() { echo "MARK_$1"; }
+relay_probe() { echo "PROBE_$1"; }
 ''', encoding='utf-8')
         harness = r'''
 set -euo pipefail
@@ -113,8 +115,14 @@ bash scripts/ios/test-simulator.sh
         self.assertIn('RELAY_RESET', result.stdout)
         self.assertEqual(result.stdout.count('<-xctestrun> <PLAN>'), 2)
         self.assertIn('<-only-testing:DrivyTests/MatrixMessagingRelayIntegrationTests>', result.stdout)
+        self.assertIn('PROBE_phone_before_xcodebuild', result.stdout)
+        self.assertIn('PROBE_ipad_before_xcodebuild', result.stdout)
+        self.assertNotIn('PROBE_phone_after_failure', result.stdout)
+        self.assertLess(result.stdout.index('PROBE_phone_before_xcodebuild'), result.stdout.index('xcodebuild <'))
         result = self.run_bash(root, harness, DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='all', MOCK_TEST_STATUS='65')
         self.assertEqual(result.returncode, 65)
+        self.assertIn('PROBE_phone_after_failure', result.stdout)
+        self.assertIn('MARK_phone_xcodebuild_status', result.stdout)
         self.assertIn('RELAY_START', result.stdout)
         self.assertNotIn('TRUST_IPAD', result.stdout)
 

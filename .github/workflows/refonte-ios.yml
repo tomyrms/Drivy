@@ -275,6 +275,7 @@ jobs:
             artifacts/ios/swift.txt
             artifacts/ios/simulator-entitlements.plist
             artifacts/ios/relay-environment.txt
+            artifacts/ios/relay-probe.txt
             artifacts/qualification/identity.json
           if-no-files-found: error
           retention-days: 14

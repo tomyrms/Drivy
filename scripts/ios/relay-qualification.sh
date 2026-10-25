@@ -24,10 +24,53 @@ relay_stop_server() {
   return "$status"
 }
 
+# Closed-vocabulary diagnostic: no URL bodies, headers, certificates or server logs.
+relay_probe_file='artifacts/ios/relay-probe.txt'
+relay_probe() {
+  local label=$1 alive=no exit_code=none port=unknown category=other curl_status=0 seconds='0'
+  [[ "$label" =~ ^[a-z0-9_]+$ ]] || label=invalid
+  if [[ -n "$relay_pid" ]] && kill -0 "$relay_pid" 2>/dev/null; then
+    alive=yes
+  elif [[ -n "$relay_pid" ]]; then
+    wait "$relay_pid" 2>/dev/null && exit_code=0 || exit_code=$?
+    relay_pid=''
+  fi
+  if command -v lsof > /dev/null 2>&1; then
+    if lsof -nP -iTCP:18443 -sTCP:LISTEN > /dev/null 2>&1; then port=yes; else port=no; fi
+  fi
+  if [[ -n "$relay_directory" && -f "$relay_directory/ca.crt" ]]; then
+    seconds=$(curl --silent --fail --output /dev/null --max-time 5 --cacert "$relay_directory/ca.crt" \
+      --write-out '%{time_total}' "$relay_url/qualification/ready" 2>/dev/null) || curl_status=$?
+  else
+    curl_status=-1
+  fi
+  case "$curl_status" in
+    0) category=ok ;;
+    28) category=timeout ;;
+    7) category=connect_refused ;;
+    35|51|53|54|58|59|60|66|77|80|83|90|91) category=tls ;;
+    22) category=http_error ;;
+    -1) category=not_started ;;
+  esac
+  [[ "$seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || seconds=0
+  local milliseconds
+  milliseconds=$(awk -v s="$seconds" 'BEGIN { printf "%d", s * 1000 }')
+  mkdir -p "$(dirname "$relay_probe_file")"
+  printf 'probe=%s utc=%s pid_alive=%s exit_code=%s port_listening=%s curl=%s curl_ms=%s\n' \
+    "$label" "$(date -u +%H:%M:%S)" "$alive" "$exit_code" "$port" "$category" "$milliseconds" >> "$relay_probe_file" || true
+}
+
+relay_mark() {
+  [[ "$1" =~ ^[a-z0-9_]+$ && "$2" =~ ^[a-z0-9_.-]+$ ]] || return 0
+  mkdir -p "$(dirname "$relay_probe_file")"
+  printf 'mark=%s value=%s utc=%s\n' "$1" "$2" "$(date -u +%H:%M:%S)" >> "$relay_probe_file" || true
+}
+
 relay_cleanup() {
   local status=$?
   trap - EXIT
   set +e
+  if [[ -n "$relay_pid" ]]; then relay_probe before_cleanup; fi
   relay_stop_server
   local server_status=$?
   local postgres_status=0
@@ -118,7 +161,10 @@ EOF
 }
 
 relay_trust_simulator() {
-  xcrun simctl keychain "$1" add-root-cert "$relay_directory/ca.crt"
+  local trust_status=0
+  xcrun simctl keychain "$1" add-root-cert "$relay_directory/ca.crt" || trust_status=$?
+  relay_mark trust_status "$trust_status"
+  return "$trust_status"
 }
 
 relay_reset_fixture() {

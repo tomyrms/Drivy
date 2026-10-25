@@ -21,9 +21,15 @@ candidates=[d for runtime,items in devices.items() if "iOS" in runtime for d in 
 if not candidates: raise SystemExit("Aucun simulateur iPhone disponible")
 print(candidates[0]["udid"])
 ')
+boot_started=$SECONDS
 xcrun simctl boot "$device_id" || true
 xcrun simctl bootstatus "$device_id" -b
-if [[ "$relay_required" == 1 ]]; then relay_trust_simulator "$device_id"; fi
+if [[ "$relay_required" == 1 ]]; then
+  relay_mark phone_boot_seconds "$((SECONDS - boot_started))"
+  relay_trust_simulator "$device_id"
+  relay_mark phone_suite_scope "${DRIVY_IOS_UNIT_TEST_SCOPE:-default}"
+  relay_probe phone_before_xcodebuild
+fi
 phone_status=0
 xcodebuild test-without-building \
   "${test_plan_options[@]}" \
@@ -34,6 +40,10 @@ xcodebuild test-without-building \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
   2>&1 | tee artifacts/ios/simulator-test.log || phone_status=$?
+if [[ "$relay_required" == 1 ]]; then
+  relay_mark phone_xcodebuild_status "$phone_status"
+  if (( phone_status != 0 )); then relay_probe phone_after_failure; fi
+fi
 if [[ "${DRIVY_IOS_UNIT_ONLY:-0}" == 1 ]]; then exit "$phone_status"; fi
 xcrun simctl launch "$device_id" ch.drivy.qualification || true
 sleep 2
@@ -54,11 +64,14 @@ pathlib.Path("artifacts/ios/test-device-iPad.json").write_text(json.dumps(dict(d
 print(selected["udid"])
 ')
 xcrun simctl shutdown "$device_id"
+boot_started=$SECONDS
 xcrun simctl boot "$ipad_id" || true
 xcrun simctl bootstatus "$ipad_id" -b
 if [[ "$relay_required" == 1 ]]; then
+  relay_mark ipad_boot_seconds "$((SECONDS - boot_started))"
   relay_reset_fixture
   relay_trust_simulator "$ipad_id"
+  relay_probe ipad_before_xcodebuild
 fi
 ipad_status=0
 ipad_test_options=(-only-testing:DrivyUITests -only-testing:DrivyTests/SchoolPresentationTests)
@@ -72,6 +85,10 @@ xcodebuild test-without-building \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
   2>&1 | tee artifacts/ios/ipad-test.log || ipad_status=$?
+if [[ "$relay_required" == 1 ]]; then
+  relay_mark ipad_xcodebuild_status "$ipad_status"
+  if (( ipad_status != 0 )); then relay_probe ipad_after_failure; fi
+fi
 xcrun simctl launch "$ipad_id" ch.drivy.qualification || true
 sleep 2
 xcrun simctl io "$ipad_id" screenshot artifacts/ios/ipad-light.png || true
