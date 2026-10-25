@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 25 octobre 2026 : résultats de la campagne finale (#84)
+
+Branche `vague/cours-collectifs`, aucun déploiement.
+- Exécuté : e2e navigateur réussi sur `a8a0729` ([run 40184333047](https://github.com/tomyrms/Drivy/actions/runs/40184333047)) ; IPA d'essai avec le droit APNs `aps-environment=development` compilée sur `6744408` ([run 40184742677](https://github.com/tomyrms/Drivy/actions/runs/40184742677)), signature et installation iLoader non faites.
+- Campagne iOS sur `495f97b` : 29 tests UI sur 30 réussis. Échec de `FieldFlowTests.testLeavingLiveThroughTheExitButtonKeepsTheStartedLessonWithoutCancellingIt` (requête de l'accessoire capture-return sous iOS 26), corrigé dans `c169a7f`. Relance ciblée en cours ([run 40184805111](https://github.com/tomyrms/Drivy/actions/runs/40184805111)).
+- Reste à qualifier : campagne iOS complète ; livraison APNs réelle (clés `APNS_*` et script `prepare-course-worker.sql` non exécutés).
+
 ## 24 octobre 2026 : cours collectifs, appel (#42), règlements sur place (#81), validation (#82)
 
 Branche `vague/cours-collectifs`, non fusionnée, aucun déploiement. Commits `3056515`, `a419e90`, `f1f726f`. Contrat : [cours-collectifs-faits-42-81-82.md](cours-collectifs-faits-42-81-82.md).

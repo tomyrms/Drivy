@@ -44,4 +44,11 @@ Une IPA compilée prouve la construction. Elle ne prouve ni le fonctionnement ni
 | #91 | Replay OSRM fiable, portions brutes explicites | | | NOT_EXECUTED | Campagne finale |
 | #95 | Démarrage compact, choix GPS réutilisé (fermée, reste couverte) | ce7e3a8, 1826c04 | UI iPhone/iPad réussie sur ce7e3a8 | NOT_EXECUTED | Échec métier corrigé dans 1826c04, non rejoué |
 
+## Résultats exécutés (25 octobre 2026)
+
+- E2e navigateur : PASS sur `a8a0729` (run 40184333047).
+- IPA d'essai avec `aps-environment=development` : compilée sur `6744408` (run 40184742677). Signature et installation iLoader : NOT_EXECUTED.
+- Campagne iOS sur `495f97b` : 29/30 tests UI PASS. FAIL : `FieldFlowTests.testLeavingLiveThroughTheExitButtonKeepsTheStartedLessonWithoutCancellingIt` (requête de l'accessoire capture-return sous iOS 26), corrigé dans `c169a7f`, relance ciblée en cours (run 40184805111).
+- Reste à qualifier : campagne iOS complète ; livraison APNs réelle (clés `APNS_*` et script `prepare-course-worker.sql` non exécutés).
+
 Les contrôles physiques (GPS réel, arrière-plan, autonomie, VoiceOver sur appareil) restent manuels. Le simulateur ne les valide pas.
