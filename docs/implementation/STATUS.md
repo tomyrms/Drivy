@@ -5,7 +5,9 @@
 - Le porteur signale `D-NOKEY` avec l'IPA 354 en alternant deux comptes sur le même téléphone. Ce code signifie que la session de déchiffrement est absente localement, pas que sa perte définitive est démontrée.
 - Relevé serveur à 10:40 UTC : deux anciens messages, aucun nouvel envoi accepté, aucun partage to-device et aucun nouvel appareil du second compte. Ces constats ne prouvent pas à eux seuls un défaut local : un refus réseau/API avant écriture reste possible.
 - La suite Apple `40184451319` est réussie après correction d'une assertion devenue obsolète. Son relais en mémoire ne qualifie pas l'intégration HTTP réelle.
-- Priorité : exécuter Matrix FFI natif contre Fastify/PostgreSQL réels et confronter le résultat aux codes des routes du serveur. Aucune suppression de l'application, de ses clés ou de ses données n'est nécessaire pour ce diagnostic. Aucun succès de réception physique n'est revendiqué.
+- Le 25 octobre à 12:17 UTC, run Apple `40191511234` sur `65eddbf` réussi : 99 XCTest sans échec, dont le scénario Matrix FFI → HTTPS → Fastify → PostgreSQL. Échange privé A/B, répétition idempotente, sauvegarde et restauration sur un appareil neuf, refus des contextes étrangers réellement exécutés. La garde confirme `RELAY_EXECUTION_PASSED: 1 scenario, 0 skipped`. Ce résultat ne couvre pas encore Général avec inscription tardive de B, l'interface d'envoi, ni l'essai physique.
+- Campagne API/PostgreSQL `40191346532` sur `7946886` réussie. Le relevé de journaux entre 10:41 et 12:01 UTC ne contient aucun parcours d'envoi, seulement des lectures et les sondes de déploiement : aucun rejet d'envoi authentifié n'est prouvé.
+- Suite : reproduire Général avec inscription tardive de B dans le même relais réel. Aucune suppression de l'application, de ses clés ou de ses données n'est nécessaire pour ce diagnostic. Aucun succès de réception physique ni correction du `D-NOKEY` signalé n'est revendiqué.
 
 ## 24 octobre 2026 : campagne #84 engagée sur la messagerie
 
