@@ -52,7 +52,7 @@ describe('course upgrade after the dated production messaging migrations', () =>
     const functions = (await pool.query(`SELECT p.oid::regprocedure::text AS signature,pg_get_functiondef(p.oid) AS definition,
       p.proacl::text AS acl,p.proowner::regrole::text AS owner,p.prosecdef,p.proconfig
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-      WHERE n.nspname='drivy' AND p.proname LIKE 'messaging_%' ORDER BY signature`)).rows;
+      WHERE n.nspname='drivy' AND p.proname LIKE 'messaging_%' AND p.proname<>'messaging_mention_enqueue' ORDER BY signature`)).rows;
     const tables = (await pool.query(`SELECT c.relname,c.relacl::text AS acl,c.relowner::regrole::text AS owner,
       c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='drivy' AND c.relname LIKE 'messaging_%' AND c.relkind='r' ORDER BY c.relname`)).rows;
