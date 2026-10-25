@@ -47,13 +47,36 @@ final class MessagingThreadUITests: XCTestCase {
         let remove = app.buttons["Retirer du général"]
         XCTAssertTrue(remove.waitForExistence(timeout: 3), "La fixture est administratrice du groupe")
         remove.tap()
-        app.buttons["messaging.members.confirmRemove"].tap()
+        let confirmRemove = try confirmationButton(in: app, identifier: "messaging.members.confirmRemove")
+        XCTAssertEqual(confirmRemove.label, "Retirer Léa Fixture")
+        confirmRemove.tap()
         let reinstate = app.buttons["messaging.members.reinstate"]
         XCTAssertTrue(reinstate.waitForExistence(timeout: 5))
         XCTAssertTrue(reinstate.label.hasPrefix("Réintégrer "))
         reinstate.tap()
-        app.buttons["messaging.members.confirmReinstate"].tap()
+        let confirmReinstate = try confirmationButton(in: app, identifier: "messaging.members.confirmReinstate")
+        XCTAssertEqual(confirmReinstate.label, "Réintégrer Léa Fixture")
+        confirmReinstate.tap()
         XCTAssertTrue(reinstate.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "Le membre réintégré retrouve sa ligne active")
+    }
+
+    private func confirmationButton(in app: XCUIApplication, identifier: String,
+                                    file: StaticString = #filePath, line: UInt = #line) throws -> XCUIElement {
+        let matches = app.buttons.matching(identifier: identifier)
+        let appeared = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in matches.count > 0 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [appeared], timeout: 5), .completed,
+                       "La confirmation doit apparaître", file: file, line: line)
+        // Le run 40194237882 expose Button > Button avec le même identifiant sur iPhone/iPad.
+        // Garder le bouton terminal, pas son conteneur. Deux actions distinctes restent un échec.
+        let actions = matches.allElementsBoundByIndex.filter {
+            $0.descendants(matching: .button).matching(identifier: identifier).count == 0
+        }
+        let action = try XCTUnwrap(actions.count == 1 ? actions[0] : nil,
+                                  "Une seule action terminale attendue pour \(identifier), trouvé : \(actions.count)",
+                                  file: file, line: line)
+        XCTAssertTrue(action.isHittable, "La confirmation doit être actionnable", file: file, line: line)
+        return action
     }
 
     func testPollComposerRequiresQuestionAndTwoOptions() throws {

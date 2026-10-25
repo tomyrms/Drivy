@@ -24,7 +24,11 @@ async function main() {
   const realm = JSON.parse(await readFile(new URL('../../infra/dev/realm.json',import.meta.url),'utf8')) as { realm:string;clients:Array<{clientId:string}> };
   const existing = await adminFetch('realms/drivy-dev');
   if (existing.status===404) {
-    const response = await adminFetch('realms',{ method:'POST',body:JSON.stringify(realm) });
+    // Le modèle historique active le password grant Apple. Le laboratoire utilise
+    // uniquement Authorization Code + PKCE ; ne jamais assouplir la validation ci-dessous.
+    const securedRealm = { ...realm,clients:realm.clients.map(client=>client.clientId==='drivy-apple'
+      ? { ...client,directAccessGrantsEnabled:false } : client) };
+    const response = await adminFetch('realms',{ method:'POST',body:JSON.stringify(securedRealm) });
     if (!response.ok) throw new Error('Création du realm local refusée.');
   } else if (!existing.ok) throw new Error('Lecture du realm local refusée.');
   const clientsResponse = await adminFetch('realms/drivy-dev/clients?clientId=drivy-apple');
