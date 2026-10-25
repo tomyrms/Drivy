@@ -45,6 +45,7 @@ if [[ "$relay_required" == 1 ]]; then
   if (( phone_status != 0 )); then relay_probe phone_after_failure; fi
 fi
 if [[ "${DRIVY_IOS_UNIT_ONLY:-0}" == 1 ]]; then exit "$phone_status"; fi
+if [[ "$ui_iphone_only" == 1 ]]; then exit "$phone_status"; fi
 xcrun simctl launch "$device_id" ch.drivy.qualification || true
 sleep 2
 xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-light.png || true

@@ -45,6 +45,10 @@ on:
         description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), iPhone et iPad sans IPA ; vide pour tout'
         type: string
         default: ''
+      ui_iphone_only:
+        description: 'Avec ui_test_suite : contrôle intermédiaire sur iPhone seul, sans iPad ni captures (pas une preuve finale)'
+        type: boolean
+        default: false
       visual_screens:
         description: Écrans à capturer, séparés par des espaces
         type: string
@@ -82,7 +86,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   apple:
-    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
+    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && inputs.ui_iphone_only && 'Parcours UI iPhone seul' || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
     timeout-minutes: 90
@@ -96,6 +100,7 @@ jobs:
       DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
       DRIVY_IOS_UNIT_TEST_SCOPE: ${{ inputs.unit_test_scope || 'gps' }}
       DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
+      DRIVY_IOS_UI_IPHONE_ONLY: ${{ inputs.ui_iphone_only && '1' || '0' }}
       DRIVY_IOS_VISUAL_ONLY: ${{ inputs.visual_only && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
