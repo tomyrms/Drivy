@@ -1,5 +1,16 @@
 # État de la réalisation
 
+## 25 octobre 2026 à 15:33 UTC : cours déployés, worker de notifications actif
+
+Accord du porteur à 15:28 UTC.
+- Sauvegarde CT113 `/root/drivy_refonte-before-courses-5888f03-20261025T1529Z.dump`, 1 878 057 octets, 0600, catalogue et blocs relus par `pg_restore`. Aucune restauration d'essai revendiquée.
+- Release `5888f03718045e13dc3c304040ead26991ffe719` (archive SHA-256 `3760d12e…aceb2`, identique avant et après transfert) installée par `install-api-release.py`. Migrations 042 à 046 appliquées : 53 au registre, empreintes identiques au dépôt. Contrôle runtime/RLS réussi.
+- API seule redémarrée : readiness 200, `/v1/me` et préférences de notification 401 sans jeton, aucune erreur au journal. Le web reste ancré sur `36a3a70` par son override : les écrans web des cours ne sont pas livrés.
+- Avant activation : 0 série, 0 événement en attente, 0 notification en attente, 0 appareil inscrit. Rien ne pouvait donc partir d'un coup.
+- `drivy-refonte-course-worker` activé et démarré sous `drivy-course-worker` : actif, aucun redémarrage ni avertissement après plusieurs cycles.
+- Reste à qualifier : réception réelle sur un iPhone signé avec le droit push (iLoader, topic, environnement APNs). Aucune notification n'a été envoyée à ce jour.
+- Retour arrière : `systemctl disable --now drivy-refonte-course-worker`, lien `current` vers `79468863…`, redémarrage de l'API. Les migrations 042 à 046 sont additives et n'ont pas besoin d'être annulées. Restauration de la sauvegarde seulement en dernier recours.
+
 ## 25 octobre 2026 à 15:03 UTC : défauts d'envoi push corrigés avant toute activation
 
 Revue de déploiement NO-GO sur `48b78d1` : le worker aurait pu envoyer des notifications devenues fausses. Corrigé, non déployé :
