@@ -140,7 +140,8 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         let late = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: alice,
                                         acceptedAt: Date(), ciphertext: second)
         do { _ = try await b.decrypt(late, scope: bScope); XCTFail("Un membre parti ne doit pas lire") }
-        catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        catch let failure as MessagingDecryptionFailure { XCTAssertTrue(failure.code.hasPrefix("D-"), failure.code) }
+        catch { XCTFail("Refus attendu avec un code de déchiffrement, reçu \(error)") }
     }
 
     /// Départ puis retour entre deux envois : la liste est identique, l'époque change, la clé doit changer.
