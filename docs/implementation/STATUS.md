@@ -10,7 +10,8 @@ Accord du porteur à 15:28 UTC.
 - Worker vérifié en base : une session `drivy_refonte_course_worker` ouverte, 21 transactions validées en 30 s, 0 redémarrage et 0 échec de cycle depuis 15:32:11 UTC.
 - Avant activation : 0 série, 0 événement en attente, 0 notification en attente, 0 appareil inscrit. Rien ne pouvait donc partir d'un coup.
 - `drivy-refonte-course-worker` activé et démarré sous `drivy-course-worker` : actif, aucun redémarrage ni avertissement après plusieurs cycles.
-- Reste à qualifier : réception réelle sur un iPhone signé avec le droit push (iLoader, topic, environnement APNs). Aucune notification n'a été envoyée à ce jour.
+- IPA non signée pour iLoader : run `40207657410`, build 356 v0.7.0, bundle `ch.drivy.qualification`, `aps-environment=development` (jeton déclaré SANDBOX). Le topic APNs configuré sur le serveur est identique au bundle (comparé sans afficher la valeur), et les 4 clés APNs sont présentes. Conditions de réception : compte développeur payant, App ID `ch.drivy.qualification` avec Push, bundle non renommé par iLoader.
+- Reste à qualifier : réception réelle sur un iPhone signé avec le droit push. Aucune notification n'a été envoyée à ce jour.
 - Retour arrière : `systemctl disable --now drivy-refonte-course-worker`, lien `current` vers `79468863…`, redémarrage de l'API. Les migrations 042 à 046 sont additives et n'ont pas besoin d'être annulées. Restauration de la sauvegarde seulement en dernier recours.
 
 ## 25 octobre 2026 à 15:03 UTC : défauts d'envoi push corrigés avant toute activation
