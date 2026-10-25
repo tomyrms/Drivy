@@ -108,10 +108,10 @@ async function main() {
   try {
     stage='base vierge et migrations non privilégiées';
     assert((await administration.query("SELECT to_regnamespace('drivy') AS schema")).rows[0].schema===null,'La recette commence dans une base vide isolée');
-    for(const role of ['drivy_e2e_migrator','drivy_app','drivy_invitation_mailer'])await administration.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT; END IF; END $$`);
+    for(const role of ['drivy_e2e_migrator','drivy_app','drivy_invitation_mailer','drivy_course_worker'])await administration.query(`DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='${role}') THEN CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOINHERIT; END IF; END $$`);
     await administration.query('GRANT CREATE ON DATABASE drivy_onboarding_e2e TO drivy_e2e_migrator');
     await administration.query('GRANT USAGE,CREATE ON SCHEMA public TO drivy_e2e_migrator');
-    await administration.query('GRANT drivy_app,drivy_invitation_mailer TO drivy_e2e_migrator WITH ADMIN OPTION');
+    await administration.query('GRANT drivy_app,drivy_invitation_mailer,drivy_course_worker TO drivy_e2e_migrator WITH ADMIN OPTION');
     const migrator=new Pool({connectionString:databaseURL,options:'-c role=drivy_e2e_migrator'});
     try{await migrate(migrator);}finally{await migrator.end();}
     runtime=new Pool({connectionString:databaseURL,options:'-c role=drivy_app',max:8});
