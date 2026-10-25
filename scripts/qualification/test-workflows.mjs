@@ -75,3 +75,21 @@ test('finale transmet le SHA figé sans appeler le wrapper', () => {
   assert.deepEqual(Object.keys(workflows.get('qualification-checks.yml').jobs).sort(), ['documentation', 'server', 'web']);
   assert.deepEqual(Object.keys(workflows.get('qualification-checks.yml').on), ['workflow_call']);
 });
+
+test('accès Messages physique explicite identique dans tests natifs et IPA', () => {
+  const wrapper = workflows.get('refonte-checks.yml');
+  const final = workflows.get('validation-finale.yml');
+  assert.equal(wrapper.on.workflow_dispatch.inputs.messaging_qualification.default, false);
+  assert.equal(wrapper.jobs.final.with.messaging_qualification, '${{ inputs.messaging_qualification }}');
+  assert.equal(final.on.workflow_call.inputs.messaging_qualification.default, false);
+  for (const name of ['ios', 'ipa']) {
+    assert.equal(final.jobs[name].with.messaging_qualification, '${{ inputs.messaging_qualification }}');
+  }
+  for (const file of ['refonte-ios.yml', 'ipa-essai.yml']) {
+    const workflow = workflows.get(file);
+    assert.equal(workflow.on.workflow_dispatch.inputs.messaging_qualification.default, false);
+    assert.equal(workflow.on.workflow_call.inputs.messaging_qualification.default, false);
+    const job = Object.values(workflow.jobs)[0];
+    assert.equal(job.env.DRIVY_MESSAGING_QUALIFICATION, "${{ inputs.messaging_qualification && '1' || '0' }}");
+  }
+});

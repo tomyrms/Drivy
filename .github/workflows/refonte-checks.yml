@@ -6,6 +6,10 @@ on:
         description: Lancer la qualification finale complète via cette entrée déjà enregistrée
         type: boolean
         default: false
+      messaging_qualification:
+        description: Accès Messages physique dans les tests et l'IPA de la campagne finale
+        type: boolean
+        default: false
       candidate_ref:
         description: Référence du candidat final, vide pour le SHA du déclenchement
         type: string
@@ -30,3 +34,4 @@ jobs:
     uses: ./.github/workflows/validation-finale.yml
     with:
       candidate_ref: ${{ inputs.candidate_ref || github.sha }}
+      messaging_qualification: ${{ inputs.messaging_qualification }}

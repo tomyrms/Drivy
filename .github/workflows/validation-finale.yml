@@ -6,12 +6,19 @@ on:
       candidate_ref:
         required: true
         type: string
+      messaging_qualification:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       candidate_ref:
         description: Branche, tag ou SHA du candidat intégré à qualifier
         required: true
         type: string
+      messaging_qualification:
+        description: Même accès Messages de qualification physique dans les tests natifs et l'IPA
+        type: boolean
+        default: false
 permissions:
   contents: read
 # Serialise candidates, including aliases of the same SHA. Never cancel evidence.
@@ -55,6 +62,7 @@ jobs:
     uses: ./.github/workflows/refonte-ios.yml
     with:
       qualification_sha: ${{ needs.resolve.outputs.sha }}
+      messaging_qualification: ${{ inputs.messaging_qualification }}
       unit_test_scope: all
       visual_only: false
       unit_only: false
@@ -64,6 +72,7 @@ jobs:
     uses: ./.github/workflows/ipa-essai.yml
     with:
       qualification_sha: ${{ needs.resolve.outputs.sha }}
+      messaging_qualification: ${{ inputs.messaging_qualification }}
   scripts:
     needs: resolve
     runs-on: ubuntu-24.04
