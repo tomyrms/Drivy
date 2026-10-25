@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SchoolHomeTab: Hashable { case session, agenda, learners, profile, lessons, progress }
+enum SchoolHomeTab: Hashable { case session, agenda, learners, profile, lessons, progress, messages }
 
 /// Onglets par rôle : le moniteur conduit (Aujourd’hui, Agenda, Élèves) et trouve
 /// leur compte et leurs trajets dans Profil ; l’élève suit (Leçons, Progression) et trouve dans Profil son
@@ -151,7 +151,7 @@ struct SchoolHomeView: View {
     // MARK: Moniteur
 
     private var staffSelection: Binding<SchoolHomeTab> {
-        Binding(get: { [.session, .agenda, .learners, .profile].contains(selectedTab) ? selectedTab : .session }, set: { selectedTab = $0 })
+        Binding(get: { staffTabsAvailable.contains(selectedTab) ? selectedTab : .session }, set: { selectedTab = $0 })
     }
 
     private var staffTabs: some View {
@@ -176,6 +176,7 @@ struct SchoolHomeView: View {
                 agendaClient: agendaClient, captureController: captureController)
                 .tabItem { tabLabel("Élèves", systemImage: "person.2", tab: .learners) }
                 .tag(SchoolHomeTab.learners)
+            messagesTab
             SchoolProfileTabView(workspace: workspace, account: account, agendaClient: agendaClient,
                 captureController: captureController, chooseSchool: chooseSchoolAction)
                 .tabItem { tabLabel("Profil", systemImage: "person.crop.circle", tab: .profile) }
@@ -343,7 +344,7 @@ struct SchoolHomeView: View {
     // MARK: Élève (onglets)
 
     private var learnerSelection: Binding<SchoolHomeTab> {
-        Binding(get: { [.lessons, .progress, .profile].contains(selectedTab) ? selectedTab : .lessons }, set: { selectedTab = $0 })
+        Binding(get: { learnerTabsAvailable.contains(selectedTab) ? selectedTab : .lessons }, set: { selectedTab = $0 })
     }
 
     private var ownLearner: SchoolLearner? {
@@ -366,6 +367,7 @@ struct SchoolHomeView: View {
             learnerTab(.progress, title: "Progression")
                 .tabItem { Label("Progression", image: "Tab-progress") }
                 .tag(SchoolHomeTab.progress)
+            messagesTab
             SchoolLearnerProfileTab(workspace: workspace, learner: ownLearner, trainings: learnerTrainings, account: account,
                 agendaClient: agendaClient, trainingClient: trainingClient, chooseSchool: chooseSchoolAction,
                 openTraining: { training, tab in chosenPermit = training; selectedTab = tab },
@@ -513,6 +515,28 @@ struct SchoolHomeView: View {
         }
     }
 
+    /// Messages : l'inbox porte sa propre pile de navigation (et sa liste partagée sur iPad).
+    /// Absent sans composition explicite, et retiré tant qu'un trajet tourne, comme l'ancienne entrée.
+    private var activeMessagingEntry: SchoolMessagingEntry? { tripInProgress ? nil : messagingEntry }
+
+    @ViewBuilder private var messagesTab: some View {
+        if let entry = activeMessagingEntry {
+            entry.makeView(nil)
+                .id(entry.scopeID)
+                .tabItem { tabLabel("Messages", systemImage: "bubble.left.and.bubble.right", tab: .messages) }
+                .accessibilityIdentifier("messages-tab")
+                .tag(SchoolHomeTab.messages)
+        }
+    }
+
+    private var staffTabsAvailable: [SchoolHomeTab] {
+        [.session, .agenda, .learners, .profile] + (activeMessagingEntry == nil ? [] : [.messages])
+    }
+
+    private var learnerTabsAvailable: [SchoolHomeTab] {
+        [.lessons, .progress, .profile] + (activeMessagingEntry == nil ? [] : [.messages])
+    }
+
     /// Un trajet GPS tourne (ou attend encore la confirmation de l’école) : changer d’école fermerait sa portée.
     private var tripInProgress: Bool {
         guard let captureController else { return false }
@@ -527,9 +551,6 @@ struct SchoolHomeView: View {
 
     /// Moniteur et administration : l’école seulement, le compte vit dans l’onglet Profil.
     @ToolbarContentBuilder private var staffToolbar: some ToolbarContent {
-        if messagingEntry != nil && !tripInProgress {
-            ToolbarItem(placement: .primaryAction) { SchoolMessagingEntryButton() }
-        }
         if let chooseSchoolAction {
             DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
         }

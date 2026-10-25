@@ -1,16 +1,20 @@
 import SwiftUI
 
-/// Composant réversible, non inséré dans les onglets tant que #66 n'a pas validé la navigation.
+/// Liste des discussions de l'école : onglet Messages (#98), pile sur iPhone, liste et conversation sur iPad.
 struct MessagingInboxView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var workspace: MessagingWorkspace
     @State private var connectivity = MessagingConnectivity()
     private let initialPeerID: UUID?
     @State private var route: Route?
     @State private var opening = false
     @State private var initialPeerAttempted = false
+    @State private var query = ""
+    @State private var choosesContact = false
+    @State private var showsSettings = false
 
-    private struct Route: Identifiable, Hashable {
+    fileprivate struct Route: Identifiable, Hashable {
         let id: UUID
         let title: String
         let detail: String?
@@ -33,107 +37,207 @@ struct MessagingInboxView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if let error = workspace.error {
-                    ContentUnavailableView("Messages indisponibles", systemImage: "lock.shield",
-                        description: Text(error.localizedDescription))
-                        .accessibilityIdentifier("messaging.error")
-                }
-                Section("Discussions") {
-                    Button { Task { await openGeneral() } } label: {
-                        Label("Général de l'école", systemImage: "person.3")
-                    }
-                    .disabled(opening)
-                    NavigationLink {
-                        MessagingMembersView(workspace: workspace)
-                    } label: {
-                        Label("Membres du général", systemImage: "person.2.circle")
-                    }
-                    .accessibilityIdentifier("messaging.members.open")
-                    ForEach(workspace.conversations) { item in
-                        Button {
-                            route = Route(id: item.id, title: item.title, detail: item.identityDetail,
-                                          sequence: item.lastSequence, readSequence: item.lastReadSequence,
-                                          mutedUntil: item.mutedUntil, readStateVersion: item.readStateVersion,
-                                          isGeneral: item.kind == .schoolGeneral)
-                        } label: {
-                            HStack {
-                                // Photo de l'interlocuteur seulement si le serveur l'a exposée (#64).
-                                DrivyAvatar(name: item.title, size: 42).accessibilityHidden(true)
-                                VStack(alignment: .leading) {
-                                    Text(item.title).font(.headline)
-                                    if let detail = item.identityDetail { Text(detail).font(.subheadline).foregroundStyle(.secondary) }
-                                }
-                                Spacer()
-                                if let unread = item.unreadCount, unread > 0 {
-                                    Text(unread.formatted()).font(.caption.bold()).padding(6)
-                                        .background(.tint, in: Capsule())
-                                        .accessibilityLabel("\(unread) messages non lus")
-                                }
-                            }
+        Group {
+            if horizontalSizeClass == .regular {
+                NavigationSplitView {
+                    inbox
+                } detail: {
+                    NavigationStack {
+                        if let route {
+                            conversation(route).id(route.id)
+                        } else {
+                            ContentUnavailableView("Aucune conversation ouverte", systemImage: "bubble.left.and.bubble.right")
                         }
                     }
-                    if workspace.canLoadMoreConversations {
-                        Button("Charger plus de conversations") { Task { await workspace.loadConversations(more: true) } }
-                    }
-                    if workspace.hasLoadedConversations && workspace.conversations.isEmpty {
-                        Text("Aucune conversation").foregroundStyle(.secondary)
-                    }
                 }
-                Section("Contacts autorisés") {
-                    ForEach(workspace.contacts) { contact in
-                        Button { Task { await openPrivate(contact) } } label: {
-                            Text(contact.displayName)
-                        }
-                        .disabled(opening)
-                    }
+            } else {
+                NavigationStack {
+                    inbox.navigationDestination(item: $route) { conversation($0) }
                 }
-            }
-            .navigationTitle("Messages")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink {
-                        MessagingSettingsView(keys: keys, scope: workspace.scope, currentScope: currentScope)
-                    } label: {
-                        Label("Réglages", systemImage: "gearshape")
-                    }
-                    .accessibilityIdentifier("messaging.settings.open")
-                }
-            }
-            .onAppear { connectivity.start() }
-            .onDisappear { connectivity.stop() }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await workspace.refreshVisible(conversationID: route?.id) } }
-            }
-            .onChange(of: connectivity.available) { _, available in
-                if available { Task { await workspace.refreshVisible(conversationID: route?.id) } }
-            }
-            .overlay { if workspace.loading && !workspace.hasLoadedConversations { ProgressView("Chargement") } }
-            .refreshable { await workspace.loadConversations(); await workspace.loadContacts() }
-            .task {
-                if !workspace.hasLoadedConversations { await workspace.loadConversations() }
-                await workspace.loadContacts()
-                await workspace.refreshVisible()
-                if let initialPeerID, !initialPeerAttempted {
-                    initialPeerAttempted = true
-                    // Une fiche ne contourne pas le contrôle serveur. La route s'ouvre uniquement après un PUT autorisé.
-                    if let id = await workspace.privateConversation(peerID: initialPeerID) {
-                        let contact = workspace.contacts.first { $0.id == initialPeerID }
-                        route = Route(id: id, title: contact?.displayName ?? "Conversation privée",
-                                      detail: nil,
-                                      sequence: 0, readSequence: 0, mutedUntil: nil,
-                                      readStateVersion: 0, isGeneral: false)
-                    }
-                }
-            }
-            .navigationDestination(item: $route) { selected in
-                MessagingConversationView(workspace: workspace, conversationID: selected.id,
-                    title: selected.title, detail: selected.detail, lastSequence: selected.sequence,
-                    lastReadSequence: selected.readSequence, mutedUntil: selected.mutedUntil,
-                    readStateVersion: selected.readStateVersion, isGeneral: selected.isGeneral)
             }
         }
+        .onAppear { connectivity.start() }
+        .onDisappear { connectivity.stop() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await refresh() } }
+        }
+        .onChange(of: connectivity.available) { _, available in
+            if available { Task { await refresh() } }
+        }
+        .task { await initialLoad() }
+    }
+
+    // MARK: Liste
+
+    private var inbox: some View {
+        List {
+            if let error = workspace.error {
+                Section {
+                    VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                        Label(error.localizedDescription, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(DrivyTheme.text)
+                        Button("Réessayer") { Task { await reload() } }
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("messaging.error")
+                }
+            }
+            if showsGeneralShortcut {
+                Button { Task { await openGeneral() } } label: {
+                    MessagingInboxRow(title: "Général", preview: nil, unread: 0, muted: false,
+                                      photo: nil, isGeneral: true)
+                }
+                .buttonStyle(.plain)
+                .disabled(opening)
+                .accessibilityIdentifier("messaging.general.open")
+            }
+            ForEach(visibleConversations) { item in
+                Button { open(item) } label: {
+                    MessagingInboxRow(title: item.kind == .schoolGeneral ? "Général" : item.title,
+                        preview: workspace.preview(for: item.id),
+                        unread: item.unreadCount ?? 0,
+                        muted: (item.mutedUntil ?? .distantPast) > Date(), photo: nil,
+                        isGeneral: item.kind == .schoolGeneral)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(route?.id == item.id && horizontalSizeClass == .regular
+                    ? DrivyTheme.accent.opacity(0.12) : nil)
+                .accessibilityIdentifier(item.kind == .schoolGeneral ? "messaging.general.open" : "messaging.conversation.\(item.id)")
+            }
+            if workspace.canLoadMoreConversations && query.isEmpty {
+                Button("Charger plus") { Task { await workspace.loadConversations(more: true); await workspace.loadPreviews() } }
+                    .frame(minHeight: 44)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(DrivyTheme.surface)
+        .overlay {
+            if workspace.loading && !workspace.hasLoadedConversations {
+                ProgressView("Chargement")
+            } else if !query.isEmpty && visibleConversations.isEmpty && !generalMatchesQuery {
+                ContentUnavailableView.search(text: query)
+            } else if workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
+                        && workspace.error == nil {
+                ContentUnavailableView {
+                    Label("Aucune conversation", systemImage: "bubble.left.and.bubble.right")
+                } actions: {
+                    Button("Nouvelle conversation") { choosesContact = true }
+                }
+                .padding(.top, 88)
+            }
+        }
+        .navigationTitle("Messages")
+        .searchable(text: $query, prompt: "Rechercher une conversation")
+        .refreshable { await reload() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { choosesContact = true } label: {
+                    Label("Nouvelle conversation", systemImage: "square.and.pencil")
+                }
+                .disabled(opening)
+                .accessibilityIdentifier("messaging.new")
+            }
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    Button("Réglages", systemImage: "gearshape") { showsSettings = true }
+                        .accessibilityIdentifier("messaging.settings.open")
+                } label: {
+                    Label("Plus", systemImage: "ellipsis.circle")
+                }
+                .accessibilityIdentifier("messaging.inbox.more")
+            }
+        }
+        .navigationDestination(isPresented: $showsSettings) {
+            MessagingSettingsView(keys: keys, scope: workspace.scope, currentScope: currentScope)
+        }
+        .sheet(isPresented: $choosesContact) {
+            MessagingContactPicker(workspace: workspace) { contact in
+                choosesContact = false
+                Task { await openPrivate(contact) }
+            }
+        }
+    }
+
+    private var privateConversations: [MessagingConversation] {
+        workspace.conversations.filter { $0.kind != .schoolGeneral }
+    }
+
+    /// Le général apparaît une fois : sa ligne serveur s'il est listé, sinon un raccourci en tête.
+    private var showsGeneralShortcut: Bool {
+        !workspace.conversations.contains { $0.kind == .schoolGeneral } && generalMatchesQuery
+    }
+
+    private var generalMatchesQuery: Bool {
+        query.isEmpty || "Général".range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    /// Le serveur trie par identifiant : la vue range par dernier message connu, puis garde l'ordre reçu.
+    private var visibleConversations: [MessagingConversation] {
+        let indexed = workspace.conversations.enumerated().map { (offset: $0.offset, item: $0.element,
+                                                                    preview: workspace.preview(for: $0.element.id)) }
+        let filtered = indexed.filter { entry in
+            guard !query.isEmpty else { return true }
+            let title = entry.item.kind == .schoolGeneral ? "Général" : entry.item.title
+            let haystack = [title, entry.preview?.text ?? ""]
+            return haystack.contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        }
+        return filtered.sorted { lhs, rhs in
+            switch (lhs.preview?.date, rhs.preview?.date) {
+            case let (l?, r?) where l != r: return l > r
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: return lhs.offset < rhs.offset
+            }
+        }.map(\.item)
+    }
+
+    @ViewBuilder private func conversation(_ selected: Route) -> some View {
+        MessagingConversationView(workspace: workspace, conversationID: selected.id,
+            title: selected.title, detail: selected.detail, lastSequence: selected.sequence,
+            lastReadSequence: selected.readSequence, mutedUntil: selected.mutedUntil,
+            readStateVersion: selected.readStateVersion, isGeneral: selected.isGeneral)
+    }
+
+    // MARK: Chargement
+
+    private func initialLoad() async {
+        if !workspace.hasLoadedConversations { await workspace.loadConversations() }
+        await workspace.loadPreviews()
+        await workspace.loadContacts()
+        await workspace.refreshVisible()
+        if let initialPeerID, !initialPeerAttempted {
+            initialPeerAttempted = true
+            // Une fiche ne contourne pas le contrôle serveur. La route s'ouvre uniquement après un PUT autorisé.
+            if let id = await workspace.privateConversation(peerID: initialPeerID) {
+                let contact = workspace.contacts.first { $0.id == initialPeerID }
+                let known = workspace.conversations.first { $0.id == id }
+                route = Route(id: id, title: contact?.displayName ?? known?.title ?? "Conversation privée",
+                              detail: nil, sequence: known?.lastSequence ?? 0,
+                              readSequence: known?.lastReadSequence ?? 0, mutedUntil: known?.mutedUntil,
+                              readStateVersion: known?.readStateVersion ?? 0, isGeneral: false)
+            }
+        }
+    }
+
+    private func reload() async {
+        await workspace.loadConversations()
+        await workspace.loadPreviews()
+        await workspace.loadContacts()
+    }
+
+    private func refresh() async {
+        await workspace.refreshVisible(conversationID: route?.id)
+        await workspace.loadPreviews()
+    }
+
+    // MARK: Ouverture
+
+    private func open(_ item: MessagingConversation) {
+        route = Route(id: item.id, title: item.kind == .schoolGeneral ? "Général" : item.title,
+                      detail: item.identityDetail, sequence: item.lastSequence, readSequence: item.lastReadSequence,
+                      mutedUntil: item.mutedUntil, readStateVersion: item.readStateVersion,
+                      isGeneral: item.kind == .schoolGeneral)
     }
 
     private func openPrivate(_ contact: MessagingContact) async {
@@ -155,5 +259,155 @@ struct MessagingInboxView: View {
                           readSequence: known?.lastReadSequence ?? 0, mutedUntil: known?.mutedUntil,
                           readStateVersion: known?.readStateVersion ?? 0, isGeneral: true)
         }
+    }
+}
+
+// MARK: Cellule
+
+private struct MessagingInboxRow: View {
+    let title: String
+    let preview: MessagingInboxPreview?
+    let unread: Int
+    let muted: Bool
+    let photo: Data?
+    let isGeneral: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DrivySpacing.m) {
+            avatar
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                    Text(title).font(.headline).foregroundStyle(DrivyTheme.text).lineLimit(1)
+                    Spacer(minLength: DrivySpacing.xs)
+                    if let date = preview?.date {
+                        Text(MessagingInboxDate.compact(date))
+                            .font(.caption)
+                            .foregroundStyle(unread > 0 ? DrivyTheme.accent : DrivyTheme.muted)
+                    }
+                }
+                HStack(alignment: .top, spacing: DrivySpacing.xs) {
+                    Text(previewText)
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .lineLimit(2)
+                    Spacer(minLength: DrivySpacing.xs)
+                    if muted {
+                        Image(systemName: "bell.slash.fill").font(.caption).foregroundStyle(DrivyTheme.muted)
+                    }
+                    if unread > 0 {
+                        Text(unread > 99 ? "99+" : unread.formatted())
+                            .font(.caption.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .frame(minWidth: 20, minHeight: 20)
+                            .background(muted ? DrivyTheme.muted : DrivyTheme.accent, in: Capsule())
+                    }
+                }
+            }
+        }
+        .padding(.vertical, DrivySpacing.xs)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    @ViewBuilder private var avatar: some View {
+        if isGeneral {
+            Image(systemName: "person.3.fill")
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.accent)
+                .frame(width: 48, height: 48)
+                .background(DrivyTheme.accent.opacity(0.14), in: Circle())
+        } else {
+            DrivyAvatar(name: title, size: 48, photo: photo)
+        }
+    }
+
+    private var previewText: String {
+        guard let preview, !preview.unavailable, let text = preview.text, !text.isEmpty else {
+            // Raccourci du général sans aperçu : rien à annoncer.
+            if isGeneral && self.preview == nil { return "" }
+            return "Message chiffré"
+        }
+        return preview.fromMe ? "Toi : \(text)" : text
+    }
+
+    private var accessibilityText: String {
+        var parts = [title]
+        if unread > 0 { parts.append(unread == 1 ? "1 message non lu" : "\(unread) messages non lus") }
+        if !previewText.isEmpty { parts.append(previewText) }
+        if let date = preview?.date { parts.append(date.formatted(.relative(presentation: .named))) }
+        if muted { parts.append("en sourdine") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+enum MessagingInboxDate {
+    /// Heure aujourd'hui, « hier », jour de la semaine, puis date courte.
+    static func compact(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        if calendar.isDateInYesterday(date) { return "Hier" }
+        if let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date),
+                                              to: calendar.startOfDay(for: now)).day, days < 7, days > 0 {
+            return date.formatted(.dateTime.weekday(.wide))
+        }
+        return date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year(.twoDigits))
+    }
+}
+
+// MARK: Nouvelle conversation
+
+private struct MessagingContactPicker: View {
+    let workspace: MessagingWorkspace
+    let choose: (MessagingContact) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var contacts: [MessagingContact] {
+        let all = workspace.contacts.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+        guard !query.isEmpty else { return all }
+        return all.filter { $0.displayName.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(contacts) { contact in
+                Button { choose(contact) } label: {
+                    HStack(spacing: DrivySpacing.m) {
+                        DrivyAvatar(name: contact.displayName, size: 40, photo: workspace.photos[contact.id])
+                        Text(contact.displayName).foregroundStyle(DrivyTheme.text)
+                        Spacer()
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(contact.displayName)
+                .task { if workspace.photos[contact.id] == nil { await workspace.loadPhoto(contact.id) } }
+            }
+            .listStyle(.plain)
+            .overlay {
+                if contacts.isEmpty {
+                    if query.isEmpty {
+                        ContentUnavailableView("Aucun contact", systemImage: "person.crop.circle.badge.questionmark")
+                    } else {
+                        ContentUnavailableView.search(text: query)
+                    }
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher")
+            .navigationTitle("Nouvelle conversation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
+            }
+            .task { await workspace.loadContacts() }
+        }
+        .accessibilityIdentifier("messaging.contacts")
     }
 }
