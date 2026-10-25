@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 25 octobre 2026 : préparation APNs sur le homelab
+
+Autorisation explicite du porteur à 12:03 UTC. Sauvegarde préalable CT113 : `/root/drivy-before-course-worker-20261025T1205.dump`, 1 871 853 octets, catalogue `pg_restore --list` vérifié, synchronisée. Aucune restauration de test revendiquée.
+
+`prepare-course-worker.sql` exécuté avec arrêt sur erreur et COMMIT. Les deux rôles sont sans SUPERUSER, BYPASSRLS, CREATEDB, CREATEROLE ni INHERIT. Le rôle de groupe reste NOLOGIN. Aucun mot de passe de connexion worker configuré à ce stade.
+
+Clé APNs transférée directement par SSH vérifié dans CT114, sans affichage. `/etc/drivy-refonte/apns-auth-key.p8` et `course-push.env` appartiennent à root en 0600. Validité structurelle de la clé contrôlée avec OpenSSL. Configuration préparée pour SANDBOX et le Bundle ID du projet, à confirmer avec le profil iLoader et la portée de la clé Apple. Aucun secret enregistré dans Git.
+
+**Worker non activé** : la release active est `79468863de0218a27451d4d00bda398affddb323` et la table `drivy.push_notification` est absente. Aucune migration, bascule, modification HBA ni relance de service effectuée. API toujours active. Restent le déploiement autorisé des cours, la connexion DB dédiée, l’unité worker et une réception réelle sur appareil. La configuration des clés ne vaut pas livraison APNs.
+
 ## 25 octobre 2026 : résultats de la campagne finale (#84)
 
 Branche `vague/cours-collectifs`, aucun déploiement.
