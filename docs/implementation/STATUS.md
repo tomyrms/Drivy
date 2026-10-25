@@ -1056,3 +1056,9 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 ### Progression des compétences (essai terrain du 30 septembre 2026)
 
 Écrit, non exécuté : la migration `020_admin_progress_read.sql` (progression lisible en lecture seule par l'administration de l'école, bilans et brouillons inchangés), le rappel du niveau actuel de chaque compétence dans le bilan d'une nouvelle leçon (sans l'écrire dans ce bilan), et la relecture de la formation à chaque affichage. Les tests PostgreSQL (`lesson-reports.integration.test.ts`) et Swift (`SchoolLessonFinishTests`, `SchoolLessonHubTests`) tournent dans la CI « Refonte · vérifications ». À revérifier sur l'iPhone après déploiement (sauvegarde de la base d'abord) : enchaîner deux leçons, puis ouvrir la progression en moniteur, en élève et en administrateur.
+ 
+## Messagerie #98 refonte UI/UX (25 octobre 2026) 
+ 
+- PASS : IPA d'essai compilee (run 40214002610), tests metier iOS complets (run 40214008527). 
+- FAIL hors perimetre : typecheck API (variable inutilisee dans course-push-revalidation, deja sur master). 
+- NOT_EXECUTED : tests UI messagerie, captures avant/apres iPhone/iPad clair/sombre/grands textes, essai sur appareil.
