@@ -115,7 +115,9 @@ import UserNotifications
     /// App ouverte : la notification reste visible, le bandeau des places proposées se relit de son côté.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification)
         async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        // #103 : conversation active, bas du fil affiché → le fil se met à jour, pas de bannière en double.
+        if MessagingActiveConversation.suppresses(notification.request.content.userInfo) { return [] }
+        return [.banner, .list, .sound]
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {

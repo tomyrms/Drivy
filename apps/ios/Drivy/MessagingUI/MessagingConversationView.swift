@@ -92,8 +92,9 @@ struct MessagingConversationView: View {
         .navigationTitle(reporting ? "Signaler" : title)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: scenePhase == .active && atBottom ? workspace.lastReadableSequence(conversationID) : nil) { if scenePhase == .active, atBottom, let seq = workspace.lastReadableSequence(conversationID) { await workspace.conversationViewed(conversationID, upTo: seq) } }
-        .onAppear { connectivity.start() }
-        .onDisappear { connectivity.stop() }
+        .onAppear { connectivity.start(); MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID, atBottom: atBottom) }
+        .onDisappear { connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
+        .onChange(of: atBottom) { _, bottom in MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID, atBottom: bottom) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await workspace.refreshVisible(conversationID: conversationID) } }
         }
@@ -566,12 +567,6 @@ struct MessagingConversationView: View {
                 if isGeneral { Button("Membres", systemImage: "person.3") { showMembers = true } }
                 Button("Signaler des messages", systemImage: "exclamationmark.bubble") { reporting = true }
                 Divider()
-                Button("Marquer comme lu") {
-                    Task {
-                        let latest = workspace.conversations.first { $0.id == conversationID }?.lastSequence ?? lastSequence
-                        await workspace.markRead(conversationID: conversationID, sequence: latest)
-                    }
-                }
                 Button("Mettre en sourdine une heure") {
                     Task { await workspace.silence(conversationID: conversationID,
                         fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(3_600),

@@ -39,6 +39,34 @@ struct SystemMessagingNotifications: MessagingNotificationCleaning {
     }
 }
 
+/// Conversation affichée au premier plan, lue par le délégué de notifications (#103) :
+/// pas de seconde bannière pour un message de cette conversation quand son bas est visible.
+enum MessagingActiveConversation {
+    struct State: Equatable, Sendable { let schoolID: UUID; let conversationID: UUID; let atBottom: Bool }
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var current: State?
+
+    static func set(schoolID: UUID, conversationID: UUID, atBottom: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        current = State(schoolID: schoolID, conversationID: conversationID, atBottom: atBottom)
+    }
+    static func clear(_ conversationID: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        if current?.conversationID == conversationID { current = nil }
+    }
+    /// Vrai seulement pour une alerte messagerie de la conversation active dont le bas du fil est affiché.
+    static func suppresses(_ info: [AnyHashable: Any]) -> Bool {
+        lock.lock(); let state = current; lock.unlock()
+        return suppresses(info, state: state)
+    }
+    static func suppresses(_ info: [AnyHashable: Any], state: State?) -> Bool {
+        guard let state, state.atBottom, info["kind"] as? String == "MESSAGING",
+              (info["schoolId"] as? String).flatMap(UUID.init(uuidString:)) == state.schoolID,
+              (info["conversationId"] as? String).flatMap(UUID.init(uuidString:)) == state.conversationID else { return false }
+        return true
+    }
+}
+
 /// Badge d'app agrégé : chaque source publie sa part, le système reçoit la somme.
 actor DrivyBadge {
     enum Source: Hashable, Sendable { case messaging, other(String) }

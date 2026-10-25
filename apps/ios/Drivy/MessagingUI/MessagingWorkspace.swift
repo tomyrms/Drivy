@@ -112,6 +112,12 @@ struct MessagingInboxPreview: Equatable, Sendable {
             conversationCursor = page.nextCursor
             loadedConversations = true
             error = nil
+            // #103 : état serveur relu (autre appareil compris) → alertes déjà lues retirées, badge recalculé.
+            // Première page seulement pour le badge : il reflète les compteurs connus, jamais un zéro aveugle.
+            for item in page.items where item.lastReadSequence > 0 {
+                await notifications.removeDelivered(schoolID: scope.schoolID, conversationID: item.id, upTo: item.lastReadSequence)
+            }
+            if !more { await notifications.setMessagingBadge(unreadTotal) }
         } catch let failure as MessagingFailure { recordFailure(failure) }
         catch { self.error = .unavailable }
     }
