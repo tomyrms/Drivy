@@ -15,12 +15,7 @@ final class MessagingThreadUITests: XCTestCase {
 
     func testGeneralMembersOpenProfileWithNameAndPhotoOnly() throws {
         let app = launch()
-        let entry = app.buttons["messages-entry"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
-        entry.tap()
-        app.buttons["messaging.members.open"].tap()
-        let list = app.descendants(matching: .any)["messaging.members"]
-        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        let list = openGeneralMembers(in: app)
         let first = list.buttons["Léa Fixture"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         first.tap()
@@ -35,12 +30,7 @@ final class MessagingThreadUITests: XCTestCase {
     /// Administrateur seulement : retirer puis réintégrer, chaque fois après confirmation.
     func testAdminReinstatesRemovedMemberAfterConfirmation() throws {
         let app = launch()
-        let entry = app.buttons["messages-entry"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
-        entry.tap()
-        app.buttons["messaging.members.open"].tap()
-        let list = app.descendants(matching: .any)["messaging.members"]
-        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        let list = openGeneralMembers(in: app)
         let row = list.buttons["Léa Fixture"]
         XCTAssertTrue(row.waitForExistence(timeout: 5), "La fixture contient deux membres")
         row.press(forDuration: 1)
@@ -59,6 +49,30 @@ final class MessagingThreadUITests: XCTestCase {
         confirmReinstate.tap()
         XCTAssertTrue(reinstate.waitForNonExistence(timeout: 5))
         XCTAssertTrue(row.waitForExistence(timeout: 5), "Le membre réintégré retrouve sa ligne active")
+    }
+
+    private func openGeneralMembers(in app: XCUIApplication,
+                                    file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let entry = app.buttons["messages-entry"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée",
+                      file: file, line: line)
+        entry.tap()
+        // Le run 40198021398 reste dans Messages après le tap Membres sur iPhone.
+        // Synchroniser la feuille et le chargement initial avant l'unique action de navigation.
+        XCTAssertTrue(app.navigationBars["Messages"].waitForExistence(timeout: 5),
+                      "La feuille Messages doit être présentée", file: file, line: line)
+        XCTAssertTrue(app.staticTexts["Aucune conversation"].waitForExistence(timeout: 5),
+                      "La fixture doit avoir terminé le chargement des discussions", file: file, line: line)
+        let open = app.buttons["messaging.members.open"]
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND hittable == true"), object: open)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed,
+                       "L'entrée Membres doit être actionnable", file: file, line: line)
+        open.tap()
+        let list = app.descendants(matching: .any)["messaging.members"]
+        XCTAssertTrue(list.waitForExistence(timeout: 5),
+                      "L'unique appui doit ouvrir les membres du général", file: file, line: line)
+        return list
     }
 
     private func confirmationButton(in app: XCUIApplication, identifier: String,
