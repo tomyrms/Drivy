@@ -8,7 +8,7 @@ Revue de déploiement NO-GO sur `48b78d1` : le worker aurait pu envoyer des noti
 - Transport APNs : la raison Apple est lue (corps borné à 4 Kio). Seuls `400 BadDeviceToken` et `410 Unregistered/ExpiredToken` révoquent l'appareil. Toute autre erreur, coupure ou délai est retentée.
 - Exécuté sur PostgreSQL 16.14 synthétique : 14 régressions (RED observé avant correctif), notifications, upgrade 042..046 après messagerie, inscriptions, 34 tests transport : PASS. Suite API complète en cours.
 - Reste : CI complète, sauvegarde puis bascule, recette d'envoi réel sur appareil dédié. Fenêtre résiduelle connue : une offre acceptée pendant l'appel APNs peut encore être notifiée.
-- Test UI iPhone : ouverture des membres synchronisée sur la feuille Messages (`3a803f6`), run ciblé `40203913273` en cours.
+- Test UI iPhone : ouverture des membres synchronisée sur la feuille Messages (`3a803f6`), run ciblé `40203913273` (`MessagingThreadUITests`, iPhone et iPad) PASS.
 
 ## 25 octobre 2026 à 14:32 UTC : un seul blocage UI iPhone restant
 
