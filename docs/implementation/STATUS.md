@@ -1,5 +1,19 @@
 # État de la réalisation
 
+## 25 octobre 2026 à 13:27 UTC : connexion worker prête, qualification intégrée encore rouge
+
+Run `40194237882` sur `85d63a4` : API/PostgreSQL, web/BFF, navigateur, intégrité documentaire, primitives SDK et IPA réussis. Échecs : scripts (`scripts/dev/setup.ts`, validation de configuration OIDC) et UI messagerie (`MessagingThreadUITests.swift:50`, identifiant de confirmation ambigu sur iPhone et iPad). Corrections en cours. Ces échecs ne sont pas masqués par les suites vertes.
+
+Après sauvegarde CT113 `/root/drivy-before-worker-login-20261025T1325.dump` (1 877 924 octets, catalogue vérifié et synchronisation), `provision-course-worker.py --check` puis `--apply` ont réussi : mot de passe initial généré sur CT113, aucun remplacement de credential existant. Coffre transféré directement vers CT114, connexion dédiée dans `course-worker.env` root/0600. HBA dédié CT114/TLS/SCRAM ajouté après sauvegarde `/root/pg_hba-before-course-worker-20261025T1326.conf`, zéro erreur de parsing, rechargement sans redémarrage PostgreSQL.
+
+Compte système `drivy-course-worker` et unité installés, `systemd-analyze verify` réussi. Connexion PostgreSQL réellement réussie depuis CT114 sous ce compte : vérification TLS complète, attributs du login restreints et `SET LOCAL ROLE drivy_course_worker` dans une transaction en lecture seule. **Worker non démarré, aucune migration cours appliquée ni bascule API/web.** Réception APNs physique toujours non vérifiée.
+
+## 25 octobre 2026 : provisionneur du login worker cours, code seulement
+
+`infra/deploy/provision-course-worker.py` ajouté pour root sur CT113, après `apps/api/scripts/prepare-course-worker.sql`. `--check` ne modifie rien durablement. `--apply` refuse tout coffre préexistant ou mot de passe non nul, contrôle les attributs et memberships contraints, conserve le secret généré sur place dans `/root/drivy-course-worker-bootstrap.json` (clé `courseWorkerPassword`, création exclusive root/0600, fsync fichier et répertoire), puis applique uniquement le vérificateur SCRAM. Contrôles répétés sous verrous de catalogues NOWAIT avant ALTER. Un échec partiel impose une reprise manuelle sans suppression automatique du coffre ni réinitialisation.
+
+Validation locale : syntaxe Python et 13 tests mocks sans réseau réussis. Aucun appel PostgreSQL réel, aucune exécution distante, migration, modification de contrat ou activation de service dans ce travail. Qualification DB et déploiement réservés au coordinateur, après nouvelle sauvegarde. Les contrôles de permissions, durabilité et journalisation côté serveur restent à qualifier sur CT113.
+
 ## 25 octobre 2026 à 12:37 UTC : finalisation et déploiement des cours autorisés
 
 Le porteur demande de terminer la qualification et le déploiement des cours ainsi que l’activation du worker. Pas de bascule avant vérification, sauvegarde renouvelée avant modification distante. La version déployée `7946886` contient la messagerie et le replay absents de la branche cours : intégration sur `vague/cours-collectifs` en `3a68ee8`, sans fusion dans master, pour éviter leur régression.
