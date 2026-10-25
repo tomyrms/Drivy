@@ -16,7 +16,16 @@ Branche `claude/98-messagerie-refonte`, base `d87e7dc` (#100 à #103 présents).
 | Signalement | `POST …/reports` `clientReportId` | intention durable | oui (`ON CONFLICT clientReportId`) | inchangé : stockage protégé existant | `MessagingProtectedReports` |
 | Sourdine | `PUT …/read-state` `mutedUntil` + `expectedVersion` | version attendue | conflit 409 si version obsolète | état local immédiat, synchro distincte | mémoire |
 | Lecture | `PUT …/read-state` | borne monotone | oui | #103 inchangé (coalescé, monotone) | — |
-| Envoi, réponse, sondage | `POST …/messages` `clientMessageId` | dédupliqué serveur | oui | bulle locale en attente immédiate (`queued.append` avant le réseau), file protégée | `MessagingProtectedOutbox` |
+| Envoi, réponse, sondage | `POST …/messages` `clientMessageId` | dédupliqué serveur | oui | bulle locale immédiate après mise en file durable ; envoi réseau non bloquant | `MessagingProtectedOutbox` |
+
+### Envoi de messages (demande du porteur, 25 octobre)
+
+- `sending` ne couvre que chiffrement + `outbox.put`. Le champ et l'aperçu de réponse sont vidés dès cette écriture durable ; en cas d'échec, le brouillon reste.
+- `MessagingWorkspace.scheduleSend` : file FIFO par conversation, un seul envoi en vol. Un envoi précédent incertain ou hors connexion retient les suivants pour ne jamais inverser l'ordre serveur ; un refus explicite les libère.
+- États de la bulle en attente : En attente → Envoi… → « Envoi lent… » (5 s) → « Non confirmé » + Réessayer (10 s). Hors connexion connu : « En attente de connexion » immédiat, départ automatique à la reconnexion. Refus (`membersChanged`, `conversationUnavailable`, …) : « Échec » + raison, contenu conservé dans la file protégée. `unavailable` / réponse perdue : incertain, jamais refus.
+- Réessayer renvoie la même entrée (même `clientMessageId`, dédupliquée par le serveur).
+- « Envoyé » (coche) seulement après l'accusé ; la bulle disparaît quand la relecture non bloquante contient `ack.serverMessageID`, le message serveur prend sa place sans trou.
+- Le fil reste en bas : `queued.count` qui augmente fait défiler, puis `messages.last` de l'auteur.
 
 ## Socle (MessagingWorkspace)
 

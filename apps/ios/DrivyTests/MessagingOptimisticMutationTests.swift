@@ -169,6 +169,125 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         XCTAssertTrue(workspace.visibleMessages(conversation).isEmpty)
         await actions.releaseAll()
     }
+
+    // MARK: Envoi de messages
+
+    private func pending(_ text: String) -> MessagingPending {
+        MessagingPending(clientMessageID: UUID(), conversationID: conversation,
+            ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data(text.utf8), expectedMembersEpoch: 1),
+            recoveryContent: Data(text.utf8))
+    }
+
+    private func sender(_ service: SendingService, outbox: MemoryOutbox = MemoryOutbox()) -> MessagingWorkspace {
+        let box = MutationScopeBox(scope)
+        return MessagingWorkspace(scope: scope, service: service, cryptography: ReadyCipher(), outbox: outbox,
+                                  mutationLatency: latency, currentScope: { box.value })
+    }
+
+    private func isAccepted(_ status: MessagingWorkspace.SendStatus?) -> Bool {
+        if case .accepted? = status { return true }
+        return false
+    }
+
+    func testTwoSendsLeaveInFIFOOrderOneAtATime() async {
+        let service = SendingService(holding: true, school: school, account: account)
+        let workspace = sender(service)
+        let first = pending("un"), second = pending("deux")
+        workspace.scheduleSend(first)
+        workspace.scheduleSend(second)
+        await until { await service.sent.count == 1 }
+        XCTAssertEqual(workspace.sendStatus(second.clientMessageID), .queued)
+        await service.releaseAll()
+        await until { await service.sent.count == 2 }
+        let order = await service.sent
+        XCTAssertEqual(order, [first.clientMessageID, second.clientMessageID])
+        await until { self.isAccepted(workspace.sendStatus(second.clientMessageID)) }
+    }
+
+    func testUncertainSendRetriesSameClientMessageID() async {
+        let service = SendingService(holding: false, school: school, account: account)
+        await service.setFailure(.unavailable)
+        let workspace = sender(service)
+        let entry = pending("x")
+        workspace.scheduleSend(entry)
+        await until { workspace.sendStatus(entry.clientMessageID) == .uncertain }
+        await service.setFailure(nil)
+        workspace.retrySend(entry)
+        await until { self.isAccepted(workspace.sendStatus(entry.clientMessageID)) }
+        let sent = await service.sent
+        XCTAssertEqual(sent, [entry.clientMessageID, entry.clientMessageID])
+    }
+
+    func testOfflineSendWaitsThenLeavesOnReconnect() async {
+        let service = SendingService(holding: false, school: school, account: account)
+        let workspace = sender(service)
+        workspace.setNetworkAvailable(false)
+        let entry = pending("x")
+        workspace.scheduleSend(entry)
+        XCTAssertEqual(workspace.sendStatus(entry.clientMessageID), .offline)
+        let none = await service.sent
+        XCTAssertTrue(none.isEmpty)
+        workspace.setNetworkAvailable(true)
+        await until { await service.sent == [entry.clientMessageID] }
+    }
+
+    func testRefusedSendKeepsContent() async {
+        let service = SendingService(holding: false, school: school, account: account)
+        await service.setFailure(.membersChanged)
+        let outbox = MemoryOutbox()
+        let workspace = sender(service, outbox: outbox)
+        let entry = pending("garde")
+        try? await outbox.put(entry, scope: scope)
+        workspace.scheduleSend(entry)
+        await until { workspace.sendStatus(entry.clientMessageID) == .failed(.membersChanged) }
+        let kept = (try? await outbox.entries(scope: scope)) ?? []
+        XCTAssertEqual(kept.map(\.clientMessageID), [entry.clientMessageID])
+        XCTAssertEqual(kept.first?.recoveryContent, Data("garde".utf8))
+    }
+}
+
+private struct ReadyCipher: MessagingCryptography {
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: plaintext, expectedMembersEpoch: 1)
+    }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data { ciphertext.payload }
+}
+
+private actor MemoryOutbox: MessagingProtectedOutbox {
+    private var stored: [MessagingPending] = []
+    func put(_ entry: MessagingPending, scope: MessagingScope) async throws { stored.append(entry) }
+    func entries(scope: MessagingScope) async throws -> [MessagingPending] { stored }
+    func remove(clientMessageID: UUID, scope: MessagingScope) async throws { stored.removeAll { $0.clientMessageID == clientMessageID } }
+}
+
+/// Envois retenus jusqu'à `releaseAll` ; échec programmable ; accusé conforme au contrat.
+private actor SendingService: MessagingService {
+    private(set) var sent: [UUID] = []
+    private var holding: Bool
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var failure: MessagingFailure?
+    private let school: UUID, account: UUID
+    init(holding: Bool, school: UUID, account: UUID) { self.holding = holding; self.school = school; self.account = account }
+    func setFailure(_ value: MessagingFailure?) { failure = value }
+    func releaseAll() {
+        holding = false
+        let pending = waiters; waiters = []
+        for waiter in pending { waiter.resume() }
+    }
+    func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPage<MessagingConversation> {
+        MessagingPage(items: [], nextCursor: nil)
+    }
+    func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPage<MessagingWireMessage> {
+        MessagingPage(items: [], nextCursor: nil)
+    }
+    func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement {
+        sent.append(pending.clientMessageID)
+        if holding { await withCheckedContinuation { waiters.append($0) } }
+        if let failure { throw failure }
+        return MessagingAcknowledgement(clientMessageID: pending.clientMessageID, serverMessageID: UUID(),
+            conversationID: pending.conversationID, schoolID: school, acceptedAt: Date(), senderID: account)
+    }
 }
 
 @MainActor private final class MutationScopeBox: Sendable {

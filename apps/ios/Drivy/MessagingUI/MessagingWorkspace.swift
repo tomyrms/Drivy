@@ -145,6 +145,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
         if let conversationID { visibleMessageConversationID = conversationID }
         resuming = true
         defer { resuming = false; resumeGeneration += 1 }
+        resumeSends()
         let results = await outbox.flushPending(currentScope: scope)
         for result in results {
             if case .failed(let failure) = result,
@@ -414,6 +415,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
             rejections = [:]
             localMute = [:]
             reloadAgain = []
+            sendStates = [:]
+            sendQueues = [:]
+            sendClocks = [:]
             previews = [:]
             conversations = []
             messages = [:]
@@ -656,7 +660,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
     /// Indique la connectivité connue. Hors connexion : les nouvelles intentions attendent sans minuterie.
     func setNetworkAvailable(_ available: Bool) {
         networkOffline = !available
-        if available { resumeMutations() }
+        if available { resumeMutations(); resumeSends() } else {
+            for (id, status) in sendStates where status == .queued { sendStates[id] = .offline }
+        }
     }
 
     /// « Réessayer » : renvoie le MÊME état souhaité (idempotent). Requête encore en vol : simple vérification.
@@ -883,6 +889,120 @@ struct MessagingInboxPreview: Equatable, Sendable {
             && (limit == nil || $0.sequence <= limit!) }
         guard currentScope() == scope else { return [] }
         return MessagingHistorySearch.matches(entries, query: query)
+    }
+
+    // MARK: Envoi de messages (#104)
+
+    /// État honnête d'un envoi de la file protégée. « Envoyé » seulement après l'accusé serveur.
+    enum SendStatus: Equatable, Sendable {
+        case queued, sending, slow, unconfirmed, offline, uncertain
+        case failed(MessagingFailure)
+        case accepted(serverMessageID: UUID)
+    }
+
+    private(set) var sendStates: [UUID: SendStatus] = [:]
+    /// File FIFO par conversation : un seul envoi en vol, l'ordre serveur suit l'ordre de mise en file.
+    private var sendQueues: [UUID: [MessagingPending]] = [:]
+    private var sendInFlight: Set<UUID> = []
+    private var sendClocks: [UUID: UUID] = [:]
+
+    func sendStatus(_ clientMessageID: UUID) -> SendStatus? { sendStates[clientMessageID] }
+
+    /// Accusé reçu ET message serveur chargé : la bulle en attente peut céder sa place sans trou.
+    func isDelivered(_ entry: MessagingPending) -> Bool {
+        guard case .accepted(let serverID)? = sendStates[entry.clientMessageID] else { return false }
+        return messages[entry.conversationID]?.contains { $0.id == serverID } ?? false
+    }
+
+    /// Ajoute à la file d'envoi (entrée déjà écrite dans la file protégée). Ne bloque pas l'appelant.
+    func scheduleSend(_ entry: MessagingPending) {
+        let id = entry.clientMessageID
+        if case .accepted? = sendStates[id] { return }
+        var queue = sendQueues[entry.conversationID] ?? []
+        if !queue.contains(where: { $0.clientMessageID == id }) { queue.append(entry) }
+        sendQueues[entry.conversationID] = queue
+        sendStates[id] = networkOffline ? .offline : .queued
+        drainSends(entry.conversationID)
+    }
+
+    /// « Réessayer » : la MÊME entrée (même clientMessageId), dédupliquée par le serveur.
+    func retrySend(_ entry: MessagingPending) {
+        let status = sendStates[entry.clientMessageID]
+        guard status != .sending, status != .slow else { return }
+        scheduleSend(entry)
+    }
+
+    private func resumeSends() {
+        guard !networkOffline else { return }
+        for (conversationID, queue) in sendQueues {
+            for entry in queue where sendStates[entry.clientMessageID] == .offline { sendStates[entry.clientMessageID] = .queued }
+            drainSends(conversationID)
+        }
+    }
+
+    private func drainSends(_ conversationID: UUID) {
+        guard !networkOffline, sendInFlight.insert(conversationID).inserted else { return }
+        Task { await self.runSends(conversationID) }
+    }
+
+    private func runSends(_ conversationID: UUID) async {
+        defer { sendInFlight.remove(conversationID) }
+        var accepted = false
+        while let entry = sendQueues[conversationID]?.first(where: { sendStates[$0.clientMessageID] == .queued }) {
+            // Ordre conservé : un envoi précédent incertain ou hors connexion retient les suivants.
+            if let head = sendQueues[conversationID]?.first, head.clientMessageID != entry.clientMessageID,
+               [SendStatus.uncertain, .offline, .unconfirmed].contains(sendStates[head.clientMessageID] ?? .queued) { break }
+            guard currentScope() == scope, !networkOffline else { break }
+            let id = entry.clientMessageID
+            sendStates[id] = .sending
+            let clock = UUID(); sendClocks[id] = clock
+            scheduleSendLatency(id, clock: clock)
+            let result = await outbox.retry(entry, currentScope: scope)
+            sendClocks[id] = nil
+            guard currentScope() == scope else { recordFailure(.contextChanged); return }
+            switch result {
+            case .accepted(let ack):
+                sendStates[id] = .accepted(serverMessageID: ack.serverMessageID)
+                sendQueues[conversationID]?.removeAll { $0.clientMessageID == id }
+                accepted = true
+            case .waiting:
+                // Déjà en vol ailleurs (reprise) : la relecture de la file tranchera.
+                sendStates[id] = .uncertain
+            case .failed(let failure):
+                switch failure {
+                case .unavailable, .invalidResponse:
+                    // Réponse perdue ou délai dépassé : peut-être accepté, jamais présenté comme refus.
+                    sendStates[id] = networkOffline ? .offline : .uncertain
+                case .accessChanged, .contextChanged:
+                    sendStates[id] = .failed(failure)
+                    recordFailure(failure)
+                    return
+                default:
+                    // Refus explicite : contenu conservé dans la file protégée, les suivants peuvent partir.
+                    sendStates[id] = .failed(failure)
+                    sendQueues[conversationID]?.removeAll { $0.clientMessageID == id }
+                }
+            }
+            if case .accepted? = sendStates[id] { continue }
+            if case .failed? = sendStates[id] { continue }
+            break
+        }
+        if accepted { Task { await self.loadMessages(conversationID, marksVisible: false) } }
+    }
+
+    private func scheduleSendLatency(_ id: UUID, clock: UUID) {
+        let latency = mutationLatency
+        Task { [weak self] in
+            try? await Task.sleep(for: latency.slow)
+            self?.advanceSend(id, clock: clock, to: .slow)
+            try? await Task.sleep(for: max(.zero, latency.unconfirmed - latency.slow))
+            self?.advanceSend(id, clock: clock, to: .unconfirmed)
+        }
+    }
+
+    private func advanceSend(_ id: UUID, clock: UUID, to status: SendStatus) {
+        guard sendClocks[id] == clock, sendStates[id] == .sending || sendStates[id] == .slow else { return }
+        sendStates[id] = status
     }
 
     func enqueue(content: MessagingPlainContent, conversationID: UUID, mentions: [UUID], replyTo: UUID?,

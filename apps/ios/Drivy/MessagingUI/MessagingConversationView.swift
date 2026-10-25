@@ -21,9 +21,6 @@ struct MessagingConversationView: View {
     @State private var draftReady = false
     @State private var draftFailure: String?
     @State private var queued: [MessagingPending] = []
-    /// Échecs par envoi en attente : affichés sur la bulle concernée, jamais comme un succès.
-    @State private var pendingFailures: [UUID: String] = [:]
-    @State private var retrying: Set<UUID> = []
     /// Échec avant la mise en file (protection indisponible, contexte changé) : le brouillon reste.
     @State private var deliveryLabel: String?
     @State private var sending = false
@@ -104,7 +101,7 @@ struct MessagingConversationView: View {
         }
         .onChange(of: workspace.error) { _, failure in
             if failure == .contextChanged || failure == .accessChanged {
-                draft = ""; queued = []; pendingFailures = [:]; selectedMentions = []; draftReady = false; replyTo = nil
+                draft = ""; queued = []; selectedMentions = []; draftReady = false; replyTo = nil
             }
         }
         .onChange(of: workspace.resumeGeneration) { _, _ in
@@ -177,10 +174,9 @@ struct MessagingConversationView: View {
                         .padding(.top, row.startsGroup ? DrivySpacing.xs : 2)
                         .id(row.message.id)
                 }
-                ForEach(queued, id: \.clientMessageID) { entry in
-                    MessagingPendingBubble(entry: entry, failure: pendingFailures[entry.clientMessageID],
-                                           retrying: retrying.contains(entry.clientMessageID)) {
-                        Task { await retry(entry) }
+                ForEach(queued.filter { !workspace.isDelivered($0) }, id: \.clientMessageID) { entry in
+                    MessagingPendingBubble(entry: entry, status: workspace.sendStatus(entry.clientMessageID)) {
+                        retry(entry)
                     }
                     .padding(.top, 2)
                     .id(entry.clientMessageID)
@@ -584,11 +580,11 @@ struct MessagingConversationView: View {
 
     // MARK: - Envoi
 
-    /// La file chiffrée sur disque précède toute tentative réseau.
+    /// La file chiffrée sur disque précède toute tentative réseau. `sending` ne couvre que la mise en file
+    /// durable : l'envoi réseau part ensuite dans la file FIFO du workspace, sans bloquer le compositeur.
     private func send(_ content: MessagingPlainContent, pollAllowsMultiple: Bool = false) async -> Bool {
         guard !sending, draftReady, access.canWrite else { return false }
         sending = true
-        defer { sending = false }
         let isText = content.poll == nil
         let submitted = draft
         let submittedMentions = selectedMentions.map(\.personID)
@@ -599,46 +595,39 @@ struct MessagingConversationView: View {
             queued.append(entry)
             replyTo = nil
             if selectedMentions.map(\.personID) == submittedMentions { selectedMentions = [] }
-            if isText && draft == submitted {
-                draft = ""
-                try await workspace.saveDraft("", conversationID: conversationID)
-                if !draft.isEmpty { try await workspace.saveDraft(draft, conversationID: conversationID) }
+            if isText && draft == submitted { draft = "" }
+            sending = false
+            workspace.scheduleSend(entry)
+            if isText {
+                // Brouillon vidé après la mise en file durable ; la saisie suivante reste protégée.
+                try? await workspace.saveDraft(draft, conversationID: conversationID)
             }
-            await retry(entry)
             return true
         } catch {
+            sending = false
             deliveryLabel = MessagingDiagnostics.shared.describe(error as? MessagingFailure ?? .protectionUnavailable)
             return false
         }
     }
 
-    private func retry(_ entry: MessagingPending) async {
-        let id = entry.clientMessageID
-        guard !retrying.contains(id) else { return }
-        retrying.insert(id)
-        defer { retrying.remove(id) }
-        switch await workspace.outbox.retry(entry, currentScope: workspace.scope) {
-        case .waiting:
-            pendingFailures[id] = nil
-        case .accepted:
-            pendingFailures[id] = nil
-            await workspace.loadMessages(conversationID)
-            queued.removeAll { $0.clientMessageID == id }
-        case .failed(let failure):
-            pendingFailures[id] = MessagingDiagnostics.shared.describe(failure)
-        }
+    private func retry(_ entry: MessagingPending) {
+        workspace.retrySend(entry)
     }
 }
 
-/// Envoi encore dans la file protégée : bulle sortante avec son état réel (en attente ou échec).
+/// Envoi encore dans la file protégée : bulle sortante avec son état réel. « Envoyé » seulement après l'accusé.
 struct MessagingPendingBubble: View {
     let entry: MessagingPending
-    let failure: String?
-    let retrying: Bool
+    let status: MessagingWorkspace.SendStatus?
     let onRetry: () -> Void
 
     private var summary: String {
         entry.recoveryContent.flatMap(MessagingPlainContent.decode)?.summary ?? "Message"
+    }
+
+    private var refused: MessagingFailure? {
+        if case .failed(let failure)? = status { return failure }
+        return nil
     }
 
     var body: some View {
@@ -648,28 +637,51 @@ struct MessagingPendingBubble: View {
                 .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
                 .background(DrivyTheme.accentSoft.opacity(0.6), in: MessagingBubbleShape(mine: true, tail: true))
                 .overlay(MessagingBubbleShape(mine: true, tail: true)
-                    .stroke(failure == nil ? DrivyTheme.border : DrivyTheme.danger, style: StrokeStyle(lineWidth: 1, dash: failure == nil ? [4, 3] : [])))
-            if let failure {
-                HStack(spacing: DrivySpacing.xs) {
-                    Label("Échec", systemImage: "exclamationmark.circle")
-                        .foregroundStyle(DrivyTheme.danger)
-                        .accessibilityLabel("Échec : \(failure)")
-                    Button("Réessayer", action: onRetry)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
-                        .frame(minHeight: DrivyLayout.tapTarget)
-                        .disabled(retrying)
-                        .accessibilityIdentifier("messaging.pending.retry")
-                }
-                .font(.caption)
-            } else {
-                Label(retrying ? "Envoi…" : "En attente", systemImage: "clock")
-                    .font(.caption2).foregroundStyle(DrivyTheme.muted)
-            }
+                    .stroke(refused == nil ? DrivyTheme.border : DrivyTheme.danger, style: StrokeStyle(lineWidth: 1, dash: refused == nil ? [4, 3] : [])))
+            stateLine.font(.caption2)
         }
         .padding(.leading, 56)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("messaging.pending")
+    }
+
+    @ViewBuilder private var stateLine: some View {
+        switch status {
+        case .failed(let failure)?:
+            HStack(spacing: DrivySpacing.xs) {
+                Label("Échec", systemImage: "exclamationmark.circle")
+                    .foregroundStyle(DrivyTheme.danger)
+                    .accessibilityLabel("Échec : \(MessagingDiagnostics.shared.describe(failure))")
+                retryButton
+            }
+        case .unconfirmed?, .uncertain?:
+            HStack(spacing: DrivySpacing.xs) {
+                Label("Non confirmé", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    .foregroundStyle(DrivyTheme.muted)
+                    .accessibilityLabel("Envoi non confirmé")
+                retryButton
+            }
+        case .offline?:
+            Label("En attente de connexion", systemImage: "wifi.slash").foregroundStyle(DrivyTheme.muted)
+        case .slow?:
+            Label("Envoi lent…", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
+        case .accepted?:
+            Label("Envoyé", systemImage: "checkmark").foregroundStyle(DrivyTheme.muted)
+                .accessibilityIdentifier("messaging.pending.sent")
+        case .sending?:
+            Label("Envoi…", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
+        case .queued?, nil:
+            Label("En attente", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
+        }
+    }
+
+    private var retryButton: some View {
+        Button("Réessayer", action: onRetry)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(DrivyTheme.accent)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .accessibilityHint("Renvoie le même message")
+            .accessibilityIdentifier("messaging.pending.retry")
     }
 }
