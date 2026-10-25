@@ -124,7 +124,8 @@ import XCTest
         exit.tap()
         XCTAssertTrue(signal.waitForNonExistence(timeout: 5))
         nativeTab("Agenda", in: app).tap()
-        let back = app.buttons["capture-return"]
+        // L’accessoire de la barre d’onglets (iOS 26) expose le conteneur comme « Other » et le bouton sans identifiant.
+        let back = app.descendants(matching: .any)["capture-return"]
         XCTAssertTrue(back.waitForExistence(timeout: 5), app.debugDescription)
         back.tap()
         XCTAssertTrue(signal.waitForExistence(timeout: 5))
