@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 25 octobre 2026 : QA84, assertions UI terrain et profil
+
+- Run Apple `40194505714`, log local `artifacts/qa84-full-native-failure.log` : terrain échoué sur iPhone/iPad, profil Signalements échoué sur iPhone clair/sombre mais réussi sur iPad.
+- Diagnostic : assertion d’interdiction d’annulation devenue obsolète depuis la décision #61 du 21 octobre, et recherche sans défilement du 12e thème dans la liste native iPhone. Produit et fixtures inchangés. Les deux parcours restent couverts, avec annulation proposée explicitement, sortie/retour live conservés et recherche bornée par défilement des mêmes thèmes.
+- Vérifié localement : `git diff --check`, conservation des 10 tests terrain et 5 tests de navigation, confrontation au contrat, au code et à la hiérarchie du log. **Pas de compilation ni de tests Apple après correction**, outils Apple absents sous Windows. Aucun commit, push ou déploiement. Rapport et fichiers gelés : `artifacts/qa84-field-profile-ui-fix.md`.
+
 ## 25 octobre 2026 : nouveaux messages confirmés sur appareil
 
 - Le porteur signale `D-NOKEY` avec l'IPA 354 en alternant deux comptes sur le même téléphone. Ce code signifie que la session de déchiffrement est absente localement, pas que sa perte définitive est démontrée.

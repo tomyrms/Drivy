@@ -105,7 +105,7 @@ import XCTest
         capture(app, name: "start-now-gps-permission-refused")
     }
 
-    func testLeavingLiveThroughTheExitButtonKeepsTheStartedLessonWithoutOfferingCancellation() {
+    func testLeavingLiveThroughTheExitButtonKeepsTheStartedLessonWithoutCancellingIt() {
         continueAfterFailure = false
         let app = launch("live")
         let signal = app.buttons["capture-signal-observation"]
@@ -115,9 +115,9 @@ import XCTest
         // Plein écran (#60) : aucune barre d’onglets pendant le trajet.
         XCTAssertFalse(app.tabBars.buttons["Agenda"].exists)
         app.buttons["capture-more"].tap()
-        // Une leçon commencée ne s'annule plus (API 409 LESSON_STARTED, depuis cdb0f82) : le menu ne propose que de la voir.
+        // #61 (21 octobre 2026) : l’annulation est proposée explicitement, mais quitter le live ne l’exécute pas.
         XCTAssertTrue(app.buttons["Voir la leçon"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertFalse(app.buttons["Annuler la leçon"].exists)
+        XCTAssertTrue(app.buttons["Annuler la leçon"].exists, app.debugDescription)
         app.tap()
         // Sortie à côté des trois points : la leçon et le GPS continuent, les onglets reviennent.
         let exit = app.buttons["capture-minimize"]

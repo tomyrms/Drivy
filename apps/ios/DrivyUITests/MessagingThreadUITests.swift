@@ -47,13 +47,32 @@ final class MessagingThreadUITests: XCTestCase {
         let remove = app.buttons["Retirer du général"]
         XCTAssertTrue(remove.waitForExistence(timeout: 3), "La fixture est administratrice du groupe")
         remove.tap()
-        app.buttons["messaging.members.confirmRemove"].tap()
+        XCTAssertFalse(app.buttons["messaging.members.reinstate"].exists, "Le retrait attend la confirmation")
+        try tapUniqueConfirmation(in: app, identifier: "messaging.members.confirmRemove", label: "Retirer Léa Fixture")
         let reinstate = app.buttons["messaging.members.reinstate"]
         XCTAssertTrue(reinstate.waitForExistence(timeout: 5))
         XCTAssertTrue(reinstate.label.hasPrefix("Réintégrer "))
         reinstate.tap()
-        app.buttons["messaging.members.confirmReinstate"].tap()
+        try tapUniqueConfirmation(in: app, identifier: "messaging.members.confirmReinstate", label: "Réintégrer Léa Fixture")
         XCTAssertTrue(reinstate.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(list.buttons["Léa Fixture"].waitForExistence(timeout: 5), "Le membre réintégré revient dans la liste active")
+    }
+
+    /// Le dialogue natif peut exposer un bouton hôte et son bouton enfant avec le même identifiant.
+    /// Cibler l'unique feuille conserve l'échec si deux actions distinctes portent cet identifiant.
+    private func tapUniqueConfirmation(in app: XCUIApplication, identifier: String, label: String,
+                                       file: StaticString = #filePath, line: UInt = #line) throws {
+        let matches = app.buttons.matching(identifier: identifier)
+        // L'index ne sert qu'à attendre l'apparition, jamais à choisir l'action à exécuter.
+        XCTAssertTrue(matches.element(boundBy: 0).waitForExistence(timeout: 5), file: file, line: line)
+        let leaves = matches.allElementsBoundByIndex.filter {
+            $0.descendants(matching: .button).matching(identifier: identifier).count == 0
+        }
+        XCTAssertEqual(leaves.count, 1, "Une seule action de confirmation doit être exposée", file: file, line: line)
+        let button = try XCTUnwrap(leaves.count == 1 ? leaves[0] : nil, file: file, line: line)
+        XCTAssertEqual(button.label, label, file: file, line: line)
+        XCTAssertTrue(button.isHittable, file: file, line: line)
+        button.tap()
     }
 
     func testPollComposerRequiresQuestionAndTwoOptions() throws {

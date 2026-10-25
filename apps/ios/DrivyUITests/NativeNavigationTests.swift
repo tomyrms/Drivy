@@ -100,14 +100,21 @@ import XCTest
             XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
             entry.tap()
             XCTAssertTrue(app.navigationBars["Signalements"].waitForExistence(timeout: 10), app.debugDescription)
-            for key in ["vehicle", "indicators"] {
-                XCTAssertTrue(app.descendants(matching: .any)["observation-theme-\(key)"].waitForExistence(timeout: 10), app.debugDescription)
-            }
             let counter = app.descendants(matching: .any)["observation-themes-count"]
             XCTAssertTrue(counter.waitForExistence(timeout: 10), app.debugDescription)
             // Le total vient du catalogue de l’école fictive : seul le nombre affiché à l’origine est fixé ici.
             XCTAssertTrue(counter.label.contains("12 affichés sur "), counter.label)
             capture(app, name: "observation-themes-\(appearance.lowercased())")
+            let themes = app.collectionViews["observation-themes"]
+            XCTAssertTrue(themes.waitForExistence(timeout: 10), app.debugDescription)
+            for key in ["vehicle", "indicators"] {
+                let theme = themes.descendants(matching: .any)["observation-theme-\(key)"]
+                // La List native ne matérialise pas toutes les rangées hors écran sur iPhone.
+                // Chercher le même thème par défilement, sans modifier le catalogue ni son ordre.
+                for _ in 0..<4 where !theme.exists || !theme.isHittable { themes.swipeUp() }
+                XCTAssertTrue(theme.waitForExistence(timeout: 10), app.debugDescription)
+                XCTAssertTrue(theme.isHittable, app.debugDescription)
+            }
             app.buttons["observation-themes-preview"].tap()
             XCTAssertTrue(app.navigationBars["Aperçu"].waitForExistence(timeout: 10), app.debugDescription)
             capture(app, name: "observation-themes-preview-\(appearance.lowercased())")
