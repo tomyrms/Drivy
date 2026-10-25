@@ -11,7 +11,9 @@ enum MessagingMentionToken {
             guard before.isWhitespace else { return nil }
         }
         let tail = text[text.index(after: at)...]
-        guard !tail.contains(where: \.isNewline), tail.count <= 30, !tail.hasPrefix(" ") else { return nil }
+        guard !tail.contains(where: \.isNewline), tail.count <= 30, !tail.hasPrefix(" "),
+              // Après insertion (`@Nom `) ou un espace final, la saisie de mention est terminée.
+              !(tail.last?.isWhitespace ?? false) else { return nil }
         return String(tail)
     }
 

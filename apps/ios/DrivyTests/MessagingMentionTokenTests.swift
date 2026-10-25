@@ -27,4 +27,10 @@ final class MessagingMentionTokenTests: XCTestCase {
         XCTAssertEqual(MessagingMentionToken.replacing(in: "@", with: "Sam Leroy"), "@Sam Leroy ")
         XCTAssertNil(MessagingMentionToken.replacing(in: "Bonjour", with: "Sam"))
     }
+
+    func testInsertedMentionClosesSuggestions() {
+        let inserted = MessagingMentionToken.replacing(in: "Bonjour @D", with: "Dylan Martin")!
+        XCTAssertNil(MessagingMentionToken.query(in: inserted))
+        XCTAssertEqual(MessagingMentionToken.query(in: "@Dylan M"), "Dylan M")
+    }
 }
