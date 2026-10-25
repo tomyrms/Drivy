@@ -5,7 +5,9 @@
 Accord du porteur à 15:28 UTC.
 - Sauvegarde CT113 `/root/drivy_refonte-before-courses-5888f03-20261025T1529Z.dump`, 1 878 057 octets, 0600, catalogue et blocs relus par `pg_restore`. Aucune restauration d'essai revendiquée.
 - Release `5888f03718045e13dc3c304040ead26991ffe719` (archive SHA-256 `3760d12e…aceb2`, identique avant et après transfert) installée par `install-api-release.py`. Migrations 042 à 046 appliquées : 53 au registre, empreintes identiques au dépôt. Contrôle runtime/RLS réussi.
-- API seule redémarrée : readiness 200, `/v1/me` et préférences de notification 401 sans jeton, aucune erreur au journal. Le web reste ancré sur `36a3a70` par son override : les écrans web des cours ne sont pas livrés.
+- API seule redémarrée : readiness 200, `/v1/me` et préférences de notification 401 sans jeton, aucune erreur au journal.
+- Web basculé à 15:37 UTC : override `90-qa84-web-anchor.conf` réancré sur `5888f03` (ancienne version gardée dans `/root/web-anchor-36a3a70.conf.bak`). Aucune variable nouvelle, pas de journal web à migrer. Port 3002 : `/app/` et `/app/bff/session` 200, aucune erreur. Depuis `https://drivy.shulker.ch` : `/app/` sert `index--_OE6dnW.js`, présent dans 5888f03 et absent de 36a3a70. Retour : restaurer le `.bak`, `daemon-reload`, redémarrer le web.
+- Worker vérifié en base : une session `drivy_refonte_course_worker` ouverte, 21 transactions validées en 30 s, 0 redémarrage et 0 échec de cycle depuis 15:32:11 UTC.
 - Avant activation : 0 série, 0 événement en attente, 0 notification en attente, 0 appareil inscrit. Rien ne pouvait donc partir d'un coup.
 - `drivy-refonte-course-worker` activé et démarré sous `drivy-course-worker` : actif, aucun redémarrage ni avertissement après plusieurs cycles.
 - Reste à qualifier : réception réelle sur un iPhone signé avec le droit push (iLoader, topic, environnement APNs). Aucune notification n'a été envoyée à ce jour.
