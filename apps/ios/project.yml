@@ -54,6 +54,9 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES
         INFOPLIST_FILE: Drivy/Info.plist
         'CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]': Configuration/Simulator.entitlements
+        # Appareil : notifications push (APNs). L'IPA d'essai n'est pas signé : iLoader applique le profil du compte, qui fixe
+        # l'environnement réel ; l'app le relit dans son profil embarqué (SchoolPushEnvironment).
+        'CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]': Configuration/Device.entitlements
     scheme:
       testTargets:
         - DrivyTests

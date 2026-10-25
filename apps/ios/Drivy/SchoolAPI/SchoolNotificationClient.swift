@@ -25,16 +25,30 @@ struct SchoolNotificationPreferencesBody: Encodable, Sendable, Equatable {
     let courseStaffAlerts: Bool
 }
 
-/// Environnement APNs du jeton : celui du profil qui signe l’app. Compilation Debug : bac à sable.
+/// Environnement APNs du jeton : celui du profil qui a signé l’app (iLoader ou Xcode), lu dans
+/// `embedded.mobileprovision`. Sans profil lisible : bac à sable en Debug, production sinon.
 enum SchoolPushEnvironment: String, Codable, Sendable, Equatable {
     case sandbox = "SANDBOX", production = "PRODUCTION"
 
     static var current: SchoolPushEnvironment {
+        if let profile = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+           let data = try? Data(contentsOf: profile), let value = provisioned(in: data) { return value }
         #if DEBUG
-        .sandbox
+        return .sandbox
         #else
-        .production
+        return .production
         #endif
+    }
+
+    /// Le profil est un PKCS#7 dont le contenu est une plist en clair : on en extrait `aps-environment`.
+    static func provisioned(in data: Data) -> SchoolPushEnvironment? {
+        guard let text = String(data: data, encoding: .isoLatin1),
+              let start = text.range(of: "<?xml"), let end = text.range(of: "</plist>", range: start.lowerBound..<text.endIndex),
+              let plist = text[start.lowerBound..<end.upperBound].data(using: .isoLatin1),
+              let object = try? PropertyListSerialization.propertyList(from: plist, format: nil) as? [String: Any],
+              let entitlements = object["Entitlements"] as? [String: Any],
+              let environment = entitlements["aps-environment"] as? String else { return nil }
+        return environment == "production" ? .production : .sandbox
     }
 }
 
