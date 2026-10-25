@@ -217,6 +217,9 @@ struct MessagingBubble: View {
                                   onShowVoters: { votersFor = state })
             } else if let text = content?.text {
                 Text(text).textSelection(.enabled)
+            } else if loaded, let code = workspace.decryptionCodes[message.id] {
+                Label("Illisible sur cet appareil · \(code)", systemImage: "lock").foregroundStyle(.secondary)
+                    .accessibilityIdentifier("messaging.undecryptable")
             } else if loaded {
                 Label("Message protégé indisponible", systemImage: "lock").foregroundStyle(.secondary)
             } else {

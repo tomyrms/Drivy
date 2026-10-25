@@ -24,6 +24,8 @@ import Observation
     private(set) var receipts: [UUID: [MessagingReadReceipt]] = [:]
     /// Contenu déchiffré en mémoire, recopié dans l'historique scellé quand il est disponible.
     private(set) var contents: [UUID: MessagingPlainContent] = [:]
+    /// Raison non sensible d'un déchiffrement impossible, affichée à la place du contenu.
+    private(set) var decryptionCodes: [UUID: String] = [:]
     private(set) var hiddenForMe: Set<UUID> = []
     private(set) var actionError: MessagingFailure?
     /// Signalement validé mais pas encore accepté : même identifiant à chaque tentative.
@@ -159,11 +161,17 @@ import Observation
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
             guard let value = MessagingPlainContent.decode(bytes) else { throw MessagingFailure.invalidResponse }
             contents[message.id] = value
+            decryptionCodes[message.id] = nil
             try? await history.upsert([MessagingHistoryEntry(messageID: message.id, conversationID: message.conversationID,
                 sequence: message.meta.sequence, senderID: message.senderID, acceptedAt: message.acceptedAt,
                 content: value)], scope: scope)
             return value
-        } catch let failure as MessagingFailure { recordFailure(failure); return nil }
+        } catch let failure as MessagingDecryptionFailure {
+            // Un message illisible n'est pas une panne de la conversation : code sur la bulle seulement.
+            decryptionCodes[message.id] = MessagingDiagnostics.isSafe(failure.code) ? failure.code : "D-X"
+            return nil
+        }
+        catch let failure as MessagingFailure { recordFailure(failure); return nil }
         catch { recordFailure(.protectionUnavailable); return nil }
     }
 
@@ -272,6 +280,7 @@ import Observation
             accessByConversation = [:]
             receipts = [:]
             contents = [:]
+            decryptionCodes = [:]
             hiddenForMe = []
             conversations = []
             messages = [:]

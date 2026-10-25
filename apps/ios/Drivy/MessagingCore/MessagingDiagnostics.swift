@@ -1,5 +1,11 @@
 import Foundation
 
+/// Échec de déchiffrement d'un message, avec la raison du SDK en code fixe (D-NOKEY, D-MEGOLM…).
+/// Reste une erreur fermée : aucun contenu n'est produit.
+struct MessagingDecryptionFailure: Error, Equatable, Sendable {
+    let code: String
+}
+
 /// Code court affiché sous une erreur de chiffrement pour la qualification sur appareil (#84).
 /// Ne contient jamais d'identifiant, de chemin, de jeton, de contenu ni de message d'erreur libre :
 /// uniquement des catégories fixes, des statuts HTTP et des OSStatus numériques.

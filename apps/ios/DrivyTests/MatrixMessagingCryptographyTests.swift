@@ -234,6 +234,71 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         XCTAssertEqual(restoredClear, clear)
     }
 
+    /// Constat qa84 : B s'enregistre APRÈS un premier envoi de A (A suit déjà B sans appareil).
+    /// A doit apprendre l'appareil de B par device_lists.changed, réclamer une OTK, partager la clé en to-device ;
+    /// B doit déchiffrer le message suivant. Le message antérieur reste illisible avec un code non sensible.
+    func testRecipientRegisteredAfterFirstSendDecryptsNextMessage() async throws {
+        let relay = InMemoryRelay()
+        let alice = UUID(), bob = UUID()
+        await relay.setMembers(conversation, [alice, bob])
+        let aScope = MessagingScope(accountID: alice, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let bScope = MessagingScope(accountID: bob, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let a = try makeDevice(aScope, relay: relay)
+        let early = try await a.encrypt(Data("Avant".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        let toDeviceBefore = await relay.toDeviceCount()
+        let diagnostics = MessagingDiagnostics()
+        let b = try MatrixMessagingCryptography(scope: bScope, relay: relay.view(bob),
+            vault: MessagingCryptoVault(scope: bScope, root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString),
+                                        keychain: FlakyKeychain(), diagnostics: diagnostics), diagnostics: diagnostics)
+        let ready = await b.isAvailable(scope: bScope, conversationID: conversation)
+        XCTAssertTrue(ready)
+        let later = try await a.encrypt(Data("Après".utf8), mentions: [], scope: aScope, conversationID: conversation)
+        let claims = await relay.claimCount()
+        let toDeviceAfter = await relay.toDeviceCount()
+        XCTAssertGreaterThan(claims, 0, "A doit réclamer une clé à usage unique de B")
+        XCTAssertGreaterThan(toDeviceAfter, toDeviceBefore, "A doit envoyer la clé de salon en to-device")
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: alice,
+                                           acceptedAt: Date(), ciphertext: later)
+        let clear = try await b.decrypt(message, scope: bScope)
+        XCTAssertEqual(clear, Data("Après".utf8))
+        let old = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: alice,
+                                       acceptedAt: Date(), ciphertext: early)
+        do { _ = try await b.decrypt(old, scope: bScope); XCTFail("Aucune clé antérieure à l'appareil") }
+        catch let failure as MessagingDecryptionFailure {
+            XCTAssertTrue(failure.code.hasPrefix("D-"))
+            XCTAssertTrue(MessagingDiagnostics.isSafe(failure.code))
+        }
+    }
+
+    /// Deux comptes sur le même téléphone (même Keychain, même dossier) : appareils distincts et persistants.
+    func testTwoAccountsOnSamePhoneKeepSeparatePersistentDevices() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let keychain = FlakyKeychain()
+        let aScope = MessagingScope(accountID: UUID(), schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let bScope = MessagingScope(accountID: UUID(), schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+        let a = try MessagingCryptoVault(scope: aScope, root: root, keychain: keychain).secrets()
+        let b = try MessagingCryptoVault(scope: bScope, root: root, keychain: keychain).secrets()
+        XCTAssertNotEqual(a.deviceID, b.deviceID)
+        XCTAssertNotEqual(a.passphrase, b.passphrase)
+        XCTAssertNotEqual(try MessagingCryptoVault(scope: aScope, root: root, keychain: keychain).storePath,
+                          try MessagingCryptoVault(scope: bScope, root: root, keychain: keychain).storePath)
+        // Reconnexion de A après B : même appareil, aucune recréation.
+        XCTAssertEqual(try MessagingCryptoVault(scope: aScope, root: root, keychain: keychain).secrets().deviceID, a.deviceID)
+        // Une nouvelle époque d'accès ne change pas l'identité d'appareil.
+        let renewed = MessagingScope(accountID: aScope.accountID, schoolID: school, accessEpoch: 2, apiBaseURL: "https://a.test")
+        XCTAssertEqual(try MessagingCryptoVault(scope: renewed, root: root, keychain: keychain).secrets().deviceID, a.deviceID)
+    }
+
+    func testDecryptionCodesAreFixedAndSafe() {
+        XCTAssertEqual(MatrixMessagingCryptography.decryptionCode(.MissingRoomKey(error: "/var/x", withheldCode: nil)), "D-NOKEY")
+        XCTAssertEqual(MatrixMessagingCryptography.decryptionCode(.MissingRoomKey(error: "x", withheldCode: "m.unverified")), "D-WH-MUNVERIFIED")
+        XCTAssertEqual(MatrixMessagingCryptography.decryptionCode(.Megolm(error: "secret path")), "D-MEGOLM")
+        XCTAssertEqual(MatrixMessagingCryptography.decryptionCode(.Store(error: "x")), "D-STORE")
+        for code in ["D-NOKEY", "D-WH-MUNVERIFIED", "D-MEGOLM", "D-ID", "D-FORMAT", "D-STORE"] {
+            XCTAssertTrue(MessagingDiagnostics.isSafe(code))
+        }
+    }
+
     private func makeDevice(_ scope: MessagingScope, relay: InMemoryRelay) throws -> MatrixMessagingCryptography {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         return try MatrixMessagingCryptography(scope: scope, relay: relay.view(scope.accountID),
@@ -281,6 +346,12 @@ private actor InMemoryRelay {
     }
     private var backups: [String: Backup] = [:]
     private var backupUnavailable = false
+    /// Comme le serveur : chaque publication de clés d'appareil apparaît dans device_lists.changed des autres.
+    private var deviceListChanges: [String] = []
+    private var claims = 0
+    private var toDeviceMessages = 0
+    func claimCount() -> Int { claims }
+    func toDeviceCount() -> Int { toDeviceMessages }
     func setBackupUnavailable(_ value: Bool) { backupUnavailable = value }
 
     nonisolated func view(_ person: UUID) -> View { View(relay: self, person: person) }
@@ -357,7 +428,7 @@ private actor InMemoryRelay {
                 output = ["etag": String(backup.etag), "count": backup.count]
             } else { throw MessagingFailure.invalidResponse }
         case "keys/upload":
-            if let keys = input["device_keys"] as? [String: Any] { deviceKeys["\(user)|\(device)"] = keys }
+            if let keys = input["device_keys"] as? [String: Any] { deviceKeys["\(user)|\(device)"] = keys; deviceListChanges.append(user) }
             var mine = oneTimeKeys["\(user)|\(device)"] ?? [:]
             for (id, key) in (input["one_time_keys"] as? [String: Any]) ?? [:] { mine[id] = ["k": key] }
             oneTimeKeys["\(user)|\(device)"] = mine
@@ -376,6 +447,7 @@ private actor InMemoryRelay {
                 for targetDevice in devices.keys {
                     let id = "\(target)|\(targetDevice)"
                     if let (keyID, entry) = oneTimeKeys[id]?.first {
+                        claims += 1
                         oneTimeKeys[id]?.removeValue(forKey: keyID)
                         result[target, default: [:]][targetDevice] = [keyID: entry["k"]!]
                     }
@@ -388,21 +460,33 @@ private actor InMemoryRelay {
             if deliveredTransactions.contains(transaction) { break }
             deliveredTransactions.insert(transaction)
             let type = path[1]
-            for (target, devices) in (input["messages"] as? [String: [String: Any]]) ?? [:] {
+            // Mêmes refus que messaging-keys.ts : un corps doublement enveloppé ou mal formé échoue en 400, pas en silence.
+            guard input.count == 1, let messages = input["messages"] as? [String: [String: Any]] else { throw MessagingFailure.unavailable }
+            for (target, devices) in messages {
+                guard MatrixMessagingCryptography.person(fromUserID: target) != nil else { throw MessagingFailure.unavailable }
                 for (targetDevice, content) in devices {
+                    guard targetDevice == "*" || MessagingCryptoHTTPRelay.validDeviceID(targetDevice), content is [String: Any] else {
+                        throw MessagingFailure.unavailable
+                    }
                     inbox["\(target)|\(targetDevice)", default: []].append(["type": type, "sender": user, "content": content])
+                    toDeviceMessages += 1
                 }
             }
         case "sync":
             guard method == "GET" else { throw MessagingFailure.invalidResponse }
             let queued = inbox["\(user)|\(device)"] ?? []
-            let since = query.first(where: { $0.name == "since" })?.value ?? "0"
-            guard let offset = Int(since), (0...queued.count).contains(offset) else { throw MessagingFailure.invalidResponse }
+            let since = query.first(where: { $0.name == "since" })?.value ?? "0_0"
+            let parts = since.split(separator: "_").compactMap { Int($0) }
+            guard parts.count == 2, (0...queued.count).contains(parts[0]), (0...deviceListChanges.count).contains(parts[1]) else {
+                throw MessagingFailure.invalidResponse
+            }
+            let offset = parts[0]
             // Une réponse perdue peut être rejouée : seule la progression de since change la page.
             let events = Array(queued.dropFirst(offset).prefix(100))
-            output = ["to_device": ["events": events], "device_lists": ["changed": [String](), "left": [String]()],
+            let changed = query.isEmpty ? [] : Array(Set(deviceListChanges.dropFirst(parts[1]).filter { $0 != user })).sorted()
+            output = ["to_device": ["events": events], "device_lists": ["changed": changed, "left": [String]()],
                       "device_one_time_keys_count": ["signed_curve25519": oneTimeKeys["\(user)|\(device)"]?.count ?? 0],
-                      "next_batch": String(offset + events.count)]
+                      "next_batch": "\(offset + events.count)_\(deviceListChanges.count)"]
         default:
             throw MessagingFailure.invalidResponse
         }

@@ -44,9 +44,8 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     private var syncing: Task<Void, any Error>?
     /// Les écritures de sauvegarde partagent une seule boucle, comme le sync.
     private var backingUp: Task<Void, any Error>?
-    private var lastKeySync: ContinuousClock.Instant?
-    /// Fenêtre pendant laquelle un lot de messages sans clé ne relance pas de sync.
-    static let keySyncWindow: Duration = .seconds(5)
+    /// Incrémenté à chaque sync terminé : un déchiffrement sans clé relit la file sauf si un sync a fini depuis son début.
+    private var syncGeneration = 0
 
     private let diagnostics: MessagingDiagnostics
 
@@ -140,14 +139,20 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             let event = try Self.encryptedEvent(message: message, ciphertext: ciphertext)
             let room = Self.roomID(message.conversationID)
             let settings = DecryptionSettings(senderDeviceTrustRequirement: .untrusted)
+            let started = syncGeneration
             let decrypted: DecryptedEvent
-            do { decrypted = try machine.decryptRoomEvent(event: event, roomId: room, handleVerificationEvents: false,
-                                                          strictShields: false, decryptionSettings: settings) }
-            catch DecryptionError.MissingRoomKey {
-                // Clé de salon pas encore reçue : un seul sync partagé par lot, puis un nouvel essai.
-                try await keySync(machine)
-                decrypted = try machine.decryptRoomEvent(event: event, roomId: room, handleVerificationEvents: false,
-                                                         strictShields: false, decryptionSettings: settings)
+            do {
+                do { decrypted = try machine.decryptRoomEvent(event: event, roomId: room, handleVerificationEvents: false,
+                                                              strictShields: false, decryptionSettings: settings) }
+                catch DecryptionError.MissingRoomKey {
+                    // Clé pas encore reçue : relire la file to-device, sauf si un sync s'est terminé depuis le début de cet appel.
+                    if syncGeneration == started { try await sync(machine) }
+                    decrypted = try machine.decryptRoomEvent(event: event, roomId: room, handleVerificationEvents: false,
+                                                             strictShields: false, decryptionSettings: settings)
+                }
+            } catch let error as DecryptionError {
+                // Raison du SDK seulement (catégorie fixe), jamais le message d'erreur libre.
+                throw MessagingDecryptionFailure(code: Self.decryptionCode(error))
             }
             return try Self.plaintext(from: decrypted)
         }
@@ -252,6 +257,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     private func shielded<T: Sendable>(_ body: () async throws -> T) async throws -> T {
         do { return try await body() }
         catch let failure as MessagingFailure { throw failure }
+        catch let failure as MessagingDecryptionFailure { diagnostics.recordIfEmpty(failure.code); throw failure }
         catch is CancellationError { throw CancellationError() }
         catch MessagingCryptoRelayFailure.backupVersionConflict { throw MessagingFailure.stateConflict }
         catch MessagingCryptoRelayFailure.deviceLimitReached { throw MessagingFailure.deviceLimitReached }
@@ -303,13 +309,6 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         }
     }
 
-    /// Sync déclenché par une clé manquante : pas de nouveau sync si un autre vient de finir pour ce lot.
-    private func keySync(_ machine: OlmMachine) async throws {
-        if syncing == nil, let last = lastKeySync, ContinuousClock.now - last < Self.keySyncWindow { return }
-        try await sync(machine)
-        lastKeySync = .now
-    }
-
     private func sync(_ machine: OlmMachine) async throws {
         if let syncing { return try await syncing.value }
         let task = Task { try await self.performSync(machine) }
@@ -341,6 +340,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             try await flush(machine)
             if !advanced || page.eventCount < 100 { break }
         }
+        syncGeneration &+= 1
         try await backupOrMarkPending(machine)
     }
 
@@ -454,6 +454,22 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             "room_id": roomID(message.conversationID),
         ]
         return String(decoding: try JSONSerialization.data(withJSONObject: event), as: UTF8.self)
+    }
+
+    /// Code court et non sensible de la raison d'échec du SDK (#84).
+    static func decryptionCode(_ error: DecryptionError) -> String {
+        switch error {
+        case .MissingRoomKey(_, let withheld):
+            guard let withheld else { return "D-NOKEY" }
+            let clean = String(withheld.uppercased().unicodeScalars
+                .filter { ($0.value >= 65 && $0.value <= 90) || ($0.value >= 48 && $0.value <= 57) }
+                .prefix(16).map(Character.init))
+            return clean.isEmpty ? "D-WITHHELD" : "D-WH-\(clean)"
+        case .Megolm: return "D-MEGOLM"
+        case .Identifier: return "D-ID"
+        case .Serialization: return "D-FORMAT"
+        case .Store: return "D-STORE"
+        }
     }
 
     static func plaintext(from decrypted: DecryptedEvent) throws -> Data {
