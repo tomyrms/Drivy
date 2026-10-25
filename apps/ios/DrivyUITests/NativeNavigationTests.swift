@@ -100,14 +100,22 @@ import XCTest
             XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
             entry.tap()
             XCTAssertTrue(app.navigationBars["Signalements"].waitForExistence(timeout: 10), app.debugDescription)
-            for key in ["vehicle", "indicators"] {
-                XCTAssertTrue(app.descendants(matching: .any)["observation-theme-\(key)"].waitForExistence(timeout: 10), app.debugDescription)
-            }
             let counter = app.descendants(matching: .any)["observation-themes-count"]
             XCTAssertTrue(counter.waitForExistence(timeout: 10), app.debugDescription)
             // Le total vient du catalogue de l’école fictive : seul le nombre affiché à l’origine est fixé ici.
             XCTAssertTrue(counter.label.contains("12 affichés sur "), counter.label)
             capture(app, name: "observation-themes-\(appearance.lowercased())")
+            let themes = app.collectionViews["observation-themes"]
+            XCTAssertTrue(themes.waitForExistence(timeout: 10), app.debugDescription)
+            // La liste native ne matérialise pas tous les thèmes hors écran sur iPhone.
+            for key in ["vehicle", "indicators"] {
+                let theme = app.descendants(matching: .any)["observation-theme-\(key)"].firstMatch
+                for _ in 0..<6 {
+                    if theme.exists && theme.isHittable { break }
+                    themes.swipeUp()
+                }
+                XCTAssertTrue(theme.exists && theme.isHittable, app.debugDescription)
+            }
             app.buttons["observation-themes-preview"].tap()
             XCTAssertTrue(app.navigationBars["Aperçu"].waitForExistence(timeout: 10), app.debugDescription)
             capture(app, name: "observation-themes-preview-\(appearance.lowercased())")
