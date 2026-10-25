@@ -179,8 +179,11 @@ final class MessagingThreadTests: XCTestCase {
 
     // MARK: Workspace
 
-    func testReportFailsClosedWithoutAdminSealing() async {
-        let workspace = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), currentScope: { [scope] in scope })
+    func testReportFailsClosedWithoutAdminSealing() async throws {
+        let scope = scope
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let workspace = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), reports: store, currentScope: { scope })
         let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
             acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("salut".utf8)))
         let sent = await workspace.report([message], conversationID: conversation)
@@ -188,14 +191,38 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertEqual(workspace.actionError, .protectionUnavailable)
     }
 
-    func testReportRetryReusesClientReportID() {
-        let workspace = MessagingWorkspace(scope: scope, currentScope: { [scope] in scope })
+    func testReportAbandonIsDurableAndNextAttemptUsesNewIntent() async throws {
+        let scope = scope
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let network = ReportLostAcknowledgementHTTP(response: envelope("{}"))
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: network, currentScope: { scope })
+        let workspace = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: ReportChangingSyntheticSealing(), reports: store, currentScope: { scope })
         let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
-            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data([1])))
-        let first = workspace.reportIdentifier(for: [message], conversationID: conversation)
-        XCTAssertEqual(workspace.reportIdentifier(for: [message], conversationID: conversation), first)
-        workspace.abandonReport(conversationID: conversation)
-        XCTAssertNotEqual(workspace.reportIdentifier(for: [message], conversationID: conversation), first)
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("SYNTHETIC_REPORT".utf8)))
+        let firstSent = await workspace.report([message], conversationID: conversation)
+        XCTAssertFalse(firstSent)
+        let pending = try await store.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertNotNil(pending)
+        let abandoned = await workspace.abandonReport(conversationID: conversation)
+        XCTAssertTrue(abandoned)
+        let reopened = try MessagingProtectedStore(scope: scope)
+        let afterAbandon = try await reopened.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertTrue(afterAbandon == nil)
+        let nextSent = await workspace.report([message], conversationID: conversation)
+        XCTAssertTrue(nextSent)
+        let bodies = await network.bodies
+        guard bodies.count == 2,
+              let first = try JSONSerialization.jsonObject(with: bodies[0]) as? [String: Any],
+              let next = try JSONSerialization.jsonObject(with: bodies[1]) as? [String: Any] else {
+            XCTFail("Deux tentatives attendues."); return
+        }
+        XCTAssertTrue(first["clientReportId"] as? String != next["clientReportId"] as? String,
+                      "Après abandon explicite, une nouvelle validation crée une intention distincte.")
+        let afterACK = try await reopened.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertTrue(afterACK == nil)
     }
 
     /// Regression: an acknowledgement may be lost after the server has accepted a report.
@@ -211,14 +238,14 @@ final class MessagingThreadTests: XCTestCase {
         let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
             acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: Data("SYNTHETIC_REPORT".utf8)))
         var first: MessagingWorkspace? = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(),
-            outbox: firstStore, drafts: firstStore, actions: actions, reportSealing: sealing, currentScope: { scope })
+            outbox: firstStore, drafts: firstStore, actions: actions, reportSealing: sealing, reports: firstStore, currentScope: { scope })
         let firstSent = await first!.report([message], conversationID: conversation)
         XCTAssertFalse(firstSent, "Un acquittement perdu ne doit pas être présenté comme une réussite.")
         first = nil
 
         let reopenedStore = try MessagingProtectedStore(scope: scope)
         let restarted = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(),
-            outbox: reopenedStore, drafts: reopenedStore, actions: actions, reportSealing: sealing, currentScope: { scope })
+            outbox: reopenedStore, drafts: reopenedStore, actions: actions, reportSealing: sealing, reports: reopenedStore, currentScope: { scope })
         let retrySent = await restarted.report([message], conversationID: conversation)
         XCTAssertTrue(retrySent, "Le réessai explicitement demandé doit pouvoir recevoir son acquittement.")
         let bodies = await network.bodies
@@ -237,6 +264,124 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertTrue(beforeBytes == afterBytes, "Le réessai doit conserver les mêmes enveloppes, sinon le serveur refuse l'empreinte.")
         let sealCount = await sealing.count
         XCTAssertEqual(sealCount, 1, "La reprise ne doit pas rechiffrer une intention déjà persistée.")
+        let afterACK = try await reopenedStore.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertTrue(afterACK == nil, "L'acquittement retire durablement l'intention.")
+    }
+
+    func testReportOtherWorkspaceCannotAbandonDuringSealing() async throws {
+        try await assertConcurrentReportAbandon(pauseDuringSealing: true)
+    }
+
+    func testReportOtherWorkspaceCannotAbandonDuringHTTP() async throws {
+        try await assertConcurrentReportAbandon(pauseDuringSealing: false)
+    }
+
+    private func assertConcurrentReportAbandon(pauseDuringSealing: Bool) async throws {
+        let scope = scope
+        let conversation = conversation
+        let store = try MessagingProtectedStore(scope: scope)
+        let otherStore = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let reached = expectation(description: "Envoi suspendu à la frontière choisie")
+        let gate = ReportSuspensionGate(reached: reached)
+        let network = ReportLostAcknowledgementHTTP(response: envelope("{}"), gate: pauseDuringSealing ? nil : gate)
+        let sealing = ReportChangingSyntheticSealing(gate: pauseDuringSealing ? gate : nil)
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: network, currentScope: { scope })
+        let first = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: sealing, reports: store, currentScope: { scope })
+        let other = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: sealing, reports: otherStore, currentScope: { scope })
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("SYNTHETIC_REPORT".utf8)))
+        let sending = Task { await first.report([message], conversationID: conversation) }
+        let waitResult = await XCTWaiter.fulfillment(of: [reached], timeout: 5)
+        XCTAssertEqual(waitResult, .completed)
+        let unrelatedAbandon = await other.abandonReport(conversationID: UUID())
+        XCTAssertTrue(unrelatedAbandon, "Une autre conversation n'est pas bloquée.")
+        let abandoned = await other.abandonReport(conversationID: conversation)
+        XCTAssertFalse(abandoned, "Un autre workspace ne peut pas annoncer un abandon pendant un envoi engagé.")
+        let competingSend = await other.report([message], conversationID: conversation)
+        XCTAssertFalse(competingSend, "Le cycle entier est exclusif entre workspaces.")
+        await gate.release()
+        let firstSent = await sending.value
+        XCTAssertFalse(firstSent, "ACK perdu injecté après la suspension.")
+        let reopenedStore = try MessagingProtectedStore(scope: scope)
+        let retained = try await reopenedStore.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertTrue(retained != nil, "L'intention doit survivre au refus d'abandon et à la perte d'ACK.")
+        let restarted = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: sealing, reports: reopenedStore, currentScope: { scope })
+        let retried = await restarted.report([message], conversationID: conversation)
+        XCTAssertTrue(retried)
+        let bodies = await network.bodies
+        guard bodies.count == 2 else { XCTFail("Deux POST attendus exactement."); return }
+        let before = try JSONSerialization.jsonObject(with: bodies[0])
+        let after = try JSONSerialization.jsonObject(with: bodies[1])
+        let beforeBytes = try JSONSerialization.data(withJSONObject: before, options: [.sortedKeys])
+        let afterBytes = try JSONSerialization.data(withJSONObject: after, options: [.sortedKeys])
+        XCTAssertTrue(beforeBytes == afterBytes, "Identifiant et enveloppes exacts conservés après réouverture.")
+        let sealCount = await sealing.count
+        XCTAssertEqual(sealCount, 1)
+        let afterACK = try await reopenedStore.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertTrue(afterACK == nil)
+        let finallyAbandoned = await other.abandonReport(conversationID: conversation)
+        XCTAssertTrue(finallyAbandoned, "L'exclusion est libérée après la fin du cycle.")
+    }
+
+    func testReportWriteFailurePreventsAnyHTTPPost() async {
+        let scope = scope
+        let network = ReportLostAcknowledgementHTTP(response: envelope("{}"))
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: network, currentScope: { scope })
+        let workspace = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: ReportChangingSyntheticSealing(), reports: ReportWriteFailureStore(), currentScope: { scope })
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("SYNTHETIC_REPORT".utf8)))
+        let sent = await workspace.report([message], conversationID: conversation)
+        XCTAssertFalse(sent)
+        XCTAssertEqual(workspace.actionError, .protectionUnavailable)
+        let bodies = await network.bodies
+        XCTAssertTrue(bodies.isEmpty, "Aucun POST sans intention écrite durablement.")
+    }
+
+    func testReportRejectsContextChangeBeforeRetry() async throws {
+        let scope = scope
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let network = ReportLostAcknowledgementHTTP(response: envelope("{}"))
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: network, currentScope: { scope })
+        let workspace = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: ReportChangingSyntheticSealing(), reports: store, currentScope: { nil })
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("SYNTHETIC_REPORT".utf8)))
+        let sent = await workspace.report([message], conversationID: conversation)
+        XCTAssertFalse(sent)
+        XCTAssertEqual(workspace.actionError, .contextChanged)
+        let bodies = await network.bodies
+        XCTAssertTrue(bodies.isEmpty)
+    }
+
+    func testReportContextChangeDuringSealingPreventsPersistenceAndPost() async throws {
+        let scope = scope
+        let context = ReportCurrentScope(scope)
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let network = ReportLostAcknowledgementHTTP(response: envelope("{}"))
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: network, currentScope: { scope })
+        let sealing = ReportContextSwitchingSealing { context.value = nil }
+        let workspace = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(), actions: actions,
+            reportSealing: sealing, reports: store, currentScope: { context.value })
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("SYNTHETIC_REPORT".utf8)))
+        let sent = await workspace.report([message], conversationID: conversation)
+        XCTAssertFalse(sent)
+        XCTAssertEqual(workspace.actionError, .contextChanged)
+        let bodies = await network.bodies
+        XCTAssertTrue(bodies.isEmpty)
+        let pending = try await store.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertTrue(pending == nil)
     }
 
     func testReadOnlyConversationRefusesEnqueue() async throws {
@@ -344,13 +489,18 @@ private struct DeviceLimitedCipher: MessagingCryptography {
 /// Fault injection at the HTTP boundary only. Workspace, serialization and protected store remain real.
 private actor ReportLostAcknowledgementHTTP: SchoolHTTPTransport {
     let response: Data
+    let gate: ReportSuspensionGate?
     private(set) var bodies: [Data] = []
-    init(response: Data) { self.response = response }
-    func send(_ request: URLRequest) throws -> SchoolHTTPResponse {
+    init(response: Data, gate: ReportSuspensionGate? = nil) { self.response = response; self.gate = gate }
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard request.httpMethod == "POST", request.url?.path.hasSuffix("/messaging/reports") == true,
               let body = request.httpBody else { throw MessagingFailure.invalidResponse }
+        let first = bodies.isEmpty
         bodies.append(body)
-        if bodies.count == 1 { throw URLError(.networkConnectionLost) }
+        if first {
+            await gate?.pause()
+            throw URLError(.networkConnectionLost)
+        }
         return SchoolHTTPResponse(data: response, status: 200, url: request.url!, contentType: "application/json")
     }
 }
@@ -358,9 +508,54 @@ private actor ReportLostAcknowledgementHTTP: SchoolHTTPTransport {
 /// Deliberately different opaque bytes on each call expose accidental re-encryption on retry.
 private actor ReportChangingSyntheticSealing: MessagingReportSealing {
     private(set) var count = 0
-    func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) throws -> MessagingCiphertext {
+    let gate: ReportSuspensionGate?
+    init(gate: ReportSuspensionGate? = nil) { self.gate = gate }
+    func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         count += 1
-        return MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data("SYNTHETIC_SEAL_\(count)".utf8))
+        let ordinal = count
+        if ordinal == 1 { await gate?.pause() }
+        return MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data("SYNTHETIC_SEAL_\(ordinal)".utf8))
+    }
+}
+
+/// Explicit rendezvous, no timing sleeps. Release also works if the expectation times out before entry.
+private actor ReportSuspensionGate {
+    let reached: XCTestExpectation
+    private var released = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    init(reached: XCTestExpectation) { self.reached = reached }
+    func pause() async {
+        reached.fulfill()
+        guard !released else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func release() {
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private struct ReportWriteFailureStore: MessagingProtectedReports {
+    func pendingReport(conversationID: UUID, scope: MessagingScope) async throws -> MessagingPendingReport? { nil }
+    func prepareReport(_ candidate: MessagingPendingReport, scope: MessagingScope) async throws -> MessagingPendingReport {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func removeReport(conversationID: UUID, clientReportID: UUID, scope: MessagingScope) async throws {
+        throw MessagingFailure.protectionUnavailable
+    }
+}
+
+@MainActor private final class ReportCurrentScope {
+    var value: MessagingScope?
+    init(_ value: MessagingScope) { self.value = value }
+}
+
+private struct ReportContextSwitchingSealing: MessagingReportSealing {
+    let switchContext: @MainActor @Sendable () -> Void
+    func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        await switchContext()
+        return MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data([1]))
     }
 }
 

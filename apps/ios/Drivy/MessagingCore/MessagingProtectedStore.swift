@@ -4,11 +4,13 @@ import Security
 
 /// Protection locale au repos uniquement. Ne fournit PAS le chiffrement de bout en bout #67.
 /// Un snapshot par compte/école/époque/URL API ; aucune donnée de personne dans le chemin ou les logs.
-actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDrafts {
+actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDrafts, MessagingProtectedReports {
     private struct Snapshot: Codable {
         let scopeFingerprint: String
         var pending: [MessagingPending]
         var drafts: [UUID: String]
+        // Optional for snapshots written before report persistence. No cleartext fallback.
+        var reports: [UUID: MessagingPendingReport]? = nil
     }
 
     private let expectedScope: MessagingScope
@@ -80,6 +82,42 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
         try save(snapshot)
     }
 
+    func pendingReport(conversationID: UUID, scope: MessagingScope) throws -> MessagingPendingReport? {
+        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
+        return try load(scope).reports?[conversationID]
+    }
+
+    func prepareReport(_ candidate: MessagingPendingReport, scope: MessagingScope) throws -> MessagingPendingReport {
+        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
+        try Task.checkCancellation()
+        try Self.validateReport(candidate)
+        var snapshot = try load(scope)
+        var reports = snapshot.reports ?? [:]
+        if let existing = reports[candidate.conversationID] {
+            if existing.messageIDs == candidate.messageIDs { return existing }
+            guard existing.clientReportID != candidate.clientReportID else { throw MessagingFailure.invalidResponse }
+        }
+        guard reports.count < 100 || reports[candidate.conversationID] != nil else { throw MessagingFailure.protectionUnavailable }
+        reports[candidate.conversationID] = candidate
+        snapshot.reports = reports
+        try save(snapshot)
+        return candidate
+    }
+
+    func removeReport(conversationID: UUID, clientReportID: UUID, scope: MessagingScope) throws {
+        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
+        try Task.checkCancellation()
+        var snapshot = try load(scope)
+        guard snapshot.reports?[conversationID]?.clientReportID == clientReportID else { return }
+        snapshot.reports?.removeValue(forKey: conversationID)
+        try save(snapshot)
+    }
+
+    private static func validateReport(_ report: MessagingPendingReport) throws {
+        guard (1...50).contains(report.items.count), report.messageIDs.count == report.items.count,
+              report.items.allSatisfy({ !$0.ciphertext.payload.isEmpty }) else { throw MessagingFailure.invalidResponse }
+    }
+
     /// À invoquer explicitement lors d'une révocation connue ; une clé d'une autre époque ne récupère pas ce fichier.
     func purge(scope: MessagingScope) throws {
         Self.ioLock.lock(); defer { Self.ioLock.unlock() }
@@ -104,6 +142,11 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
             let clear = try AES.GCM.open(combined, using: key(create: false), authenticating: Data(fingerprint.utf8))
             let snapshot = try JSONDecoder().decode(Snapshot.self, from: clear)
             guard snapshot.scopeFingerprint == fingerprint else { throw MessagingFailure.contextChanged }
+            guard (snapshot.reports?.count ?? 0) <= 100 else { throw MessagingFailure.protectionUnavailable }
+            for (conversation, report) in snapshot.reports ?? [:] {
+                guard report.conversationID == conversation else { throw MessagingFailure.protectionUnavailable }
+                try Self.validateReport(report)
+            }
             return snapshot
         } catch { throw MessagingFailure.protectionUnavailable }
     }

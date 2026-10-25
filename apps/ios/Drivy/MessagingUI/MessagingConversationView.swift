@@ -155,7 +155,14 @@ struct MessagingConversationView: View {
     @ViewBuilder private var footer: some View {
         if reporting {
             HStack {
-                Button("Annuler") { reporting = false; reportSelection = []; workspace.abandonReport(conversationID: conversationID) }
+                Button("Annuler") {
+                    Task {
+                        if await workspace.abandonReport(conversationID: conversationID) {
+                            reporting = false
+                            reportSelection = []
+                        }
+                    }
+                }
                 Spacer()
                 Button("Transmettre (\(reportSelection.count))") {
                     let selected = workspace.visibleMessages(conversationID).filter { reportSelection.contains($0.id) }
