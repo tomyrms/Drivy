@@ -42,6 +42,25 @@ final class MessagingDiagnosticsTests: XCTestCase {
         XCTAssertEqual(MessagingDiagnostics.route(["crypto", "sendToDevice", "m.room.encrypted", "txn"]), "TODEVICE")
     }
 
+    /// qa84 : un refus du POST du message (après un chiffrement réussi) doit laisser un code sous la saisie.
+    func testMessageSendRefusalKeepsRouteStatusCode() async throws {
+        XCTAssertEqual(MessagingDiagnostics.route(["conversations", "x", "messages"]), "SEND")
+        XCTAssertEqual(MessagingDiagnostics.route(["conversations", "x", "members"]), "MEMBERS")
+        for (status, expected) in [(400, "H-SEND-400"), (500, "H-SEND-500"), (409, "H-SEND-409"), (403, "H-SEND-403")] {
+            let diagnostics = MessagingDiagnostics()
+            let scope = self.scope
+            let wire = DiagnosticHTTP { request in
+                SchoolHTTPResponse(data: Data("{\"code\":\"X\"}".utf8), status: status, url: request.url!, contentType: "application/json")
+            }
+            let http = MessagingHTTPTransport(baseURL: baseURL, transport: wire, diagnostics: diagnostics,
+                token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
+            let pending = MessagingSendDTO(clientMessageId: UUID(), ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "k",
+                payload: Data("abcd".utf8), expectedMembersEpoch: 0), mentionPersonIds: [], replyToMessageId: nil, poll: nil)
+            do { _ = try await http.send(scope: scope, conversationID: UUID(), body: pending); XCTFail() } catch {}
+            XCTAssertEqual(diagnostics.last, expected)
+        }
+    }
+
     func testUnknownConflictIsNotAnExistingBackup() async throws {
         let diagnostics = MessagingDiagnostics()
         do {

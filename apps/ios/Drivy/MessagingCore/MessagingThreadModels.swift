@@ -127,9 +127,31 @@ struct MessagingMember: Identifiable, Sendable, Hashable {
 }
 
 /// Ã‰lÃ©ment transmis aux administrateurs de l'Ã©cole, rechiffrÃ© pour eux.
-struct MessagingReportItem: Sendable, Equatable {
+struct MessagingReportItem: Codable, Sendable, Equatable {
     let messageID: UUID
     let ciphertext: MessagingCiphertext
+}
+
+/// Enveloppes déjà chiffrées pour les destinataires : jamais de contenu déchiffré ici.
+struct MessagingPendingReport: Codable, Sendable, Equatable {
+    let clientReportID: UUID
+    let conversationID: UUID
+    let items: [MessagingReportItem]
+    var messageIDs: Set<UUID> { Set(items.map(\.messageID)) }
+}
+
+protocol MessagingProtectedReports: Sendable {
+    func pendingReport(conversationID: UUID, scope: MessagingScope) async throws -> MessagingPendingReport?
+    /// Atomique : même sélection = intention existante, même si deux workspaces ont préparé un candidat.
+    func prepareReport(_ candidate: MessagingPendingReport, scope: MessagingScope) async throws -> MessagingPendingReport
+    /// Compare l'identifiant : un acquittement tardif ne retire pas une intention plus récente.
+    func removeReport(conversationID: UUID, clientReportID: UUID, scope: MessagingScope) async throws
+}
+
+struct UnavailableMessagingReports: MessagingProtectedReports {
+    func pendingReport(conversationID: UUID, scope: MessagingScope) async throws -> MessagingPendingReport? { throw MessagingFailure.protectionUnavailable }
+    func prepareReport(_ candidate: MessagingPendingReport, scope: MessagingScope) async throws -> MessagingPendingReport { throw MessagingFailure.protectionUnavailable }
+    func removeReport(conversationID: UUID, clientReportID: UUID, scope: MessagingScope) async throws { throw MessagingFailure.protectionUnavailable }
 }
 
 /// Fourni par l'agent crypto (Olm vers les appareils des administrateurs de l'Ã©cole).

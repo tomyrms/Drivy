@@ -76,6 +76,11 @@ final class MessagingKeyBackupModel {
 struct MessagingSettingsView: View {
     let keys: (any MessagingKeyManagement)?
     let scope: MessagingScope
+    let currentScope: @MainActor @Sendable () -> MessagingScope?
+
+    func makeDevicesModel(keys: any MessagingKeyManagement) -> MessagingOwnDevicesModel {
+        MessagingOwnDevicesModel(scope: scope, keys: keys, currentScope: currentScope)
+    }
 
     var body: some View {
         List {
@@ -87,6 +92,12 @@ struct MessagingSettingsView: View {
                         Label("Sauvegarde des clés", systemImage: "key")
                     }
                     .accessibilityIdentifier("messaging.backup.open")
+                    NavigationLink {
+                        MessagingOwnDevicesView(model: makeDevicesModel(keys: keys))
+                    } label: {
+                        Label("Mes appareils", systemImage: "iphone.and.ipad")
+                    }
+                    .accessibilityIdentifier("messaging.devices.open")
                 } else {
                     Label("Sauvegarde des clés indisponible", systemImage: "key.slash")
                         .foregroundStyle(.secondary)

@@ -13,6 +13,7 @@ import Observation
     private let actions: any MessagingThreadActions
     private let history: any MessagingHistoryStore
     private let reportSealing: any MessagingReportSealing
+    private let reports: any MessagingProtectedReports
     private let photoLoader: @Sendable (UUID) async -> Data?
     let outbox: MessagingOutboxCoordinator
     private(set) var members: [MessagingMember] = []
@@ -28,8 +29,13 @@ import Observation
     private(set) var decryptionCodes: [UUID: String] = [:]
     private(set) var hiddenForMe: Set<UUID> = []
     private(set) var actionError: MessagingFailure?
-    /// Signalement validé mais pas encore accepté : même identifiant à chaque tentative.
-    private var pendingReports: [UUID: (messageIDs: Set<UUID>, clientReportID: UUID)] = [:]
+    private struct ReportOperationKey: Hashable {
+        let scope: MessagingScope
+        let conversationID: UUID
+    }
+    /// MainActor sérialise acquisition/libération, sans verrou bloquant pendant les awaits.
+    /// Partagé par toutes les instances, du début du scellement à la fin du POST/ACK ou abandon.
+    private static var activeReportOperations: Set<ReportOperationKey> = []
     private(set) var contacts: [MessagingContact] = []
     private(set) var generalMembers: [MessagingContact] = []
     private(set) var conversations: [MessagingConversation] = []
@@ -53,11 +59,13 @@ import Observation
          actions: any MessagingThreadActions = UnavailableMessagingThreadActions(),
          history: any MessagingHistoryStore = UnavailableMessagingHistory(),
          reportSealing: any MessagingReportSealing = UnavailableMessagingReportSealing(),
+         reports: any MessagingProtectedReports = UnavailableMessagingReports(),
          photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil }) {
         self.actions = actions
         self.history = history
         self.reportSealing = reportSealing
+        self.reports = reports
         self.photoLoader = photoLoader
         self.scope = scope
         self.service = service
@@ -433,32 +441,63 @@ import Observation
 
     /// Seuls les messages choisis sont rechiffrés pour les administrateurs de l'école puis transmis.
     func report(_ selected: [MessagingWireMessage], conversationID: UUID) async -> Bool {
-        let clientReportID = reportIdentifier(for: selected, conversationID: conversationID)
-        let sent = await perform(nil) {
-            var items: [MessagingReportItem] = []
-            for message in selected where message.conversationID == conversationID {
-                guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
-                let sealed = try await reportSealing.sealForSchoolAdmins(try content.encoded(), scope: scope,
-                                                                         conversationID: conversationID)
-                items.append(MessagingReportItem(messageID: message.id, ciphertext: sealed))
+        let operation = ReportOperationKey(scope: scope, conversationID: conversationID)
+        guard Self.activeReportOperations.insert(operation).inserted else { return false }
+        defer { Self.activeReportOperations.remove(operation) }
+        return await perform(nil) {
+            try verifyReportContext()
+            let ids = Set(selected.map(\.id))
+            guard (1...50).contains(selected.count), ids.count == selected.count,
+                  selected.allSatisfy({ $0.conversationID == conversationID && $0.schoolID == scope.schoolID })
+            else { throw MessagingFailure.invalidResponse }
+            let existing = try await reports.pendingReport(conversationID: conversationID, scope: scope)
+            try verifyReportContext()
+            let pending: MessagingPendingReport
+            if let existing, existing.messageIDs == ids {
+                pending = existing
+            } else {
+                var items: [MessagingReportItem] = []
+                for message in selected.sorted(by: { $0.id.uuidString < $1.id.uuidString }) {
+                    guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
+                    try verifyReportContext()
+                    let sealed = try await reportSealing.sealForSchoolAdmins(try content.encoded(), scope: scope,
+                                                                             conversationID: conversationID)
+                    try verifyReportContext()
+                    items.append(MessagingReportItem(messageID: message.id, ciphertext: sealed))
+                }
+                pending = try await reports.prepareReport(MessagingPendingReport(clientReportID: UUID(),
+                    conversationID: conversationID, items: items), scope: scope)
+                try verifyReportContext()
             }
-            guard !items.isEmpty else { throw MessagingFailure.invalidResponse }
-            try await actions.report(scope: scope, conversationID: conversationID, clientReportID: clientReportID, items: items)
+            // Aucun POST avant écriture durable. Le serveur revalide les droits à chaque tentative.
+            try await actions.report(scope: scope, conversationID: conversationID,
+                                     clientReportID: pending.clientReportID, items: pending.items)
+            try verifyReportContext()
+            try await reports.removeReport(conversationID: conversationID, clientReportID: pending.clientReportID, scope: scope)
+            try verifyReportContext()
         }
-        if sent { pendingReports[conversationID] = nil }
-        return sent
     }
 
-    /// L'identifiant naît à la première validation et survit aux échecs pour la même sélection.
-    func reportIdentifier(for selected: [MessagingWireMessage], conversationID: UUID) -> UUID {
-        let ids = Set(selected.filter { $0.conversationID == conversationID }.map(\.id))
-        if let pending = pendingReports[conversationID], pending.messageIDs == ids { return pending.clientReportID }
-        let id = UUID()
-        pendingReports[conversationID] = (ids, id)
-        return id
+    private func verifyReportContext() throws {
+        try Task.checkCancellation()
+        guard currentScope() == scope else { throw MessagingFailure.contextChanged }
     }
 
-    func abandonReport(conversationID: UUID) { pendingReports[conversationID] = nil }
+    @discardableResult
+    func abandonReport(conversationID: UUID) async -> Bool {
+        let operation = ReportOperationKey(scope: scope, conversationID: conversationID)
+        guard Self.activeReportOperations.insert(operation).inserted else { return false }
+        defer { Self.activeReportOperations.remove(operation) }
+        return await perform(nil) {
+            try verifyReportContext()
+            let existing = try await reports.pendingReport(conversationID: conversationID, scope: scope)
+            try verifyReportContext()
+            if let existing {
+                try await reports.removeReport(conversationID: conversationID, clientReportID: existing.clientReportID, scope: scope)
+                try verifyReportContext()
+            }
+        }
+    }
 
     /// Recherche sur l'appareil : historique scellé, complété par la mémoire de la session.
     func search(_ query: String, conversationID: UUID) async -> [MessagingHistoryEntry] {

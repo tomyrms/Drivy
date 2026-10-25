@@ -22,11 +22,14 @@ struct MessagingInboxView: View {
     }
 
     private let keys: (any MessagingKeyManagement)?
+    private let currentScope: @MainActor @Sendable () -> MessagingScope?
 
-    init(workspace: MessagingWorkspace, initialPeerID: UUID? = nil, keys: (any MessagingKeyManagement)? = nil) {
+    init(workspace: MessagingWorkspace, initialPeerID: UUID? = nil, keys: (any MessagingKeyManagement)? = nil,
+         currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
         _workspace = State(initialValue: workspace)
         self.initialPeerID = initialPeerID
         self.keys = keys
+        self.currentScope = currentScope
     }
 
     var body: some View {
@@ -91,7 +94,7 @@ struct MessagingInboxView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
-                        MessagingSettingsView(keys: keys, scope: workspace.scope)
+                        MessagingSettingsView(keys: keys, scope: workspace.scope, currentScope: currentScope)
                     } label: {
                         Label("Réglages", systemImage: "gearshape")
                     }

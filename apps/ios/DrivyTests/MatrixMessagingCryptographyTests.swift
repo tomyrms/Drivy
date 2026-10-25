@@ -300,6 +300,273 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         }
     }
 
+    // MARK: Vérification de ses appareils : régressions avant raccord UI
+
+    /// Régression : updateTrackedUsers seul ne rafraîchit pas un compte déjà suivi.
+    func testOwnDevicesRefreshFindsDeviceRegisteredAfterFirstListing() async throws {
+        let relay = InMemoryRelay()
+        let a = try makeDevice(scope, relay: relay)
+        let first = try await a.ownDevices(scope: scope)
+        XCTAssertEqual(first.filter { !$0.isCurrent }.count, 0)
+        let b = try makeDevice(scope, relay: relay)
+        let bDevices = try await b.ownDevices(scope: scope)
+        let target = try XCTUnwrap(bDevices.first(where: \.isCurrent))
+
+        let refreshed = try await a.ownDevices(scope: scope)
+        XCTAssertTrue(refreshed.contains { $0.id == target.id && $0.fingerprint == target.fingerprint },
+                      "Actualiser doit découvrir le nouvel appareil du même compte")
+    }
+
+    /// Le SDK réel produit les signatures, le relais stocke les documents publics sans fabriquer la confiance.
+    func testConfirmOwnDevicePublishesSignatureAndReloadsSDKTrust() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        XCTAssertFalse(pair.target.isVerified)
+
+        try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+
+        let devices = try await pair.a.ownDevices(scope: scope)
+        let verified = try XCTUnwrap(devices.first { $0.id == pair.target.id })
+        XCTAssertTrue(verified.isVerified, "Le résultat doit être relu depuis la confiance du SDK")
+    }
+
+    func testConfirmOwnDeviceRejectsDifferentFingerprintBeforePublishingIdentity() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: "different-public-fingerprint", scope: scope)
+            XCTFail("Une comparaison différente ne peut pas vérifier l'appareil")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        let writes = await relay.verificationWriteCount()
+        XCTAssertEqual(writes, 0, "Aucune identité ni signature publiée avant comparaison correcte")
+    }
+
+    func testConfirmOwnDeviceRejectsOtherScopeBeforePublishingIdentity() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        let other = MessagingScope(accountID: UUID(), schoolID: school, accessEpoch: 1, apiBaseURL: scope.apiBaseURL)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: other)
+            XCTFail("Un autre compte ne peut confirmer cet appareil")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .contextChanged) }
+        let writes = await relay.verificationWriteCount()
+        XCTAssertEqual(writes, 0)
+    }
+
+    /// HTTP 200 ne vaut pas acceptation : l'API renvoie les refus dans failures.
+    func testConfirmOwnDeviceRejectsPartialSignatureFailure() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        await relay.setSignatureFault(.refused, target: pair.target.id)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+            XCTFail("Un refus de signature HTTP 200 ne doit pas retourner un succès")
+        } catch {
+            XCTAssertNotNil(error as? MessagingFailure)
+        }
+        let refusals = await relay.signatureFaultCount()
+        XCTAssertEqual(refusals, 1, "Atteindre le refus de la signature de B, pas échouer avant")
+        let devices = try await pair.a.ownDevices(scope: scope)
+        XCTAssertFalse(try XCTUnwrap(devices.first { $0.id == pair.target.id }).isVerified,
+                       "Une signature refusée ne doit pas apparaître vérifiée après relecture")
+    }
+
+    func testConfirmOwnDeviceRejectsMalformedSignatureAcknowledgement() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        await relay.setSignatureFault(.malformed, target: pair.target.id)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+            XCTFail("Une réponse sans failures typé ne confirme aucune signature")
+        } catch {
+            XCTAssertNotNil(error as? MessagingFailure)
+        }
+        let faults = await relay.signatureFaultCount()
+        XCTAssertEqual(faults, 1)
+    }
+
+    func testConfirmOwnDeviceRejectsDeviceRevokedAfterComparison() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        await relay.removeDevice(person, device: pair.target.id)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+            XCTFail("Une empreinte comparée avant révocation ne permet pas de confirmer l'appareil retiré")
+        } catch { XCTAssertNotNil(error as? MessagingFailure) }
+    }
+
+    /// L'identité privée créée avant un échec réseau ne prouve pas sa publication.
+    func testConfirmOwnDeviceRetriesBootstrapNotAcceptedByRelay() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        await relay.failNextSigningUpload(afterCommit: false)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+            XCTFail("La publication initiale est indisponible")
+        } catch { XCTAssertNotNil(error as? MessagingFailure) }
+
+        try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+        let devices = try await pair.a.ownDevices(scope: scope)
+        XCTAssertTrue(try XCTUnwrap(devices.first { $0.id == pair.target.id }).isVerified)
+        let published = await relay.hasPublishedIdentity(person)
+        XCTAssertTrue(published, "La reprise doit publier l'identité, pas seulement signer B localement")
+    }
+
+    /// Une réponse perdue ne doit ni remplacer ni régénérer la master key déjà acceptée.
+    func testConfirmOwnDeviceReconcilesLostBootstrapResponseWithoutReplacingIdentity() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        await relay.failNextSigningUpload(afterCommit: true)
+        do {
+            try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+            XCTFail("La réponse de publication est perdue")
+        } catch { XCTAssertNotNil(error as? MessagingFailure) }
+        let acceptedMaster = await relay.publishedMasterKey(person)
+        let firstMaster = try XCTUnwrap(acceptedMaster)
+
+        try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+        let finalMaster = await relay.publishedMasterKey(person)
+        XCTAssertEqual(finalMaster, firstMaster)
+        let devices = try await pair.a.ownDevices(scope: scope)
+        XCTAssertTrue(try XCTUnwrap(devices.first { $0.id == pair.target.id }).isVerified)
+    }
+
+    /// B possède ses clés d'appareil, pas les secrets cross-signing de A.
+    func testDeviceWithoutPrivateSigningKeyDoesNotAttemptToReplaceExistingIdentity() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+        let before = await relay.signingUploadCount()
+        do {
+            try await pair.b.confirmOwnDevice(deviceID: pair.current.id, fingerprint: pair.current.fingerprint, scope: scope)
+            XCTFail("B doit demander l'appareil d'origine, pas réinitialiser l'identité")
+        } catch { XCTAssertNotNil(error as? MessagingFailure) }
+        let after = await relay.signingUploadCount()
+        XCTAssertEqual(after, before, "L'absence de clé privée n'autorise aucune tentative de remplacement")
+    }
+
+    func testDeviceVerificationSnapshotExposesLocalFingerprintAndPrivateCapability() async throws {
+        let relay = InMemoryRelay()
+        let pair = try await verificationPair(relay)
+        let before = try await pair.a.deviceVerificationSnapshot(scope: scope)
+        XCTAssertEqual(before.localDevice.id, pair.current.id)
+        XCTAssertEqual(before.localDevice.fingerprint, pair.current.fingerprint)
+        XCTAssertEqual(before.capability, .available)
+        XCTAssertFalse(before.devices.contains(where: \.isCurrent))
+        try await pair.a.confirmOwnDevice(deviceID: pair.target.id, fingerprint: pair.target.fingerprint, scope: scope)
+        let onB = try await pair.b.deviceVerificationSnapshot(scope: scope)
+        XCTAssertEqual(onB.localDevice.fingerprint, pair.target.fingerprint)
+        XCTAssertEqual(onB.capability, .originalDeviceRequired)
+        let onA = try await pair.a.deviceVerificationSnapshot(scope: scope)
+        XCTAssertEqual(onA.capability, .available)
+    }
+
+    func testLocalFingerprintDoesNotDependOnServerDeviceProjection() async throws {
+        let relay = InMemoryRelay()
+        let device = try makeDevice(scope, relay: relay)
+        let initial = try await device.deviceVerificationSnapshot(scope: scope)
+        await relay.removeDevice(person, device: initial.localDevice.id)
+        let withoutServerDevice = try await device.deviceVerificationSnapshot(scope: scope)
+        XCTAssertFalse(initial.localDevice.fingerprint.isEmpty)
+        XCTAssertEqual(withoutServerDevice.localDevice.fingerprint, initial.localDevice.fingerprint)
+        XCTAssertEqual(withoutServerDevice.localDevice.id, initial.localDevice.id)
+    }
+
+    func testSigningBootstrapIntentSurvivesDeviceReopen() async throws {
+        let relay = InMemoryRelay()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let vault = try MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain())
+        var a: MatrixMessagingCryptography? = try MatrixMessagingCryptography(scope: scope, relay: relay.view(person), vault: vault)
+        let b = try makeDevice(scope, relay: relay)
+        let bDevices = try await b.ownDevices(scope: scope)
+        let target = try XCTUnwrap(bDevices.first(where: \.isCurrent))
+        await relay.failNextSigningUpload(afterCommit: false)
+        do {
+            try await a!.confirmOwnDevice(deviceID: target.id, fingerprint: target.fingerprint, scope: scope)
+            XCTFail("La publication initiale doit échouer")
+        } catch { XCTAssertNotNil(error as? MessagingFailure) }
+        let pending = try XCTUnwrap(vault.deviceSigningRecord()).intent
+        let expected = try pending.identity()
+        a = nil
+        let reopened = try MatrixMessagingCryptography(scope: scope, relay: relay.view(person), vault: vault)
+        try await reopened.confirmOwnDevice(deviceID: target.id, fingerprint: target.fingerprint, scope: scope)
+        XCTAssertTrue(try XCTUnwrap(vault.deviceSigningRecord()).completed)
+        let published = await relay.publishedMasterKey(person)
+        XCTAssertEqual(published, expected.master?.keys.values.first)
+        let devices = try await reopened.ownDevices(scope: scope)
+        XCTAssertTrue(try XCTUnwrap(devices.first { $0.id == target.id }).isVerified)
+    }
+
+    func testConcurrentBackupCannotEraseSigningIntentAndReopenResumesSameIdentity() async throws {
+        let relay = InMemoryRelay()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let vault = try MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain())
+        var signer: MatrixMessagingCryptography? = try MatrixMessagingCryptography(scope: scope, relay: relay.view(person), vault: vault)
+        var staleWriter: MatrixMessagingCryptography? = try MatrixMessagingCryptography(scope: scope, relay: relay.view(person), vault: vault)
+        let ready = await staleWriter!.isAvailable(scope: scope, conversationID: conversation)
+        XCTAssertTrue(ready, "Le second écrivain charge son ancien snapshot avant le bootstrap")
+        let other = try makeDevice(scope, relay: relay)
+        let devices = try await other.ownDevices(scope: scope)
+        let target = try XCTUnwrap(devices.first(where: \.isCurrent))
+        await relay.holdNextSigningUpload()
+        await relay.failNextSigningUpload(afterCommit: false)
+        let task = Task { [signer = signer!, scope = scope] in
+            do {
+                try await signer.confirmOwnDevice(deviceID: target.id, fingerprint: target.fingerprint, scope: scope)
+                XCTFail("La publication suspendue doit ensuite être refusée")
+            } catch { XCTAssertNotNil(error as? MessagingFailure) }
+            await relay.finishSigningAttempt()
+        }
+        guard await relay.waitForHeldSigningUpload() else {
+            await task.value
+            XCTFail("La tentative doit atteindre l'upload suspendu, pas échouer en préparation")
+            return
+        }
+        let initial: MessagingCryptoVault.DeviceSigningRecord
+        do {
+            initial = try XCTUnwrap(vault.deviceSigningRecord())
+            XCTAssertFalse(initial.completed)
+            _ = try await staleWriter!.enableBackup(scope: scope)
+            XCTAssertEqual(try vault.deviceSigningRecord(), initial,
+                           "Le backup en vol sur le même coffre ne doit pas effacer l'intention")
+        } catch {
+            await relay.releaseSigningUpload()
+            await task.value
+            throw error
+        }
+        await relay.releaseSigningUpload()
+        await task.value
+        signer = nil
+        staleWriter = nil
+        let reopened = try MatrixMessagingCryptography(scope: scope, relay: relay.view(person), vault: vault)
+        try await reopened.confirmOwnDevice(deviceID: target.id, fingerprint: target.fingerprint, scope: scope)
+        let completed = try XCTUnwrap(vault.deviceSigningRecord())
+        XCTAssertTrue(completed.completed)
+        XCTAssertEqual(completed.intent, initial.intent, "Aucun reset ni remplacement à la reprise")
+        let published = await relay.publishedMasterKey(person)
+        XCTAssertEqual(published, try initial.intent.identity().master?.keys.values.first)
+        let reloaded = try await reopened.ownDevices(scope: scope)
+        XCTAssertTrue(try XCTUnwrap(reloaded.first { $0.id == target.id }).isVerified)
+    }
+
+    private func verificationPair(_ relay: InMemoryRelay) async throws ->
+        (a: MatrixMessagingCryptography, b: MatrixMessagingCryptography, current: MessagingOwnDevice, target: MessagingOwnDevice) {
+        let a = try makeDevice(scope, relay: relay)
+        let b = try makeDevice(scope, relay: relay)
+        let aReady = await a.isAvailable(scope: scope, conversationID: conversation)
+        let bReady = await b.isAvailable(scope: scope, conversationID: conversation)
+        XCTAssertTrue(aReady)
+        XCTAssertTrue(bReady)
+        let aDevices = try await a.ownDevices(scope: scope)
+        let bDevices = try await b.ownDevices(scope: scope)
+        let current = try XCTUnwrap(aDevices.first(where: \.isCurrent))
+        let bCurrent = try XCTUnwrap(bDevices.first(where: \.isCurrent))
+        let target = try XCTUnwrap(aDevices.first { $0.id == bCurrent.id })
+        XCTAssertFalse(target.fingerprint.isEmpty)
+        XCTAssertEqual(target.fingerprint, bCurrent.fingerprint)
+        return (a, b, current, target)
+    }
+
     private func makeDevice(_ scope: MessagingScope, relay: InMemoryRelay) throws -> MatrixMessagingCryptography {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         return try MatrixMessagingCryptography(scope: scope, relay: relay.view(scope.accountID),
@@ -347,6 +614,57 @@ private actor InMemoryRelay {
     }
     private var backups: [String: Backup] = [:]
     private var backupUnavailable = false
+    // Cross-signing : documents publics réels du SDK, jamais de confiance attribuée par fixture.
+    private var signingKeys: [String: [String: [String: Any]]] = [:]
+    enum SignatureFault: Sendable { case refused, malformed }
+    private var signatureFault: (mode: SignatureFault, target: String)?
+    private var signatureFaults = 0
+    private var signingUploads = 0
+    private var signatureUploads = 0
+    private var signingUploadFailureAfterCommit: Bool?
+    private var holdSigningUpload = false
+    private var heldSigningUpload: CheckedContinuation<Void, Never>?
+    private var signingUploadStarted: CheckedContinuation<Bool, Never>?
+    private var signingAttemptFinished = false
+    func holdNextSigningUpload() { holdSigningUpload = true; signingAttemptFinished = false }
+    func finishSigningAttempt() {
+        signingAttemptFinished = true
+        signingUploadStarted?.resume(returning: false)
+        signingUploadStarted = nil
+    }
+    func pauseSigningUploadIfNeeded() async {
+        guard holdSigningUpload else { return }
+        holdSigningUpload = false
+        await withCheckedContinuation { continuation in
+            heldSigningUpload = continuation
+            signingUploadStarted?.resume(returning: true)
+            signingUploadStarted = nil
+        }
+    }
+    func waitForHeldSigningUpload() async -> Bool {
+        if heldSigningUpload != nil { return true }
+        if signingAttemptFinished { return false }
+        return await withCheckedContinuation { signingUploadStarted = $0 }
+    }
+    func releaseSigningUpload() { heldSigningUpload?.resume(); heldSigningUpload = nil }
+    func setSignatureFault(_ mode: SignatureFault, target: String) { signatureFault = (mode, target) }
+    func signatureFaultCount() -> Int { signatureFaults }
+    func signingUploadCount() -> Int { signingUploads }
+    func removeDevice(_ person: UUID, device: String) {
+        let user = MatrixMessagingCryptography.userID(person)
+        deviceKeys.removeValue(forKey: "\(user)|\(device)")
+        oneTimeKeys.removeValue(forKey: "\(user)|\(device)")
+        deviceListChanges.append(user)
+    }
+    func verificationWriteCount() -> Int { signingUploads + signatureUploads }
+    func failNextSigningUpload(afterCommit: Bool) { signingUploadFailureAfterCommit = afterCommit }
+    func hasPublishedIdentity(_ person: UUID) -> Bool {
+        signingKeys[MatrixMessagingCryptography.userID(person)]?["master_key"] != nil
+    }
+    func publishedMasterKey(_ person: UUID) -> String? {
+        let master = signingKeys[MatrixMessagingCryptography.userID(person)]?["master_key"]
+        return (master?["keys"] as? [String: String])?.values.first
+    }
     /// Comme le serveur : chaque publication de clés d'appareil apparaît dans device_lists.changed des autres.
     private var deviceListChanges: [String] = []
     private var claims = 0
@@ -370,6 +688,7 @@ private actor InMemoryRelay {
         let person: UUID
         func call(scope: MessagingScope, deviceID: String, method: String, path: [String], query: [URLQueryItem], body: Data?) async throws -> Data {
             guard scope.accountID == person else { throw MessagingFailure.contextChanged }
+            if path == ["keys", "device_signing", "upload"] { await relay.pauseSigningUploadIfNeeded() }
             return try await relay.handle(user: MatrixMessagingCryptography.userID(person), school: scope.schoolID,
                 device: deviceID, method: method, path: path, query: query, body: body)
         }
@@ -441,7 +760,70 @@ private actor InMemoryRelay {
                     result[requested, default: [:]][String(id.split(separator: "|")[1])] = keys
                 }
             }
-            output = ["device_keys": result, "failures": [String: Any]()]
+            var masters: [String: Any] = [:]
+            var selfSigning: [String: Any] = [:]
+            var userSigning: [String: Any] = [:]
+            for requested in ((input["device_keys"] as? [String: Any]) ?? [:]).keys {
+                masters[requested] = signingKeys[requested]?["master_key"]
+                selfSigning[requested] = signingKeys[requested]?["self_signing_key"]
+                if requested == user { userSigning[requested] = signingKeys[requested]?["user_signing_key"] }
+            }
+            output = ["device_keys": result, "failures": [String: Any](),
+                      "master_keys": masters, "self_signing_keys": selfSigning, "user_signing_keys": userSigning]
+        case "keys/device_signing/upload":
+            guard method == "POST" else { throw MessagingFailure.invalidResponse }
+            signingUploads += 1
+            let failure = signingUploadFailureAfterCommit
+            signingUploadFailureAfterCommit = nil
+            if failure == false { throw MessagingFailure.unavailable }
+            // Contrat actuel : même un master identique déjà présent est refusé, aucun remplacement.
+            if signingKeys[user]?["master_key"] != nil, input["master_key"] != nil {
+                throw MessagingFailure.stateConflict
+            }
+            let usages = ["master_key": "master", "self_signing_key": "self_signing", "user_signing_key": "user_signing"]
+            for (field, usage) in usages {
+                guard let raw = input[field] else { continue }
+                guard let key = raw as? [String: Any], key["user_id"] as? String == user,
+                      (key["usage"] as? [String])?.contains(usage) == true,
+                      key["keys"] is [String: String] else { throw MessagingFailure.invalidResponse }
+                signingKeys[user, default: [:]][field] = key
+            }
+            deviceListChanges.append(user)
+            if failure == true { throw MessagingFailure.unavailable }
+        case "keys/signatures/upload":
+            guard method == "POST" else { throw MessagingFailure.invalidResponse }
+            signatureUploads += 1
+            if let fault = signatureFault, (input[user] as? [String: Any])?[fault.target] != nil {
+                signatureFaults += 1
+                switch fault.mode {
+                case .refused:
+                    output = ["failures": [user: [fault.target: ["errcode": "M_FORBIDDEN", "error": "Signature refusée."]]]]
+                case .malformed:
+                    output = ["failures": "not-an-object"]
+                }
+                break
+            }
+            var failures: [String: [String: Any]] = [:]
+            for (owner, raw) in input {
+                guard let signedKeys = raw as? [String: Any] else { throw MessagingFailure.invalidResponse }
+                for (keyID, signed) in signedKeys {
+                    guard owner == user, let signed = signed as? [String: Any] else {
+                        failures[owner, default: [:]][keyID] = ["errcode": "M_FORBIDDEN", "error": "Signature refusée."]
+                        continue
+                    }
+                    if let existing = deviceKeys["\(owner)|\(keyID)"] {
+                        deviceKeys["\(owner)|\(keyID)"] = Self.mergeSignatures(existing, signed)
+                    } else if let field = signingKeys[owner]?.first(where: {
+                        ($0.value["keys"] as? [String: String])?.values.contains(keyID) == true
+                    })?.key, let existing = signingKeys[owner]?[field] {
+                        signingKeys[owner]?[field] = Self.mergeSignatures(existing, signed)
+                    } else {
+                        failures[owner, default: [:]][keyID] = ["errcode": "M_FORBIDDEN", "error": "Signature refusée."]
+                    }
+                }
+            }
+            deviceListChanges.append(user)
+            output = ["failures": failures]
         case "keys/claim":
             var result: [String: [String: [String: Any]]] = [:]
             for (target, devices) in (input["one_time_keys"] as? [String: [String: String]]) ?? [:] {
@@ -484,7 +866,7 @@ private actor InMemoryRelay {
             let offset = parts[0]
             // Une réponse perdue peut être rejouée : seule la progression de since change la page.
             let events = Array(queued.dropFirst(offset).prefix(100))
-            let changed = query.isEmpty ? [] : Array(Set(deviceListChanges.dropFirst(parts[1]).filter { $0 != user })).sorted()
+            let changed = query.isEmpty ? [] : Array(Set(deviceListChanges.dropFirst(parts[1]))).sorted()
             output = ["to_device": ["events": events], "device_lists": ["changed": changed, "left": [String]()],
                       "device_one_time_keys_count": ["signed_curve25519": oneTimeKeys["\(user)|\(device)"]?.count ?? 0],
                       "next_batch": "\(offset + events.count)_\(deviceListChanges.count)"]
@@ -492,6 +874,17 @@ private actor InMemoryRelay {
             throw MessagingFailure.invalidResponse
         }
         return try JSONSerialization.data(withJSONObject: output)
+    }
+
+    /// Même fusion de signatures publiques que l'API. La validation cryptographique reste au SDK.
+    private static func mergeSignatures(_ existing: [String: Any], _ incoming: [String: Any]) -> [String: Any] {
+        var result = existing
+        var signatures = existing["signatures"] as? [String: [String: String]] ?? [:]
+        for (owner, values) in incoming["signatures"] as? [String: [String: String]] ?? [:] {
+            signatures[owner, default: [:]].merge(values) { _, new in new }
+        }
+        result["signatures"] = signatures
+        return result
     }
 
     /// Même priorité que putBackupKeys : vérifiée, premier index, nombre de transferts.

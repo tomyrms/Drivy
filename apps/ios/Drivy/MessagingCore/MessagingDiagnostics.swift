@@ -42,7 +42,13 @@ final class MessagingDiagnostics: @unchecked Sendable {
     /// Catégorie fixe d'une route du relais : jamais l'identifiant de conversation ou de transaction.
     static func route(_ path: [String]) -> String {
         let joined = path.prefix(3).joined(separator: "/")
-        if path.first == "conversations" { return "MEMBERS" }
+        if path.first == "conversations" {
+            switch path.count > 2 ? path[2] : "" {
+            case "members": return "MEMBERS"
+            case "messages": return path.count == 3 ? "SEND" : "MSG"
+            default: return "CONV"
+            }
+        }
         if path.first == "sendToDevice" { return "TODEVICE" }
         switch joined {
         case "crypto/keys/upload": return "UPLOAD"

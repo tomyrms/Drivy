@@ -25,7 +25,7 @@ struct MessagingQualificationFixture: View {
     var body: some View {
         SchoolMessagingEntryButton()
             .environment(\.schoolMessagingEntry, SchoolMessagingEntry(scopeID: "synthetic-ui-only", makeView: { _ in
-                AnyView(MessagingInboxView(workspace: workspace, keys: keys))
+                AnyView(MessagingInboxView(workspace: workspace, keys: keys, currentScope: { [scope = workspace.scope] in scope }))
             }))
             .environment(\.locale, Locale(identifier: "fr_CH"))
     }
@@ -90,6 +90,13 @@ private actor MessagingQualificationKeys: MessagingKeyManagement {
         throw MessagingFailure.protectionUnavailable
     }
     func ownDevices(scope: MessagingScope) -> [MessagingOwnDevice] { [] }
+    func deviceVerificationSnapshot(scope: MessagingScope) -> MessagingDeviceVerificationSnapshot {
+        MessagingDeviceVerificationSnapshot(
+            localDevice: MessagingOwnDevice(id: "FIXTURELOCAL", fingerprint: "local-synthetic-public-fingerprint",
+                isCurrent: true, isVerified: false),
+            devices: [MessagingOwnDevice(id: "FIXTUREOTHER", fingerprint: "other-synthetic-public-fingerprint",
+                isCurrent: false, isVerified: false)], capability: .available)
+    }
     func confirmOwnDevice(deviceID: String, fingerprint: String, scope: MessagingScope) throws {
         throw MessagingFailure.protectionUnavailable
     }

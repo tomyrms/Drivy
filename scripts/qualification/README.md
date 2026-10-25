@@ -1,7 +1,7 @@
 # Qualification finale #84
 
 `validation-finale.yml` est une entrée **manuelle**, sans déploiement, fusion,
-activation fonctionnelle, publication ni clôture d'issue. Elle réutilise les
+activation générale, publication ni clôture d'issue. Elle réutilise les
 quatre workflows existants via `workflow_call`. Un seul checkout résout
 `candidate_ref`, puis tous les jobs vérifient le même SHA complet. Le SHA du
 produit IPA vient de `git rev-parse HEAD`, jamais du SHA du workflow appelant.
@@ -61,6 +61,18 @@ deux simulateurs, avec une limite de 90 minutes. L'IPA est un job séparé pour
   toute la cible métier sur iPhone, la présentation et toute l'UI sur iPad.
   `VisualOrientationTests` reste le harnais de capture visuelle paramétré, exclu
   comme auparavant de la suite produit. Il n'est pas présenté comme exécuté.
+  Si `MatrixMessagingRelayIntegrationTests.swift` est présent, la campagne
+  complète et le mode métier `all` démarrent automatiquement PostgreSQL 17 natif
+  et le relais Fastify HTTPS réel. Le mode GPS seul, les UI ciblées et les captures
+  ne découvrent pas cette cible et ne démarrent pas ce service.
+  Une CA éphémère est ajoutée au trousseau de confiance de chaque simulateur,
+  sans désactiver TLS. L'URL loopback est injectée dans `EnvironmentVariables`
+  du vrai fichier `.xctestrun`, consommé par `test-without-building -xctestrun`.
+  Le parcours relais est également ajouté à l'iPad après remise à zéro des
+  seules fixtures jetables. Clés TLS, base, état du relais et journaux serveur
+  restent hors artefacts, dans le dossier temporaire nettoyé à la sortie.
+  Ce raccord exige une exécution Apple réelle avant toute revendication de
+  réussite du test de bout en bout, les tests Python du script ne la remplacent pas.
 - Scripts : gardes de preuve, sélection iOS, captures iOS et provisionnement
   synthétique. Celui-ci réutilise `scripts/dev/setup.ts` sur runner GitHub hébergé
   éphémère : PostgreSQL/Keycloak/Mailpit loopback via Compose, Edge pour le
@@ -82,6 +94,27 @@ deux simulateurs, avec une limite de 90 minutes. L'IPA est un job séparé pour
   qualification automatisée positive. Aucun `continue-on-error` n'est ajouté.
 
 ## Vérification locale des outils, pas du produit Apple
+
+### IPA pour recette physique de Messages
+
+L'accès physique est compilé uniquement sur demande explicite, sans fixture de
+conversation ni simulation de réussite. Il ne nécessite pas d'avoir déjà achevé
+la recette VoiceOver physique, précisément destinée à cette IPA. Exemple réservé
+au coordinateur :
+
+```console
+gh workflow run ipa-essai.yml --repo tomyrms/Drivy --ref <SHA_CANDIDAT> -f messaging_qualification=true
+```
+
+Pour tester et construire ce même mode dans la campagne finale, ajouter
+`-f messaging_qualification=true` au dispatch du wrapper. La valeur est propagée
+aux compilations simulateur et IPA via le même script, sans activer ce mode sur
+les push ordinaires. `build-info.json` conserve
+`messagingQualificationBuildRequested`, `messagingGeneralQualification=NOT_CLAIMED`
+et `physicalQualification=NOT_EXECUTED`. Aucune configuration ou mise en ligne
+du service n'en découle.
+
+### Tests des scripts
 
 ```console
 python -B scripts/qualification/run-python-tests.py

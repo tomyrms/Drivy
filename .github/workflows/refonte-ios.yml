@@ -5,6 +5,9 @@ on:
       qualification_sha:
         required: true
         type: string
+      messaging_qualification:
+        type: boolean
+        default: false
       unit_test_scope:
         type: string
         default: all
@@ -21,6 +24,10 @@ on:
   # Every native delivery still builds its device IPA in ipa-essai.yml.
   workflow_dispatch:
     inputs:
+      messaging_qualification:
+        description: Compiler l'accès Messages de qualification physique, sans fixtures ni validation générale
+        type: boolean
+        default: false
       visual_only:
         description: Capturer les écrans iPhone et iPad sans lancer la campagne de tests
         type: boolean
@@ -38,6 +45,10 @@ on:
         description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), iPhone et iPad sans IPA ; vide pour tout'
         type: string
         default: ''
+      ui_iphone_only:
+        description: 'Avec ui_test_suite : contrôle intermédiaire sur iPhone seul, sans iPad ni captures (pas une preuve finale)'
+        type: boolean
+        default: false
       visual_screens:
         description: Écrans à capturer, séparés par des espaces
         type: string
@@ -75,12 +86,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   apple:
-    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
+    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && inputs.ui_iphone_only && 'Parcours UI iPhone seul' || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
     timeout-minutes: 90
     env:
       QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
+      DRIVY_MESSAGING_QUALIFICATION: ${{ inputs.messaging_qualification && '1' || '0' }}
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
       DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
@@ -88,6 +100,7 @@ jobs:
       DRIVY_IOS_UNIT_ONLY: ${{ inputs.unit_only && '1' || '0' }}
       DRIVY_IOS_UNIT_TEST_SCOPE: ${{ inputs.unit_test_scope || 'gps' }}
       DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
+      DRIVY_IOS_UI_IPHONE_ONLY: ${{ inputs.ui_iphone_only && '1' || '0' }}
       DRIVY_IOS_VISUAL_ONLY: ${{ inputs.visual_only && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -95,14 +108,32 @@ jobs:
           ref: ${{ inputs.qualification_sha || github.sha }}
       - run: bash scripts/qualification/verify-checkout.sh
       - name: Valider le mode et la sélection des tests
+        id: selection
         shell: bash
         run: |
           set -euo pipefail
           source scripts/ios/test-selection.sh
+          source scripts/ios/messaging-qualification.sh
+          echo "relay_required=$relay_required" >> "$GITHUB_OUTPUT"
           if [[ "$unit_only" == 1 ]]; then
             echo "Tests métier iPhone : $unit_test_scope, sans UI, iPad ni IPA."
             printf '%s\n' "${test_options[@]}"
           fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.selection.outputs.relay_required == '1'
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Préparer PostgreSQL natif et relais synthétique
+        if: steps.selection.outputs.relay_required == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --test --import tsx scripts/messaging-relay-qualification.test.mjs
+          if ! brew list --versions postgresql@17 > /dev/null; then brew install postgresql@17; fi
+          echo "$(brew --prefix postgresql@17)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - name: Installer XcodeGen vérifié
         shell: bash
         run: |
@@ -135,10 +166,12 @@ jobs:
         run: |
           set -euo pipefail
           source scripts/ios/test-selection.sh
+          source scripts/ios/messaging-qualification.sh
           action=build-for-testing
           if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status|lesson-evidence|lesson-permit|planning-details|planning-confirmation)[[:space:]] ]]; then action=build; fi
           xcodebuild "$action" \
             ${test_options[@]+"${test_options[@]}"} \
+            ${messaging_build_options[@]+"${messaging_build_options[@]}"} \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath artifacts/ios/DerivedData \
@@ -206,6 +239,15 @@ jobs:
             xcrun xcresulttool get test-results tests --path "$result" > "artifacts/ios/test-reports/$name/tests.json"
             xcrun xcresulttool export attachments --path "$result" --output-path "artifacts/ios/test-reports/$name/attachments"
           done
+      - name: Exiger le scénario FFI vers Fastify et PostgreSQL réellement exécuté
+        if: always() && steps.selection.outputs.relay_required == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/messaging-relay-qualification.py artifacts/ios/test-reports/Tests/summary.json artifacts/ios/test-reports/Tests/tests.json
+          if [[ "$DRIVY_IOS_UNIT_ONLY" != 1 ]]; then
+            python3 scripts/messaging-relay-qualification.py artifacts/ios/test-reports/iPadTests/summary.json artifacts/ios/test-reports/iPadTests/tests.json
+          fi
       - name: Exiger les preuves métier et UI iPhone ET iPad
         if: always() && inputs.qualification_sha != ''
         shell: bash
@@ -237,6 +279,8 @@ jobs:
             artifacts/ios/macos.txt
             artifacts/ios/swift.txt
             artifacts/ios/simulator-entitlements.plist
+            artifacts/ios/relay-environment.txt
+            artifacts/ios/relay-probe.txt
             artifacts/qualification/identity.json
           if-no-files-found: error
           retention-days: 14

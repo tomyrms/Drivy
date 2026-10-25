@@ -263,7 +263,6 @@ struct SchoolHomeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(saved ? "Revenir au trajet" : "Revenir au trajet en cours")
         .accessibilityValue("\(captureLearnerName)\(saved ? ", arrêté" : paused ? ", en pause" : "")")
         .accessibilityIdentifier("capture-return")

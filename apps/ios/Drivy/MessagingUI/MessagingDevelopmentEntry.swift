@@ -39,7 +39,8 @@ private struct MessagingDevelopmentContainer: View {
     var body: some View {
         Group {
             if let workspace {
-                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys)
+                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys,
+                                   currentScope: currentScope)
             } else if let failure {
                 ContentUnavailableView("Messages indisponibles", systemImage: "lock.shield",
                     description: Text(failure.localizedDescription))
@@ -60,6 +61,7 @@ private struct MessagingDevelopmentContainer: View {
                     directory: http, actions: http,
                     // Sans historique scellé disponible, la recherche se limite à la mémoire : pas de repli en clair.
                     history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
+                    reports: store,
                     photoLoader: photoLoader,
                     currentScope: currentScope)
             } catch { failure = .protectionUnavailable }

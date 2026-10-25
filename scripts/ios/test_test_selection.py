@@ -71,6 +71,8 @@ class TestSelection(unittest.TestCase):
             {'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests;echo unsafe'},
             {'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests\nVisualOrientationTests'},
             {'DRIVY_IOS_UI_TEST_SUITE': ' '.join(['VisualOrientationTests'] * 9)},
+            {'DRIVY_IOS_UI_IPHONE_ONLY': '1'},
+            {'DRIVY_IOS_UI_IPHONE_ONLY': 'yes', 'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests'},
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -140,6 +142,19 @@ export -f xcodebuild xcrun python3 sleep
                 self.assertEqual(re.findall(r'<(-only-testing:[^>]+)>', call), expected)
             if not build:
                 self.assertIn('<IPAD>', result.stdout)
+
+    def test_ui_iphone_only_runs_selection_once_without_ipad_or_capture(self):
+        expected = ['-only-testing:DrivyUITests/VisualOrientationTests/testRequestedScreensAtRealOrientations']
+        for status in ['0', '65']:
+            with self.subTest(status=status):
+                result = self.run_script(DRIVY_IOS_UI_TEST_SUITE='VisualOrientationTests/testRequestedScreensAtRealOrientations',
+                                         DRIVY_IOS_UI_IPHONE_ONLY='1', MOCK_TEST_STATUS=status)
+                self.assertEqual(result.returncode, int(status), result.stderr + result.stdout)
+                calls = [line for line in result.stdout.splitlines() if line.startswith('xcodebuild')]
+                self.assertEqual(len(calls), 1, result.stdout)
+                self.assertEqual(re.findall(r'<(-only-testing:[^>]+)>', calls[0]), expected)
+                self.assertNotIn('<IPAD>', result.stdout)
+                self.assertNotIn('<screenshot>', result.stdout)
 
     def test_visual_build_action_is_unchanged(self):
         for orientations, action in [('', 'build'), ('portrait', 'build-for-testing')]:
