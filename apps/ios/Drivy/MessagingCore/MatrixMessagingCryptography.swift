@@ -12,8 +12,23 @@ protocol MessagingKeyManagement: Sendable {
     /// Vrai si des clés n'ont pas encore pu être envoyées à la sauvegarde (nouvel essai au prochain open/sync).
     func backupPending(scope: MessagingScope) async -> Bool
     func ownDevices(scope: MessagingScope) async throws -> [MessagingOwnDevice]
+    func deviceVerificationSnapshot(scope: MessagingScope) async throws -> MessagingDeviceVerificationSnapshot
     /// À appeler seulement après comparaison visuelle de l'empreinte affichée sur les deux appareils.
     func confirmOwnDevice(deviceID: String, fingerprint: String, scope: MessagingScope) async throws
+}
+
+extension MessagingKeyManagement {
+    func deviceVerificationSnapshot(scope: MessagingScope) async throws -> MessagingDeviceVerificationSnapshot {
+        throw MessagingFailure.protectionUnavailable
+    }
+}
+
+struct MessagingDeviceVerificationSnapshot: Sendable {
+    enum Capability: Sendable, Equatable { case available, originalDeviceRequired, identityConflict }
+    /// Empreinte issue de la machine locale, jamais de la réponse du serveur.
+    let localDevice: MessagingOwnDevice
+    let devices: [MessagingOwnDevice]
+    let capability: Capability
 }
 
 struct MessagingOwnDevice: Sendable, Hashable, Identifiable {
@@ -47,6 +62,8 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     /// Incrémenté à chaque sync terminé : un déchiffrement sans clé relit la file sauf si un sync a fini depuis son début.
     private var syncGeneration = 0
 
+    /// Une seule confirmation en vol : aucun bootstrap concurrent dans cette instance.
+    private var verifyingDevice = false
     private let diagnostics: MessagingDiagnostics
 
     init(scope: MessagingScope, relay: any MessagingCryptoRelay, vault: MessagingCryptoVault? = nil,
@@ -214,40 +231,167 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         try guardScope(scope)
         return try await shielded {
             let machine = try await open()
-            let me = Self.userID(scope.accountID)
-            try machine.updateTrackedUsers(users: [me])
-            try await flush(machine)
-            // Un compte déjà suivi n'est pas remis à jour par updateTrackedUsers.
-            // Relire explicitement ses clés, puis laisser le SDK valider et persister la réponse.
-            try await dispatch(.keysQuery(requestId: UUID().uuidString, users: [me]), machine)
-            return try machine.getUserDevices(userId: me, timeout: 0).map {
-                MessagingOwnDevice(id: $0.deviceId, fingerprint: $0.keys["ed25519:\($0.deviceId)"] ?? "",
-                                   isCurrent: $0.deviceId == deviceID, isVerified: $0.crossSigningTrusted || $0.locallyTrusted)
-            }.sorted { $0.id < $1.id }
+            _ = try await refreshOwnIdentity(machine)
+            return try deviceProjection(machine)
+        }
+    }
+
+    func deviceVerificationSnapshot(scope: MessagingScope) async throws -> MessagingDeviceVerificationSnapshot {
+        try guardScope(scope)
+        return try await shielded {
+            let machine = try await open()
+            let remote = try await refreshOwnIdentity(machine)
+            guard let fingerprint = machine.identityKeys()["ed25519"], !fingerprint.isEmpty else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            let devices = try deviceProjection(machine)
+            let status = machine.crossSigningStatus()
+            let capability: MessagingDeviceVerificationSnapshot.Capability
+            if let record = try vault.deviceSigningRecord(), !record.completed {
+                let matches = try record.intent.identity() == remote.signing
+                if remote.signing.master != nil && !matches { capability = .identityConflict }
+                else { capability = status.hasSelfSigning ? .available : .originalDeviceRequired }
+            } else if remote.signing.master != nil {
+                let verified = try machine.isIdentityVerified(userId: Self.userID(scope.accountID))
+                capability = status.hasSelfSigning && verified ? .available : .originalDeviceRequired
+            } else {
+                let existingRecord = try vault.deviceSigningRecord() != nil
+                capability = existingRecord || status.hasMaster || status.hasSelfSigning || status.hasUserSigning
+                    ? .identityConflict : .available
+            }
+            return MessagingDeviceVerificationSnapshot(
+                localDevice: MessagingOwnDevice(id: deviceID, fingerprint: fingerprint, isCurrent: true,
+                    isVerified: devices.first(where: { $0.id == deviceID })?.isVerified == true),
+                devices: devices.filter { !$0.isCurrent }, capability: capability)
         }
     }
 
     func confirmOwnDevice(deviceID other: String, fingerprint: String, scope: MessagingScope) async throws {
         try guardScope(scope)
+        guard !verifyingDevice else { throw MessagingFailure.unavailable }
+        verifyingDevice = true
+        defer { verifyingDevice = false }
         try await shielded {
             let machine = try await open()
             let me = Self.userID(scope.accountID)
-            guard let device = try machine.getDevice(userId: me, deviceId: other, timeout: 0),
+            guard other != deviceID, !fingerprint.isEmpty else { throw MessagingFailure.protectionUnavailable }
+            let remote = try await refreshOwnIdentity(machine)
+            guard remote.devices[other] == fingerprint,
+                  let device = try machine.getDevice(userId: me, deviceId: other, timeout: 0),
                   device.keys["ed25519:\(other)"] == fingerprint else { throw MessagingFailure.protectionUnavailable }
-            if !machine.crossSigningStatus().hasMaster {
-                let bootstrap = try machine.bootstrapCrossSigning()
-                if let upload = bootstrap.uploadKeysRequest { try await dispatch(upload, machine) }
-                let signing = bootstrap.uploadSigningKeysRequest
-                let body = "{\"master_key\":\(signing.masterKey),\"self_signing_key\":\(signing.selfSigningKey),\"user_signing_key\":\(signing.userSigningKey)}"
-                _ = try await relay.call(scope: scope, deviceID: deviceID, method: "POST", path: ["keys", "device_signing", "upload"],
-                                         query: [], body: Data(body.utf8))
-                _ = try await relay.call(scope: scope, deviceID: deviceID, method: "POST", path: ["keys", "signatures", "upload"],
-                                         query: [], body: Data(bootstrap.uploadSignatureRequest.body.utf8))
-            }
+            try await ensureSigningIdentity(machine, remote: remote)
+            // Une révocation pendant l'initialisation ne doit pas être signée depuis un cache ancien.
+            let current = try await refreshOwnIdentity(machine)
+            guard current.devices[other] == fingerprint else { throw MessagingFailure.protectionUnavailable }
             let signature = try machine.verifyDevice(userId: me, deviceId: other)
-            _ = try await relay.call(scope: scope, deviceID: deviceID, method: "POST", path: ["keys", "signatures", "upload"],
-                                     query: [], body: Data(signature.body.utf8))
+            try await uploadDeviceSignature(Data(signature.body.utf8))
+            let accepted = try await refreshOwnIdentity(machine)
+            guard accepted.devices[other] == fingerprint,
+                  let verified = try machine.getDevice(userId: me, deviceId: other, timeout: 0),
+                  verified.crossSigningTrusted else { throw MessagingFailure.protectionUnavailable }
         }
+    }
+
+    private func deviceProjection(_ machine: OlmMachine) throws -> [MessagingOwnDevice] {
+        try machine.getUserDevices(userId: Self.userID(scope.accountID), timeout: 0).map {
+            MessagingOwnDevice(id: $0.deviceId, fingerprint: $0.keys["ed25519:\($0.deviceId)"] ?? "",
+                               isCurrent: $0.deviceId == deviceID, isVerified: $0.crossSigningTrusted)
+        }.sorted { $0.id < $1.id }
+    }
+
+    private struct OwnIdentity: Sendable {
+        let devices: [String: String]
+        let signing: MessagingCryptoVault.SigningIdentity
+    }
+
+    /// Requête explicite : updateTrackedUsers seul ne rafraîchit pas un compte déjà suivi.
+    private func refreshOwnIdentity(_ machine: OlmMachine) async throws -> OwnIdentity {
+        let me = Self.userID(scope.accountID)
+        try machine.updateTrackedUsers(users: [me])
+        try await flush(machine)
+        let id = UUID().uuidString
+        let body = try JSONSerialization.data(withJSONObject: ["device_keys": [me: [String]()]])
+        let response = try await relay.call(scope: scope, deviceID: deviceID, method: "POST",
+                                            path: ["keys", "query"], query: [], body: body)
+        guard let raw = try JSONSerialization.jsonObject(with: response) as? [String: Any],
+              let failures = raw["failures"] as? [String: Any], failures.isEmpty,
+              let allDevices = raw["device_keys"] as? [String: [String: Any]] else {
+            throw MessagingFailure.invalidResponse
+        }
+        var devices: [String: String] = [:]
+        for (device, value) in allDevices[me] ?? [:] {
+            guard let value = value as? [String: Any], value["user_id"] as? String == me,
+                  value["device_id"] as? String == device,
+                  let keys = value["keys"] as? [String: String], let fingerprint = keys["ed25519:\(device)"],
+                  !fingerprint.isEmpty else { throw MessagingFailure.invalidResponse }
+            devices[device] = fingerprint
+        }
+        let signing = try MessagingCryptoVault.SigningIdentity(query: raw, user: me)
+        try machine.markRequestAsSent(requestId: id, requestType: .keysQuery,
+                                     responseBody: String(decoding: response, as: UTF8.self))
+        return OwnIdentity(devices: devices, signing: signing)
+    }
+
+    /// Intention publique scellée avant tout upload. Aucune nouvelle identité à la reprise.
+    private func ensureSigningIdentity(_ machine: OlmMachine, remote: OwnIdentity) async throws {
+        let status = machine.crossSigningStatus()
+        if try vault.deviceSigningRecord() == nil, remote.signing.master != nil {
+            guard status.hasSelfSigning,
+                  try machine.isIdentityVerified(userId: Self.userID(scope.accountID)) else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            return
+        }
+        // Lecture/création/écriture coordonnées entre instances, sans attente réseau sous verrou.
+        let record = try vault.prepareDeviceSigning {
+            // Secrets privés sans intention durable : état ambigu, ne jamais les remplacer.
+            guard remote.signing.master == nil,
+                  !status.hasMaster, !status.hasSelfSigning, !status.hasUserSigning else {
+                throw MessagingFailure.stateConflict
+            }
+            let bootstrap = try machine.bootstrapCrossSigning()
+            let signing = bootstrap.uploadSigningKeysRequest
+            let body = Data("{\"master_key\":\(signing.masterKey),\"self_signing_key\":\(signing.selfSigningKey),\"user_signing_key\":\(signing.userSigningKey)}".utf8)
+            var deviceKeys: String?
+            if let upload = bootstrap.uploadKeysRequest {
+                guard case .keysUpload(_, let value) = upload else { throw MessagingFailure.invalidResponse }
+                deviceKeys = value
+            }
+            return MessagingCryptoVault.PendingDeviceSigning(
+                signingBody: body, signatureBody: Data(bootstrap.uploadSignatureRequest.body.utf8), deviceKeysBody: deviceKeys)
+        }
+        guard machine.crossSigningStatus().hasSelfSigning else { throw MessagingFailure.protectionUnavailable }
+        let pending = record.intent
+        let expected = try pending.identity()
+        if record.completed {
+            guard remote.signing == expected else { throw MessagingFailure.stateConflict }
+            return
+        }
+        if remote.signing.master == nil {
+            if let body = pending.deviceKeysBody {
+                try await dispatch(.keysUpload(requestId: UUID().uuidString, body: body), machine)
+            }
+            let response = try await relay.call(scope: scope, deviceID: deviceID, method: "POST",
+                path: ["keys", "device_signing", "upload"], query: [], body: pending.signingBody)
+            guard let object = try JSONSerialization.jsonObject(with: response) as? [String: Any], object.isEmpty else {
+                throw MessagingFailure.invalidResponse
+            }
+        } else {
+            guard remote.signing == expected else { throw MessagingFailure.stateConflict }
+        }
+        // Une réponse d'upload perdue est résolue par query, sans renvoyer un master existant.
+        let published = try await refreshOwnIdentity(machine)
+        guard published.signing == expected else { throw MessagingFailure.stateConflict }
+        try await uploadDeviceSignature(pending.signatureBody)
+        try vault.completeDeviceSigning(expected: pending)
+    }
+
+    private func uploadDeviceSignature(_ body: Data) async throws {
+        let response = try await relay.call(scope: scope, deviceID: deviceID, method: "POST",
+            path: ["keys", "signatures", "upload"], query: [], body: body)
+        guard let object = try JSONSerialization.jsonObject(with: response) as? [String: Any],
+              let failures = object["failures"] as? [String: Any] else { throw MessagingFailure.invalidResponse }
+        guard failures.isEmpty else { throw MessagingFailure.protectionUnavailable }
     }
 
     // MARK: Machine
@@ -564,6 +708,52 @@ private final class SilentProgress: ProgressListener, @unchecked Sendable {
 /// Store crypto dans un dossier protégé, passphrase et identifiant d'appareil dans le Keychain.
 /// Si le store existe sans passphrase, il n'est ni recréé ni ouvert en clair : erreur fermée.
 struct MessagingCryptoVault: Sendable {
+    /// Comparaison des clés publiques seulement, les signatures peuvent être enrichies au serveur.
+    struct PublicSigningKey: Codable, Equatable, Sendable {
+        let user_id: String
+        let usage: [String]
+        let keys: [String: String]
+    }
+    struct SigningIdentity: Codable, Equatable, Sendable {
+        let master: PublicSigningKey?
+        let selfSigning: PublicSigningKey?
+        let userSigning: PublicSigningKey?
+
+        init(query: [String: Any], user: String) throws {
+            func key(_ field: String, usage: String) throws -> PublicSigningKey? {
+                guard let raw = query[field] else { return nil }
+                guard let values = raw as? [String: Any] else { throw MessagingFailure.invalidResponse }
+                guard let value = values[user] else { return nil }
+                let key = try JSONDecoder().decode(PublicSigningKey.self, from: JSONSerialization.data(withJSONObject: value))
+                guard key.user_id == user, key.usage == [usage], key.keys.count == 1 else {
+                    throw MessagingFailure.invalidResponse
+                }
+                return key
+            }
+            master = try key("master_keys", usage: "master")
+            selfSigning = try key("self_signing_keys", usage: "self_signing")
+            userSigning = try key("user_signing_keys", usage: "user_signing")
+        }
+    }
+    struct PendingDeviceSigning: Codable, Equatable, Sendable {
+        let signingBody: Data
+        let signatureBody: Data
+        let deviceKeysBody: String?
+
+        func identity() throws -> SigningIdentity {
+            guard let raw = try JSONSerialization.jsonObject(with: signingBody) as? [String: Any],
+                  let master = raw["master_key"] as? [String: Any], let user = master["user_id"] as? String,
+                  let selfSigning = raw["self_signing_key"], let userSigning = raw["user_signing_key"] else {
+                throw MessagingFailure.invalidResponse
+            }
+            return try SigningIdentity(query: ["master_keys": [user: master],
+                "self_signing_keys": [user: selfSigning], "user_signing_keys": [user: userSigning]], user: user)
+        }
+    }
+    struct DeviceSigningRecord: Codable, Equatable, Sendable {
+        let intent: PendingDeviceSigning
+        var completed: Bool
+    }
     struct State: Codable, Equatable, Sendable {
         var syncToken: String?
         var members: [UUID: [UUID]] = [:]
@@ -588,6 +778,9 @@ struct MessagingCryptoVault: Sendable {
     let diagnostics: MessagingDiagnostics
     var storePath: String { folder.appendingPathComponent("store", isDirectory: true).path }
     private var stateFile: URL { folder.appendingPathComponent("state.sealed") }
+    private var signingFile: URL { folder.appendingPathComponent("device-signing.sealed") }
+    /// Toutes les instances de l'app coordonnent la préparation et l'acquittement du journal dédié.
+    private static let signingLock = NSLock()
 
     init(scope: MessagingScope, root: URL? = nil, keychain: any MessagingCryptoKeychain = MessagingSystemKeychain(),
          diagnostics: MessagingDiagnostics = .shared) throws {
@@ -656,6 +849,51 @@ struct MessagingCryptoVault: Sendable {
             try bytes.write(to: stateFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             try Self.protect(stateFile)
         } catch { diagnostics.recordIfEmpty("S-SAVE"); throw MessagingFailure.protectionUnavailable }
+    }
+
+    /// Journal indépendant : aucun save(State) de sync/backup ne peut le remplacer.
+    func deviceSigningRecord() throws -> DeviceSigningRecord? {
+        try Self.signingLock.withLock { try readDeviceSigning() }
+    }
+
+    func prepareDeviceSigning(_ create: () throws -> PendingDeviceSigning) throws -> DeviceSigningRecord {
+        try Self.signingLock.withLock {
+            if let existing = try readDeviceSigning() { return existing }
+            let record = DeviceSigningRecord(intent: try create(), completed: false)
+            try writeDeviceSigning(record)
+            return record
+        }
+    }
+
+    func completeDeviceSigning(expected: PendingDeviceSigning) throws {
+        try Self.signingLock.withLock {
+            guard var record = try readDeviceSigning(), record.intent == expected else {
+                throw MessagingFailure.stateConflict
+            }
+            if record.completed { return }
+            record.completed = true
+            try writeDeviceSigning(record)
+        }
+    }
+
+    private func readDeviceSigning() throws -> DeviceSigningRecord? {
+        guard FileManager.default.fileExists(atPath: signingFile.path) else { return nil }
+        do {
+            let box = try AES.GCM.SealedBox(combined: Data(contentsOf: signingFile))
+            let clear = try AES.GCM.open(box, using: stateKey(),
+                                         authenticating: Data("device-signing|\(fingerprint)".utf8))
+            return try JSONDecoder().decode(DeviceSigningRecord.self, from: clear)
+        } catch { diagnostics.recordIfEmpty("S-SIGN-READ"); throw MessagingFailure.protectionUnavailable }
+    }
+
+    private func writeDeviceSigning(_ record: DeviceSigningRecord) throws {
+        do {
+            let sealed = try AES.GCM.seal(JSONEncoder().encode(record), using: stateKey(),
+                                         authenticating: Data("device-signing|\(fingerprint)".utf8))
+            guard let bytes = sealed.combined else { throw MessagingFailure.protectionUnavailable }
+            try bytes.write(to: signingFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try Self.protect(signingFile)
+        } catch { diagnostics.recordIfEmpty("S-SIGN-SAVE"); throw MessagingFailure.protectionUnavailable }
     }
 
     private func stateKey() throws -> SymmetricKey {

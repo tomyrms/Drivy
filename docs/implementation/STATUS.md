@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 25 octobre 2026 : vérification crypto de ses appareils, candidat non qualifié
+
+- Apple `40199170223` : découverte d'un appareil ajouté tardivement réussie après rafraîchissement explicite. Cinq RED métier atteints : révocation, accusé mal formé, refus partiel HTTP 200, reprise d'un bootstrap non publié, tentative de remplacement depuis B sans clé privée. Nominal, mauvaise empreinte, mauvais contexte et réponse de bootstrap perdue réussis. La panne distincte du relais réel à l'étape `READINESS` n'a pas de lien causal établi avec ces changements.
+- Candidat en revue : intention de publication scellée et reprise sans remplacement d'identité, validation des accusés de signatures, relecture du périphérique avant/après signature. Parcours natif « Mes appareils », empreinte locale du SDK, comparaison explicite, disponibilité de la clé privée et absence de succès optimiste. Aucun SAS/QR, reset, changement API ou nouvelle politique de confiance pour l'envoi.
+- Après revue P1, l'intention de bootstrap est isolée dans un journal `device-signing.sealed`, coordonné entre instances et conservé après acquittement. Une sauvegarde d'un ancien snapshot sync/backup ne réécrit plus ce journal. Test ajouté avec deux adaptateurs sur le même coffre, upload suspendu, backup concurrent et reprise après réouverture sans reset. Décision et limites : `messaging-device-verification-20261025.md`. **Test non exécuté Apple à cette étape.**
+- Contrôlé localement : lecture du log et `git diff --check`. Les tests ajoutés du modèle/UI, de reprise après réouverture et de source locale de l'empreinte **ne sont pas encore exécutés sur Apple**. Aucun GREEN ni résultat physique/VoiceOver annoncé. Rapport de remise : `artifacts/qa84-device-verification-progress.md`.
+
 ## 25 octobre 2026 : QA84, assertions UI terrain et profil
 
 - Run Apple `40194505714`, log local `artifacts/qa84-full-native-failure.log` : terrain échoué sur iPhone/iPad, profil Signalements échoué sur iPhone clair/sombre mais réussi sur iPad.

@@ -39,7 +39,8 @@ private struct MessagingDevelopmentContainer: View {
     var body: some View {
         Group {
             if let workspace {
-                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys)
+                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys,
+                                   currentScope: currentScope)
             } else if let failure {
                 ContentUnavailableView("Messages indisponibles", systemImage: "lock.shield",
                     description: Text(failure.localizedDescription))
