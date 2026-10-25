@@ -1,6 +1,14 @@
 import Foundation
 import Observation
 
+/// Aperçu de la dernière activité d'une conversation, issu de la mémoire ou de l'historique scellé local.
+struct MessagingInboxPreview: Equatable, Sendable {
+    let text: String?
+    let date: Date?
+    let fromMe: Bool
+    let unavailable: Bool
+}
+
 /// État éphémère par contexte, sans cache transversal ni persistance de texte déchiffré.
 @MainActor
 @Observable final class MessagingWorkspace {
@@ -131,9 +139,11 @@ import Observation
             guard (cursor == nil || page.nextCursor != cursor),
                   page.items.allSatisfy({ $0.schoolID == scope.schoolID && $0.conversationID == conversationID }),
                   Set(page.items.map(\.id)).count == page.items.count else { throw MessagingFailure.invalidResponse }
-            let existing = more ? (messages[conversationID] ?? []) : []
-            messages[conversationID] = existing + page.items.filter { item in !existing.contains(where: { $0.id == item.id }) }
-            messageCursors[conversationID] = page.nextCursor
+            messages[conversationID] = Self.mergedMessages(messages[conversationID] ?? [], page.items)
+            // Un rechargement initial ne doit pas faire oublier la suite des pages anciennes déjà parcourues.
+            if more || !loadedMessages.contains(conversationID) {
+                messageCursors[conversationID] = page.nextCursor
+            }
             if let pageAccess = page.access {
                 accessByConversation[conversationID] = pageAccess
                 if let limit = pageAccess.readableUntilSequence {
@@ -290,6 +300,7 @@ import Observation
             contents = [:]
             decryptionCodes = [:]
             hiddenForMe = []
+            previews = [:]
             conversations = []
             messages = [:]
             readStates = [:]
@@ -302,6 +313,64 @@ import Observation
     }
 
     func hasLoadedMessages(_ id: UUID) -> Bool { loadedMessages.contains(id) }
+
+    /// Fusion par identifiant (la version serveur la plus récente remplace), ordre ascendant de séquence.
+    /// Le serveur renvoie chaque page en séquence décroissante ; l'heure locale n'est jamais utilisée.
+    static func mergedMessages(_ existing: [MessagingWireMessage], _ incoming: [MessagingWireMessage]) -> [MessagingWireMessage] {
+        var byID: [UUID: MessagingWireMessage] = [:]
+        for item in existing { byID[item.id] = item }
+        for item in incoming { byID[item.id] = item }
+        return byID.values.sorted { lhs, rhs in
+            lhs.meta.sequence != rhs.meta.sequence ? lhs.meta.sequence < rhs.meta.sequence : lhs.id.uuidString < rhs.id.uuidString
+        }
+    }
+
+    // MARK: Aperçus de la boîte de réception
+
+    /// Aperçus issus de l'historique scellé local, en mémoire seulement.
+    private(set) var previews: [UUID: MessagingInboxPreview] = [:]
+
+    private func readable(_ sequence: Int, in conversationID: UUID) -> Bool {
+        guard let limit = accessByConversation[conversationID]?.readableUntilSequence else { return true }
+        return sequence <= limit
+    }
+
+    /// Dernier message visible (ni masqué pour moi, ni au-delà de la limite lisible).
+    func lastReadableSequence(_ id: UUID) -> Int? {
+        visibleMessages(id).last { readable($0.meta.sequence, in: id) }?.meta.sequence
+    }
+
+    /// Mémoire de session d'abord (dernier message chargé), puis historique scellé. Jamais de réseau.
+    func preview(for conversationID: UUID) -> MessagingInboxPreview? {
+        if let last = visibleMessages(conversationID).last(where: { readable($0.meta.sequence, in: conversationID) }) {
+            let fromMe = last.senderID == scope.accountID
+            if let content = contents[last.id] {
+                return MessagingInboxPreview(text: content.summary, date: last.acceptedAt, fromMe: fromMe, unavailable: false)
+            }
+            if last.meta.deletedForEveryone || decryptionCodes[last.id] != nil {
+                return MessagingInboxPreview(text: nil, date: last.acceptedAt, fromMe: fromMe, unavailable: true)
+            }
+        }
+        return previews[conversationID]
+    }
+
+    /// Lit le dernier élément de l'historique scellé de chaque conversation listée, sans requête réseau.
+    func loadPreviews() async {
+        guard currentScope() == scope else { recordFailure(.contextChanged); return }
+        for conversation in conversations {
+            guard let entries = try? await history.entries(conversationID: conversation.id, scope: scope) else { continue }
+            guard currentScope() == scope else { recordFailure(.contextChanged); return }
+            let last = entries
+                .filter { !hiddenForMe.contains($0.messageID) && readable($0.sequence, in: conversation.id) }
+                .max { $0.sequence != $1.sequence ? $0.sequence < $1.sequence : $0.messageID.uuidString < $1.messageID.uuidString }
+            if let last {
+                previews[conversation.id] = MessagingInboxPreview(text: last.content.summary, date: last.acceptedAt,
+                    fromMe: last.senderID == scope.accountID, unavailable: false)
+            } else {
+                previews.removeValue(forKey: conversation.id)
+            }
+        }
+    }
 
     // MARK: v2
 

@@ -477,6 +477,129 @@ final class MessagingThreadTests: XCTestCase {
         let calls = await actions.calls
         XCTAssertTrue(calls.isEmpty)
     }
+
+    // MARK: Ordre des messages et aperçus (#98)
+
+    private func wire(_ sequence: Int, id: UUID = UUID(), text: String = "m", sender: UUID? = nil,
+                      at date: Date = Date(timeIntervalSince1970: 1_000)) -> MessagingWireMessage {
+        MessagingWireMessage(id: id, conversationID: conversation, schoolID: school, senderID: sender ?? account,
+            acceptedAt: date, ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data(text.utf8)),
+            meta: MessagingMessageMeta(sequence: sequence))
+    }
+
+    func testDescendingPagesAreShownOldestFirstAcrossPages() async {
+        let service = PagedService(pages: [nil: .init(items: [wire(6), wire(5), wire(4)], nextCursor: "c1"),
+                                           "c1": .init(items: [wire(3), wire(2), wire(1)], nextCursor: nil)])
+        let workspace = MessagingWorkspace(scope: scope, service: service, currentScope: { [scope] in scope })
+        await workspace.loadMessages(conversation)
+        XCTAssertEqual(workspace.visibleMessages(conversation).map(\.meta.sequence), [4, 5, 6])
+        await workspace.loadMessages(conversation, more: true)
+        XCTAssertEqual(workspace.visibleMessages(conversation).map(\.meta.sequence), [1, 2, 3, 4, 5, 6])
+        XCTAssertEqual(workspace.lastReadableSequence(conversation), 6)
+    }
+
+    func testInitialReloadMergesWithOlderPagesAndReplacesDuplicates() async {
+        let kept = UUID()
+        let service = PagedService(pages: [nil: .init(items: [wire(4, id: kept), wire(3)], nextCursor: "c1"),
+                                           "c1": .init(items: [wire(2), wire(1)], nextCursor: nil)])
+        let workspace = MessagingWorkspace(scope: scope, service: service, currentScope: { [scope] in scope })
+        await workspace.loadMessages(conversation)
+        await workspace.loadMessages(conversation, more: true)
+        var pinned = wire(4, id: kept); pinned.meta.pinned = true
+        await service.setFirstPage(.init(items: [wire(5), pinned], nextCursor: "c1"))
+        await workspace.loadMessages(conversation)
+        let visible = workspace.visibleMessages(conversation)
+        XCTAssertEqual(visible.map(\.meta.sequence), [1, 2, 3, 4, 5])
+        XCTAssertEqual(visible.filter { $0.id == kept }.count, 1)
+        XCTAssertTrue(workspace.message(kept, in: conversation)?.meta.pinned == true)
+        XCTAssertFalse(workspace.canLoadMoreMessages(conversation))
+    }
+
+    func testOutOfOrderAndSameDateUseSequenceThenStableID() {
+        let date = Date(timeIntervalSince1970: 5)
+        let a = wire(2, at: date), b = wire(1, at: date.addingTimeInterval(60)), c = wire(3, at: date)
+        let merged = MessagingWorkspace.mergedMessages([c], [a, b])
+        XCTAssertEqual(merged.map(\.meta.sequence), [1, 2, 3])
+        let x = wire(7, id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!)
+        let y = wire(7, id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!)
+        XCTAssertEqual(MessagingWorkspace.mergedMessages([], [x, y]).map(\.id), [y.id, x.id])
+        XCTAssertEqual(MessagingWorkspace.mergedMessages([], [y, x]).map(\.id), [y.id, x.id])
+    }
+
+    func testPreviewPrefersDecryptedSessionMessage() async {
+        let other = UUID()
+        let service = PagedService(pages: [nil: .init(items: [wire(2, text: "Dernier", sender: other), wire(1, text: "Premier")], nextCursor: nil)])
+        let workspace = MessagingWorkspace(scope: scope, service: service, cryptography: ThreadSyntheticCipher(),
+                                           currentScope: { [scope] in scope })
+        XCTAssertNil(workspace.preview(for: conversation))
+        await workspace.loadMessages(conversation)
+        XCTAssertNil(workspace.preview(for: conversation))
+        let last = workspace.visibleMessages(conversation).last!
+        _ = await workspace.content(for: last)
+        XCTAssertEqual(workspace.preview(for: conversation),
+            MessagingInboxPreview(text: "Dernier", date: last.acceptedAt, fromMe: false, unavailable: false))
+    }
+
+    func testPreviewsComeFromSealedHistoryWithoutNetworkAndClearOnContextChange() async {
+        let history = PreviewHistory(entries: [
+            MessagingHistoryEntry(messageID: UUID(), conversationID: conversation, sequence: 1, senderID: account,
+                acceptedAt: Date(timeIntervalSince1970: 1), content: MessagingPlainContent(text: "Ancien")),
+            MessagingHistoryEntry(messageID: UUID(), conversationID: conversation, sequence: 3, senderID: account,
+                acceptedAt: Date(timeIntervalSince1970: 3), content: MessagingPlainContent(text: "Récent")),
+        ])
+        let service = PagedService(pages: [:], conversations: [MessagingConversation(id: conversation, schoolID: school,
+            kind: .privateExchange, title: "Léa", identityDetail: nil, unreadCount: 0, lastSequence: 3,
+            lastReadSequence: 3, mutedUntil: nil, readStateVersion: 1)])
+        let current = PreviewScopeBox(scope)
+        let workspace = MessagingWorkspace(scope: scope, service: service, history: history, currentScope: { current.value })
+        await workspace.loadConversations()
+        await workspace.loadPreviews()
+        XCTAssertEqual(workspace.preview(for: conversation),
+            MessagingInboxPreview(text: "Récent", date: Date(timeIntervalSince1970: 3), fromMe: true, unavailable: false))
+        let messageCalls = await service.messageCalls
+        XCTAssertEqual(messageCalls, 0)
+        current.value = nil
+        await workspace.loadPreviews()
+        XCTAssertNil(workspace.preview(for: conversation))
+    }
+}
+
+/// Pages fixées par curseur, renvoyées telles quelles (séquence décroissante comme le contrat serveur).
+private actor PagedService: MessagingService {
+    private var pages: [String?: MessagingPage<MessagingWireMessage>]
+    private let listed: [MessagingConversation]
+    private(set) var messageCalls = 0
+    init(pages: [String?: MessagingPage<MessagingWireMessage>], conversations: [MessagingConversation] = []) {
+        self.pages = pages; self.listed = conversations
+    }
+    func setFirstPage(_ page: MessagingPage<MessagingWireMessage>) { pages[nil] = page }
+    func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPage<MessagingConversation> {
+        MessagingPage(items: listed, nextCursor: nil)
+    }
+    func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPage<MessagingWireMessage> {
+        messageCalls += 1
+        guard let page = pages[before] else { throw MessagingFailure.unavailable }
+        return page
+    }
+    func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement { throw MessagingFailure.unavailable }
+}
+
+@MainActor private final class PreviewScopeBox: Sendable {
+    var value: MessagingScope?
+    init(_ value: MessagingScope?) { self.value = value }
+}
+
+private actor PreviewHistory: MessagingHistoryStore {
+    private var stored: [MessagingHistoryEntry]
+    init(entries: [MessagingHistoryEntry]) { stored = entries }
+    func upsert(_ entries: [MessagingHistoryEntry], scope: MessagingScope) async throws { stored += entries }
+    func entries(conversationID: UUID, scope: MessagingScope) async throws -> [MessagingHistoryEntry] {
+        stored.filter { $0.conversationID == conversationID }
+    }
+    func remove(messageIDs: [UUID], scope: MessagingScope) async throws { stored.removeAll { messageIDs.contains($0.messageID) } }
+    func truncate(conversationID: UUID, after sequence: Int, scope: MessagingScope) async throws {
+        stored.removeAll { $0.conversationID == conversationID && $0.sequence > sequence }
+    }
 }
 
 private struct DeviceLimitedCipher: MessagingCryptography {
