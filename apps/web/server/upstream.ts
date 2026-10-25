@@ -64,6 +64,25 @@ export function createGateway(baseURL: string): ApiGateway {
   };
 }
 
+/** Personal notification preferences: only GET and PUT (with If-Match) of this one path. Push devices stay with the app. */
+export type NotificationRequest = { method: 'GET' } | { method: 'PUT'; body: unknown; ifMatch: string };
+export type NotificationGateway = (request: NotificationRequest, accessToken: string) => Promise<SchoolResult>;
+export const NOTIFICATION_PREFERENCES_PATH = '/v1/me/notification-preferences';
+export function createNotificationGateway(baseURL: string): NotificationGateway {
+  return async (request, accessToken) => {
+    if (request.method !== 'GET' && request.method !== 'PUT') throw new Error('Route API non autorisée.');
+    const write = request.method === 'PUT';
+    if (write && !strongVersion.test(request.ifMatch)) throw new Error('Version invalide.');
+    const response = await fetch(baseURL + NOTIFICATION_PREFERENCES_PATH, { method: request.method, redirect: 'error', signal: AbortSignal.timeout(15_000),
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json, application/problem+json', 'Cache-Control': 'no-store',
+        ...(write ? { 'Content-Type': 'application/json', 'If-Match': request.ifMatch } : {}) },
+      ...(write ? { body: JSON.stringify(request.body) } : {}) });
+    const etag = response.headers.get('etag');
+    const body = await readJSON(response, 64 * 1024);
+    return { status: response.status, body, ...(etag && strongVersion.test(etag) ? { etag } : {}) };
+  };
+}
+
 /**
  * School management relay. The allowlist is checked again here so that no caller can
  * reach another API path with the user's token; only Authorization, Accept, Content-Type,

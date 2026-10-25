@@ -7,7 +7,7 @@ import type { WebConfig } from './config.js';
 import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { clientKey, RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session, type Tokens } from './session.js';
-import { createAnonymousGateway, createGateway, createSchoolGateway, createOpeningGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { createAnonymousGateway, createGateway, createSchoolGateway, createOpeningGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
@@ -47,7 +47,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
@@ -61,6 +61,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const schoolGateway = options.schoolGateway ?? createSchoolGateway(config.apiBaseURL);
   const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
   const anonymousGateway = options.anonymousGateway ?? createAnonymousGateway(config.apiBaseURL);
+  const notificationGateway = options.notificationGateway ?? createNotificationGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
   // After a sign-out the identity provider may still hold its own session: the next login must ask for the credentials.
   const reloginName = config.development ? 'drivy-dev-relogin' : '__Host-drivy-relogin';
@@ -339,6 +340,29 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     delete session.invitation; return {ok:true};
   });
   app.get('/app/bff/me',async (request,reply) => sendApi(reply,await callApi(current(request),'/v1/me')));
+  const preferenceBody = z.object({courseOffers:z.boolean(),courseReminders:z.boolean(),courseChanges:z.boolean(),courseStaffAlerts:z.boolean()}).strict();
+  const callNotification = async (session: Session, command: Parameters<NotificationGateway>[0]) => {
+    const result = await notificationGateway(command,await accessToken(session));
+    if (!store.isCurrent(session)) throw new WebError(401,command.method === 'GET' ? 'SESSION_EXPIRED' : 'SESSION_LOST_RESULT_UNKNOWN');
+    if (result.status === 401) { store.destroy(session); throw new WebError(401,'SESSION_EXPIRED'); }
+    return result;
+  };
+  app.get('/app/bff/me/notification-preferences',async (request,reply) => {
+    empty.parse(request.query);
+    const result = await callNotification(current(request),{method:'GET'});
+    if (result.status < 400 && result.etag) reply.header('ETag',result.etag);
+    return sendApi(reply,result);
+  });
+  app.put('/app/bff/me/notification-preferences',{bodyLimit:1_024},async (request,reply) => {
+    const session = protect(request); empty.parse(request.query);
+    const version = request.headers['if-match'];
+    if (version === undefined) throw new WebError(428,'PRECONDITION_REQUIRED');
+    if (typeof version !== 'string' || !strongVersion.test(version)) throw new WebError(400,'INVALID_REQUEST');
+    const body = preferenceBody.parse(request.body);
+    const result = await callNotification(session,{method:'PUT',body,ifMatch:version});
+    if (result.status < 400 && result.etag) reply.header('ETag',result.etag);
+    return sendApi(reply,result);
+  });
   app.post('/app/bff/invitation/preview',async (request,reply) => {
     const session = protect(request); empty.parse(request.body); const invitation = session.invitation;
     if (!invitation) throw new WebError(404,'INVITATION_NOT_FOUND');

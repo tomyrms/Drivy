@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { BrandSymbol } from './BrandSymbol';
 import { Symbol } from './ui';
 import { type ThemePreference, useTheme } from './theme';
+import { NotificationPreferencesSection } from './notification-preferences';
 import './console/settings-studio.css';
 
 const themes: { value: ThemePreference; label: string }[] = [
@@ -70,6 +71,7 @@ export function PreferencesPage() {
       <section className="settings-section"><div className="settings-section-heading"><h2>Affichage</h2></div>
         <div className="settings-section-body"><ThemeControl /></div>
       </section>
+      <NotificationPreferencesSection />
     </main>
   </div>;
 }
