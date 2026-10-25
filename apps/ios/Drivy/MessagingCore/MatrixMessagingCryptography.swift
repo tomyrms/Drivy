@@ -217,6 +217,9 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             let me = Self.userID(scope.accountID)
             try machine.updateTrackedUsers(users: [me])
             try await flush(machine)
+            // Un compte déjà suivi n'est pas remis à jour par updateTrackedUsers.
+            // Relire explicitement ses clés, puis laisser le SDK valider et persister la réponse.
+            try await dispatch(.keysQuery(requestId: UUID().uuidString, users: [me]), machine)
             return try machine.getUserDevices(userId: me, timeout: 0).map {
                 MessagingOwnDevice(id: $0.deviceId, fingerprint: $0.keys["ed25519:\($0.deviceId)"] ?? "",
                                    isCurrent: $0.deviceId == deviceID, isVerified: $0.crossSigningTrusted || $0.locallyTrusted)
