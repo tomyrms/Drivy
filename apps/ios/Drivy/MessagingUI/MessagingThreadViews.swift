@@ -37,7 +37,10 @@ struct MessagingMembersView: View {
                         DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
                         Text(member.displayName).foregroundStyle(DrivyTheme.text)
                         Spacer()
-                        if member.isGroupAdmin {
+                        if workspace.isInProgress(MessagingWorkspace.memberOperation(member.id)) {
+                            Text("En cours").font(.caption).foregroundStyle(DrivyTheme.muted)
+                                .accessibilityIdentifier("messaging.members.inProgress")
+                        } else if member.isGroupAdmin {
                             Text("Admin").font(.caption).foregroundStyle(DrivyTheme.muted)
                         }
                     }
@@ -239,6 +242,7 @@ struct MessagingBubble: View {
                     .contextMenu { if !selecting { menu } }
                 if !message.meta.reactions.isEmpty { reactions.padding(.top, -6).padding(.horizontal, DrivySpacing.xs) }
                 if showsMeta || message.meta.pinned { meta.padding(.horizontal, DrivySpacing.xs) }
+                syncStatus.padding(.horizontal, DrivySpacing.xs)
             }
             if !mine { Spacer(minLength: 56) }
         }
@@ -262,8 +266,11 @@ struct MessagingBubble: View {
             }
             if canInteract {
                 Button(message.meta.pinned ? "Désépingler" : "Épingler") {
-                    Task { await workspace.setPinned(message, pinned: !message.meta.pinned) }
+                    workspace.setPinned(message, pinned: !message.meta.pinned)
                 }
+            }
+            if workspace.mutationAttention(for: message)?.needsAttention == true {
+                Button("Réessayer la synchronisation") { workspace.retryMutations(for: message) }
             }
         }
         .confirmationDialog(dialog == .react ? "Réagir" : "Supprimer pour tout le monde ?",
@@ -276,7 +283,7 @@ struct MessagingBubble: View {
                 }
             } else {
                 Button("Supprimer pour tout le monde", role: .destructive) {
-                    Task { await workspace.delete(message, for: .everyone) }
+                    workspace.delete(message, for: .everyone)
                 }
             }
         }
@@ -290,7 +297,11 @@ struct MessagingBubble: View {
         let shape = MessagingBubbleShape(mine: mine, tail: showsMeta)
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             if let replyID = message.meta.replyToMessageID { quote(replyID) }
-            if message.meta.deletedForEveryone {
+            if !message.meta.deletedForEveryone, workspace.mutation(.deleteForEveryone, on: message) != nil {
+                // L'effacement chez tous n'est annoncé qu'après la relecture serveur.
+                Label("Suppression en cours", systemImage: "hourglass").italic().foregroundStyle(DrivyTheme.muted)
+                    .accessibilityIdentifier("messaging.deleting")
+            } else if message.meta.deletedForEveryone {
                 Label("Message supprimé", systemImage: "nosign").italic().foregroundStyle(DrivyTheme.muted)
                     .accessibilityIdentifier("messaging.deleted")
             } else if let poll = content?.poll, let state = message.meta.poll {
@@ -359,7 +370,9 @@ struct MessagingBubble: View {
         HStack(spacing: DrivySpacing.xxs) {
             ForEach(message.meta.reactions, id: \.emoji) { reaction in
                 let reacted = reaction.personIDs.contains(workspace.scope.accountID)
-                Button { Task { await workspace.toggleReaction(reaction.emoji, on: message) } } label: {
+                let status = workspace.mutation(.reaction(reaction.emoji), on: message)?.status
+                let provisional = status != nil && status != .confirmed
+                Button { workspace.toggleReaction(reaction.emoji, on: message) } label: {
                     HStack(spacing: 3) {
                         Text(reaction.emoji)
                         Text(reaction.personIDs.count.formatted())
@@ -370,15 +383,62 @@ struct MessagingBubble: View {
                     .padding(.horizontal, DrivySpacing.xs).padding(.vertical, 3)
                     .background(reacted ? DrivyTheme.accentSoft : DrivyTheme.surfaceRaised, in: Capsule())
                     .overlay(Capsule().stroke(reacted ? DrivyTheme.accent : DrivyTheme.border, lineWidth: reacted ? 1.5 : 0.5))
+                    .opacity(provisional && status != .sending ? 0.6 : 1)
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!access.canWrite)
                 .accessibilityLabel("\(MessagingReactionPalette.label(reaction.emoji)), \(reaction.personIDs.count)"
-                    + (reacted ? ", vous avez réagi" : ""))
+                    + (reacted ? ", vous avez réagi" : "") + Self.syncSuffix(status))
                 .accessibilityAddTraits(reacted ? [.isSelected] : [])
                 .accessibilityHint(reaction.personIDs.map(workspace.displayName).joined(separator: ", "))
+            }
+        }
+    }
+
+    static func syncSuffix(_ status: MessagingMutationStatus?) -> String {
+        switch status {
+        case .sending?, .slow?: ", en cours de synchronisation"
+        case .unconfirmed?, .uncertain?: ", modification non confirmée"
+        case .offline?: ", en attente de connexion"
+        default: ""
+        }
+    }
+
+    /// Indication discrète au niveau de l'élément : rien sous 5 s, puis lenteur, puis reprise proposée.
+    @ViewBuilder private var syncStatus: some View {
+        if let rejection = workspace.rejection(for: message.id) {
+            Button { workspace.clearRejection(message.id) } label: {
+                Label(rejection.summary, systemImage: "exclamationmark.triangle")
+                    .font(.caption2).foregroundStyle(DrivyTheme.danger)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(rejection.summary). \(rejection.failure.localizedDescription)")
+            .accessibilityHint("Masque l'erreur")
+            .accessibilityIdentifier("messaging.mutation.rejected")
+        } else if let status = workspace.mutationAttention(for: message) {
+            switch status {
+            case .slow:
+                Label("Synchronisation…", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityLabel("En cours de synchronisation")
+                    .accessibilityIdentifier("messaging.mutation.slow")
+            case .offline:
+                Label("En attente de connexion", systemImage: "wifi.slash")
+                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityIdentifier("messaging.mutation.offline")
+            case .unconfirmed, .uncertain:
+                Button { workspace.retryMutations(for: message) } label: {
+                    Label("Modification non confirmée · Réessayer", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                        .font(.caption2).foregroundStyle(DrivyTheme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Modification non confirmée")
+                .accessibilityHint("Renvoie la même modification")
+                .accessibilityIdentifier("messaging.mutation.retry")
+            default:
+                EmptyView()
             }
         }
     }
@@ -393,13 +453,13 @@ struct MessagingBubble: View {
         }
     }
 
-    /// Ne bloque jamais l'action d'un menu : la requête part après la fermeture.
+    /// Ne bloque jamais l'action d'un menu : l'intention est posée après la fermeture, sans attendre le réseau.
     private func react(_ emoji: String) {
         let workspace = workspace, message = message
         Task { @MainActor in
-            // Laisse l'aperçu se refermer avant que la relecture du fil ne change sa mise en page.
-            try? await Task.sleep(for: .milliseconds(350))
-            await workspace.toggleReaction(emoji, on: message)
+            // Laisse l'aperçu se refermer avant que la réaction locale ne change la mise en page.
+            try? await Task.sleep(for: .milliseconds(250))
+            workspace.toggleReaction(emoji, on: message)
         }
     }
 
@@ -423,7 +483,7 @@ struct MessagingBubble: View {
             .controlGroupStyle(.palette)
             Button("Répondre", systemImage: "arrowshape.turn.up.left", action: onReply)
             Button(message.meta.pinned ? "Désépingler" : "Épingler", systemImage: message.meta.pinned ? "pin.slash" : "pin") {
-                Task { await workspace.setPinned(message, pinned: !message.meta.pinned) }
+                workspace.setPinned(message, pinned: !message.meta.pinned)
             }
         }
         if let text = content?.text, !message.meta.deletedForEveryone {
@@ -431,7 +491,7 @@ struct MessagingBubble: View {
         }
         Divider()
         Button("Supprimer pour moi", systemImage: "trash", role: .destructive) {
-            Task { await workspace.delete(message, for: .me) }
+            workspace.delete(message, for: .me)
         }
         if !message.meta.deletedForEveryone,
            MessagingPermissions.canDeleteForEveryone(senderID: message.senderID, account: workspace.scope.accountID, access: access) {
@@ -460,12 +520,17 @@ struct MessagingPollCard: View {
             Label(poll.question, systemImage: "chart.bar.xaxis").font(.headline)
             Text(state.closed ? "Sondage clos" : (state.allowsMultiple ? "Plusieurs choix possibles" : "Un seul choix"))
                 .font(.caption).foregroundStyle(DrivyTheme.muted)
+            if workspace.mutation(.vote, on: message).map({ $0.status != .confirmed }) == true {
+                // Totaux provisoires : jamais présentés comme confirmés.
+                Text("Vote en cours d'enregistrement").font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityIdentifier("messaging.poll.pending")
+            }
             ForEach(poll.options, id: \.id) { option in
                 let votes = state.options.first { $0.optionID == option.id }?.voterIDs.count ?? 0
                 let chosen = myVotes.contains(option.id)
                 Button {
                     let next = MessagingPollRules.toggled(myVotes, option: option.id, allowsMultiple: state.allowsMultiple)
-                    Task { await workspace.vote(message, optionIDs: next) }
+                    workspace.vote(message, optionIDs: next)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
@@ -492,7 +557,10 @@ struct MessagingPollCard: View {
             HStack {
                 Button("Voir les votes", action: onShowVoters).font(.subheadline)
                 Spacer()
-                if MessagingPermissions.canClosePoll(state, account: workspace.scope.accountID, access: access) {
+                if workspace.isInProgress(MessagingWorkspace.pollCloseOperation(message.id)) {
+                    Text("Clôture en cours").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .accessibilityIdentifier("messaging.poll.closing")
+                } else if MessagingPermissions.canClosePoll(state, account: workspace.scope.accountID, access: access) {
                     Button("Clore", role: .destructive) { confirmClose = true }.font(.subheadline)
                 }
             }

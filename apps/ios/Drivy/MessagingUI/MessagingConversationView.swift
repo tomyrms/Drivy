@@ -99,6 +99,7 @@ struct MessagingConversationView: View {
             if phase == .active { Task { await workspace.refreshVisible(conversationID: conversationID) } }
         }
         .onChange(of: connectivity.available) { _, available in
+            workspace.setNetworkAvailable(available)
             if available { Task { await workspace.refreshVisible(conversationID: conversationID) } }
         }
         .onChange(of: workspace.error) { _, failure in
@@ -283,7 +284,7 @@ struct MessagingConversationView: View {
     }
 
     @ViewBuilder private var statusStrip: some View {
-        let muted = (workspace.readStates[conversationID].map(\.mutedUntil) ?? mutedUntil).map { $0 > Date() } ?? false
+        let muted = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil).map { $0 > Date() } ?? false
         if workspace.error != nil || workspace.actionError != nil || detail != nil || muted {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 if let error = workspace.error {
