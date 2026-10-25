@@ -198,6 +198,47 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertNotEqual(workspace.reportIdentifier(for: [message], conversationID: conversation), first)
     }
 
+    /// Regression: an acknowledgement may be lost after the server has accepted a report.
+    /// Recreating the workspace must not create another intention or encrypt the selected items again.
+    func testReportRetryAfterWorkspaceRestartReusesDurableIntentAndCiphertext() async throws {
+        let scope = scope
+        let firstStore = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await firstStore.purge(scope: scope) }
+        let network = ReportLostAcknowledgementHTTP(response: envelope("{}"))
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+            transport: network, currentScope: { scope })
+        let sealing = ReportChangingSyntheticSealing()
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "fixture", payload: Data("SYNTHETIC_REPORT".utf8)))
+        var first: MessagingWorkspace? = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(),
+            outbox: firstStore, drafts: firstStore, actions: actions, reportSealing: sealing, currentScope: { scope })
+        let firstSent = await first!.report([message], conversationID: conversation)
+        XCTAssertFalse(firstSent, "Un acquittement perdu ne doit pas être présenté comme une réussite.")
+        first = nil
+
+        let reopenedStore = try MessagingProtectedStore(scope: scope)
+        let restarted = MessagingWorkspace(scope: scope, cryptography: ThreadSyntheticCipher(),
+            outbox: reopenedStore, drafts: reopenedStore, actions: actions, reportSealing: sealing, currentScope: { scope })
+        let retrySent = await restarted.report([message], conversationID: conversation)
+        XCTAssertTrue(retrySent, "Le réessai explicitement demandé doit pouvoir recevoir son acquittement.")
+        let bodies = await network.bodies
+        guard bodies.count == 2,
+              let before = try JSONSerialization.jsonObject(with: bodies[0]) as? [String: Any],
+              let after = try JSONSerialization.jsonObject(with: bodies[1]) as? [String: Any],
+              let beforeID = before["clientReportId"] as? String,
+              let afterID = after["clientReportId"] as? String,
+              let beforeItems = before["items"] as? [[String: Any]],
+              let afterItems = after["items"] as? [[String: Any]] else {
+            XCTFail("Deux intentions de signalement structurées doivent atteindre le transport."); return
+        }
+        XCTAssertTrue(beforeID == afterID, "Le redémarrage doit conserver le même identifiant d'intention durable.")
+        let beforeBytes = try JSONSerialization.data(withJSONObject: beforeItems, options: [.sortedKeys])
+        let afterBytes = try JSONSerialization.data(withJSONObject: afterItems, options: [.sortedKeys])
+        XCTAssertTrue(beforeBytes == afterBytes, "Le réessai doit conserver les mêmes enveloppes, sinon le serveur refuse l'empreinte.")
+        let sealCount = await sealing.count
+        XCTAssertEqual(sealCount, 1, "La reprise ne doit pas rechiffrer une intention déjà persistée.")
+    }
+
     func testReadOnlyConversationRefusesEnqueue() async throws {
         let workspace = MessagingWorkspace(scope: scope, service: LimitedService(school: school, conversation: conversation),
                                            cryptography: ThreadSyntheticCipher(), currentScope: { [scope] in scope })
@@ -298,6 +339,29 @@ private struct DeviceLimitedCipher: MessagingCryptography {
     func availabilityFailure(scope: MessagingScope, conversationID: UUID) async -> MessagingFailure? { .deviceLimitReached }
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext { throw MessagingFailure.deviceLimitReached }
     func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data { throw MessagingFailure.deviceLimitReached }
+}
+
+/// Fault injection at the HTTP boundary only. Workspace, serialization and protected store remain real.
+private actor ReportLostAcknowledgementHTTP: SchoolHTTPTransport {
+    let response: Data
+    private(set) var bodies: [Data] = []
+    init(response: Data) { self.response = response }
+    func send(_ request: URLRequest) throws -> SchoolHTTPResponse {
+        guard request.httpMethod == "POST", request.url?.path.hasSuffix("/messaging/reports") == true,
+              let body = request.httpBody else { throw MessagingFailure.invalidResponse }
+        bodies.append(body)
+        if bodies.count == 1 { throw URLError(.networkConnectionLost) }
+        return SchoolHTTPResponse(data: response, status: 200, url: request.url!, contentType: "application/json")
+    }
+}
+
+/// Deliberately different opaque bytes on each call expose accidental re-encryption on retry.
+private actor ReportChangingSyntheticSealing: MessagingReportSealing {
+    private(set) var count = 0
+    func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) throws -> MessagingCiphertext {
+        count += 1
+        return MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data("SYNTHETIC_SEAL_\(count)".utf8))
+    }
 }
 
 private actor MembersActions: MessagingThreadActions {
