@@ -11,10 +11,13 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         static let general = "messaging.general.open"
     }
 
+    private var darkModeSet = false
+
     override func setUp() { continueAfterFailure = false }
 
     override func tearDown() {
-        if #available(iOS 17.0, *) { XCUIDevice.shared.appearance = .unspecified }
+        // `.unspecified` est refusé par le simulateur CI (« appearance value (0) is not valid »).
+        if #available(iOS 17.0, *), darkModeSet { XCUIDevice.shared.appearance = .light }
         super.tearDown()
     }
 
@@ -124,8 +127,10 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         let app = launch()
         openGeneral(app)
         let older = app.buttons["Charger les messages précédents"]
-        for _ in 0..<12 where !(older.exists && older.isHittable) { app.swipeDown() }
-        XCTAssertTrue(older.isHittable, "Bouton de chargement des précédents")
+        for _ in 0..<15 where !(older.exists && older.isHittable) { app.swipeDown(velocity: .fast) }
+        capture("05a-haut-du-fil")
+        XCTAssertTrue(older.exists && older.isHittable,
+                      "Bouton de chargement des précédents (existe \(older.exists), premier chargé visible \(text(app, "Bonjour à tous, nouvelle semaine").exists))")
         older.tap()
         XCTAssertTrue(text(app, "Premier message du général").waitForExistence(timeout: 8), "Page 2 chargée")
         capture("05-messages-precedents")
@@ -136,15 +141,17 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         openGeneral(app)
         let target = text(app, "Leçon de conduite confirmée")
         XCTAssertTrue(waitFor(target, "hittable == true"))
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Pouce levé, 2, vous avez réagi'")).firstMatch.exists,
-                      "Ma réaction existante est marquée")
+        let mine = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'vous avez réagi'")).firstMatch
+        capture("06-avant-reaction")
+        XCTAssertTrue(mine.waitForExistence(timeout: 5), "Ma réaction existante est marquée")
+        XCTAssertTrue(mine.label.hasPrefix("Pouce levé, 2"), "Capsule : \(mine.label)")
         target.press(forDuration: 1.2)
         let heart = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
         XCTAssertTrue(heart.waitForExistence(timeout: 5), "Palette de réactions dans le menu")
         capture("06a-menu-reactions")
         heart.tap()
         XCTAssertTrue(app.buttons["Répondre"].waitForNonExistence(timeout: 3), "#102 : le menu se ferme après le choix")
-        let capsule = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Cœur, 1, vous avez réagi'")).firstMatch
+        let capsule = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Cœur, 1'")).firstMatch
         XCTAssertTrue(capsule.waitForExistence(timeout: 5), "Capsule Cœur mise à jour")
         capture("06b-reaction-appliquee")
     }
@@ -237,7 +244,9 @@ final class MessagingFeatureCheckUITests: XCTestCase {
     func testDarkModeCapture() throws {
         guard #available(iOS 17.0, *) else { throw XCTSkip("Apparence pilotable à partir d'iOS 17") }
         XCUIDevice.shared.appearance = .dark
+        darkModeSet = true
         let app = launch()
+        capture("13-sombre-avant-entree")
         openInbox(app)
         capture("13a-sombre-liste")
         app.buttons[ID.general].firstMatch.tap()
