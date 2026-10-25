@@ -52,7 +52,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private(set) var conversationCursor: String?
     private(set) var messageCursors: [UUID: String] = [:]
     private(set) var error: MessagingFailure?
+    /// Chargement de la liste seulement : un chargement de fil n'empêche jamais celui de la liste, et inversement.
     private(set) var loading = false
+    private var loadingMessages: Set<UUID> = []
     private(set) var resumeGeneration = 0
     private var resuming = false
     private var loadedConversations = false
@@ -135,8 +137,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
     func loadMessages(_ conversationID: UUID, more: Bool = false) async {
         visibleMessageConversationID = conversationID
         if error == .membersChanged { error = nil }
-        guard !loading, !more || messageCursors[conversationID] != nil else { return }
-        loading = true; defer { loading = false }
+        guard !loadingMessages.contains(conversationID), !more || messageCursors[conversationID] != nil else { return }
+        loadingMessages.insert(conversationID); defer { loadingMessages.remove(conversationID) }
         do {
             let cursor = more ? messageCursors[conversationID] : nil
             let page = try await service.messages(scope: scope, conversationID: conversationID, before: cursor)
