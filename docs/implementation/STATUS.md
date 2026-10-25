@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 25 octobre 2026 à 14:32 UTC : un seul blocage UI iPhone restant
+
+Campagne `40198021398` sur `48b78d1` : scripts, primitives SDK, API/PostgreSQL, web/BFF, navigateur, intégrité et IPA PASS. iOS FAIL : `MessagingThreadUITests.testGeneralMembersOpenProfileWithNameAndPhotoOnly`, ligne23, liste des membres absente après le geste d’ouverture sur iPhone. Le même test passe sur iPad, où les38 tests UI passent. Le correctif du test Profil/Signalements et celui de la confirmation de retrait ne sont plus en échec.
+
+Diagnostic ciblé et revue finale du déploiement délégués en parallèle. Aucun succès global revendiqué, aucune bascule API/web ni activation du worker. Prochaine étape : correction fondée sur les preuves, qualification ciblée de la suite messagerie iPhone/iPad avant nouvelle campagne complète.
+
 ## 25 octobre 2026 à 13:32 UTC : relance sur 48b78d1
 
 Les deux échecs de qualification sont corrigés en `7384363` : import OIDC local sans password grant Apple (validation de sécurité conservée) et sélection du bouton terminal de confirmation messagerie sans choix arbitraire entre deux actions. Le setup réel a été rejoué dans des conteneurs isolés : 6 contrôles réussis, migration 045, reprise idempotente et refus de configurations dangereuses inclus. Le correctif UI reste à vérifier sur runner Apple.
