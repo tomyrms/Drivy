@@ -56,15 +56,14 @@ export function registerNotificationPreferences(app:FastifyInstance,options:{poo
   empty.parse(r.query);const body=deviceBody.parse(r.body),identity=await options.verifyToken(r.headers.authorization);
   const token=body.token.toLowerCase();
   return envelope(await own(identity,null,async(db,personId)=>{
-   const updated=await db.query("UPDATE drivy.push_device SET last_seen_at=now(),revoked_at=NULL,environment=$3 WHERE person_id=$1 AND token=$2 RETURNING id",[personId,token,body.environment]);
-   if(!updated.rowCount)await db.query('SELECT drivy.push_device_claim($1,$2,$3)',[personId,token,body.environment]);
+   await db.query('SELECT drivy.push_device_claim($1,$2,$3)',[personId,token,body.environment]);
    return {registered:true};
   }),r);
  });
  app.post('/v1/me/push-devices/revoke',{bodyLimit:1_024},async r=>{
   empty.parse(r.query);const body=z.object({token:deviceBody.shape.token}).strict().parse(r.body),identity=await options.verifyToken(r.headers.authorization);
   return envelope(await own(identity,null,async(db,personId)=>{
-   await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE person_id=$1 AND token=$2 AND revoked_at IS NULL',[personId,body.token.toLowerCase()]);return {revoked:true};
+   await db.query('SELECT drivy.push_device_revoke($1,$2)',[personId,body.token.toLowerCase()]);return {revoked:true};
   }),r);
  });
 
@@ -78,7 +77,7 @@ export function registerNotificationPreferences(app:FastifyInstance,options:{poo
     WHERE f.school_id=$1 AND l.person_id=$2 ORDER BY f.created_at`,[schoolId,actor.personId])).rows.map(row=>row.type_id)};
   }),r);
  });
- for(const [method,follow] of [['put',true],['delete',false]] as const)app[method]('/v1/schools/:schoolId/course-follows/me/:typeId',async r=>{
+ for(const [method,suffix,follow] of [['put','',true],['post','/unfollow',false]] as const)app[method](`/v1/schools/:schoolId/course-follows/me/:typeId${suffix}`,async r=>{
   empty.parse(r.query);const schoolId=school(r),typeId=z.object({typeId:z.uuid()}).passthrough().parse(r.params).typeId,identity=await options.verifyToken(r.headers.authorization);
   return envelope(await own(identity,schoolId,async(db,personId)=>{
    const learner=(await db.query<{id:string}>('SELECT id FROM drivy.learner_profile WHERE school_id=$1 AND person_id=$2 AND archived_at IS NULL',[schoolId,personId])).rows[0];

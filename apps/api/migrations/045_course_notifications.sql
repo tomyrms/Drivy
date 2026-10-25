@@ -87,8 +87,6 @@ CREATE POLICY course_type_follow_self ON drivy.course_type_follow FOR ALL TO dri
   AND l.person_id=nullif(current_setting('app.person_id',true),'')::uuid AND drivy.current_school_member(l.school_id)));
 CREATE POLICY push_notification_self_read ON drivy.push_notification FOR SELECT TO drivy_app USING(person_id=nullif(current_setting('app.person_id',true),'')::uuid);
 GRANT SELECT(id,person_id,platform,environment,created_at,last_seen_at,revoked_at) ON drivy.push_device TO drivy_app;
-GRANT INSERT(person_id,platform,environment,token) ON drivy.push_device TO drivy_app;
-GRANT UPDATE(last_seen_at,revoked_at,environment) ON drivy.push_device TO drivy_app;
 GRANT SELECT,INSERT ON drivy.notification_preference TO drivy_app;
 GRANT UPDATE(version,course_offers,course_reminders,course_changes,course_staff_alerts,updated_at) ON drivy.notification_preference TO drivy_app;
 GRANT SELECT,INSERT,DELETE ON drivy.course_type_follow TO drivy_app;
@@ -103,6 +101,12 @@ CREATE FUNCTION drivy.push_device_claim(person uuid,device_token text,device_env
 $$;
 REVOKE ALL ON FUNCTION drivy.push_device_claim(uuid,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION drivy.push_device_claim(uuid,text,text) TO drivy_app;
+CREATE FUNCTION drivy.push_device_revoke(person uuid,device_token text) RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ UPDATE drivy.push_device SET revoked_at=now() WHERE person_id=person AND token=device_token AND revoked_at IS NULL
+  AND person=nullif(current_setting('app.person_id',true),'')::uuid
+$$;
+REVOKE ALL ON FUNCTION drivy.push_device_revoke(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION drivy.push_device_revoke(uuid,text) TO drivy_app;
 
 -- Rôle du service d'envoi : connexion propre, sans BYPASSRLS ; lit les jetons et marque les notifications. Aucune autre table.
 -- Comme drivy_invitation_mailer, le rôle est préparé par l'exploitation (scripts/prepare-course-worker.sql) ; la migration le crée
