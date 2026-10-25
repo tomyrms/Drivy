@@ -1062,3 +1062,5 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - PASS : IPA d'essai compilee (run 40214002610), tests metier iOS complets (run 40214008527). 
 - FAIL hors perimetre : typecheck API (variable inutilisee dans course-push-revalidation, deja sur master). 
 - NOT_EXECUTED : tests UI messagerie, captures avant/apres iPhone/iPad clair/sombre/grands textes, essai sur appareil.
+- PASS : tests UI MessagingThreadUITests et MessagingOwnDevicesUITests iPhone/iPad (run 40215297685). 
+- PASS : IPA avec acces Messages (run 40215714427).
