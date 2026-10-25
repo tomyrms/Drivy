@@ -4,8 +4,25 @@ import SwiftUI
 struct MessagingMembersView: View {
     let workspace: MessagingWorkspace
     @State private var profile: MessagingMember?
-    @State private var pendingRemoval: MessagingMember?
-    @State private var pendingReinstatement: MessagingMember?
+    /// Une seule confirmation à la fois : deux `confirmationDialog` sur la même vue
+    /// se neutralisent (seul le dernier attaché se présente de façon fiable).
+    private enum PendingAction: Identifiable {
+        case remove(MessagingMember)
+        case reinstate(MessagingMember)
+        var id: String {
+            switch self {
+            case .remove(let m): "remove-\(m.id)"
+            case .reinstate(let m): "reinstate-\(m.id)"
+            }
+        }
+        var title: String {
+            switch self {
+            case .remove: "Retirer du général ?"
+            case .reinstate: "Réintégrer dans le général ?"
+            }
+        }
+    }
+    @State private var pending: PendingAction?
 
     private var isAdmin: Bool { workspace.members.first { $0.id == workspace.scope.accountID }?.isGroupAdmin ?? false }
 
@@ -31,7 +48,7 @@ struct MessagingMembersView: View {
                 .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
                 .swipeActions {
                     if isAdmin && member.id != workspace.scope.accountID {
-                        Button("Retirer", role: .destructive) { pendingRemoval = member }
+                        Button("Retirer", role: .destructive) { pending = .remove(member) }
                         Button(member.isGroupAdmin ? "Retirer admin" : "Nommer admin") {
                             Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
                         }
@@ -43,7 +60,7 @@ struct MessagingMembersView: View {
                                systemImage: "person.badge.shield.checkmark") {
                             Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
                         }
-                        Button("Retirer du général", systemImage: "person.badge.minus", role: .destructive) { pendingRemoval = member }
+                        Button("Retirer du général", systemImage: "person.badge.minus", role: .destructive) { pending = .remove(member) }
                     }
                 }
             }
@@ -54,7 +71,7 @@ struct MessagingMembersView: View {
                             DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
                             Text(member.displayName).foregroundStyle(DrivyTheme.muted)
                             Spacer()
-                            Button("Réintégrer") { pendingReinstatement = member }
+                            Button("Réintégrer") { pending = .reinstate(member) }
                                 .buttonStyle(.borderless)
                                 .accessibilityLabel("Réintégrer \(member.displayName)")
                                 .accessibilityIdentifier("messaging.members.reinstate")
@@ -73,21 +90,22 @@ struct MessagingMembersView: View {
         .sheet(item: $profile) { member in
             MessagingMemberProfileView(member: member, photo: workspace.photos[member.id])
         }
-        .confirmationDialog("Retirer du général ?", isPresented: Binding(get: { pendingRemoval != nil },
-                                                                         set: { if !$0 { pendingRemoval = nil } }),
-                            presenting: pendingRemoval) { member in
-            Button("Retirer \(member.displayName)", role: .destructive) {
-                Task { await workspace.removeMember(member.id) }
+        .confirmationDialog(pending?.title ?? "", isPresented: Binding(get: { pending != nil },
+                                                                       set: { if !$0 { pending = nil } }),
+                            titleVisibility: .visible,
+                            presenting: pending) { action in
+            switch action {
+            case .remove(let member):
+                Button("Retirer \(member.displayName)", role: .destructive) {
+                    Task { await workspace.removeMember(member.id) }
+                }
+                .accessibilityIdentifier("messaging.members.confirmRemove")
+            case .reinstate(let member):
+                Button("Réintégrer \(member.displayName)") {
+                    Task { await workspace.reinstateMember(member.id) }
+                }
+                .accessibilityIdentifier("messaging.members.confirmReinstate")
             }
-            .accessibilityIdentifier("messaging.members.confirmRemove")
-        }
-        .confirmationDialog("Réintégrer dans le général ?", isPresented: Binding(get: { pendingReinstatement != nil },
-                                                                                 set: { if !$0 { pendingReinstatement = nil } }),
-                            presenting: pendingReinstatement) { member in
-            Button("Réintégrer \(member.displayName)") {
-                Task { await workspace.reinstateMember(member.id) }
-            }
-            .accessibilityIdentifier("messaging.members.confirmReinstate")
         }
     }
 }
@@ -192,9 +210,10 @@ struct MessagingBubble: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var content: MessagingPlainContent?
     @State private var loaded = false
-    @State private var confirmDeleteEveryone = false
+    /// Un seul dialogue par bulle : deux `confirmationDialog` sur la même vue se neutralisent.
+    private enum BubbleDialog { case deleteEveryone, react }
+    @State private var dialog: BubbleDialog?
     @State private var votersFor: MessagingPollState?
-    @State private var showReactionPicker = false
 
     private var mine: Bool { message.senderID == workspace.scope.accountID }
     private var access: MessagingConversationAccess { workspace.access(for: message.conversationID) }
@@ -236,7 +255,7 @@ struct MessagingBubble: View {
         .accessibilityActions {
             if canInteract {
                 Button("Répondre", action: onReply)
-                Button("Réagir") { showReactionPicker = true }
+                Button("Réagir") { dialog = .react }
             }
             if let text = content?.text, !message.meta.deletedForEveryone, !selecting {
                 Button("Copier") { UIPasteboard.general.string = text }
@@ -247,15 +266,17 @@ struct MessagingBubble: View {
                 }
             }
         }
-        .confirmationDialog("Supprimer pour tout le monde ?", isPresented: $confirmDeleteEveryone) {
-            Button("Supprimer pour tout le monde", role: .destructive) {
-                Task { await workspace.delete(message, for: .everyone) }
-            }
-        }
-        .confirmationDialog("Réagir", isPresented: $showReactionPicker) {
-            ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
-                Button("\(emoji) \(MessagingReactionPalette.label(emoji))") {
-                    react(emoji)
+        .confirmationDialog(dialog == .react ? "Réagir" : "Supprimer pour tout le monde ?",
+                            isPresented: Binding(get: { dialog != nil }, set: { if !$0 { dialog = nil } })) {
+            if dialog == .react {
+                ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
+                    Button("\(emoji) \(MessagingReactionPalette.label(emoji))") {
+                        react(emoji)
+                    }
+                }
+            } else {
+                Button("Supprimer pour tout le monde", role: .destructive) {
+                    Task { await workspace.delete(message, for: .everyone) }
                 }
             }
         }
@@ -414,7 +435,7 @@ struct MessagingBubble: View {
         }
         if !message.meta.deletedForEveryone,
            MessagingPermissions.canDeleteForEveryone(senderID: message.senderID, account: workspace.scope.accountID, access: access) {
-            Button("Supprimer pour tout le monde", systemImage: "trash.slash", role: .destructive) { confirmDeleteEveryone = true }
+            Button("Supprimer pour tout le monde", systemImage: "trash.slash", role: .destructive) { dialog = .deleteEveryone }
         }
     }
 }
