@@ -94,7 +94,7 @@ describe('notification de mention (#101)', () => {
 
     await pool.query('UPDATE drivy.messaging_read_state SET muted_until=NULL WHERE person_id=$1', [id.alice]);
     const deleted = await send('demo-admin', conversationId, [id.alice]);
-    await pool.query('UPDATE drivy.messaging_message SET deleted_at=now() WHERE id=$1', [deleted.id]);
+    await pool.query('UPDATE drivy.messaging_message SET deleted_at=now(),envelope=NULL,deleted_by_person_id=sender_person_id WHERE id=$1', [deleted.id]);
     await processPushBatch(worker, collector(out));
     expect(out).toEqual([]);
   });
