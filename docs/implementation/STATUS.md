@@ -1064,3 +1064,9 @@ Les 434 sc√©narios m√©tier et 68 sc√©narios mobiles ne changent pas de statut pa
 - NOT_EXECUTED : tests UI messagerie, captures avant/apres iPhone/iPad clair/sombre/grands textes, essai sur appareil.
 - PASS : tests UI MessagingThreadUITests et MessagingOwnDevicesUITests iPhone/iPad (run 40215297685). 
 - PASS : IPA avec acces Messages (run 40215714427).
+
+## #100-#104 (25 octobre 2026, b6673c6)
+
+- PASS : tests metier iOS complets (runs 40236644565, 40237951212), verifications API/PostgreSQL (40237952137), IPA avec acces Messages (40239305741).
+- NOT_EXECUTED : controle UI fonctionnel MessagingFeatureCheckUITests sur le dernier SHA, recette reseau 1/5/15 s, essai iPhone, push reel.
+- BLOCKED : alerte de mention (migration 20261025 non deployee) ; aucune alerte Æ nouveau message Ø cote serveur.
