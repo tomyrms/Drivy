@@ -58,7 +58,8 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
         let aToken = "demo-instructor", bToken = "demo-alice"
         let aHTTP = MessagingHTTPTransport(baseURL: base, token: { aToken }, invalidate: { _ in false }, currentScope: { aScope })
         let bHTTP = MessagingHTTPTransport(baseURL: base, token: { bToken }, invalidate: { _ in false }, currentScope: { bScope })
-        let aRelay = MessagingCryptoHTTPRelay(baseURL: base, token: { aToken }, invalidate: { _ in false }, currentScope: { aScope })
+        let aRelay = RelayQualificationSyncObserver(upstream: MessagingCryptoHTTPRelay(
+            baseURL: base, token: { aToken }, invalidate: { _ in false }, currentScope: { aScope }))
         let bRelay = MessagingCryptoHTTPRelay(baseURL: base, token: { bToken }, invalidate: { _ in false }, currentScope: { bScope })
 
         // Readiness proves that this is our disposable fixture server, not merely an open port.
@@ -88,9 +89,70 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
         let cVault = try MessagingCryptoVault(scope: bScope, root: root.appendingPathComponent("C"), keychain: cKeychain)
         let a = try MatrixMessagingCryptography(scope: aScope, relay: aRelay, vault: aVault)
         let b = try MatrixMessagingCryptography(scope: bScope, relay: bRelay, vault: bVault)
+
+        // Physical regression: A has already shared a General session while B has no device keys.
+        // Keep these same FFI instances alive. Do not discard the room key or reopen A to hide a stale cache.
+        enter("GENERAL-BEFORE-B-REGISTRATION")
+        let general = try await aHTTP.generalConversation(scope: aScope)
+        let aReady = await a.isAvailable(scope: aScope, conversationID: general)
+        guard aReady else { XCTFail("Publication clés A impossible : diagnostic=\(safeDiagnostic())."); return }
+        let aDevice = try aVault.secrets().deviceID
+        let learnerUser = MatrixMessagingCryptography.userID(learner)
+        let queryBody = try JSONSerialization.data(withJSONObject: ["device_keys": [learnerUser: [String]()]])
+        let beforeKeys = try await aRelay.call(scope: aScope, deviceID: aDevice, method: "POST",
+                                               path: ["keys", "query"], query: [], body: queryBody)
+        guard let beforeObject = try JSONSerialization.jsonObject(with: beforeKeys) as? [String: Any],
+              let beforeDevices = beforeObject["device_keys"] as? [String: [String: Any]],
+              (beforeDevices[learnerUser] ?? [:]).isEmpty else {
+            XCTFail("Précondition invalide : B doit être sans clés publiées avant le premier envoi Général."); return
+        }
+        let earlyText = Data("SYNTHETIC_GENERAL_BEFORE_REGISTRATION".utf8)
+        let earlyCiphertext = try await a.encrypt(earlyText, mentions: [], scope: aScope, conversationID: general)
+        let earlyAck = try await aHTTP.send(scope: aScope, conversationID: general,
+            body: MessagingSendDTO(clientMessageId: UUID(), ciphertext: earlyCiphertext, mentionPersonIds: []))
+        // A has a durable message and an existing Megolm session before any B SDK open/upload.
+        let earlyPage = try await MessagingAPIClient(transport: aHTTP).messages(scope: aScope, conversationID: general, before: nil)
+        guard earlyPage.items.contains(where: { $0.id == earlyAck.serverMessageId }) else {
+            XCTFail("Le premier message Général doit être relu du serveur avant inscription B."); return
+        }
+        await aRelay.clearObservedChanges()
+
         enter("B-KEYS-UPLOAD")
+        let bGeneral = try await bHTTP.generalConversation(scope: bScope)
+        guard bGeneral == general else { XCTFail("A et B doivent rejoindre le même Général."); return }
         let bReady = await b.isAvailable(scope: bScope, conversationID: conversation)
         guard bReady else { XCTFail("Publication clés B impossible : diagnostic=\(safeDiagnostic())."); return }
+
+        enter("GENERAL-A-SEND-AFTER-B-REGISTRATION")
+        let lateText = Data("SYNTHETIC_GENERAL_AFTER_REGISTRATION".utf8)
+        let lateCiphertext = try await a.encrypt(lateText, mentions: [], scope: aScope, conversationID: general)
+        let observedBChange = await aRelay.observedChange(for: learnerUser)
+        XCTAssertTrue(observedBChange, "Le sync réel consommé par A doit annoncer B dans device_lists.changed après son inscription.")
+        XCTAssertTrue(lateCiphertext.keyID == earlyCiphertext.keyID,
+                      "Le nouvel appareil doit recevoir la session Général déjà ouverte, sans rotation forcée par le test.")
+        let lateAck = try await aHTTP.send(scope: aScope, conversationID: general,
+            body: MessagingSendDTO(clientMessageId: UUID(), ciphertext: lateCiphertext, mentionPersonIds: []))
+        enter("GENERAL-B-LATE-DECRYPT")
+        let latePage = try await MessagingAPIClient(transport: bHTTP).messages(scope: bScope, conversationID: general, before: nil)
+        guard let lateMessage = latePage.items.first(where: { $0.id == lateAck.serverMessageId }) else {
+            XCTFail("B doit relire le nouveau message Général via PostgreSQL."); return
+        }
+        let lateReceived = try await b.decrypt(lateMessage, scope: bScope)
+        XCTAssertTrue(lateReceived == lateText, "B inscrit tardivement doit déchiffrer le nouveau message Général.")
+
+        // Alternate accounts/FFI instances on the same General without clearing either protected store.
+        enter("GENERAL-B-REPLY")
+        let replyText = Data("SYNTHETIC_GENERAL_REPLY_FROM_B".utf8)
+        let replyCiphertext = try await b.encrypt(replyText, mentions: [], scope: bScope, conversationID: general)
+        let replyAck = try await bHTTP.send(scope: bScope, conversationID: general,
+            body: MessagingSendDTO(clientMessageId: UUID(), ciphertext: replyCiphertext, mentionPersonIds: []))
+        enter("GENERAL-A-REPLY-DECRYPT")
+        let replyPage = try await MessagingAPIClient(transport: aHTTP).messages(scope: aScope, conversationID: general, before: nil)
+        guard let replyMessage = replyPage.items.first(where: { $0.id == replyAck.serverMessageId }) else {
+            XCTFail("A doit relire la réponse Général du compte B."); return
+        }
+        let replyReceived = try await a.decrypt(replyMessage, scope: aScope)
+        XCTAssertTrue(replyReceived == replyText, "Le retour B vers A doit rester déchiffrable après alternance de comptes.")
 
         let plaintext = Data("SYNTHETIC_RELAY_MESSAGE_\(run)".utf8)
         enter("A-ENCRYPT-MEMBERS-QUERY-CLAIM")
@@ -161,6 +223,32 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
         // No values, keys, tokens, event JSON or SDK errors are printed by this test.
         // The simulator is disposable. Protected stores stay outside uploaded artifacts.
     }
+}
+
+/// Passive observation of actual HTTP sync responses. No fabricated response, extra sync or SDK injection.
+/// In particular, observing changed must not consume a cursor before the production FFI receives it.
+private actor RelayQualificationSyncObserver: MessagingCryptoRelay {
+    let upstream: MessagingCryptoHTTPRelay
+    private var changedUsers = Set<String>()
+
+    init(upstream: MessagingCryptoHTTPRelay) { self.upstream = upstream }
+
+    func call(scope: MessagingScope, deviceID: String, method: String, path: [String],
+              query: [URLQueryItem], body: Data?) async throws -> Data {
+        let raw = try await upstream.call(scope: scope, deviceID: deviceID, method: method,
+                                          path: path, query: query, body: body)
+        if method == "GET", path == ["sync"], let page = try? MatrixMessagingCryptography.syncPage(raw) {
+            changedUsers.formUnion(page.changed)
+        }
+        return raw
+    }
+
+    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers {
+        try await upstream.members(scope: scope, deviceID: deviceID, conversationID: conversationID)
+    }
+
+    func clearObservedChanges() { changedUsers.removeAll() }
+    func observedChange(for user: String) -> Bool { changedUsers.contains(user) }
 }
 
 /// Isolates three devices while exercising the real system Keychain, not an in-memory substitute.
