@@ -86,7 +86,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
                 title: item.title, identityDetail: nil,
                 unreadCount: item.unreadCount, lastSequence: item.lastSequence,
                 lastReadSequence: item.lastReadSequence, mutedUntil: try item.mutedUntil.map(date),
-                readStateVersion: item.readStateVersion)
+                readStateVersion: item.readStateVersion, peerPersonId: item.peerPersonId)
         }, nextCursor: data.nextCursor?.uuidString.lowercased())
     }
 

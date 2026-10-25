@@ -30,6 +30,19 @@ export type MessagingNotificationDecision =
   | { allowed: true; category: MessagingNotificationCategory; preferenceVersion: number }
   | { allowed: false; reason: 'CONTEXT_MISMATCH' | 'ACCESS_REVOKED' | 'EVENT_UNAVAILABLE' | 'DEVICE_UNAVAILABLE' | 'PREFERENCES_UNAVAILABLE' | 'PUSH_DISABLED' | 'SILENCED' | 'CATEGORY_DISABLED' };
 
+/** APNs payload for an allowed messaging event (#103). Technical identifiers only: no text, name or secret.
+ * `thread-id` groups alerts per school+conversation; `conversationId`/`schoolId`/`sequence` let the app
+ * remove exactly the delivered alerts of one conversation up to its confirmed read sequence. */
+export function messagingPushPayload(event: MessagingNotificationEvent, decision: Extract<MessagingNotificationDecision, { allowed: true }>,
+  sequence: number, alert: { title: string; body: string }) {
+  if (!Number.isSafeInteger(sequence) || sequence < 1) throw new Error('INVALID_SEQUENCE');
+  return {
+    aps: { alert, sound: 'default', 'thread-id': `messaging:${event.schoolId}:${event.conversationId}` },
+    kind: 'MESSAGING', category: decision.category,
+    schoolId: event.schoolId, conversationId: event.conversationId, sequence
+  };
+}
+
 export function decideMessagingNotification(event: MessagingNotificationEvent, state: MessagingNotificationSnapshot): MessagingNotificationDecision {
   if (event.accountId !== state.accountId || event.schoolId !== state.schoolId || event.conversationId !== state.conversationId) return { allowed: false, reason: 'CONTEXT_MISMATCH' };
   if (!state.recipientEligible) return { allowed: false, reason: 'ACCESS_REVOKED' };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideMessagingNotification, type MessagingNotificationSnapshot } from '../src/messaging-notifications.js';
+import { decideMessagingNotification, messagingPushPayload, type MessagingNotificationSnapshot } from '../src/messaging-notifications.js';
 
 const snapshot = (): MessagingNotificationSnapshot => ({
   accountId: 'person-a', schoolId: 'school-a', conversationId: 'conversation-a',
@@ -38,6 +38,12 @@ describe('messaging notification contract for #44', () => {
     expect(decideMessagingNotification(event, { ...snapshot(), systemPermission: 'UNKNOWN' }).allowed).toBe(false);
     const state = snapshot(); delete state.preferences!.categories.MESSAGING_GENERAL;
     expect(decideMessagingNotification(event, state).allowed).toBe(false);
+  });
+  it('payload carries only technical identifiers for per-conversation cleanup', () => {
+    const payload = messagingPushPayload(event, { allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 7 }, 12, { title: 'Drivy', body: 'Nouveau message' });
+    expect(payload).toEqual({ aps: { alert: { title: 'Drivy', body: 'Nouveau message' }, sound: 'default', 'thread-id': 'messaging:school-a:conversation-a' },
+      kind: 'MESSAGING', category: 'MESSAGING_GENERAL', schoolId: 'school-a', conversationId: 'conversation-a', sequence: 12 });
+    expect(() => messagingPushPayload(event, { allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 7 }, 0, { title: '', body: '' })).toThrow();
   });
   it('selects private and poll categories without reading message content', () => {
     expect(decideMessagingNotification({ ...event, kind: 'PRIVATE' }, snapshot())).toEqual({ allowed: true, category: 'MESSAGING_PRIVATE', preferenceVersion: 7 });

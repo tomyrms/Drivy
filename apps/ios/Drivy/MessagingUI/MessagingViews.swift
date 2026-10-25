@@ -88,6 +88,7 @@ struct MessagingInboxView: View {
                                       photo: nil, isGeneral: true)
                 }
                 .buttonStyle(.plain)
+                .listRowBackground(DrivyTheme.surface)
                 .disabled(opening)
                 .accessibilityIdentifier("messaging.general.open")
             }
@@ -96,12 +97,16 @@ struct MessagingInboxView: View {
                     MessagingInboxRow(title: item.kind == .schoolGeneral ? "Général" : item.title,
                         preview: workspace.preview(for: item.id),
                         unread: item.unreadCount ?? 0,
-                        muted: (item.mutedUntil ?? .distantPast) > Date(), photo: nil,
+                        muted: (item.mutedUntil ?? .distantPast) > Date(),
+                        photo: item.peerPersonID.flatMap { workspace.photos[$0] },
                         isGeneral: item.kind == .schoolGeneral)
+                }
+                .task(id: item.peerPersonID) {
+                    if let peer = item.peerPersonID { await workspace.loadPhoto(peer) }
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(route?.id == item.id && horizontalSizeClass == .regular
-                    ? DrivyTheme.accent.opacity(0.12) : nil)
+                    ? DrivyTheme.accent.opacity(0.12) : DrivyTheme.surface)
                 .accessibilityIdentifier(item.kind == .schoolGeneral ? "messaging.general.open" : "messaging.conversation.\(item.id)")
             }
             if workspace.canLoadMoreConversations && query.isEmpty {
@@ -111,7 +116,8 @@ struct MessagingInboxView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(DrivyTheme.surface)
+        .background(DrivyTheme.surface.ignoresSafeArea())
+        .toolbarBackground(DrivyTheme.surface, for: .navigationBar)
         .overlay {
             if workspace.loading && !workspace.hasLoadedConversations {
                 ProgressView("Chargement")

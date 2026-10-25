@@ -17,7 +17,6 @@ struct MessagingConversationView: View {
     let readStateVersion: Int
     let isGeneral: Bool
     @State private var selectedMentions: [MessagingMentionSelection] = []
-    @State private var showMentionPicker = false
     @State private var draft = ""
     @State private var draftReady = false
     @State private var draftFailure: String?
@@ -59,7 +58,11 @@ struct MessagingConversationView: View {
                 thread(proxy)
                     .overlay(alignment: .top) { noticeView }
                     .overlay(alignment: .bottomTrailing) { jumpToBottom(proxy) }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        // #100 : fond Drivy continu jusqu'au bord, clavier compris ; seul le fond déborde.
+                        footer.background(DrivyTheme.surface.ignoresSafeArea(.container, edges: .bottom)
+                            .ignoresSafeArea(.keyboard, edges: .bottom))
+                    }
                     .onChange(of: scrollTarget) { _, target in
                         guard let target else { return }
                         scrollTarget = nil
@@ -84,9 +87,11 @@ struct MessagingConversationView: View {
                     }
             }
         }
-        .background(DrivyTheme.canvas)
+        .background(DrivyTheme.canvas.ignoresSafeArea())
+        .toolbarBackground(DrivyTheme.canvas, for: .navigationBar)
         .navigationTitle(reporting ? "Signaler" : title)
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: scenePhase == .active && atBottom ? workspace.lastReadableSequence(conversationID) : nil) { if scenePhase == .active, atBottom, let seq = workspace.lastReadableSequence(conversationID) { await workspace.conversationViewed(conversationID, upTo: seq) } }
         .onAppear { connectivity.start() }
         .onDisappear { connectivity.stop() }
         .onChange(of: scenePhase) { _, phase in
@@ -108,7 +113,6 @@ struct MessagingConversationView: View {
                 catch { deliveryLabel = (error as? MessagingFailure ?? .protectionUnavailable).localizedDescription }
             }
         }
-        .sheet(isPresented: $showMentionPicker) { mentionPicker }
         .sheet(isPresented: $showPollComposer) {
             MessagingPollComposer { poll, multiple in
                 await send(MessagingPlainContent(poll: poll), pollAllowsMultiple: multiple)
@@ -185,6 +189,8 @@ struct MessagingConversationView: View {
             .frame(maxWidth: DrivyLayout.readingColumn)
             .frame(maxWidth: .infinity)
         }
+        .scrollContentBackground(.hidden)
+        .background(DrivyTheme.canvas)
         .scrollDismissesKeyboard(.interactively)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
         .defaultScrollAnchor(.bottom, for: .alignment)
@@ -415,13 +421,11 @@ struct MessagingConversationView: View {
                 .accessibilityIdentifier("messaging.report.send")
             }
             .padding(.horizontal, DrivySpacing.m)
-            .background(.bar)
         } else if access.isReadOnly {
             // Fin du lien : l'historique reste lisible, aucun envoi possible.
             Label("Lecture seule", systemImage: "lock")
                 .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 .frame(maxWidth: .infinity).padding()
-                .background(.bar)
                 .accessibilityIdentifier("messaging.readonly")
         } else {
             composer
@@ -441,11 +445,10 @@ struct MessagingConversationView: View {
                     .accessibilityIdentifier(deliveryLabel != nil ? "messaging.delivery" : "messaging.draft.error")
             }
             if let replyTo { replyPreview(replyTo) }
-            if isGeneral && !selectedMentions.isEmpty { mentionChips }
+            if isGeneral, let query = mentionQuery { mentionSuggestions(query) }
             HStack(alignment: .bottom, spacing: DrivySpacing.xs) {
                 Menu {
                     Button("Sondage", systemImage: "chart.bar.xaxis") { showPollComposer = true }
-                    if isGeneral { Button("Mentionner", systemImage: "at") { showMentionPicker = true } }
                 } label: {
                     Image(systemName: "plus")
                         .font(.body.weight(.semibold))
@@ -467,6 +470,10 @@ struct MessagingConversationView: View {
                     .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .accessibilityLabel("Rédiger un message")
                     .accessibilityIdentifier("messaging.compose.text")
+                    .onChange(of: draft) { _, text in
+                        // Une mention effacée du texte n'est plus envoyée (#101).
+                        selectedMentions.removeAll { !text.contains("@\($0.displayName)") }
+                    }
                 Button {
                     Task { _ = await send(MessagingPlainContent(text: draft)) }
                 } label: {
@@ -485,7 +492,6 @@ struct MessagingConversationView: View {
         }
         .padding(.horizontal, DrivySpacing.xs)
         .padding(.vertical, DrivySpacing.xs)
-        .background(.bar)
     }
 
     private func replyPreview(_ message: MessagingWireMessage) -> some View {
@@ -506,60 +512,50 @@ struct MessagingConversationView: View {
         .accessibilityIdentifier("messaging.reply.preview")
     }
 
-    private var mentionChips: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: DrivySpacing.xs) {
-                ForEach(selectedMentions, id: \.personID) { mention in
-                    Button {
-                        selectedMentions.removeAll { $0.personID == mention.personID }
-                    } label: {
-                        HStack(spacing: DrivySpacing.xxs) {
-                            Text("@\(mention.displayName)")
-                            Image(systemName: "xmark").font(.caption2.weight(.bold))
+    /// Jeton `@xxx` en cours de frappe à la fin du brouillon (#101), nil sinon.
+    private var mentionQuery: String? { MessagingMentionToken.query(in: draft) }
+
+    private func mentionSuggestions(_ query: String) -> some View {
+        let people = MessagingMentionToken.filter(workspace.generalMembers.filter { $0.id != workspace.scope.accountID },
+                                                   query: query, name: \.displayName)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(people.prefix(6)) { person in
+                    Button { insertMention(person) } label: {
+                        HStack(spacing: DrivySpacing.s) {
+                            DrivyAvatar(name: person.displayName, size: 28, photo: workspace.photos[person.id])
+                            Text(person.displayName).foregroundStyle(DrivyTheme.text)
+                            Spacer(minLength: 0)
                         }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(DrivyTheme.accent)
                         .padding(.horizontal, DrivySpacing.s)
-                        .frame(minHeight: 32)
-                        .background(DrivyTheme.accentSoft, in: Capsule())
                         .frame(minHeight: DrivyLayout.tapTarget)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Retirer @\(mention.displayName)")
+                    .accessibilityLabel("Mentionner \(person.displayName)")
+                }
+                if people.isEmpty {
+                    Text("Aucun participant").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        .padding(DrivySpacing.s)
                 }
             }
-            .padding(.horizontal, DrivySpacing.s)
         }
-        .scrollIndicators(.hidden)
+        .frame(maxHeight: 6 * DrivyLayout.tapTarget)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Participants à mentionner")
+        .accessibilityIdentifier("messaging.mention.suggestions")
+        .task { if workspace.generalMembers.isEmpty { await workspace.loadGeneralMembers() } }
     }
 
-    private var mentionPicker: some View {
-        NavigationStack {
-            List(workspace.generalMembers) { person in
-                let chosen = selectedMentions.contains(where: { $0.personID == person.id })
-                Button {
-                    if chosen {
-                        selectedMentions.removeAll { $0.personID == person.id }
-                    } else if selectedMentions.count < 8 {
-                        selectedMentions.append(MessagingMentionSelection(personID: person.id, displayName: person.displayName))
-                    }
-                } label: {
-                    HStack(spacing: DrivySpacing.s) {
-                        DrivyAvatar(name: person.displayName, size: 32, photo: workspace.photos[person.id])
-                        Text(person.displayName).foregroundStyle(DrivyTheme.text)
-                        Spacer()
-                        if chosen { Image(systemName: "checkmark").foregroundStyle(DrivyTheme.accent) }
-                    }
-                }
-                .accessibilityAddTraits(chosen ? [.isSelected] : [])
-            }
-            .navigationTitle("Mentionner")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("Terminé") { showMentionPicker = false } }
+    private func insertMention(_ person: MessagingContact) {
+        guard let replaced = MessagingMentionToken.replacing(in: draft, with: person.displayName) else { return }
+        draft = replaced
+        if !selectedMentions.contains(where: { $0.personID == person.id }) && selectedMentions.count < 8 {
+            selectedMentions.append(MessagingMentionSelection(personID: person.id, displayName: person.displayName))
         }
-        .presentationDetents([.medium, .large])
-        .task { await workspace.loadGeneralMembers() }
+        composerFocused = true
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {

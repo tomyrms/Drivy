@@ -255,7 +255,7 @@ struct MessagingBubble: View {
         .confirmationDialog("Réagir", isPresented: $showReactionPicker) {
             ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
                 Button("\(emoji) \(MessagingReactionPalette.label(emoji))") {
-                    Task { await workspace.toggleReaction(emoji, on: message) }
+                    react(emoji)
                 }
             }
         }
@@ -372,15 +372,27 @@ struct MessagingBubble: View {
         }
     }
 
+    /// Ne bloque jamais l'action d'un menu : la requête part après la fermeture.
+    private func react(_ emoji: String) {
+        let workspace = workspace, message = message
+        Task { @MainActor in
+            // Laisse l'aperçu se refermer avant que la relecture du fil ne change sa mise en page.
+            try? await Task.sleep(for: .milliseconds(350))
+            await workspace.toggleReaction(emoji, on: message)
+        }
+    }
+
     @ViewBuilder private var menu: some View {
         if !message.meta.deletedForEveryone && access.canWrite {
-            // Réactions rapides en tête du menu, sans sous-menu.
+            // #102 : réactions rapides en tête du menu. L'action lance une tâche détachée et rend la main
+            // aussitôt, le menu et l'aperçu se ferment sans attendre le serveur ; un échec s'affiche
+            // dans la conversation (actionError) sans rouvrir le menu ni déplacer le fil.
             ControlGroup {
                 ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
                     let reacted = message.meta.reactions.first { $0.emoji == emoji }?
                         .personIDs.contains(workspace.scope.accountID) ?? false
                     Button {
-                        Task { await workspace.toggleReaction(emoji, on: message) }
+                        react(emoji)
                     } label: {
                         Text(emoji)
                     }

@@ -31,6 +31,8 @@ struct MessagingConversation: Identifiable, Sendable {
     let lastReadSequence: Int
     let mutedUntil: Date?
     let readStateVersion: Int
+    /// Pair d'un échange privé (photo de la cellule), nil pour le général.
+    var peerPersonID: UUID? = nil
 }
 
 struct MessagingCiphertext: Codable, Sendable, Equatable {

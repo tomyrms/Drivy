@@ -58,6 +58,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private var loadedConversations = false
     private var loadedMessages: Set<UUID> = []
     private var visibleMessageConversationID: UUID?
+    private var requestedRead: [UUID: Int] = [:]
+    private var readInFlight: Set<UUID> = []
+    private let notifications: any MessagingNotificationCleaning
 
     init(scope: MessagingScope, service: any MessagingService = UnavailableMessagingService(),
          cryptography: any MessagingCryptography = UnavailableMessagingCryptography(),
@@ -69,8 +72,10 @@ struct MessagingInboxPreview: Equatable, Sendable {
          reportSealing: any MessagingReportSealing = UnavailableMessagingReportSealing(),
          reports: any MessagingProtectedReports = UnavailableMessagingReports(),
          photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
+         notifications: any MessagingNotificationCleaning = SystemMessagingNotifications(),
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil }) {
         self.actions = actions
+        self.notifications = notifications
         self.history = history
         self.reportSealing = reportSealing
         self.reports = reports
@@ -232,16 +237,65 @@ struct MessagingInboxPreview: Equatable, Sendable {
         catch { self.error = .unavailable; return nil }
     }
 
-    func markRead(conversationID: UUID, sequence: Int) async {
+    /// Accusé serveur, puis seulement en cas de succès : compteur local, badge, alertes de CETTE conversation.
+    @discardableResult func markRead(conversationID: UUID, sequence: Int) async -> Bool {
         do {
             let state = try await directory.readState(scope: scope, conversationID: conversationID,
                 sequence: sequence, mutedUntil: nil, expectedVersion: nil)
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
             mergeReadState(state, conversationID: conversationID)
             error = nil
+            applyConfirmedRead(conversationID)
+            if let confirmed = readStates[conversationID]?.lastReadSequence {
+                await notifications.removeDelivered(schoolID: scope.schoolID, conversationID: conversationID, upTo: confirmed)
+            }
+            await notifications.setMessagingBadge(unreadTotal)
+            return true
         }
-        catch let failure as MessagingFailure { recordFailure(failure) }
-        catch { self.error = .unavailable }
+        catch let failure as MessagingFailure { recordFailure(failure); return false }
+        catch { self.error = .unavailable; return false }
+    }
+
+    /// Bas du fil réellement affiché (#103). Borne monotone, limitée au dernier message lisible chargé,
+    /// requêtes coalescées : une seule en vol par conversation, la plus haute demande gagne.
+    func conversationViewed(_ id: UUID, upTo sequence: Int) async {
+        guard currentScope() == scope, access(for: id).readableUntilSequence.map({ $0 > 0 }) ?? true,
+              let readable = lastReadableSequence(id) else { return }
+        let target = min(sequence, readable)
+        guard target > (readStates[id]?.lastReadSequence ?? 0) else { return }
+        requestedRead[id] = max(requestedRead[id] ?? 0, target)
+        guard !readInFlight.contains(id) else { return }
+        readInFlight.insert(id); defer { readInFlight.remove(id) }
+        while let wanted = requestedRead[id], wanted > (readStates[id]?.lastReadSequence ?? 0) {
+            requestedRead[id] = nil
+            // Tâche détachée de la vue : un défilement qui relance `.task` n'annule pas un accusé en vol.
+            guard await Task(operation: { await self.markRead(conversationID: id, sequence: wanted) }).value else { return }
+        }
+        requestedRead[id] = nil
+    }
+
+    /// Somme des non-lus messagerie connus de ce contexte.
+    var unreadTotal: Int { conversations.reduce(0) { $0 + max(0, $1.unreadCount ?? 0) } }
+
+    /// Non-lus après une lecture confirmée : zéro si la borne couvre la conversation, sinon les seuls
+    /// messages reçus (pas les miens) chargés au-delà de la borne, sans dépasser le compteur serveur.
+    private func applyConfirmedRead(_ id: UUID) {
+        guard let read = readStates[id]?.lastReadSequence, let index = conversations.firstIndex(where: { $0.id == id }) else { return }
+        let item = conversations[index]
+        let remaining = Self.unreadAfterRead(lastSequence: item.lastSequence, readSequence: read, serverUnread: item.unreadCount,
+            loaded: messages[id] ?? [], accountID: scope.accountID)
+        conversations[index] = MessagingConversation(id: item.id, schoolID: item.schoolID, kind: item.kind, title: item.title,
+            identityDetail: item.identityDetail, unreadCount: remaining, lastSequence: item.lastSequence,
+            lastReadSequence: max(item.lastReadSequence, read), mutedUntil: readStates[id]?.mutedUntil ?? item.mutedUntil,
+            readStateVersion: max(item.readStateVersion, readStates[id]?.version ?? 0), peerPersonID: item.peerPersonID)
+    }
+
+    nonisolated static func unreadAfterRead(lastSequence: Int, readSequence: Int, serverUnread: Int?,
+                                            loaded: [MessagingWireMessage], accountID: UUID) -> Int {
+        let newest = max(lastSequence, loaded.map(\.meta.sequence).max() ?? 0)
+        guard readSequence < newest else { return 0 }
+        let after = loaded.filter { $0.meta.sequence > readSequence && $0.senderID != accountID }.count
+        return min(after, serverUnread ?? after)
     }
 
     func silence(conversationID: UUID, fallbackSequence: Int, until: Date, fallbackVersion: Int) async {

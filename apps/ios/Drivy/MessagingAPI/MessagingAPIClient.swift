@@ -13,6 +13,7 @@ struct MessagingConversationDTO: Sendable {
     let lastReadSequence: Int
     let mutedUntil: Date?
     let readStateVersion: Int
+    var peerPersonId: UUID? = nil
 }
 
 struct MessagingMessageDTO: Sendable {
@@ -75,7 +76,8 @@ struct MessagingAPIClient: MessagingService {
             return MessagingConversation(id: item.id, schoolID: item.schoolId, kind: kind,
                 title: item.title, identityDetail: item.identityDetail, unreadCount: item.unreadCount,
                 lastSequence: item.lastSequence, lastReadSequence: item.lastReadSequence,
-                mutedUntil: item.mutedUntil, readStateVersion: item.readStateVersion)
+                mutedUntil: item.mutedUntil, readStateVersion: item.readStateVersion,
+                peerPersonID: kind == .privateExchange ? item.peerPersonId : nil)
         }, nextCursor: page.nextCursor)
     }
 
