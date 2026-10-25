@@ -1,5 +1,13 @@
 # Validation finale : manifeste de vague (#84)
 
+## Candidat intégré du 25 octobre à 13:32 UTC
+
+- `40194237882`, candidat `85d63a4` : API/PostgreSQL, web/BFF, navigateur, IPA et primitives SDK PASS. Scripts FAIL (import OIDC local incompatible avec la garde de sécurité), iOS FAIL (confirmation messagerie à identifiant doublé). Qualification globale FAIL.
+- Corrections `7384363` : setup local réellement rejoué avec Keycloak et PostgreSQL isolés, 6 contrôles PASS. UI corrigée, requalification Apple en attente.
+- `beee4f1` : dépendances runtime corrigées, audit API/web sans alerte, typages PASS, 352 tests web PASS localement sous Node26. La cible Node24 reste couverte par la CI.
+- `48b78d1` : test de migration après messagerie PASS sur PostgreSQL16.14 jetable, données et droits préservés, réexécution sans effet.
+- Nouvelle campagne complète `40198021398` sur `48b78d1621f6e3eb1eab4082e75634ce1a0b0899` : IN_PROGRESS. Aucun résultat de ce candidat déduit des runs précédents. APNs physique NOT_EXECUTED.
+
 Vague ouverte le 21 octobre 2026. Les tests sont écrits avec le code. Leur exécution complète a lieu à la fin.
 
 ## Mode vague (IPA seulement)

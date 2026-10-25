@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 25 octobre 2026 à 13:32 UTC : relance sur 48b78d1
+
+Les deux échecs de qualification sont corrigés en `7384363` : import OIDC local sans password grant Apple (validation de sécurité conservée) et sélection du bouton terminal de confirmation messagerie sans choix arbitraire entre deux actions. Le setup réel a été rejoué dans des conteneurs isolés : 6 contrôles réussis, migration 045, reprise idempotente et refus de configurations dangereuses inclus. Le correctif UI reste à vérifier sur runner Apple.
+
+Audit des dépendances runtime après correctifs ciblés `beee4f1` : zéro vulnérabilité signalée API et web. Typages réussis, 352 tests web réussis localement sous Node26 hors cible24. Versions verrouillées Fastify5.12.6, Zod4.6.6, Nodemailer10.1.4, fast-uri corrigé dans les locks. La CI utilise Node24.
+
+Test `course-upgrade.integration.test.ts` réellement réussi sur PostgreSQL16.14 jetable : état001..041 puis sept migrations messagerie, ajout042..045 sous propriétaire restreint, conservation des données synthétiques, droits et fonctions messagerie, empreintes et réexécution sans effet. Les48 empreintes de migrations actives en production correspondent exactement au candidat Git. Conteneur de test supprimé après réussite.
+
+Campagne complète `40198021398` en cours sur `48b78d1621f6e3eb1eab4082e75634ce1a0b0899`. Aucun déploiement applicatif ni activation worker à ce stade. Prochaine bascule seulement après résultat et nouvelle sauvegarde. Web actif ancré sur `36a3a70`, API sur `7946886`.
+
 ## 25 octobre 2026 à 13:27 UTC : connexion worker prête, qualification intégrée encore rouge
 
 Run `40194237882` sur `85d63a4` : API/PostgreSQL, web/BFF, navigateur, intégrité documentaire, primitives SDK et IPA réussis. Échecs : scripts (`scripts/dev/setup.ts`, validation de configuration OIDC) et UI messagerie (`MessagingThreadUITests.swift:50`, identifiant de confirmation ambigu sur iPhone et iPad). Corrections en cours. Ces échecs ne sont pas masqués par les suites vertes.
