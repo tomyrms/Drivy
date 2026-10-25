@@ -29,15 +29,40 @@ export function apnsSender(config:PushConfig):PushSender{
  return {
   async send(device,environment,payload,expiresAt,collapseId){
    const auth=await token();
-   return await new Promise(resolve=>{
+   return await new Promise<'SENT'|'INVALID_TOKEN'|'RETRY'>(resolve=>{
     const request=session(environment).request({[constants.HTTP2_HEADER_METHOD]:'POST',[constants.HTTP2_HEADER_PATH]:`/3/device/${device}`,
      authorization:`bearer ${auth}`,'apns-topic':config.topic,'apns-push-type':'alert','apns-priority':'10','apns-collapse-id':collapseId.slice(0,64),
      'apns-expiration':expiresAt?String(Math.floor(expiresAt.getTime()/1000)):'0'});
-    let status=0;request.on('response',headers=>{status=Number(headers[constants.HTTP2_HEADER_STATUS]);});
-    request.on('error',()=>resolve('RETRY'));request.setTimeout(10_000,()=>{request.close();resolve('RETRY');});
-    request.on('close',()=>resolve(status===200?'SENT':status===400||status===410?'INVALID_TOKEN':'RETRY'));
+    let status=0,bytes=0,settled=false;const chunks:Buffer[]=[];
+    const finish=(result:'SENT'|'INVALID_TOKEN'|'RETRY')=>{if(!settled){settled=true;chunks.length=0;resolve(result);}};
+    request.on('response',headers=>{status=Number(headers[constants.HTTP2_HEADER_STATUS]);});
+    request.on('data',(chunk:Buffer)=>{
+     if(settled)return;
+     bytes+=chunk.length;
+     // Ne conserver ni journaliser un corps fournisseur arbitrairement volumineux.
+     if(bytes>4096){finish('RETRY');request.close();return;}
+     chunks.push(chunk);
+    });
+    request.on('error',()=>finish('RETRY'));
+    request.on('aborted',()=>finish('RETRY'));
+    request.setTimeout(10_000,()=>{finish('RETRY');request.close();});
+    request.on('end',()=>{
+     if(settled)return;
+     if(request.rstCode!==0){finish('RETRY');return;}
+     if(status===200){finish('SENT');return;}
+     let reason:unknown;
+     try{const body:unknown=JSON.parse(Buffer.concat(chunks,bytes).toString('utf8'));
+      if(body!==null&&typeof body==='object'&&!Array.isArray(body))reason=(body as {reason?:unknown}).reason;
+     }catch{/* Réponse absente ou invalide : aucune révocation présumée. */}
+     // Apple distingue les erreurs de requête/configuration des jetons invalides.
+     // DeviceTokenNotForTopic peut être une erreur de topic, pas un appareil révoqué.
+     finish((status===400&&reason==='BadDeviceToken')||
+      (status===410&&(reason==='Unregistered'||reason==='ExpiredToken'))?'INVALID_TOKEN':'RETRY');
+    });
+    // close seul ne prouve jamais que le corps et END_STREAM ont été reçus.
+    request.on('close',()=>finish('RETRY'));
     request.end(JSON.stringify(payload));request.resume();
-   });
+   }).catch(()=>'RETRY' as const);
   },
   close(){for(const s of sessions.values())s.close();}
  };
@@ -53,6 +78,9 @@ export async function processPushBatch(pool:Pool,sender:PushSender|undefined,lim
   const due=(await db.query<{id:string;person_id:string;title:string;body:string;series_id:string|null;valid_until:Date|null;category:string;dedupe_key:string;attempts:number}>(
    `SELECT id,person_id,title,body,series_id,valid_until,category,dedupe_key,attempts FROM drivy.push_notification WHERE status='PENDING' AND available_at<=now() ORDER BY available_at LIMIT $1 FOR UPDATE SKIP LOCKED`,[limit])).rows;
   for(const n of due){
+   // Relecture à chaque notification, y compris après un tick ancien ou une reprise.
+   // Aucun accès direct aux tables métier n'est accordé au rôle du worker.
+   if(!(await db.query<{allowed:boolean}>('SELECT drivy.course_push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed)continue;
    const devices=(await db.query<{id:string;token:string;environment:'SANDBOX'|'PRODUCTION'}>('SELECT id,token,environment FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL',[n.person_id])).rows;
    if(!devices.length){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code='NO_DEVICE' WHERE id=$1",[n.id]);continue;}
    let sent=false,retry=false;

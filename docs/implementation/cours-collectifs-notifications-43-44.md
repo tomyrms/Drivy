@@ -12,7 +12,7 @@ une politique garde son choix, y compris « file désactivée ».
 ## Service des cours (`npm run course:worker`)
 
 - Rôle PostgreSQL `drivy_course_worker` (sans BYPASSRLS), préparé par `apps/api/scripts/prepare-course-worker.sql`
-  (non exécuté par Drivy). Variable `COURSE_WORKER_DATABASE_URL`.
+  (exécuté sur le homelab le 25 octobre 2026, activation du service encore bloquée par la qualification). Variable `COURSE_WORKER_DATABASE_URL`.
 - Toutes les 15 s : expiration des propositions échues et passage au suivant, outbox des cours transformée en
   notifications ciblées, rappels 24 h et 2 h aux inscrits, alerte de minimum au responsable 72 h avant (aucune
   annulation automatique), notifications périmées marquées EXPIRED.
@@ -43,10 +43,10 @@ une politique garde son choix, y compris « file désactivée ».
 Autorisation demandée seulement après un geste explicite. Jeton envoyé après connexion, révoqué à la déconnexion.
 Écran « Notifications » dans Mon profil. « Prévenir des prochaines sessions » sur la fiche d'un cours.
 
-**Droit APNs non activé** : `apps/ios/Configuration/Push.entitlements.disabled` contient `aps-environment`. Il n'est pas
-référencé, car une signature iLoader avec un compte Apple gratuit risque d'échouer avec ce droit. Pour l'activer :
-compte développeur payant, renommer le fichier et le référencer dans `project.yml`
-(`CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]`).
+**Droit APNs activé dans le projet** : `apps/ios/Configuration/Device.entitlements` est référencé par
+`CODE_SIGN_ENTITLEMENTS[sdk=iphoneos*]`. Le porteur possède un compte développeur payant. L'environnement de l'app
+est lu dans son profil embarqué après signature. La signature iLoader, le topic effectif et la réception sur appareil
+restent à qualifier. Une IPA non signée ne prouve pas ces points.
 
 ## Vérification
 

@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 25 octobre 2026 à 15:03 UTC : défauts d'envoi push corrigés avant toute activation
+
+Revue de déploiement NO-GO sur `48b78d1` : le worker aurait pu envoyer des notifications devenues fausses. Corrigé, non déployé :
+- Migration `046_course_push_revalidation.sql` (additive) : `course_push_revalidate(uuid)`, réservée au rôle worker, relit juste avant chaque envoi les préférences, l'adhésion, l'abonnement, l'accomplissement, l'inscription, l'offre active et l'horaire. Refus durable `SKIPPED` (`PREFERENCE_DISABLED`, `RECIPIENT_INELIGIBLE`, `EVENT_OBSOLETE`) ou `EXPIRED`. Le worker n'obtient aucun `SELECT` métier.
+- Même migration : une offre réémise après replanification et un rappel d'horaire déplacé ont une clé distincte (avant : ignorés en silence). L'expiration des offres ne touche plus la nouvelle offre de la même entrée.
+- Transport APNs : la raison Apple est lue (corps borné à 4 Kio). Seuls `400 BadDeviceToken` et `410 Unregistered/ExpiredToken` révoquent l'appareil. Toute autre erreur, coupure ou délai est retentée.
+- Exécuté sur PostgreSQL 16.14 synthétique : 14 régressions (RED observé avant correctif), notifications, upgrade 042..046 après messagerie, inscriptions, 34 tests transport : PASS. Suite API complète en cours.
+- Reste : CI complète, sauvegarde puis bascule, recette d'envoi réel sur appareil dédié. Fenêtre résiduelle connue : une offre acceptée pendant l'appel APNs peut encore être notifiée.
+- Test UI iPhone : ouverture des membres synchronisée sur la feuille Messages (`3a803f6`), run ciblé `40203913273` en cours.
+
 ## 25 octobre 2026 à 14:32 UTC : un seul blocage UI iPhone restant
 
 Campagne `40198021398` sur `48b78d1` : scripts, primitives SDK, API/PostgreSQL, web/BFF, navigateur, intégrité et IPA PASS. iOS FAIL : `MessagingThreadUITests.testGeneralMembersOpenProfileWithNameAndPhotoOnly`, ligne23, liste des membres absente après le geste d’ouverture sur iPhone. Le même test passe sur iPad, où les38 tests UI passent. Le correctif du test Profil/Signalements et celui de la confirmation de retrait ne sont plus en échec.

@@ -6,7 +6,7 @@ import { migrate, migrationFilePattern } from '../scripts/migrations.js';
 import { canRead, eligibleContacts, findOrCreatePrivate, sendEnvelope } from '../src/messaging.js';
 import { freshDatabase, id, prepareSchool } from './support/harness.js';
 
-const coursePattern = /^04[2-5]_/;
+const coursePattern = /^04[2-6]_/;
 const migrationDirectory = new URL('../migrations/', import.meta.url);
 const actor = { schoolId: id.schoolA, personId: id.instructor, membershipId: id.instructorMember };
 
@@ -85,11 +85,11 @@ describe('course upgrade after the dated production messaging migrations', () =>
     } finally { await db.query('ROLLBACK'); db.release(); }
   }
 
-  it('applies 042..045 after messaging without losing existing data, rights or migration hashes, then is a no-op', async () => {
+  it('applies 042..046 after messaging without losing existing data, rights or migration hashes, then is a no-op', async () => {
     const names = (await readdir(migrationDirectory)).filter(name => migrationFilePattern.test(name)).sort();
     const courses = names.filter(name => coursePattern.test(name));
     expect(courses).toEqual(['042_collective_courses.sql', '043_course_enrollment_waitlist_cancellation.sql',
-      '044_course_attendance_payment_completion.sql', '045_course_notifications.sql']);
+      '044_course_attendance_payment_completion.sql', '045_course_notifications.sql', '046_course_push_revalidation.sql']);
     const beforeRegistry = await registry();
     expect(beforeRegistry.map(row => row.name)).toEqual(names.filter(name => !coursePattern.test(name)));
     expect(beforeRegistry.filter(row => /^0\d{2}_/.test(row.name))).toHaveLength(41);
