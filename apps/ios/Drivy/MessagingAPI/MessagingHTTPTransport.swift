@@ -8,8 +8,10 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     private let token: @MainActor @Sendable () async throws -> String
     private let invalidate: @MainActor @Sendable (String) async -> Bool
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
+    private let diagnostics: MessagingDiagnostics
 
     init(baseURL: URL, transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
+         diagnostics: MessagingDiagnostics = .shared,
          token: @escaping @MainActor @Sendable () async throws -> String,
          invalidate: @escaping @MainActor @Sendable (String) async -> Bool,
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
@@ -18,6 +20,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         self.token = token
         self.invalidate = invalidate
         self.currentScope = currentScope
+        self.diagnostics = diagnostics
     }
 
     @MainActor static func using(baseURL: URL, tokenSource: any AccessTokenSource,
@@ -260,13 +263,18 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
             let response: SchoolHTTPResponse
             do { response = try await sendHTTP.send(request) }
-            catch { throw error.unlessCancelled(MessagingFailure.unavailable) }
+            catch {
+                if !(error is CancellationError) { diagnostics.recordIfEmpty(MessagingDiagnostics.network(path)) }
+                throw error.unlessCancelled(MessagingFailure.unavailable)
+            }
             try Task.checkCancellation()
             try await verifyCurrent(scope)
             guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw MessagingFailure.invalidResponse }
             if response.status == 401 && attempt == 0 {
                 if await invalidate(bearer) { bearer = try await token(); continue }
             }
+            // qa84 : sans ce code, un refus du message après chiffrement réussi restait muet sous la saisie.
+            if !(200...299).contains(response.status) { diagnostics.recordIfEmpty(MessagingDiagnostics.http(path, response.status)) }
             if response.status == 409 {
                 if (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code == "MESSAGING_MEMBERS_CHANGED" {
                     throw MessagingFailure.membersChanged

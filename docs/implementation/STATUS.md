@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 25 octobre 2026 : déchiffrement entre comptes non qualifié
+
+- Le porteur signale `D-NOKEY` avec l'IPA 354 en alternant deux comptes sur le même téléphone. Ce code signifie que la session de déchiffrement est absente localement, pas que sa perte définitive est démontrée.
+- Relevé serveur à 10:40 UTC : deux anciens messages, aucun nouvel envoi accepté, aucun partage to-device et aucun nouvel appareil du second compte. Ces constats ne prouvent pas à eux seuls un défaut local : un refus réseau/API avant écriture reste possible.
+- La suite Apple `40184451319` est réussie après correction d'une assertion devenue obsolète. Son relais en mémoire ne qualifie pas l'intégration HTTP réelle.
+- Priorité : exécuter Matrix FFI natif contre Fastify/PostgreSQL réels et confronter le résultat aux codes des routes du serveur. Aucune suppression de l'application, de ses clés ou de ses données n'est nécessaire pour ce diagnostic. Aucun succès de réception physique n'est revendiqué.
+
 ## 24 octobre 2026 : campagne #84 engagée sur la messagerie
 
 - Demande du porteur : tester puis afficher Messages une fois qualifié. Travail sur `openai/65-messagerie`, PR #96 en brouillon, checkout des cours collectifs préservé. [Rapport et limites](qualification-messagerie-84-20261024.md).
