@@ -24,7 +24,12 @@ final class MessagingOwnDevicesUITests: XCTestCase {
         other.tap()
         let comparison = app.switches["messaging.devices.compared"]
         XCTAssertTrue(comparison.waitForExistence(timeout: 5))
-        comparison.tap()
+        // iOS 26 : le tap au centre de la ligne ne bascule pas l'interrupteur ; viser le contrôle lui-même.
+        let knob = comparison.switches.firstMatch
+        (knob.exists ? knob : comparison).tap()
+        let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == '1'"), object: comparison)
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: confirm)
+        XCTAssertEqual(XCTWaiter().wait(for: [on, enabled], timeout: 5), .completed)
         XCTAssertTrue(confirm.isEnabled)
         confirm.tap()
         XCTAssertTrue(app.descendants(matching: .any)["messaging.devices.error"].firstMatch.waitForExistence(timeout: 5))
