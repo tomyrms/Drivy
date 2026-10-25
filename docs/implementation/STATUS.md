@@ -1,6 +1,6 @@
 # État de la réalisation
 
-## 25 octobre 2026 : déchiffrement entre comptes non qualifié
+## 25 octobre 2026 : nouveaux messages confirmés sur appareil
 
 - Le porteur signale `D-NOKEY` avec l'IPA 354 en alternant deux comptes sur le même téléphone. Ce code signifie que la session de déchiffrement est absente localement, pas que sa perte définitive est démontrée.
 - Relevé serveur à 10:40 UTC : deux anciens messages, aucun nouvel envoi accepté, aucun partage to-device et aucun nouvel appareil du second compte. Ces constats ne prouvent pas à eux seuls un défaut local : un refus réseau/API avant écriture reste possible.
@@ -8,7 +8,7 @@
 - Le 25 octobre à 12:17 UTC, run Apple `40191511234` sur `65eddbf` réussi : 99 XCTest sans échec, dont le scénario Matrix FFI → HTTPS → Fastify → PostgreSQL. Échange privé A/B, répétition idempotente, sauvegarde et restauration sur un appareil neuf, refus des contextes étrangers réellement exécutés. La garde confirme `RELAY_EXECUTION_PASSED: 1 scenario, 0 skipped`. Ce résultat ne couvre pas encore Général avec inscription tardive de B, l'interface d'envoi, ni l'essai physique.
 - Campagne API/PostgreSQL `40191346532` sur `7946886` réussie. Le relevé de journaux entre 10:41 et 12:01 UTC ne contient aucun parcours d'envoi, seulement des lectures et les sondes de déploiement : aucun rejet d'envoi authentifié n'est prouvé.
 - Run Apple `40192648610` sur `4d8c156` réussi : 99 XCTest sans échec, garde relais positive. Le scénario étendu vérifie Général avant inscription B, publication des clés B, `device_lists.changed` réellement consommé par A, nouvel envoi avec la même session Megolm, déchiffrement B puis réponse B déchiffrée par A. Aucun reset ni réponse HTTP simulée. Cela ne reproduit pas la bascule OIDC/UI sur l'iPhone du porteur, ni la lecture des anciens messages envoyés avant publication des clés B.
-- L'incident physique reste non reproduit. Prochaine preuve nécessaire : distinguer ancienne bulle sans clé et nouvel envoi réellement tenté sur l'appareil, avec le résultat du bouton Envoyer et le code éventuel. Aucune suppression de l'application, de ses clés ou de ses données n'est nécessaire. Aucun succès physique ni correction du `D-NOKEY` signalé n'est revendiqué.
+- À 12:36 UTC le 25 octobre, le porteur confirme que les nouveaux messages fonctionnent sur son appareil et précise que `D-MEGOLM` concerne un ancien message. Réception des nouveaux messages confirmée par le porteur, sans attribuer ce succès à un correctif causal non démontré. Le diagnostic supplémentaire est arrêté, aucune suppression d'app, de clé ou de message. La récupération de cet ancien message n'est ni réalisée ni déclarée impossible. Cette confirmation ne clôt pas la qualification globale #84 (iPad, VoiceOver et autres scénarios physiques restent distincts).
 
 ## 24 octobre 2026 : campagne #84 engagée sur la messagerie
 
