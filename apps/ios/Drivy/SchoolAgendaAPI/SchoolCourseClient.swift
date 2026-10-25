@@ -207,6 +207,10 @@ enum SchoolCourseLearnerAction: Equatable, Sendable {
     }
 }
 
+/// Abonnements « prochaines sessions » (#40) : contrat de apps/api/src/notification-preferences.ts.
+struct SchoolCourseFollows: Codable, Sendable, Equatable { let typeIds: [UUID] }
+struct SchoolCourseFollowReply: Codable, Sendable, Equatable { let typeId: UUID; let following: Bool }
+
 struct SchoolCourseStaffEnrollBody: Encodable, Sendable, Equatable { let operationId: UUID; let learnerId: UUID }
 struct SchoolCourseStaffCancelBody: Encodable, Sendable, Equatable { let operationId: UUID; let reason: String }
 
@@ -464,6 +468,22 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
         guard result.enrollments.allSatisfy({ Self.valid($0.requirements) }),
               result.completions.allSatisfy({ SchoolLesson.date($0.validatedAt) != nil }) else { throw SchoolPlanningFailure.invalidResponse }
         return result
+    }
+
+    // MARK: Prochaines sessions (#40) : indépendant de l’inscription et de la file
+
+    /// Types de cours que l’élève appelant suit dans l’école.
+    func follows(schoolID: UUID) async throws -> Set<UUID> {
+        let result: SchoolCourseFollows = try await request(schoolID, ["course-follows", "me"])
+        return Set(result.typeIds)
+    }
+    /// Suivre (PUT) ou ne plus suivre (POST `unfollow`) un type ; rend l’état écrit par l’école.
+    func setFollow(schoolID: UUID, typeID: UUID, following: Bool) async throws -> Bool {
+        let path = ["course-follows", "me", typeID.uuidString] + (following ? [] : ["unfollow"])
+        let result: SchoolCourseFollowReply = try await send(schoolID, path, query: [], method: following ? "PUT" : "POST",
+            body: nil, operation: nil, version: nil, expected: 200)
+        guard result.typeId == typeID, result.following == following else { throw SchoolPlanningFailure.invalidResponse }
+        return result.following
     }
 
     static func valid(_ requirements: SchoolCourseRequirements) -> Bool {

@@ -672,6 +672,7 @@ struct SchoolRootView: View {
                             workspace.reset()
                             Task {
                                 // La page de connexion de l’app reprend la main.
+                                await SchoolPushCenter.shared.sessionEnding()
                                 await identity.signOut()
                             }
                         }
@@ -703,7 +704,8 @@ struct SchoolRootView: View {
         closeAll()
         workspace?.reset()
         showsAccount = false
-        Task { await identity.signOut() }
+        // L’appareil est retiré tant que le jeton d’accès vaut encore ; une panne ne retient pas la déconnexion.
+        Task { await SchoolPushCenter.shared.sessionEnding(); await identity.signOut() }
     }
 
     private func closeAll() {

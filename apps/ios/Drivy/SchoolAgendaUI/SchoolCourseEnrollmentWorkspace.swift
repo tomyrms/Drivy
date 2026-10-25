@@ -80,6 +80,28 @@ struct SchoolCourseOperationMemory {
 
     var series: SchoolCourseSeries? { reply?.series }
     var me: SchoolCourseLearnerState? { reply?.me }
+    /// Le type de cours est suivi (prochaines sessions, #40) ; `nil` tant que l’école ne l’a pas dit.
+    private(set) var following: Bool?
+    private(set) var isUpdatingFollow = false
+
+    /// Lecture séparée : une panne laisse seulement le bouton absent.
+    func loadFollow() async {
+        guard let typeID = series?.typeId, !isUpdatingFollow,
+              let types = try? await client.follows(schoolID: schoolID), !Task.isCancelled else { return }
+        following = types.contains(typeID)
+    }
+
+    /// Geste explicite : l’autorisation système n’est demandée qu’en s’abonnant. Rien n’est annoncé avant l’école.
+    func setFollow(_ value: Bool) async {
+        guard let typeID = series?.typeId, !isUpdatingFollow else { return }
+        isUpdatingFollow = true; errorMessage = nil; confirmation = nil; defer { isUpdatingFollow = false }
+        if value { await SchoolPushCenter.shared.requestAuthorization() }
+        do {
+            following = try await client.setFollow(schoolID: schoolID, typeID: typeID, following: value)
+            confirmation = value ? "Tu seras prévenu des prochaines sessions" : "Tu ne seras plus prévenu"
+        } catch is CancellationError {
+        } catch { errorMessage = Self.message(error) }
+    }
 
     func load() async {
         guard !isLoading, !isBusy else { return }
@@ -87,6 +109,7 @@ struct SchoolCourseOperationMemory {
         do {
             reply = try await client.learnerView(schoolID: schoolID, seriesID: seriesID)
             if errorMessage != nil && reply != nil { errorMessage = nil }
+            if following == nil { await loadFollow() }
         } catch is CancellationError {
         } catch { errorMessage = Self.message(error) }
     }

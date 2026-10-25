@@ -145,6 +145,15 @@ struct SchoolCourseLearnerView: View {
             case .completed, .cancelled, .closed:
                 EmptyView()
             }
+            if let following = model.following {
+                Button(following ? "Ne plus prévenir" : "Prévenir des prochaines sessions",
+                       systemImage: following ? "bell.slash" : "bell") {
+                    Task { await model.setFollow(!following) }
+                }
+                .disabled(model.isBusy || model.isUpdatingFollow)
+                .accessibilityValue(model.isUpdatingFollow ? "Envoi en cours" : "")
+                .accessibilityIdentifier("course-follow")
+            }
         }
         .drivyFormRows()
     }
@@ -391,7 +400,9 @@ struct SchoolLearnerCourseEntry: ViewModifier {
                     }
                 }
             }
-            .task(id: schoolID) { await prepare() }
+            .task(id: schoolID) { await prepare(); openPendingSeries() }
+            // Toucher une notification de cours : sa fiche s’ouvre, relue auprès de l’école (aucun droit déduit de la charge utile).
+            .onChange(of: SchoolPushCenter.shared.pendingSeriesID) { _, _ in openPendingSeries() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active, let model { Task { await model.refreshOffers() } }
             }
@@ -401,6 +412,12 @@ struct SchoolLearnerCourseEntry: ViewModifier {
             .sheet(item: $offered, onDismiss: { Task { await model?.load() } }) { course in
                 SchoolCourseLearnerView(model: course)
             }
+    }
+
+    private func openPendingSeries() {
+        guard let model, SchoolPushCenter.shared.pendingSeriesID != nil, presented == nil,
+              let seriesID = SchoolPushCenter.shared.consumePendingSeries() else { return }
+        offered = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: seriesID, timeZone: model.timeZone, client: model.client)
     }
 
     private func prepare() async {

@@ -3,6 +3,8 @@ import UIKit
 
 @main
 struct DrivyApp: App {
+    /// Jeton APNs et toucher sur une notification ; aucune autorisation n’est demandée au lancement.
+    @UIApplicationDelegateAdaptor(DrivyAppDelegate.self) private var appDelegate
     @State private var identity: IdentitySession
     @State private var workspace: SchoolWorkspace?
     @State private var clients: SchoolHomeClients?
@@ -47,6 +49,9 @@ struct DrivyApp: App {
         })
         _clients = State(initialValue: configuration.map {
             SchoolHomeClients(configuration: $0, tokenSource: identity, transport: transport)
+        })
+        SchoolPushCenter.shared.configure(client: configuration.map {
+            SchoolNotificationClient(baseURL: $0.apiBaseURL, tokenSource: identity, transport: transport)
         })
     }
 
@@ -118,6 +123,10 @@ struct DrivyApp: App {
                     cover.update(sceneIsActive: current == .active, hasSession: identity.isAuthenticated)
                 }
                 .onChange(of: appLock.isLocked, initial: true) { _, _ in cover.update() }
+                // Connexion ou session restaurée : l’appareil s’enregistre seulement si l’autorisation existe déjà.
+                .onChange(of: identity.isAuthenticated, initial: true) { _, isAuthenticated in
+                    if isAuthenticated { SchoolPushCenter.shared.sessionStarted() }
+                }
                 .onChange(of: identity.isAuthenticated) { wasAuthenticated, isAuthenticated in
                     if !isAuthenticated { appLock.sessionEnded() }
                     if !wasAuthenticated, isAuthenticated, appLock.shouldOffer { offerAppLockWhenIdle() }
