@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 25 octobre 2026 à 12:37 UTC : finalisation et déploiement des cours autorisés
+
+Le porteur demande de terminer la qualification et le déploiement des cours ainsi que l’activation du worker. Pas de bascule avant vérification, sauvegarde renouvelée avant modification distante. La version déployée `7946886` contient la messagerie et le replay absents de la branche cours : intégration sur `vague/cours-collectifs` en `3a68ee8`, sans fusion dans master, pour éviter leur régression.
+
+Le run iOS `40186160920` sur `10a77b0` a échoué dans `NativeNavigationTests.testProfileOpensObservationThemesWithItsCounterAndPreview`, ligne 104 : thème `indicators` hors des cellules matérialisées sur iPhone. Correctif test `85d63a4` : compteur vérifié en haut, défilement borné, présence et interactivité des deux thèmes toujours exigées. Pas encore qualifié sur Apple.
+
+Typages API et web et suite web exécutés localement avec succès après intégration. Campagne complète `40194237882` lancée sur `85d63a4591a16e0bb86db5bb04522cdd809f8776` : API/PostgreSQL, web, navigateur, iOS, IPA et scripts. Résultats en attente. Aucun nouveau déploiement à ce stade, réception APNs physique non vérifiée.
+
 ## 25 octobre 2026 : préparation APNs sur le homelab
 
 Autorisation explicite du porteur à 12:03 UTC. Sauvegarde préalable CT113 : `/root/drivy-before-course-worker-20261025T1205.dump`, 1 871 853 octets, catalogue `pg_restore --list` vérifié, synchronisée. Aucune restauration de test revendiquée.
