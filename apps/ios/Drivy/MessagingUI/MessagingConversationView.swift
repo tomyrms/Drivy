@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Conversation v2 : bandeau épinglé, bulles riches, réponse citée, sondages, recherche locale,
+/// Conversation v2 : fil ancré en bas (anciens en haut, récents près du composeur), séparateurs de jour,
+/// regroupement par auteur, envois en attente intégrés au fil, bandeau épinglé, recherche locale,
 /// sélection pour signalement, lecture seule après la fin du lien (composeur masqué).
 struct MessagingConversationView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var connectivity = MessagingConnectivity()
     let workspace: MessagingWorkspace
     let conversationID: UUID
@@ -20,6 +22,10 @@ struct MessagingConversationView: View {
     @State private var draftReady = false
     @State private var draftFailure: String?
     @State private var queued: [MessagingPending] = []
+    /// Échecs par envoi en attente : affichés sur la bulle concernée, jamais comme un succès.
+    @State private var pendingFailures: [UUID: String] = [:]
+    @State private var retrying: Set<UUID> = []
+    /// Échec avant la mise en file (protection indisponible, contexte changé) : le brouillon reste.
     @State private var deliveryLabel: String?
     @State private var sending = false
     @State private var replyTo: MessagingWireMessage?
@@ -30,49 +36,55 @@ struct MessagingConversationView: View {
     @State private var reportSelection: Set<UUID> = []
     @State private var reportSent = false
     @State private var scrollTarget: UUID?
+    @State private var highlighted: UUID?
+    @State private var notice: String?
+    @State private var atBottom = true
+    @State private var unseenBelow = false
+    @State private var loadingOlder = false
+    @FocusState private var composerFocused: Bool
+
+    private static let bottomID = "messaging.thread.bottom"
+    /// Deux messages du même auteur à moins de cinq minutes forment un groupe.
+    private static let groupWindow: TimeInterval = 300
 
     private var access: MessagingConversationAccess { workspace.access(for: conversationID) }
+    /// Ordre ascendant : le plus ancien en haut, le plus récent en bas.
+    private var messages: [MessagingWireMessage] { workspace.visibleMessages(conversationID) }
 
     var body: some View {
         VStack(spacing: 0) {
             MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { scrollTarget = $0 }
+            statusStrip
             ScrollViewReader { proxy in
-                List {
-                    if let error = workspace.error { Text(error.localizedDescription).foregroundStyle(.secondary) }
-                    if let failure = workspace.actionError {
-                        Text(failure.localizedDescription).foregroundStyle(.red)
-                            .accessibilityIdentifier("messaging.action.error")
-                            .onTapGesture { workspace.clearActionError() }
+                thread(proxy)
+                    .overlay(alignment: .top) { noticeView }
+                    .overlay(alignment: .bottomTrailing) { jumpToBottom(proxy) }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { footer }
+                    .onChange(of: scrollTarget) { _, target in
+                        guard let target else { return }
+                        scrollTarget = nil
+                        Task { await jump(to: target, proxy: proxy) }
                     }
-                    if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
-                    if let until = (workspace.readStates[conversationID].map(\.mutedUntil) ?? mutedUntil), until > Date() {
-                        Text("En sourdine").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if workspace.canLoadMoreMessages(conversationID) {
-                        Button("Charger les messages précédents") { Task { await workspace.loadMessages(conversationID, more: true) } }
-                    }
-                    ForEach(workspace.visibleMessages(conversationID)) { message in
-                        row(message).id(message.id)
-                    }
-                    ForEach(queued, id: \.clientMessageID) { entry in
-                        HStack {
-                            Text("En attente d'envoi").font(.caption)
-                            Spacer()
-                            Button("Réessayer") { Task { await retry(entry) } }
+                    .onChange(of: messages.last?.id) { _, _ in
+                        if atBottom || messages.last?.senderID == workspace.scope.accountID {
+                            scrollToBottom(proxy, animated: true)
+                        } else {
+                            unseenBelow = true
                         }
                     }
-                    if let deliveryLabel { Text(deliveryLabel).font(.caption).accessibilityIdentifier("messaging.delivery") }
-                    if let draftFailure { Text(draftFailure).font(.caption).foregroundStyle(.red) }
-                }
-                .listStyle(.plain)
-                .onChange(of: scrollTarget) { _, target in
-                    guard let target else { return }
-                    withAnimation { proxy.scrollTo(target, anchor: .center) }
-                    scrollTarget = nil
-                }
+                    .onChange(of: queued.count) { old, new in
+                        if new > old { scrollToBottom(proxy, animated: true) }
+                    }
+                    .onChange(of: composerFocused) { _, focused in
+                        guard focused, atBottom else { return }
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(300))
+                            scrollToBottom(proxy, animated: true)
+                        }
+                    }
             }
-            footer
         }
+        .background(DrivyTheme.canvas)
         .navigationTitle(reporting ? "Signaler" : title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { connectivity.start() }
@@ -85,7 +97,7 @@ struct MessagingConversationView: View {
         }
         .onChange(of: workspace.error) { _, failure in
             if failure == .contextChanged || failure == .accessChanged {
-                draft = ""; queued = []; selectedMentions = []; draftReady = false; replyTo = nil
+                draft = ""; queued = []; pendingFailures = [:]; selectedMentions = []; draftReady = false; replyTo = nil
             }
         }
         .onChange(of: workspace.resumeGeneration) { _, _ in
@@ -103,7 +115,7 @@ struct MessagingConversationView: View {
             }
         }
         .sheet(isPresented: $showSearch) {
-            MessagingSearchView(workspace: workspace, conversationID: conversationID) { scrollTarget = $0 }
+            MessagingSearchView(workspace: workspace, conversationID: conversationID, conversationTitle: title) { scrollTarget = $0 }
         }
         .navigationDestination(isPresented: $showMembers) { MessagingMembersView(workspace: workspace) }
         .alert("Signalement transmis", isPresented: $reportSent) { Button("OK") {} }
@@ -131,10 +143,126 @@ struct MessagingConversationView: View {
         }
     }
 
-    @ViewBuilder private func row(_ message: MessagingWireMessage) -> some View {
+    // MARK: - Fil
+
+    private func thread(_ proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if workspace.canLoadMoreMessages(conversationID) {
+                    Button {
+                        Task { await loadOlder(proxy) }
+                    } label: {
+                        HStack(spacing: DrivySpacing.xs) {
+                            if loadingOlder { ProgressView().controlSize(.small) }
+                            Text("Charger les messages précédents")
+                        }
+                        .font(.subheadline)
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .padding(.horizontal, DrivySpacing.m)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(DrivyTheme.accent)
+                    .disabled(loadingOlder)
+                    .padding(.vertical, DrivySpacing.xs)
+                }
+                ForEach(rows) { row in
+                    if let day = row.dayBreak { daySeparator(day) }
+                    rowView(row)
+                        .padding(.top, row.startsGroup ? DrivySpacing.xs : 2)
+                        .id(row.message.id)
+                }
+                ForEach(queued, id: \.clientMessageID) { entry in
+                    MessagingPendingBubble(entry: entry, failure: pendingFailures[entry.clientMessageID],
+                                           retrying: retrying.contains(entry.clientMessageID)) {
+                        Task { await retry(entry) }
+                    }
+                    .padding(.top, 2)
+                    .id(entry.clientMessageID)
+                }
+                Color.clear.frame(height: DrivySpacing.xs).id(Self.bottomID)
+            }
+            .padding(.horizontal, DrivySpacing.s)
+            .frame(maxWidth: DrivyLayout.readingColumn)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .defaultScrollAnchor(.bottom, for: .initialOffset)
+        .defaultScrollAnchor(.bottom, for: .alignment)
+        .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
+            ScrollMetrics(distanceToBottom: geometry.contentSize.height - geometry.visibleRect.maxY,
+                          contentHeight: geometry.contentSize.height,
+                          containerHeight: geometry.containerSize.height)
+        } action: { old, new in
+            // Une variation de taille (clavier, rotation, déchiffrement, réaction) ne fait jamais quitter le bas.
+            if atBottom && (old.containerHeight != new.containerHeight || old.contentHeight != new.contentHeight) && !loadingOlder {
+                if new.distanceToBottom > 1 { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+                return
+            }
+            atBottom = new.distanceToBottom < 48
+            if atBottom { unseenBelow = false }
+        }
+    }
+
+    private struct ScrollMetrics: Equatable {
+        let distanceToBottom: CGFloat
+        let contentHeight: CGFloat
+        let containerHeight: CGFloat
+    }
+
+    private struct ThreadRow: Identifiable {
+        let message: MessagingWireMessage
+        let dayBreak: Date?
+        let startsGroup: Bool
+        let endsGroup: Bool
+        var id: UUID { message.id }
+    }
+
+    private var rows: [ThreadRow] {
+        let list = messages
+        let calendar = Calendar.current
+        func grouped(_ a: MessagingWireMessage, _ b: MessagingWireMessage) -> Bool {
+            a.senderID == b.senderID && calendar.isDate(a.acceptedAt, inSameDayAs: b.acceptedAt)
+                && abs(b.acceptedAt.timeIntervalSince(a.acceptedAt)) < Self.groupWindow
+        }
+        return list.indices.map { index in
+            let message = list[index]
+            let previous = index > list.startIndex ? list[index - 1] : nil
+            let next = index < list.endIndex - 1 ? list[index + 1] : nil
+            let newDay = previous.map { !calendar.isDate($0.acceptedAt, inSameDayAs: message.acceptedAt) } ?? true
+            return ThreadRow(message: message,
+                             dayBreak: newDay ? message.acceptedAt : nil,
+                             startsGroup: newDay || previous.map { !grouped($0, message) } ?? true,
+                             endsGroup: next.map { !grouped(message, $0) } ?? true)
+        }
+    }
+
+    private func daySeparator(_ date: Date) -> some View {
+        Text(Self.dayLabel(date))
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(DrivyTheme.muted)
+            .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xxs)
+            .background(DrivyTheme.surfaceMuted, in: Capsule())
+            .frame(maxWidth: .infinity)
+            .padding(.top, DrivySpacing.m).padding(.bottom, DrivySpacing.xxs)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private static func dayLabel(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Aujourd'hui" }
+        if calendar.isDateInYesterday(date) { return "Hier" }
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            return date.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        }
+        return date.formatted(.dateTime.day().month(.wide).year())
+    }
+
+    @ViewBuilder private func rowView(_ row: ThreadRow) -> some View {
+        let message = row.message
         let bubble = MessagingBubble(workspace: workspace, message: message, isGeneral: isGeneral,
             selecting: reporting, selected: reportSelection.contains(message.id),
-            onReply: { replyTo = message }, onJump: { scrollTarget = $0 })
+            showsAuthor: row.startsGroup, showsMeta: row.endsGroup, highlighted: highlighted == message.id,
+            onReply: { replyTo = message; composerFocused = true }, onJump: { scrollTarget = $0 })
         if reporting && !message.meta.deletedForEveryone {
             Button {
                 if reportSelection.contains(message.id) { reportSelection.remove(message.id) } else { reportSelection.insert(message.id) }
@@ -144,13 +272,121 @@ struct MessagingConversationView: View {
             .accessibilityHint("Sélectionne ce message pour le signalement")
         } else {
             bubble
-                .swipeActions(edge: .leading) {
-                    if access.canWrite && !message.meta.deletedForEveryone && !reporting {
-                        Button("Répondre", systemImage: "arrowshape.turn.up.left") { replyTo = message }.tint(.accentColor)
-                    }
-                }
         }
     }
+
+    @ViewBuilder private var statusStrip: some View {
+        let muted = (workspace.readStates[conversationID].map(\.mutedUntil) ?? mutedUntil).map { $0 > Date() } ?? false
+        if workspace.error != nil || workspace.actionError != nil || detail != nil || muted {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                if let error = workspace.error {
+                    Text(error.localizedDescription).font(.footnote).foregroundStyle(DrivyTheme.muted)
+                }
+                if let failure = workspace.actionError {
+                    Button { workspace.clearActionError() } label: {
+                        Label(failure.localizedDescription, systemImage: "exclamationmark.triangle")
+                            .font(.footnote).foregroundStyle(DrivyTheme.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Masque l'erreur")
+                    .accessibilityIdentifier("messaging.action.error")
+                }
+                HStack(spacing: DrivySpacing.xs) {
+                    if let detail { Text(detail).font(.caption).foregroundStyle(DrivyTheme.muted) }
+                    if muted {
+                        Label("En sourdine", systemImage: "bell.slash").font(.caption).foregroundStyle(DrivyTheme.muted)
+                    }
+                }
+            }
+            .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DrivyTheme.surface)
+        }
+    }
+
+    @ViewBuilder private var noticeView: some View {
+        if let notice {
+            Label(notice, systemImage: "exclamationmark.bubble")
+                .font(.footnote)
+                .foregroundStyle(DrivyTheme.text)
+                .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
+                .background(DrivyTheme.surfaceRaised, in: Capsule())
+                .overlay(Capsule().stroke(DrivyTheme.border))
+                .padding(.top, DrivySpacing.xs)
+                .transition(.opacity)
+                .accessibilityIdentifier("messaging.notice")
+        }
+    }
+
+    @ViewBuilder private func jumpToBottom(_ proxy: ScrollViewProxy) -> some View {
+        if !atBottom {
+            Button { scrollToBottom(proxy, animated: true) } label: {
+                HStack(spacing: DrivySpacing.xxs) {
+                    Image(systemName: "arrow.down")
+                    if unseenBelow { Text("Nouveaux messages").font(.footnote.weight(.semibold)) }
+                }
+                .foregroundStyle(unseenBelow ? DrivyTheme.onAccent : DrivyTheme.accent)
+                .padding(.horizontal, unseenBelow ? DrivySpacing.s : 0)
+                .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
+                .background(unseenBelow ? AnyShapeStyle(DrivyTheme.accentFill) : AnyShapeStyle(DrivyTheme.surfaceRaised), in: Capsule())
+                .overlay(Capsule().stroke(DrivyTheme.border, lineWidth: unseenBelow ? 0 : 1))
+                .shadow(color: DrivyTheme.shadow.opacity(0.12), radius: 6, y: 2)
+            }
+            .buttonStyle(.plain)
+            .padding(DrivySpacing.m)
+            .accessibilityLabel(unseenBelow ? "Nouveaux messages, revenir en bas" : "Revenir en bas")
+            .accessibilityIdentifier("messaging.scroll.bottom")
+            .transition(.opacity)
+        }
+    }
+
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
+        withAnimation(animated ? DrivyMotion.settle(reduceMotion) : nil) {
+            proxy.scrollTo(Self.bottomID, anchor: .bottom)
+        }
+        unseenBelow = false
+    }
+
+    /// Les anciens messages arrivent au-dessus : le premier message lu reste à sa place.
+    private func loadOlder(_ proxy: ScrollViewProxy) async {
+        guard !loadingOlder else { return }
+        let anchor = messages.first?.id
+        loadingOlder = true
+        await workspace.loadMessages(conversationID, more: true)
+        if let anchor {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy.scrollTo(anchor, anchor: .top) }
+        }
+        loadingOlder = false
+    }
+
+    /// Citation, épingle ou recherche : charge le contexte si besoin, puis met le message brièvement en évidence.
+    private func jump(to id: UUID, proxy: ScrollViewProxy) async {
+        var pages = 0
+        while !messages.contains(where: { $0.id == id }), workspace.canLoadMoreMessages(conversationID), pages < 10 {
+            await workspace.loadMessages(conversationID, more: true)
+            pages += 1
+        }
+        guard messages.contains(where: { $0.id == id }) else {
+            await show(notice: "Message indisponible")
+            return
+        }
+        withAnimation(DrivyMotion.settle(reduceMotion)) { proxy.scrollTo(id, anchor: .center) }
+        withAnimation(DrivyMotion.feedback(reduceMotion)) { highlighted = id }
+        try? await Task.sleep(for: .milliseconds(1_500))
+        if highlighted == id { withAnimation(DrivyMotion.settle(reduceMotion)) { highlighted = nil } }
+    }
+
+    private func show(notice text: String) async {
+        withAnimation(DrivyMotion.feedback(reduceMotion)) { notice = text }
+        AccessibilityNotification.Announcement(text).post()
+        try? await Task.sleep(for: .seconds(3))
+        if notice == text { withAnimation(DrivyMotion.feedback(reduceMotion)) { notice = nil } }
+    }
+
+    // MARK: - Pied
 
     @ViewBuilder private var footer: some View {
         if reporting {
@@ -163,9 +399,10 @@ struct MessagingConversationView: View {
                         }
                     }
                 }
+                .frame(minHeight: DrivyLayout.tapTarget)
                 Spacer()
                 Button("Transmettre (\(reportSelection.count))") {
-                    let selected = workspace.visibleMessages(conversationID).filter { reportSelection.contains($0.id) }
+                    let selected = messages.filter { reportSelection.contains($0.id) }
                     Task {
                         if await workspace.report(selected, conversationID: conversationID) {
                             reporting = false; reportSelection = []; reportSent = true
@@ -173,15 +410,16 @@ struct MessagingConversationView: View {
                     }
                 }
                 .bold()
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .disabled(reportSelection.isEmpty)
                 .accessibilityIdentifier("messaging.report.send")
             }
-            .padding()
+            .padding(.horizontal, DrivySpacing.m)
             .background(.bar)
         } else if access.isReadOnly {
             // Fin du lien : l'historique reste lisible, aucun envoi possible.
             Label("Lecture seule", systemImage: "lock")
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                 .frame(maxWidth: .infinity).padding()
                 .background(.bar)
                 .accessibilityIdentifier("messaging.readonly")
@@ -190,81 +428,137 @@ struct MessagingConversationView: View {
         }
     }
 
+    private var canSend: Bool {
+        !sending && draftReady && draftFailure == nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var composer: some View {
-        VStack(spacing: 6) {
-            if let replyTo {
-                HStack {
-                    Rectangle().fill(.tint).frame(width: 3)
-                    VStack(alignment: .leading) {
-                        Text(workspace.displayName(replyTo.senderID)).font(.caption.bold())
-                        Text(workspace.contents[replyTo.id]?.summary ?? "Message").font(.caption).lineLimit(1).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Annuler la réponse", systemImage: "xmark.circle.fill") { self.replyTo = nil }
-                        .labelStyle(.iconOnly).foregroundStyle(.secondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("messaging.reply.preview")
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            if let failure = deliveryLabel ?? draftFailure {
+                Text(failure)
+                    .font(.footnote).foregroundStyle(DrivyTheme.danger)
+                    .padding(.horizontal, DrivySpacing.s)
+                    .accessibilityIdentifier(deliveryLabel != nil ? "messaging.delivery" : "messaging.draft.error")
             }
-            if isGeneral && !selectedMentions.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack {
-                        ForEach(selectedMentions, id: \.personID) { mention in
-                            Button("Retirer @\(mention.displayName)") {
-                                selectedMentions.removeAll { $0.personID == mention.personID }
-                            }
-                            .font(.caption)
-                        }
-                    }
-                }
-            }
-            HStack(alignment: .bottom) {
+            if let replyTo { replyPreview(replyTo) }
+            if isGeneral && !selectedMentions.isEmpty { mentionChips }
+            HStack(alignment: .bottom, spacing: DrivySpacing.xs) {
                 Menu {
                     Button("Sondage", systemImage: "chart.bar.xaxis") { showPollComposer = true }
                     if isGeneral { Button("Mentionner", systemImage: "at") { showMentionPicker = true } }
                 } label: {
-                    Image(systemName: "plus.circle").font(.title2)
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .frame(width: 36, height: 36)
+                        .background(DrivyTheme.surfaceMuted, in: Circle())
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Plus d'options")
                 .accessibilityIdentifier("messaging.compose.more")
                 TextField("Message", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...6)
+                    .focused($composerFocused)
+                    .foregroundStyle(DrivyTheme.text)
+                    .padding(.horizontal, DrivySpacing.s)
+                    .padding(.vertical, 10)
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .accessibilityLabel("Rédiger un message")
                     .accessibilityIdentifier("messaging.compose.text")
-                Button("Envoyer", systemImage: "arrow.up.circle.fill") {
+                Button {
                     Task { _ = await send(MessagingPlainContent(text: draft)) }
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(canSend ? DrivyTheme.onAccent : DrivyTheme.disabledText)
+                        .frame(width: 36, height: 36)
+                        .background(canSend ? DrivyTheme.accentFill : DrivyTheme.disabledSurface, in: Circle())
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
                 }
-                .labelStyle(.iconOnly).font(.title2)
-                .disabled(sending || !draftReady || draftFailure != nil || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Envoyer")
+                .disabled(!canSend)
             }
         }
-        .padding()
+        .padding(.horizontal, DrivySpacing.xs)
+        .padding(.vertical, DrivySpacing.xs)
         .background(.bar)
+    }
+
+    private func replyPreview(_ message: MessagingWireMessage) -> some View {
+        HStack(spacing: DrivySpacing.xs) {
+            RoundedRectangle(cornerRadius: 1.5).fill(DrivyTheme.accent).frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Réponse à \(workspace.displayName(message.senderID))").font(.caption.bold()).foregroundStyle(DrivyTheme.accent)
+                Text(workspace.contents[message.id]?.summary ?? "Message").font(.caption).lineLimit(1).foregroundStyle(DrivyTheme.muted)
+            }
+            Spacer(minLength: 0)
+            Button("Annuler la réponse", systemImage: "xmark.circle.fill") { self.replyTo = nil }
+                .labelStyle(.iconOnly).foregroundStyle(DrivyTheme.muted)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+        }
+        .padding(.leading, DrivySpacing.s)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("messaging.reply.preview")
+    }
+
+    private var mentionChips: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: DrivySpacing.xs) {
+                ForEach(selectedMentions, id: \.personID) { mention in
+                    Button {
+                        selectedMentions.removeAll { $0.personID == mention.personID }
+                    } label: {
+                        HStack(spacing: DrivySpacing.xxs) {
+                            Text("@\(mention.displayName)")
+                            Image(systemName: "xmark").font(.caption2.weight(.bold))
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .padding(.horizontal, DrivySpacing.s)
+                        .frame(minHeight: 32)
+                        .background(DrivyTheme.accentSoft, in: Capsule())
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retirer @\(mention.displayName)")
+                }
+            }
+            .padding(.horizontal, DrivySpacing.s)
+        }
+        .scrollIndicators(.hidden)
     }
 
     private var mentionPicker: some View {
         NavigationStack {
             List(workspace.generalMembers) { person in
+                let chosen = selectedMentions.contains(where: { $0.personID == person.id })
                 Button {
-                    if selectedMentions.contains(where: { $0.personID == person.id }) {
+                    if chosen {
                         selectedMentions.removeAll { $0.personID == person.id }
                     } else if selectedMentions.count < 8 {
                         selectedMentions.append(MessagingMentionSelection(personID: person.id, displayName: person.displayName))
                     }
                 } label: {
-                    HStack {
-                        Text(person.displayName)
+                    HStack(spacing: DrivySpacing.s) {
+                        DrivyAvatar(name: person.displayName, size: 32, photo: workspace.photos[person.id])
+                        Text(person.displayName).foregroundStyle(DrivyTheme.text)
                         Spacer()
-                        if selectedMentions.contains(where: { $0.personID == person.id }) { Image(systemName: "checkmark") }
+                        if chosen { Image(systemName: "checkmark").foregroundStyle(DrivyTheme.accent) }
                     }
                 }
-                .accessibilityAddTraits(selectedMentions.contains(where: { $0.personID == person.id }) ? [.isSelected] : [])
+                .accessibilityAddTraits(chosen ? [.isSelected] : [])
             }
             .navigationTitle("Mentionner")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("Terminé") { showMentionPicker = false } }
         }
+        .presentationDetents([.medium, .large])
         .task { await workspace.loadGeneralMembers() }
     }
 
@@ -296,6 +590,8 @@ struct MessagingConversationView: View {
         }
     }
 
+    // MARK: - Envoi
+
     /// La file chiffrée sur disque précède toute tentative réseau.
     private func send(_ content: MessagingPlainContent, pollAllowsMultiple: Bool = false) async -> Bool {
         guard !sending, draftReady, access.canWrite else { return false }
@@ -307,6 +603,7 @@ struct MessagingConversationView: View {
         do {
             let entry = try await workspace.enqueue(content: content, conversationID: conversationID,
                 mentions: submittedMentions, replyTo: replyTo?.id, pollAllowsMultiple: pollAllowsMultiple)
+            deliveryLabel = nil
             queued.append(entry)
             replyTo = nil
             if selectedMentions.map(\.personID) == submittedMentions { selectedMentions = [] }
@@ -315,7 +612,6 @@ struct MessagingConversationView: View {
                 try await workspace.saveDraft("", conversationID: conversationID)
                 if !draft.isEmpty { try await workspace.saveDraft(draft, conversationID: conversationID) }
             }
-            deliveryLabel = "En attente d'envoi"
             await retry(entry)
             return true
         } catch {
@@ -325,13 +621,63 @@ struct MessagingConversationView: View {
     }
 
     private func retry(_ entry: MessagingPending) async {
+        let id = entry.clientMessageID
+        guard !retrying.contains(id) else { return }
+        retrying.insert(id)
+        defer { retrying.remove(id) }
         switch await workspace.outbox.retry(entry, currentScope: workspace.scope) {
-        case .waiting: deliveryLabel = "En attente d'envoi"
+        case .waiting:
+            pendingFailures[id] = nil
         case .accepted:
-            deliveryLabel = nil
-            queued.removeAll { $0.clientMessageID == entry.clientMessageID }
+            pendingFailures[id] = nil
             await workspace.loadMessages(conversationID)
-        case .failed(let failure): deliveryLabel = "Échec : \(MessagingDiagnostics.shared.describe(failure))"
+            queued.removeAll { $0.clientMessageID == id }
+        case .failed(let failure):
+            pendingFailures[id] = MessagingDiagnostics.shared.describe(failure)
         }
+    }
+}
+
+/// Envoi encore dans la file protégée : bulle sortante avec son état réel (en attente ou échec).
+struct MessagingPendingBubble: View {
+    let entry: MessagingPending
+    let failure: String?
+    let retrying: Bool
+    let onRetry: () -> Void
+
+    private var summary: String {
+        entry.recoveryContent.flatMap(MessagingPlainContent.decode)?.summary ?? "Message"
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: DrivySpacing.xxs) {
+            Text(summary)
+                .foregroundStyle(DrivyTheme.text)
+                .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
+                .background(DrivyTheme.accentSoft.opacity(0.6), in: MessagingBubbleShape(mine: true, tail: true))
+                .overlay(MessagingBubbleShape(mine: true, tail: true)
+                    .stroke(failure == nil ? DrivyTheme.border : DrivyTheme.danger, style: StrokeStyle(lineWidth: 1, dash: failure == nil ? [4, 3] : [])))
+            if let failure {
+                HStack(spacing: DrivySpacing.xs) {
+                    Label("Échec", systemImage: "exclamationmark.circle")
+                        .foregroundStyle(DrivyTheme.danger)
+                        .accessibilityLabel("Échec : \(failure)")
+                    Button("Réessayer", action: onRetry)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .disabled(retrying)
+                        .accessibilityIdentifier("messaging.pending.retry")
+                }
+                .font(.caption)
+            } else {
+                Label(retrying ? "Envoi…" : "En attente", systemImage: "clock")
+                    .font(.caption2).foregroundStyle(DrivyTheme.muted)
+            }
+        }
+        .padding(.leading, 56)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("messaging.pending")
     }
 }
