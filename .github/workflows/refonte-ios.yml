@@ -1,5 +1,22 @@
 name: Refonte · iOS
 on:
+  workflow_call:
+    inputs:
+      qualification_sha:
+        required: true
+        type: string
+      unit_test_scope:
+        type: string
+        default: all
+      visual_only:
+        type: boolean
+        default: false
+      unit_only:
+        type: boolean
+        default: false
+      ui_test_suite:
+        type: string
+        default: ''
   # Full simulator campaign is run explicitly at the end of implementation.
   # Every native delivery still builds its device IPA in ipa-essai.yml.
   workflow_dispatch:
@@ -54,15 +71,16 @@ permissions:
 concurrency:
   # A long screen matrix must not exceed GitHub's 400-character group limit.
   # Visual runs are independent; each test scope stays serial on its branch.
-  group: refonte-ios-${{ github.ref }}-${{ inputs.visual_only && github.run_id || inputs.unit_only && 'unit' || inputs.ui_test_suite != '' && 'ui' || 'tests' }}
+  group: refonte-ios-${{ inputs.qualification_sha || github.ref }}-${{ inputs.visual_only && github.run_id || inputs.unit_only && 'unit' || inputs.ui_test_suite != '' && 'ui' || 'tests' }}
   cancel-in-progress: false
 jobs:
   apple:
     name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
+      QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
       DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}
@@ -73,6 +91,9 @@ jobs:
       DRIVY_IOS_VISUAL_ONLY: ${{ inputs.visual_only && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.qualification_sha || github.sha }}
+      - run: bash scripts/qualification/verify-checkout.sh
       - name: Valider le mode et la sélection des tests
         shell: bash
         run: |
@@ -153,11 +174,11 @@ jobs:
           DRIVY_VISUAL_HOT_SWITCH: ${{ inputs.visual_hot_switch && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
-        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
+        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == '' && inputs.qualification_sha == ''
         shell: bash
         run: bash scripts/ios/build-ipa.sh
       - name: Artefact IPA
-        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''
+        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == '' && inputs.qualification_sha == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Drivy-unsigned-${{ github.sha }}
@@ -182,13 +203,24 @@ jobs:
             name=$(basename "$result" .xcresult)
             mkdir -p "artifacts/ios/test-reports/$name"
             xcrun xcresulttool get test-results summary --path "$result" > "artifacts/ios/test-reports/$name/summary.json"
+            xcrun xcresulttool get test-results tests --path "$result" > "artifacts/ios/test-reports/$name/tests.json"
             xcrun xcresulttool export attachments --path "$result" --output-path "artifacts/ios/test-reports/$name/attachments"
+          done
+      - name: Exiger les preuves métier et UI iPhone ET iPad
+        if: always() && inputs.qualification_sha != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in Tests iPadTests; do
+            family=iPhone
+            if [[ "$name" == iPadTests ]]; then family=iPad; fi
+            python3 scripts/qualification/evidence.py native "artifacts/ios/test-reports/$name/summary.json" "artifacts/ios/test-reports/$name/tests.json" --device-family "$family"
           done
       - name: Résultats natifs et captures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Drivy-native-results-${{ github.sha }}
+          name: Drivy-native-results-${{ inputs.qualification_sha || github.sha }}
           path: |
             artifacts/ios/*.xcresult
             artifacts/ios/test-reports/
@@ -205,7 +237,8 @@ jobs:
             artifacts/ios/macos.txt
             artifacts/ios/swift.txt
             artifacts/ios/simulator-entitlements.plist
-          if-no-files-found: warn
+            artifacts/qualification/identity.json
+          if-no-files-found: error
           retention-days: 14
       # Dernière étape : les captures (fixtures fictives uniquement, voir
       # SchoolVisualReview.swift et ses voisins) sont réduites en

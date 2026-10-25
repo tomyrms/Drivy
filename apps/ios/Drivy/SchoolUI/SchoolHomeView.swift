@@ -17,6 +17,8 @@ struct SchoolHomeView: View {
     var agendaClient: SchoolAgendaClient? = nil
     var trainingClient: SchoolTrainingClient? = nil
     var captureController: SchoolCaptureSessionController? = nil
+    /// Présentation de développement réversible. Aucune entrée sans composition explicite.
+    var messagingEntry: SchoolMessagingEntry? = nil
     /// Rejoindre une école avec un code, quand le compte n’en a encore aucune.
     var joinSchool: (() -> Void)? = nil
     @Binding var selectedTab: SchoolHomeTab
@@ -57,6 +59,7 @@ struct SchoolHomeView: View {
         .tint(DrivyTheme.accent)
         .environment(requiredActions)
         .environment(\.schoolLearnerDossier, learnerDossierOpener)
+        .environment(\.schoolMessagingEntry, tripInProgress ? nil : messagingEntry)
         .sheet(isPresented: $choosesSchool) {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
@@ -525,6 +528,9 @@ struct SchoolHomeView: View {
 
     /// Moniteur et administration : l’école seulement, le compte vit dans l’onglet Profil.
     @ToolbarContentBuilder private var staffToolbar: some ToolbarContent {
+        if messagingEntry != nil && !tripInProgress {
+            ToolbarItem(placement: .primaryAction) { SchoolMessagingEntryButton() }
+        }
         if let chooseSchoolAction {
             DrivySchoolToolbarItem(schoolName: workspace.school?.name ?? workspace.membership?.schoolName, chooseSchool: chooseSchoolAction)
         }

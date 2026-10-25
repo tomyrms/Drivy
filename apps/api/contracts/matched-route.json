@@ -13,6 +13,14 @@
           "enum": ["READY", "PENDING", "UNAVAILABLE"],
           "description": "READY : calcul terminé, spans peut être vide (aucune route sûre). PENDING : calcul en cours, relire dans quelques secondes. UNAVAILABLE : rien à proposer (recalage non configuré, trajet non finalisé, échec en attente d'un nouvel essai). Dans les trois cas le trajet mesuré du replay reste complet et suffisant."
         },
+        "reason": {
+          "enum": ["WAITING_FOR_SYNC", "PROCESSING", "MATCHED", "NO_RELIABLE_MATCH", "MATCHING_DISABLED", "PROVIDER_UNAVAILABLE", "RATE_LIMITED", "PROVIDER_REFUSED", "INVALID_RESPONSE", "MATCHING_FAILED", "ROUTE_TOO_LARGE", "CACHE_UNREADABLE"],
+          "description": "Ajout compatible #91, absent sur les anciens serveurs. Motif non sensible, jamais une déduction de faible vitesse. MATCHED signifie au moins un tronçon disponible, pas une couverture complète : le client distingue les portions effectivement recalées de ses mesures restantes. WAITING_FOR_SYNC inclut la finalisation en attente. CACHE_UNREADABLE signale un dérivé illisible sans compromettre le replay mesuré."
+        },
+        "retryAfterSeconds": {
+          "type": ["integer", "null"], "minimum": 1, "maximum": 604800,
+          "description": "Ajout compatible #91. Délai minimal avant nouvelle lecture automatique, à combiner avec un backoff et un budget borné côté client. null : aucune reprise automatique suggérée. Ne contourne jamais les baux ni le délai serveur de recalcul ; un délai supérieur au budget laisse une relance utilisateur ultérieure."
+        },
         "provider": {"enum": ["mapbox", "osrm", null], "description": "Moteur qui a produit le résultat ; null hors READY."},
         "algorithmVersion": {"type": "integer", "minimum": 1},
         "reconstructionVersion": {"type": "integer", "minimum": 1, "description": "Version des mesures dont ce résultat dérive ; il est détruit dès qu'elle change."},

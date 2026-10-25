@@ -18,6 +18,8 @@ import XCTest
         "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome",
         "onboarding-information", "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready",
         "onboarding-staff", "dossier-multi", "lessons-multi", "lessons-two", "progression-multi", "lesson-cancelled",
+        "access-code", "access-register", "access-opening", "school-opening", "dossier-incomplete",
+        "lesson-competencies", "lesson-route", "learner-lesson", "learner-lesson-planned", "learner-permit", "start-now-gps-known",
     ]
 
     func testRequestedScreensAtRealOrientations() throws {
@@ -73,7 +75,13 @@ import XCTest
                     // Même délai de stabilisation des fixtures/MapKit que la voie simctl.
                     RunLoop.current.run(until: Date().addingTimeInterval(10))
                     let readyIdentifier: String? = switch screen {
-                    case "learner", "dossier", "dossier-multi": "learner-dossier"
+                    case "learner", "dossier", "dossier-multi", "dossier-incomplete": "learner-dossier"
+                    case "access-code", "access-register", "access-opening": "access-code"
+                    case "school-opening": "school-opening"
+                    case "learner-permit": "learner-permit-detail"
+                    case "lesson-competencies", "lesson-route", "learner-lesson": "lesson-summary"
+                    case "learner-lesson-planned": "lesson-state"
+                    case "start-now-gps-known": "start-now-confirm"
                     case "lessons-multi", "lessons-two", "progression-multi": "training-permit-filter"
                     case "lesson-cancelled": "lesson-state"
                     case "account": "account-heading"

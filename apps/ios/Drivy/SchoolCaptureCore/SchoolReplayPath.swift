@@ -21,6 +21,28 @@ struct SchoolMatchedRoute: Decodable, Sendable, Equatable {
     let provider: String?
     let algorithmVersion: Int?
     let spans: [Span]
+    var reconstructionVersion: Int? = nil
+    var reason: String? = nil
+    var retryAfterSeconds: Int? = nil
+    /// Missing advice on an old server is not the same as an explicit null.
+    var hasRetryAdvice = false
+
+    var suggestedRetryDelay: Int? {
+        guard status != "READY" else { return nil }
+        if hasRetryAdvice { return retryAfterSeconds }
+        // Old servers did not distinguish unfinished sync, transient outages and a disabled matcher.
+        // A bounded screen-local retry can discover progress without inventing a reason.
+        return status == "PENDING" || status == "UNAVAILABLE" ? 2 : nil
+    }
+
+    var isValidResponse: Bool {
+        guard ["READY", "PENDING", "UNAVAILABLE"].contains(status),
+              (algorithmVersion ?? 0) >= 1,
+              let reconstructionVersion, reconstructionVersion > 0,
+              retryAfterSeconds.map({ (1...604_800).contains($0) }) ?? true else { return false }
+        if status != "READY" { return spans.isEmpty && provider == nil }
+        return provider != nil && spans.count <= 2_000
+    }
 
     /// The school is computing it: worth asking again shortly.
     var isPending: Bool { status == "PENDING" && (algorithmVersion ?? 0) >= 2 && spans.isEmpty }
@@ -34,6 +56,25 @@ struct SchoolMatchedRoute: Decodable, Sendable, Equatable {
                 && span.geometry.utf8.count <= 400_000 && span.anchors.count >= 2 && span.anchors.count <= 20_000
                 && span.anchors.allSatisfy { $0.count == 2 && $0[0].isFinite && $0[1].isFinite && $0[1] >= 0 }
         }
+    }
+}
+
+extension SchoolMatchedRoute {
+    private enum CodingKeys: String, CodingKey {
+        case captureId, status, provider, algorithmVersion, spans, reconstructionVersion, reason, retryAfterSeconds
+    }
+
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(captureId: try values.decode(UUID.self, forKey: .captureId),
+                  status: try values.decode(String.self, forKey: .status),
+                  provider: try values.decodeIfPresent(String.self, forKey: .provider),
+                  algorithmVersion: try values.decodeIfPresent(Int.self, forKey: .algorithmVersion),
+                  spans: try values.decode([Span].self, forKey: .spans),
+                  reconstructionVersion: try values.decodeIfPresent(Int.self, forKey: .reconstructionVersion),
+                  reason: try values.decodeIfPresent(String.self, forKey: .reason),
+                  retryAfterSeconds: try values.decodeIfPresent(Int.self, forKey: .retryAfterSeconds),
+                  hasRetryAdvice: values.contains(.retryAfterSeconds))
     }
 }
 

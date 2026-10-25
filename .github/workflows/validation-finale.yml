@@ -1,0 +1,162 @@
+name: Validation finale · backlog
+run-name: Qualification ${{ inputs.candidate_ref }}
+on:
+  workflow_call:
+    inputs:
+      candidate_ref:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Branche, tag ou SHA du candidat intégré à qualifier
+        required: true
+        type: string
+permissions:
+  contents: read
+# Serialise candidates, including aliases of the same SHA. Never cancel evidence.
+concurrency:
+  group: validation-finale-backlog
+  cancel-in-progress: false
+jobs:
+  resolve:
+    name: Figer le candidat une seule fois
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.candidate_ref }}
+      - id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "## Candidat immuable : $sha" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Automatisation uniquement. Recette physique et revue de couverture #55/#78/#83/#84 distinctes.' >> "$GITHUB_STEP_SUMMARY"
+          test -f scripts/qualification/evidence.py
+          test -f scripts/qualification/verify-checkout.sh
+  checks:
+    needs: resolve
+    uses: ./.github/workflows/qualification-checks.yml
+    with:
+      qualification_sha: ${{ needs.resolve.outputs.sha }}
+  browser:
+    needs: resolve
+    uses: ./.github/workflows/school-opening-e2e.yml
+    with:
+      qualification_sha: ${{ needs.resolve.outputs.sha }}
+  ios:
+    needs: resolve
+    uses: ./.github/workflows/refonte-ios.yml
+    with:
+      qualification_sha: ${{ needs.resolve.outputs.sha }}
+      unit_test_scope: all
+      visual_only: false
+      unit_only: false
+      ui_test_suite: ''
+  ipa:
+    needs: resolve
+    uses: ./.github/workflows/ipa-essai.yml
+    with:
+      qualification_sha: ${{ needs.resolve.outputs.sha }}
+  scripts:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      QUALIFICATION_SHA: ${{ needs.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - run: bash scripts/qualification/verify-checkout.sh
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+      - name: Gardes et scripts iOS sans simulateur
+        run: python3 -B scripts/qualification/run-python-tests.py
+      - name: Provisionnement synthétique
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          npm ci
+          node --test --test-reporter=tap scripts/qualification/test-workflows.mjs | tee artifacts/qualification/workflows.tap
+          python3 scripts/qualification/evidence.py tap artifacts/qualification/workflows.tap
+          npm ci --prefix infra/dev --ignore-scripts
+          node infra/dev/node_modules/playwright-core/cli.js install --with-deps msedge
+          npx tsx scripts/dev/setup.ts
+          node --test --import tsx --test-reporter=tap scripts/dev/provision-school.test.mjs | tee artifacts/qualification/provision.tap
+          python3 scripts/qualification/evidence.py tap artifacts/qualification/provision.tap
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: script-results-${{ needs.resolve.outputs.sha }}
+          path: artifacts/qualification/
+          if-no-files-found: error
+          retention-days: 14
+  crypto:
+    name: Primitives SDK crypto synthétiques
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      QUALIFICATION_SHA: ${{ needs.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+      - run: bash scripts/qualification/verify-checkout.sh
+      - name: Chaîne Rust et dépendances verrouillées
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.99.0 --profile minimal --no-self-update
+          rustc +1.99.0 --version > artifacts/qualification/rust.txt
+          cargo +1.99.0 --version >> artifacts/qualification/rust.txt
+          cargo +1.99.0 test --locked --manifest-path prototypes/messaging-crypto/Cargo.toml 2>&1 | tee artifacts/qualification/crypto.log
+          python3 scripts/qualification/evidence.py cargo artifacts/qualification/crypto.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: crypto-results-${{ needs.resolve.outputs.sha }}
+          path: artifacts/qualification/
+          if-no-files-found: error
+          retention-days: 14
+  conclusion:
+    name: Toutes les suites obligatoires réellement réussies
+    if: always()
+    needs: [resolve, checks, browser, ios, ipa, scripts, crypto]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.resolve.outputs.sha || github.sha }}
+      - name: Bilan structuré et conclusion fermée
+        env:
+          QUALIFICATION_NEEDS: ${{ toJSON(needs) }}
+          QUALIFICATION_SHA: ${{ needs.resolve.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/qualification
+          printf '%s\n' "$QUALIFICATION_NEEDS" > artifacts/qualification/jobs.json
+          printf '## Qualification automatisée\n\nCandidat : `%s`\n\n' "$QUALIFICATION_SHA" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/qualification/evidence.py jobs >> "$GITHUB_STEP_SUMMARY"
+          echo 'Ne clôture aucune issue et n’autorise aucun déploiement. Contrôles physiques : NOT_EXECUTED. Couverture du périmètre retenu : revue humaine obligatoire.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: qualification-summary-${{ needs.resolve.outputs.sha || github.sha }}
+          path: artifacts/qualification/jobs.json
+          if-no-files-found: error
+          retention-days: 14

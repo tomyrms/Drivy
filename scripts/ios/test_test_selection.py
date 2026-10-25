@@ -14,7 +14,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASH = os.environ.get('DRIVY_TEST_BASH') or (r'C:\Program Files\Git\bin\bash.exe' if os.name == 'nt' else 'bash')
 GPS_SUITES = [
     'SchoolLiveMatchTests', 'SchoolLiveMatchTransportTests', 'SchoolLiveMatchLifecycleTests',
-    'SchoolCaptureLifecycleTests', 'SchoolCaptureInteropTests', 'SchoolTrackDisplayTests',
+    'SchoolCaptureLifecycleTests', 'SchoolCaptureInteropTests', 'SchoolCaptureReplayTests', 'SchoolTrackDisplayTests',
     'SchoolMapCourseTests', 'SchoolMapRouteGapTests', 'SchoolLiveHeadingTests', 'SchoolReplayFormattingTests',
 ]
 GPS_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in GPS_SUITES]

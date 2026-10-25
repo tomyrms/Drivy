@@ -1,6 +1,9 @@
+import type { MessagingQualification } from './messaging-access.js';
+import { registerMessaging } from './messaging-routes.js';
+import { registerMessagingKeys } from './messaging-keys-routes.js';
 import {registerCaptureObservations} from './capture-observations.js';
 import { randomUUID } from 'node:crypto';
-import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { LogController, type FastifyReply, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import type { Pool, PoolClient } from 'pg';
 import { z, ZodError } from 'zod';
 import type { TokenVerifier } from './auth.js';
@@ -98,7 +101,13 @@ export function clientError(error: unknown): ApiError | undefined {
   return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');
 }
 
-export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
+/** Routes dont chaque réponse est journalisée, pour diagnostiquer les refus vus sur les appareils. */
+const loggedRoutePrefix = '/v1/schools/:schoolId/messaging';
+const validationCodes = new Set(['INVALID_REQUEST', 'PAYLOAD_TOO_LARGE', 'UNSUPPORTED_MEDIA_TYPE']);
+/** Code métier et motif générique d'une réponse refusée : le message est un texte fixe du serveur, jamais une valeur reçue. */
+const responseProblem = new WeakMap<FastifyRequest, { errorCode: string; reason?: string }>();
+
+export function buildApp(options: { messaging?: MessagingQualification; pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean | FastifyServerOptions['logger']; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
   // Derrière le proxy public, l'adresse du client sert de clé aux freins des routes sans connexion (codes, création de compte).
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384, ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}) });
   const cursors = new Cursors(options.cursorSecret);
@@ -117,12 +126,21 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
     const known = error instanceof ApiError ? error : error instanceof ZodError
       ? new ApiError(400, 'INVALID_REQUEST', 'Paramètres invalides.')
       : clientError(error) ?? dataError(error) ?? new ApiError(503, 'SERVICE_UNAVAILABLE', 'Service temporairement indisponible.');
+    responseProblem.set(request, known.status < 500 && validationCodes.has(known.code) && known.message.length <= 120
+      ? { errorCode: known.code, reason: known.message } : { errorCode: known.code });
     if (known.status >= 500) request.log.error({ requestId: request.id, ...failureSummary(error) }, 'Échec de traitement API');
     if (known.status === 401) reply.header('WWW-Authenticate','Bearer');
     return reply.status(known.status).type('application/problem+json').send({
       type: `urn:drivy:problem:${known.code.toLowerCase()}`, title: known.message,
       status: known.status, code: known.code, requestId: request.id
     });
+  });
+  // Uniquement méthode, modèle de route, statut, code métier et durée : ni URL réelle, ni en-tête, ni requête, ni corps.
+  app.addHook('onResponse', async (request, reply) => {
+    const route = request.routeOptions.url;
+    if (!route || (route !== loggedRoutePrefix && !route.startsWith(`${loggedRoutePrefix}/`))) return;
+    app.log.info({ method: request.method, route, statusCode: reply.statusCode, ...responseProblem.get(request),
+      durationMs: Math.round(reply.elapsedTime) }, 'Réponse API');
   });
   app.setNotFoundHandler((_request, _reply) => { throw notFound(); });
   const envelope = (data: unknown, request: FastifyRequest) => ({ data, requestId: request.id, serverTime: new Date().toISOString() });
@@ -225,5 +243,9 @@ export function buildApp(options: { pool: Pool; verifyToken: TokenVerifier; curs
   registerCourseEnrollments(app,options);
   registerCourseFacts(app,options);
   registerNotificationPreferences(app,options);
+  // Qualification physique explicite par école, jamais de mode synthétique en composition réelle.
+  // Désactivée ou hors liste : aucune connexion base, aucun effet sur les parcours leçon.
+  registerMessaging(app, { pool: options.pool, verifyToken: options.verifyToken, ...(options.messaging ? { qualification: options.messaging } : {}) });
+  registerMessagingKeys(app, { pool: options.pool, verifyToken: options.verifyToken, ...(options.messaging ? { qualification: options.messaging } : {}) });
   return app;
 }

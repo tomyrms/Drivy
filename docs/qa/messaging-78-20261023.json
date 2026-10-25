@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "epic": 65,
+  "qualificationIssue": 78,
+  "campaignIssue": 84,
+  "baseCommit": "6d08b40",
+  "branch": "openai/65-messagerie",
+  "issues": [65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78],
+  "sharedDependencies": [44, 50, 64, 84],
+  "activation": "BLOCKED",
+  "activationReasons": ["SWISS_RESIDENCY_NOT_QUALIFIED", "RESTORATION_NOT_QUALIFIED", "FINAL_QUALIFICATION_NOT_COMPLETED", "PHYSICAL_DEVICE_RECIPE_NOT_EXECUTED", "PRODUCTION_ROUTES_DISABLED"],
+  "checks": [
+    { "id": "api-messaging", "files": ["apps/api/test/messaging.test.ts", "apps/api/test/messaging.integration.test.ts"], "status": "NOT_EXECUTED", "requires": "isolated PostgreSQL, final campaign #84" },
+    { "id": "activation", "files": ["apps/api/test/messaging-activation.test.ts"], "status": "NOT_EXECUTED" },
+    { "id": "notifications-contract", "files": ["apps/api/test/messaging-notifications.test.ts"], "status": "NOT_EXECUTED", "integration": "BLOCKED: shared #44 store and transport not integrated" },
+    { "id": "ios-messaging", "files": ["apps/ios/DrivyTests/MessagingCoreTests.swift", "apps/ios/DrivyTests/MessagingEntryTests.swift", "apps/ios/DrivyTests/MessagingHTTPTransportTests.swift", "apps/ios/DrivyTests/MessagingProtectedStoreTests.swift"], "status": "NOT_EXECUTED", "requires": "Apple runner, full DrivyTests selection" },
+    { "id": "crypto-prototype-scenarios", "files": ["prototypes/messaging-crypto/tests/scenarios.rs"], "status": "PASS", "tests": 4, "command": "cargo test --locked --offline --manifest-path prototypes/messaging-crypto/Cargo.toml", "sourceCommit": "60e845f5275fcab822bb9ce335892dda9be5702b", "scope": "synthetic Rust SDK 0.19.1 harness only, not Apple FFI 0.17.0 product integration" },
+    { "id": "e2ee", "status": "NOT_EXECUTED", "requires": "integrated Matrix SDK qualification, two real clients through the Drivy relay" },
+    { "id": "swiss-residency-and-restoration", "status": "BLOCKED", "requires": "approved infrastructure operation and evidence" },
+    { "id": "voiceover-gps-battery", "status": "NOT_EXECUTED", "requires": "physical iPhone and iPad" },
+    { "id": "enriched-interactions", "issues": [75, 76], "status": "NOT_EXECUTED", "requires": "API and native tests for reactions, replies, pins, local search and receipts selected on 2026-10-23" },
+    { "id": "attachments", "issues": [97], "status": "DEFERRED", "requires": "separate photos and files delivery" }
+  ],
+  "compilationEvidence": {
+    "typescript": "PASSED: npm run typecheck and npm run build on 2026-10-23, final code ffa40d8; local Node 26.8.1 outside required >=24 <25",
+    "swiftRelease": { "status": "PASSED", "runId": 39886599190, "commit": "ffa40d893a6ddb86234f582f31e9dc46d2ce1135", "artifact": "Drivy-essai-ffa40d893a6ddb86234f582f31e9dc46d2ce1135", "artifactId": 12473375819, "ipaSha256": "6dfc69dd256ef594e8cfe0f665c8695977b84e12e71776c427ee2f704b0e194d", "downloadedChecksumMatches": true, "messagingVisibleInRelease": false, "signed": false },
+    "swiftTests": "NOT_COMPILED"
+  },
+  "preparationEvidence": {
+    "swiftFixtureBuildCommand": "bash scripts/messaging-build-for-testing.sh",
+    "swiftFixtureBuildExecution": "NOT_EXECUTED",
+    "swiftFixtureBuildScriptSyntax": "PASSED: bash -n under local MSYS; not an Apple compilation",
+    "additionalApiScenarios": ["exact multi-page school directory", "conversation pagination", "replayed event cursors", "ignored acknowledgement retry", "revoked assignment read/event/state/retry refusal", "cross-school mention causes no write"],
+    "additionalApiScenariosExecution": "NOT_EXECUTED",
+    "networkFaultInjection": "NOT_IMPLEMENTED: ignored acknowledgement is only an idempotence fixture"
+  },
+  "automaticTestSuitesTriggered": false,
+  "manualCampaignBaseline": {
+    "commit": "e2657c493029153d46f2ca4ae034ebe8d01304bd",
+    "apiWebRunId": 40031983397,
+    "appleRunId": 40031925552,
+    "browserRunId": 40031985954,
+    "browserStatus": "PASS",
+    "finalCandidateQualified": false
+  },
+  "productionDeploymentPerformed": false,
+  "issuesClosed": []
+}

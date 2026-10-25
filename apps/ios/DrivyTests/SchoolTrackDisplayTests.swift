@@ -381,6 +381,9 @@ struct SchoolTrackDisplayTests {
         let matched = matchedRoute(segment: segment, first: 0, last: 20, north: 3, fromEast: 0, toEast: 200, anchors: anchors)
         let timeline = replay(points, segmentID: segment, matched: matched)
         #expect(timeline.usesMatchedRoute)
+        #expect(timeline.matchingCoverage.state == .full)
+        #expect(timeline.matchingCoverage.matchedIntervals == timeline.matchingCoverage.totalIntervals)
+        #expect(timeline.matchingCoverage.totalIntervals > 0)
         // Layer 1 and 2: every measured fix is still there, unchanged.
         #expect(timeline.samples.map(\.coordinate.latitude) == points.map(\.latitude))
         // Layer 3: the drawn line is the road.
@@ -400,6 +403,9 @@ struct SchoolTrackDisplayTests {
         let matched = matchedRoute(segment: segment, first: 10, last: 20, north: 3, fromEast: 100, toEast: 200, anchors: anchors)
         let timeline = replay(points, segmentID: segment, matched: matched)
         #expect(timeline.usesMatchedRoute && timeline.fragments.count == 1)
+        #expect(timeline.matchingCoverage.state == .partial)
+        #expect(timeline.matchingCoverage.matchedIntervals > 0)
+        #expect(timeline.matchingCoverage.matchedIntervals < timeline.matchingCoverage.totalIntervals)
         // Ten measured vertices, the road, ten measured vertices: a parking or a private road stays as measured.
         #expect(timeline.paths[0].vertexCount == 22)
         let before = try #require(timeline.position(at: 5)), inside = try #require(timeline.position(at: 15))
@@ -445,10 +451,44 @@ struct SchoolTrackDisplayTests {
         for matched in [unknownFix, acrossAGap, pending, broken] {
             let timeline = replay(points, segmentID: segment, matched: matched)
             #expect(!timeline.usesMatchedRoute)
+            #expect(timeline.matchingCoverage.state == .none && timeline.matchingCoverage.matchedIntervals == 0)
+            #expect(timeline.matchingCoverage.measuredIntervals > 0)
             #expect(timeline.paths.first?.vertexCount == 21)
             #expect(timeline.position(at: 7)?.latitude == 0)
         }
         #expect(pending.isPending && !pending.isUsable)
+    }
+
+    @Test func advertisedSpansRejectedByRenderingDoNotCountAsMatchedCoverage() {
+        let segment = UUID()
+        let points = (0...20).map { fix($0, second: Double($0), east: Double($0) * 10) }
+        let first = matchedRoute(segment: segment, first: 0, last: 10, north: 3, fromEast: 0, toEast: 100,
+            anchors: [[0, 0], [5, 50], [10, 100]])
+        let rejected = SchoolMatchedRoute.Span(segmentId: segment, firstSequence: 10, lastSequence: 20,
+            confidence: 0.9, geometry: "\u{01}", anchors: [[10, 0], [15, 50], [20, 100]])
+        let route = SchoolMatchedRoute(captureId: UUID(), status: "READY", provider: "osrm", algorithmVersion: 2,
+            spans: first.spans + [rejected])
+        let timeline = replay(points, segmentID: segment, matched: route)
+        #expect(route.spans.count == 2 && route.isUsable)
+        #expect(timeline.matchingCoverage.state == .partial)
+        #expect(timeline.matchingCoverage.matchedIntervals == 10)
+        #expect(timeline.matchingCoverage.measuredIntervals == 10)
+    }
+
+    @Test func adjacentRenderedSpansAreFullCoverageRegardlessOfPartialQualityLabel() {
+        let segment = UUID()
+        let points = (0...20).map { fix($0, second: Double($0), east: Double($0) * 10) }
+        let first = matchedRoute(segment: segment, first: 0, last: 10, north: 3, fromEast: 0, toEast: 100,
+            anchors: [[0, 0], [5, 50], [10, 100]])
+        let second = matchedRoute(segment: segment, first: 10, last: 20, north: 3, fromEast: 100, toEast: 200,
+            anchors: [[10, 0], [15, 50], [20, 100]])
+        let route = SchoolMatchedRoute(captureId: UUID(), status: "READY", provider: "osrm", algorithmVersion: 2,
+            spans: first.spans + second.spans)
+        let timeline = SchoolReplayTimeline(fragments: [.init(id: "synthetic", segmentID: segment, segmentIndex: 0,
+            points: points, hasGapBefore: false, qualityLabel: "PARTIAL")], observations: [], startsAt: Self.start,
+            endsAt: Self.start.addingTimeInterval(20), matched: route)
+        #expect(timeline.matchingCoverage.state == .full)
+        #expect(timeline.matchingCoverage.matchedIntervals == 20 && timeline.matchingCoverage.measuredIntervals == 0)
     }
 
     // MARK: Smooth replay and predicted live marker
@@ -539,6 +579,30 @@ struct SchoolTrackDisplayTests {
     }
 
     // MARK: Player
+
+    @Test @MainActor func lateMatchedGeometryPreservesPlaybackInstantSpeedAndPlayState() throws {
+        let segment = UUID()
+        let points = (0...100).map { fix($0, second: Double($0), east: Double($0) * 10) }
+        let measured = replay(points, segmentID: segment)
+        let matched = matchedRoute(segment: segment, first: 0, last: 100, north: 3, fromEast: 0, toEast: 1_000,
+            anchors: [[0, 0], [100, 1_000]])
+        let updated = replay(points, segmentID: segment, matched: matched)
+        let player = SchoolReplayPlayer()
+        player.load(measured)
+        player.seek(to: 42)
+        player.cycleSpeed()
+        player.cycleSpeed()
+        player.load(updated)
+        #expect(player.offset == 42 && player.speed == 5 && !player.isPlaying)
+        #expect(player.timeline?.usesMatchedRoute == true)
+        player.play()
+        defer { player.pause() }
+        let before = player.time(at: CACurrentMediaTime())
+        player.load(updated)
+        let after = player.time(at: CACurrentMediaTime())
+        #expect(after >= before && after - before < 0.5)
+        #expect(player.speed == 5 && player.isPlaying)
+    }
 
     @Test @MainActor func seekingIsImmediateAndPlaybackFollowsOneClock() throws {
         let player = SchoolReplayPlayer()

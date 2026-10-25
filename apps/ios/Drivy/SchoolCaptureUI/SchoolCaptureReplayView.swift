@@ -49,12 +49,12 @@ struct SchoolCaptureReplayView: View {
         .background(DrivyTheme.canvas)
         .foregroundStyle(DrivyTheme.text)
         .tint(DrivyTheme.accent)
-        .task { await model.load() }
+        .task(id: model.id) { await model.load() }
         .onChange(of: contentKey, initial: true) { _, _ in rebuildTimeline() }
         .onChange(of: reduceMotion, initial: true) { _, value in player.reduceMotion = value }
         .onChange(of: scenePhase) { _, phase in if phase != .active { player.pause() } }
         .onAppear { player.onCross = { id in selectedID = id } }
-        .onDisappear { player.pause() }
+        .onDisappear { player.pause(); model.stopLoading() }
         .sheet(isPresented: $showsList) {
             if let timeline { listSheet(timeline) }
         }
@@ -66,7 +66,7 @@ struct SchoolCaptureReplayView: View {
                                          startsAt: model.startsAt, endsAt: model.endsAt, matched: model.matchedRoute)
         timeline = built
         player.load(built)
-        if !model.observations.contains(where: { $0.id == selectedID }) { selectedID = nil }
+        selectedID = built.retainedSelection(selectedID)
     }
 
     // MARK: States
@@ -198,6 +198,40 @@ struct SchoolCaptureReplayView: View {
             DrivyLoadingState(title: "Chargement de la suite…")
         } else if let error = model.errorMessage {
             SchoolErrorNotice(message: error, retry: model.isInvalidated ? nil : { Task { await model.load() } })
+        } else {
+            matchingNotice
+        }
+    }
+
+    @ViewBuilder private var matchingNotice: some View {
+        switch model.matchingState {
+        case .idle, .loading:
+            EmptyView()
+        case .waitingForSync:
+            DrivyLoadingState(title: "Synchronisation du trajet…")
+        case .processing:
+            DrivyLoadingState(title: "Recalage en cours…")
+        case .retrying:
+            DrivyLoadingState(title: "Reprise du recalage…")
+        case .matched, .noReliableMatch:
+            Text(matchingCoverageLabel).font(.caption).foregroundStyle(DrivyTheme.muted)
+        case .unavailable:
+            SchoolErrorNotice(message: "Recalage indisponible. Le tracé mesuré reste lisible.", retry: nil)
+        case .deferred(let reason):
+            SchoolErrorNotice(message: reason == "WAITING_FOR_SYNC"
+                ? "Synchronisation encore en attente. Réessaie plus tard."
+                : "Recalage différé. Le tracé mesuré reste lisible.", retry: { Task { await model.load() } })
+        case .failed:
+            SchoolErrorNotice(message: "Le recalage n’a pas pu être chargé. Le tracé mesuré reste lisible.",
+                retry: { Task { await model.load() } })
+        }
+    }
+
+    private var matchingCoverageLabel: String {
+        switch timeline?.matchingCoverage.state ?? .none {
+        case .full: "Tracé recalé"
+        case .partial: "Recalage partiel"
+        case .none: "Aucune correspondance fiable"
         }
     }
 

@@ -17,6 +17,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+BASH = os.environ.get('DRIVY_TEST_BASH') or (r'C:\Program Files\Git\bin\bash.exe' if os.name == 'nt' else 'bash')
 SCRIPT = ROOT / 'scripts/ios/capture-screens.sh'
 SWIFT = ROOT / 'apps/ios/DrivyUITests/VisualOrientationTests.swift'
 
@@ -85,11 +86,12 @@ class VisualCaptureScriptTests(unittest.TestCase):
         environment = {key: value for key, value in os.environ.items()
                        if not key.startswith(('DRIVY_VISUAL_', 'MOCK_'))}
         environment.update(PATH=str(binaries) + os.pathsep + os.environ.get('PATH', ''),
+                           PYTHONIOENCODING='utf-8',
                            DRIVY_VISUAL_SCREENS='dossier', DRIVY_VISUAL_DEVICES='iPhone',
                            DRIVY_VISUAL_APPEARANCES='dark', DRIVY_VISUAL_ORIENTATIONS='portrait')
         environment.update(overrides)
-        result = subprocess.run(['bash', str(SCRIPT)], cwd=root, env=environment,
-                                text=True, capture_output=True, timeout=20)
+        result = subprocess.run([BASH, str(SCRIPT)], cwd=root, env=environment,
+                                text=True, encoding='utf-8', capture_output=True, timeout=20)
         log = root / 'mock-calls.jsonl'
         calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         return result, root, calls

@@ -8,6 +8,7 @@ import {parse} from 'yaml';
 import {buildApp} from '../../src/app.js';
 import {createTokenVerifier} from '../../src/auth.js';
 import {fixtureIds as id,seedFixtures} from '../../scripts/fixtures.js';
+import {migrationFilePattern} from '../../scripts/migrations.js';
 
 /** Recette PostgreSQL réelle : schéma recréé, toutes les migrations sous un propriétaire non privilégié, requêtes sous drivy_app. */
 export const issuer='https://harness-identity.example.invalid';
@@ -23,7 +24,7 @@ export async function freshDatabase(){
  try{
   // Le registre reste cohérent avec le schéma : une suite suivante utilisant scripts/migrations.ts ne réapplique rien.
   await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
-  for(const name of (await readdir(new URL('../../migrations/',import.meta.url))).filter(n=>/^[0-9]{3}_.*\.sql$/.test(n)).sort()){
+  for(const name of (await readdir(new URL('../../migrations/',import.meta.url))).filter(n=>migrationFilePattern.test(n)).sort()){
    const db=await migration.connect(),sql=await readFile(new URL(`../../migrations/${name}`,import.meta.url),'utf8');
    try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
    if(name.startsWith('001_'))await seedFixtures(pool,issuer);
