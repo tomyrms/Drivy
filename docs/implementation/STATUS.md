@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 25 octobre 2026 : signalements durables et Mes appareils, tests métier iPhone
+
+- Run Apple `40203243767` sur `e210f7c` réussi : 135 XCTest sans échec sur simulateur iPhone, dont les 34 tests `MatrixMessagingCryptographyTests` (vérification croisée, refus partiels, cible révoquée, reprise du bootstrap), les 11 tests `MessagingOwnDevicesTests` et le scénario FFI → HTTPS → Fastify → PostgreSQL (`RELAY_EXECUTION_PASSED: 1 scenario, 0 skipped`).
+- Campagne complète `40199762381` sur `911739f` en échec. Passent sur iPhone et iPad : reprise durable des signalements, confirmation de retrait/réintégration d'un membre, thèmes du profil. Échouent : `FieldFlowTests` ligne 129 (sortie du live) et `READINESS` du relais (`-1001`, avant tout chiffrement, deuxième run consécutif, déjà vu sur `40199170223`). Les échecs « Mes appareils » de ce run portent sur la version antérieure à `e210f7c`.
+- Non qualifié : UI iPad et iPhone de « Mes appareils », bascule réelle de compte, signature croisée sur deux appareils physiques, VoiceOver. Aucun déploiement.
+
 ## 25 octobre 2026 : vérification crypto de ses appareils, candidat non qualifié
 
 - Apple `40199170223` : découverte d'un appareil ajouté tardivement réussie après rafraîchissement explicite. Cinq RED métier atteints : révocation, accusé mal formé, refus partiel HTTP 200, reprise d'un bootstrap non publié, tentative de remplacement depuis B sans clé privée. Nominal, mauvaise empreinte, mauvais contexte et réponse de bootstrap perdue réussis. La panne distincte du relais réel à l'étape `READINESS` n'a pas de lien causal établi avec ces changements.
