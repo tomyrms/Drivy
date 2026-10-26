@@ -444,6 +444,7 @@ struct MessagingBubble: View {
         case .sending?, .slow?: ", en cours de synchronisation"
         case .unconfirmed?, .uncertain?: ", modification non confirmée"
         case .offline?: ", en attente de connexion"
+        case .storageFailed?: ", modification non conservée"
         default: ""
         }
     }
@@ -479,6 +480,14 @@ struct MessagingBubble: View {
                 .accessibilityLabel("Modification non confirmée")
                 .accessibilityHint("Renvoie la même modification")
                 .accessibilityIdentifier("messaging.mutation.retry")
+            case .storageFailed:
+                Button { workspace.retryMutations(for: message) } label: {
+                    Label("Modification non conservée · Réessayer", systemImage: "exclamationmark.triangle")
+                        .font(.caption2).foregroundStyle(DrivyTheme.danger)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Réessaie de conserver la modification sur cet appareil avant de la synchroniser")
+                .accessibilityIdentifier("messaging.mutation.storageFailed")
             default:
                 EmptyView()
             }

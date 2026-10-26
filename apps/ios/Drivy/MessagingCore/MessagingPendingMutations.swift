@@ -2,28 +2,30 @@ import Foundation
 
 /// #104 : intentions locales posées par-dessus l'état confirmé par le serveur.
 /// L'affichage local immédiat n'est jamais un succès serveur : le statut le distingue.
-enum MessagingMutationKind: Hashable, Sendable {
+enum MessagingMutationKind: Hashable, Codable, Sendable {
     case reaction(String)
     case pin
     case vote
     case hideForMe
     case deleteForEveryone
+    case mute
 }
 
 /// Une cible = une intention : la dernière volonté de l'utilisateur remplace la précédente.
-struct MessagingMutationKey: Hashable, Sendable {
+struct MessagingMutationKey: Hashable, Codable, Sendable {
     let conversationID: UUID
     let messageID: UUID
     let kind: MessagingMutationKind
 }
 
 /// État souhaité transmis tel quel (jamais une bascule) : un renvoi est idempotent.
-enum MessagingMutationValue: Hashable, Sendable {
+enum MessagingMutationValue: Hashable, Codable, Sendable {
     case active(Bool)
     case options(Set<String>)
+    case mutedUntil(Date?)
 }
 
-enum MessagingMutationStatus: Equatable, Sendable {
+enum MessagingMutationStatus: String, Codable, Equatable, Sendable {
     /// Requête en vol, pas encore de signe de lenteur.
     case sending
     /// Au-delà de `MessagingMutationLatency.slow` sans réponse.
@@ -36,8 +38,9 @@ enum MessagingMutationStatus: Equatable, Sendable {
     case uncertain
     /// Acceptée par le serveur ; l'intention reste jusqu'à ce qu'une relecture la reflète.
     case confirmed
+    case storageFailed
 
-    var needsAttention: Bool { self == .unconfirmed || self == .uncertain }
+    var needsAttention: Bool { self == .unconfirmed || self == .uncertain || self == .storageFailed }
 }
 
 struct MessagingMutationLatency: Sendable {
@@ -46,7 +49,7 @@ struct MessagingMutationLatency: Sendable {
     var unconfirmed: Duration = .seconds(10)
 }
 
-struct MessagingPendingMutation: Equatable, Sendable {
+struct MessagingPendingMutation: Codable, Equatable, Sendable {
     /// Identifiant stable de l'intention, conservé lors des renvois.
     let id: UUID
     var desired: MessagingMutationValue
@@ -56,6 +59,10 @@ struct MessagingPendingMutation: Equatable, Sendable {
     var acknowledgedAt: Date? = nil
     /// Renouvelé à chaque nouvelle volonté ou reprise : les minuteries précédentes deviennent inertes.
     var clock = UUID()
+    /// Corps logique réellement émis : une réponse perdue ne transforme pas le choix suivant en reprise.
+    var transmitting: MessagingMutationValue? = nil
+    /// La sourdine partage sa version avec l'état de lecture. Jamais de faux accusé de lecture ajouté.
+    var readState: MessagingReadState? = nil
 }
 
 /// Refus explicite affiché sur la bulle concernée seulement.
@@ -69,6 +76,7 @@ struct MessagingMutationRejection: Equatable, Sendable {
         case .pin: "Épingle non enregistrée"
         case .vote: "Vote non enregistré"
         case .hideForMe, .deleteForEveryone: "Suppression non effectuée"
+        case .mute: "Sourdine non enregistrée"
         }
     }
 }

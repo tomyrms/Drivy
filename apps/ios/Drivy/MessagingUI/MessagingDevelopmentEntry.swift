@@ -61,7 +61,7 @@ private struct MessagingDevelopmentContainer: View {
                     directory: http, actions: http,
                     // Sans historique scellé disponible, la recherche se limite à la mémoire : pas de repli en clair.
                     history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
-                    reports: store,
+                    reports: store, mutations: store,
                     photoLoader: photoLoader,
                     currentScope: currentScope)
             } catch { failure = .protectionUnavailable }

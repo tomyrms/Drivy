@@ -42,6 +42,19 @@ import Testing
         #expect(model.preferences?.courseReminders == false && model.preferences?.courseOffers == false)
     }
 
+    @Test func eighthConfirmedWriteDoesNotLeaveAFalseConflict() async throws {
+        let api = NotificationSettingsTestAPI(), store = NotificationSettingsTestStore()
+        let model = make(api, store)
+        await model.load(); model.set(.courseOffers, false)
+        for index in 1...8 {
+            try await until { api.requests.count == index }
+            if index < 8 { model.set(.courseOffers, index % 2 == 1) }
+            api.succeed()
+        }
+        try await until { !model.isSaving }
+        #expect(!model.hasPendingChanges && model.state == .idle && model.errorMessage == nil)
+    }
+
     @Test func lostReplyIsReconciledByReadWithoutASecondWrite() async throws {
         let api = NotificationSettingsTestAPI(), store = NotificationSettingsTestStore()
         let model = make(api, store)

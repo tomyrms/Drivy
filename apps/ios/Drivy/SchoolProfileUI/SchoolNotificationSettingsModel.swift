@@ -223,6 +223,7 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
                 return
             }
         }
+        guard hasPendingChanges else { return }
         state = .conflict
         errorMessage = "Tes préférences changent sur un autre appareil. Vérifie-les avant de reprendre."
     }

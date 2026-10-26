@@ -4,6 +4,87 @@ import Security
 @testable import Drivy
 
 final class MessagingProtectedStoreTests: XCTestCase {
+    func testMutationJournalSurvivesReopeningWithoutBeingErasedByDraftWrites() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2, apiBaseURL: "https://example.invalid/")
+        let first = try MessagingProtectedStore(scope: scope), second = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await first.purge(scope: scope) }
+        let key = MessagingMutationKey(conversationID: UUID(), messageID: UUID(), kind: .reaction("👍"))
+        var pending = MessagingPendingMutation(id: UUID(), desired: .active(false), startedAt: Date(), status: .uncertain)
+        pending.transmitting = .active(true)
+        let entry = MessagingStoredMutation(key: key, value: pending)
+        try await first.putMutation(entry, replacing: nil, scope: scope)
+        try await second.saveDraft("synthetic-private-draft", conversationID: key.conversationID, scope: scope)
+        let reopened = try MessagingProtectedStore(scope: scope)
+        let restored = try await reopened.mutationEntries(scope: scope)
+        XCTAssertEqual(restored, [entry])
+        let draft = try await reopened.loadDraft(conversationID: key.conversationID, scope: scope)
+        XCTAssertEqual(draft, "synthetic-private-draft")
+        let bytes = try Data(contentsOf: mutationSnapshotFile(scope))
+        XCTAssertNil(bytes.range(of: Data(key.messageID.uuidString.utf8)))
+        XCTAssertNil(bytes.range(of: Data("transmitting".utf8)))
+        XCTAssertNil(bytes.range(of: Data("👍".utf8)))
+    }
+
+    func testStaleMutationWriterAndAcknowledgementCannotEraseNewerChoice() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2, apiBaseURL: "https://example.invalid/")
+        let first = try MessagingProtectedStore(scope: scope), second = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await first.purge(scope: scope) }
+        let key = MessagingMutationKey(conversationID: UUID(), messageID: UUID(), kind: .pin)
+        let original = MessagingPendingMutation(id: UUID(), desired: .active(true), startedAt: Date(), status: .sending)
+        try await first.putMutation(.init(key: key, value: original), replacing: nil, scope: scope)
+        var latest = original; latest.clock = UUID(); latest.desired = .active(false)
+        try await second.putMutation(.init(key: key, value: latest), replacing: original.clock, scope: scope)
+        try await first.removeMutation(key, id: original.id, clock: original.clock, scope: scope)
+        do {
+            try await first.putMutation(.init(key: key, value: original), replacing: original.clock, scope: scope)
+            XCTFail("Une ancienne instance ne peut écraser le dernier choix")
+        } catch MessagingFailure.stateConflict {}
+        let restored = try await first.mutationEntries(scope: scope)
+        XCTAssertEqual(restored.first?.value, latest)
+        try await second.removeMutation(key, id: latest.id, clock: latest.clock, scope: scope)
+        do {
+            try await first.putMutation(.init(key: key, value: original), replacing: original.clock, scope: scope)
+            XCTFail("Une réponse ancienne ne ressuscite pas l'intention")
+        } catch MessagingFailure.stateConflict {}
+    }
+
+    func testMutationJournalRejectsOtherContextAndCorruptionWithoutReplacingBytes() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2, apiBaseURL: "https://example.invalid/")
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let entry = MessagingStoredMutation(key: .init(conversationID: UUID(), messageID: UUID(), kind: .vote),
+            value: .init(id: UUID(), desired: .options(["choice-1"]), startedAt: Date(), status: .offline))
+        try await store.putMutation(entry, replacing: nil, scope: scope)
+        for other in [
+            MessagingScope(accountID: UUID(), schoolID: scope.schoolID, accessEpoch: scope.accessEpoch, apiBaseURL: scope.apiBaseURL),
+            MessagingScope(accountID: scope.accountID, schoolID: UUID(), accessEpoch: scope.accessEpoch, apiBaseURL: scope.apiBaseURL),
+            MessagingScope(accountID: scope.accountID, schoolID: scope.schoolID, accessEpoch: 3, apiBaseURL: scope.apiBaseURL),
+            MessagingScope(accountID: scope.accountID, schoolID: scope.schoolID, accessEpoch: scope.accessEpoch, apiBaseURL: "https://other.example.invalid/")
+        ] {
+            do { _ = try await store.mutationEntries(scope: other); XCTFail("Périmètre différent accepté") }
+            catch MessagingFailure.contextChanged {}
+            let isolated = try MessagingProtectedStore(scope: other)
+            let empty = try await isolated.mutationEntries(scope: other)
+            XCTAssertTrue(empty.isEmpty)
+        }
+        let file = try mutationSnapshotFile(scope)
+        var damaged = try Data(contentsOf: file); damaged[damaged.count - 1] ^= 1
+        try damaged.write(to: file)
+        do { _ = try await store.mutationEntries(scope: scope); XCTFail("Journal corrompu accepté") }
+        catch MessagingFailure.protectionUnavailable {}
+        do { try await store.putMutation(entry, replacing: entry.value.clock, scope: scope); XCTFail("Journal corrompu remplacé") }
+        catch MessagingFailure.protectionUnavailable {}
+        XCTAssertEqual(try Data(contentsOf: file), damaged)
+    }
+
+    private func mutationSnapshotFile(_ scope: MessagingScope) throws -> URL {
+        let descriptor = "\(scope.accountID.uuidString.lowercased())|\(scope.schoolID.uuidString.lowercased())|\(scope.accessEpoch)|\(scope.apiBaseURL)"
+        let fingerprint = SHA256.hash(data: Data(descriptor.utf8)).map { String(format: "%02x", $0) }.joined()
+        return try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: false).appendingPathComponent("MessagingProtected")
+            .appendingPathComponent(fingerprint + "-mutations.sealed")
+    }
+
     func testDraftAndOutboxPersistAsSealedSnapshotAndRejectOtherScope() async throws {
         let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 7,
                                    apiBaseURL: "https://example.invalid/")

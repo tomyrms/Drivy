@@ -24,7 +24,7 @@ struct MessagingQualificationFixture: View {
         _workspace = State(initialValue: MessagingWorkspace(scope: scope,
             service: MessagingAPIClient(transport: http), cryptography: MessagingQualificationCrypto(),
             outbox: memory, drafts: memory, directory: http, actions: http,
-            history: MessagingQualificationHistory(seed: seed), notifications: MessagingQualificationNotifications(),
+            history: MessagingQualificationHistory(seed: seed), mutations: memory, notifications: MessagingQualificationNotifications(),
             currentScope: { scope }))
     }
 
@@ -333,8 +333,17 @@ private struct MessagingQualificationNotifications: MessagingNotificationCleanin
 }
 
 /// Ephemeral UI input only. No disk storage and no successful message send.
-private actor MessagingQualificationMemory: MessagingProtectedOutbox, MessagingProtectedDrafts {
+private actor MessagingQualificationMemory: MessagingProtectedOutbox, MessagingProtectedDrafts, MessagingProtectedMutations {
     private var drafts: [UUID: String] = [:]
+    private var mutations: [MessagingMutationKey: MessagingPendingMutation] = [:]
+    func mutationEntries(scope: MessagingScope) -> [MessagingStoredMutation] { mutations.map { .init(key: $0.key, value: $0.value) } }
+    func putMutation(_ entry: MessagingStoredMutation, replacing clock: UUID?, scope: MessagingScope) throws {
+        guard mutations[entry.key]?.clock == clock else { throw MessagingFailure.stateConflict }
+        mutations[entry.key] = entry.value
+    }
+    func removeMutation(_ key: MessagingMutationKey, id: UUID, clock: UUID, scope: MessagingScope) {
+        if mutations[key]?.id == id && mutations[key]?.clock == clock { mutations[key] = nil }
+    }
     func put(_ entry: MessagingPending, scope: MessagingScope) throws { throw MessagingFailure.protectionUnavailable }
     func entries(scope: MessagingScope) -> [MessagingPending] { [] }
     func remove(clientMessageID: UUID, scope: MessagingScope) throws { throw MessagingFailure.protectionUnavailable }

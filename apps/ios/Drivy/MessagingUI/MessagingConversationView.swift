@@ -290,7 +290,8 @@ struct MessagingConversationView: View {
 
     @ViewBuilder private var statusStrip: some View {
         let muted = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil).map { $0 > Date() } ?? false
-        if workspace.error != nil || workspace.actionError != nil || detail != nil || muted {
+        let muteStatus = workspace.muteAttention(conversationID)
+        if workspace.error != nil || workspace.actionError != nil || detail != nil || muted || muteStatus != nil {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 if let error = workspace.error {
                     Text(error.localizedDescription).font(.footnote).foregroundStyle(DrivyTheme.muted)
@@ -307,7 +308,21 @@ struct MessagingConversationView: View {
                 }
                 HStack(spacing: DrivySpacing.xs) {
                     if let detail { Text(detail).font(.caption).foregroundStyle(DrivyTheme.muted) }
-                    if muted {
+                    if let muteStatus, muteStatus != .confirmed {
+                        if muteStatus.needsAttention {
+                            Button { workspace.retryMute(conversationID) } label: {
+                                Label(muteStatus == .storageFailed ? "Sourdine non conservée · Réessayer" : "Sourdine non confirmée · Réessayer",
+                                      systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                                    .font(.caption).foregroundStyle(DrivyTheme.muted)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("messaging.mute.retry")
+                        } else {
+                            Label(muteStatus == .offline ? "Sourdine en attente de connexion" : "Modification de la sourdine…",
+                                  systemImage: muteStatus == .offline ? "wifi.slash" : "clock")
+                                .font(.caption).foregroundStyle(DrivyTheme.muted)
+                        }
+                    } else if muted {
                         Label("En sourdine", systemImage: "bell.slash").font(.caption).foregroundStyle(DrivyTheme.muted)
                     }
                 }

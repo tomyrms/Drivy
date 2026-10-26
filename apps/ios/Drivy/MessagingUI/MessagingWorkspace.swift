@@ -22,6 +22,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private let history: any MessagingHistoryStore
     private let reportSealing: any MessagingReportSealing
     private let reports: any MessagingProtectedReports
+    private let mutationStore: any MessagingProtectedMutations
     private let photoLoader: @Sendable (UUID) async -> Data?
     let outbox: MessagingOutboxCoordinator
     private(set) var members: [MessagingMember] = []
@@ -63,16 +64,20 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private var requestedRead: [UUID: Int] = [:]
     private var readInFlight: Set<UUID> = []
     private let notifications: any MessagingNotificationCleaning
-    /// #104 : intentions locales en mémoire seulement, par cible. L'état serveur reste dans `messages`.
+    /// Projection des intentions scellées par cible. L'état serveur reste dans `messages`.
     private(set) var pendingMutations: [MessagingMutationKey: MessagingPendingMutation] = [:]
+    private var mutationsRestored = false
+    private var mutationRestoration: Task<Bool, Never>?
+    private var persistedMutationClocks: [MessagingMutationKey: UUID] = [:]
+    private var persistedMutations: [MessagingMutationKey: MessagingPendingMutation] = [:]
+    private var mutationPersistence: [MessagingMutationKey: Task<Bool, Never>] = [:]
+    private var restoredMutations: Set<MessagingMutationKey> = []
     /// Une seule requête en vol par cible ; à sa réponse, le dernier état souhaité est renvoyé si besoin.
     private var mutationsInFlight: Set<MessagingMutationKey> = []
     /// Refus explicite par message, affiché sur la bulle concernée.
     private(set) var rejections: [UUID: MessagingMutationRejection] = [:]
     /// Hors connexion connu (MessagingConnectivity) : aucune attente artificielle, renvoi à la reconnexion.
     private(set) var networkOffline = false
-    /// Sourdine affichée tout de suite ; `Date.distantPast` = réactivation demandée.
-    private var localMute: [UUID: Date] = [:]
     /// Actions sensibles en cours : « En cours » visible, effet annoncé seulement après confirmation.
     private(set) var operationsInProgress: Set<String> = []
     private var reloadAgain: Set<UUID> = []
@@ -89,6 +94,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
          history: any MessagingHistoryStore = UnavailableMessagingHistory(),
          reportSealing: any MessagingReportSealing = UnavailableMessagingReportSealing(),
          reports: any MessagingProtectedReports = UnavailableMessagingReports(),
+         mutations: any MessagingProtectedMutations = UnavailableMessagingMutations(),
          photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
          notifications: any MessagingNotificationCleaning = SystemMessagingNotifications(),
          mutationLatency: MessagingMutationLatency = MessagingMutationLatency(),
@@ -99,6 +105,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
         self.history = history
         self.reportSealing = reportSealing
         self.reports = reports
+        self.mutationStore = mutations
         self.photoLoader = photoLoader
         self.scope = scope
         self.service = service
@@ -116,6 +123,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
     func loadConversations(more: Bool = false) async {
         guard !loading, !more || conversationCursor != nil else { return }
         loading = true; defer { loading = false }
+        _ = await restoreMutations()
         do {
             let cursor = more ? conversationCursor : nil
             let page = try await service.conversations(scope: scope, cursor: cursor)
@@ -130,6 +138,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
             conversationCursor = page.nextCursor
             loadedConversations = true
             error = nil
+            for item in page.items { await reconcileMutations(item.id, readMute: true) }
+            resumeMutations()
             // #103 : état serveur relu (autre appareil compris) → alertes déjà lues retirées, badge recalculé.
             // Première page seulement pour le badge : il reflète les compteurs connus, jamais un zéro aveugle.
             for item in page.items where item.lastReadSequence > 0 {
@@ -155,7 +165,6 @@ struct MessagingInboxPreview: Equatable, Sendable {
             }
         }
         guard currentScope() == scope else { recordFailure(.contextChanged); return }
-        resumeMutations()
         await loadConversations()
         if let conversationID, visibleMessageConversationID == conversationID { await loadMessages(conversationID) }
     }
@@ -172,6 +181,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
         }
         guard !more || messageCursors[conversationID] != nil else { return }
         loadingMessages.insert(conversationID); defer { loadingMessages.remove(conversationID) }
+        _ = await restoreMutations()
         defer {
             if reloadAgain.remove(conversationID) != nil, currentScope() == scope {
                 Task { await self.loadMessages(conversationID, marksVisible: false) }
@@ -185,7 +195,6 @@ struct MessagingInboxPreview: Equatable, Sendable {
                   page.items.allSatisfy({ $0.schoolID == scope.schoolID && $0.conversationID == conversationID }),
                   Set(page.items.map(\.id)).count == page.items.count else { throw MessagingFailure.invalidResponse }
             messages[conversationID] = Self.mergedMessages(messages[conversationID] ?? [], page.items)
-            reconcileMutations(conversationID)
             // Un rechargement initial ne doit pas faire oublier la suite des pages anciennes déjà parcourues.
             if more || !loadedMessages.contains(conversationID) {
                 messageCursors[conversationID] = page.nextCursor
@@ -196,6 +205,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
                     try? await history.truncate(conversationID: conversationID, after: limit, scope: scope)
                 }
             }
+            await reconcileMutations(conversationID)
+            resumeMutations()
             if !more { receipts[conversationID] = page.readReceipts }
             let deleted = page.items.filter(\.meta.deletedForEveryone).map(\.id)
             if !deleted.isEmpty {
@@ -342,45 +353,35 @@ struct MessagingInboxPreview: Equatable, Sendable {
     /// Sourdine : contrôle local immédiat, synchronisation serveur distincte. Ne promet pas l'arrêt
     /// des notifications déjà en transit.
     func silence(conversationID: UUID, fallbackSequence: Int, until: Date, fallbackVersion: Int) async {
-        localMute[conversationID] = until
-        await writeMute(conversationID: conversationID, mutedUntil: until,
-                        fallbackSequence: fallbackSequence, fallbackVersion: fallbackVersion)
+        submitMute(conversationID, until: until, sequence: fallbackSequence, version: fallbackVersion)
     }
 
     func unsilence(conversationID: UUID, fallbackSequence: Int, fallbackVersion: Int) async {
-        localMute[conversationID] = .distantPast
-        await writeMute(conversationID: conversationID, mutedUntil: nil,
-                        fallbackSequence: fallbackSequence, fallbackVersion: fallbackVersion)
+        submitMute(conversationID, until: nil, sequence: fallbackSequence, version: fallbackVersion)
     }
 
-    private func writeMute(conversationID: UUID, mutedUntil: Date?, fallbackSequence: Int, fallbackVersion: Int) async {
-        let requested = localMute[conversationID]
-        do {
-            let state = readStates[conversationID]
-            let response = try await directory.readState(scope: scope, conversationID: conversationID,
-                sequence: state?.lastReadSequence ?? fallbackSequence,
-                mutedUntil: mutedUntil, expectedVersion: state?.version ?? fallbackVersion)
-            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
-            mergeReadState(response, conversationID: conversationID)
-            error = nil
-            if localMute[conversationID] == requested { localMute[conversationID] = nil }
-            Task { await self.loadConversations() }
-        }
-        catch let failure as MessagingFailure {
-            // Refus ou panne : le contrôle revient à l'état serveur connu, avec l'explication.
-            if localMute[conversationID] == requested { localMute[conversationID] = nil }
-            if failure == .accessChanged || failure == .contextChanged { recordFailure(failure) }
-            actionError = failure
-        }
-        catch {
-            if localMute[conversationID] == requested { localMute[conversationID] = nil }
-            actionError = .unavailable
-        }
+    private func submitMute(_ conversationID: UUID, until: Date?, sequence: Int, version: Int) {
+        let key = MessagingMutationKey(conversationID: conversationID, messageID: conversationID, kind: .mute)
+        // Le transport ISO8601 n'émet pas de fractions : journal et réconciliation utilisent la même valeur.
+        let canonical = until.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded(.down)) }
+        submit(key, desired: .mutedUntil(canonical), readState: readStates[conversationID]
+            ?? MessagingReadState(lastReadSequence: sequence, mutedUntil: nil, version: version))
+    }
+
+    func muteAttention(_ conversationID: UUID) -> MessagingMutationStatus? {
+        pendingMutations[MessagingMutationKey(conversationID: conversationID, messageID: conversationID, kind: .mute)]?.status
+    }
+
+    func retryMute(_ conversationID: UUID) {
+        let key = MessagingMutationKey(conversationID: conversationID, messageID: conversationID, kind: .mute)
+        guard !mutationsInFlight.contains(key) else { return }
+        restart(key)
     }
 
     /// Sourdine affichée : la demande locale en cours prime sur l'état serveur connu.
     func displayedMutedUntil(_ conversationID: UUID, fallback: Date?) -> Date? {
-        if let local = localMute[conversationID] { return local == .distantPast ? nil : local }
+        let key = MessagingMutationKey(conversationID: conversationID, messageID: conversationID, kind: .mute)
+        if case .mutedUntil(let until) = pendingMutations[key]?.desired { return until }
         return readStates[conversationID].map(\.mutedUntil) ?? fallback
     }
 
@@ -413,7 +414,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
             // #104 : aucune intention n'est rejouée sous un autre compte, une autre école ou après retrait.
             pendingMutations = [:]
             rejections = [:]
-            localMute = [:]
+            restoredMutations = []
             reloadAgain = []
             sendStates = [:]
             sendQueues = [:]
@@ -502,7 +503,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
     }
 
     private func isHiddenLocally(_ id: UUID, in conversationID: UUID) -> Bool {
-        pendingMutations[MessagingMutationKey(conversationID: conversationID, messageID: id, kind: .hideForMe)] != nil
+        guard let pending = pendingMutations[MessagingMutationKey(conversationID: conversationID, messageID: id, kind: .hideForMe)] else { return false }
+        return pending.status != .storageFailed
     }
 
     private func project(_ message: MessagingWireMessage) -> MessagingWireMessage {
@@ -654,7 +656,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
     func mutationAttention(for message: MessagingWireMessage) -> MessagingMutationStatus? {
         let statuses = pendingMutations.filter { $0.key.messageID == message.id && $0.key.conversationID == message.conversationID }
             .map(\.value.status)
-        for candidate in [MessagingMutationStatus.uncertain, .unconfirmed, .offline, .slow] where statuses.contains(candidate) {
+        for candidate in [MessagingMutationStatus.storageFailed, .uncertain, .unconfirmed, .offline, .slow] where statuses.contains(candidate) {
             return candidate
         }
         return nil
@@ -686,7 +688,11 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private func resumeMutations() {
         guard !networkOffline else { return }
         for (key, mutation) in pendingMutations where !mutationsInFlight.contains(key) {
-            if mutation.status == .offline || (key.kind == .hideForMe && mutation.status == .uncertain) { restart(key) }
+            if mutation.status == .offline || restoredMutations.contains(key)
+                || (key.kind == .hideForMe && mutation.status == .uncertain) {
+                restoredMutations.remove(key)
+                restart(key)
+            }
         }
     }
 
@@ -695,12 +701,10 @@ struct MessagingInboxPreview: Equatable, Sendable {
         mutation.status = networkOffline ? .offline : .sending
         mutation.clock = UUID()
         pendingMutations[key] = mutation
-        guard !networkOffline else { return }
-        scheduleLatency(key, clock: mutation.clock)
-        dispatch(key)
+        persistAndDispatch(key)
     }
 
-    private func submit(_ key: MessagingMutationKey, desired: MessagingMutationValue) {
+    private func submit(_ key: MessagingMutationKey, desired: MessagingMutationValue, readState: MessagingReadState? = nil) {
         guard currentScope() == scope else { recordFailure(.contextChanged); return }
         rejections[key.messageID] = nil
         var mutation = pendingMutations[key]
@@ -708,10 +712,90 @@ struct MessagingInboxPreview: Equatable, Sendable {
         mutation.desired = desired
         mutation.status = networkOffline ? .offline : .sending
         mutation.clock = UUID()
+        if mutation.readState == nil { mutation.readState = readState }
         pendingMutations[key] = mutation
-        guard !networkOffline else { return }
-        scheduleLatency(key, clock: mutation.clock)
-        dispatch(key)
+        persistAndDispatch(key)
+    }
+
+    /// La projection est immédiate, mais même hors connexion son intention est scellée sans attendre le HTTP.
+    /// Une modification pendant un HTTP lent est ainsi conservée avant la réponse de la précédente.
+    private func persistAndDispatch(_ key: MessagingMutationKey) {
+        Task {
+            guard await restoreMutations(), await persistMutation(key), currentScope() == scope,
+                  let current = pendingMutations[key] else { return }
+            guard !networkOffline else { return }
+            scheduleLatency(key, clock: current.clock)
+            dispatch(key)
+        }
+    }
+
+    @discardableResult private func restoreMutations() async -> Bool {
+        guard currentScope() == scope else { return false }
+        if mutationsRestored { return true }
+        if let mutationRestoration { return await mutationRestoration.value }
+        let task = Task { @MainActor in
+            do {
+                let stored = try await mutationStore.mutationEntries(scope: scope)
+                guard currentScope() == scope else { return false }
+                for entry in stored {
+                    var value = entry.value
+                    persistedMutationClocks[entry.key] = value.clock
+                    persistedMutations[entry.key] = value
+                    if let local = pendingMutations[entry.key] {
+                        // Une saisie pendant l'ouverture du coffre garde le dernier choix et l'ancien envoi exact.
+                        value.desired = local.desired; value.clock = local.clock; value.status = local.status
+                    } else if value.status != .confirmed && value.status != .storageFailed {
+                        value.status = .uncertain
+                        restoredMutations.insert(entry.key)
+                    }
+                    pendingMutations[entry.key] = value
+                }
+                mutationsRestored = true
+                return true
+            } catch {
+                guard currentScope() == scope else { return false }
+                actionError = .protectionUnavailable
+                for key in pendingMutations.keys { pendingMutations[key]?.status = .storageFailed }
+                return false
+            }
+        }
+        mutationRestoration = task
+        let success = await task.value
+        mutationRestoration = nil
+        return success
+    }
+
+    /// Sérialise les écritures locales, sans bloquer les autres cibles ni attendre la requête réseau.
+    @discardableResult private func persistMutation(_ key: MessagingMutationKey) async -> Bool {
+        if let task = mutationPersistence[key] {
+            guard await task.value else { return false }
+            if pendingMutations[key] == persistedMutations[key] { return true }
+            return await persistMutation(key)
+        }
+        let task = Task { @MainActor in
+            defer { mutationPersistence[key] = nil }
+            while let value = pendingMutations[key] {
+                guard currentScope() == scope else { return false }
+                do {
+                    try await mutationStore.putMutation(.init(key: key, value: value),
+                        replacing: persistedMutationClocks[key], scope: scope)
+                    guard currentScope() == scope else { return false }
+                    persistedMutationClocks[key] = value.clock
+                    persistedMutations[key] = value
+                    if pendingMutations[key] == value { return true }
+                } catch {
+                    guard currentScope() == scope else { return false }
+                    pendingMutations[key]?.status = .storageFailed
+                    actionError = error as? MessagingFailure ?? .protectionUnavailable
+                    // La reprise explicite relira le journal partagé avant de remplacer un choix local devenu ancien.
+                    if error as? MessagingFailure == .stateConflict { mutationsRestored = false }
+                    return false
+                }
+            }
+            return true
+        }
+        mutationPersistence[key] = task
+        return await task.value
     }
 
     /// Indication de latence seulement : ni échec ni renvoi à l'échéance.
@@ -741,39 +825,86 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private func drive(_ key: MessagingMutationKey) async {
         defer { mutationsInFlight.remove(key) }
         var accepted = false
-        while let current = pendingMutations[key], current.acknowledged != current.desired,
+        var muteRebases = 0
+        while let current = pendingMutations[key], (current.acknowledged != current.desired || current.transmitting != nil),
               current.status != .offline, current.status != .uncertain {
             guard currentScope() == scope else { recordFailure(.contextChanged); return }
-            let sent = current.desired
+            guard current.status != .storageFailed else { return }
+            let sent = current.transmitting ?? current.desired
+            let sentClock = current.clock
+            pendingMutations[key]?.transmitting = sent
+            guard await persistMutation(key), currentScope() == scope else { return }
             do {
                 try await transmit(key, sent)
                 guard currentScope() == scope else { recordFailure(.contextChanged); return }
                 guard var mutation = pendingMutations[key] else { return }
                 mutation.acknowledged = sent
                 mutation.acknowledgedAt = Date()
+                mutation.transmitting = nil
                 if mutation.desired == sent { mutation.status = .confirmed }
                 pendingMutations[key] = mutation
+                guard await persistMutation(key) else { return }
                 accepted = true
                 if key.kind == .hideForMe || key.kind == .deleteForEveryone { await applyDeletion(key) }
             } catch {
                 let failure = error as? MessagingFailure ?? .unavailable
                 guard pendingMutations[key] != nil else { return }
+                guard currentScope() == scope else { recordFailure(.contextChanged); return }
+                if failure == .stateConflict, key.kind == .mute, muteRebases < 2 {
+                    muteRebases += 1
+                    let previous = pendingMutations[key]?.readState
+                    await loadConversations()
+                    guard currentScope() == scope else { recordFailure(.contextChanged); return }
+                    if let fresh = readStates[key.conversationID], fresh.version > (previous?.version ?? -1),
+                       case .mutedUntil(let until) = sent {
+                        if fresh.mutedUntil == until || fresh.mutedUntil == previous?.mutedUntil {
+                            pendingMutations[key]?.readState = fresh
+                            if fresh.mutedUntil == until {
+                                pendingMutations[key]?.acknowledged = sent
+                                pendingMutations[key]?.acknowledgedAt = Date()
+                                pendingMutations[key]?.transmitting = nil
+                                if pendingMutations[key]?.desired == sent { pendingMutations[key]?.status = .confirmed }
+                                accepted = true
+                            }
+                            guard await persistMutation(key) else { return }
+                            continue
+                        }
+                    }
+                }
                 switch failure {
                 case .accessChanged, .contextChanged:
                     recordFailure(failure)
                 case .stateConflict, .conversationUnavailable, .membersChanged:
                     // Refus explicite : seule cette intention est retirée, l'état serveur courant reste.
-                    pendingMutations[key] = nil
+                    // Une réponse à une ancienne volonté ne retire pas celle saisie pendant le HTTP.
+                    if pendingMutations[key]?.clock == sentClock {
+                        _ = await removeMutation(key, expectedClock: sentClock)
+                    } else {
+                        pendingMutations[key]?.transmitting = nil
+                        pendingMutations[key]?.status = .uncertain
+                        _ = await persistMutation(key)
+                    }
                     rejections[key.messageID] = MessagingMutationRejection(kind: key.kind, failure: failure)
+                    if key.kind == .mute { actionError = failure }
                 default:
                     // Réponse perdue, délai dépassé, indisponibilité : peut-être enregistré, jamais un refus.
                     pendingMutations[key]?.status = networkOffline ? .offline : .uncertain
+                    _ = await persistMutation(key)
                 }
                 return
             }
         }
+        if let current = pendingMutations[key], current.acknowledged == current.desired,
+           current.transmitting == nil, current.status != .confirmed {
+            pendingMutations[key]?.status = .confirmed
+            guard await persistMutation(key) else { return }
+            accepted = true
+        }
         if accepted {
-            Task { await self.loadMessages(key.conversationID, marksVisible: false) }
+            Task {
+                if key.kind == .mute { await self.loadConversations() }
+                else { await self.loadMessages(key.conversationID, marksVisible: false) }
+            }
         }
     }
 
@@ -792,6 +923,13 @@ struct MessagingInboxPreview: Equatable, Sendable {
             try await actions.delete(scope: scope, conversationID: key.conversationID, messageID: key.messageID, for: .me)
         case (.deleteForEveryone, _):
             try await actions.delete(scope: scope, conversationID: key.conversationID, messageID: key.messageID, for: .everyone)
+        case (.mute, .mutedUntil(let until)):
+            guard let base = pendingMutations[key]?.readState else { throw MessagingFailure.invalidResponse }
+            let response = try await directory.readState(scope: scope, conversationID: key.conversationID,
+                sequence: base.lastReadSequence, mutedUntil: until, expectedVersion: base.version)
+            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            mergeReadState(response, conversationID: key.conversationID)
+            pendingMutations[key]?.readState = response
         default:
             throw MessagingFailure.invalidResponse
         }
@@ -800,7 +938,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private func applyDeletion(_ key: MessagingMutationKey) async {
         if key.kind == .hideForMe {
             hiddenForMe.insert(key.messageID)
-            pendingMutations[key] = nil
+            if let clock = pendingMutations[key]?.clock { _ = await removeMutation(key, expectedClock: clock) }
         }
         contents.removeValue(forKey: key.messageID)
         try? await history.remove(messageIDs: [key.messageID], scope: scope)
@@ -808,16 +946,54 @@ struct MessagingInboxPreview: Equatable, Sendable {
 
     /// Après relecture : une intention hors vol que le serveur reflète est retirée (pas de double compte).
     /// Confirmée mais toujours absente après le délai de grâce : l'état serveur fait foi.
-    private func reconcileMutations(_ conversationID: UUID) {
+    private func reconcileMutations(_ conversationID: UUID, readMute: Bool = false) async {
         let now = Date()
         for (key, mutation) in pendingMutations where key.conversationID == conversationID && !mutationsInFlight.contains(key) {
-            guard let base = messages[conversationID]?.first(where: { $0.id == key.messageID }) else { continue }
-            let satisfied = MessagingMutationProjection.isSatisfied(key.kind, mutation.desired, by: base.meta, account: scope.accountID)
+            let satisfied: Bool
+            if key.kind == .mute {
+                guard readMute, case .mutedUntil(let until) = mutation.desired, let base = readStates[conversationID] else { continue }
+                satisfied = base.mutedUntil == until
+            } else if key.kind == .hideForMe, mutation.status == .confirmed, !readMute {
+                hiddenForMe.insert(key.messageID)
+                satisfied = true
+            } else {
+                guard !readMute, let base = messages[conversationID]?.first(where: { $0.id == key.messageID }) else { continue }
+                satisfied = MessagingMutationProjection.isSatisfied(key.kind, mutation.desired, by: base.meta, account: scope.accountID)
+            }
             let settled = mutation.status == .confirmed || mutation.status == .uncertain
             let expired = mutation.status == .confirmed
                 && (mutation.acknowledgedAt.map { now.timeIntervalSince($0) > Self.confirmationGrace } ?? false)
-            if (satisfied && settled) || expired { pendingMutations[key] = nil }
+            // Un ancien envoi encore incertain peut porter une autre valeur que la projection actuelle.
+            if (satisfied && settled && (mutation.transmitting == nil || mutation.transmitting == mutation.desired)) || expired {
+                mutationsInFlight.insert(key)
+                _ = await removeMutation(key, expectedClock: mutation.clock)
+                mutationsInFlight.remove(key)
+                if pendingMutations[key] != nil, pendingMutations[key]?.clock != mutation.clock { persistAndDispatch(key) }
+            }
         }
+    }
+
+    /// Acquittement local comparé à la révision scellée. Un geste pendant l'effacement n'est pas perdu.
+    @discardableResult private func removeMutation(_ key: MessagingMutationKey, expectedClock: UUID) async -> Bool {
+        guard pendingMutations[key]?.clock == expectedClock, await persistMutation(key),
+              let value = pendingMutations[key], value.clock == expectedClock else { return false }
+        let task = Task { @MainActor in
+            defer { mutationPersistence[key] = nil }
+            do {
+                try await mutationStore.removeMutation(key, id: value.id, clock: value.clock, scope: scope)
+                guard currentScope() == scope else { return false }
+                persistedMutationClocks[key] = nil; persistedMutations[key] = nil
+                if pendingMutations[key]?.clock == value.clock { pendingMutations[key] = nil }
+                return true
+            } catch {
+                guard currentScope() == scope else { return false }
+                pendingMutations[key]?.status = .storageFailed
+                actionError = .protectionUnavailable
+                return false
+            }
+        }
+        mutationPersistence[key] = task
+        return await task.value
     }
 
     /// Seuls les messages choisis sont rechiffrés pour les administrateurs de l'école puis transmis.

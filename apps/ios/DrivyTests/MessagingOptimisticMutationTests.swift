@@ -16,9 +16,10 @@ final class MessagingOptimisticMutationTests: XCTestCase {
             meta: meta)
     }
 
-    private func make(_ actions: GatedActions, service: MutableService, current: MutationScopeBox? = nil) async -> MessagingWorkspace {
+    private func make(_ actions: GatedActions, service: MutableService, current: MutationScopeBox? = nil,
+                      store: MutationMemory = MutationMemory(), directory: any MessagingDirectoryService = UnavailableMessagingDirectory()) async -> MessagingWorkspace {
         let box = current ?? MutationScopeBox(scope)
-        let workspace = MessagingWorkspace(scope: scope, service: service, actions: actions,
+        let workspace = MessagingWorkspace(scope: scope, service: service, directory: directory, actions: actions, mutations: store,
                                            mutationLatency: latency, currentScope: { box.value })
         await workspace.loadMessages(conversation)
         return workspace
@@ -170,6 +171,132 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await actions.releaseAll()
     }
 
+    func testOfflineChoiceIsDurableAndRestoredWithTheSameIdentity() async {
+        let store = MutationMemory(), firstActions = GatedActions(holding: false)
+        let first = await make(firstActions, service: MutableService(wire()), store: store)
+        first.setNetworkAvailable(false)
+        first.toggleReaction("👍", on: wire())
+        await until { await store.saved.count == 1 }
+        let original = await store.saved.first!
+        XCTAssertEqual(original.value.desired, .active(true))
+        let noCalls = await firstActions.calls
+        XCTAssertTrue(noCalls.isEmpty)
+        let resumedActions = GatedActions(holding: true)
+        let reopened = await make(resumedActions, service: MutableService(wire()), store: store)
+        XCTAssertEqual(reopened.mutation(.reaction("👍"), on: wire())?.id, original.value.id)
+        XCTAssertEqual(thumbs(reopened), [account])
+        await until { await resumedActions.calls == ["reaction 👍 true"] }
+        await resumedActions.releaseAll()
+    }
+
+    func testNewerChoicePersistsDuringHTTPAndReopeningFinishesOriginalBeforeLatest() async {
+        let store = MutationMemory(), firstActions = GatedActions(holding: true)
+        let oldScope = MutationScopeBox(scope)
+        let first = await make(firstActions, service: MutableService(wire()), current: oldScope, store: store)
+        first.toggleReaction("👍", on: wire())
+        await until { await firstActions.calls.count == 1 }
+        first.toggleReaction("👍", on: wire())
+        await until { await store.saved.first?.value.desired == .active(false) }
+        let stored = await store.saved.first!
+        XCTAssertEqual(stored.value.transmitting, .active(true))
+        oldScope.value = nil
+        let resumedActions = GatedActions(holding: true)
+        let reopened = await make(resumedActions, service: MutableService(wire()), store: store)
+        XCTAssertEqual(reopened.mutation(.reaction("👍"), on: wire())?.id, stored.value.id)
+        XCTAssertTrue(thumbs(reopened).isEmpty)
+        await until { await resumedActions.calls == ["reaction 👍 true"] }
+        await resumedActions.releaseAll()
+        await until { await resumedActions.calls == ["reaction 👍 true", "reaction 👍 false"] }
+        await until { reopened.pendingMutations.isEmpty }
+        await firstActions.releaseAll()
+        await until { first.pendingMutations.isEmpty }
+        let remaining = await store.saved
+        XCTAssertTrue(remaining.isEmpty, "L'ancienne réponse ne ressuscite pas l'intention acquittée.")
+    }
+
+    func testStorageFailureNeverStartsHTTPAndCanBeRetried() async {
+        let store = MutationMemory(), actions = GatedActions(holding: false)
+        let workspace = await make(actions, service: MutableService(wire()), store: store)
+        await store.failWrites(true)
+        workspace.toggleReaction("👍", on: wire())
+        await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .storageFailed }
+        XCTAssertEqual(thumbs(workspace), [account])
+        let calls = await actions.calls
+        XCTAssertTrue(calls.isEmpty)
+        await store.failWrites(false)
+        workspace.retryMutations(for: wire())
+        await until { await actions.calls == ["reaction 👍 true"] }
+    }
+
+    func testSlowRequestKeepsOneDurableAttemptWithoutAutomaticResend() async {
+        let store = MutationMemory(), actions = GatedActions(holding: true)
+        let box = MutationScopeBox(scope)
+        let workspace = MessagingWorkspace(scope: scope, service: MutableService(wire()), actions: actions,
+            mutations: store, mutationLatency: .init(slow: .milliseconds(10), unconfirmed: .milliseconds(20)),
+            currentScope: { box.value })
+        await workspace.loadMessages(conversation)
+        workspace.toggleReaction("👍", on: wire())
+        await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .unconfirmed }
+        workspace.retryMutations(for: wire())
+        await workspace.loadMessages(conversation)
+        let calls = await actions.calls, entry = await store.saved.first
+        XCTAssertEqual(calls, ["reaction 👍 true"])
+        XCTAssertEqual(entry?.value.transmitting, .active(true))
+        XCTAssertEqual(thumbs(workspace), [account])
+        await actions.releaseAll()
+    }
+
+    func testRefusalOfAnOlderChoiceKeepsTheNewerIntentDurable() async {
+        let store = MutationMemory(), actions = GatedActions(holding: true)
+        await actions.fail(emoji: "👍", with: .stateConflict)
+        let workspace = await make(actions, service: MutableService(wire()), store: store)
+        workspace.toggleReaction("👍", on: wire())
+        await until { await actions.calls.count == 1 }
+        workspace.toggleReaction("👍", on: wire())
+        await until { await store.saved.first?.value.desired == .active(false) }
+        await actions.releaseAll()
+        await until { workspace.rejection(for: self.messageID) != nil }
+        let stored = await store.saved.first
+        XCTAssertEqual(stored?.value.desired, .active(false))
+        XCTAssertNil(stored?.value.transmitting)
+        XCTAssertEqual(workspace.mutation(.reaction("👍"), on: wire())?.status, .uncertain)
+    }
+
+    func testUnreadableJournalDoesNotSendOrOverwriteIt() async {
+        let store = MutationMemory(), actions = GatedActions(holding: false)
+        await store.failReads(true)
+        let workspace = await make(actions, service: MutableService(wire()), store: store)
+        workspace.setPinned(wire(), pinned: true)
+        await until { workspace.mutation(.pin, on: self.wire())?.status == .storageFailed }
+        let calls = await actions.calls, saved = await store.saved
+        XCTAssertTrue(calls.isEmpty && saved.isEmpty)
+        XCTAssertEqual(workspace.actionError, .protectionUnavailable)
+    }
+
+    func testUncertainMuteRetainsItsVersionAndLaterChoiceAcrossReopening() async {
+        let store = MutationMemory(), directory = GatedMuteDirectory()
+        let scopeBox = MutationScopeBox(scope)
+        let first = await make(GatedActions(holding: false), service: MutableService(wire()), current: scopeBox,
+                               store: store, directory: directory)
+        let untilDate = Date(timeIntervalSince1970: 1_800_000_000)
+        await first.silence(conversationID: conversation, fallbackSequence: 4, until: untilDate.addingTimeInterval(0.75), fallbackVersion: 7)
+        await until { await directory.calls.count == 1 }
+        await first.unsilence(conversationID: conversation, fallbackSequence: 4, fallbackVersion: 7)
+        await until { await store.saved.first?.value.desired == .mutedUntil(nil) }
+        scopeBox.value = nil
+        await directory.releaseAll()
+        let restoredDirectory = GatedMuteDirectory(holding: false)
+        let reopened = await make(GatedActions(holding: false), service: MutableService(wire()), store: store, directory: restoredDirectory)
+        await until { await restoredDirectory.calls.count == 2 }
+        let requests = await restoredDirectory.calls
+        XCTAssertEqual(requests[0].mutedUntil, untilDate)
+        XCTAssertEqual(requests.map(\.version), [7, 8])
+        XCTAssertEqual(requests.map(\.lastReadSequence), [4, 4], "Aucun faux accusé de lecture ajouté par la reprise.")
+        XCTAssertNil(requests[1].mutedUntil)
+        await until { reopened.muteAttention(self.conversation) == .confirmed }
+        XCTAssertNil(reopened.displayedMutedUntil(conversation, fallback: untilDate))
+    }
+
     // MARK: Envoi de messages
 
     private func pending(_ text: String) -> MessagingPending {
@@ -259,6 +386,51 @@ private actor MemoryOutbox: MessagingProtectedOutbox {
     func put(_ entry: MessagingPending, scope: MessagingScope) async throws { stored.append(entry) }
     func entries(scope: MessagingScope) async throws -> [MessagingPending] { stored }
     func remove(clientMessageID: UUID, scope: MessagingScope) async throws { stored.removeAll { $0.clientMessageID == clientMessageID } }
+}
+
+/// Double explicite : les tests UI/métier n'utilisent jamais un repli mémoire en production.
+private actor MutationMemory: MessagingProtectedMutations {
+    private var values: [MessagingMutationKey: MessagingPendingMutation] = [:]
+    private var writesFail = false, readsFail = false
+    var saved: [MessagingStoredMutation] { values.map { .init(key: $0.key, value: $0.value) } }
+    func failWrites(_ fail: Bool) { writesFail = fail }
+    func failReads(_ fail: Bool) { readsFail = fail }
+    func mutationEntries(scope: MessagingScope) throws -> [MessagingStoredMutation] {
+        if readsFail { throw MessagingFailure.protectionUnavailable }
+        return saved
+    }
+    func putMutation(_ entry: MessagingStoredMutation, replacing clock: UUID?, scope: MessagingScope) throws {
+        if writesFail { throw MessagingFailure.protectionUnavailable }
+        guard values[entry.key]?.clock == clock else { throw MessagingFailure.stateConflict }
+        values[entry.key] = entry.value
+    }
+    func removeMutation(_ key: MessagingMutationKey, id: UUID, clock: UUID, scope: MessagingScope) throws {
+        if writesFail { throw MessagingFailure.protectionUnavailable }
+        if values[key]?.id == id && values[key]?.clock == clock { values[key] = nil }
+    }
+}
+
+private actor GatedMuteDirectory: MessagingDirectoryService {
+    private(set) var calls: [MessagingReadState] = []
+    private var holding: Bool
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    init(holding: Bool = true) { self.holding = holding }
+    func releaseAll() {
+        holding = false
+        let pending = waiters; waiters = []
+        for waiter in pending { waiter.resume() }
+    }
+    func readState(scope: MessagingScope, conversationID: UUID, sequence: Int,
+                   mutedUntil: Date?, expectedVersion: Int?) async throws -> MessagingReadState {
+        guard let expectedVersion else { throw MessagingFailure.invalidResponse }
+        calls.append(.init(lastReadSequence: sequence, mutedUntil: mutedUntil, version: expectedVersion))
+        if holding { await withCheckedContinuation { waiters.append($0) } }
+        return .init(lastReadSequence: sequence, mutedUntil: mutedUntil, version: expectedVersion + 1)
+    }
+    func contacts(scope: MessagingScope) async throws -> [MessagingContact] { [] }
+    func generalMembers(scope: MessagingScope) async throws -> [MessagingContact] { [] }
+    func privateConversation(scope: MessagingScope, peerID: UUID) async throws -> UUID { throw MessagingFailure.unavailable }
+    func generalConversation(scope: MessagingScope) async throws -> UUID { throw MessagingFailure.unavailable }
 }
 
 /// Envois retenus jusqu'à `releaseAll` ; échec programmable ; accusé conforme au contrat.
