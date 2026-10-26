@@ -50,6 +50,7 @@ struct SchoolMyProfileView: View {
             }
             .alert("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard) {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                Button("Continuer", role: .cancel) { }
             }
             .confirmationDialog("Retirer la photo ?", isPresented: $confirmsPhotoRemoval, titleVisibility: .visible) {
                 Button("Retirer la photo", role: .destructive) { upload(nil) }

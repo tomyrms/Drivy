@@ -676,7 +676,8 @@ struct SchoolRootView: View {
                 Task { await identity.signIn(email: email, password: password) }
             },
             joinWithCode: { openAccessCode() },
-            clearError: { identity.clearError() })
+            clearError: { identity.clearError() },
+            recoveryClient: configuration.map { SchoolAccountRecoveryClient(configuration: $0) })
     }
 
     @ViewBuilder

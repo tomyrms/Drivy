@@ -4,7 +4,7 @@ import SwiftUI
 /// Les vrais écrans, des transports et journaux exclusivement en mémoire.
 /// Aucune connexion OIDC, requête réseau ou permission GPS n'est demandée.
 struct SchoolAccountVisualReview: View {
-    static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "account", "app-lock", "app-privacy",
+    static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "sign-in-recovery-ready", "account", "app-lock", "app-privacy",
         "access-code", "access-register", "access-opening", "school-opening",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "profile-instructor", "onboarding-welcome", "onboarding-information",
@@ -25,7 +25,7 @@ struct SchoolAccountVisualReview: View {
                 NavigationStack {
                     SchoolSignInLanding(isConfigured: screen != "sign-in-unconfigured", isWorking: screen == "sign-in-loading",
                         errorMessage: screen == "sign-in-error" ? IdentityFailure.invalidCredentials.localizedDescription : nil,
-                        signIn: { _, _ in }, joinWithCode: {})
+                        signIn: { _, _ in }, joinWithCode: {}, recoveryClient: recoveryClient)
                         .navigationTitle("Drivy")
                 }
             } else if screen == "app-lock" {
@@ -59,6 +59,13 @@ struct SchoolAccountVisualReview: View {
             guard context == nil, codeModel == nil, linkModel == nil, profileModel == nil, accessModel == nil, openingModel == nil else { return }
             do { try await prepare() } catch { self.error = error.localizedDescription }
         }
+    }
+
+    private var recoveryClient: SchoolAccountRecoveryClient {
+        let configuration = AppConfiguration(apiBaseURL: URL(string: "https://visual.drivy.invalid")!,
+            issuer: URL(string: "https://visual.drivy.invalid/identity")!, clientID: "visual", redirectURL: AppConfiguration.callback)
+        return SchoolAccountRecoveryClient(configuration: configuration,
+            transport: SchoolRecoveryVisualTransport(available: screen == "sign-in-recovery-ready"))
     }
 
     @MainActor private func prepare() async throws {
@@ -251,6 +258,16 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
                 field: nil, purpose: nil, resourceId: nil, destinationKey: "PROFILE")], returnDestinationKey: nil, returnResourceId: nil)
         savedWelcome = value
         return .onboarding(value)
+    }
+}
+
+private struct SchoolRecoveryVisualTransport: SchoolHTTPTransport {
+    let available: Bool
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let url: Any = available ? "https://visual.drivy.invalid/app/recover" : NSNull()
+        let payload = try JSONSerialization.data(withJSONObject: ["data": ["available": available, "recoveryUrl": url],
+                                                                 "serverTime": "2026-10-26T12:00:00Z"])
+        return SchoolHTTPResponse(data: payload, status: 200, url: request.url!, contentType: "application/json")
     }
 }
 
