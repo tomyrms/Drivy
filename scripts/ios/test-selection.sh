@@ -38,7 +38,7 @@ elif [[ "$unit_only" == 1 ]]; then
     test_options=(-only-testing:DrivyTests)
   elif [[ "$unit_test_scope" == agenda ]]; then
     # Agenda #144-#146: calendar projection, course reads and their synthetic UI transport.
-    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolVisualTransportTests; do
+    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   else

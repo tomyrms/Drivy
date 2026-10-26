@@ -18,7 +18,7 @@ GPS_SUITES = [
     'SchoolMapCourseTests', 'SchoolMapRouteGapTests', 'SchoolLiveHeadingTests', 'SchoolReplayFormattingTests',
 ]
 GPS_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in GPS_SUITES]
-AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolVisualTransportTests']
+AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolCourseClientTests', 'SchoolVisualTransportTests']
 AGENDA_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in AGENDA_SUITES]
 
 
@@ -63,9 +63,9 @@ class TestSelection(unittest.TestCase):
         self.assert_options([])
         self.assert_options([], DRIVY_IOS_VISUAL_ONLY='1')
 
-    def test_gps_suite_names_exist_in_real_swift_sources(self):
+    def test_selected_suite_names_exist_in_real_swift_sources(self):
         sources = '\n'.join(path.read_text(encoding='utf-8') for path in (ROOT / 'apps/ios/DrivyTests').glob('*.swift'))
-        for suite in GPS_SUITES:
+        for suite in GPS_SUITES + AGENDA_SUITES:
             self.assertRegex(sources, r'\bstruct\s+' + suite + r'\b')
 
     def test_ui_suite_and_method_are_preserved(self):

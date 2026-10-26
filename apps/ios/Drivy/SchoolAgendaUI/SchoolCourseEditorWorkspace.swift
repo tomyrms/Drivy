@@ -278,17 +278,19 @@ private extension SchoolCourseForm {
 }
 
 /// Une séance de cours telle que la liste du jour l’affiche.
-struct SchoolAgendaCourseItem: Identifiable, Equatable {
+struct SchoolAgendaCourseItem: Identifiable, Equatable, Sendable {
     let series: SchoolCourseSeries
     let occurrence: SchoolCourseOccurrence
     var id: UUID { occurrence.id }
 
-    /// Séances qui commencent le jour donné (fuseau du calendrier de l’école), par heure de début. Les cours annulés n’y sont pas.
+    /// Séances autorisées qui commencent ce jour ; leur statut reste visible, même après annulation.
     static func items(_ series: [SchoolCourseSeries], on day: Date, calendar: Calendar) -> [SchoolAgendaCourseItem] {
-        series.filter { $0.status != .cancelled }
-            .flatMap { course in course.occurrences.map { SchoolAgendaCourseItem(series: course, occurrence: $0) } }
+        series.flatMap { course in course.occurrences.map { SchoolAgendaCourseItem(series: course, occurrence: $0) } }
             .filter { item in item.occurrence.start.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
-            .sorted { ($0.occurrence.start ?? .distantPast) < ($1.occurrence.start ?? .distantPast) }
+            .sorted {
+                if $0.occurrence.start != $1.occurrence.start { return ($0.occurrence.start ?? .distantPast) < ($1.occurrence.start ?? .distantPast) }
+                return $0.id.uuidString < $1.id.uuidString
+            }
     }
 }
 
