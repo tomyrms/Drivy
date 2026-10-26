@@ -310,4 +310,165 @@ import Testing
         let items = SchoolAgendaCourseItem.items([series], on: day, calendar: calendar)
         #expect(items.map(\.occurrence.position) == [1])
     }
+
+    @Test func occurrenceSelectionKeepsTheServerIdentityAndAllowsIntentionalDraftRemoval() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let form = SchoolCourseForm(series: series)
+        #expect(form.occurrences.map(\.id) == series.occurrences.map(\.id))
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseSelectionTransport(series: series))
+        let selected = series.occurrences[1].id
+        let editor = SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: instructorID, timeZone: "Europe/Zurich",
+            client: client, catalogue: nil, series: series, selectedOccurrenceID: selected)
+        await editor.load()
+        let detail = SchoolCourseDetailWorkspace(schoolID: schoolID, client: client, series: series, selectedOccurrenceID: selected)
+        #expect(editor.focusedOccurrenceID == selected)
+        #expect(detail.focusedOccurrenceID == selected)
+        #expect(!editor.hasUnsavedChanges)
+        editor.removeOccurrence(selected)
+        #expect(editor.focusedOccurrenceID == nil)
+        #expect(editor.selectionMessage == nil)
+        #expect(editor.hasUnsavedChanges && editor.canSave && editor.canPublish)
+    }
+
+    @Test func selectingADraftRefreshesItsReferenceWithoutReplacingLocalChanges() async throws {
+        let original = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        var body = try JSONSerialization.jsonObject(with: seriesJSON()) as! [String: Any]
+        body["title"] = "Titre actualisé"; body["version"] = original.version + 1
+        let fresh = try JSONDecoder().decode(SchoolCourseSeries.self, from: JSONSerialization.data(withJSONObject: body))
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseSelectionTransport(series: fresh))
+        let selected = original.occurrences[1].id
+        let clean = SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: instructorID, timeZone: "Europe/Zurich",
+            client: client, catalogue: nil, series: original, selectedOccurrenceID: selected)
+        await clean.load()
+        #expect(clean.series?.version == fresh.version && clean.form.title == fresh.title)
+        #expect(!clean.hasUnsavedChanges && clean.focusedOccurrenceID == selected)
+
+        let edited = SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: instructorID, timeZone: "Europe/Zurich",
+            client: client, catalogue: nil, series: original, selectedOccurrenceID: selected)
+        edited.form.title = "Titre en cours de saisie"
+        await edited.load()
+        #expect(edited.form.title == "Titre en cours de saisie" && edited.hasUnsavedChanges)
+        #expect(edited.series?.version == original.version && edited.focusedOccurrenceID == selected)
+    }
+
+    @Test func removedOccurrenceDoesNotSilentlySelectAnotherSessionAfterRefresh() async throws {
+        let original = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        var body = try JSONSerialization.jsonObject(with: seriesJSON()) as! [String: Any]
+        body["occurrences"] = (body["occurrences"] as! [[String: Any]]).prefix(1).map { $0 }
+        let fresh = try JSONDecoder().decode(SchoolCourseSeries.self, from: JSONSerialization.data(withJSONObject: body))
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseSelectionTransport(series: fresh))
+        let selected = original.occurrences[1].id
+        let detail = SchoolCourseDetailWorkspace(schoolID: schoolID, client: client, series: original, selectedOccurrenceID: selected)
+        await detail.refresh()
+        #expect(detail.series.occurrences.count == 1)
+        #expect(detail.focusedOccurrenceID == nil && detail.selectionMessage != nil)
+        let editor = SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: instructorID, timeZone: "Europe/Zurich",
+            client: client, catalogue: nil, series: original, selectedOccurrenceID: selected)
+        await editor.load()
+        #expect(editor.focusedOccurrenceID == nil && editor.selectionMessage != nil)
+        #expect(!editor.canSave && !editor.canPublish)
+    }
+
+    @Test func selectingAnOccurrenceNeverKeepsTheScreenAfterAnAccessRefusal() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseSelectionTransport(series: series, status: 403))
+        let selected = series.occurrences[1].id
+        let detail = SchoolCourseDetailWorkspace(schoolID: schoolID, client: client, series: series, selectedOccurrenceID: selected)
+        await detail.refresh()
+        #expect(detail.accessUnavailable && detail.focusedOccurrenceID == nil)
+        let editor = SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: instructorID, timeZone: "Europe/Zurich",
+            client: client, catalogue: nil, series: series, selectedOccurrenceID: selected)
+        await editor.load()
+        #expect(editor.accessUnavailable && editor.focusedOccurrenceID == nil)
+        #expect(!editor.canSave && !editor.canPublish)
+    }
+
+    @Test(arguments: [401, 403, 404])
+    func cancelledRequestStillReturnsAReceivedAccessRefusal(status: Int) async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let transport = CourseCancellationGate(base: CourseSelectionTransport(series: series, status: status))
+        let token = CourseCancellationToken()
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: token, transport: transport)
+        let reading = Task { () -> SchoolPlanningFailure? in
+            do { _ = try await client.series(schoolID: schoolID, id: seriesID); return nil }
+            catch { return error as? SchoolPlanningFailure }
+        }
+        await transport.waitForStart()
+        reading.cancel()
+        await transport.finish()
+        #expect(await reading.value == SchoolPlanningClient.failure(status, nil))
+        #expect(await transport.requestCount == 1)
+        #expect(token.invalidations == 0)
+    }
+
+    @Test func cancelledRequestNeverAcceptsAReceivedSuccess() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let transport = CourseCancellationGate(base: CourseSelectionTransport(series: series))
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: transport)
+        let reading = Task { () -> Bool in
+            do { _ = try await client.series(schoolID: schoolID, id: seriesID); return false }
+            catch { return error is CancellationError }
+        }
+        await transport.waitForStart()
+        reading.cancel()
+        await transport.finish()
+        #expect(await reading.value)
+    }
+}
+
+@MainActor private final class CourseCancellationToken: AccessTokenSource {
+    private(set) var invalidations = 0
+    func accessToken() async throws -> String { invalidations == 0 ? "synthetic-first" : "synthetic-renewed" }
+    func invalidateAccessToken(_ token: String) async -> Bool { invalidations += 1; return true }
+}
+
+/// La réponse arrive après l'annulation, comme un transport qui a déjà reçu les octets.
+private actor CourseCancellationGate: SchoolHTTPTransport {
+    let base: CourseSelectionTransport
+    private(set) var requestCount = 0
+    private var pending: CheckedContinuation<Void, Never>?
+    private var started: CheckedContinuation<Void, Never>?
+
+    init(base: CourseSelectionTransport) { self.base = base }
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        requestCount += 1
+        await withCheckedContinuation { continuation in
+            pending = continuation
+            started?.resume(); started = nil
+        }
+        return try await base.send(request)
+    }
+    func waitForStart() async {
+        if pending != nil { return }
+        await withCheckedContinuation { started = $0 }
+    }
+    func finish() {
+        pending?.resume(); pending = nil
+    }
+}
+
+private struct CourseSelectionTransport: SchoolHTTPTransport {
+    let series: SchoolCourseSeries
+    var status = 200
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let url = request.url!
+        if status != 200 {
+            return SchoolHTTPResponse(data: Data("{\"code\":\"ACCESS_DENIED\",\"title\":\"Accès refusé\"}".utf8),
+                status: status, url: url, contentType: "application/problem+json")
+        }
+        let payload: Data
+        if url.lastPathComponent == "course-catalogue" {
+            payload = try JSONEncoder().encode(SchoolCourseCatalogue(schoolId: series.schoolId, canManage: true,
+                types: [SchoolCourseType(id: series.typeId, schoolId: series.schoolId, stableKey: nil, title: series.typeTitle,
+                    description: "", version: 1, predefined: false)], policy: SchoolCoursePolicy(version: 1, selfCancelHours: 24, offerResponseMinutes: nil),
+                instructors: [SchoolCourseInstructor(membershipId: series.responsibleMembershipId, displayName: "Camille Exemple")]))
+        } else { payload = try JSONEncoder().encode(series) }
+        let body: [String: Any] = ["data": try JSONSerialization.jsonObject(with: payload), "requestId": "selection-test",
+                                   "serverTime": "2026-10-26T12:00:00Z"]
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, contentType: "application/json")
+    }
 }

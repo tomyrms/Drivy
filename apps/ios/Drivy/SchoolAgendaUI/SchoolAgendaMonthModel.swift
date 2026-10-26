@@ -43,6 +43,8 @@ enum SchoolAgendaDayMark: Equatable, Sendable {
     case active
     /// Leçon annulée ou manquée : elle ne remplit pas le jour.
     case closed
+    /// Brouillon de cours : événement provisoire, pas un engagement confirmé.
+    case provisional
     /// Au-delà de trois leçons : la dernière marque s’allonge.
     case more
 }
@@ -156,10 +158,16 @@ enum SchoolAgendaMonth {
     }
 
     /// Les leçons actives d’abord, puis les closes ; au-delà de trois, la dernière marque dit « davantage ».
-    static func marks(active: Int, closed: Int) -> [SchoolAgendaDayMark] {
-        let active = max(active, 0), closed = max(closed, 0)
-        let all = Array(repeating: SchoolAgendaDayMark.active, count: active) + Array(repeating: .closed, count: closed)
+    static func marks(active: Int, closed: Int, provisional: Int = 0) -> [SchoolAgendaDayMark] {
+        let active = max(active, 0), closed = max(closed, 0), provisional = max(provisional, 0)
+        let all = Array(repeating: SchoolAgendaDayMark.active, count: active)
+            + Array(repeating: .provisional, count: provisional) + Array(repeating: .closed, count: closed)
         guard all.count > markLimit else { return all }
         return Array(all.prefix(markLimit - 1)) + [.more]
+    }
+
+    static func dayIdentifier(_ day: Date, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: day)
+        return String(format: "agenda-day-%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 }

@@ -1,0 +1,43 @@
+{
+  "deviceFamily": "iPhone",
+  "appearance": "light",
+  "capture": "XCUIScreen.main.screenshot",
+  "orientation": "XCUIDevice.shared.orientation",
+  "appleLanguages": [
+    "fr"
+  ],
+  "appleLocale": "fr_CH",
+  "imageRotationApplied": false,
+  "files": [
+    {
+      "file": "iPhone-agenda-courses-error-light-portrait-synthetic.png",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "orientation": "portrait",
+      "sha256": "9814124aadde421714abe1a9e2c508693c06110ce3df6269164003ccd54a1254"
+    },
+    {
+      "file": "iPhone-agenda-mixed-light-portrait-synthetic.png",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "orientation": "portrait",
+      "sha256": "33f5724c1c8e516147eab4d1097f97e0737270c38b0af07b8036508d84c47a37"
+    },
+    {
+      "file": "iPhone-agenda-mixed-month-light-portrait-synthetic.png",
+      "storedWidthPixels": 1206,
+      "storedHeightPixels": 2622,
+      "displayWidthPixels": 1206,
+      "displayHeightPixels": 2622,
+      "exifOrientation": 1,
+      "orientation": "portrait",
+      "sha256": "4e78db6b2c7e19e5154a2b945e46b33b681fd3827a677dca0bbd24274581a203"
+    }
+  ]
+}

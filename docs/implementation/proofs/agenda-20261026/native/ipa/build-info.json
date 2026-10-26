@@ -1,0 +1,58 @@
+{
+  "commit": "23b19f30baa7225ba5d686c18a8c005a494b51cc",
+  "run": "40317577943",
+  "build": "381",
+  "version": "0.7.0",
+  "bundleIdentifier": "ch.drivy.qualification",
+  "executable": "Drivy",
+  "builtAt": "2026-10-26T11:54:20.285633+00:00",
+  "configuration": "Release",
+  "signed": false,
+  "archiveCreated": true,
+  "signatureVerification": {
+    "status": "PASSED",
+    "method": "codesign --display après suppression ; plateforme via lipo et vtool",
+    "checkedBundles": 4,
+    "checkedBinaries": 2
+  },
+  "minimumOS": "26.0",
+  "platforms": [
+    "iPhoneOS"
+  ],
+  "sdkName": "iphoneos26.5",
+  "xcodeBuild": "17F113",
+  "ipaSHA256": "bda1e104263ff434eb12e2e640757ec73e5bced1ca71e0b735b3c49288cdcde7",
+  "binaries": [
+    {
+      "path": "Payload/Drivy.app/Drivy",
+      "sha256": "4970a5e142d90e0c68bcbf0285ff1ede807616cccf8ab0a8e6fc8b1e5220898e",
+      "slices": [
+        {
+          "architecture": "arm64",
+          "platform": "iOS",
+          "minimumOS": "26.0",
+          "sdk": "26.5"
+        }
+      ]
+    },
+    {
+      "path": "Payload/Drivy.app/Frameworks/SQLCipher.framework/SQLCipher",
+      "sha256": "ec36b9a465db3abc5cdedf285a34288b9163b3c00993694bd9e6e7e7104b3dcb",
+      "slices": [
+        {
+          "architecture": "arm64",
+          "platform": "iOS",
+          "minimumOS": "12.0",
+          "sdk": "18.5"
+        }
+      ]
+    }
+  ],
+  "packageResolvedSHA256": "90d879f790dc4d740e9a5100510447a8a6b284892995f448a362481cf780ecd5",
+  "distribution": "Signature locale avec iLoader",
+  "scope": "Leçons scolaires, trajets facultatifs, observations, bilans et invitations par code ; qualification physique distincte",
+  "schoolConnectionConfigured": true,
+  "physicalQualification": "NOT_EXECUTED",
+  "messagingQualificationBuildRequested": false,
+  "messagingGeneralQualification": "NOT_CLAIMED"
+}

@@ -1,0 +1,28 @@
+{
+  "candidate": "849bb274a24d34f4bb1ff309b83fa824ba858cbf",
+  "run": "40310714721",
+  "result": "FAIL",
+  "supersededBy": "bee144c2a91aa6ec4f182bcb76f7139404047701",
+  "devices": [
+    {
+      "device": "iPhone 17 Pro",
+      "passed": 4,
+      "failed": 2,
+      "skipped": 0,
+      "failedTests": [
+        "testMixedDayUsesOneChronologyAndOpensTheLesson()",
+        "testRefreshFailureRetainsCoursesAndSelectionUntilRetry()"
+      ]
+    },
+    {
+      "device": "iPad Air 11-inch (M4)",
+      "passed": 4,
+      "failed": 2,
+      "skipped": 0,
+      "failedTests": [
+        "testMixedDayUsesOneChronologyAndOpensTheLesson()",
+        "testRefreshFailureRetainsCoursesAndSelectionUntilRetry()"
+      ]
+    }
+  ]
+}

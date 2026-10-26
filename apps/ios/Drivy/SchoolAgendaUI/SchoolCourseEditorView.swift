@@ -8,6 +8,7 @@ struct SchoolCourseEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var addsType = false
+    @AccessibilityFocusState private var focusedOccurrence: UUID?
     private static let errorAnchor = "course-error"
 
     private var zone: TimeZone { TimeZone(identifier: model.timeZone) ?? .current }
@@ -20,20 +21,27 @@ struct SchoolCourseEditorView: View {
                         Section { DrivyFormMessage(text: message, tone: .danger) }
                             .drivyFormRows().id(Self.errorAnchor)
                     }
-                    if model.catalogue == nil {
-                        if model.isLoading { Section { DrivyLoadingState(title: "Chargement…") }.drivyFormRows() }
-                    } else {
-                        courseFields
-                        occurrenceFields
-                        summaryFields
-                        if typeSize.isAccessibilitySize { Section { actions }.drivyFormRows() }
+                    if let message = model.selectionMessage {
+                        Section { DrivyFormMessage(text: message, tone: .warning) }
+                            .drivyFormRows().id("course-occurrence-unavailable")
+                            .accessibilityIdentifier("course-occurrence-unavailable")
+                    }
+                    if !model.accessUnavailable {
+                        if model.catalogue == nil {
+                            if model.isLoading { Section { DrivyLoadingState(title: "Chargement…") }.drivyFormRows() }
+                        } else {
+                            courseFields
+                            occurrenceFields
+                            summaryFields
+                            if typeSize.isAccessibilitySize { Section { actions }.drivyFormRows() }
+                        }
                     }
                 }
                 .scrollContentBackground(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if !typeSize.isAccessibilitySize && model.catalogue != nil { DrivyStickyActionBar { actions } }
+                    if !typeSize.isAccessibilitySize && model.catalogue != nil && !model.accessUnavailable { DrivyStickyActionBar { actions } }
                 }
                 .environment(\.timeZone, zone)
                 .environment(\.locale, Locale(identifier: "fr_CH"))
@@ -44,10 +52,22 @@ struct SchoolCourseEditorView: View {
                         ToolbarItem(placement: .primaryAction) { ProgressView().accessibilityLabel("Actualisation") }
                     }
                 }
-                .task { await model.load() }
+                .task {
+                    await model.load()
+                    guard !Task.isCancelled, let target = model.focusedOccurrenceID else { return }
+                    await Task.yield()
+                    scroll.scrollTo(target, anchor: .top)
+                    focusedOccurrence = target
+                }
                 .onChange(of: model.errorMessage) { _, message in
                     guard let message else { return }
                     scroll.scrollTo(Self.errorAnchor, anchor: .top)
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
+                .onChange(of: model.selectionMessage) { _, message in
+                    guard let message else { return }
+                    focusedOccurrence = nil
+                    scroll.scrollTo("course-occurrence-unavailable", anchor: .top)
                     UIAccessibility.post(notification: .announcement, argument: message)
                 }
                 .onChange(of: model.finished) { _, series in
@@ -131,8 +151,15 @@ struct SchoolCourseEditorView: View {
                     .disabled(model.isBusy)
                     .accessibilityLabel("Retirer la séance \(index + 1)")
                 }
-            } header: { Text("Séance \(index + 1)").drivyFormSectionHeader() }
-                .drivyFormRows()
+            } header: {
+                Text("Séance \(index + 1)").drivyFormSectionHeader()
+                    .foregroundStyle(model.focusedOccurrenceID == occurrence.id ? DrivyTheme.accent : DrivyTheme.muted)
+                    .accessibilityAddTraits(model.focusedOccurrenceID == occurrence.id ? [.isSelected] : [])
+                    .accessibilityIdentifier(model.focusedOccurrenceID == occurrence.id ? "course-selected-occurrence" : "course-occurrence-\(occurrence.id.uuidString)")
+                    .accessibilityFocused($focusedOccurrence, equals: occurrence.id)
+            }
+                .drivyFormRows(isSelected: model.focusedOccurrenceID == occurrence.id)
+                .id(occurrence.id)
         }
         .datePickerStyle(.compact)
         .drivyControlTint()
@@ -217,6 +244,7 @@ struct SchoolCourseDetailView: View {
     let timeZone: String
     @Environment(\.dismiss) private var dismiss
     @State private var attendance: SchoolCourseAttendanceWorkspace?
+    @AccessibilityFocusState private var focusedOccurrence: UUID?
 
     /// L’appel s’ouvre dès qu’une séance a commencé ; les droits sont relus par le serveur.
     private var canTakeAttendance: Bool {
@@ -227,10 +255,17 @@ struct SchoolCourseDetailView: View {
 
     var body: some View {
         NavigationStack {
+          ScrollViewReader { scroll in
             Form {
                 if let message = model.errorMessage {
                     Section { DrivyFormMessage(text: message, tone: .danger) }.drivyFormRows()
                 }
+                if let message = model.selectionMessage {
+                    Section { DrivyFormMessage(text: message, tone: .warning) }
+                        .drivyFormRows().id("course-occurrence-unavailable")
+                        .accessibilityIdentifier("course-occurrence-unavailable")
+                }
+                if !model.accessUnavailable {
                 Section {
                     LabeledContent("Type", value: series.typeTitle)
                     if !series.location.isEmpty { LabeledContent("Lieu", value: series.location) }
@@ -247,6 +282,11 @@ struct SchoolCourseDetailView: View {
                             }
                         }
                         .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(model.focusedOccurrenceID == occurrence.id ? [.isSelected] : [])
+                        .accessibilityIdentifier(model.focusedOccurrenceID == occurrence.id ? "course-selected-occurrence" : "course-occurrence-\(occurrence.id.uuidString)")
+                        .accessibilityFocused($focusedOccurrence, equals: occurrence.id)
+                        .drivyFormRows(isSelected: model.focusedOccurrenceID == occurrence.id)
+                        .id(occurrence.id)
                     }
                     LabeledContent("Total") { Text(SchoolCourseFormat.duration(minutes: series.totalMinutes)).monospacedDigit() }
                     Text(SchoolCourseFormat.cancellationSentence(hours: series.selfCancelHours))
@@ -289,6 +329,7 @@ struct SchoolCourseDetailView: View {
                     .drivyFormRows()
                 }
                 if let roster = model.roster { SchoolCourseRosterSection(model: roster) }
+                }
             }
             .sheet(item: $attendance, onDismiss: { Task { await model.refresh() } }) { sheet in
                 SchoolCourseAttendanceView(model: sheet)
@@ -297,10 +338,23 @@ struct SchoolCourseDetailView: View {
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .navigationTitle("Cours collectif").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
-            .task { await model.refresh() }
+            .task {
+                await model.refresh()
+                guard !Task.isCancelled, let target = model.focusedOccurrenceID else { return }
+                await Task.yield()
+                scroll.scrollTo(target, anchor: .top)
+                focusedOccurrence = target
+            }
             .onChange(of: model.errorMessage) { _, message in
                 if let message { UIAccessibility.post(notification: .announcement, argument: message) }
             }
+            .onChange(of: model.selectionMessage) { _, message in
+                guard let message else { return }
+                focusedOccurrence = nil
+                scroll.scrollTo("course-occurrence-unavailable", anchor: .top)
+                UIAccessibility.post(notification: .announcement, argument: message)
+            }
+          }
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)

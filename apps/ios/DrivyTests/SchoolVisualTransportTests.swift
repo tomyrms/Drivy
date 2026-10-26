@@ -91,6 +91,62 @@ struct SchoolVisualTransportTests {
         #expect(reports.isEmpty)
     }
 
+    @MainActor @Test(arguments: ["agenda-mixed", "agenda-mixed-month"])
+    func mixedAgendaFixtureIsAcceptedByTheRealClients(scenario: String) async throws {
+        let context = try await SchoolVisualData.prepare(agendaScenario: scenario)
+        let schoolID = SchoolVisualData.schoolID
+        let lesson = try await context.agenda.lesson(schoolID: schoolID, id: SchoolVisualData.lessonID)
+        let start = try #require(lesson.startsAt)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/Zurich"))
+        let from = calendar.startOfDay(for: start)
+        let to = try #require(calendar.date(byAdding: .day, value: 2, to: from))
+        let lessons = try await context.agenda.lessons(schoolID: schoolID, from: from, to: to,
+            cursor: nil, instructorMembershipID: SchoolVisualData.membershipID)
+        #expect(lessons.items == [lesson])
+        #expect(lessons.nextCursor == nil)
+        #expect(lesson.status == "PLANNED")
+        #expect(calendar.component(.hour, from: start) == 11)
+
+        let courses = try await context.agenda.courseClient.series(schoolID: schoolID, from: from, to: to)
+        let course = try #require(courses.first)
+        #expect(courses.count == 1)
+        #expect(course.occurrences.count == 3)
+        #expect(course.occurrences.allSatisfy { $0.instructorMembershipId == SchoolVisualData.membershipID })
+        #expect(course.occurrences.compactMap(\.start).map { calendar.component(.hour, from: $0) } == [9, 14, 9])
+        let detail = try await context.agenda.courseClient.series(schoolID: schoolID, id: course.id)
+        #expect(detail == course)
+        let catalogue = try await context.agenda.courseClient.catalogue(schoolID: schoolID)
+        #expect(catalogue.canManage)
+        #expect(catalogue.instructors.map(\.membershipId) == [SchoolVisualData.membershipID])
+    }
+
+    @MainActor @Test(arguments: ["agenda-courses-error", "agenda-courses-stale"])
+    func courseFailureFixturesKeepLessonReadsAvailableAndRecover(scenario: String) async throws {
+        let context = try await SchoolVisualData.prepare(agendaScenario: scenario)
+        let schoolID = SchoolVisualData.schoolID
+        let lesson = try await context.agenda.lesson(schoolID: schoolID, id: SchoolVisualData.lessonID)
+        let start = try #require(lesson.startsAt)
+        let from = start.addingTimeInterval(-24 * 60 * 60)
+        let to = start.addingTimeInterval(48 * 60 * 60)
+        if scenario == "agenda-courses-stale" {
+            let initial = try await context.agenda.courseClient.series(schoolID: schoolID, from: from, to: to)
+            #expect(initial.count == 1)
+        }
+        do {
+            _ = try await context.agenda.courseClient.series(schoolID: schoolID, from: from, to: to)
+            Issue.record("La panne de lecture prévue doit être observable par le client de cours.")
+        } catch {
+            #expect(error as? SchoolPlanningFailure == .unavailable)
+        }
+        let lessons = try await context.agenda.lessons(schoolID: schoolID, from: from, to: to,
+            cursor: nil, instructorMembershipID: SchoolVisualData.membershipID)
+        #expect(lessons.items == [lesson])
+        let recovered = try await context.agenda.courseClient.series(schoolID: schoolID, from: from, to: to)
+        #expect(recovered.count == 1)
+        #expect(recovered.first?.occurrences.count == 3)
+    }
+
     private static let path = "/v1/schools/fixture-school/lessons"
 
     private func trainingFixture() throws -> SchoolVisualTransport {

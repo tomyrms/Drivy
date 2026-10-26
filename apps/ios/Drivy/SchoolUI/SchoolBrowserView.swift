@@ -282,6 +282,7 @@ enum SchoolContactLinks {
 struct SchoolErrorNotice: View {
     let message: String
     var retry: (() -> Void)? = nil
+    var retryIdentifier = "school-error-retry"
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
@@ -294,7 +295,7 @@ struct SchoolErrorNotice: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .accessibilityElement(children: .combine)
-            if let retry { DrivyRetryButton(action: retry) }
+            if let retry { DrivyRetryButton(action: retry).accessibilityIdentifier(retryIdentifier) }
         }
         .foregroundStyle(DrivyTheme.danger)
         .padding(DrivySpacing.m)

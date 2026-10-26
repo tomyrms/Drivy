@@ -1,0 +1,22 @@
+{
+  "commit": "bee144c2a91aa6ec4f182bcb76f7139404047701",
+  "workflowRunId": 40315360630,
+  "workflowRunUrl": "https://github.com/tomyrms/Drivy/actions/runs/40315360630",
+  "artifactId": 12647992659,
+  "devices": [
+    { "name": "iPhone 17 Pro", "passed": 4, "failed": 2, "skipped": 0 },
+    { "name": "iPad Air 11-inch (M4)", "passed": 4, "failed": 2, "skipped": 0 }
+  ],
+  "passedOnBothDevices": [
+    "SchoolAgendaUITests/testChangingPeriodDoesNotRetainCoursesOutsideItsScope()",
+    "SchoolAgendaUITests/testCollectiveOnlyDayIsCountedInWeekAndMonthAndOpensItsCourse()",
+    "SchoolAgendaUITests/testCourseFailureKeepsLessonsAndRetryRestoresTheMixedDay()",
+    "SchoolAgendaUITests/testEachOccurrenceOfTheSameSeriesOpensItsOwnSelectedSession()"
+  ],
+  "failures": [
+    { "test": "SchoolAgendaUITests/testMixedDayUsesOneChronologyAndOpensTheLesson()", "line": 29,
+      "finding": "Élève, horaire et état exacts contrôlés avec succès. L'action lesson-start attendue dépend de l'heure ; la hiérarchie montre lesson-no-show après la fin prévue." },
+    { "test": "SchoolAgendaUITests/testRefreshFailureRetainsCoursesAndSelectionUntilRetry()", "line": 117,
+      "finding": "Le chargement permanent a disparu. Une image extraite à 27 s de la vidéo iPhone montre l'interruption avant la première reprise (ui-bee144c-refresh-before-retry.png). Après cette reprise, la hiérarchie montre la panne réseau synthétique et les données conservées. La séquence d'interruption et de panne doit être distinguée avant de vérifier la reprise réussie." }
+  ]
+}

@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi", "dossier-incomplete"]
+    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "agenda-mixed", "agenda-mixed-month", "agenda-courses-error", "agenda-courses-stale", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi", "dossier-incomplete"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -90,9 +90,9 @@ struct SchoolVisualReview: View {
                     SchoolCaptureReplayView(model: context.replay, learnerName: "Trajet synthétique", lessonTimeZone: "Europe/Zurich")
                 case "home-tabs", "home-to-finish":
                     SchoolVisualShell(context: context, tab: .session)
-                case "agenda", "agenda-month":
+                case "agenda", "agenda-month", "agenda-mixed", "agenda-mixed-month", "agenda-courses-error", "agenda-courses-stale":
                     // L’affichage retenu est posé avant l’onglet : « agenda » reste la semaine d’une capture à l’autre.
-                    let _ = SchoolAgendaDisplayMode.remember(screen == "agenda-month" ? .month : .week)
+                    let _ = SchoolAgendaDisplayMode.remember(screen == "agenda-month" || screen == "agenda-mixed-month" ? .month : .week)
                     SchoolVisualShell(context: context, tab: .agenda)
                 case "learners":
                     SchoolVisualShell(context: context, tab: .learners)
@@ -123,7 +123,7 @@ struct SchoolVisualReview: View {
                 context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "learner-lesson",
                     "learner-lesson-planned", "learner-permit"].contains(screen),
                     populatedObservations: ["lesson-observations", "lesson-route", "learner-lesson"].contains(screen),
-                    permitCount: SchoolVisualData.permitCount(for: screen))
+                    permitCount: SchoolVisualData.permitCount(for: screen), agendaScenario: screen)
             }
             catch { self.error = error.localizedDescription }
         }
@@ -197,7 +197,7 @@ struct SchoolVisualShell: View {
     nonisolated static let time = "2026-09-24T10:00:00Z"
 
     static func prepare(learnerRole: Bool = false, populatedObservations: Bool = false,
-        permitCount: Int = 1) async throws -> SchoolVisualContext {
+        permitCount: Int = 1, agendaScenario: String? = nil) async throws -> SchoolVisualContext {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
         // Aucun fichier sur le simulateur : la configuration des signalements reste en mémoire.
         SchoolObservationThemeStores.makeCache = { SchoolVisualThemeCache() }
@@ -206,7 +206,12 @@ struct SchoolVisualShell: View {
         SchoolLessonSignalOrderStores.make = { _ in SchoolLessonSignalOrderMemoryStore() }
         let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations,
             permitCount: permitCount)
-        let transport = SchoolVisualTransport(responses: fixtures)
+        let transport: any SchoolHTTPTransport
+        if let agendaScenario, SchoolAgendaVisualData.screens.contains(agendaScenario) {
+            transport = try SchoolAgendaVisualData.transport(overriding: fixtures, scenario: agendaScenario)
+        } else {
+            transport = SchoolVisualTransport(responses: fixtures)
+        }
         let token = SchoolVisualToken()
         let client = SchoolTrainingClient(baseURL: baseURL, tokenSource: token, transport: transport)
         let profile = SchoolProfileClient(baseURL: baseURL, tokenSource: token, transport: transport)
@@ -471,6 +476,9 @@ struct SchoolVisualShell: View {
             "\(root)/offerings": page([offering, otherOffering]), "\(root)/curricula": page([curriculum]),
             "\(root)/policy-versions": page([policy]), "\(root)/members": page([member]),
             "\(root)/lessons": page([nextLesson, lesson]),
+            "\(root)/course-series": page([]),
+            "\(root)/course-catalogue": ["schoolId": schoolID.uuidString, "canManage": false,
+                "types": [], "instructors": [], "policy": ["version": 1, "selfCancelHours": 24, "offerResponseMinutes": null]],
             agendaKey: page(agendaLessons()), "\(root)/lessons/\(lessonID.uuidString)": lesson,
             "\(root)/lessons/\(identifier(13).uuidString)": nextLesson,
             "\(root)/report-revisions/\(revisionID.uuidString)": revision,

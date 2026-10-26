@@ -1,0 +1,645 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "58FBEAC1-8EC6-4E83-B597-D6801A423A50",
+      "deviceName" : "iPhone 17 Pro",
+      "modelName" : "iPhone 17 Pro",
+      "osBuildNumber" : "23E254a",
+      "osVersion" : "26.4.1",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0.025s",
+                  "durationInSeconds" : 0.02482008934020996,
+                  "name" : "failedFirstReadIsDistinctFromAConfirmedEmptyPeriodAndRetrySucceeds()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/failedFirstReadIsDistinctFromAConfirmedEmptyPeriodAndRetrySucceeds()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/failedFirstReadIsDistinctFromAConfirmedEmptyPeriodAndRetrySucceeds()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0058s",
+                  "durationInSeconds" : 0.0058460235595703125,
+                  "name" : "failedRefreshRetainsOnlyTheSameScopeAndShowsItsOwnReadDate()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/failedRefreshRetainsOnlyTheSameScopeAndShowsItsOwnReadDate()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/failedRefreshRetainsOnlyTheSameScopeAndShowsItsOwnReadDate()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0013s",
+                  "durationInSeconds" : 0.0012559890747070312,
+                  "name" : "newerReadWinsEvenWhenTheOlderReadCompletesLastInTheSameScope()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/newerReadWinsEvenWhenTheOlderReadCompletesLastInTheSameScope()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/newerReadWinsEvenWhenTheOlderReadCompletesLastInTheSameScope()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00042s",
+                  "durationInSeconds" : 0.00041794776916503906,
+                  "name" : "changedContextRejectsLateResponseBeforeTheNextReadStarts()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/changedContextRejectsLateResponseBeforeTheNextReadStarts()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/changedContextRejectsLateResponseBeforeTheNextReadStarts()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00037s",
+                  "durationInSeconds" : 0.00037407875061035156,
+                  "name" : "cancelledInitialReadCanRetryWithoutAcceptingItsResponseOrSpinningForever()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/cancelledInitialReadCanRetryWithoutAcceptingItsResponseOrSpinningForever()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/cancelledInitialReadCanRetryWithoutAcceptingItsResponseOrSpinningForever()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.03s",
+                  "durationInSeconds" : 0.02971196174621582,
+                  "name" : "cancelledRefreshKeepsItsLastReadAndOffersRetryAfterAFetchFailure()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/cancelledRefreshKeepsItsLastReadAndOffersRetryAfterAFetchFailure()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/cancelledRefreshKeepsItsLastReadAndOffersRetryAfterAFetchFailure()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0014s",
+                  "durationInSeconds" : 0.0013921260833740234,
+                  "name" : "revokedAccessDiscardsPreviouslyReadCoursesAndRequestsAccountRefresh()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/revokedAccessDiscardsPreviouslyReadCoursesAndRequestsAccountRefresh()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/revokedAccessDiscardsPreviouslyReadCoursesAndRequestsAccountRefresh()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0016s",
+                  "durationInSeconds" : 0.0015850067138671875,
+                  "name" : "currentAccessRefusalAfterCancellationStillPurgesTheLastSuccessfulRead()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/currentAccessRefusalAfterCancellationStillPurgesTheLastSuccessfulRead()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/currentAccessRefusalAfterCancellationStillPurgesTheLastSuccessfulRead()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.001s",
+                  "durationInSeconds" : 0.001049041748046875,
+                  "name" : "resetDuringAnInflightReadRejectsTheResponse()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/resetDuringAnInflightReadRejectsTheResponse()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/resetDuringAnInflightReadRejectsTheResponse()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "7s",
+                  "durationInSeconds" : 7.180141925811768,
+                  "name" : "serverListLimitNeverClaimsExhaustiveCountsOrAFreeDay()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/serverListLimitNeverClaimsExhaustiveCountsOrAFreeDay()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/serverListLimitNeverClaimsExhaustiveCountsOrAFreeDay()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.055s",
+                  "durationInSeconds" : 0.05476808547973633,
+                  "name" : "dailyChronologyMixesCoursesAndLessonsWithStableDistinctIdentities()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/dailyChronologyMixesCoursesAndLessonsWithStableDistinctIdentities()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/dailyChronologyMixesCoursesAndLessonsWithStableDistinctIdentities()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0011s",
+                  "durationInSeconds" : 0.0011279582977294922,
+                  "name" : "equalStartAndEndTimesHaveAnOrderIndependentOfResponseOrder()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/equalStartAndEndTimesHaveAnOrderIndependentOfResponseOrder()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/equalStartAndEndTimesHaveAnOrderIndependentOfResponseOrder()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00081s",
+                  "durationInSeconds" : 0.0008080005645751953,
+                  "name" : "summaryCountsEachOccurrenceAndDistinguishesDraftAndCancelledCourses()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/summaryCountsEachOccurrenceAndDistinguishesDraftAndCancelledCourses()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/summaryCountsEachOccurrenceAndDistinguishesDraftAndCancelledCourses()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0016s",
+                  "durationInSeconds" : 0.001569986343383789,
+                  "name" : "instructorFilterUsesTheOccurrenceInstructorNotOnlyTheSeriesResponsible()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/instructorFilterUsesTheOccurrenceInstructorNotOnlyTheSeriesResponsible()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/instructorFilterUsesTheOccurrenceInstructorNotOnlyTheSeriesResponsible()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.32s",
+                  "durationInSeconds" : 0.3240811824798584,
+                  "name" : "coursesUseSchoolMidnightAndPreserveBothRepeatedAutumnHours()",
+                  "nodeIdentifier" : "SchoolAgendaCoursesTests/coursesUseSchoolMidnightAndPreserveBothRepeatedAutumnHours()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests/coursesUseSchoolMidnightAndPreserveBothRepeatedAutumnHours()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "SchoolAgendaCoursesTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaCoursesTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.19s",
+                  "durationInSeconds" : 0.1863248348236084,
+                  "name" : "emptyAgendaAlwaysOffersTheNextDayWithoutDuplicatingPlan()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/emptyAgendaAlwaysOffersTheNextDayWithoutDuplicatingPlan()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/emptyAgendaAlwaysOffersTheNextDayWithoutDuplicatingPlan()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.071s",
+                  "durationInSeconds" : 0.07065200805664062,
+                  "name" : "freshnessAppearsOnlyForRetainedContentAfterAnErrorInTheSameScope()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/freshnessAppearsOnlyForRetainedContentAfterAnErrorInTheSameScope()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/freshnessAppearsOnlyForRetainedContentAfterAnErrorInTheSameScope()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.04s",
+                  "durationInSeconds" : 0.04046797752380371,
+                  "name" : "confirmedLessonIsConsumedOnlyWhenThePlanningSheetReturns()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/confirmedLessonIsConsumedOnlyWhenThePlanningSheetReturns()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/confirmedLessonIsConsumedOnlyWhenThePlanningSheetReturns()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0018s",
+                  "durationInSeconds" : 0.0017809867858886719,
+                  "name" : "gridStartsOnMondayAndAlwaysHoldsSixWeeks()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/gridStartsOnMondayAndAlwaysHoldsSixWeeks()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/gridStartsOnMondayAndAlwaysHoldsSixWeeks()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.33s",
+                  "durationInSeconds" : 0.3279609680175781,
+                  "name" : "monthsSpanFourFiveOrSixWeeks()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/monthsSpanFourFiveOrSixWeeks()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/monthsSpanFourFiveOrSixWeeks()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.059s",
+                  "durationInSeconds" : 0.058567047119140625,
+                  "name" : "monthNavigationCrossesYears()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/monthNavigationCrossesYears()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/monthNavigationCrossesYears()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0027s",
+                  "durationInSeconds" : 0.002666950225830078,
+                  "name" : "selectedDayIsClampedToTheShorterMonth()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/selectedDayIsClampedToTheShorterMonth()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/selectedDayIsClampedToTheShorterMonth()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.014s",
+                  "durationInSeconds" : 0.014095067977905273,
+                  "name" : "gridDaysStayAtMidnightAcrossDaylightSavingChanges()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/gridDaysStayAtMidnightAcrossDaylightSavingChanges()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/gridDaysStayAtMidnightAcrossDaylightSavingChanges()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0058s",
+                  "durationInSeconds" : 0.005772113800048828,
+                  "name" : "weekRangeIsContainedInItsMonthGrid()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/weekRangeIsContainedInItsMonthGrid()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/weekRangeIsContainedInItsMonthGrid()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0035s",
+                  "durationInSeconds" : 0.0035109519958496094,
+                  "name" : "lessonsAreCountedOnTheirDayInTheSchoolTimeZone()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/lessonsAreCountedOnTheirDayInTheSchoolTimeZone()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/lessonsAreCountedOnTheirDayInTheSchoolTimeZone()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "4s",
+                  "durationInSeconds" : 4.786421060562134,
+                  "name" : "dayMarksAreCappedAtThree()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/dayMarksAreCappedAtThree()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/dayMarksAreCappedAtThree()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.002s",
+                  "durationInSeconds" : 0.0019838809967041016,
+                  "name" : "memoryServesAWeekFromItsMonthOnlyForTheSameScope()",
+                  "nodeIdentifier" : "SchoolAgendaMonthTests/memoryServesAWeekFromItsMonthOnlyForTheSameScope()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests/memoryServesAWeekFromItsMonthOnlyForTheSameScope()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "SchoolAgendaMonthTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolAgendaMonthTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.0056s",
+                  "durationInSeconds" : 0.005627870559692383,
+                  "name" : "decodesARealisticSeries()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/decodesARealisticSeries()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/decodesARealisticSeries()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0055s",
+                  "durationInSeconds" : 0.005460977554321289,
+                  "name" : "encodesNullsExplicitlyInTheSeriesCommand()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/encodesNullsExplicitlyInTheSeriesCommand()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/encodesNullsExplicitlyInTheSeriesCommand()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.002s",
+                  "durationInSeconds" : 0.002026081085205078,
+                  "name" : "formValidationMirrorsTheServerBounds()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/formValidationMirrorsTheServerBounds()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/formValidationMirrorsTheServerBounds()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00067s",
+                  "durationInSeconds" : 0.0006728172302246094,
+                  "name" : "draftRoundTripsThroughTheForm()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/draftRoundTripsThroughTheForm()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/draftRoundTripsThroughTheForm()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0015s",
+                  "durationInSeconds" : 0.001463174819946289,
+                  "name" : "wordingStaysShort()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/wordingStaysShort()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/wordingStaysShort()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.01s",
+                  "durationInSeconds" : 0.010351896286010742,
+                  "name" : "decodesEveryLearnerState()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/decodesEveryLearnerState()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/decodesEveryLearnerState()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.011s",
+                  "durationInSeconds" : 0.011195898056030273,
+                  "name" : "decodesMineAndTheStaffRoster()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/decodesMineAndTheStaffRoster()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/decodesMineAndTheStaffRoster()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.97s",
+                  "durationInSeconds" : 0.9693930149078369,
+                  "name" : "encodesEnrollmentCommands()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/encodesEnrollmentCommands()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/encodesEnrollmentCommands()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00097s",
+                  "durationInSeconds" : 0.0009729862213134766,
+                  "name" : "retriesKeepTheSameOperation()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/retriesKeepTheSameOperation()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/retriesKeepTheSameOperation()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0017s",
+                  "durationInSeconds" : 0.0017158985137939453,
+                  "name" : "contactMailNeedsARealAddress()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/contactMailNeedsARealAddress()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/contactMailNeedsARealAddress()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.03s",
+                  "durationInSeconds" : 0.029562950134277344,
+                  "name" : "decodesTheCourseSheet()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/decodesTheCourseSheet()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/decodesTheCourseSheet()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.007s",
+                  "durationInSeconds" : 0.006960868835449219,
+                  "name" : "decodesTheLearnerProgress()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/decodesTheLearnerProgress()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/decodesTheLearnerProgress()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0047s",
+                  "durationInSeconds" : 0.0047149658203125,
+                  "name" : "encodesSheetCommandsWithExplicitNulls()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/encodesSheetCommandsWithExplicitNulls()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/encodesSheetCommandsWithExplicitNulls()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00043s",
+                  "durationInSeconds" : 0.00043487548828125,
+                  "name" : "sheetRetriesKeepTheSameOperation()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/sheetRetriesKeepTheSameOperation()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/sheetRetriesKeepTheSameOperation()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "1s",
+                  "durationInSeconds" : 1.0150377750396729,
+                  "name" : "agendaListsOnlyTheSessionsOfTheDay()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/agendaListsOnlyTheSessionsOfTheDay()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/agendaListsOnlyTheSessionsOfTheDay()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.025s",
+                  "durationInSeconds" : 0.024805068969726562,
+                  "name" : "occurrenceSelectionKeepsTheServerIdentityAndAllowsIntentionalDraftRemoval()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/occurrenceSelectionKeepsTheServerIdentityAndAllowsIntentionalDraftRemoval()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/occurrenceSelectionKeepsTheServerIdentityAndAllowsIntentionalDraftRemoval()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0037s",
+                  "durationInSeconds" : 0.003654003143310547,
+                  "name" : "selectingADraftRefreshesItsReferenceWithoutReplacingLocalChanges()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/selectingADraftRefreshesItsReferenceWithoutReplacingLocalChanges()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/selectingADraftRefreshesItsReferenceWithoutReplacingLocalChanges()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0025s",
+                  "durationInSeconds" : 0.002502918243408203,
+                  "name" : "removedOccurrenceDoesNotSilentlySelectAnotherSessionAfterRefresh()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/removedOccurrenceDoesNotSilentlySelectAnotherSessionAfterRefresh()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/removedOccurrenceDoesNotSilentlySelectAnotherSessionAfterRefresh()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.017s",
+                  "durationInSeconds" : 0.016803979873657227,
+                  "name" : "selectingAnOccurrenceNeverKeepsTheScreenAfterAnAccessRefusal()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/selectingAnOccurrenceNeverKeepsTheScreenAfterAnAccessRefusal()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/selectingAnOccurrenceNeverKeepsTheScreenAfterAnAccessRefusal()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "duration" : "0.00098s",
+                      "durationInSeconds" : 0.0009839534759521484,
+                      "name" : "401",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    },
+                    {
+                      "duration" : "0.00088s",
+                      "durationInSeconds" : 0.0008819103240966797,
+                      "name" : "403",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    },
+                    {
+                      "duration" : "0.00062s",
+                      "durationInSeconds" : 0.0006229877471923828,
+                      "name" : "404",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    }
+                  ],
+                  "duration" : "0.00083s",
+                  "durationInSeconds" : 0.0008296171824137369,
+                  "name" : "cancelledRequestStillReturnsAReceivedAccessRefusal(status:)",
+                  "nodeIdentifier" : "SchoolCourseClientTests/cancelledRequestStillReturnsAReceivedAccessRefusal(status:)",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/cancelledRequestStillReturnsAReceivedAccessRefusal(status:)",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.001s",
+                  "durationInSeconds" : 0.0010230541229248047,
+                  "name" : "cancelledRequestNeverAcceptsAReceivedSuccess()",
+                  "nodeIdentifier" : "SchoolCourseClientTests/cancelledRequestNeverAcceptsAReceivedSuccess()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests/cancelledRequestNeverAcceptsAReceivedSuccess()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "SchoolCourseClientTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolCourseClientTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.0069s",
+                  "durationInSeconds" : 0.006891012191772461,
+                  "name" : "agendaWindowUsesStrictOverlapAndKeepsCrossingLessons()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/agendaWindowUsesStrictOverlapAndKeepsCrossingLessons()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/agendaWindowUsesStrictOverlapAndKeepsCrossingLessons()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0014s",
+                  "durationInSeconds" : 0.0013599395751953125,
+                  "name" : "eitherAgendaBoundaryCanBeUsedAlone()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/eitherAgendaBoundaryCanBeUsedAlone()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/eitherAgendaBoundaryCanBeUsedAlone()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0007s",
+                  "durationInSeconds" : 0.0006961822509765625,
+                  "name" : "dossierWithoutWindowKeepsItsFixedHistory()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/dossierWithoutWindowKeepsItsFixedHistory()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/dossierWithoutWindowKeepsItsFixedHistory()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.00044s",
+                  "durationInSeconds" : 0.00043892860412597656,
+                  "name" : "trainingReadKeepsOnlyTheLessonsOfItsTraining()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/trainingReadKeepsOnlyTheLessonsOfItsTraining()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/trainingReadKeepsOnlyTheLessonsOfItsTraining()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.08s",
+                  "durationInSeconds" : 0.08022093772888184,
+                  "name" : "defaultFixtureKeepsOneTrainingAndTwoLessons()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/defaultFixtureKeepsOneTrainingAndTwoLessons()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/defaultFixtureKeepsOneTrainingAndTwoLessons()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.13s",
+                  "durationInSeconds" : 0.12813997268676758,
+                  "name" : "threePermitFixtureIsAcceptedByTheClients()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/threePermitFixtureIsAcceptedByTheClients()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/threePermitFixtureIsAcceptedByTheClients()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.0095s",
+                  "durationInSeconds" : 0.009474039077758789,
+                  "name" : "twoPermitFixtureServesTheFirstTwoTrainings()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/twoPermitFixtureServesTheFirstTwoTrainings()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/twoPermitFixtureServesTheFirstTwoTrainings()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "0.03s",
+                  "durationInSeconds" : 0.029521942138671875,
+                  "name" : "cancelledLessonOpensWithItsPlannedGoals()",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/cancelledLessonOpensWithItsPlannedGoals()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/cancelledLessonOpensWithItsPlannedGoals()",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "duration" : "0.0072s",
+                      "durationInSeconds" : 0.007220029830932617,
+                      "name" : "\"agenda-mixed-month\"",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    },
+                    {
+                      "duration" : "0.021s",
+                      "durationInSeconds" : 0.02129983901977539,
+                      "name" : "\"agenda-mixed\"",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    }
+                  ],
+                  "duration" : "0.014s",
+                  "durationInSeconds" : 0.014259934425354004,
+                  "name" : "mixedAgendaFixtureIsAcceptedByTheRealClients(scenario:)",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/mixedAgendaFixtureIsAcceptedByTheRealClients(scenario:)",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/mixedAgendaFixtureIsAcceptedByTheRealClients(scenario:)",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "children" : [
+                    {
+                      "duration" : "0.05s",
+                      "durationInSeconds" : 0.04954695701599121,
+                      "name" : "\"agenda-courses-error\"",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    },
+                    {
+                      "duration" : "0.015s",
+                      "durationInSeconds" : 0.015280961990356445,
+                      "name" : "\"agenda-courses-stale\"",
+                      "nodeType" : "Arguments",
+                      "result" : "Passed"
+                    }
+                  ],
+                  "duration" : "0.032s",
+                  "durationInSeconds" : 0.03241395950317383,
+                  "name" : "courseFailureFixturesKeepLessonReadsAvailableAndRecover(scenario:)",
+                  "nodeIdentifier" : "SchoolVisualTransportTests/courseFailureFixturesKeepLessonReadsAvailableAndRecover(scenario:)",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests/courseFailureFixturesKeepLessonReadsAvailableAndRecover(scenario:)",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "SchoolVisualTransportTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests/SchoolVisualTransportTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "DrivyTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "Drivy",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

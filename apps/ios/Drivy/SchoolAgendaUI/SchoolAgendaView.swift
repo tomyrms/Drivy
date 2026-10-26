@@ -28,8 +28,7 @@ struct SchoolAgendaView: View {
     /// Administration qui enseigne aussi : ses leçons par défaut, toute l’école sur demande.
     @State private var wholeSchool = false
     /// Cours collectifs (#38) : séances de la fenêtre lue, catalogue pour savoir qui peut en créer.
-    @State private var courses: [SchoolCourseSeries] = []
-    @State private var coursesScope: SchoolAgendaScope?
+    @State private var courseRead = SchoolAgendaCourses()
     @State private var courseCatalogue: SchoolCourseCatalogue?
     @State private var courseEditor: SchoolCourseEditorWorkspace?
     @State private var courseDetail: SchoolCourseDetailWorkspace?
@@ -58,7 +57,7 @@ struct SchoolAgendaView: View {
     private var weekDays: [Date] { (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: weekStart) } }
     /// Compte, droits, école et filtre : ce qui change ici efface l’agenda au lieu de le garder.
     private var scopePrefix: String {
-        "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(instructorFilter?.uuidString ?? "all")"
+        "\(identityScope):\(workspace.membership?.schoolId.uuidString ?? ""):\(instructorFilter?.uuidString ?? "all"):\(schoolTimeZone)"
     }
     /// La fenêtre à lire : la semaine du jour choisi, ou les six semaines de la grille de son mois.
     private var currentScope: SchoolAgendaScope { scope(for: selectedDate, mode: displayMode) }
@@ -71,10 +70,6 @@ struct SchoolAgendaView: View {
         guard let loaded, loaded.prefix == scopePrefix else { return false }
         return loaded.range.contains(calendar.startOfDay(for: day))
     }
-    private var dailyLessons: [SchoolLesson] {
-        guard isLoaded(selectedDate) else { return [] }
-        return dayIndex[calendar.startOfDay(for: selectedDate)] ?? []
-    }
     private var dateTitle: String {
         if calendar.isDateInToday(selectedDate) { return "Aujourd’hui" }
         return SchoolDateFormat.template("EEEEdMMMM", selectedDate, zone: calendar.timeZone.identifier).capitalizedFirst
@@ -82,10 +77,14 @@ struct SchoolAgendaView: View {
     private var emptyPresentation: SchoolAgendaEmptyPresentation { SchoolAgendaEmptyPresentation(mayPlan: mayPlan) }
     private var schoolTimeZone: String { calendar.timeZone.identifier }
     private var mayCreateCourse: Bool { mayPlan && courseCatalogue?.canManage == true }
-    /// Séances de cours du jour choisi, dans l’ordre.
-    private var dailyCourses: [SchoolAgendaCourseItem] {
-        guard let coursesScope, coursesScope.prefix == scopePrefix, coursesScope.range.contains(calendar.startOfDay(for: selectedDate)) else { return [] }
-        return SchoolAgendaCourseItem.items(courses, on: selectedDate, calendar: calendar)
+    private var dailyEvents: [SchoolAgendaEvent] { events(on: selectedDate) }
+    private var courseError: String? { courseRead.error(in: currentScope, timeZone: schoolTimeZone) }
+    private func events(on day: Date) -> [SchoolAgendaEvent] {
+        SchoolAgendaEvent.day(lessons: isLoaded(day) ? dayIndex[calendar.startOfDay(for: day)] ?? [] : [],
+            courses: courseRead.items(in: currentScope), on: day, calendar: calendar, instructorID: instructorFilter)
+    }
+    private func isComplete(_ day: Date) -> Bool {
+        isLoaded(day) && error == nil && courseRead.isComplete(in: currentScope)
     }
 
     var body: some View {
@@ -106,7 +105,7 @@ struct SchoolAgendaView: View {
                         .padding(.trailing, DrivySpacing.xl)
                     }
                     .frame(maxWidth: AgendaLayout.dayColumnMaxWidth)
-                    .refreshable { await loadAgenda(keepingCurrent: true) }
+                    .refreshable { await refreshSources() }
                 }
                 .frame(maxWidth: AgendaLayout.weekColumnWidth + DrivySpacing.xl + AgendaLayout.dayColumnMaxWidth,
                     maxHeight: .infinity, alignment: .topLeading)
@@ -120,7 +119,7 @@ struct SchoolAgendaView: View {
                     }
                     .drivyPageContent(maxWidth: AgendaLayout.singleColumnMaxWidth)
                 }
-                .refreshable { await loadAgenda(keepingCurrent: true) }
+                .refreshable { await refreshSources() }
             }
         }
         .background(DrivyTheme.surface)
@@ -160,13 +159,13 @@ struct SchoolAgendaView: View {
         }
         .onChange(of: identityScope) { _, _ in
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
-            courseEditor = nil; courseDetail = nil; courses = []; coursesScope = nil; courseCatalogue = nil
+            courseEditor = nil; courseDetail = nil; courseRead.reset(); courseCatalogue = nil
             planningReturn = SchoolAgendaPlanningReturn(); freshness.reset()
         }
         // Retour au premier plan : la période se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
         // relira déjà l’agenda à sa fermeture.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && selectedLesson == nil && planningModel == nil { Task { await loadAgenda(keepingCurrent: true) } }
+            if phase == .active && selectedLesson == nil && planningModel == nil { Task { await refreshSources() } }
         }
     }
 
@@ -213,28 +212,44 @@ struct SchoolAgendaView: View {
                         .accessibilityIdentifier("agenda-retained-read-date")
                 }
             }
+            if let courseError {
+                SchoolErrorNotice(message: courseError, retry: { Task { await loadCourses() } }, retryIdentifier: "agenda-courses-retry")
+                    .accessibilityIdentifier("agenda-courses-error")
+            }
             if !isLoaded(selectedDate) && error == nil {
                 DrivySkeletonRows(count: 3, leading: .time).drivySkeleton("Chargement de l’agenda…")
-            } else if isLoaded(selectedDate) && dailyLessons.isEmpty && dailyCourses.isEmpty {
+            }
+            if courseRead.isLoading(in: currentScope) {
+                ProgressView("Chargement des cours…")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .accessibilityIdentifier("agenda-courses-loading")
+            }
+            if isComplete(selectedDate) && dailyEvents.isEmpty {
                 // Qui planifie a déjà « Planifier une leçon » dans l’en-tête du jour : pas de second bouton identique.
-                DrivyEmptyState(title: "Aucune leçon ce jour", message: "",
+                DrivyEmptyState(title: "Aucun rendez-vous ce jour", message: "",
                     symbol: "calendar", actionTitle: emptyPresentation.nextDayActionTitle) {
                     if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { select(next) }
                 }
-            } else if isLoaded(selectedDate) {
+            } else if !dailyEvents.isEmpty {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(dailyLessons.enumerated()), id: \.element.id) { index, lesson in
-                        Button { selectedLesson = lesson } label: {
-                            lessonRow(lesson, position: .at(index, count: dailyLessons.count))
-                        }
+                    ForEach(Array(dailyEvents.enumerated()), id: \.element.id) { index, event in
+                        switch event {
+                        case .lesson(let lesson):
+                            Button { selectedLesson = lesson } label: {
+                                lessonRow(lesson, position: .at(index, count: dailyEvents.count))
+                            }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint("Ouvre la leçon")
-                    }
-                    ForEach(dailyCourses) { item in
-                        Button { open(item.series) } label: { courseRow(item) }
+                            .accessibilityIdentifier("agenda-event-lesson-\(lesson.id.uuidString)")
+                        case .course(let item):
+                            Button { open(item.series, occurrenceID: item.occurrence.id) } label: {
+                                courseRow(item, position: .at(index, count: dailyEvents.count))
+                                    .accessibilityIdentifier("agenda-event-course-\(item.occurrence.id.uuidString)")
+                            }
                             .buttonStyle(DrivyRowButtonStyle())
                             .accessibilityHint(item.series.isDraft && item.series.canManage ? "Ouvre le brouillon" : "Ouvre le cours")
                             .accessibilityIdentifier("agenda-course-occurrence")
+                        }
                     }
                 }
             }
@@ -312,6 +327,7 @@ struct SchoolAgendaView: View {
                 .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget).contentShape(Rectangle())
         }
         .accessibilityLabel(label)
+        .accessibilityIdentifier(symbol == "chevron.left" ? "agenda-previous-period" : "agenda-next-period")
     }
 
     /// Semaine ou mois au même endroit : le nouvel affichage se pose en fondu, l’ancien s’efface aussitôt
@@ -340,11 +356,13 @@ struct SchoolAgendaView: View {
             HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.m) {
                 Text(dateTitle).font(.drivySection).foregroundStyle(DrivyTheme.text).fixedSize()
                     .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("agenda-selected-date")
                 Spacer(minLength: DrivySpacing.s)
                 if emptyPresentation.showsPlanInHeading { planButton }
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                 Text(dateTitle).font(.drivySection).foregroundStyle(DrivyTheme.text).accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("agenda-selected-date")
                 if emptyPresentation.showsPlanInHeading { planButton }
             }
         }
@@ -366,19 +384,21 @@ struct SchoolAgendaView: View {
                 .accessibilityIdentifier("agenda-plan-lesson")
         }
     }
-    private func courseRow(_ item: SchoolAgendaCourseItem) -> some View {
-        let details = [item.series.typeTitle, item.series.location].filter { !$0.isEmpty }
+    private func courseRow(_ item: SchoolAgendaCourseItem, position: DrivyThreadPosition) -> some View {
+        var details = [item.series.typeTitle, item.series.location].filter { !$0.isEmpty }
+        if showsInstructor { details.insert(item.occurrence.instructorDisplayName, at: 0) }
         return DrivyLessonRow(start: time(item.occurrence.start), end: time(item.occurrence.end), title: item.series.title,
-            details: details, note: item.series.isDraft ? DrivyRowNote(text: "Brouillon") : nil)
+            details: details, state: item.series.status == .cancelled ? .cancelled : nil,
+            note: item.series.isDraft ? DrivyRowNote(text: "Brouillon") : nil, railPosition: position)
     }
-    private func open(_ series: SchoolCourseSeries) {
+    private func open(_ series: SchoolCourseSeries, occurrenceID: UUID) {
         guard let membership = workspace.membership else { return }
         if series.isDraft && series.canManage {
             courseEditor = SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
-                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series)
+                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series, selectedOccurrenceID: occurrenceID)
         } else {
             courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series,
-                learners: workspace.learners)
+                learners: workspace.learners, selectedOccurrenceID: occurrenceID)
         }
     }
     private func newCourseEditor() -> SchoolCourseEditorWorkspace? {
@@ -386,13 +406,22 @@ struct SchoolAgendaView: View {
         return SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
             timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, day: selectedDate)
     }
-    /// Séances de la fenêtre affichée ; un échec garde ce qui est déjà lu (les leçons portent l’erreur de l’agenda).
+    /// Les deux sources ont chacune leur résultat ; la réussite de l'une ne masque pas l'autre.
+    @MainActor private func refreshSources() async {
+        async let lessonRead: Void = loadAgenda(keepingCurrent: true)
+        async let coursesRead: Void = loadCourses()
+        _ = await (lessonRead, coursesRead)
+    }
     @MainActor private func loadCourses() async {
         let wanted = currentScope
-        guard let schoolID = workspace.membership?.schoolId, workspace.school?.status == "ACTIVE" else { return }
-        guard let items = try? await client.courseClient.series(schoolID: schoolID, from: wanted.range.start, to: wanted.range.end),
-              !Task.isCancelled, currentScope == wanted else { return }
-        courses = items; coursesScope = wanted
+        guard let schoolID = workspace.membership?.schoolId, workspace.school?.status == "ACTIVE" else { courseRead.reset(); return }
+        let refreshAccess = await courseRead.load(scope: wanted, isCurrent: { currentScope == wanted }) {
+            try await client.courseClient.series(schoolID: schoolID, from: wanted.range.start, to: wanted.range.end)
+        }
+        if refreshAccess {
+            courseDetail = nil; courseEditor = nil; courseCatalogue = nil
+            await workspace.refreshAccount(minimumInterval: 0)
+        }
     }
     @MainActor private func loadCourseCatalogue() async {
         guard mayPlan, let schoolID = workspace.membership?.schoolId else { courseCatalogue = nil; return }
@@ -452,6 +481,7 @@ struct SchoolAgendaView: View {
                 // « Aujourd’hui » ne se lit pas qu’à la couleur du chiffre.
                 .accessibilityLabel(today ? "Aujourd’hui, \(formattedDay(day, template: "EEEE d MMMM"))" : formattedDay(day, template: "EEEE d MMMM"))
                 .accessibilityValue(summary.spokenCount)
+                .accessibilityIdentifier(SchoolAgendaMonth.dayIdentifier(day, calendar: calendar))
                 .accessibilityAddTraits(selected ? [.isSelected] : [])
             }
         }
@@ -482,12 +512,9 @@ struct SchoolAgendaView: View {
     private func formattedDay(_ date: Date, template: String) -> String {
         SchoolDateFormat.template(template, date, zone: calendar.timeZone.identifier)
     }
-    /// Mêmes leçons, même comptage dans la semaine et dans le mois ; rien tant que le jour n’est pas lu.
+    /// Même projection que la liste ; une lecture incomplète n'annonce jamais un jour libre.
     private func daySummary(on day: Date) -> SchoolAgendaDaySummary {
-        guard isLoaded(day) else { return .empty }
-        let lessons = dayIndex[calendar.startOfDay(for: day)] ?? []
-        let closed = lessons.filter { $0.drivyState.isClosed }.count
-        return SchoolAgendaDaySummary(active: lessons.count - closed, closed: closed)
+        SchoolAgendaEvent.summary(events(on: day), isComplete: isComplete(day))
     }
     private func moveWeek(_ offset: Int) { if let date = calendar.date(byAdding: .weekOfYear, value: offset, to: selectedDate) { select(date) } }
     /// Même jour du mois voisin, ramené au dernier jour s’il n’existe pas (31 janvier → février).
@@ -573,6 +600,7 @@ struct SchoolAgendaView: View {
             case .authentication, .forbidden:
                 SchoolAgendaMemory.forget()
                 lessons = []; dayIndex = [:]; loaded = nil; selectedLesson = nil; freshness.reset()
+                courseRead.reset(); courseCatalogue = nil; courseDetail = nil; courseEditor = nil
                 self.error = (error as? LocalizedError)?.errorDescription ?? "L’agenda n’a pas pu être chargé."
                 // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
                 // relu. Refusé, il ouvre la reconnexion ; modifié, il recharge l’école ; inchangé, rien ne bouge.

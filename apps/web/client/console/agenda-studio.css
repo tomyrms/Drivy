@@ -20,7 +20,7 @@
 .agenda-studio .agenda-day-date { display: flex; flex-wrap: wrap; align-items: baseline; gap: .375rem; margin: 0; padding: 0; font: 500 .875rem / 1.5 var(--font); }
 .agenda-studio .agenda-day-name { font: inherit; color: var(--text); text-transform: capitalize; }
 .agenda-studio .agenda-day-number { font: inherit; color: var(--muted); }
-.agenda-day-count { color: var(--muted); font: var(--type-caption); white-space: nowrap; }
+.agenda-day-count { color: var(--muted); font: var(--type-caption); text-align: end; }
 .agenda-studio .agenda-day .row-list { border: 1px solid var(--border); border-radius: .5rem; overflow: hidden; }
 .agenda-studio .agenda-lesson { grid-template-columns: 5.5rem minmax(0, 1fr) 1rem; min-block-size: 4.5rem; padding: .875rem 1rem; gap: 1rem; }
 .agenda-studio .agenda-time { gap: .25rem; font: 500 .875rem / 1.4 var(--font); font-variant-numeric: tabular-nums; }
@@ -68,5 +68,6 @@
 .course-session { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; padding-block-end: 12px; border-block-end: 1px solid var(--line, rgb(0 0 0 / .1)); }
 .course-session .field-error { grid-column: 1 / -1; }
 .course-preview-list { margin: 0; padding-inline-start: 1.2rem; display: grid; gap: 4px; }
+.course-preview-list > [aria-current="true"], .course-sessions > [aria-current="true"] { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 .course-editor-heading { display: flex; gap: 12px; align-items: center; }
 .course-editor-heading > .button { margin-inline-start: auto; }

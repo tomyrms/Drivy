@@ -1,8 +1,12 @@
+import { useEffect, useRef } from 'react';
 import { permitState, type PermitState } from '../command-core';
-import { reportHistory } from '../dossier-model';
+import { lessonMatchesSelection, reportHistory, reportsMatchLesson } from '../dossier-model';
+import { dayOf, formatTimeRange, lessonPhase } from '../agenda-model';
 import { lessonSchema, progressSchema, readAll, readSchool, reportSchema, type Lesson, type Permit, type Progress, type Report, type Training } from '../school-api';
 import { EmptyState, Loading, Notice, SelectField, formatCivilDate, formatDateTime, type Tone } from '../ui';
 import { readError, useLoad } from './context';
+import { useCommandSnapshot } from '../command-store';
+import { RequestFailure } from '../protocol';
 import { ReadRetry } from './layout';
 import { useListState } from './list-state';
 
@@ -43,9 +47,14 @@ function ReportBody({ report, competencies }: { report: Report; competencies: Re
 }
 
 /** Bilan publié d'une leçon, lu à la demande (dernière révision). */
-function LessonReport({ schoolId, lesson, competencies }: { schoolId: string; lesson: Lesson; competencies: ReadonlyMap<string, string> }) {
-  const [open, setOpen] = useListState(`report/${lesson.id}/open`, false);
-  const loaded = useLoad(async () => open ? (await readAll(schoolId, `lessons/${lesson.id}/reports`, reportSchema)).items : null, [schoolId, lesson.id, open], `${schoolId}/${lesson.id}`);
+function LessonReport({ schoolId, lesson, competencies, initiallyOpen = false }: { schoolId: string; lesson: Lesson; competencies: ReadonlyMap<string, string>; initiallyOpen?: boolean }) {
+  const [open, setOpen] = useListState(`report/${lesson.id}/open`, initiallyOpen);
+  const loaded = useLoad(async () => {
+    if (!open) return null;
+    const reports = (await readAll(schoolId, `lessons/${lesson.id}/reports`, reportSchema)).items;
+    if (!reportsMatchLesson(reports, lesson)) throw new RequestFailure('INVALID_RESPONSE');
+    return reports;
+  }, [schoolId, lesson.id, open], `${schoolId}/${lesson.id}`);
   // La dernière révision publiée : la plus haute séquence, quel que soit l’ordre de lecture.
   const latest = loaded.data?.reduce<Report | undefined>((best, item) => !best || item.sequence > best.sequence ? item : best, undefined);
   return (
@@ -58,6 +67,34 @@ function LessonReport({ schoolId, lesson, competencies }: { schoolId: string; le
       </details>
     </li>
   );
+}
+
+/** Exact, authorized lesson from agenda or a copied URL; independent of report/list pagination. */
+export function SelectedLessonContext({ schoolId, learnerId, lessonId, competencies, instructorName }: {
+  schoolId: string; learnerId: string; lessonId: string; competencies: ReadonlyMap<string, string>; instructorName: (id: string) => string;
+}) {
+  const { revision } = useCommandSnapshot();
+  const loaded = useLoad(async () => {
+    const lesson = await readSchool(schoolId, `lessons/${lessonId}`, lessonSchema);
+    return lessonMatchesSelection(lesson, { schoolId, learnerId, lessonId }) ? lesson : null;
+  }, [schoolId, learnerId, lessonId, revision], `${schoolId}/${learnerId}/${lessonId}`);
+  const heading = useRef<HTMLHeadingElement>(null), focused = useRef(false);
+  useEffect(() => {
+    if (loaded.status !== 'loading' && !focused.current) { heading.current?.focus(); focused.current = true; }
+  }, [loaded.status]);
+  const lesson = loaded.data;
+  const status = lesson ? ({ planned: 'Planifiée', waiting: 'En attente', started: 'En cours', 'to-finish': 'À terminer', completed: 'Terminée', cancelled: 'Annulée', absent: 'Absent' } as const)[lessonPhase(lesson)] : null;
+  return <section className="section-stack" aria-label="Leçon sélectionnée" data-lesson-id={lesson?.id}>
+    <h2 ref={heading} tabIndex={-1} className="section-title">{lesson ? `Leçon du ${formatCivilDate(dayOf(lesson.plannedStart, lesson.timeZone))}` : 'Leçon sélectionnée'}</h2>
+    {loaded.status === 'loading' && <Loading label="Lecture de la leçon…" />}
+    {loaded.status === 'error' && <Notice tone="error" title="Leçon indisponible" actions={<ReadRetry loaded={loaded} />}><p>{loaded.error}{lesson ? ' Les informations conservées peuvent être anciennes.' : ' Retrouvez les rendez-vous disponibles dans l’agenda.'}</p></Notice>}
+    {loaded.status === 'ready' && lesson === null && <Notice tone="error" title="Leçon indisponible" actions={<ReadRetry loaded={loaded} />}><p>Ce rendez-vous n’est pas disponible dans ce dossier. Retrouvez les rendez-vous disponibles dans l’agenda.</p></Notice>}
+    {lesson && <>
+      <p className="row-meta">{formatTimeRange(lesson.plannedStart, lesson.plannedEnd, lesson.timeZone)} · {instructorName(lesson.instructorMembershipId)} · {status}</p>
+      {lesson.meetingPoint && <p>{lesson.meetingPoint}</p>}
+      {lesson.currentPublishedRevisionId && <ul className="report-list"><LessonReport schoolId={schoolId} lesson={lesson} competencies={competencies} initiallyOpen /></ul>}
+    </>}
+  </section>;
 }
 
 /** Progression par compétence et bilans publiés d'une formation, en lecture seule. */
