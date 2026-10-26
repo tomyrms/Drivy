@@ -197,6 +197,24 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       ...(expectedSubject !== undefined ? { reauthenticationSubject: expectedSubject } : {}) };
     return {url:result.url};
   });
+  app.get('/app/bff/account-recovery/options', async request => {
+    empty.parse(request.query);
+    return { data: { available: config.accountRecoveryEnabled === true,
+      recoveryUrl: config.accountRecoveryEnabled === true ? `${config.origin}/app/recover` : null }, serverTime: new Date(now()).toISOString() };
+  });
+  app.post('/app/bff/account-recovery/start', async request => {
+    admit(request); empty.parse(request.body); empty.parse(request.query);
+    if (config.accountRecoveryEnabled !== true) throw new WebError(503,'ACCOUNT_RECOVERY_UNAVAILABLE');
+    // Keycloak supports an independent reset flow. No redirect URI means no app session or token exchange follows it.
+    const issuer = new URL(config.issuer);
+    if (issuer.username || issuer.password || issuer.search || issuer.hash ||
+        (issuer.protocol !== 'https:' && !(config.development && ['127.0.0.1','localhost','[::1]'].includes(issuer.hostname) && issuer.protocol === 'http:'))) {
+      throw new WebError(503,'ACCOUNT_RECOVERY_UNAVAILABLE');
+    }
+    const url = new URL(`${issuer.href.replace(/\/$/, '')}/login-actions/reset-credentials`);
+    url.searchParams.set('client_id',config.clientId); url.searchParams.set('ui_locales','fr');
+    return { url: url.href };
+  });
   const rotateSession = (session: Session, tokens: Tokens) => {
     if (session.tokens && session.tokens.principal.subject !== tokens.principal.subject && session.invitation) {
       if (session.invitation.accepting || (session.invitation.submitted && !session.invitation.accepted)) throw new WebError(409,'INVITATION_IN_PROGRESS');
@@ -448,7 +466,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     } });
   if (options.staticRoot) {
     await app.register(staticFiles,{root:options.staticRoot,prefix:'/app/',index:false,wildcard:false,cacheControl:false});
-    for (const path of ['/app','/app/','/app/preferences','/app/preferences/','/app/invitation','/app/ouvrir','/app/operateur','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
+    for (const path of ['/app','/app/','/app/recover','/app/preferences','/app/preferences/','/app/invitation','/app/ouvrir','/app/operateur','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
   }
   app.setNotFoundHandler(async (_request,reply) => reply.status(404).send({code:'NOT_FOUND',title:'Page introuvable.'}));
   return app;
