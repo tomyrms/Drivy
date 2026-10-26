@@ -54,7 +54,8 @@ function mailLink(text:string,expectedOrigin:string,path:string) {
   const links=(text.match(/https?:\/\/[^\s<>]+/g)??[]).map(value=>new URL(value)).filter(url=>url.origin===expectedOrigin&&url.pathname===path);
   if(links.length!==1||links[0]!.username||links[0]!.password)throw new Error('MAIL_LINK_INVALID');return links[0]!.href;
 }
-function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);}
+// Un contrôle réussi n'est jamais présenté comme l'étape en échec si l'action suivante échoue.
+function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);stage=`après « ${label} »`;}
 function docker(args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn('docker',args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('DOCKER_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('DOCKER_FAILED')));});}
 function runBuild(command:string,args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn(command,args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('IDENTITY_BUILD_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('IDENTITY_BUILD_FAILED')));});}
 async function buildIdentityProvider(temporary:string) {
