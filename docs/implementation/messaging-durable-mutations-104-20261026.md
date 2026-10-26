@@ -30,6 +30,8 @@ Scénarios ajoutés à `MessagingOptimisticMutationTests` : reprise hors connexi
 
 Le complément protocole vérifie un identifiant identique pour A/reprise de A après réouverture et un identifiant distinct pour B ; un ancien serveur sans reçu ne libère jamais B même si une relecture correspond à A. `MessagingHTTPTransportTests` couvre les headers et corps sur les sept formes de route, le reçu absent et le reçu incohérent. Les preuves PostgreSQL de non-réapplication d'A retardée et de revalidation des droits sont portées par le lot API associé.
 
+Deux régressions couvrent l'erreur locale après un remplacement ou un retrait déjà effectué : la reprise relit l'horloge réellement conservée, ne restaure pas les autres cibles actives et ne renvoie pas une action déjà confirmée pour réparer un retrait local.
+
 Suites Apple ciblées : `MessagingOptimisticMutationTests`, `MessagingProtectedStoreTests`, `MessagingCoreTests`, `MessagingHTTPTransportTests`. `SchoolNotificationSettingsTests` contient aussi la régression sur la huitième confirmation du lot #119, qui ne doit pas laisser un faux conflit.
 
 ## Limites de qualification

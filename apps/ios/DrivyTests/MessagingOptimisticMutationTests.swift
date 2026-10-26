@@ -252,6 +252,35 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await actions.releaseAll()
     }
 
+    func testFailureAfterDurableReplacementReloadsTheActualClockBeforeRetry() async {
+        let store = MutationMemory(), actions = GatedActions(holding: false)
+        let workspace = await make(actions, service: MutableService(wire()), store: store)
+        await store.failNextAfterWrite()
+        workspace.toggleReaction("👍", on: wire())
+        await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .storageFailed }
+        let before = await actions.calls, stored = await store.saved
+        XCTAssertTrue(before.isEmpty)
+        XCTAssertEqual(stored.first?.value.desired, .active(true))
+        workspace.retryMutations(for: wire())
+        await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .confirmed }
+        let after = await actions.calls
+        XCTAssertEqual(after, ["reaction 👍 true"])
+    }
+
+    func testFailureAfterDurableRemovalCanRecoverWithoutResendingTheAction() async {
+        let store = MutationMemory(), actions = GatedActions(holding: false)
+        let workspace = await make(actions, service: MutableService(wire(pinned: true)), store: store)
+        await store.failNextAfterRemoval()
+        workspace.setPinned(wire(), pinned: true)
+        await until { workspace.mutation(.pin, on: self.wire())?.status == .storageFailed }
+        let stored = await store.saved
+        XCTAssertTrue(stored.isEmpty)
+        workspace.retryMutations(for: wire())
+        await until { workspace.pendingMutations.isEmpty }
+        let calls = await actions.calls
+        XCTAssertEqual(calls, ["pin true"])
+    }
+
     func testRefusalOfAnOlderChoiceKeepsTheNewerIntentDurable() async {
         let store = MutationMemory(), actions = GatedActions(holding: true)
         await actions.fail(emoji: "👍", with: .stateConflict)
@@ -420,9 +449,12 @@ private actor MemoryOutbox: MessagingProtectedOutbox {
 private actor MutationMemory: MessagingProtectedMutations {
     private var values: [MessagingMutationKey: MessagingPendingMutation] = [:]
     private var writesFail = false, readsFail = false
+    private var failAfterWrite = false, failAfterRemoval = false
     var saved: [MessagingStoredMutation] { values.map { .init(key: $0.key, value: $0.value) } }
     func failWrites(_ fail: Bool) { writesFail = fail }
     func failReads(_ fail: Bool) { readsFail = fail }
+    func failNextAfterWrite() { failAfterWrite = true }
+    func failNextAfterRemoval() { failAfterRemoval = true }
     func mutationEntries(scope: MessagingScope) throws -> [MessagingStoredMutation] {
         if readsFail { throw MessagingFailure.protectionUnavailable }
         return saved
@@ -431,10 +463,12 @@ private actor MutationMemory: MessagingProtectedMutations {
         if writesFail { throw MessagingFailure.protectionUnavailable }
         guard values[entry.key]?.clock == clock else { throw MessagingFailure.stateConflict }
         values[entry.key] = entry.value
+        if failAfterWrite { failAfterWrite = false; throw MessagingFailure.protectionUnavailable }
     }
     func removeMutation(_ key: MessagingMutationKey, id: UUID, clock: UUID, scope: MessagingScope) throws {
         if writesFail { throw MessagingFailure.protectionUnavailable }
         if values[key]?.id == id && values[key]?.clock == clock { values[key] = nil }
+        if failAfterRemoval { failAfterRemoval = false; throw MessagingFailure.protectionUnavailable }
     }
 }
 

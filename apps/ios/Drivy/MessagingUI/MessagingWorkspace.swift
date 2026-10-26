@@ -72,6 +72,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private var persistedMutations: [MessagingMutationKey: MessagingPendingMutation] = [:]
     private var mutationPersistence: [MessagingMutationKey: Task<Bool, Never>] = [:]
     private var restoredMutations: Set<MessagingMutationKey> = []
+    private var mutationRebaseKeys: Set<MessagingMutationKey> = []
     /// Une seule requête en vol par cible ; à sa réponse, le dernier état souhaité est renvoyé si besoin.
     private var mutationsInFlight: Set<MessagingMutationKey> = []
     /// Refus explicite par message, affiché sur la bulle concernée.
@@ -737,7 +738,13 @@ struct MessagingInboxPreview: Equatable, Sendable {
             do {
                 let stored = try await mutationStore.mutationEntries(scope: scope)
                 guard currentScope() == scope else { return false }
-                for entry in stored {
+                let rebasing = mutationRebaseKeys
+                // Une écriture interrompue après le remplacement peut avoir abouti malgré son erreur.
+                // Relire seulement les cibles concernées évite de restaurer un état ancien des autres HTTP actifs.
+                for key in rebasing where !stored.contains(where: { $0.key == key }) {
+                    persistedMutationClocks[key] = nil; persistedMutations[key] = nil
+                }
+                for entry in stored where rebasing.isEmpty || rebasing.contains(entry.key) {
                     var value = entry.value
                     persistedMutationClocks[entry.key] = value.clock
                     persistedMutations[entry.key] = value
@@ -750,6 +757,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                     }
                     pendingMutations[entry.key] = value
                 }
+                mutationRebaseKeys.subtract(rebasing)
                 mutationsRestored = true
                 return true
             } catch {
@@ -782,13 +790,17 @@ struct MessagingInboxPreview: Equatable, Sendable {
                     guard currentScope() == scope else { return false }
                     persistedMutationClocks[key] = value.clock
                     persistedMutations[key] = value
-                    if pendingMutations[key] == value { return true }
+                    if pendingMutations[key] == value {
+                        if actionError == .protectionUnavailable,
+                           !pendingMutations.values.contains(where: { $0.status == .storageFailed }) { actionError = nil }
+                        return true
+                    }
                 } catch {
                     guard currentScope() == scope else { return false }
                     pendingMutations[key]?.status = .storageFailed
                     actionError = error as? MessagingFailure ?? .protectionUnavailable
-                    // La reprise explicite relira le journal partagé avant de remplacer un choix local devenu ancien.
-                    if error as? MessagingFailure == .stateConflict { mutationsRestored = false }
+                    // L'erreur peut être postérieure au remplacement durable ; la reprise relira sa vraie horloge.
+                    mutationRebaseKeys.insert(key); mutationsRestored = false
                     return false
                 }
             }
@@ -988,6 +1000,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                 guard currentScope() == scope else { return false }
                 pendingMutations[key]?.status = .storageFailed
                 actionError = .protectionUnavailable
+                mutationRebaseKeys.insert(key); mutationsRestored = false
                 return false
             }
         }
