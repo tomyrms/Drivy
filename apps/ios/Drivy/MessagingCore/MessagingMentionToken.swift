@@ -33,6 +33,36 @@ enum MessagingMentionToken {
         return String(text[..<at]) + "@" + displayName + " "
     }
 
+    /// Texte affiché avec chaque `@Nom` connu en gras. Les noms sont essayés du plus long au plus court.
+    static func styled(_ text: String, names: [String]) -> AttributedString {
+        var result = AttributedString(text)
+        for range in mentionRanges(in: text, names: names) {
+            guard let lower = AttributedString.Index(range.lowerBound, within: result),
+                  let upper = AttributedString.Index(range.upperBound, within: result) else { continue }
+            result[lower..<upper].inlinePresentationIntent = .stronglyEmphasized
+        }
+        return result
+    }
+
+    /// Plages `@Nom` reconnues, sans chevauchement, `@` en début de mot.
+    static func mentionRanges(in text: String, names: [String]) -> [Range<String.Index>] {
+        let ordered = names.filter { !$0.isEmpty }.sorted { $0.count > $1.count }
+        var ranges: [Range<String.Index>] = []
+        var index = text.startIndex
+        while let at = text[index...].firstIndex(of: "@") {
+            let startsWord = at == text.startIndex || text[text.index(before: at)].isWhitespace
+            let after = text.index(after: at)
+            if startsWord, let name = ordered.first(where: { text[after...].hasPrefix($0) }) {
+                let end = text.index(after, offsetBy: name.count)
+                ranges.append(at..<end)
+                index = end
+            } else {
+                index = after
+            }
+        }
+        return ranges
+    }
+
     private static func fold(_ s: String) -> String {
         s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "fr_FR"))
     }

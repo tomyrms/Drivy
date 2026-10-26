@@ -49,11 +49,16 @@ struct MessagingConversationView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { scrollTarget = $0 }
             statusStrip
             ScrollViewReader { proxy in
                 thread(proxy)
-                    .overlay(alignment: .top) { noticeView }
+                    .overlay(alignment: .top) {
+                        // Épinglé en pastille flottante au-dessus du fil : il ne pousse plus le contenu.
+                        VStack(spacing: 0) {
+                            MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { scrollTarget = $0 }
+                            noticeView
+                        }
+                    }
                     .overlay(alignment: .bottomTrailing) { jumpToBottom(proxy) }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         // #100 : fond Drivy continu jusqu'au bord, clavier compris ; seul le fond déborde.
@@ -632,18 +637,31 @@ struct MessagingPendingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: DrivySpacing.xxs) {
+            // Même bulle qu'un message envoyé : pas de contour pointillé qui clignote pendant l'envoi normal.
+            // Seul un vrai problème (refus) change la bulle ; les autres états restent sur la ligne d'état.
             Text(summary)
                 .foregroundStyle(DrivyTheme.text)
                 .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-                .background(DrivyTheme.accentSoft.opacity(0.6), in: MessagingBubbleShape(mine: true, tail: true))
+                .background(DrivyTheme.accentSoft, in: MessagingBubbleShape(mine: true, tail: true))
                 .overlay(MessagingBubbleShape(mine: true, tail: true)
-                    .stroke(refused == nil ? DrivyTheme.border : DrivyTheme.danger, style: StrokeStyle(lineWidth: 1, dash: refused == nil ? [4, 3] : [])))
+                    .stroke(refused == nil ? Color.clear : DrivyTheme.danger, lineWidth: 1))
+                .opacity(quiet ? 1 : 0.85)
             stateLine.font(.caption2)
+                .transition(.opacity)
         }
+        .animation(.easeOut(duration: 0.2), value: quiet)
         .padding(.leading, 56)
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("messaging.pending")
+    }
+
+    /// Envoi normal en cours (moins de 5 s) ou accepté : aucune mention d'état, la bulle est déjà à sa place.
+    private var quiet: Bool {
+        switch status {
+        case .queued?, .sending?, .accepted?, nil: true
+        default: false
+        }
     }
 
     @ViewBuilder private var stateLine: some View {
@@ -665,14 +683,15 @@ struct MessagingPendingBubble: View {
         case .offline?:
             Label("En attente de connexion", systemImage: "wifi.slash").foregroundStyle(DrivyTheme.muted)
         case .slow?:
-            Label("Envoi lent…", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
-        case .accepted?:
-            Label("Envoyé", systemImage: "checkmark").foregroundStyle(DrivyTheme.muted)
-                .accessibilityIdentifier("messaging.pending.sent")
-        case .sending?:
             Label("Envoi…", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
-        case .queued?, nil:
-            Label("En attente", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
+        case .accepted?:
+            // Coche discrète le temps que le message serveur remplace la bulle.
+            Image(systemName: "checkmark").foregroundStyle(DrivyTheme.textTertiary)
+                .accessibilityLabel("Envoyé")
+                .accessibilityIdentifier("messaging.pending.sent")
+        case .sending?, .queued?, nil:
+            // Rien à lire pendant un envoi normal ; VoiceOver annonce l'état.
+            Color.clear.frame(height: 0).accessibilityLabel("Envoi en cours")
         }
     }
 

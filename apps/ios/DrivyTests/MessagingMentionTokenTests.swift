@@ -33,4 +33,10 @@ final class MessagingMentionTokenTests: XCTestCase {
         XCTAssertNil(MessagingMentionToken.query(in: inserted))
         XCTAssertEqual(MessagingMentionToken.query(in: "@Dylan M"), "Dylan M")
     }
+
+    func testMentionRangesBoldKnownNamesOnly() {
+        let text = "Salut @Léa Fixture et @Inconnu, mail@x.ch"
+        let ranges = MessagingMentionToken.mentionRanges(in: text, names: ["Léa", "Léa Fixture"])
+        XCTAssertEqual(ranges.map { String(text[$0]) }, ["@Léa Fixture"])
+    }
 }

@@ -151,23 +151,26 @@ struct MessagingPinnedBanner: View {
                 onSelect(current.id)
                 index = (index + 1) % pinned.count
             } label: {
-                HStack(spacing: DrivySpacing.s) {
-                    RoundedRectangle(cornerRadius: 1.5).fill(DrivyTheme.accent).frame(width: 3)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: DrivySpacing.xxs) {
-                            Image(systemName: "pin.fill").accessibilityHidden(true)
-                            Text(pinned.count > 1 ? "Épinglé \(min(index, pinned.count - 1) + 1)/\(pinned.count)" : "Épinglé")
-                        }
-                        .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.accent)
-                        Text(workspace.contents[current.id]?.summary ?? "Message épinglé")
-                            .lineLimit(1).font(.subheadline).foregroundStyle(DrivyTheme.text)
+                // Une seule ligne compacte, flottante, sans bloc pleine largeur (retour du porteur).
+                HStack(spacing: DrivySpacing.xs) {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .accessibilityHidden(true)
+                    Text(workspace.contents[current.id]?.summary ?? "Message épinglé")
+                        .lineLimit(1).font(.footnote).foregroundStyle(DrivyTheme.text)
+                    if pinned.count > 1 {
+                        Text("\(min(index, pinned.count - 1) + 1)/\(pinned.count)")
+                            .font(.caption2.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                     }
-                    Spacer(minLength: 0)
                 }
-                .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
-                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
-                .background(DrivyTheme.surface)
-                .overlay(alignment: .bottom) { Rectangle().fill(DrivyTheme.border).frame(height: 0.5) }
+                .padding(.horizontal, DrivySpacing.s).padding(.vertical, 6)
+                .background(DrivyTheme.surfaceRaised, in: Capsule())
+                .overlay(Capsule().stroke(DrivyTheme.border, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                .frame(maxWidth: 320)
+                .padding(.top, DrivySpacing.xxs)
+                .frame(minHeight: DrivyLayout.tapTarget)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -217,8 +220,44 @@ struct MessagingBubble: View {
     private enum BubbleDialog { case deleteEveryone, react }
     @State private var dialog: BubbleDialog?
     @State private var votersFor: MessagingPollState?
+    /// Glissement vers la gauche pour répondre, borné pour rester un geste discret.
+    @State private var swipe: CGFloat = 0
+    @State private var swipeArmed = false
+    private static let swipeThreshold: CGFloat = 56
+
+    private var replySwipe: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onChanged { value in
+                // Horizontal vers la gauche seulement : le défilement vertical du fil reste prioritaire.
+                guard value.translation.width < 0, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                swipe = max(value.translation.width, -Self.swipeThreshold - 16)
+                let armed = swipe <= -Self.swipeThreshold
+                if armed != swipeArmed {
+                    swipeArmed = armed
+                    if armed { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                }
+            }
+            .onEnded { _ in
+                if swipeArmed { onReply() }
+                swipeArmed = false
+                withAnimation(DrivyMotion.settle(reduceMotion)) { swipe = 0 }
+            }
+    }
+
+    @ViewBuilder private var swipeHint: some View {
+        if swipe < 0 {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(swipeArmed ? DrivyTheme.accent : DrivyTheme.muted)
+                .opacity(min(1, -swipe / Self.swipeThreshold))
+                .offset(x: 28)
+                .accessibilityHidden(true)
+        }
+    }
 
     private var mine: Bool { message.senderID == workspace.scope.accountID }
+    /// Noms connus du contexte (membres du général, contacts) : un `@Nom` correspondant passe en gras.
+    private var mentionNames: [String] { workspace.knownDisplayNames }
     private var access: MessagingConversationAccess { workspace.access(for: message.conversationID) }
     private var canInteract: Bool { !message.meta.deletedForEveryone && access.canWrite && !selecting }
 
@@ -240,6 +279,9 @@ struct MessagingBubble: View {
                 }
                 bubble
                     .contextMenu { if !selecting { menu } }
+                    .offset(x: swipe)
+                    .overlay(alignment: .trailing) { swipeHint }
+                    .simultaneousGesture(replySwipe, including: canInteract ? .all : .subviews)
                 if !message.meta.reactions.isEmpty { reactions.padding(.top, -6).padding(.horizontal, DrivySpacing.xs) }
                 if showsMeta || message.meta.pinned { meta.padding(.horizontal, DrivySpacing.xs) }
                 syncStatus.padding(.horizontal, DrivySpacing.xs)
@@ -309,7 +351,7 @@ struct MessagingBubble: View {
                                   onShowVoters: { votersFor = state })
                     .frame(minWidth: 220)
             } else if let text = content?.text {
-                Text(text).foregroundStyle(DrivyTheme.text).textSelection(.enabled)
+                Text(MessagingMentionToken.styled(text, names: mentionNames)).foregroundStyle(DrivyTheme.text).textSelection(.enabled)
             } else if loaded, let code = workspace.decryptionCodes[message.id] {
                 Label("Illisible sur cet appareil · \(code)", systemImage: "lock").foregroundStyle(DrivyTheme.muted)
                     .accessibilityIdentifier("messaging.undecryptable")
@@ -465,9 +507,8 @@ struct MessagingBubble: View {
 
     @ViewBuilder private var menu: some View {
         if !message.meta.deletedForEveryone && access.canWrite {
-            // #102 : réactions rapides en tête du menu. L'action lance une tâche détachée et rend la main
-            // aussitôt, le menu et l'aperçu se ferment sans attendre le serveur ; un échec s'affiche
-            // dans la conversation (actionError) sans rouvrir le menu ni déplacer le fil.
+            // Réactions en tête du menu, palette compacte. Une palette garde le menu ouvert par défaut :
+            // chaque bouton force la fermeture du menu et de l'aperçu dès le choix (retour du porteur).
             ControlGroup {
                 ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
                     let reacted = message.meta.reactions.first { $0.emoji == emoji }?
@@ -478,9 +519,11 @@ struct MessagingBubble: View {
                         Text(emoji)
                     }
                     .accessibilityLabel(MessagingReactionPalette.label(emoji) + (reacted ? ", vous avez réagi" : ""))
+                    .menuActionDismissBehavior(.enabled)
                 }
             }
             .controlGroupStyle(.palette)
+            .menuActionDismissBehavior(.enabled)
             Button("Répondre", systemImage: "arrowshape.turn.up.left", action: onReply)
             Button(message.meta.pinned ? "Désépingler" : "Épingler", systemImage: message.meta.pinned ? "pin.slash" : "pin") {
                 workspace.setPinned(message, pinned: !message.meta.pinned)

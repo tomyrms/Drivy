@@ -517,6 +517,12 @@ struct MessagingInboxPreview: Equatable, Sendable {
         messages[conversationID]?.first { $0.id == id }.map(project)
     }
 
+    /// Noms affichables connus dans ce contexte, plus longs d'abord (« @Léa Martin » avant « @Léa »).
+    var knownDisplayNames: [String] {
+        Array(Set(members.map(\.displayName) + generalMembers.map(\.displayName) + contacts.map(\.displayName)))
+            .filter { !$0.isEmpty }.sorted { $0.count > $1.count }
+    }
+
     func displayName(_ personID: UUID) -> String {
         if personID == scope.accountID { return "Moi" }
         return members.first { $0.id == personID }?.displayName
