@@ -17,7 +17,7 @@ import Foundation
                 of: calendar.date(byAdding: .day, value: day, to: today)!)!
         }
         func envelope(_ object: Any) throws -> Data {
-            try JSONSerialization.data(withJSONObject: ["data": object, "requestId": "agenda-visual", "serverTime": iso.string(from: today)])
+            try JSONSerialization.data(withJSONObject: ["data": object, "requestId": "10000000-0000-4000-8000-000000000399", "serverTime": iso.string(from: today)])
         }
         func data(_ path: String) throws -> [String: Any] {
             guard let bytes = responses[path],
@@ -94,7 +94,7 @@ actor SchoolAgendaVisualTransport: SchoolHTTPTransport {
             }
         }
         struct Page: Encodable { let items: [SchoolCourseSeries] }
-        struct Envelope: Encodable { let data: Page; let requestId = "agenda-visual"; let serverTime = "2026-10-26T10:00:00Z" }
+        struct Envelope: Encodable { let data: Page; let requestId = "10000000-0000-4000-8000-000000000399"; let serverTime = "2026-10-26T10:00:00Z" }
         return SchoolHTTPResponse(data: try JSONEncoder().encode(Envelope(data: Page(items: matching))),
             status: 200, url: url, contentType: "application/json")
     }
