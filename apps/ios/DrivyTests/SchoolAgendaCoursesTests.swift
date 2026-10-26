@@ -123,6 +123,26 @@ import Testing
         #expect(!model.isComplete(in: scope))
     }
 
+    @Test func currentAccessRefusalAfterCancellationStillPurgesTheLastSuccessfulRead() async {
+        let model = SchoolAgendaCourses(), gate = AgendaCourseReadGate(), wanted = scope
+        await model.load(scope: wanted) { [course()] }
+        #expect(model.readAt != nil && !model.items.isEmpty)
+        let reading = Task {
+            await model.load(scope: wanted) {
+                _ = try await gate.fetch(1)
+                throw SchoolPlanningFailure.forbidden
+            }
+        }
+        await gate.waitForStart(1)
+        reading.cancel()
+        gate.finish(1, with: [])
+        let refreshAccess = await reading.value
+        #expect(refreshAccess)
+        #expect(model.items.isEmpty && model.readAt == nil)
+        #expect(model.state == .failed(SchoolPlanningFailure.forbidden.errorDescription!))
+        #expect(!model.isLoading(in: wanted) && !model.isComplete(in: wanted))
+    }
+
     @Test func resetDuringAnInflightReadRejectsTheResponse() async {
         let model = SchoolAgendaCourses(), gate = AgendaCourseReadGate(), wanted = scope
         let reading = Task { await model.load(scope: wanted) { try await gate.fetch(1) } }

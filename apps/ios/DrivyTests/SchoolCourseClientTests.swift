@@ -386,6 +386,69 @@ import Testing
         #expect(editor.accessUnavailable && editor.focusedOccurrenceID == nil)
         #expect(!editor.canSave && !editor.canPublish)
     }
+
+    @Test(arguments: [401, 403, 404])
+    func cancelledRequestStillReturnsAReceivedAccessRefusal(status: Int) async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let transport = CourseCancellationGate(base: CourseSelectionTransport(series: series, status: status))
+        let token = CourseCancellationToken()
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: token, transport: transport)
+        let reading = Task { () -> SchoolPlanningFailure? in
+            do { _ = try await client.series(schoolID: schoolID, id: seriesID); return nil }
+            catch { return error as? SchoolPlanningFailure }
+        }
+        await transport.waitForStart()
+        reading.cancel()
+        await transport.finish()
+        #expect(await reading.value == SchoolPlanningClient.failure(status, nil))
+        #expect(await transport.requestCount == 1)
+        #expect(token.invalidations == 0)
+    }
+
+    @Test func cancelledRequestNeverAcceptsAReceivedSuccess() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let transport = CourseCancellationGate(base: CourseSelectionTransport(series: series))
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: transport)
+        let reading = Task { () -> Bool in
+            do { _ = try await client.series(schoolID: schoolID, id: seriesID); return false }
+            catch { return error is CancellationError }
+        }
+        await transport.waitForStart()
+        reading.cancel()
+        await transport.finish()
+        #expect(await reading.value)
+    }
+}
+
+@MainActor private final class CourseCancellationToken: AccessTokenSource {
+    private(set) var invalidations = 0
+    func accessToken() async throws -> String { invalidations == 0 ? "synthetic-first" : "synthetic-renewed" }
+    func invalidateAccessToken(_ token: String) async -> Bool { invalidations += 1; return true }
+}
+
+/// La réponse arrive après l'annulation, comme un transport qui a déjà reçu les octets.
+private actor CourseCancellationGate: SchoolHTTPTransport {
+    let base: CourseSelectionTransport
+    private(set) var requestCount = 0
+    private var pending: CheckedContinuation<Void, Never>?
+    private var started: CheckedContinuation<Void, Never>?
+
+    init(base: CourseSelectionTransport) { self.base = base }
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        requestCount += 1
+        await withCheckedContinuation { continuation in
+            pending = continuation
+            started?.resume(); started = nil
+        }
+        return try await base.send(request)
+    }
+    func waitForStart() async {
+        if pending != nil { return }
+        await withCheckedContinuation { started = $0 }
+    }
+    func finish() {
+        pending?.resume(); pending = nil
+    }
 }
 
 private struct CourseSelectionTransport: SchoolHTTPTransport {

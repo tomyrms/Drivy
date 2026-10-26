@@ -59,15 +59,15 @@ import Observation
             state = fresh.count >= 200 ? .partial : .loaded
         } catch {
             guard requestID == id, isCurrent() else { return false }
-            if Task.isCancelled || error is CancellationError {
-                state = .interrupted
-                return false
-            }
             if let failure = error as? SchoolPlanningFailure,
                failure == .unauthorized || failure == .forbidden || failure == .notFound {
                 items = []; readAt = nil
                 state = .failed(failure.errorDescription ?? "Tes accès ont changé.")
                 return true
+            }
+            if Task.isCancelled || error is CancellationError {
+                state = .interrupted
+                return false
             }
             state = .failed("Réessaie pour retrouver les cours de cette période.")
         }
