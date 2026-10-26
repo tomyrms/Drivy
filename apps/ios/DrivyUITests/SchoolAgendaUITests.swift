@@ -26,7 +26,10 @@ import XCTest
         XCTAssertTrue(app.buttons["lesson-open-dossier"].label.contains("Camille Perret"), app.debugDescription)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "11:00", "12:00")).firstMatch.exists,
             app.debugDescription)
-        XCTAssertTrue(app.buttons["lesson-start"].exists, app.debugDescription)
+        app.navigationBars["Leçon"].buttons["Fermer"].tap()
+        XCTAssertTrue(app.navigationBars["Leçon"].waitForNonExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(app.segmentedControls["agenda-display-mode"].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(app.buttons[lessonID].isHittable, app.debugDescription)
     }
 
     func testCollectiveOnlyDayIsCountedInWeekAndMonthAndOpensItsCourse() {
@@ -106,15 +109,37 @@ import XCTest
         start.press(forDuration: 0.05, thenDragTo: end)
         let failure = element("agenda-courses-error", in: app)
         XCTAssertTrue(failure.waitForExistence(timeout: 15), app.debugDescription)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dernière lecture réussie")).firstMatch.exists,
-            app.debugDescription)
+        let retainedRead = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dernière lecture réussie")).firstMatch
+        XCTAssertTrue(retainedRead.exists, app.debugDescription)
+        let retainedDate = retainedRead.label.components(separatedBy: "Dernière lecture réussie").last!
+        let wasInterrupted = retainedRead.label.contains("L’actualisation a été interrompue")
         XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
         XCTAssertTrue(course(at: "09:00", in: app).exists, app.debugDescription)
         XCTAssertTrue(app.buttons[lessonID].exists)
         let retry = app.buttons["agenda-courses-retry"]
         reveal(retry, in: app)
         retry.tap()
+        let loading = element("agenda-courses-loading", in: app)
+        let networkFailure = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@",
+            "Cours non actualisés. Réessaie pour retrouver les cours de cette période.")).firstMatch
+        // Si le geste a été annulé avant le transport, la première reprise consomme
+        // la panne unique de la fixture. La transition doit être réelle, jamais un clic sans effet.
+        let resumed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !loading.exists && (!failure.exists || (wasInterrupted && networkFailure.exists))
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [resumed], timeout: 15), .completed, app.debugDescription)
+        if networkFailure.exists {
+            XCTAssertTrue(wasInterrupted, app.debugDescription)
+            XCTAssertTrue(networkFailure.label.hasSuffix(retainedDate), app.debugDescription)
+            XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
+            XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
+            XCTAssertTrue(app.buttons[lessonID].exists, app.debugDescription)
+            reveal(retry, in: app)
+            retry.tap()
+        }
         XCTAssertTrue(failure.waitForNonExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(loading.waitForNonExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(failure.exists, app.debugDescription)
         XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
         XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
     }
