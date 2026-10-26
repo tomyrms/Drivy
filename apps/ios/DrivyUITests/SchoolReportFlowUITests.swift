@@ -7,7 +7,7 @@ import XCTest
         let app = launch("lesson-draft")
         editDraft(in: app, text: " Brouillon conservé après fermeture")
         closeReport(in: app)
-        let keep = app.buttons["Conserver le brouillon et quitter"]
+        let keep = app.alerts.buttons.matching(identifier: "lesson-keep-draft-close").firstMatch
         XCTAssertTrue(keep.waitForExistence(timeout: 5), app.debugDescription)
         keep.tap()
         let open = app.buttons["Ouvrir la leçon"]
@@ -27,7 +27,7 @@ import XCTest
         let app = launch("lesson-draft-error")
         editDraft(in: app, text: " Texte gardé malgré la panne")
         closeReport(in: app)
-        let keep = app.buttons["Conserver le brouillon et quitter"]
+        let keep = app.alerts.buttons.matching(identifier: "lesson-keep-draft-close").firstMatch
         XCTAssertTrue(keep.waitForExistence(timeout: 5), app.debugDescription)
         keep.tap()
         XCTAssertTrue(app.buttons["Fermer"].waitForExistence(timeout: 5), app.debugDescription)

@@ -18,9 +18,9 @@ import XCTest
         XCTAssertTrue(name.isHittable, app.debugDescription)
         name.tap(); name.typeText(" Test fermeture")
         close.tap()
-        let stay = app.alerts.buttons["Continuer"]
+        let stay = app.alerts.buttons.matching(identifier: "Continuer").firstMatch
         XCTAssertTrue(stay.waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.alerts.buttons["Quitter sans enregistrer"].exists)
+        XCTAssertTrue(app.alerts.buttons.matching(identifier: "Quitter sans enregistrer").firstMatch.exists)
         stay.tap()
         XCTAssertTrue((name.value as? String)?.contains("Test fermeture") == true)
         let attachment = XCTAttachment(screenshot: app.screenshot())
