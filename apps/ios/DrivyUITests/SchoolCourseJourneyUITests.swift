@@ -17,7 +17,7 @@ import XCTest
         XCTAssertNotEqual(candidates.element(boundBy: 0).label, candidates.element(boundBy: 1).label)
         candidates.element(boundBy: 1).tap()
         XCTAssertTrue(app.buttons["Inscrire à toute la série"].waitForExistence(timeout: 10), app.debugDescription)
-        app.buttons["Annuler"].tap()
+        app.buttons.matching(identifier: "Annuler").firstMatch.tap()
         XCTAssertTrue(search.exists)
     }
 
@@ -58,7 +58,7 @@ import XCTest
         XCTAssertTrue(cancel.waitForExistence(timeout: 15), app.debugDescription)
         cancel.tap()
         XCTAssertTrue(app.staticTexts["Ton inscription aux 4 séances sera annulée."].waitForExistence(timeout: 10), app.debugDescription)
-        app.buttons["Garder"].tap()
+        app.buttons.matching(identifier: "Garder").firstMatch.tap()
         XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Inscrit")
     }
 
@@ -77,7 +77,7 @@ import XCTest
         amount.tap(); amount.typeText("80")
         app.navigationBars["Payé sur place"].buttons["Fermer"].tap()
         XCTAssertTrue(app.alerts["Quitter sans conserver le montant ?"].waitForExistence(timeout: 5), app.debugDescription)
-        app.alerts.buttons["Continuer"].tap()
+        app.alerts.buttons.matching(identifier: "Continuer").firstMatch.tap()
         XCTAssertEqual(amount.value as? String, "80")
         app.buttons["course-payment-submit"].tap()
         XCTAssertTrue(app.navigationBars["Payé sur place"].exists)
@@ -94,7 +94,7 @@ import XCTest
         title.tap(); title.typeText(" modifié")
         app.navigationBars["Brouillon"].buttons["Fermer"].tap()
         XCTAssertTrue(app.alerts["Quitter sans enregistrer ?"].waitForExistence(timeout: 5), app.debugDescription)
-        app.alerts.buttons["Continuer"].tap()
+        app.alerts.buttons.matching(identifier: "Continuer").firstMatch.tap()
         XCTAssertTrue((title.value as? String)?.contains("modifié") == true)
     }
 
