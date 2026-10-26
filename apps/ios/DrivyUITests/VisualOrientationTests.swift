@@ -20,6 +20,8 @@ import XCTest
         "onboarding-staff", "dossier-multi", "lessons-multi", "lessons-two", "progression-multi", "lesson-cancelled",
         "access-code", "access-register", "access-opening", "school-opening", "dossier-incomplete",
         "lesson-competencies", "lesson-route", "learner-lesson", "learner-lesson-planned", "learner-permit", "start-now-gps-known",
+        "sign-in-recovery-ready", "course-learner", "course-enrolled", "course-list", "course-editor", "course-roster",
+        "course-attendance", "course-payments-before-start",
     ]
 
     func testRequestedScreensAtRealOrientations() throws {
