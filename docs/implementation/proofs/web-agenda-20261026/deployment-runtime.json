@@ -1,0 +1,82 @@
+{
+  "checkedAt": "2026-10-26T13:28:07.660600+00:00",
+  "commit": "71390e97d3c3ac313673635fe06c40c2f8e98c46",
+  "scope": "Read-only runtime, internal API readiness and web journal counters; no journal content or environment exported.",
+  "current": "/opt/drivy-refonte/releases/5888f03718045e13dc3c304040ead26991ffe719",
+  "currentMatchesExpected": true,
+  "services": {
+    "api": {
+      "MainPID": "70603",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Sun 2026-10-25 15:30:55 UTC",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/releases/5888f03718045e13dc3c304040ead26991ffe719/apps/api",
+      "matchesActivationReceipt": true
+    },
+    "web": {
+      "MainPID": "73824",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Mon 2026-10-26 13:25:04 UTC",
+      "WorkingDirectory": "/opt/drivy-refonte/web-releases/71390e97d3c3ac313673635fe06c40c2f8e98c46/apps/web",
+      "ActiveState": "active",
+      "DropInPaths": "/etc/systemd/system/drivy-refonte-web.service.d/90-qa84-web-anchor.conf",
+      "actualCwd": "/opt/drivy-refonte/web-releases/71390e97d3c3ac313673635fe06c40c2f8e98c46/apps/web",
+      "matchesActivationReceipt": true
+    },
+    "identity": {
+      "MainPID": "40265",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Sat 2026-10-17 14:45:01 UTC",
+      "WorkingDirectory": "/opt/drivy-refonte/runtime/keycloak",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/runtime/keycloak",
+      "matchesActivationReceipt": true
+    },
+    "ingress": {
+      "MainPID": "0",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Tue 2026-10-06 09:40:07 UTC",
+      "WorkingDirectory": "",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "matchesActivationReceipt": true
+    },
+    "course-worker": {
+      "MainPID": "70666",
+      "NRestarts": "0",
+      "ExecMainStartTimestamp": "Sun 2026-10-25 15:32:11 UTC",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "ActiveState": "active",
+      "DropInPaths": "",
+      "actualCwd": "/opt/drivy-refonte/releases/5888f03718045e13dc3c304040ead26991ffe719/apps/api",
+      "matchesActivationReceipt": true
+    }
+  },
+  "apiReadiness": {
+    "httpStatus": 200,
+    "status": "ready",
+    "internalRequest": true
+  },
+  "webJournal": {
+    "sinceUTC": "2026-10-26 13:25:08 UTC",
+    "untilUTC": "2026-10-26 13:28:07 UTC",
+    "entries": 0,
+    "priorityErrors": 0,
+    "priorityWarnings": 0,
+    "messageErrorIndicators": 0,
+    "messageWarningIndicators": 0,
+    "invalidEntries": 0,
+    "contentExported": false
+  },
+  "environmentReadOnlyForHealthBinding": true,
+  "migrations": {
+    "count": 53,
+    "namesAndHashesMatchActivationReceipt": true,
+    "readOnlyTransaction": true,
+    "executed": false
+  },
+  "passed": true
+}
