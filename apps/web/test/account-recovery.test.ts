@@ -1,10 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildWebApp } from '../server/app.js';
 import type { IdentityProvider } from '../server/oidc.js';
+import { RateLimiter } from '../server/rate-limit.js';
 
 const config = { origin:'https://drivy.example', apiBaseURL:'https://drivy.example', issuer:'https://identity.example/realms/drivy',
   clientId:'drivy-web', clientSecret:'synthetic-account-recovery-000000', development:false,host:'127.0.0.1',port:3002 };
 describe('entrée récupération sans connexion applicative', () => {
+  it('refuse les entrées anonymes excessives et reprend après la fenêtre', async () => {
+    let now = 0;
+    const app = await buildWebApp({config:{...config,accountRecoveryEnabled:true},identity:{} as IdentityProvider,
+      entryLimiter:new RateLimiter(2,60_000,()=>now)});
+    try {
+      const csrf = (await app.inject('/app/bff/session')).json().csrfToken;
+      const start = () => app.inject({method:'POST',url:'/app/bff/account-recovery/start',headers:{origin:config.origin,'x-csrf-token':csrf},payload:{}});
+      expect((await start()).statusCode).toBe(200); expect((await start()).statusCode).toBe(200);
+      expect((await start()).statusCode).toBe(429);
+      now = 60_001;
+      expect((await start()).statusCode).toBe(200);
+    } finally { await app.close(); }
+  });
   it.each([false,true])('applique activation explicite %s et ne crée pas de session', async enabled => {
     const begin = vi.fn(); const app = await buildWebApp({config:{...config,accountRecoveryEnabled:enabled},identity:{begin} as unknown as IdentityProvider});
     try {

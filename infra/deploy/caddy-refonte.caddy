@@ -11,7 +11,7 @@ handle @drivyRefonteSensitive {
     route {
         # #50 reste fermé tant que SMTP et la limitation directe des demandes ne sont pas qualifiés.
         # Retirer ce refus uniquement avec la garde décrite dans account-recovery-20261026.md.
-        handle /identity/realms/drivy/login-actions/reset-credentials {
+        handle /identity/realms/drivy/login-actions/reset-credentials* {
             respond "La récupération est momentanément indisponible." 503
         }
         handle @drivyWeb {

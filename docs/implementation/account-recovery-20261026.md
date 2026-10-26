@@ -30,7 +30,9 @@ Procédure opératoire : sauvegarder la configuration et la base conformément a
 
 ## Vérification
 
-Exécuté localement avec Node 24 : huit tests API et deux tests BFF ciblés, types API/web, build web, contrôle de types du helper de recette. Ils vérifient l'absence d'énumération au niveau de l'endpoint options, les URL fixes, les valeurs par défaut, les refus CSRF et les corps/query interdits. Ils ne prouvent pas un envoi SMTP.
+Exécuté localement avec Node 24 : huit tests API ciblés et 42 tests web (trois récupération et 39 BFF), types API/web, build web, contrôle de types du helper de recette. Ils vérifient l'absence d'énumération au niveau de l'endpoint options, les URL fixes, les valeurs par défaut, les refus CSRF, les corps/query interdits et le refus 429 du BFF suivi de la reprise après fenêtre. Ils ne prouvent pas un envoi SMTP.
+
+La recette UI `scripts/dev/check-account-recovery.mjs` passe quatre cas Edge clair/sombre, disponibilité activée ou non, avec BFF synthétique : absence de service, panne à l'ouverture, panne de lecture et reprise, aucune erreur JavaScript ni débordement horizontal. Captures relues dans `proofs/account-recovery-20261026/`. Aucun fournisseur d'identité ni courrier n'est sollicité par cette recette UI.
 
 La recette réelle existante est étendue dans `scripts/dev/check-school-opening.ts` avec `check-school-account-recovery.ts` : realm Keycloak 26.7.4 éphémère, thème Drivy, Mailpit local, identité synthétique créée puis supprimée, comparaison connu/inconnu, courrier réel, changement de mot de passe, ancien mot de passe refusé, refresh révoqué si choisi, lien consommé et expiré, SMTP en panne, absence de session BFF créée. Aucun lien, token, mot de passe ou journal réseau n'est sauvegardé. **Cette extension n'a pas encore été exécutée localement : Docker est indisponible.** Son résultat doit être obtenu dans la CI intégrée avant de qualifier le parcours. Les trois rôles, la conservation des rattachements après une récupération et la reprise physique Face ID restent à qualifier avant clôture #50.
 
