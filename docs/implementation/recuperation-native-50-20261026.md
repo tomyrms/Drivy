@@ -35,3 +35,14 @@ recette intégrée, pas à une déduction depuis l'ouverture du navigateur.
 
 Tests Apple à exécuter. Aucun résultat physique, SMTP réel ou récupération d'un compte réel revendiqué.
 La recette du fournisseur isolé et la préparation d'activation sont documentées avec le lot serveur/web.
+
+## Exécution UI Apple
+
+Au commit `bd5cbdc`, les deux parcours de récupération passent sur iPhone et sur iPad dans le
+[run 40332822066](https://github.com/tomyrms/Drivy/actions/runs/40332822066). Les captures iPhone des deux états
+ont été inspectées : titre et actions visibles, aucun message promettant un e-mail envoyé.
+Ce run global reste **en échec**, avec deux autres tests cours et le test profil en échec par appareil.
+La vidéo du profil montre que le tap XCTest ciblait le conteneur du bouton « Continuer » et laissait
+l'alerte ouverte ; le helper de bouton terminal et une assertion de fermeture remplacent ce ciblage.
+Les corrections attendent une nouvelle exécution ; les tests unitaires du client de récupération
+seront également inclus dans la campagne complète.
