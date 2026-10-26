@@ -1,0 +1,249 @@
+{
+  "checkedAt": "2026-10-26T13:26:29.894576+00:00",
+  "commit": "71390e97d3c3ac313673635fe06c40c2f8e98c46",
+  "origin": "https://drivy.shulker.ch",
+  "checks": [
+    {
+      "path": "/app/apple-touch-icon.png",
+      "status": 200,
+      "sha256": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+      "expectedSHA256": "993f15b06297a3cab640ff68c40356f750632e1eb39d88ba8037e8915722b71f",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/App-BAtEqHZR.js",
+      "status": 200,
+      "sha256": "fe4b43dd3bce2033a721002bbbe1eeba3415570809c35039da5f949129f5f646",
+      "expectedSHA256": "fe4b43dd3bce2033a721002bbbe1eeba3415570809c35039da5f949129f5f646",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/Console-CF3JGmcV.js",
+      "status": 200,
+      "sha256": "20421b090a00d7fb744f8fbc9e7811e8a3bff82054fe6ef73a9453ab522f4c88",
+      "expectedSHA256": "20421b090a00d7fb744f8fbc9e7811e8a3bff82054fe6ef73a9453ab522f4c88",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/Console-CRfyj4Oa.css",
+      "status": 200,
+      "sha256": "fd4873f58786160e92e8cfaa7b5bd93467b76213ebde6f9ab8596a0e83f8ea82",
+      "expectedSHA256": "fd4873f58786160e92e8cfaa7b5bd93467b76213ebde6f9ab8596a0e83f8ea82",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/Manrope-Variable-D0hgXaxw.woff2",
+      "status": 200,
+      "sha256": "22f962f7e0e72d1e5d99888e902132b4ad4ad8b18ccc3a65e1bb7c87566bb56d",
+      "expectedSHA256": "22f962f7e0e72d1e5d99888e902132b4ad4ad8b18ccc3a65e1bb7c87566bb56d",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/account-entry-BtAyNZpO.js",
+      "status": 200,
+      "sha256": "7a40d62847188369bc055637d58a6d393108739e90f481ead2da0c27e04a6024",
+      "expectedSHA256": "7a40d62847188369bc055637d58a6d393108739e90f481ead2da0c27e04a6024",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/account-entry-route-C3XQwMkn.js",
+      "status": 200,
+      "sha256": "45f4c3b0298a94b594103b13820d0bde149ac507e7e529a12fb5244ec99cf093",
+      "expectedSHA256": "45f4c3b0298a94b594103b13820d0bde149ac507e7e529a12fb5244ec99cf093",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/index-B-v6T9VL.js",
+      "status": 200,
+      "sha256": "c3fa5b764837a8ecdd1fb621d4ea644c3ce4a43cd28ca4575d7fac570b8d39e9",
+      "expectedSHA256": "c3fa5b764837a8ecdd1fb621d4ea644c3ce4a43cd28ca4575d7fac570b8d39e9",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/index-Cmuz9aFS.css",
+      "status": 200,
+      "sha256": "a57f37872db957f00ae3747db80d5c4174f60f0c394e97146348794be8c40f1a",
+      "expectedSHA256": "a57f37872db957f00ae3747db80d5c4174f60f0c394e97146348794be8c40f1a",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/preferences-BfEZhGPP.js",
+      "status": 200,
+      "sha256": "740cee88f5207d904be8596482f68bd76d85ca93a95c68a250d16dfa18e89aa0",
+      "expectedSHA256": "740cee88f5207d904be8596482f68bd76d85ca93a95c68a250d16dfa18e89aa0",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/preferences-HcY-LSHP.css",
+      "status": 200,
+      "sha256": "45a138d8a74a73a75a5077f919338ce88a376c1d8dda15c0be1206072bf2cb00",
+      "expectedSHA256": "45a138d8a74a73a75a5077f919338ce88a376c1d8dda15c0be1206072bf2cb00",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/assets/school-opening-C2EPDss0.js",
+      "status": 200,
+      "sha256": "ab171ed7cbbe202b72e9131f763e6e1e28b3165624fcaa4f56d4c42cb8e48cb2",
+      "expectedSHA256": "ab171ed7cbbe202b72e9131f763e6e1e28b3165624fcaa4f56d4c42cb8e48cb2",
+      "cacheControl": "public, max-age=31536000, immutable",
+      "passed": true
+    },
+    {
+      "path": "/app/favicon-32.png",
+      "status": 200,
+      "sha256": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+      "expectedSHA256": "e4851a47ac2a25057b4676a539781335f9473855a77e2bec0d163e65a42392ed",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/favicon.ico",
+      "status": 200,
+      "sha256": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+      "expectedSHA256": "0e4b08d3d040a6c29b4007008429be466ae1be40f93a682120d4354370f12820",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/favicon.svg",
+      "status": 200,
+      "sha256": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+      "expectedSHA256": "912c5c3a0b7b038ccf434722dfc48727fa7298626d3670f70d870fc21c29fdd9",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/icon-192.png",
+      "status": 200,
+      "sha256": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+      "expectedSHA256": "8e031bf07a0fbfa312930ec917fc65a6d0b4859fa7766185c7249efcfaa732f3",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/icon-512.png",
+      "status": 200,
+      "sha256": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+      "expectedSHA256": "f6f34cf69ad7803738081dfaf6620416293e3b7ed8b87005cfd54f9e424569a5",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/index.html",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "expectedSHA256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/site.webmanifest",
+      "status": 200,
+      "sha256": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+      "expectedSHA256": "4cf15553b61153d5f461effa735740554487fd256b87d088168c3eef05bedd67",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/theme-init.js",
+      "status": 200,
+      "sha256": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354",
+      "expectedSHA256": "6fad58c2c4851aaa252c4de5a9c3b14299a9a4bca16dcc1225c7639087d6a354",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/preferences",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/preferences/",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/invitation",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/ouvrir",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/operateur",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/gestion",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/gestion/agenda",
+      "status": 200,
+      "sha256": "2bbb08e7dcbcf48f15b2b6db9884a6dda8e371aba34f4043f42df14d2e7ad7ce",
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/bff/session",
+      "status": 200,
+      "anonymous": true,
+      "cacheControl": "no-store",
+      "passed": true
+    },
+    {
+      "path": "/app/bff/me",
+      "status": 401,
+      "passed": true
+    },
+    {
+      "path": "/refonte/v1/me",
+      "status": 401,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "count": 32
+}
