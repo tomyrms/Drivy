@@ -208,6 +208,11 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   await page.screenshot({path:resolve(artifactDirectory,'08-premiere-lecon-planifiee-synthetic.png'),fullPage:true});
   if(process.argv.includes('--v3'))await verifyV3Agenda({page,schoolPath,bff,civilDay,instructorId:founder.id,instructorName:founder.displayName,artifactDirectory,assert,setStage});
   if(process.argv.includes('--v4'))await verifyV4Web({page,schoolPath,bff,artifactDirectory,assert,setStage});
+  // #51 : la leçon s'ouvre d'abord dans l'agenda ; sa fiche mène au dossier du bon élève.
+  setStage('première leçon : fiche de la leçon depuis l’agenda');
   await page.locator('.agenda-lesson').click();
-  assert(new URL(page.url()).searchParams.get('selection')===learner.id,'La leçon de l’Agenda ouvre toujours le dossier du bon élève');
+  await page.waitForURL(url=>url.searchParams.get('lesson')===lesson.id,{waitUntil:'commit'});
+  await page.getByRole('button',{name:'Ouvrir le dossier élève',exact:true}).click();
+  await page.waitForURL(url=>url.pathname===`/app/gestion/${schoolId}/eleves`,{waitUntil:'commit'});
+  assert(new URL(page.url()).searchParams.get('selection')===learner.id,'La leçon de l’Agenda ouvre sa fiche, puis le dossier du bon élève');
 }
