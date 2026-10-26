@@ -42,6 +42,7 @@ import Observation
     private(set) var confirmation: String?
     /// Échec du coffre local, distinct d'une écriture refusée par l'école.
     private(set) var localDraftError: String?
+    private(set) var localDraftReadFailed = false
     /// Vrai uniquement après le reçu de sauvegarde de ce bilan et le retrait durable de sa demande.
     private(set) var reportSaveConfirmed = false
     private(set) var pendingReviewed = false
@@ -76,6 +77,7 @@ import Observation
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAccessible = false
     @ObservationIgnored private var localDraftRemovalFailed = false
+    @ObservationIgnored private var localDraftDiscardRequested = false
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
@@ -88,14 +90,14 @@ import Observation
     var canReadLessonContent: Bool { isAuthor || isOwnLearner || membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") }
     var canReadSharedReport: Bool { isAuthor || isOwnLearner || membership.roles.contains("INSTRUCTOR") }
     var replayableCaptures: [SchoolCaptureSession] { captures.filter(SchoolTripsWorkspace.isReplayable) }
-    var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil }
+    var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil && !localDraftReadFailed }
     /// Réglage de partage tout juste demandé, en cours d’envoi : la saisie n’en dépend pas.
     private var isSendingSharing: Bool { isBusy && isFirstSend && pending?.kind == .updateLessonSharing }
     /// Saisie possible. Une relecture silencieuse ou l’envoi d’un réglage de partage ne ferment rien à l’écran ;
     /// seul un état qui dure le fait : accès retiré, conflit à relire, stockage fermé, demande à vérifier,
     /// contenu en cours d’enregistrement. L’envoi d’une commande reste gardé par `canMutate`.
     var acceptsInput: Bool {
-        guard !invalidated, !needsReload, storageAccessible, !awaitsRereadAfterWrite else { return false }
+        guard !invalidated, !needsReload, storageAccessible, !awaitsRereadAfterWrite, !localDraftReadFailed else { return false }
         return pending == nil ? !isBusy : isSendingSharing
     }
     /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
@@ -148,7 +150,9 @@ import Observation
     /// Un coffre illisible n’écrit rien : la saisie reste en mémoire, jamais en clair sur le disque.
     @discardableResult func persistLocalDraft() -> Bool {
         guard let localDrafts, !invalidated, isAuthor, let draft, lesson?.status == "COMPLETED" else { return false }
+        guard !localDraftReadFailed else { return false }
         localDraftRemovalFailed = false
+        localDraftDiscardRequested = false
         do {
             if reportEdited {
                 try localDrafts.save(SchoolReportLocalDraft(draftID: draft.id, lessonID: lessonID, base: Self.content(of: draft),
@@ -159,13 +163,26 @@ import Observation
             localDraftError = nil
             return true
         } catch {
-            localDraftError = "Le brouillon n’a pas pu être conservé sur cet appareil. Garde cette fiche ouverte et réessaie."
+            localDraftError = reportEdited
+                ? "Le brouillon n’a pas pu être conservé sur cet appareil. Garde cette fiche ouverte et réessaie."
+                : "Le brouillon n’a pas pu être supprimé de cet appareil. Réessaie avant de quitter."
             return false
         }
     }
+    var requiresLocalDraftResolution: Bool { localDraftReadFailed || localDraftError != nil }
+
+    /// Même sans différence affichée, le retrait de l'ancien brouillon doit être effectif avant la sortie.
+    func closeWithoutLocalEdits() -> Bool {
+        guard !invalidated, !hasLocalEdits, !holdsScreen, !localDraftReadFailed else { return false }
+        if localDrafts != nil, isAuthor, draft != nil, lesson?.status == "COMPLETED" {
+            guard persistLocalDraft() else { return false }
+        }
+        close()
+        return true
+    }
     /// Le coffre ne contient que le bilan, pas les objectifs ni le souhait : ne pas promettre leur conservation.
     var canKeepLocalDraft: Bool {
-        localDrafts != nil && !invalidated && isAuthor && draft != nil && lesson?.status == "COMPLETED"
+        localDrafts != nil && !invalidated && !localDraftReadFailed && isAuthor && draft != nil && lesson?.status == "COMPLETED"
             && reportEdited && !preparationChanged && !wishChanged && !holdsScreen
     }
     /// Aucun envoi à l'école. Une demande déjà en file y reste, même après fermeture de la fiche.
@@ -175,10 +192,15 @@ import Observation
         return true
     }
     /// Le moniteur renonce à sa saisie, ou l’école vient de l’enregistrer.
-    @discardableResult func discardLocalDraft() -> Bool {
+    @discardableResult func discardLocalDraft(explicit: Bool = false) -> Bool {
         guard let localDrafts, let draft else { return true }
+        guard explicit || !localDraftReadFailed else { return false }
+        localDraftDiscardRequested = explicit
         do {
-            try localDrafts.remove(scope: scope, draftID: draft.id)
+            if explicit { try localDrafts.discard(scope: scope, draftID: draft.id) }
+            else { try localDrafts.remove(scope: scope, draftID: draft.id) }
+            localDraftReadFailed = false
+            localDraftRemovalFailed = false
             localDraftError = nil
             return true
         } catch {
@@ -189,7 +211,13 @@ import Observation
     }
     func retryLocalDraft() {
         guard !invalidated else { return }
-        if localDraftRemovalFailed { discardLocalDraft() } else { persistLocalDraft() }
+        if localDraftRemovalFailed { discardLocalDraft(explicit: localDraftDiscardRequested) }
+        else if localDraftReadFailed {
+            if restoreUnsentReport() {
+                needsReload = true
+                errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
+            }
+        } else { persistLocalDraft() }
     }
     private static func content(of draft: SchoolReportDraft) -> SchoolReportLocalDraft.Content {
         .init(workedOn: draft.workedOn, observationText: draft.observationText, nextStep: draft.nextStep, observations: draft.observations)
@@ -200,13 +228,26 @@ import Observation
     private func restoreUnsentReport() -> Bool {
         guard isAuthor, let draft, lesson?.status == "COMPLETED" else { return false }
         let server = Self.content(of: draft)
-        if let localDrafts, let stored = try? localDrafts.read(scope: scope, draftID: draft.id) {
-            if stored.edited == server {
-                try? localDrafts.remove(scope: scope, draftID: draft.id)
-            } else {
-                workedOn = stored.edited.workedOn; observationText = stored.edited.observationText
-                nextStep = stored.edited.nextStep; observations = stored.edited.observations
-                return stored.base != server
+        if let localDrafts {
+            do {
+                let stored = try localDrafts.read(scope: scope, draftID: draft.id)
+                localDraftReadFailed = false
+                localDraftRemovalFailed = false; localDraftDiscardRequested = false
+                localDraftError = nil
+                if let stored {
+                    if stored.edited == server {
+                        _ = discardLocalDraft()
+                    } else {
+                        workedOn = stored.edited.workedOn; observationText = stored.edited.observationText
+                        nextStep = stored.edited.nextStep; observations = stored.edited.observations
+                        return stored.base != server
+                    }
+                }
+            } catch {
+                localDraftReadFailed = true
+                localDraftRemovalFailed = false; localDraftDiscardRequested = false
+                localDraftError = "Le brouillon de cet appareil n’a pas pu être relu. Réessaie avant de modifier le bilan."
+                return false
             }
         }
         guard proposesWorkedOn, server.isEmpty else { return false }
@@ -314,6 +355,7 @@ import Observation
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
         isFirstSend = false; awaitsRereadAfterWrite = false
         localDraftError = nil
+        localDraftReadFailed = false; localDraftRemovalFailed = false; localDraftDiscardRequested = false
         wake()
     }
     /// Attend la fin de la relecture ou de l’envoi en cours. Un appui fait pendant ce bref passage n’est ni grisé
@@ -351,7 +393,7 @@ import Observation
     func load(discardingEdits: Bool = false) async {
         guard !invalidated, !isBusy else { return }
         if discardingEdits {
-            guard discardLocalDraft() else { return }
+            guard discardLocalDraft(explicit: true) else { return }
             proposesWorkedOn = false
         }
         generation = UUID(); let request = generation

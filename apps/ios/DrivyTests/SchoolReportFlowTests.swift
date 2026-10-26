@@ -173,11 +173,51 @@ import Testing
         let other = SchoolCommandScope(personID: UUID(), schoolID: scope.schoolID, membershipID: scope.membershipID,
             accessEpoch: scope.accessEpoch, apiBaseURL: scope.apiBaseURL)
         #expect(throws: SchoolConfigurationFailure.storage) { _ = try store.read(scope: other, draftID: draft.draftID) }
+        #expect(throws: SchoolConfigurationFailure.storage) { try store.save(draft, scope: other) }
+        #expect(throws: SchoolConfigurationFailure.storage) { try store.remove(scope: other, draftID: draft.draftID) }
         let otherKey = EncryptedSchoolReportDraftStore(directory: directory, keyData: Data(repeating: 9, count: 32))
         #expect(throws: SchoolConfigurationFailure.storage) { _ = try otherKey.read(scope: scope, draftID: draft.draftID) }
+        #expect(throws: SchoolConfigurationFailure.storage) { try otherKey.save(draft, scope: scope) }
+        #expect(throws: SchoolConfigurationFailure.storage) { try otherKey.remove(scope: scope, draftID: draft.draftID) }
+        #expect(try Data(contentsOf: file) == bytes)
 
         try store.remove(scope: scope, draftID: draft.draftID)
         #expect(try store.read(scope: scope, draftID: draft.draftID) == nil)
+    }
+
+    @Test func corruptedLocalDraftRequiresExplicitDiscardBeforeReplacement() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("drivy-report-corrupt-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = EncryptedSchoolReportDraftStore(directory: directory, keyData: Data(repeating: 7, count: 32))
+        let scope = ConfigurationFixture.scope(), draft = Self.localDraft(edited: "Texte conservé")
+        try store.save(draft, scope: scope)
+        let file = directory.appendingPathComponent("\(draft.draftID.uuidString.lowercased()).bin")
+        let corrupted = Data([1, 2, 3])
+        try corrupted.write(to: file)
+        #expect(throws: SchoolConfigurationFailure.storage) { try store.save(draft, scope: scope) }
+        #expect(throws: SchoolConfigurationFailure.storage) { try store.remove(scope: scope, draftID: draft.draftID) }
+        #expect(try Data(contentsOf: file) == corrupted)
+        try store.discard(scope: scope, draftID: draft.draftID)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        try store.save(draft, scope: scope)
+        #expect(try store.read(scope: scope, draftID: draft.draftID) == draft)
+    }
+
+    @Test func missingKeyWithExistingDraftNeverCreatesAReplacementKey() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("drivy-report-missing-key-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = ReportDraftVaultStub()
+        let store = EncryptedSchoolReportDraftStore(directory: directory, vault: vault)
+        let scope = ConfigurationFixture.scope(), draft = Self.localDraft(edited: "Texte conservé")
+        try store.save(draft, scope: scope)
+        let file = directory.appendingPathComponent("\(draft.draftID.uuidString.lowercased()).bin")
+        let bytes = try Data(contentsOf: file)
+        vault.value = nil
+        #expect(throws: SchoolConfigurationFailure.storage) { try store.save(draft, scope: scope) }
+        let other = SchoolReportLocalDraft(draftID: UUID(), lessonID: UUID(), base: draft.base, edited: draft.edited, savedAt: Date())
+        #expect(throws: SchoolConfigurationFailure.storage) { try store.save(other, scope: scope) }
+        #expect(vault.writes == 0 && vault.value == nil)
+        #expect(try Data(contentsOf: file) == bytes)
     }
 
     // MARK: Saisie gardée et reprise
@@ -231,9 +271,10 @@ import Testing
     }
 
     @Test func withoutAVaultTheEntryStaysInMemoryAndTheReportStillSaves() async {
-        let drafts = LocalDraftStub(); drafts.fails = true
+        let drafts = LocalDraftStub()
         let model = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
         await model.load()
+        drafts.fails = true
         model.nextStep = "À garder en mémoire"
         model.persistLocalDraft()
         #expect(drafts.values.isEmpty && model.nextStep == "À garder en mémoire" && model.localDraftError != nil)
@@ -315,6 +356,52 @@ import Testing
         #expect(edited.localDraftError == nil && drafts.values.isEmpty)
     }
 
+    @Test func unreadableLocalDraftIsNeverTreatedAsAbsentByAutosaveOrClose() async {
+        let drafts = LocalDraftStub()
+        let stored = Self.localDraft(edited: "Brouillon à retrouver")
+        drafts.values[Self.draftID] = stored; drafts.failsReads = true
+        let model = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await model.load()
+        #expect(model.localDraftReadFailed && !model.acceptsInput && !model.canMutate)
+        #expect(!model.persistLocalDraft() && !model.closeWithoutLocalEdits() && !model.isInvalidated)
+        drafts.failsReads = false
+        #expect(!model.persistLocalDraft(), "Une reprise explicite doit relire la saisie avant tout remplacement.")
+        #expect(drafts.values[Self.draftID] == stored)
+        model.retryLocalDraft()
+        #expect(!model.localDraftReadFailed && model.workedOn == "Brouillon à retrouver")
+        #expect(model.acceptsInput && model.localDraftError == nil)
+    }
+
+    @Test func unreadableDraftCanOnlyBeRemovedByExplicitAbandonment() async {
+        let drafts = LocalDraftStub()
+        drafts.values[Self.draftID] = Self.localDraft(edited: "Brouillon illisible")
+        drafts.failsReads = true
+        let model = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await model.load()
+        #expect(!model.discardLocalDraft() && drafts.values.count == 1)
+        #expect(model.discardLocalDraft(explicit: true))
+        #expect(drafts.values.isEmpty && !model.localDraftReadFailed && model.localDraftError == nil)
+    }
+
+    @Test func closingAfterRevertingTheTextWaitsForDurableDraftRemoval() async {
+        let drafts = LocalDraftStub(), server = LessonFinishServer()
+        let model = workspace(server, outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await model.load()
+        model.nextStep = "Ancien brouillon local"
+        #expect(model.persistLocalDraft())
+        model.nextStep = ""
+        #expect(!model.hasLocalEdits)
+        drafts.failsRemovals = true
+        #expect(!model.closeWithoutLocalEdits())
+        #expect(!model.isInvalidated && model.requiresLocalDraftResolution && drafts.values.count == 1)
+        drafts.failsRemovals = false
+        #expect(model.closeWithoutLocalEdits())
+        #expect(model.isInvalidated && drafts.values.isEmpty)
+        let reopened = workspace(server, outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await reopened.load()
+        #expect(reopened.nextStep.isEmpty && !reopened.hasLocalEdits)
+    }
+
     @Test func anUnconfirmedInvitationDoesNotBlockSavingTheLessonReport() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("drivy-report-domains-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -376,9 +463,11 @@ struct SchoolReportStepCase: Sendable {
 final class LocalDraftStub: SchoolReportLocalDraftStore {
     var values: [UUID: SchoolReportLocalDraft] = [:]
     var fails = false
+    var failsReads = false
+    var failsRemovals = false
 
     func read(scope: SchoolCommandScope, draftID: UUID) throws -> SchoolReportLocalDraft? {
-        if fails { throw SchoolConfigurationFailure.storage }
+        if fails || failsReads { throw SchoolConfigurationFailure.storage }
         return values[draftID]
     }
     func save(_ draft: SchoolReportLocalDraft, scope: SchoolCommandScope) throws {
@@ -386,7 +475,15 @@ final class LocalDraftStub: SchoolReportLocalDraftStore {
         values[draft.draftID] = draft
     }
     func remove(scope: SchoolCommandScope, draftID: UUID) throws {
-        if fails { throw SchoolConfigurationFailure.storage }
+        if fails || failsRemovals { throw SchoolConfigurationFailure.storage }
         values[draftID] = nil
     }
+}
+
+@MainActor private final class ReportDraftVaultStub: IdentityVault {
+    var value: Data? = Data(repeating: 7, count: 32)
+    var writes = 0
+    func read() throws -> Data? { value }
+    func write(_ data: Data) throws { writes += 1; value = data }
+    func clear() throws { value = nil }
 }

@@ -103,18 +103,19 @@ struct SchoolLessonReportView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
-                    if hasUnsavedChanges {
+                    if hasUnsavedChanges || model?.requiresLocalDraftResolution == true {
                         confirmsDiscard = true
                     } else {
                         // Sans saisie à garder, le brouillon local éventuel est retiré avec la fiche.
-                        model?.persistLocalDraft(); model?.close(); dismiss()
+                        guard model?.closeWithoutLocalEdits() ?? true else { return }
+                        dismiss()
                     }
                 }
                 // Un réglage de partage, bref, ne grise pas « Fermer » : sa demande reste dans la file chiffrée.
                 .disabled(model?.holdsScreen == true || isCompletingLesson)
             }
         }
-        .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true || isCompletingLesson)
+        .interactiveDismissDisabled(hasUnsavedChanges || model?.requiresLocalDraftResolution == true || model?.isBusy == true || isCompletingLesson)
         .onChange(of: scenePhase) { _, phase in
             guard let model, matches(model) else { return }
             // L’app quitte le premier plan : la saisie du bilan est écrite sur l’appareil avant tout verrouillage.
@@ -139,12 +140,14 @@ struct SchoolLessonReportView: View {
                 .accessibilityIdentifier("lesson-keep-draft-close")
             }
             Button("Quitter sans enregistrer", role: .destructive) {
-                guard let model, matches(model), model.discardLocalDraft() else { return }
+                guard let model, matches(model), model.discardLocalDraft(explicit: true) else { return }
                 model.close(); dismiss()
             }
             Button("Continuer", role: .cancel) { }
         } message: {
-            Text(model?.pending != nil
+            Text(model?.localDraftReadFailed == true
+                ? "Le brouillon de cet appareil n’a pas pu être relu. Quitter sans enregistrer le supprime."
+                : model?.pending != nil
                 ? "La demande déjà envoyée à l’école reste à vérifier. Quitter ne l’annule pas."
                 : "Les modifications n’ont pas encore été enregistrées auprès de l’école.")
         }
