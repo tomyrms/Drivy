@@ -19,7 +19,7 @@ export async function verifyAccountRecovery(input: Inputs) {
   const initial = await realmResponse.json() as {smtpServer:Record<string,string>;actionTokenGeneratedByUserLifespan:number;attributes?:Record<string,string>};
   const email = `recovery-${randomBytes(8).toString('hex')}@example.invalid`;
   const initialPassword = randomBytes(24).toString('base64url'), nextPassword = randomBytes(24).toString('base64url');
-  const userResponse = await fetch(`${realmURL}/users`,{method:'POST',headers,body:JSON.stringify({username:email,email,emailVerified:true,enabled:true,
+  const userResponse = await fetch(`${realmURL}/users`,{method:'POST',headers,body:JSON.stringify({username:email,email,firstName:'Récupération',lastName:'Synthétique',emailVerified:true,enabled:true,
     credentials:[{type:'password',value:initialPassword,temporary:false}]})});
   if (userResponse.status !== 201) throw new Error('RECOVERY_IDENTITY_UNAVAILABLE');
   const userLocation = userResponse.headers.get('location');
