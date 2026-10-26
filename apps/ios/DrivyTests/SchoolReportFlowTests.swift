@@ -236,7 +236,7 @@ import Testing
         await model.load()
         model.nextStep = "À garder en mémoire"
         model.persistLocalDraft()
-        #expect(drafts.values.isEmpty && model.nextStep == "À garder en mémoire" && model.errorMessage == nil)
+        #expect(drafts.values.isEmpty && model.nextStep == "À garder en mémoire" && model.localDraftError != nil)
         #expect(await model.saveDraft())
         #expect(model.reportSaveConfirmed)
     }
@@ -250,6 +250,69 @@ import Testing
         #expect(drafts.values.count == 1)
         model.discardLocalDraft()
         #expect(drafts.values.isEmpty)
+    }
+
+    @Test func keepingAndClosingWritesTheDraftBeforeClosingWithoutSendingIt() async {
+        let server = LessonFinishServer(), drafts = LocalDraftStub(), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox, drafts: drafts)
+        await model.load()
+        model.nextStep = "Reprendre les priorités"
+        #expect(model.canKeepLocalDraft)
+        #expect(model.keepLocalDraftAndClose())
+        #expect(model.isInvalidated && !model.reportSaveConfirmed && drafts.values[Self.draftID]?.edited.nextStep == "Reprendre les priorités")
+        #expect(outbox.saves.isEmpty)
+        #expect(await server.requests().allSatisfy { $0.httpMethod != "PUT" && $0.httpMethod != "POST" })
+        let reopened = workspace(server, outbox: outbox, drafts: drafts)
+        await reopened.load()
+        #expect(reopened.nextStep == "Reprendre les priorités" && reopened.hasLocalEdits)
+    }
+
+    @Test func failedLocalWriteKeepsTheScreenAndTextUntilRetrySucceeds() async {
+        let drafts = LocalDraftStub()
+        let retrying = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await retrying.load()
+        retrying.nextStep = "À ne pas perdre"
+        drafts.fails = true
+        #expect(!retrying.keepLocalDraftAndClose())
+        #expect(!retrying.isInvalidated && retrying.nextStep == "À ne pas perdre" && retrying.localDraftError != nil)
+        drafts.fails = false
+        #expect(retrying.keepLocalDraftAndClose())
+        #expect(retrying.localDraftError == nil && retrying.isInvalidated)
+        // Une réponse tardive ou une action d'une ancienne fiche ne peut conserver un autre contexte.
+        let model = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await model.load()
+        model.nextStep = "Ancien contexte"
+        model.invalidate()
+        #expect(!model.canKeepLocalDraft && !model.keepLocalDraftAndClose())
+    }
+
+    @Test func aLocalDraftNeverClaimsToKeepUnsavedPreparationOrCancelASentRequest() async {
+        let server = LessonFinishServer(), outbox = ConfigurationOutboxStub(), drafts = LocalDraftStub()
+        let model = workspace(server, outbox: outbox, drafts: drafts)
+        await model.load()
+        model.nextStep = "Bilan en cours"
+        model.administrativeNote = "Note distincte"
+        #expect(!model.canKeepLocalDraft)
+        model.administrativeNote = model.preparation?.administrativeCheckNote ?? ""
+        await server.setReceiptAvailable(false)
+        #expect(!(await model.saveDraft()))
+        let command = model.pending
+        #expect(command != nil && model.keepLocalDraftAndClose())
+        #expect(outbox.value == command && !model.reportSaveConfirmed)
+    }
+
+    @Test func failedDiscardDoesNotPretendTheOldDraftWasDeleted() async {
+        let drafts = LocalDraftStub()
+        let edited = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
+        await edited.load()
+        edited.nextStep = "Brouillon conservé"
+        #expect(edited.persistLocalDraft())
+        drafts.fails = true
+        #expect(!edited.discardLocalDraft())
+        #expect(edited.localDraftError != nil && !edited.isInvalidated && drafts.values.count == 1)
+        drafts.fails = false
+        edited.retryLocalDraft()
+        #expect(edited.localDraftError == nil && drafts.values.isEmpty)
     }
 
     // MARK: Données de test

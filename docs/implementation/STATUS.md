@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 26 octobre 2026 : vague parcours, bilan #162/#163 prêt pour qualification ciblée
+
+- Worktree isolé, branche `codex/bilans-reactivite-parcours-20261026` : correctifs Messages jusqu'à `da7f8f3` conservés et agenda `71390e9` intégré. [Périmètre demandé](vague-parcours-20261026.md).
+- Bilan : conservation locale proposée avant sortie, fermeture après écriture réussie seulement, erreur réessayable sans perte de saisie. Suppression locale refusée signalée ; commande déjà partie jamais annulée fictivement. Action « Enregistrer et fermer » et variantes privées/vides. [Détail](bilan-brouillon-162-163-20261026.md).
+- Tests Swift et UI préparés, pas encore exécutés sur Apple. Mode ciblé `reports` ajouté sans réduire la campagne complète. Aucun déploiement ni résultat physique annoncé.
+
 ## 26 octobre 2026 : agenda unifié, lot qualifié pour intégration
 
 Lot #144/#145/#146/#147/#172/#173/#175 sur `codex/agenda-fiable-20261026`. Leçons et séances partagent la chronologie, les repères et les compteurs ; les sources se relisent avec erreurs et couverture partielle explicites ; l'ouverture conserve le rendez-vous choisi. Produit `23b19f3`, inchangé dans `00f0f45` qui ajuste uniquement deux tests UI. Aucun nouveau contrat API ni migration.

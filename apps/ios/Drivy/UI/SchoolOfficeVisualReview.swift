@@ -32,10 +32,12 @@ struct SchoolOfficeVisualReview: View {
                 default:
                     NavigationStack {
                         VStack(spacing: DrivySpacing.l) {
-                            if reportClosed {
+                            if reportClosed && !screen.hasPrefix("lesson-draft") {
                                 Text("Leçon enregistrée").font(.drivyTitle).accessibilityIdentifier("field-lesson-closed")
                             } else {
-                                Button("Ouvrir la leçon") { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }.buttonStyle(DrivyPrimaryButtonStyle())
+                                Button("Ouvrir la leçon") {
+                                    report = OfficeReportRoute(id: screen.hasPrefix("lesson-draft") ? SchoolVisualData.lessonID : SchoolVisualData.plannedLessonID)
+                                }.buttonStyle(DrivyPrimaryButtonStyle())
                             }
                         }.drivyPageContent()
                     }
@@ -43,7 +45,7 @@ struct SchoolOfficeVisualReview: View {
                         NavigationStack {
                             SchoolLessonReportView(client: models.agenda.reportClient, schoolWorkspace: context.workspace,
                                 lessonID: route.id, learnerName: context.learner.displayName,
-                                opensCompletion: screen == "lesson-permit", outbox: models.outbox)
+                                opensCompletion: screen == "lesson-permit", outbox: models.outbox, localDrafts: models.reportDrafts)
                         }
                     }
                 }
@@ -53,12 +55,13 @@ struct SchoolOfficeVisualReview: View {
         .task {
             guard models == nil else { return }
             do {
-                let loaded = try SchoolOfficeVisualModels(context: context, permitWarning: screen == "lesson-permit",
+                let loaded = try SchoolOfficeVisualModels(context: context, permitWarning: screen == "lesson-permit", draftScreen: screen,
                     testsStartNowGPS: screen == "start-now-gps-disabled" || screen == "start-now-gps-permission" || screen == "start-now-gps-known")
                 await loaded.prepare(screen: screen)
                 models = loaded
                 if screen == "lesson-finish" || screen == "lesson-permit" { report = OfficeReportRoute(id: SchoolVisualData.plannedLessonID) }
                 if screen == "lesson-modal" { report = OfficeReportRoute(id: SchoolVisualData.lessonID) }
+                if screen.hasPrefix("lesson-draft") { report = OfficeReportRoute(id: SchoolVisualData.lessonID) }
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -71,8 +74,9 @@ struct SchoolOfficeVisualReview: View {
     let startNowLaunch: SchoolStartNowLaunch
     let invitations: SchoolInvitationWorkspace
     let outbox: SchoolOfficeVisualOutbox
+    let reportDrafts: (any SchoolReportLocalDraftStore)?
 
-    init(context: SchoolVisualContext, permitWarning: Bool = false, testsStartNowGPS: Bool = false) throws {
+    init(context: SchoolVisualContext, permitWarning: Bool = false, draftScreen: String = "", testsStartNowGPS: Bool = false) throws {
         guard let person = context.workspace.person, let membership = context.workspace.membership else { throw SchoolAPIError.invalidResponse }
         let scope = context.agenda.scope(person: person, membership: membership)
         let baseURL = URL(string: "https://visual.drivy.invalid")!, token = SchoolVisualToken()
@@ -80,6 +84,13 @@ struct SchoolOfficeVisualReview: View {
             allowsWrites: !permitWarning)
         let outbox = SchoolOfficeVisualOutbox(allowsWrites: !permitWarning)
         self.outbox = outbox
+        if draftScreen == "lesson-draft-error" {
+            reportDrafts = SchoolVisualUnavailableReportDrafts()
+        } else if draftScreen == "lesson-draft" {
+            // Contenu synthétique seulement, avec le vrai coffre chiffré dans un répertoire temporaire distinct.
+            reportDrafts = EncryptedSchoolReportDraftStore(directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent("report-draft-review-\(UUID().uuidString)"), keyData: Data(repeating: 31, count: 32))
+        } else { reportDrafts = nil }
         let agenda = SchoolAgendaClient(baseURL: baseURL, tokenSource: token, transport: transport)
         self.agenda = agenda
         planning = SchoolPlanningWorkspace(scope: scope, client: agenda.planningClient, date: Date().addingTimeInterval(86_400), outbox: outbox)

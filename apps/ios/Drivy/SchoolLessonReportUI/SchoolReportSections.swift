@@ -641,6 +641,14 @@ struct SchoolReportNotices: View {
     let model: SchoolLessonReportWorkspace
 
     var body: some View {
+        if let error = model.localDraftError {
+            Section {
+                SchoolErrorNotice(message: error, retry: model.isInvalidated ? nil : { model.retryLocalDraft() })
+                    .accessibilityIdentifier("lesson-local-draft-error")
+            }
+            .drivyClearRow()
+            .listRowSeparator(.hidden)
+        }
         if model.needsReload && model.hasLocalEdits {
             Section { Text(model.retainedEditsText).textSelection(.enabled) } header: { Text("Saisie conservée").drivyFormSectionHeader() }
                 .drivyFormRows()

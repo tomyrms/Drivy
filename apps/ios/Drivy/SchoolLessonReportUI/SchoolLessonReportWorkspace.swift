@@ -40,6 +40,8 @@ import Observation
     private(set) var revisionsError: String?
     private(set) var information: String?
     private(set) var confirmation: String?
+    /// Échec du coffre local, distinct d'une écriture refusée par l'école.
+    private(set) var localDraftError: String?
     /// Vrai uniquement après le reçu de sauvegarde de ce bilan et le retrait durable de sa demande.
     private(set) var reportSaveConfirmed = false
     private(set) var pendingReviewed = false
@@ -73,6 +75,7 @@ import Observation
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAccessible = false
+    @ObservationIgnored private var localDraftRemovalFailed = false
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
@@ -143,19 +146,50 @@ import Observation
     }
     /// Écrit la saisie du bilan dans le brouillon chiffré de l’appareil, ou le retire quand il n’y a plus rien à garder.
     /// Un coffre illisible n’écrit rien : la saisie reste en mémoire, jamais en clair sur le disque.
-    func persistLocalDraft() {
-        guard let localDrafts, !invalidated, isAuthor, let draft, lesson?.status == "COMPLETED" else { return }
-        if reportEdited {
-            try? localDrafts.save(SchoolReportLocalDraft(draftID: draft.id, lessonID: lessonID, base: Self.content(of: draft),
-                edited: editedReport, savedAt: Date()), scope: scope)
-        } else {
-            try? localDrafts.remove(scope: scope, draftID: draft.id)
+    @discardableResult func persistLocalDraft() -> Bool {
+        guard let localDrafts, !invalidated, isAuthor, let draft, lesson?.status == "COMPLETED" else { return false }
+        localDraftRemovalFailed = false
+        do {
+            if reportEdited {
+                try localDrafts.save(SchoolReportLocalDraft(draftID: draft.id, lessonID: lessonID, base: Self.content(of: draft),
+                    edited: editedReport, savedAt: Date()), scope: scope)
+            } else {
+                try localDrafts.remove(scope: scope, draftID: draft.id)
+            }
+            localDraftError = nil
+            return true
+        } catch {
+            localDraftError = "Le brouillon n’a pas pu être conservé sur cet appareil. Garde cette fiche ouverte et réessaie."
+            return false
         }
     }
+    /// Le coffre ne contient que le bilan, pas les objectifs ni le souhait : ne pas promettre leur conservation.
+    var canKeepLocalDraft: Bool {
+        localDrafts != nil && !invalidated && isAuthor && draft != nil && lesson?.status == "COMPLETED"
+            && reportEdited && !preparationChanged && !wishChanged && !holdsScreen
+    }
+    /// Aucun envoi à l'école. Une demande déjà en file y reste, même après fermeture de la fiche.
+    func keepLocalDraftAndClose() -> Bool {
+        guard canKeepLocalDraft, persistLocalDraft() else { return false }
+        close()
+        return true
+    }
     /// Le moniteur renonce à sa saisie, ou l’école vient de l’enregistrer.
-    func discardLocalDraft() {
-        guard let localDrafts, let draft else { return }
-        try? localDrafts.remove(scope: scope, draftID: draft.id)
+    @discardableResult func discardLocalDraft() -> Bool {
+        guard let localDrafts, let draft else { return true }
+        do {
+            try localDrafts.remove(scope: scope, draftID: draft.id)
+            localDraftError = nil
+            return true
+        } catch {
+            localDraftRemovalFailed = true
+            localDraftError = "Le brouillon n’a pas pu être supprimé de cet appareil. Réessaie avant de quitter."
+            return false
+        }
+    }
+    func retryLocalDraft() {
+        guard !invalidated else { return }
+        if localDraftRemovalFailed { discardLocalDraft() } else { persistLocalDraft() }
     }
     private static func content(of draft: SchoolReportDraft) -> SchoolReportLocalDraft.Content {
         .init(workedOn: draft.workedOn, observationText: draft.observationText, nextStep: draft.nextStep, observations: draft.observations)
@@ -279,6 +313,7 @@ import Observation
         training = nil; account = nil; currentLevels = [:]; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
         isFirstSend = false; awaitsRereadAfterWrite = false
+        localDraftError = nil
         wake()
     }
     /// Attend la fin de la relecture ou de l’envoi en cours. Un appui fait pendant ce bref passage n’est ni grisé
@@ -315,7 +350,10 @@ import Observation
     /// cas, la version ancienne reste attachée au texte et toute écriture attend une relecture explicite.
     func load(discardingEdits: Bool = false) async {
         guard !invalidated, !isBusy else { return }
-        if discardingEdits { discardLocalDraft(); proposesWorkedOn = false }
+        if discardingEdits {
+            guard discardLocalDraft() else { return }
+            proposesWorkedOn = false
+        }
         generation = UUID(); let request = generation
         // Une relecture garde l’état affiché : `needsReload`, les notes et la saisie ne changent qu’à son résultat.
         isLoading = true; errorMessage = nil; pendingReviewed = false

@@ -2,6 +2,68 @@ import XCTest
 
 /// Parcours représentatif du bilan V4. À exécuter sur runner Apple avec les fixtures visuelles existantes.
 @MainActor final class SchoolReportFlowUITests: XCTestCase {
+    func testKeepDraftClosesAndReopensTheSameText() {
+        continueAfterFailure = false
+        let app = launch("lesson-draft")
+        editDraft(in: app, text: " Brouillon conservé après fermeture")
+        closeReport(in: app)
+        let keep = app.buttons["Conserver le brouillon et quitter"]
+        XCTAssertTrue(keep.waitForExistence(timeout: 5), app.debugDescription)
+        keep.tap()
+        let open = app.buttons["Ouvrir la leçon"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5), app.debugDescription)
+        open.tap()
+        XCTAssertTrue(waitUntil(timeout: 15) {
+            app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Brouillon conservé après fermeture")).firstMatch.exists
+        }, app.debugDescription)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Bilan repris — données synthétiques"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testFailedDraftWriteDoesNotCloseOrDiscardTheText() {
+        continueAfterFailure = false
+        let app = launch("lesson-draft-error")
+        editDraft(in: app, text: " Texte gardé malgré la panne")
+        closeReport(in: app)
+        let keep = app.buttons["Conserver le brouillon et quitter"]
+        XCTAssertTrue(keep.waitForExistence(timeout: 5), app.debugDescription)
+        keep.tap()
+        XCTAssertTrue(app.buttons["Fermer"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.buttons["Ouvrir la leçon"].isHittable)
+        XCTAssertTrue(waitUntil {
+            app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Le brouillon n’a pas pu être conservé")).firstMatch.exists
+        }, app.debugDescription)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Écriture locale refusée — données synthétiques"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func editDraft(in app: XCUIApplication, text: String) {
+        let more = app.buttons["lesson-more-actions"]
+        XCTAssertTrue(more.waitForExistence(timeout: 20), app.debugDescription)
+        more.tap()
+        let edit = app.buttons["lesson-report-edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), app.debugDescription)
+        edit.tap()
+        let field = reportField("Travail réalisé", in: app)
+        XCTAssertTrue(field.waitForExistence(timeout: 10), app.debugDescription)
+        field.tap(); field.typeText(text)
+        app.buttons["lesson-report-dismiss-keyboard"].tapIfExists()
+    }
+
+    private func closeReport(in app: XCUIApplication) {
+        let close = app.buttons["Fermer"]
+        if !close.isHittable {
+            let back = app.navigationBars.buttons["Leçon"]
+            if back.waitForExistence(timeout: 2), back.isHittable { back.tap() }
+        }
+        XCTAssertTrue(waitUntil { close.exists && close.isHittable }, app.debugDescription)
+        close.tap()
+    }
+
     func testCompactReportEditsTextBeforeCompetenciesAndSavesOnlyFromReview() {
         continueAfterFailure = false
         let app = launch("lesson-finish")
@@ -43,6 +105,7 @@ import XCTest
             .firstMatch.exists, app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["lesson-report-review-visibility"].exists)
         XCTAssertTrue(app.buttons["lesson-save-report"].exists)
+        XCTAssertEqual(app.buttons["lesson-save-report"].label, "Enregistrer et fermer")
     }
 
     /// Vrai si une étape portant ce titre est à l'écran, même si une autre est encore en train de sortir.

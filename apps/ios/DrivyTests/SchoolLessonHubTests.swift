@@ -218,14 +218,14 @@ struct SchoolLessonHubTests {
         #expect(SchoolLessonHubRules.priceLines(lesson: HubFixture.lesson(status: "NO_SHOW"), account: account(0)).isEmpty)
     }
 
-    @Test func reportSaveLabelSaysWhatIsSavedAndWhoWillReadIt() {
-        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: true) == "Enregistrer et partager le bilan")
-        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: false) == "Enregistrer le bilan pour moi")
+    @Test func reportSaveLabelAnnouncesClosingAndRetainsThePrivateChoice() {
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: true) == "Enregistrer et fermer")
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: false) == "Enregistrer pour moi et fermer")
         // Réglage de partage illisible : aucune promesse sur ce que lira l’élève.
-        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: nil) == "Enregistrer le bilan")
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: false, shared: nil) == "Enregistrer et fermer")
         // Sans texte ni niveau, l’école ne montre rien à l’élève, quel que soit le réglage.
-        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: true, shared: true) == "Enregistrer sans bilan")
-        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: true, shared: false) == "Enregistrer sans bilan")
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: true, shared: true) == "Enregistrer sans bilan et fermer")
+        #expect(SchoolLessonHubRules.saveReportTitle(isEmpty: true, shared: false) == "Enregistrer sans bilan et fermer")
         #expect(SchoolLessonHubRules.reportIsEmpty(workedOn: " ", observationText: "\n", nextStep: "", observations: []))
         #expect(!SchoolLessonHubRules.reportIsEmpty(workedOn: "", observationText: "", nextStep: "Créneaux", observations: []))
         #expect(!SchoolLessonHubRules.reportIsEmpty(workedOn: "", observationText: "", nextStep: "",

@@ -23,7 +23,7 @@ struct SchoolVisualReview: View {
                 switch screen {
                 case "gps-choice", "signal", "signal-all", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
+                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit", "lesson-draft", "lesson-draft-error":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled", "lesson-competencies", "lesson-route",
                      "learner-lesson", "learner-lesson-planned":
