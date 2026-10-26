@@ -3,6 +3,60 @@ import XCTest
 
 @MainActor
 final class MessagingHTTPTransportTests: XCTestCase {
+    func testDurableMutationsCarryTheirReceiptIdentityOnEveryRoute() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let conversation = UUID(), message = UUID()
+        let cases: [(MessagingMutationKind, MessagingMutationValue, String)] = [
+            (.reaction("👍"), .active(true), "PUT"), (.reaction("👍"), .active(false), "DELETE"),
+            (.pin, .active(true), "PUT"), (.pin, .active(false), "DELETE"),
+            (.vote, .options(["o2", "o1"]), "PUT"), (.hideForMe, .active(true), "DELETE"),
+            (.deleteForEveryone, .active(true), "DELETE")
+        ]
+        for (kind, value, method) in cases {
+            let requestID = UUID()
+            let wire = RecordingMessagingHTTP { request in
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), requestID.uuidString.lowercased())
+                XCTAssertEqual(request.httpMethod, method)
+                if kind == .vote {
+                    let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+                    XCTAssertEqual(body["optionIndexes"] as? [Int], [0, 1])
+                }
+                let response = """
+                {"data":{},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":4},"mutationReceipt":{"operationId":"\(requestID)"}}
+                """
+                return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+            }
+            let client = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                transport: wire, currentScope: { scope })
+            try await client.mutate(scope: scope, key: .init(conversationID: conversation, messageID: message, kind: kind),
+                                    value: value, requestID: requestID)
+        }
+    }
+
+    func testMissingOrDifferentReceiptIsNeverAcceptedAsAConfirmation() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        for missing in [true, false] {
+            let wire = RecordingMessagingHTTP { request in
+                let receipt = missing ? "" : ",\"mutationReceipt\":{\"operationId\":\"\(UUID())\"}"
+                let response = """
+                {"data":{},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":4}\(receipt)}
+                """
+                return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+            }
+            let client = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                transport: wire, currentScope: { scope })
+            do {
+                try await client.mutate(scope: scope, key: .init(conversationID: UUID(), messageID: UUID(), kind: .pin),
+                                        value: .active(true), requestID: UUID())
+                XCTFail("Une réponse sans reçu correspondant n'acquitte pas l'intention")
+            } catch let failure as MessagingFailure {
+                XCTAssertEqual(failure, missing ? .mutationReceiptUnavailable : .invalidResponse)
+            }
+        }
+    }
+
     func testSendCarriesOriginalEpochOutsideCiphertextAndNeverRecoveryContent() async throws {
         let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID(), message = UUID()
         let baseURL = URL(string: "https://api.example.invalid/")!

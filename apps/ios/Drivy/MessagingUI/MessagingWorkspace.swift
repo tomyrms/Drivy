@@ -833,14 +833,17 @@ struct MessagingInboxPreview: Equatable, Sendable {
             let sent = current.transmitting ?? current.desired
             let sentClock = current.clock
             pendingMutations[key]?.transmitting = sent
+            if key.kind != .mute, pendingMutations[key]?.transmittingID == nil { pendingMutations[key]?.transmittingID = UUID() }
             guard await persistMutation(key), currentScope() == scope else { return }
             do {
                 try await transmit(key, sent)
                 guard currentScope() == scope else { recordFailure(.contextChanged); return }
+                if actionError == .mutationReceiptUnavailable { actionError = nil }
                 guard var mutation = pendingMutations[key] else { return }
                 mutation.acknowledged = sent
                 mutation.acknowledgedAt = Date()
                 mutation.transmitting = nil
+                mutation.transmittingID = nil
                 if mutation.desired == sent { mutation.status = .confirmed }
                 pendingMutations[key] = mutation
                 guard await persistMutation(key) else { return }
@@ -863,6 +866,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                                 pendingMutations[key]?.acknowledged = sent
                                 pendingMutations[key]?.acknowledgedAt = Date()
                                 pendingMutations[key]?.transmitting = nil
+                                pendingMutations[key]?.transmittingID = nil
                                 if pendingMutations[key]?.desired == sent { pendingMutations[key]?.status = .confirmed }
                                 accepted = true
                             }
@@ -881,6 +885,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                         _ = await removeMutation(key, expectedClock: sentClock)
                     } else {
                         pendingMutations[key]?.transmitting = nil
+                        pendingMutations[key]?.transmittingID = nil
                         pendingMutations[key]?.status = .uncertain
                         _ = await persistMutation(key)
                     }
@@ -889,6 +894,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                 default:
                     // Réponse perdue, délai dépassé, indisponibilité : peut-être enregistré, jamais un refus.
                     pendingMutations[key]?.status = networkOffline ? .offline : .uncertain
+                    if failure == .mutationReceiptUnavailable { actionError = failure }
                     _ = await persistMutation(key)
                 }
                 return
@@ -909,20 +915,12 @@ struct MessagingInboxPreview: Equatable, Sendable {
     }
 
     private func transmit(_ key: MessagingMutationKey, _ value: MessagingMutationValue) async throws {
-        let actions = self.actions, scope = self.scope
+        if key.kind != .mute {
+            guard let requestID = pendingMutations[key]?.transmittingID else { throw MessagingFailure.protectionUnavailable }
+            try await actions.mutate(scope: scope, key: key, value: value, requestID: requestID)
+            return
+        }
         switch (key.kind, value) {
-        case (.reaction(let emoji), .active(let active)):
-            try await actions.setReaction(scope: scope, conversationID: key.conversationID, messageID: key.messageID,
-                                          emoji: emoji, active: active)
-        case (.pin, .active(let pinned)):
-            try await actions.setPinned(scope: scope, conversationID: key.conversationID, messageID: key.messageID, pinned: pinned)
-        case (.vote, .options(let options)):
-            try await actions.vote(scope: scope, conversationID: key.conversationID, messageID: key.messageID,
-                                   optionIDs: options.sorted())
-        case (.hideForMe, _):
-            try await actions.delete(scope: scope, conversationID: key.conversationID, messageID: key.messageID, for: .me)
-        case (.deleteForEveryone, _):
-            try await actions.delete(scope: scope, conversationID: key.conversationID, messageID: key.messageID, for: .everyone)
         case (.mute, .mutedUntil(let until)):
             guard let base = pendingMutations[key]?.readState else { throw MessagingFailure.invalidResponse }
             let response = try await directory.readState(scope: scope, conversationID: key.conversationID,
@@ -964,7 +962,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
             let expired = mutation.status == .confirmed
                 && (mutation.acknowledgedAt.map { now.timeIntervalSince($0) > Self.confirmationGrace } ?? false)
             // Un ancien envoi encore incertain peut porter une autre valeur que la projection actuelle.
-            if (satisfied && settled && (mutation.transmitting == nil || mutation.transmitting == mutation.desired)) || expired {
+            if (satisfied && settled && mutation.transmittingID == nil
+                && (mutation.transmitting == nil || mutation.transmitting == mutation.desired)) || expired {
                 mutationsInFlight.insert(key)
                 _ = await removeMutation(key, expectedClock: mutation.clock)
                 mutationsInFlight.remove(key)

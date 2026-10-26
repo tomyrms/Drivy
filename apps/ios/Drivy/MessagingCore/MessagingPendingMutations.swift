@@ -61,6 +61,9 @@ struct MessagingPendingMutation: Codable, Equatable, Sendable {
     var clock = UUID()
     /// Corps logique réellement émis : une réponse perdue ne transforme pas le choix suivant en reprise.
     var transmitting: MessagingMutationValue? = nil
+    /// Identité de CETTE requête logique, différente de celle de l'intention coalescée.
+    /// Conservée avec le corps jusqu'à l'accusé, puis renouvelée pour le choix suivant.
+    var transmittingID: UUID? = nil
     /// La sourdine partage sa version avec l'état de lecture. Jamais de faux accusé de lecture ajouté.
     var readState: MessagingReadState? = nil
 }

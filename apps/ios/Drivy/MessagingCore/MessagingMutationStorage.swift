@@ -18,6 +18,7 @@ struct MessagingStoredMutation: Codable, Equatable, Sendable {
         }
         return accepts(value.desired) && (value.acknowledged.map(accepts) ?? true)
             && (value.transmitting.map(accepts) ?? true)
+            && (value.transmittingID == nil || value.transmitting != nil)
             && (key.kind != .mute || (value.readState.map { $0.version >= 0 && $0.lastReadSequence >= 0 } ?? false))
     }
 }

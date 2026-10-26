@@ -158,7 +158,7 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
     private func loadMutations(_ scope: MessagingScope) throws -> MutationSnapshot {
         try verify(scope)
         guard FileManager.default.fileExists(atPath: mutationFile.path) else {
-            return MutationSnapshot(version: 1, scopeFingerprint: fingerprint, entries: [])
+            return MutationSnapshot(version: 2, scopeFingerprint: fingerprint, entries: [])
         }
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: mutationFile.path)
@@ -168,7 +168,7 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
             guard bytes.count <= Self.maxBytes else { throw MessagingFailure.protectionUnavailable }
             let clear = try AES.GCM.open(AES.GCM.SealedBox(combined: bytes), using: key(create: false), authenticating: mutationAuthentication)
             let snapshot = try JSONDecoder().decode(MutationSnapshot.self, from: clear)
-            guard snapshot.version == 1, snapshot.scopeFingerprint == fingerprint, snapshot.entries.count <= 500,
+            guard (1...2).contains(snapshot.version), snapshot.scopeFingerprint == fingerprint, snapshot.entries.count <= 500,
                   Set(snapshot.entries.map(\.key)).count == snapshot.entries.count,
                   snapshot.entries.allSatisfy(\.isValid) else { throw MessagingFailure.protectionUnavailable }
             return snapshot
@@ -177,7 +177,9 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
 
     private func saveMutations(_ snapshot: MutationSnapshot) throws {
         guard snapshot.scopeFingerprint == fingerprint else { throw MessagingFailure.contextChanged }
-        try save(JSONEncoder().encode(snapshot), to: mutationFile, authentication: mutationAuthentication)
+        // Une version antérieure qui ignorerait l'identité de requête doit refuser le journal, jamais la perdre.
+        let current = MutationSnapshot(version: 2, scopeFingerprint: snapshot.scopeFingerprint, entries: snapshot.entries)
+        try save(JSONEncoder().encode(current), to: mutationFile, authentication: mutationAuthentication)
     }
 
     /// À invoquer explicitement lors d'une révocation connue ; une clé d'une autre époque ne récupère pas ce fichier.

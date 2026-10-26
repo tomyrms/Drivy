@@ -84,12 +84,22 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private var conversations: [FixtureConversation] = []
     private var reactions: [UUID: [String: [UUID]]] = [:]
     private var pinned: Set<UUID> = []
+    private var mutationReceipts: [UUID: (request: URLRequest, response: SchoolHTTPResponse)] = [:]
+    private let mutationDelay: Int
+    private let refuseMutation: Bool
+    private let denyMutationAccess: Bool
     /// General page 1 holds sequences 24...9, page 2 holds 8...1.
     private static let generalPageCursor = "fixture-page-2"
     private static let generalPageFloor = 9
 
     init(scope: MessagingScope, readOnly: Bool, rich: Bool, seed: [FixtureConversation]) {
         self.scope = scope; self.readOnly = readOnly; self.rich = rich
+        let arguments = ProcessInfo.processInfo.arguments
+        let delay = arguments.first { $0.hasPrefix("-messaging-ui-mutation-delay=") }
+            .flatMap { Int($0.dropFirst("-messaging-ui-mutation-delay=".count)) } ?? 0
+        mutationDelay = [1, 5, 15].contains(delay) ? delay : 0
+        refuseMutation = arguments.contains("-messaging-ui-mutation-refused")
+        denyMutationAccess = arguments.contains("-messaging-ui-mutation-access-denied")
         conversation = rich ? MessagingQualificationIDs.general : UUID()
         member = rich ? MessagingQualificationIDs.leaPerson : UUID()
         guard rich else { return }
@@ -144,13 +154,26 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         ]
     }
 
-    func send(_ request: URLRequest) throws -> SchoolHTTPResponse {
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "messaging-ui.example.invalid" else {
             throw MessagingFailure.invalidResponse
         }
         let path = url.path.lowercased()
         let parts = url.pathComponents.map { $0.lowercased() }
         let method = request.httpMethod ?? "GET"
+        let requestID = request.value(forHTTPHeaderField: "Idempotency-Key").flatMap(UUID.init(uuidString:))
+        if parts.count >= 2, parts[parts.count - 2] == "reactions", method == "PUT" || method == "DELETE" {
+            if mutationDelay > 0 { try await Task.sleep(for: .seconds(mutationDelay)) }
+            if refuseMutation || denyMutationAccess {
+                return SchoolHTTPResponse(data: Data("{\"code\":\"MESSAGING_MUTATION_CONFLICT\"}".utf8),
+                    status: denyMutationAccess ? 403 : 409, url: url, contentType: "application/json")
+            }
+        }
+        if let requestID, let previous = mutationReceipts[requestID] {
+            guard previous.request.url == request.url, previous.request.httpMethod == request.httpMethod,
+                  previous.request.httpBody == request.httpBody else { throw MessagingFailure.stateConflict }
+            return previous.response
+        }
         let other = #"{"personId":"\#(member)","displayName":"Léa Fixture","hasPhoto":false,"isGroupAdmin":false}"#
         let marc = #"{"personId":"\#(MessagingQualificationIDs.marcPerson)","displayName":"Marc Fixture","hasPhoto":false,"isGroupAdmin":false}"#
         let admin = #"{"personId":"\#(scope.accountID)","displayName":"Admin Fixture","hasPhoto":false,"isGroupAdmin":true}"#
@@ -198,8 +221,11 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             // Unspecified mutations (message send included) must fail rather than manufacture acceptance.
             throw MessagingFailure.unavailable
         }
-        let body = #"{"data":\#(data),"context":{"schoolId":"\#(scope.schoolID)","actorPersonId":"\#(scope.accountID)","accessEpoch":1}}"#
-        return SchoolHTTPResponse(data: Data(body.utf8), status: 200, url: url, contentType: "application/json")
+        let receipt = requestID.map { #", "mutationReceipt":{"operationId":"\#($0)"}"# } ?? ""
+        let body = #"{"data":\#(data),"context":{"schoolId":"\#(scope.schoolID)","actorPersonId":"\#(scope.accountID)","accessEpoch":1}\#(receipt)}"#
+        let response = SchoolHTTPResponse(data: Data(body.utf8), status: 200, url: url, contentType: "application/json")
+        if let requestID { mutationReceipts[requestID] = (request, response) }
+        return response
     }
 
     private func uuid(after marker: String, in parts: [String]) -> UUID? {

@@ -90,6 +90,8 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .confirmed }
         let calls = await actions.calls
         XCTAssertEqual(calls, ["reaction 👍 true", "reaction 👍 true"])
+        let requestIDs = await actions.requestIDs
+        XCTAssertEqual(requestIDs[0], requestIDs[1])
     }
 
     func testInterleavedServerReloadDoesNotEraseIntention() async {
@@ -199,6 +201,7 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await until { await store.saved.first?.value.desired == .active(false) }
         let stored = await store.saved.first!
         XCTAssertEqual(stored.value.transmitting, .active(true))
+        XCTAssertNotNil(stored.value.transmittingID)
         oldScope.value = nil
         let resumedActions = GatedActions(holding: true)
         let reopened = await make(resumedActions, service: MutableService(wire()), store: store)
@@ -207,6 +210,9 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await until { await resumedActions.calls == ["reaction 👍 true"] }
         await resumedActions.releaseAll()
         await until { await resumedActions.calls == ["reaction 👍 true", "reaction 👍 false"] }
+        let requestIDs = await resumedActions.requestIDs
+        XCTAssertEqual(requestIDs.first, stored.value.transmittingID)
+        XCTAssertNotEqual(requestIDs[0], requestIDs[1], "Le nouveau choix a sa propre identité de requête.")
         await until { reopened.pendingMutations.isEmpty }
         await firstActions.releaseAll()
         await until { first.pendingMutations.isEmpty }
@@ -271,6 +277,28 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         let calls = await actions.calls, saved = await store.saved
         XCTAssertTrue(calls.isEmpty && saved.isEmpty)
         XCTAssertEqual(workspace.actionError, .protectionUnavailable)
+    }
+
+    func testServerWithoutReceiptCannotReleaseTheNextChoiceEvenAfterMatchingRead() async {
+        let store = MutationMemory(), actions = GatedActions(holding: false), service = MutableService(wire())
+        await actions.fail(emoji: "👍", with: .mutationReceiptUnavailable)
+        let workspace = await make(actions, service: service, store: store)
+        workspace.toggleReaction("👍", on: wire())
+        await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .uncertain }
+        await service.set(wire(reactions: [.init(emoji: "👍", personIDs: [account])]))
+        await workspace.loadMessages(conversation)
+        XCTAssertNotNil(workspace.mutation(.reaction("👍"), on: wire()))
+        workspace.toggleReaction("👍", on: wire())
+        await until { await actions.calls.count == 2 }
+        await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .uncertain }
+        let waiting = await actions.calls
+        XCTAssertEqual(waiting, ["reaction 👍 true", "reaction 👍 true"])
+        XCTAssertEqual(workspace.actionError, .mutationReceiptUnavailable)
+        await actions.fail(emoji: "👍", with: nil)
+        workspace.retryMutations(for: wire())
+        await until { await actions.calls.count == 4 }
+        let ids = await actions.requestIDs
+        XCTAssertEqual(ids[0], ids[1]); XCTAssertEqual(ids[1], ids[2]); XCTAssertNotEqual(ids[2], ids[3])
     }
 
     func testUncertainMuteRetainsItsVersionAndLaterChoiceAcrossReopening() async {
@@ -483,10 +511,27 @@ private actor MutableService: MessagingService {
 /// Retient chaque requête jusqu'à `releaseAll` quand `holding` ; échecs programmables par emoji.
 private actor GatedActions: MessagingThreadActions {
     private(set) var calls: [String] = []
+    private(set) var requestIDs: [UUID] = []
     private var holding: Bool
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var failures: [String: MessagingFailure] = [:]
     init(holding: Bool) { self.holding = holding }
+
+    func mutate(scope: MessagingScope, key: MessagingMutationKey, value: MessagingMutationValue, requestID: UUID) async throws {
+        requestIDs.append(requestID)
+        switch (key.kind, value) {
+        case (.reaction(let emoji), .active(let active)):
+            try await setReaction(scope: scope, conversationID: key.conversationID, messageID: key.messageID, emoji: emoji, active: active)
+        case (.pin, .active(let pinned)):
+            try await setPinned(scope: scope, conversationID: key.conversationID, messageID: key.messageID, pinned: pinned)
+        case (.vote, .options(let options)):
+            try await vote(scope: scope, conversationID: key.conversationID, messageID: key.messageID, optionIDs: options.sorted())
+        case (.hideForMe, _), (.deleteForEveryone, _):
+            try await delete(scope: scope, conversationID: key.conversationID, messageID: key.messageID,
+                             for: key.kind == .hideForMe ? .me : .everyone)
+        default: throw MessagingFailure.invalidResponse
+        }
+    }
 
     func fail(emoji: String, with failure: MessagingFailure?) { failures[emoji] = failure }
     func releaseAll() {

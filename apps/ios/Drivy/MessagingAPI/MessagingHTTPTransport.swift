@@ -33,8 +33,10 @@ actor MessagingHTTPTransport: MessagingAPITransport {
 
     private struct Wrapper<T: Decodable>: Decodable {
         struct Context: Decodable { let schoolId: UUID; let actorPersonId: UUID; let accessEpoch: Int }
+        struct MutationReceipt: Decodable { let operationId: UUID }
         let data: T
         let context: Context
+        let mutationReceipt: MutationReceipt?
     }
     private struct Conversations: Decodable {
         struct Item: Decodable {
@@ -238,7 +240,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     private func request<T: Decodable>(scope: MessagingScope, method: String, path: [String],
-                                        query: [URLQueryItem] = [], body: Data? = nil) async throws -> T {
+                                        query: [URLQueryItem] = [], body: Data? = nil, requestID: UUID? = nil) async throws -> T {
         guard scope.apiBaseURL == baseURL.absoluteString, await DrivyAPIClient.permits(baseURL),
               let origin = baseURL.host else { throw MessagingFailure.contextChanged }
         try await verifyCurrent(scope)
@@ -260,6 +262,7 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             request.setValue(String(scope.accessEpoch), forHTTPHeaderField: "X-Drivy-Expected-Access-Epoch")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
             request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+            if let requestID { request.setValue(requestID.uuidString.lowercased(), forHTTPHeaderField: "Idempotency-Key") }
             if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
             let response: SchoolHTTPResponse
             do { response = try await sendHTTP.send(request) }
@@ -290,6 +293,10 @@ actor MessagingHTTPTransport: MessagingAPITransport {
                 guard wrapped.context.schoolId == scope.schoolID,
                       wrapped.context.actorPersonId == scope.accountID,
                       wrapped.context.accessEpoch == scope.accessEpoch else { throw MessagingFailure.contextChanged }
+                if let requestID {
+                    guard let receipt = wrapped.mutationReceipt else { throw MessagingFailure.mutationReceiptUnavailable }
+                    guard receipt.operationId == requestID else { throw MessagingFailure.invalidResponse }
+                }
                 return wrapped.data
             } catch let failure as MessagingFailure { throw failure }
             catch { throw MessagingFailure.invalidResponse }
@@ -304,6 +311,26 @@ actor MessagingHTTPTransport: MessagingAPITransport {
 
     private func message(_ conversationID: UUID, _ messageID: UUID, _ tail: String...) -> [String] {
         ["conversations", conversationID.uuidString, "messages", messageID.uuidString] + tail
+    }
+
+    func mutate(scope: MessagingScope, key: MessagingMutationKey, value: MessagingMutationValue, requestID: UUID) async throws {
+        let path = message(key.conversationID, key.messageID)
+        switch (key.kind, value) {
+        case (.reaction(let emoji), .active(let active)):
+            guard MessagingReactionPalette.all.contains(emoji) else { throw MessagingFailure.invalidResponse }
+            let _: Done = try await request(scope: scope, method: active ? "PUT" : "DELETE",
+                path: path + ["reactions", emoji], requestID: requestID)
+        case (.pin, .active(let pinned)):
+            let _: Done = try await request(scope: scope, method: pinned ? "PUT" : "DELETE", path: path + ["pin"], requestID: requestID)
+        case (.vote, .options(let options)):
+            let _: Done = try await request(scope: scope, method: "PUT", path: path + ["poll", "votes"],
+                body: try voteBody(Array(options)), requestID: requestID)
+        case (.hideForMe, .active(true)), (.deleteForEveryone, .active(true)):
+            let deletion: MessagingDeletionScope = key.kind == .hideForMe ? .me : .everyone
+            let _: Done = try await request(scope: scope, method: "DELETE", path: path,
+                query: [URLQueryItem(name: "scope", value: deletion.rawValue)], requestID: requestID)
+        default: throw MessagingFailure.invalidResponse
+        }
     }
 
     func delete(scope: MessagingScope, conversationID: UUID, messageID: UUID, for deletion: MessagingDeletionScope) async throws {
@@ -322,13 +349,17 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     func vote(scope: MessagingScope, conversationID: UUID, messageID: UUID, optionIDs: [String]) async throws {
+        let _: Done = try await request(scope: scope, method: "PUT", path: message(conversationID, messageID, "poll", "votes"),
+                                        body: try voteBody(optionIDs))
+    }
+
+    private func voteBody(_ optionIDs: [String]) throws -> Data {
         struct Body: Encodable { let optionIndexes: [Int] }
         let indexes = try optionIDs.map { id -> Int in
             guard let index = MessagingPollIndex.index(id) else { throw MessagingFailure.invalidResponse }
             return index
         }
-        let _: Done = try await request(scope: scope, method: "PUT", path: message(conversationID, messageID, "poll", "votes"),
-                                        body: try JSONEncoder().encode(Body(optionIndexes: indexes.sorted())))
+        return try JSONEncoder().encode(Body(optionIndexes: indexes.sorted()))
     }
 
     func closePoll(scope: MessagingScope, conversationID: UUID, messageID: UUID) async throws {

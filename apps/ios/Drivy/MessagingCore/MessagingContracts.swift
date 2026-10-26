@@ -76,6 +76,7 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
     case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict, deviceLimitReached, membersChanged
     /// Clé de récupération mal formée, étrangère à la sauvegarde ou sauvegarde absente : volontairement indistincts.
     case recoveryKeyRefused
+    case mutationReceiptUnavailable
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
@@ -88,6 +89,7 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
         case .deviceLimitReached: "Trop d'appareils utilisent Messages sur ce compte. Retire un appareil puis réessaie. Rien n'a été envoyé."
         case .membersChanged: "Les participants ont changé. Ce message n'a pas été envoyé et reste conservé sur cet appareil."
         case .recoveryKeyRefused: "Clé de récupération refusée. Rien n'a été modifié."
+        case .mutationReceiptUnavailable: "Le service doit être mis à jour pour confirmer ces modifications. Tes choix restent conservés."
         }
     }
 }

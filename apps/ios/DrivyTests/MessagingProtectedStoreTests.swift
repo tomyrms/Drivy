@@ -11,6 +11,7 @@ final class MessagingProtectedStoreTests: XCTestCase {
         let key = MessagingMutationKey(conversationID: UUID(), messageID: UUID(), kind: .reaction("👍"))
         var pending = MessagingPendingMutation(id: UUID(), desired: .active(false), startedAt: Date(), status: .uncertain)
         pending.transmitting = .active(true)
+        pending.transmittingID = UUID()
         let entry = MessagingStoredMutation(key: key, value: pending)
         try await first.putMutation(entry, replacing: nil, scope: scope)
         try await second.saveDraft("synthetic-private-draft", conversationID: key.conversationID, scope: scope)
