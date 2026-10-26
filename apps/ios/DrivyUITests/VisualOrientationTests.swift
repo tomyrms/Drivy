@@ -7,7 +7,7 @@ import XCTest
     private let supportedScreens: Set<String> = [
         "dossier", "progression", "home-tabs", "home-to-finish", "school-choice", "no-school",
         "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "start-now", "planning-settings",
-        "agenda", "agenda-month", "learners", "learner", "lesson", "lesson-planned",
+        "agenda", "agenda-month", "agenda-mixed", "agenda-mixed-month", "agenda-courses-error", "agenda-courses-stale", "learners", "learner", "lesson", "lesson-planned",
         "lesson-observations", "lesson-evidence", "lesson-permit", "invitation-code", "lessons-history",
         "replay", "design-system", "skeletons", "gps-choice", "signal", "signal-all", "live-signal",
         "signal-status", "observations", "capture-preparation", "live", "live-waiting",
@@ -82,6 +82,7 @@ import XCTest
                     case "lesson-competencies", "lesson-route", "learner-lesson": "lesson-summary"
                     case "learner-lesson-planned": "lesson-state"
                     case "start-now-gps-known": "start-now-confirm"
+                    case "agenda", "agenda-month", "agenda-mixed", "agenda-mixed-month", "agenda-courses-error", "agenda-courses-stale": "agenda-display-mode"
                     case "lessons-multi", "lessons-two", "progression-multi": "training-permit-filter"
                     case "lesson-cancelled": "lesson-state"
                     case "account": "account-heading"

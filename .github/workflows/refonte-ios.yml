@@ -37,9 +37,9 @@ on:
         type: boolean
         default: false
       unit_test_scope:
-        description: 'Avec unit_only : gps pour le parcours GPS, all pour toute la suite métier'
+        description: 'Avec unit_only : gps ou agenda pour un parcours ciblé, all pour toute la suite métier'
         type: choice
-        options: [gps, all]
+        options: [gps, agenda, all]
         default: gps
       ui_test_suite:
         description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), iPhone et iPad sans IPA ; vide pour tout'

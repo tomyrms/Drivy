@@ -18,6 +18,8 @@ GPS_SUITES = [
     'SchoolMapCourseTests', 'SchoolMapRouteGapTests', 'SchoolLiveHeadingTests', 'SchoolReplayFormattingTests',
 ]
 GPS_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in GPS_SUITES]
+AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolVisualTransportTests']
+AGENDA_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in AGENDA_SUITES]
 
 
 def environment(**overrides):
@@ -45,6 +47,17 @@ class TestSelection(unittest.TestCase):
 
     def test_explicit_all_keeps_old_full_unit_target(self):
         self.assert_options(['-only-testing:DrivyTests'], DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='all')
+
+    def test_agenda_selects_only_its_projection_reading_and_fixture_suites(self):
+        self.assert_options(AGENDA_OPTIONS, DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='agenda')
+
+    def test_agenda_does_not_require_the_unrelated_crypto_relay(self):
+        result = subprocess.run([BASH, '-c', 'set -euo pipefail; source scripts/ios/test-selection.sh; '
+                                 'printf "%s" "$relay_required"'], cwd=ROOT,
+                                env=environment(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='agenda'),
+                                text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '0')
 
     def test_full_campaign_and_visual_mode_remain_unfiltered(self):
         self.assert_options([])
@@ -108,7 +121,7 @@ export -f xcodebuild xcrun python3 sleep
         return subprocess.run([BASH, '-c', harness], cwd=root, env=env, text=True, capture_output=True, timeout=15)
 
     def test_unit_build_and_test_share_exact_selection_and_never_run_ui_or_ipad(self):
-        for scope, expected in [('gps', GPS_OPTIONS), ('all', ['-only-testing:DrivyTests'])]:
+        for scope, expected in [('gps', GPS_OPTIONS), ('agenda', AGENDA_OPTIONS), ('all', ['-only-testing:DrivyTests'])]:
             with self.subTest(scope=scope):
                 outputs = []
                 for build in [True, False]:
@@ -180,7 +193,7 @@ export -f xcodebuild xcrun python3 sleep
         workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
         self.assertLess(workflow.index('- name: Valider le mode et la sélection des tests'), workflow.index('- name: Installer XcodeGen'))
         self.assertIn("unit_test_scope:\n", workflow)
-        self.assertIn("options: [gps, all]", workflow)
+        self.assertIn("options: [gps, agenda, all]", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
         self.assertIn("inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''", workflow)
         self.assertIn('if: inputs.visual_only == true', workflow)

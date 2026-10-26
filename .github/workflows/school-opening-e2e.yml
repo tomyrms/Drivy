@@ -20,7 +20,11 @@ concurrency:
 jobs:
   browser:
     name: Chromium · OIDC · BFF · API · PostgreSQL
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    # #132: the exact agenda branch runs targeted UI checks; workflow_dispatch remains available.
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft) &&
+      !((github.event_name == 'push' && github.ref == 'refs/heads/codex/agenda-fiable-20261026') ||
+        (github.event_name == 'pull_request' && github.head_ref == 'codex/agenda-fiable-20261026'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
