@@ -201,7 +201,8 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("papiers")
-        let result = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Pensez aux papiers du permis'")).firstMatch
+        // L'épinglé du fil, resté derrière la feuille, porte le même texte : viser la ligne de résultat.
+        let result = app.buttons.matching(NSPredicate(format: "identifier == 'messaging.search.result' AND label CONTAINS 'Pensez aux papiers du permis'")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 5), "Résultat de recherche dans le fil")
         capture("09-recherche-fil")
         result.tap()

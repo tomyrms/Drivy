@@ -735,6 +735,7 @@ struct MessagingSearchView: View {
                             .padding(.vertical, DrivySpacing.xxs)
                         }
                         .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("messaging.search.result")
                     }
                 } header: {
                     Text(conversationTitle.map { "Dans « \($0) »" } ?? "Dans cette conversation")
