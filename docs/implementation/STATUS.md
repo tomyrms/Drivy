@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 26 octobre 2026 — socle réactivité qualifié sur Apple
+
+- Socle natif #106/#107/#119 : [79 tests réussis, zéro échec/ignoré](https://github.com/tomyrms/Drivy/actions/runs/40331345770) sur `0c3a712`, et IPA compilée. [Détail et preuve](reactivite-native-106-107-119-20261026.md#exécution-apple-du-socle).
+- Web : socle et pilote réglages en `dbd868b`, 84 tests ciblés, concurrence des préférences vérifiée sur PostgreSQL17.11 isolé, quatre parcours navigateur synthétiques. Revalidation du compte actif après verrou ajoutée en `120f24a`.
+- Cours/formulaires en `50cd527`, entrée récupération native en `bd5cbdc`, intégration serveur/web #50 en `cc85d22` et correctifs de recette suivants. Apple ciblé et recette réelle Keycloak/Mailpit encore en cours ; SMTP réel non activé.
+- Les deux nouveaux tests UI du bilan ont échoué sur un sélecteur XCTest ambigu (boutons imbriqués). Ciblage corrigé en `ab9a2d3`, reprise programmée ; pas de validation UI revendiquée.
+- Messagerie durable en `fcc3c35` ; reçu serveur contre les anciennes requêtes retardées en réalisation. Planification web #51 en réalisation. Aucun déploiement.
+
+
 ## 26 octobre 2026 — vague parcours, première preuve bilan
 
 - #162/#163 : 101 tests Swift réussis (105 cas paramétrés), zéro échec/ignoré, sur Apple au commit `2b0c952` : [run 40328492050](https://github.com/tomyrms/Drivy/actions/runs/40328492050). UI iPhone/iPad encore en cours. [Détail](bilan-brouillon-162-163-20261026.md).
