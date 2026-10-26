@@ -127,12 +127,16 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         let app = launch()
         openGeneral(app)
         let older = app.buttons["Charger les messages précédents"]
-        for _ in 0..<15 where !(older.exists && older.isHittable) { app.swipeDown(velocity: .fast) }
+        let thread = app.scrollViews.firstMatch
+        for _ in 0..<20 where !(older.exists && older.isHittable) { thread.swipeDown(velocity: .fast) }
         capture("05a-haut-du-fil")
         XCTAssertTrue(older.exists && older.isHittable,
                       "Bouton de chargement des précédents (existe \(older.exists), premier chargé visible \(text(app, "Bonjour à tous, nouvelle semaine").exists))")
         older.tap()
-        XCTAssertTrue(text(app, "Premier message du général").waitForExistence(timeout: 8), "Page 2 chargée")
+        // Le fil est paresseux : les messages chargés au-dessus n'existent qu'une fois remontés à l'écran.
+        let first = text(app, "Premier message du général")
+        for _ in 0..<10 where !first.exists { thread.swipeDown(velocity: .fast) }
+        XCTAssertTrue(first.waitForExistence(timeout: 8), "Page 2 chargée")
         capture("05-messages-precedents")
     }
 

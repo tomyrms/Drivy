@@ -123,7 +123,11 @@ struct MessagingConversationView: View {
             }
         }
         .sheet(isPresented: $showSearch) {
-            MessagingSearchView(workspace: workspace, conversationID: conversationID, conversationTitle: title) { scrollTarget = $0 }
+            // La feuille se ferme depuis ici : avec `.searchable` actif, `dismiss()` ne fermait que le champ.
+            MessagingSearchView(workspace: workspace, conversationID: conversationID, conversationTitle: title) {
+                showSearch = false
+                scrollTarget = $0
+            }
         }
         .navigationDestination(isPresented: $showMembers) { MessagingMembersView(workspace: workspace) }
         .alert("Signalement transmis", isPresented: $reportSent) { Button("OK") {} }
