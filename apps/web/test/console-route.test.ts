@@ -7,15 +7,16 @@ import { resumableDraft } from '../client/console/draft-model.js';
 const school = '11111111-1111-4111-8111-111111111111';
 const learner = '22222222-2222-4222-8222-222222222222';
 const instructor = '33333333-3333-4333-8333-333333333333';
+const selectedLesson = '44444444-4444-4444-8444-444444444444';
 const restore = (path: string) => { const url = new URL(path, 'https://school.example.test'); return parseConsoleRoute(url.pathname, url.search); };
 
 describe('Navigation entre les tâches de gestion', () => {
   test('un dossier garde le retour à la semaine et au moniteur après relecture de son URL', () => {
-    const query = { selection: learner, from: 'agenda' as const, week: '2026-09-28', instructor };
+    const query = { selection: learner, lesson: selectedLesson, from: 'agenda' as const, week: '2026-09-28', instructor };
     const dossier = restore(consolePath(school, 'eleves', query));
     expect(dossier).toEqual({ schoolId: school, section: 'eleves', query });
-    const agenda = restore(consolePath(school, dossier.query.from!, { week: dossier.query.week, instructor: dossier.query.instructor }));
-    expect(agenda).toEqual({ schoolId: school, section: 'agenda', query: { week: '2026-09-28', instructor } });
+    const agenda = restore(consolePath(school, dossier.query.from!, { week: dossier.query.week, instructor: dossier.query.instructor, lesson: dossier.query.lesson }));
+    expect(agenda).toEqual({ schoolId: school, section: 'agenda', query: { week: '2026-09-28', instructor, lesson: selectedLesson } });
   });
 
   test('le contexte de formation et sa version sélectionnée survivent à une URL copiée', () => {
@@ -32,6 +33,8 @@ describe('Navigation entre les tâches de gestion', () => {
   test('les paramètres ambigus ou étrangers ne deviennent pas du contexte de navigation', () => {
     expect(readNavigationQuery(`?selection=${learner}&selection=${instructor}&instructor=invalid&week=2026-02-30&category=B%00&from=https://example.test&audience=all&token=secret&draft=content`)).toEqual({});
     expect(readNavigationQuery('?week=2026-09-28&week=2026-10-05&category=A&category=B')).toEqual({});
+    expect(readNavigationQuery(`lesson=${selectedLesson}&lesson=${learner}`)).toEqual({});
+    expect(readNavigationQuery('lesson=Nom%20personnel')).toEqual({});
     expect(parseConsoleRoute(`/other/gestion/${school}/eleves`).schoolId).toBeNull();
     expect(parseConsoleRoute('/app/gestion/not-an-id/eleves').schoolId).toBeNull();
   });

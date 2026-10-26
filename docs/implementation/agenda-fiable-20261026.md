@@ -1,6 +1,6 @@
 # Agenda : lectures fiables et chronologie commune
 
-26 octobre 2026. Issues #144, #145, #146, #147, #172 et #173, sous l'epic #132.
+26 octobre 2026. Issues #144, #145, #146, #147, #172, #173 et #175, sous l'epic #132. #175 complète le critère d'ouverture de la leçon exacte déjà demandé par #144.
 
 ## Base et périmètre
 
@@ -8,7 +8,7 @@ Branche `codex/agenda-fiable-20261026`, issue de `master` `fcfdfde0408cf2a5a84dd
 
 Références : `COMMENCER_ICI.md`, R34/R37 (portée et révocation), R55/R64 (offres et engagements), T155/T156/T157 (calendrier et fuseau), contrat canonique AP147 OpenAPI 3.11.0. L'agenda réalisé utilise les extensions existantes `lessons` et `course-series` décrites dans `cours-collectifs-socle-80.md`, sans nouvelle route ni migration.
 
-Le lot traite les erreurs de lecture, l'actualisation de toutes les sources, le filtre par formateur de séance, le tri commun des occurrences et leçons, les repères et les compteurs. Il ne transforme pas une offre de cours en inscription et ne crée aucune autorisation locale.
+Le lot traite les erreurs de lecture, l'actualisation de toutes les sources, le filtre par formateur de séance, le tri commun des occurrences et leçons, les repères, les compteurs et la conservation du rendez-vous choisi à son ouverture. Il ne transforme pas une offre de cours en inscription et ne crée aucune autorisation locale.
 
 ## Qualification ciblée
 
@@ -24,6 +24,7 @@ Le scope métier Apple `agenda` sélectionne les tests d'agenda, de chargement d
 - Web : le bouton Actualiser et la relecture automatique relisent leçons, répertoire et cours, sans doubler les requêtes en vol ni changer sélection, focus ou recherche. L'heure globale est la plus ancienne des lectures réussies ; une source en erreur interdit le statut global « À jour ».
 - Projection commune sur chaque support : ordre début, fin puis identité stable ; une occurrence est distincte de sa série. Brouillons et annulations restent identifiés. Le filtre porte sur le formateur de la séance, pas le responsable de la série. Repères et compteurs reprennent la projection affichée.
 - Couverture : le contrat `course-series` est borné à 200 séries sans pagination. Atteindre cette borne rend la couverture potentiellement partielle ; aucune exhaustivité n'est affirmée. La recherche web par élève annonce son périmètre limité aux leçons. Aucune réservation, publication, inscription ou règle de droit modifiée.
+- Navigation web : l'UUID de la leçon choisie est conservé dans la route. Le dossier relit le rendez-vous exact par l'endpoint existant et vérifie école, élève et leçon ; les bilans sont contrôlés avant affichage. La liste blanche BFF ajoute uniquement `GET lessons/:id`. La séance de cours sélectionnée est ciblée dans la fiche ou le formulaire existant ; une cible retirée est signalée sans sélectionner arbitrairement une autre séance.
 
 ## Preuves exécutées et restantes
 
@@ -33,6 +34,10 @@ La recette `scripts/dev/check-agenda-integration.mjs` utilise les vraies vues Re
 
 Scripts : 17 tests de sélection Apple et 11 tests de captures réussis. Revue indépendante du chargement, du contexte et des projections native/web : aucun défaut bloquant confirmé.
 
-Sur Apple, candidat natif `290cd87` : [métier ciblé](https://github.com/tomyrms/Drivy/actions/runs/40305925081), [UI iPhone/iPad](https://github.com/tomyrms/Drivy/actions/runs/40305929146), [captures](https://github.com/tomyrms/Drivy/actions/runs/40305933009), [IPA](https://github.com/tomyrms/Drivy/actions/runs/40305925127) en cours. [Captures avant correction](https://github.com/tomyrms/Drivy/actions/runs/40305370458) sur `fda97e5` : mêmes fixtures, vues de référence.
+Complément #175/ouverture #144 : 46 tests web ciblés, typages et build réussis sous Node 24.22.1. Dix scénarios Edge supplémentaires réussis : deux leçons du même élève, retour navigateur, lien direct, rechargement, hors pagination, refus 403/404, incohérences d'identité, bilan incohérent, occurrences distinctes et occurrence retirée. [Résultats](proofs/agenda-20261026/web/lesson-context-results.json), [leçon exacte](proofs/agenda-20261026/web/selected-lesson-context.png), [occurrence ciblée](proofs/agenda-20261026/web/selected-course-occurrence.png). Les deux captures ont été inspectées ; la recette agenda précédente a été rejouée avec succès.
+
+Sur Apple, candidat natif `290cd87` : [métier ciblé](https://github.com/tomyrms/Drivy/actions/runs/40305925081) réussi, 48 tests sans échec ni saut, et [IPA](https://github.com/tomyrms/Drivy/actions/runs/40305925127) compilée et vérifiée. Cette première IPA ne couvre pas les ajustements ultérieurs de navigation.
+
+La revue des [premières captures de référence](https://github.com/tomyrms/Drivy/actions/runs/40305370458) sur `fda97e5` a détecté une erreur de fixture : `requestId` n'était pas un UUID, contrairement à l'enveloppe du vrai client agenda. Ces huit captures ne prouvent aucun comportement d'événement. Les [tests UI](https://github.com/tomyrms/Drivy/actions/runs/40305929146) et [captures candidates](https://github.com/tomyrms/Drivy/actions/runs/40305933009) ont été interrompus pour corriger cette cause. Quatre scénarios de transport traversant les vrais clients ont été ajoutés ; ils restent à exécuter sur Apple. La référence corrigée `37a322a` ne change que les deux identifiants synthétiques par rapport à `fda97e5` et conserve les vues avant correction.
 
 Aucun déploiement, changement de base, données réelles ni clôture d'issue à ce stade. Ces tests UI synthétiques ne qualifient pas VoiceOver sur appareil physique, le GPS ou la batterie.

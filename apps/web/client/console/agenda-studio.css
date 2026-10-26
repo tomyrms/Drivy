@@ -68,5 +68,6 @@
 .course-session { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; padding-block-end: 12px; border-block-end: 1px solid var(--line, rgb(0 0 0 / .1)); }
 .course-session .field-error { grid-column: 1 / -1; }
 .course-preview-list { margin: 0; padding-inline-start: 1.2rem; display: grid; gap: 4px; }
+.course-preview-list > [aria-current="true"], .course-sessions > [aria-current="true"] { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 .course-editor-heading { display: flex; gap: 12px; align-items: center; }
 .course-editor-heading > .button { margin-inline-start: auto; }

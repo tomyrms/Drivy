@@ -5,6 +5,7 @@ import { learnerSchema, readAll, readSchool } from '../school-api';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice } from './layout';
+import { RequestFailure } from '../protocol';
 import {
   LIMITS, REASON_LIMIT, courseRosterSchema, enrollableLearners, policyBody, policyForm, policyProblems, reasonProblem, rescheduleBody, sourceLabel,
   type CourseEnrollment, type CourseRoster, type PolicyForm,
@@ -54,18 +55,25 @@ export function LessonInAppDialog({ open, onClose }: { open: boolean; onClose: (
 }
 
 /** Ouvre un cours : édition du brouillon, fiche d'un cours publié. `seriesId` absent : nouveau cours. */
-export function CourseWorkspace({ seriesId, catalogue, onClose, onSaved }: {
-  seriesId: string | null; catalogue: CourseCatalogue; onClose: () => void; onSaved: (series: CourseSeries | null) => void;
+export function CourseWorkspace({ seriesId, selectedOccurrenceId, catalogue, onClose, onSaved }: {
+  seriesId: string | null; selectedOccurrenceId?: string | undefined; catalogue: CourseCatalogue; onClose: () => void; onSaved: (series: CourseSeries | null) => void;
 }) {
   const { schoolId } = useConsole();
-  const loaded = useLoad(async () => seriesId ? readSchool(schoolId, `course-series/${seriesId}`, courseSeriesSchema) : null, [schoolId, seriesId], `${schoolId}/${seriesId ?? 'new'}`);
-  return <LoadState loaded={loaded} label="Lecture du cours…">{series => series && series.status !== 'DRAFT'
-    ? <CourseSheet series={series} onClose={onClose} onSaved={onSaved} reload={loaded.reload} />
-    : <CourseEditor key={series ? `${series.id}/${series.version}` : 'new'} series={series} catalogue={catalogue} onClose={onClose} onSaved={onSaved} />}</LoadState>;
+  const loaded = useLoad(async () => {
+    if (!seriesId) return null;
+    const series = await readSchool(schoolId, `course-series/${seriesId}`, courseSeriesSchema);
+    if (series.id !== seriesId || series.schoolId !== schoolId) throw new RequestFailure('INVALID_RESPONSE');
+    return series;
+  }, [schoolId, seriesId], `${schoolId}/${seriesId ?? 'new'}`);
+  return <LoadState loaded={loaded} label="Lecture du cours…">{series => selectedOccurrenceId && (!series || !series.occurrences.some(item => item.id === selectedOccurrenceId))
+    ? <Notice tone="warning" title="Séance indisponible" actions={<button type="button" className="button quiet" onClick={onClose}>Retour à l’agenda</button>}><p>Cette séance n’apparaît plus dans le cours. Actualisez l’agenda pour retrouver ses dates.</p></Notice>
+    : series && series.status !== 'DRAFT'
+      ? <CourseSheet series={series} selectedOccurrenceId={selectedOccurrenceId} onClose={onClose} onSaved={onSaved} reload={loaded.reload} />
+      : <CourseEditor key={series ? `${series.id}/${series.version}` : 'new'} series={series} selectedOccurrenceId={selectedOccurrenceId} catalogue={catalogue} onClose={onClose} onSaved={onSaved} />}</LoadState>;
 }
 
-function CourseEditor({ series, catalogue: initial, onClose, onSaved }: {
-  series: CourseSeries | null; catalogue: CourseCatalogue; onClose: () => void; onSaved: (series: CourseSeries | null) => void;
+function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClose, onSaved }: {
+  series: CourseSeries | null; selectedOccurrenceId?: string | undefined; catalogue: CourseCatalogue; onClose: () => void; onSaved: (series: CourseSeries | null) => void;
 }) {
   const { schoolId, school, membership } = useConsole();
   const timeZone = school.timeZone;
@@ -75,6 +83,9 @@ function CourseEditor({ series, catalogue: initial, onClose, onSaved }: {
   const [current, setCurrent] = useState(series);
   const baseline = useMemo(() => series ? formFromSeries(series, timeZone)
     : emptyForm(catalogue, catalogue.instructors.some(item => item.membershipId === membership.membershipId) ? membership.membershipId : ''), []);
+  const selectedSessionKey = baseline.sessions[series?.occurrences.findIndex(item => item.id === selectedOccurrenceId) ?? -1]?.key;
+  const selectedSession = useRef<HTMLLIElement>(null);
+  useEffect(() => { selectedSession.current?.focus(); }, [selectedSessionKey]);
   const [form, setForm] = useState<SeriesForm>(baseline);
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -207,7 +218,8 @@ function CourseEditor({ series, catalogue: initial, onClose, onSaved }: {
         {shown.fields.sessions && <p className="field-error"><Symbol kind="alert" bare />{shown.fields.sessions}</p>}
         <ol className="course-sessions">{form.sessions.map((session, index) => {
           const problem = shown.sessions[session.key];
-          return <li key={session.key} className={problem ? 'course-session invalid' : 'course-session'} aria-label={`Séance ${index + 1}`}>
+          return <li key={session.key} ref={session.key === selectedSessionKey ? selectedSession : undefined} tabIndex={session.key === selectedSessionKey ? -1 : undefined}
+            aria-current={session.key === selectedSessionKey ? 'true' : undefined} className={problem ? 'course-session invalid' : 'course-session'} aria-label={`Séance ${index + 1}`}>
             <TextField label="Date" type="date" value={session.date} onChange={date => setSession(session.key, { date })} required />
             <TextField label="Début" type="time" value={session.start} onChange={start => setSession(session.key, { start })} required />
             <TextField label="Fin" type="time" value={session.end} onChange={end => setSession(session.key, { end })} required />
@@ -243,9 +255,11 @@ function CourseEditor({ series, catalogue: initial, onClose, onSaved }: {
 }
 
 /** Cours publié : lecture, seule la capacité se change ici. */
-function CourseSheet({ series, onClose, onSaved, reload }: { series: CourseSeries; onClose: () => void; onSaved: (series: CourseSeries | null) => void; reload: () => void }) {
+function CourseSheet({ series, selectedOccurrenceId, onClose, onSaved, reload }: { series: CourseSeries; selectedOccurrenceId?: string | undefined; onClose: () => void; onSaved: (series: CourseSeries | null) => void; reload: () => void }) {
   const { schoolId, school } = useConsole();
   const timeZone = school.timeZone;
+  const selectedOccurrence = useRef<HTMLLIElement>(null);
+  useEffect(() => { selectedOccurrence.current?.focus(); }, [selectedOccurrenceId]);
   const runner = useCommandRunner();
   const [capacity, setCapacity] = useState(String(series.capacity));
   const [error, setError] = useState<string | null>(null);
@@ -290,7 +304,8 @@ function CourseSheet({ series, onClose, onSaved, reload }: { series: CourseSerie
     ]} />
     {series.description && <p>{series.description}</p>}
     {series.conditions && <p className="row-meta">{series.conditions}</p>}
-    <ol className="course-preview-list">{series.occurrences.map(item => <li key={item.id}>
+    <ol className="course-preview-list">{series.occurrences.map(item => <li key={item.id} ref={item.id === selectedOccurrenceId ? selectedOccurrence : undefined}
+      data-occurrence-id={item.id} tabIndex={item.id === selectedOccurrenceId ? -1 : undefined} aria-current={item.id === selectedOccurrenceId ? 'true' : undefined}>
       <time dateTime={item.startsAt}>{formatDay(Date.parse(item.startsAt), timeZone)}</time>{' '}
       {instantToSchoolTime(item.startsAt, timeZone).slice(11)}–{instantToSchoolTime(item.endsAt, timeZone).slice(11)}
       <span className="row-meta"> · {item.instructorDisplayName}{item.attendanceRequired ? '' : ' · Facultative'}</span>

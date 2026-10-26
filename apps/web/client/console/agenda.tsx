@@ -86,7 +86,7 @@ export function AgendaSection() {
     document.addEventListener('visibilitychange', refreshIfStale);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfStale); };
   }, [refreshLessons, refreshDirectory, refreshCourses]);
-  const [course, setCourse] = useState<{ id: string | null } | null>(null);
+  const [course, setCourse] = useState<{ id: string | null; occurrenceId?: string } | null>(null);
   const [lessonHelp, setLessonHelp] = useState(false);
   const [coursePolicy, setCoursePolicy] = useState(false);
   const reloadCourses = courses.refresh ?? courses.reload;
@@ -110,6 +110,15 @@ export function AgendaSection() {
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
   const thisWeek = weekStart(civilDateIn(school.timeZone));
   const weekLabel = useRef<HTMLSpanElement>(null);
+  const restoredFocus = useRef<string | null>(null);
+  const selectedLessonVisible = days.some(day => day.items.some(event => event.kind === 'lesson' && event.lesson.id === routeQuery?.lesson));
+  useEffect(() => {
+    const key = routeQuery?.lesson ? `${monday}/${instructor}/${routeQuery.lesson}` : null;
+    if (!key) { restoredFocus.current = null; return; }
+    if (loaded.status !== 'ready' || restoredFocus.current === key) return;
+    const target = document.getElementById(`agenda-lesson-${routeQuery?.lesson}`) ?? weekLabel.current;
+    target?.focus(); restoredFocus.current = key;
+  }, [routeQuery?.lesson, monday, instructor, loaded.status, selectedLessonVisible]);
 
   return (
     <div className="section-stack agenda-studio">
@@ -122,8 +131,9 @@ export function AgendaSection() {
       </div>} />
       <LessonInAppDialog open={lessonHelp} onClose={() => setLessonHelp(false)} />
       {catalogue.data?.canManage === true && <CoursePolicyDialog open={coursePolicy} catalogue={catalogue.data} onClose={() => setCoursePolicy(false)} onSaved={catalogue.reload} />}
-      {course && catalogue.data && <CourseWorkspace key={course.id ?? 'new'} seriesId={course.id} catalogue={catalogue.data}
-        onClose={() => setCourse(null)} onSaved={saved => { reloadCourses(); setCourse(saved ? { id: saved.id } : null); }} />}
+      {course && catalogue.data && <CourseWorkspace key={`${course.id ?? 'new'}/${course.occurrenceId ?? ''}`} seriesId={course.id} selectedOccurrenceId={course.occurrenceId} catalogue={catalogue.data}
+        onClose={() => { setCourse(null); window.requestAnimationFrame(() => document.getElementById(`agenda-course-${course.id}-${course.occurrenceId}`)?.focus()); }}
+        onSaved={saved => { reloadCourses(); setCourse(saved ? { id: saved.id, ...(course.id === saved.id && course.occurrenceId ? { occurrenceId: course.occurrenceId } : {}) } : null); }} />}
       <PlanningReadinessBanner />
       <FirstLessonActions />
       <div className="agenda-studio-toolbar">
@@ -155,6 +165,7 @@ export function AgendaSection() {
       <AgendaSourceState loaded={directory} name="Élèves et moniteurs" />
       <AgendaSourceState loaded={loaded} name="Leçons" />
       <AgendaSourceState loaded={courses} name="Cours" />
+        {routeQuery?.lesson && loaded.status === 'ready' && !selectedLessonVisible && <Notice tone="warning" title="Leçon absente de cette vue" live={false}><p>Ce rendez-vous n’apparaît plus dans cette semaine ou avec ces filtres.</p></Notice>}
         {data?.truncated && <Notice tone="warning" title="Leçons partiellement chargées" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
         {directory.data?.truncated && <Notice tone="warning" title="Répertoire partiellement chargé" live={false}><p>Les noms, filtres et résultats de recherche peuvent être incomplets.</p></Notice>}
         {courseLimitReached && <Notice tone="warning" title="Cours potentiellement incomplets" live={false}><p>Certains cours de cette semaine peuvent manquer.</p></Notice>}
@@ -174,7 +185,7 @@ export function AgendaSection() {
                 const { series, occurrence } = event;
                 const [start, end] = formatTimeRange(occurrence.startsAt, occurrence.endsAt, school.timeZone).split('–');
                 return <li key={event.key} className={series.status === 'CANCELLED' ? 'muted-row' : undefined}>
-                  <button type="button" className="agenda-lesson" onClick={() => setCourse({ id: series.id })}>
+                  <button id={`agenda-course-${series.id}-${occurrence.id}`} type="button" className="agenda-lesson" onClick={() => setCourse({ id: series.id, occurrenceId: occurrence.id })}>
                     <span className="agenda-time"><time dateTime={occurrence.startsAt}>{start}</time><span className="visually-hidden"> à </span><time dateTime={occurrence.endsAt}>{end}</time></span>
                     <span className="agenda-identity">
                       <span className="agenda-identity-top"><span className="row-title">{series.title}</span>
@@ -193,9 +204,10 @@ export function AgendaSection() {
               const state = lessonState[phase];
               const [start, end] = formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone).split('–');
               return <li key={event.key} className={lesson.status === 'CANCELLED' ? 'muted-row' : undefined}>
-                <button type="button" className="agenda-lesson" onClick={() => navigate('eleves', {
-                    selection: lesson.learnerId, from: 'agenda', week: monday, instructor: instructor || undefined,
-                  })}>
+                <button id={`agenda-lesson-${lesson.id}`} type="button" className="agenda-lesson" aria-current={routeQuery?.lesson === lesson.id ? 'true' : undefined} onClick={() => {
+                    setRouteQuery?.({ ...routeQuery, lesson: lesson.id }, true, true);
+                    navigate('eleves', { selection: lesson.learnerId, lesson: lesson.id, from: 'agenda', week: monday, instructor: instructor || undefined });
+                  }}>
                   <span className="agenda-time"><time dateTime={lesson.plannedStart}>{start}</time><span className="visually-hidden"> à </span><time dateTime={lesson.plannedEnd}>{end}</time></span>
                   <span className="agenda-identity">
                     <span className="agenda-identity-top"><span className="row-title">{learnerName(lesson.learnerId)}</span>

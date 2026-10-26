@@ -5,6 +5,7 @@ import { settingTargets } from './settings-search-model.js';
 export interface NavigationQuery {
   selection?: string | undefined;
   learner?: string | undefined;
+  lesson?: string | undefined;
   instructor?: string | undefined;
   category?: string | undefined;
   from?: SectionKey | undefined;
@@ -26,7 +27,7 @@ export function readNavigationQuery(search: string): NavigationQuery {
   const params = new URLSearchParams(search), query: NavigationQuery = {};
   const focus = params.get('focus');
   if (focus && params.getAll('focus').length === 1 && settingTargets.includes(focus)) query.focus = focus;
-  for (const key of ['selection', 'learner', 'instructor'] as const) {
+  for (const key of ['selection', 'learner', 'lesson', 'instructor'] as const) {
     const value = params.get(key);
     if (value && params.getAll(key).length === 1 && uuid.test(value)) query[key] = value.toLowerCase();
   }

@@ -7,6 +7,7 @@ import { chromium } from '../../infra/dev/node_modules/playwright-core/index.mjs
 const origin = process.env.DRIVY_REVIEW_ORIGIN ?? 'http://127.0.0.1:5191';
 const baseline = process.env.DRIVY_BASELINE_ORIGIN ?? 'http://127.0.0.1:5190';
 const capturesOnly = process.argv.includes('--captures-only');
+const lessonContextOnly = process.argv.includes('--lesson-context-only');
 for (const url of [origin, baseline]) assert(['127.0.0.1', 'localhost'].includes(new URL(url).hostname), 'LOOPBACK_ONLY');
 const directory = resolve(process.env.DRIVY_REVIEW_DIRECTORY ?? 'artifacts/agenda-20261026/web');
 await mkdir(directory, { recursive: true });
@@ -45,7 +46,7 @@ async function scenario(name, run, fixture = 'mixed', extra = '') {
   } finally { await h?.context.close(); }
 }
 try {
-  if (!capturesOnly) {
+  if (!capturesOnly && !lessonContextOnly) {
   // Same fixture demonstrates the original defects, without treating baseline failure as candidate success.
   const before = await harness(baseline);
   try {
@@ -159,6 +160,94 @@ try {
     assert.equal(new URL(page.url()).searchParams.get('week'), '2026-11-23');
   });
   }
+  if (!capturesOnly) {
+    await scenario('Leçon exacte : deux rendez-vous du même élève, retour navigateur, rechargement et lien direct', async page => {
+      await chooseInstructor(page, 'Marie Dupont');
+      const lessonIds = await page.evaluate(() => window.__agendaReview.lessonIds);
+      for (const lessonId of lessonIds) {
+        await page.locator(`#agenda-lesson-${lessonId}`).click();
+        const selected = page.getByRole('region', { name: 'Leçon sélectionnée', exact: true });
+        await page.waitForFunction(id => document.querySelector('[aria-label="Leçon sélectionnée"]')?.getAttribute('data-lesson-id') === id, lessonId);
+        assert.equal(new URL(page.url()).searchParams.get('lesson'), lessonId);
+        await page.waitForFunction(() => document.querySelector('[aria-label="Leçon sélectionnée"] h2') === document.activeElement);
+        if (lessonId === lessonIds[1]) { const path = resolve(directory, 'selected-lesson-context.png'); await page.screenshot({ path, fullPage: true }); captures.push(path); }
+        const direct = page.url();
+        await page.reload();
+        await page.waitForFunction(id => document.querySelector('[aria-label="Leçon sélectionnée"]')?.getAttribute('data-lesson-id') === id, lessonId);
+        assert.equal(await selected.getAttribute('data-lesson-id'), lessonId);
+        await page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
+        await page.waitForFunction(id => document.activeElement?.id === `agenda-lesson-${id}`, lessonId);
+        assert.equal(new URL(page.url()).searchParams.get('week'), '2026-09-28');
+        assert(new URL(page.url()).searchParams.has('instructor'));
+        await page.goto(direct);
+        await page.waitForFunction(id => document.querySelector('[aria-label="Leçon sélectionnée"]')?.getAttribute('data-lesson-id') === id, lessonId);
+        await page.goBack();
+        await page.waitForFunction(id => document.activeElement?.id === `agenda-lesson-${id}`, lessonId);
+      }
+    }, 'lesson-context');
+    await scenario('Leçon hors page : lecture ciblée indépendante de la liste, aucun autre rendez-vous choisi', async page => {
+      const ids = await page.evaluate(() => ({ ...window.__agendaReview, lessonIds: window.__agendaReview.lessonIds }));
+      const lessonId = ids.lessonIds[1];
+      await page.evaluate(id => window.__agendaReview.hideLessonFromList(id), lessonId);
+      await page.getByRole('button', { name: 'Actualiser', exact: true }).click(); await settle(page);
+      assert.equal(await page.locator(`#agenda-lesson-${lessonId}`).count(), 0);
+      // Same-document navigation preserves the synthetic server state, as the real SPA does.
+      await page.evaluate(({ schoolId, learnerId, lessonId, instructor }) => {
+        history.pushState(null, '', `/app/gestion/${schoolId}/eleves?selection=${learnerId}&lesson=${lessonId}&from=agenda&week=2026-09-28&instructor=${instructor}`);
+        dispatchEvent(new PopStateEvent('popstate'));
+      }, { schoolId: ids.schoolId, learnerId: ids.learnerId, lessonId, instructor: ids.instructorIds.second });
+      await page.waitForFunction(id => document.querySelector('[aria-label="Leçon sélectionnée"]')?.getAttribute('data-lesson-id') === id, lessonId);
+      assert(await page.evaluate(id => window.__reads.includes(`lessons/${id}`), lessonId));
+      await page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
+      await page.getByText('Leçon absente de cette vue', { exact: true }).waitFor();
+      assert(await page.locator('.agenda-period-label').evaluate(element => element === document.activeElement));
+    }, 'lesson-context');
+    for (const failure of [403, 404, 'wrong-id', 'wrong-school', 'wrong-learner']) {
+      await scenario(`Leçon refusée ${failure} : explication, aucune autre leçon, retour sûr`, async page => {
+        const lessonId = await page.evaluate(failure => {
+          if (typeof failure === 'number') window.__agendaReview.setLessonFailure(failure);
+          else window.__agendaReview.setLessonResponse(failure);
+          return window.__agendaReview.lessonIds[1];
+        }, failure);
+        await page.locator(`#agenda-lesson-${lessonId}`).click();
+        await page.getByText('Leçon indisponible', { exact: true }).waitFor();
+        assert.equal(await page.locator('[aria-label="Leçon sélectionnée"][data-lesson-id]').count(), 0);
+        assert.equal(await page.getByRole('region', { name: 'Leçon sélectionnée' }).getByText('Parking synthétique de l’après-midi', { exact: true }).count(), 0);
+        await page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
+        await page.waitForFunction(id => document.activeElement?.id === `agenda-lesson-${id}`, lessonId);
+      }, 'lesson-context');
+    }
+    await scenario('Bilan incohérent : aucun contenu d’une autre leçon affiché sous le rendez-vous choisi', async page => {
+      const lessonId = await page.evaluate(() => { window.__agendaReview.setReportMismatch(true); return window.__agendaReview.lessonIds[0]; });
+      await page.locator(`#agenda-lesson-${lessonId}`).click();
+      await page.getByText('Bilan indisponible', { exact: true }).waitFor();
+      assert.equal(await page.getByText('Démarrage en côte', { exact: true }).count(), 0);
+      assert.equal(await page.getByRole('region', { name: 'Leçon sélectionnée' }).getAttribute('data-lesson-id'), lessonId);
+    }, 'lesson-context');
+    await scenario('Cours : sélectionner exactement chaque occurrence de la même série', async page => {
+      const rows = page.getByRole('button', { name: /Sensibilisation du matin.*Ouvrir le cours/ });
+      await rows.nth(1).click();
+      await page.waitForFunction(() => document.activeElement?.matches('.course-preview-list > [aria-current="true"]'));
+      const second = await page.locator('.course-preview-list > [aria-current="true"]').getAttribute('data-occurrence-id');
+      assert.match(await page.locator('.course-preview-list > [aria-current="true"]').textContent(), /29/);
+      { await settle(page); const path = resolve(directory, 'selected-course-occurrence.png'); await page.screenshot({ path, fullPage: true }); captures.push(path); }
+      await page.getByRole('button', { name: 'Fermer', exact: true }).click();
+      await page.waitForFunction(() => document.activeElement?.id.startsWith('agenda-course-'));
+      await rows.nth(0).click();
+      await page.waitForFunction(() => document.activeElement?.matches('.course-preview-list > [aria-current="true"]'));
+      assert.notEqual(await page.locator('.course-preview-list > [aria-current="true"]').getAttribute('data-occurrence-id'), second);
+      assert.match(await page.locator('.course-preview-list > [aria-current="true"]').textContent(), /28/);
+    });
+    await scenario('Cours : occurrence retirée entre agenda et ouverture explicitement indisponible', async page => {
+      await page.evaluate(() => window.__agendaReview.removeOccurrence(window.__agendaReview.occurrenceIds[0][1]));
+      await page.getByRole('button', { name: /Sensibilisation du matin.*Ouvrir le cours/ }).nth(1).click();
+      await page.getByText('Séance indisponible', { exact: true }).waitFor();
+      assert.equal(await page.locator('.course-preview-list > [aria-current="true"]').count(), 0);
+      await page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
+      await page.waitForFunction(() => document.activeElement?.id.startsWith('agenda-course-'));
+    });
+  }
+  if (!lessonContextOnly) {
   for (const [source, phase] of [[baseline, 'before'], [origin, 'after']]) {
     for (const [width, color] of [[1440, 'light'], [1440, 'dark'], [390, 'light'], [390, 'dark']]) {
       const h = await harness(source, 'mixed', width, color);
@@ -171,9 +260,10 @@ try {
       } finally { await h.context.close(); }
     }
   }
+  }
 } catch (error) { failures.push({ name: 'Harness ou comparaison avant/après', message: error.message }); }
 finally {
-  await writeFile(resolve(directory, capturesOnly ? 'captures-results.json' : 'results.json'), JSON.stringify({ checkedAt: new Date().toISOString(), browser: browser.version(),
+  await writeFile(resolve(directory, capturesOnly ? 'captures-results.json' : lessonContextOnly ? 'lesson-context-results.json' : 'results.json'), JSON.stringify({ checkedAt: new Date().toISOString(), browser: browser.version(),
     scope: 'Edge, vrais composants React, données et transport synthétiques en mémoire. Aucune API/PostgreSQL, VoiceOver ou mesure de performance réelle qualifiée.',
     checks, regressions, failures, captures }, null, 2));
   await browser.close(); console.log(JSON.stringify({ passed: checks.length, regressions, failures, captures: captures.length }, null, 2));

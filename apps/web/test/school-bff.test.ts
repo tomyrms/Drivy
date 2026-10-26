@@ -48,6 +48,25 @@ async function harness(schoolGateway: SchoolGateway) {
 const school = randomUUID();
 
 describe('Liste blanche des routes de gestion', () => {
+  test('le détail exact d’une leçon exige une session et conserve les refus serveur', async () => {
+    const lessonId = randomUUID(), path = `/schools/${school}/lessons/${lessonId}`;
+    const gateway = vi.fn<SchoolGateway>(async () => ({ status: 403, body: { code: 'ACCESS_DENIED' } }));
+    const h = await harness(gateway);
+    expect((await h.get(`/app/bff${path}`)).statusCode).toBe(401);
+    expect(gateway).not.toHaveBeenCalled();
+    await h.login();
+    expect((await h.get(`/app/bff${path}`)).statusCode).toBe(403);
+    expect(gateway).toHaveBeenCalledWith({ method: 'GET', path: `/v1${path}`, query: '' }, h.tokens.accessToken);
+    gateway.mockResolvedValueOnce({ status: 200, body: envelope({ id: lessonId, schoolId: school }) });
+    const confirmed = await h.get(`/app/bff${path}`);
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json().data).toEqual({ id: lessonId, schoolId: school });
+    expect(confirmed.headers['cache-control']).toBe('no-store');
+    expect(matchSchoolRoute('GET', path, '?learnerId=' + randomUUID())).toBeUndefined();
+    expect(matchSchoolRoute('GET', `/schools/${school}/lessons/not-an-id`, '')).toBeUndefined();
+    expect(matchSchoolRoute('GET', `${path}/account`, '')).toBeUndefined();
+    expect(matchSchoolRoute('PATCH', path, '')).toBeUndefined();
+  });
   test('les possibilités d’invitation sont relues depuis l’API, sous session et sans paramètre libre', async () => {
     const path = `/schools/${school}/invitation-options`;
     expect(matchSchoolRoute('GET', path, '')?.path).toBe(`/v1${path}`);
@@ -88,6 +107,7 @@ describe('Liste blanche des routes de gestion', () => {
       ['POST', `/schools/${school}/trainings/${training}/transition`, true], ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/end`, true],
       ['PUT', `/schools/${school}/modules`, true], ['POST', `/schools/${school}/trainings/${training}/permit-checks`, true],
       ['GET', `/schools/${school}/trainings/${training}/permit-checks`, undefined], ['GET', `/schools/${school}/lessons/${school}/reports`, undefined],
+      ['GET', `/schools/${school}/lessons/${school}`, undefined],
       ['GET', `/schools/${school}/trainings/${training}/progress`, undefined],
     ] as const) {
       const match = matchSchoolRoute(method, path, '');
@@ -146,7 +166,6 @@ describe('Liste blanche des routes de gestion', () => {
       ['GET', `/schools/${school}/lessons`, '?trainingId=1'],
       ['GET', `/schools/${school}/lessons`, '?status=PLANNED'],
       ['POST', `/schools/${school}/lessons/${school}/cancel`, ''],
-      ['GET', `/schools/${school}/lessons/${school}`, ''],
       ['PATCH', `/schools/${school}/members/${school}/deactivate`, ''],
       ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/remove`, ''],
       ['GET', `/schools/${school}/report-drafts`, ''],
@@ -174,7 +193,7 @@ describe('Liste blanche des routes de gestion', () => {
   test('un chemin hors liste ne consomme jamais le jeton de la session', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({}) }));
     const h = await harness(gateway); await h.login();
-    for (const url of [`/app/bff/schools/${school}/lessons/${school}`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
+    for (const url of [`/app/bff/schools/${school}/lessons/${school}/account`, `/app/bff/schools/${school}/report-drafts`, `/app/bff/schools/x/setup`,
       `/app/bff/schools/${school}/offerings?q=1`, `/app/bff/schools/${school}/captures/${school}/replay`]) {
       expect((await h.get(url)).statusCode, url).toBe(404);
     }

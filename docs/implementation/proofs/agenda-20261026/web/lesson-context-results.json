@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-10-26T10:47:10.551Z",
+  "browser": "156.0.4314.42",
+  "scope": "Edge, vrais composants React, données et transport synthétiques en mémoire. Aucune API/PostgreSQL, VoiceOver ou mesure de performance réelle qualifiée.",
+  "checks": [
+    "Leçon exacte : deux rendez-vous du même élève, retour navigateur, rechargement et lien direct",
+    "Leçon hors page : lecture ciblée indépendante de la liste, aucun autre rendez-vous choisi",
+    "Leçon refusée 403 : explication, aucune autre leçon, retour sûr",
+    "Leçon refusée 404 : explication, aucune autre leçon, retour sûr",
+    "Leçon refusée wrong-id : explication, aucune autre leçon, retour sûr",
+    "Leçon refusée wrong-school : explication, aucune autre leçon, retour sûr",
+    "Leçon refusée wrong-learner : explication, aucune autre leçon, retour sûr",
+    "Bilan incohérent : aucun contenu d’une autre leçon affiché sous le rendez-vous choisi",
+    "Cours : sélectionner exactement chaque occurrence de la même série",
+    "Cours : occurrence retirée entre agenda et ouverture explicitement indisponible"
+  ],
+  "regressions": [],
+  "failures": [],
+  "captures": [
+    "selected-lesson-context.png",
+    "selected-course-occurrence.png"
+  ]
+}
