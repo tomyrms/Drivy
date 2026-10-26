@@ -80,7 +80,7 @@ test('la passerelle nâ€™envoie que ce chemin, avec Bearer et If-Match', asy
 
 test('le client envoie If-Match et signale un conflit', async () => {
   const send = vi.fn(async () => new Response(JSON.stringify({ code: 'VERSION_CONFLICT' }), { status: 412 }));
-  expect(await saveNotificationPreferences(prefs, 7, 'csrf', send as unknown as typeof fetch)).toEqual({ ok: false, conflict: true });
+  expect(await saveNotificationPreferences(prefs, 7, 'csrf', send as unknown as typeof fetch)).toEqual({ ok: false, conflict: true, kind: 'conflict' });
   const init = (send.mock.calls[0] as unknown as [string, RequestInit])[1];
   expect((init.headers as Record<string, string>)['If-Match']).toBe('"7"');
   expect(init.method).toBe('PUT');

@@ -1,0 +1,37 @@
+{
+  "synthetic": true,
+  "checks": [
+    {
+      "width": 1440,
+      "colorScheme": "light",
+      "immediateChoices": true,
+      "latestChoicePreserved": true,
+      "lostResponseVerifiedWithoutReplay": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 390,
+      "colorScheme": "light",
+      "immediateChoices": true,
+      "latestChoicePreserved": true,
+      "lostResponseVerifiedWithoutReplay": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1440,
+      "colorScheme": "dark",
+      "immediateChoices": true,
+      "latestChoicePreserved": true,
+      "lostResponseVerifiedWithoutReplay": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 390,
+      "colorScheme": "dark",
+      "immediateChoices": true,
+      "latestChoicePreserved": true,
+      "lostResponseVerifiedWithoutReplay": true,
+      "horizontalOverflow": false
+    }
+  ]
+}

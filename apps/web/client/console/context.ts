@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import type { SchoolCommand } from '../command-core';
 import { commandMessage } from '../command-core';
+import { commandRefreshesSchool } from '../command-conflicts';
 import { commandStore, useCommandSnapshot, type PendingEntry, type SubmitResult } from '../command-store';
 import { errorMessage, RequestFailure } from '../protocol';
 import type { Member, Me } from '../protocol';
@@ -8,7 +9,7 @@ import type { School } from '../school-api';
 import type { NavigationQuery } from './route';
 import type { SectionKey } from './sections';
 import { resumableDraft } from './draft-model';
-import { failedReadState, readStateFor, type ScopedReadState } from './load-model';
+import { failedReadState, readStateFor, type ScopedReadState, type ScopedReadCache } from './load-model';
 export { sectionKeys, type SectionKey } from './sections';
 
 export interface ConsoleContextValue {
@@ -30,6 +31,8 @@ export interface ConsoleContextValue {
   setRouteQuery?: (query: NavigationQuery, replace?: boolean, keepForms?: boolean) => void;
   /** Unsent catalogue drafts, memory only, renewed with the authenticated school/access scope. */
   drafts?: Map<string, unknown>;
+  /** Memory cache, replaced and purged whenever account, school, membership or access epoch changes. */
+  readCache?: ScopedReadCache;
   /** Sign in within Drivy; step-up preserves the same account and any reviewed form. */
   login: (options?: { reauthenticate?: boolean }) => void;
   confirmIdentity?: () => Promise<boolean>;
@@ -106,28 +109,42 @@ export type Loaded<T> = {
 };
 
 /** Keep the same resource during refresh; hide the previous resource immediately when scope changes. */
-export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], scope = String(deps[0] ?? '')): Loaded<T> {
-  const [state, setState] = useState<ScopedReadState<T> & { readAt?: number }>({ scope, status: 'loading', data: undefined, error: null });
+export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], scope = String(deps[0] ?? ''), resourceKey?: string): Loaded<T> {
+  const context = useContext(ConsoleContext);
+  const cache = context?.readCache;
+  const cacheKey = resourceKey === undefined ? undefined : `${scope}/${resourceKey}`;
+  const accessScope = context ? `${context.me.personId}/${context.membership.membershipId}/${context.membership.accessEpoch}/${scope}` : scope;
+  const restored = cacheKey === undefined ? undefined : cache?.peek<T>(cacheKey);
+  const [state, setState] = useState<ScopedReadState<T> & { readAt?: number }>({ scope: accessScope,
+    status: restored ? 'ready' : 'loading', data: restored?.value, error: null, ...(restored ? { readAt: restored.readAt } : {}) });
   const generation = useRef(0);
   const inFlight = useRef(false);
+  const lastLoader = useRef<(() => Promise<T>) | null>(null);
   const run = useCallback(loader, deps);
-  const start = useCallback((silent: boolean) => {
+  const start = useCallback((silent: boolean, force = false) => {
     const current = ++generation.current;
     inFlight.current = true;
-    if (!silent) setState(previous => ({ scope, status: 'loading', data: readStateFor(previous, scope).data, error: null }));
-    run().then(data => { if (current === generation.current) { inFlight.current = false; setState({ scope, status: 'ready', data, error: null, readAt: Date.now() }); } },
+    if (cache && cacheKey !== undefined && (force || lastLoader.current !== null && lastLoader.current !== run)) cache.invalidate(cacheKey);
+    lastLoader.current = run;
+    if (!silent) setState(previous => {
+      const retained = readStateFor(previous, accessScope).data ?? (cacheKey === undefined ? undefined : cache?.peek<T>(cacheKey)?.value);
+      return { scope: accessScope, status: retained === undefined ? 'loading' : 'ready', data: retained, error: null,
+        ...(previous.scope === accessScope && previous.readAt !== undefined ? { readAt: previous.readAt } : {}) };
+    });
+    const request = cache && cacheKey !== undefined ? cache.read(cacheKey, run) : run();
+    request.then(data => { if (current === generation.current) { inFlight.current = false; setState({ scope: accessScope, status: 'ready', data, error: null, readAt: Date.now() }); } },
       error => { if (current === generation.current) { inFlight.current = false; setState(previous => {
-        const failed = failedReadState(previous, scope, error instanceof RequestFailure ? error : {}, readError(error));
+        const failed = failedReadState(previous, accessScope, error instanceof RequestFailure ? error : {}, readError(error));
         // Kept data keeps the time it was read: the screen tells how old it is.
-        return failed.data !== undefined && previous.scope === scope && previous.readAt !== undefined ? { ...failed, readAt: previous.readAt } : failed;
+        return failed.data !== undefined && previous.scope === accessScope && previous.readAt !== undefined ? { ...failed, readAt: previous.readAt } : failed;
       }); } });
-  }, [run, scope]);
-  const reload = useCallback(() => start(false), [start]);
+  }, [run, accessScope, cache, cacheKey]);
+  const reload = useCallback(() => start(false, true), [start]);
   // A background refresh never overlaps a read in progress: the newest answer would be thrown away anyway.
-  const refresh = useCallback(() => { if (!inFlight.current) start(true); }, [start]);
-  useEffect(() => { reload(); return () => { generation.current++; inFlight.current = false; }; }, [reload]);
-  const visible = readStateFor(state, scope);
-  return { ...visible, reload, refresh, ...(state.scope === scope && state.readAt !== undefined ? { readAt: state.readAt } : {}) };
+  const refresh = useCallback(() => { if (!inFlight.current) start(true, true); }, [start]);
+  useEffect(() => { start(false); return () => { generation.current++; inFlight.current = false; }; }, [start]);
+  const visible = readStateFor(state, accessScope);
+  return { ...visible, reload, refresh, ...(state.scope === accessScope && state.readAt !== undefined ? { readAt: state.readAt } : {}) };
 }
 
 /** Draft that follows the school's value until the person edits it. */
@@ -160,13 +177,13 @@ export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; me
 export function useCommandRunner(onConfirmed?: () => void) {
   const context = useConsole();
   const snapshot = useCommandSnapshot();
-  const pending: PendingEntry | undefined = snapshot.entries.get(context.schoolId);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
   const submitted = useRef<string | null>(null);
+  const pending: PendingEntry | undefined = submitted.current ? snapshot.entries.get(submitted.current) : undefined;
   const callback = useRef(onConfirmed);
   callback.current = onConfirmed;
-  const confirmed = snapshot.confirmed;
+  const confirmed = snapshot.confirmations.find(item => item.operationId === submitted.current);
   useEffect(() => {
     if (!confirmed || confirmed.operationId !== submitted.current) return;
     submitted.current = null;
@@ -186,11 +203,11 @@ export function useCommandRunner(onConfirmed?: () => void) {
     setBusy(false);
     if (result.status === 'confirmed') {
       setOutcome({ tone: 'success', title: 'Confirmé par l’école', message: success });
-      void context.reloadSchool();
+      if (commandRefreshesSchool(command.kind)) void context.reloadSchool();
     } else if (result.status === 'rejected') {
       submitted.current = null;
       if (draftKey && unsentDraft !== undefined) context.drafts?.set(draftKey, unsentDraft);
-      setOutcome({ tone: 'error', title: 'Modification refusée', message: result.needsLogin ? result.message : `${result.message} Votre saisie est conservée.`, code: result.code, needsLogin: result.needsLogin });
+      setOutcome({ tone: 'error', title: result.code.startsWith('LOCAL_COMMAND_') ? 'Modification en attente' : 'Modification refusée', message: result.needsLogin ? result.message : `${result.message} Votre saisie est conservée.`, code: result.code, needsLogin: result.needsLogin });
     } else {
       // The pending panel at the top of the page carries the verification; move focus there.
       window.requestAnimationFrame(() => document.getElementById('pending-title')?.focus());

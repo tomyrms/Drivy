@@ -42,6 +42,9 @@ export function registerNotificationPreferences(app:FastifyInstance,options:{poo
   empty.parse(r.query);const body=preferenceBody.parse(r.body),identity=await options.verifyToken(r.headers.authorization);
   const expected=z.string().regex(/^"[1-9][0-9]*"$/).transform(v=>Number(v.slice(1,-1))).parse(r.headers['if-match']);
   const data=await own(identity,null,async(db,personId)=>{
+   // Lock the owner, which exists even before the first preference row. Reading the version before
+   // this lock lets two devices both accept the same If-Match and overwrite each other's choices.
+   await db.query('SELECT id FROM drivy.person WHERE id=$1 FOR UPDATE',[personId]);
    const current=await read(db,personId);
    if(current.version!==expected)throw new ApiError(412,'VERSION_CONFLICT','Vos préférences ont changé. Rechargez-les.');
    await db.query(`INSERT INTO drivy.notification_preference(person_id,version,course_offers,course_reminders,course_changes,course_staff_alerts) VALUES($1,2,$2,$3,$4,$5)
