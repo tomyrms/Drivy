@@ -18,7 +18,7 @@ struct SchoolNotificationPreferences: Codable, Sendable, Equatable {
 }
 
 /// Corps de `PUT /v1/me/notification-preferences` : le même que la lecture, sans version (le serveur le refuse strictement).
-struct SchoolNotificationPreferencesBody: Encodable, Sendable, Equatable {
+struct SchoolNotificationPreferencesBody: Codable, Sendable, Equatable {
     let courseOffers: Bool
     let courseReminders: Bool
     let courseChanges: Bool
@@ -77,16 +77,16 @@ struct SchoolPushRevokeBody: Encodable, Sendable, Equatable { let token: String 
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
     }
 
-    func preferences() async throws -> SchoolNotificationPreferences {
-        let result: SchoolNotificationPreferences = try await send(["notification-preferences"], method: "GET", body: nil, version: nil)
+    func preferences(contextIsCurrent: @escaping @MainActor () -> Bool = { true }) async throws -> SchoolNotificationPreferences {
+        let result: SchoolNotificationPreferences = try await send(["notification-preferences"], method: "GET", body: nil, version: nil, contextIsCurrent: contextIsCurrent)
         guard result.version > 0 else { throw SchoolPlanningFailure.invalidResponse }
         return result
     }
     /// Rend les préférences écrites par l’école ; 412 (`conflict`) si elles ont changé ailleurs.
-    func save(_ body: SchoolNotificationPreferencesBody, version: Int) async throws -> SchoolNotificationPreferences {
+    func save(_ body: SchoolNotificationPreferencesBody, version: Int, contextIsCurrent: @escaping @MainActor () -> Bool = { true }) async throws -> SchoolNotificationPreferences {
         let data: Data
         do { data = try JSONEncoder().encode(body) } catch { throw SchoolPlanningFailure.invalidResponse }
-        let result: SchoolNotificationPreferences = try await send(["notification-preferences"], method: "PUT", body: data, version: version)
+        let result: SchoolNotificationPreferences = try await send(["notification-preferences"], method: "PUT", body: data, version: version, contextIsCurrent: contextIsCurrent)
         guard result.version > version, result.body == body else { throw SchoolPlanningFailure.invalidResponse }
         return result
     }
@@ -110,15 +110,19 @@ struct SchoolPushRevokeBody: Encodable, Sendable, Equatable { let token: String 
     private struct Envelope<Value: Decodable>: Decodable { let data: Value; let requestId: String; let serverTime: String }
     private struct Problem: Decodable { let code: String; let title: String? }
 
-    private func send<Value: Decodable>(_ path: [String], method: String, body: Data?, version: Int?) async throws -> Value {
+    private func send<Value: Decodable>(_ path: [String], method: String, body: Data?, version: Int?, contextIsCurrent: @escaping @MainActor () -> Bool = { true }) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolPlanningFailure.invalidResponse }
+        guard contextIsCurrent() else { throw CancellationError() }
         var target = baseURL
         for part in ["v1", "me"] + path { target.appendPathComponent(part) }
         let token = try await accessToken()
+        guard contextIsCurrent() else { throw CancellationError() }
         do { return try await perform(target, method: method, body: body, version: version, token: token) }
         catch SchoolPlanningFailure.unauthorized {
+            guard contextIsCurrent() else { throw CancellationError() }
             guard await tokenSource.invalidateAccessToken(token) else { throw SchoolPlanningFailure.unauthorized }
             let renewed = try await accessToken()
+            guard contextIsCurrent() else { throw CancellationError() }
             guard renewed != token else { throw SchoolPlanningFailure.unauthorized }
             return try await perform(target, method: method, body: body, version: version, token: renewed)
         }

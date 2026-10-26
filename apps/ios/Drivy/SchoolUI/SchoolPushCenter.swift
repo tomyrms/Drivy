@@ -48,6 +48,7 @@ import UserNotifications
     /// Avant la déconnexion, tant que le jeton d’accès vaut encore : l’école cesse d’envoyer à cet appareil.
     /// Une panne n’empêche jamais la déconnexion ; l’école révoque d’elle-même un jeton refusé par Apple.
     func sessionEnding() async {
+        SchoolNotificationSettingsCache.reset()
         hasSession = false
         pendingSeriesID = nil
         guard let token = registeredToken ?? deviceToken, let client else { registeredToken = nil; return }

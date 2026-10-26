@@ -253,6 +253,7 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
 @MainActor
 protocol SchoolCommandOutbox: AnyObject {
     func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand?
+    func pendingCommands(for scope: SchoolCommandScope) throws -> [PendingSchoolCommand]
     func save(_ command: PendingSchoolCommand) throws
     func remove(_ command: PendingSchoolCommand) throws
 }
@@ -282,10 +283,14 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
         try read().first { $0.scope.belongsToWorkspace(scope) }
     }
 
+    func pendingCommands(for scope: SchoolCommandScope) throws -> [PendingSchoolCommand] {
+        try read().filter { $0.scope.belongsToWorkspace(scope) }
+    }
+
     func save(_ command: PendingSchoolCommand) throws {
         try validate(command)
         var commands = try read()
-        if let index = commands.firstIndex(where: { $0.scope.belongsToWorkspace(command.scope) || $0.id == command.id }) {
+        if let index = commands.firstIndex(where: { $0.id == command.id }) {
             let existing = commands[index]
             if existing != command {
                 // One atomic encrypted replacement: a late CREATE acknowledgement cannot erase this intent.
@@ -298,6 +303,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             try synchronize()
             return
         }
+        guard !commands.contains(where: { $0.conflicts(with: command) }) else { throw SchoolConfigurationFailure.pendingCommand }
         guard commands.count < 50 else { throw SchoolConfigurationFailure.storage }
         commands.append(command)
         try write(commands)
@@ -329,11 +335,13 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             let box = try AES.GCM.SealedBox(combined: encrypted)
             let clear = try AES.GCM.open(box, using: key(create: false), authenticating: authenticatedData)
             let archive = try JSONDecoder().decode(Archive.self, from: clear)
-            guard (archive.version == 1 || archive.version == 2), archive.commands.count <= 50,
+            guard (1...3).contains(archive.version), archive.commands.count <= 50,
                   Set(archive.commands.map(\.id)).count == archive.commands.count else { throw SchoolConfigurationFailure.storage }
             for (index, command) in archive.commands.enumerated() {
                 try validate(command)
-                guard !archive.commands.prefix(index).contains(where: { $0.scope.belongsToWorkspace(command.scope) }) else {
+                guard !archive.commands.prefix(index).contains(where: {
+                    archive.version < 3 ? $0.scope.belongsToWorkspace(command.scope) : $0.conflicts(with: command)
+                }) else {
                     throw SchoolConfigurationFailure.storage
                 }
             }
@@ -344,7 +352,10 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
     private func write(_ commands: [PendingSchoolCommand]) throws {
         do {
             // Older binaries must fail closed instead of ignoring a durable withdrawal intent.
-            let version = commands.contains { $0.observationUndoOperationID != nil } ? 2 : 1
+            let hasConcurrentSchool = commands.enumerated().contains { index, command in
+                commands.prefix(index).contains { $0.scope.belongsToWorkspace(command.scope) }
+            }
+            let version = hasConcurrentSchool ? 3 : (commands.contains { $0.observationUndoOperationID != nil } ? 2 : 1)
             let data = try JSONEncoder().encode(Archive(version: version, commands: commands))
             guard data.count + 28 <= maximumArchiveBytes else { throw SchoolConfigurationFailure.storage }
             let box = try AES.GCM.seal(data, using: key(create: true), authenticating: authenticatedData)

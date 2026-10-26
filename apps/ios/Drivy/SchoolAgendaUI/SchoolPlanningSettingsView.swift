@@ -47,7 +47,7 @@ import Foundation
         isLoading = true; errorMessage = nil; storageAvailable = false; contextCurrent = false; conflictingDefaults = nil
         defer { isLoading = false }
         do {
-            pending = try outbox.pending(for: scope); storageAvailable = true
+            pending = try outbox.pending(for: scope, domain: .planningPreferences); storageAvailable = true
             let person = try await client.reader.me()
             guard person.personId == scope.personID, person.memberships.contains(where: {
                 $0.membershipId == scope.membershipID && $0.schoolId == scope.schoolID && $0.accessEpoch == scope.accessEpoch
