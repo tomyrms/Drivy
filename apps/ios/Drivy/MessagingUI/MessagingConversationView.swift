@@ -37,6 +37,8 @@ struct MessagingConversationView: View {
     @State private var atBottom = true
     @State private var unseenBelow = false
     @State private var loadingOlder = false
+    /// Saut en cours vers une citation, une épingle ou un résultat : le suivi du bas ne doit pas le contrarier.
+    @State private var jumping: UUID?
     @FocusState private var composerFocused: Bool
 
     private static let bottomID = "messaging.thread.bottom"
@@ -200,14 +202,17 @@ struct MessagingConversationView: View {
         .background(DrivyTheme.canvas)
         .scrollDismissesKeyboard(.interactively)
         .defaultScrollAnchor(.bottom, for: .initialOffset)
-        .defaultScrollAnchor(.bottom, for: .alignment)
+        // Pas d'ancrage `.alignment` : il recollait le fil au bas dès que le contenu grandissait, ce qui
+        // annulait la position gardée au chargement des précédents et le saut vers un résultat de recherche.
+        // Le suivi du bas est explicite ci-dessous, seulement quand l'utilisateur y est déjà.
         .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
             ScrollMetrics(distanceToBottom: geometry.contentSize.height - geometry.visibleRect.maxY,
                           contentHeight: geometry.contentSize.height,
                           containerHeight: geometry.containerSize.height)
         } action: { old, new in
             // Une variation de taille (clavier, rotation, déchiffrement, réaction) ne fait jamais quitter le bas.
-            if atBottom && (old.containerHeight != new.containerHeight || old.contentHeight != new.contentHeight) && !loadingOlder {
+            if atBottom && (old.containerHeight != new.containerHeight || old.contentHeight != new.contentHeight)
+                && !loadingOlder && jumping == nil {
                 if new.distanceToBottom > 1 { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
                 return
             }
@@ -371,6 +376,8 @@ struct MessagingConversationView: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { proxy.scrollTo(anchor, anchor: .top) }
+            // Le fil n'est plus en bas : sans cela, la prochaine variation de hauteur l'y ramène.
+            atBottom = false
         }
         // La variation de hauteur arrive après ce cycle : garder le drapeau le temps que la
         // correction d'ancrage ne soit pas prise pour un suivi du bas du fil.
@@ -390,11 +397,14 @@ struct MessagingConversationView: View {
             return
         }
         // Laisse la feuille de recherche se refermer : un défilement lancé pendant sa disparition est perdu.
+        jumping = id
+        defer { jumping = nil }
         try? await Task.sleep(for: .milliseconds(350))
         withAnimation(DrivyMotion.settle(reduceMotion)) { proxy.scrollTo(id, anchor: .center) }
         // Deuxième passe après le rendu paresseux du voisinage, sinon la cible reste hors écran.
         try? await Task.sleep(for: .milliseconds(250))
         proxy.scrollTo(id, anchor: .center)
+        atBottom = false
         withAnimation(DrivyMotion.feedback(reduceMotion)) { highlighted = id }
         try? await Task.sleep(for: .milliseconds(1_500))
         if highlighted == id { withAnimation(DrivyMotion.settle(reduceMotion)) { highlighted = nil } }
