@@ -6,9 +6,10 @@ struct SchoolCourseAttendanceView: View {
     @Bindable var model: SchoolCourseAttendanceWorkspace
     @Environment(\.dismiss) private var dismiss
     @State private var paying: SchoolCourseSheetRow?
-    @State private var amount = ""
     @State private var validating: SchoolCourseSheetRow?
     @State private var reversal: SchoolCourseReversal?
+    @State private var mode: SchoolCourseParticipantMode = .attendance
+    @State private var onlyUnmarked = false
 
     var body: some View {
         NavigationStack {
@@ -29,27 +30,21 @@ struct SchoolCourseAttendanceView: View {
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
-            .navigationTitle("Appel").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Participants").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { await model.load() }
             .refreshable { await model.load() }
+            .onChange(of: model.rights, initial: true) { _, rights in
+                let modes = SchoolCourseParticipantMode.available(rights)
+                if !modes.contains(mode), let first = modes.first { mode = first }
+            }
             .onChange(of: model.errorMessage) { _, message in
                 if let message { UIAccessibility.post(notification: .announcement, argument: message) }
             }
             .onChange(of: model.confirmation) { _, message in
                 if let message { UIAccessibility.post(notification: .announcement, argument: message) }
             }
-            .alert("Payé sur place", isPresented: Binding(get: { paying != nil }, set: { if !$0 { paying = nil } })) {
-                TextField("Montant en CHF", text: $amount).keyboardType(.decimalPad)
-                Button("Enregistrer") {
-                    if let row = paying, let cents = SchoolCatalogFormatting.cents(amount) {
-                        Task { await model.perform(.payment(enrollmentID: row.enrollmentId, amountCents: cents), learnerName: name(row)) }
-                    }
-                    paying = nil
-                }
-                .disabled(SchoolCatalogFormatting.cents(amount) == nil)
-                Button("Annuler", role: .cancel) { paying = nil }
-            } message: { if let row = paying { Text(name(row)) } }
+            .sheet(item: $paying) { row in SchoolCoursePaymentSheet(model: model, row: row) }
             .confirmationDialog(validating.map { "Valider le cours pour \(name($0)) ?" } ?? "",
                                 isPresented: Binding(get: { validating != nil }, set: { if !$0 { validating = nil } }),
                                 titleVisibility: .visible) {
@@ -67,6 +62,33 @@ struct SchoolCourseAttendanceView: View {
     }
 
     @ViewBuilder private var content: some View {
+        let modes = SchoolCourseParticipantMode.available(model.rights)
+        if modes.count > 1 {
+            Section {
+                Picker("Suivi", selection: $mode) {
+                    ForEach(modes) { item in Text(item.title).tag(item) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("course-participant-mode")
+            }.drivyFormRows()
+        }
+        if mode == .attendance && modes.contains(.attendance) { attendanceContent }
+        else if mode == .payments && modes.contains(.payments) {
+            Section {
+                if model.rows.isEmpty { Text("Aucun inscrit").foregroundStyle(DrivyTheme.muted) }
+                ForEach(model.rows) { row in paymentRow(row) }
+            } header: { Text("Règlements sur place").drivyFormSectionHeader() }
+            .drivyFormRows()
+        } else if mode == .validation && modes.contains(.validation) {
+            Section {
+                if model.rows.isEmpty { Text("Aucun inscrit").foregroundStyle(DrivyTheme.muted) }
+                ForEach(model.rows) { row in validationRow(row) }
+            } header: { Text("Validation du cours").drivyFormSectionHeader() }
+            .drivyFormRows()
+        }
+    }
+
+    @ViewBuilder private var attendanceContent: some View {
         let started = model.startedOccurrences()
         if started.isEmpty {
             Section { Text("Aucune séance commencée").foregroundStyle(DrivyTheme.muted) }.drivyFormRows()
@@ -84,9 +106,15 @@ struct SchoolCourseAttendanceView: View {
                 .drivyFormRows()
             }
             if let occurrence = model.occurrence {
+                let unmarked = model.rows.filter { $0.mark(occurrence.id)?.status == nil }
+                Section {
+                    LabeledContent("Appel renseigné", value: "\(model.rows.count - unmarked.count) sur \(model.rows.count)")
+                    Toggle("À renseigner", isOn: $onlyUnmarked).drivyControlTint()
+                }.drivyFormRows()
                 Section {
                     if model.rows.isEmpty { Text("Aucun inscrit").foregroundStyle(DrivyTheme.muted) }
-                    ForEach(model.rows) { row in learnerRow(row, occurrence: occurrence) }
+                    else if onlyUnmarked && unmarked.isEmpty { Text("Appel complet").foregroundStyle(DrivyTheme.muted) }
+                    ForEach(onlyUnmarked ? unmarked : model.rows) { row in learnerRow(row, occurrence: occurrence) }
                 } header: {
                     Text(SchoolPlanningFormat.interval(occurrence.startsAt, occurrence.endsAt, zone: model.timeZone)).drivyFormSectionHeader()
                 }
@@ -100,13 +128,9 @@ struct SchoolCourseAttendanceView: View {
     @ViewBuilder private func learnerRow(_ row: SchoolCourseSheetRow, occurrence: SchoolCourseOccurrence) -> some View {
         let mark = row.mark(occurrence.id)
         let rights = model.rights
-        let busy = model.busyEnrollment == row.enrollmentId
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            HStack(spacing: DrivySpacing.xs) {
-                Text(name(row)).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                if busy { ProgressView().accessibilityLabel("Envoi en cours") }
-            }
+            learnerHeader(row)
+            if mark?.status == nil { Text("Non renseigné").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
             if rights?.canTakeAttendance == true {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: DrivySpacing.xs) { statusButtons(row, mark: mark, occurrence: occurrence) }
@@ -115,11 +139,22 @@ struct SchoolCourseAttendanceView: View {
             } else if let status = mark?.status {
                 Text(SchoolCourseSheetFormat.title(status)).font(.subheadline)
             }
-            if row.requirements.required > 0 {
-                Text(SchoolCourseSheetFormat.progress(row.requirements))
-                    .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
-            }
-            if rights?.canRecordPayment == true {
+        }
+        .padding(.vertical, DrivySpacing.xxs)
+    }
+
+    private func learnerHeader(_ row: SchoolCourseSheetRow) -> some View {
+        HStack(spacing: DrivySpacing.xs) {
+            Text(name(row)).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if model.busyEnrollment == row.enrollmentId { ProgressView().accessibilityLabel("Envoi en cours") }
+        }
+    }
+
+    @ViewBuilder private func paymentRow(_ row: SchoolCourseSheetRow) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            learnerHeader(row)
+            if model.rights?.canRecordPayment == true {
                 let paid = row.payments.filter { $0.voidedAt == nil }.reduce(Int64(0)) { $0 + $1.amountCents }
                 if paid > 0 {
                     Text("Payé : \(SchoolCatalogFormatting.price(paid))").font(.subheadline).monospacedDigit()
@@ -133,15 +168,26 @@ struct SchoolCourseAttendanceView: View {
                         .accessibilityLabel("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents)), \(name(row))")
                         .accessibilityIdentifier("course-payment-void")
                 }
-                Button { amount = ""; paying = row } label: { Label("Payé sur place", systemImage: "banknote") }
+                Button { paying = row } label: { Label("Payé sur place", systemImage: "banknote") }
                     .buttonStyle(DrivySecondaryButtonStyle())
                     .disabled(model.isBusy)
                     .accessibilityLabel("Payé sur place, \(name(row))")
                     .accessibilityIdentifier("course-payment")
             }
-            if let completion = row.completion {
+        }
+        .padding(.vertical, DrivySpacing.xxs)
+    }
+
+    @ViewBuilder private func validationRow(_ row: SchoolCourseSheetRow) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            learnerHeader(row)
+            if row.requirements.required > 0 {
+                Text(SchoolCourseSheetFormat.progress(row.requirements))
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+            }
+            if let completion = row.completion, completion.revokedAt == nil {
                 Label("Cours validé", systemImage: "checkmark.seal.fill").font(.subheadline.weight(.semibold))
-                if rights?.canValidate == true && completion.revokedAt == nil {
+                if model.rights?.canValidate == true {
                     Button {
                         reversal = SchoolCourseReversal(kind: .completion(completion.id), enrollmentID: row.enrollmentId, learnerName: name(row))
                     } label: { Label("Retirer la validation", systemImage: "xmark.seal") }
@@ -150,7 +196,7 @@ struct SchoolCourseAttendanceView: View {
                         .accessibilityLabel("Retirer la validation, \(name(row))")
                         .accessibilityIdentifier("course-completion-revoke")
                 }
-            } else if rights?.canValidate == true && row.requirements.required > 0 {
+            } else if model.rights?.canValidate == true && row.requirements.required > 0 {
                 Button { validating = row } label: { Label("Valider le cours", systemImage: "checkmark.seal") }
                     .buttonStyle(DrivySecondaryButtonStyle())
                     .disabled(model.isBusy || !model.canValidate(row))
@@ -229,6 +275,7 @@ struct SchoolCourseReversalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var reason = ""
     @State private var confirming = false
+    @State private var confirmsDiscard = false
     @State private var error: String?
     @FocusState private var focused: Bool
 
@@ -262,15 +309,21 @@ struct SchoolCourseReversalSheet: View {
             .scrollContentBackground(.hidden)
             .background(DrivyTheme.canvas)
             .navigationTitle(target.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) {
+                Button("Fermer") { if reason.isEmpty { dismiss() } else { confirmsDiscard = true } }.disabled(model.isBusy)
+            } }
             // L’annonce VoiceOver de l’erreur et de la confirmation vient de l’écran d’appel (model.errorMessage / confirmation).
             .onAppear { focused = true }
             .confirmationDialog(target.question, isPresented: $confirming, titleVisibility: .visible) {
                 Button(target.title, role: .destructive) { Task { await submit() } }
                 Button("Ne rien changer", role: .cancel) {}
             }
+            .alert("Quitter sans conserver le motif ?", isPresented: $confirmsDiscard) {
+                Button("Quitter", role: .destructive) { dismiss() }
+                Button("Continuer", role: .cancel) {}
+            }
         }
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(model.isBusy || !reason.isEmpty)
         .tint(DrivyTheme.accent)
     }
 

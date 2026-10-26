@@ -19,6 +19,8 @@ struct SchoolVisualReview: View {
                 SchoolEntryVisualReview(screen: screen)
             } else if SchoolAccountVisualReview.screenNames.contains(screen) {
                 SchoolAccountVisualReview(screen: screen)
+            } else if SchoolCourseVisualReview.screens.contains(screen) {
+                SchoolCourseVisualReview(screen: screen)
             } else if let context {
                 switch screen {
                 case "gps-choice", "signal", "signal-all", "observations", "capture-preparation", "live", "live-waiting":
@@ -117,7 +119,8 @@ struct SchoolVisualReview: View {
         .environment(\.locale, Locale(identifier: "fr_CH"))
         .tint(DrivyTheme.accent)
         .task {
-            guard !SchoolAccountVisualReview.screenNames.contains(screen), !SchoolEntryVisualReview.screenNames.contains(screen) else { return }
+            guard !SchoolAccountVisualReview.screenNames.contains(screen), !SchoolEntryVisualReview.screenNames.contains(screen),
+                  !SchoolCourseVisualReview.screens.contains(screen) else { return }
             guard context == nil else { return }
             do {
                 context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "learner-lesson",

@@ -20,6 +20,8 @@ struct SchoolCourseForm: Equatable, Sendable {
     var description = ""
     var location = ""
     var conditions = ""
+    /// Conservée lors de la reprise d’un brouillon créé sur le web, même si ce formulaire ne l’édite pas.
+    var teachingLanguage: String?
     var responsibleID: UUID?
     var capacity = 12
     var minParticipants: Int?
@@ -69,7 +71,7 @@ struct SchoolCourseForm: Equatable, Sendable {
         guard inputs.count == occurrences.count else { return nil }
         return SchoolCourseSeriesBody(operationId: operationID, typeId: typeID, title: Self.trimmed(title),
             description: Self.trimmed(description), location: Self.trimmed(location), conditions: Self.trimmed(conditions),
-            teachingLanguage: nil, responsibleMembershipId: responsibleID, capacity: capacity, minParticipants: minParticipants,
+            teachingLanguage: teachingLanguage, responsibleMembershipId: responsibleID, capacity: capacity, minParticipants: minParticipants,
             timeZone: timeZone, occurrences: inputs)
     }
 
@@ -77,6 +79,7 @@ struct SchoolCourseForm: Equatable, Sendable {
     init(series: SchoolCourseSeries) {
         typeID = series.typeId; title = series.title; description = series.description; location = series.location
         conditions = series.conditions; responsibleID = series.responsibleMembershipId; capacity = series.capacity
+        teachingLanguage = series.teachingLanguage
         minParticipants = series.minParticipants
         occurrences = series.occurrences.sorted { $0.position < $1.position }.compactMap { occurrence in
             guard let start = occurrence.start, let end = occurrence.end else { return nil }
@@ -123,6 +126,9 @@ enum SchoolCourseFormat {
     private(set) var finished: SchoolCourseSeries?
     /// Une réponse perdue se rejoue avec la même opération, tant que la saisie n’a pas changé.
     @ObservationIgnored private var pending: (key: String, operation: UUID)?
+    private enum Intent { case type, draft(closing: Bool), publication }
+    @ObservationIgnored private var pendingIntent: Intent?
+    @ObservationIgnored private var initialForm = SchoolCourseForm()
 
     init(schoolID: UUID, membershipID: UUID, timeZone: String, client: SchoolCourseClient,
          catalogue: SchoolCourseCatalogue?, series: SchoolCourseSeries? = nil, day: Date = Date(), selectedOccurrenceID: UUID? = nil) {
@@ -142,6 +148,7 @@ enum SchoolCourseFormat {
                 instructorID: Self.defaultInstructor(catalogue, membershipID: membershipID))]
         }
         applyCatalogueDefaults()
+        initialForm = form
     }
 
     var isNew: Bool { series == nil }
@@ -161,13 +168,16 @@ enum SchoolCourseFormat {
     var canSave: Bool { !isBusy && !accessUnavailable && selectionMessage == nil && catalogue?.canManage == true && problem == nil }
     var canPublish: Bool { !isBusy && !accessUnavailable && selectionMessage == nil && catalogue?.canManage == true && form.problem(publishing: true) == nil }
     var publishProblem: String? { problem ?? form.problem(publishing: true) }
+    var hasUnconfirmedOperation: Bool { pending != nil }
 
     func load() async {
         guard !isLoading else { return }
+        let wasUnedited = !hasUnsavedChanges
         isLoading = true; defer { isLoading = false }
         do {
             catalogue = try await client.catalogue(schoolID: schoolID)
             applyCatalogueDefaults()
+            if series == nil && wasUnedited { initialForm = form }
             if catalogue?.canManage == false { errorMessage = SchoolCourseClient.failure(403, "COURSE_ACCESS_REQUIRED").errorDescription }
             if let selectedOccurrenceID, let series {
                 let fresh = try await client.series(schoolID: schoolID, id: series.id)
@@ -202,6 +212,7 @@ enum SchoolCourseFormat {
     func createType() async {
         let title = newTypeTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !isBusy, !title.isEmpty, title.utf16.count <= 120 else { return }
+        pendingIntent = .type
         isBusy = true; errorMessage = nil; defer { isBusy = false }
         let operation = operationID(for: "type|\(title)")
         do {
@@ -218,6 +229,7 @@ enum SchoolCourseFormat {
     /// Écrit le brouillon ; le succès n’est annoncé qu’après la réponse de l’école.
     @discardableResult func saveDraft(closing: Bool = true) async -> SchoolCourseSeries? {
         guard canSave else { return nil }
+        pendingIntent = .draft(closing: closing)
         isBusy = true; errorMessage = nil; defer { isBusy = false }
         return await writeDraft(closing: closing)
     }
@@ -225,6 +237,7 @@ enum SchoolCourseFormat {
     /// Enregistre d’abord la saisie si elle a changé, puis publie.
     func publish() async {
         guard canPublish else { return }
+        pendingIntent = .publication
         isBusy = true; errorMessage = nil; defer { isBusy = false }
         var written = series
         if written == nil || hasUnsavedChanges { written = await writeDraft(closing: false) }
@@ -237,14 +250,26 @@ enum SchoolCourseFormat {
     }
 
     var hasUnsavedChanges: Bool {
-        guard let series else { return true }
+        if !newTypeTitle.isEmpty { return true }
+        guard let series else { return initialForm.comparable != form.comparable || !newTypeTitle.isEmpty }
         return SchoolCourseForm(series: series).comparable != form.comparable
+    }
+
+    /// Les champs restent figés après une réponse perdue : ce bouton reprend exactement l’intention précédente.
+    func retryUnconfirmed() async {
+        guard pending != nil, !isBusy else { return }
+        switch pendingIntent {
+        case .type: await createType()
+        case .draft(let closing): _ = await saveDraft(closing: closing)
+        case .publication: await publish()
+        case nil: break
+        }
     }
 
     private func writeDraft(closing: Bool) async -> SchoolCourseSeries? {
         guard let probe = form.body(operationID: UUID(), timeZone: timeZone),
               let signature = try? JSONEncoder().encode(SchoolCourseSeriesBody(operationId: Self.zero, typeId: probe.typeId, title: probe.title,
-                description: probe.description, location: probe.location, conditions: probe.conditions, teachingLanguage: nil,
+                description: probe.description, location: probe.location, conditions: probe.conditions, teachingLanguage: probe.teachingLanguage,
                 responsibleMembershipId: probe.responsibleMembershipId, capacity: probe.capacity, minParticipants: probe.minParticipants,
                 timeZone: probe.timeZone, occurrences: probe.occurrences)) else { return nil }
         let key = "draft|\(series?.id.uuidString ?? "new")|\(series?.version ?? 0)|" + signature.base64EncodedString()
@@ -299,7 +324,7 @@ private extension SchoolCourseForm {
         let parts: [String] = [typeID?.uuidString ?? "", title.trimmingCharacters(in: .whitespacesAndNewlines),
             description.trimmingCharacters(in: .whitespacesAndNewlines), location.trimmingCharacters(in: .whitespacesAndNewlines),
             conditions.trimmingCharacters(in: .whitespacesAndNewlines), responsibleID?.uuidString ?? "", String(capacity),
-            minParticipants.map(String.init) ?? ""]
+            minParticipants.map(String.init) ?? "", teachingLanguage ?? ""]
         return (parts + sessions).joined(separator: "|")
     }
 }

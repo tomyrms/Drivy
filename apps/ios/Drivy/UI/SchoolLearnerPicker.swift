@@ -73,14 +73,16 @@ struct SchoolLearnerPicker: View {
     let learners: [SchoolLearner]
     let selectedID: UUID?
     let choose: (UUID) -> Void
+    let showsHomonymReference: Bool
     @State private var search = ""
     @State private var index: SchoolLearnerIndex
     @FocusState private var searching: Bool
 
-    init(learners: [SchoolLearner], selectedID: UUID?, choose: @escaping (UUID) -> Void) {
+    init(learners: [SchoolLearner], selectedID: UUID?, showsHomonymReference: Bool = false, choose: @escaping (UUID) -> Void) {
         self.learners = learners
         self.selectedID = selectedID
         self.choose = choose
+        self.showsHomonymReference = showsHomonymReference
         _index = State(initialValue: SchoolLearnerIndex(learners: learners))
     }
 
@@ -88,6 +90,7 @@ struct SchoolLearnerPicker: View {
 
     var body: some View {
         let shown = matches
+        let references = showsHomonymReference ? HomonymReference.references(learners.map { ($0.id, $0.displayName) }) : [:]
         List {
             ForEach(shown) { learner in
                 let isSelected = learner.id == selectedID
@@ -96,7 +99,8 @@ struct SchoolLearnerPicker: View {
                     searching = false
                     choose(learner.id)
                 } label: {
-                    DrivyEntityRow(title: learner.displayName, leading: .avatar(learner.displayName), isSelected: isSelected)
+                    DrivyEntityRow(title: HomonymReference.label(learner.displayName, reference: references[learner.id]),
+                                   leading: .avatar(learner.displayName), isSelected: isSelected)
                 }
                 .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.m, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
                 .listRowBackground(isSelected ? DrivyTheme.accentSoft : DrivyTheme.canvas)

@@ -6,8 +6,7 @@ struct SchoolCourseLearnerView: View {
     @Bindable var model: SchoolCourseLearnerWorkspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @State private var confirmsEnroll = false
-    @State private var confirmsAccept = false
+    @State private var review: SchoolCourseEnrollmentReview?
     @State private var confirmsCancel = false
 
     private var zone: String { model.timeZone }
@@ -31,7 +30,7 @@ struct SchoolCourseLearnerView: View {
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
-            .navigationTitle("Cours collectif").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(model.series?.title ?? "Cours collectif").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
             .task { await model.load() }
             .refreshable { await model.load() }
@@ -41,17 +40,8 @@ struct SchoolCourseLearnerView: View {
             .onChange(of: model.confirmation) { _, message in
                 if let message { UIAccessibility.post(notification: .announcement, argument: message) }
             }
-            .confirmationDialog(enrollTitle, isPresented: $confirmsEnroll, titleVisibility: .visible) {
-                Button("S’inscrire") { Task { await model.perform(.enroll) } }
-                Button("Annuler", role: .cancel) {}
-            }
-            .confirmationDialog(enrollTitle, isPresented: $confirmsAccept, titleVisibility: .visible) {
-                if let offer = model.me?.offer {
-                    Button("Accepter la place") { Task { await model.perform(.accept(offerID: offer.id)) } }
-                }
-                Button("Annuler", role: .cancel) {}
-            } message: {
-                if model.cancellationClosed() { Text("Le délai d’annulation est passé : tu ne pourras plus annuler toi-même.") }
+            .sheet(item: $review) { review in
+                SchoolCourseEnrollmentReviewView(model: model, review: review)
             }
             .confirmationDialog("Annuler l’inscription ?", isPresented: $confirmsCancel, titleVisibility: .visible) {
                 if let enrollment = model.me?.enrollment {
@@ -60,61 +50,59 @@ struct SchoolCourseLearnerView: View {
                     }
                 }
                 Button("Garder", role: .cancel) {}
-            } message: { Text("Toutes les séances sont annulées.") }
+            } message: { Text(SchoolCourseEnrollmentFormat.cancellationMessage(model.series?.occurrences.count ?? 1)) }
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
     }
 
-    /// L’inscription couvre toutes les dates : la confirmation le rappelle.
-    private var enrollTitle: String {
-        "L’inscription couvre \(SchoolCourseEnrollmentFormat.sessions(model.series?.occurrences.count ?? 1))."
-    }
-
     @ViewBuilder private func content(_ series: SchoolCourseSeries, _ me: SchoolCourseLearnerState) -> some View {
         Section {
-            LabeledContent("Statut") {
-                Text(SchoolCourseEnrollmentFormat.status(me, zone: zone)).fontWeight(.semibold).multilineTextAlignment(.trailing)
-            }
+            Text(SchoolCourseEnrollmentFormat.status(me, zone: zone)).font(.headline)
             .accessibilityIdentifier("course-learner-status")
-            if !series.location.isEmpty { LabeledContent("Lieu", value: series.location) }
+            if let next = SchoolCoursePresentation.nextOccurrence(series, now: Date()) {
+                Label(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: zone), systemImage: "calendar")
+                    .monospacedDigit().fixedSize(horizontal: false, vertical: true)
+            }
+            if !series.location.isEmpty { Label(series.location, systemImage: "mappin.and.ellipse") }
+            Text("\(series.occurrences.count) \(series.occurrences.count == 1 ? "séance" : "séances") · \(SchoolCourseFormat.duration(minutes: series.totalMinutes))")
+                .foregroundStyle(DrivyTheme.muted)
             if me.state == .available || me.state == .full {
-                LabeledContent("Places restantes") { Text(SchoolCourseFormat.seats(series.remainingSeats)).monospacedDigit() }
+                Text(SchoolCourseFormat.seats(series.remainingSeats)).monospacedDigit()
             }
-            LabeledContent("Paiement", value: "Sur place")
-            if !series.conditions.isEmpty {
-                Text(series.conditions).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            }
-        } header: { Text(series.title).drivyFormSectionHeader() }
+        }
             .drivyFormRows()
+        actions(series, me)
+        if !series.description.isEmpty {
+            Section {
+                Text(series.description).fixedSize(horizontal: false, vertical: true)
+            } header: { Text("À propos").drivyFormSectionHeader() }
+            .drivyFormRows()
+        }
         Section {
-            ForEach(series.occurrences.sorted { $0.position < $1.position }) { occurrence in
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(SchoolPlanningFormat.interval(occurrence.startsAt, occurrence.endsAt, zone: zone)).monospacedDigit()
-                        .fixedSize(horizontal: false, vertical: true)
-                    if occurrence.attendanceRequired {
-                        Text("Présence obligatoire").font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    }
-                }
-                .accessibilityElement(children: .combine)
+            DisclosureGroup("Toutes les séances") {
+                SchoolCourseDatesContent(series: series, timeZone: zone)
             }
-            LabeledContent("Total") { Text(SchoolCourseFormat.duration(minutes: series.totalMinutes)).monospacedDigit() }
             if let deadline = me.enrollment?.deadline ?? SchoolLesson.date(series.selfCancellationDeadline) {
-                LabeledContent("Annulation libre jusqu’au") {
+                LabeledContent("Annulable jusqu’au") {
                     Text(SchoolCourseEnrollmentFormat.deadline(deadline, zone: zone)).multilineTextAlignment(.trailing)
                 }
                 .accessibilityIdentifier("course-cancel-deadline")
             }
-        } header: { Text("Séances").drivyFormSectionHeader() }
+            DisclosureGroup("Conditions d’inscription") {
+                Text("Inscription pour \(SchoolCourseEnrollmentFormat.sessions(series.occurrences.count)).")
+                Text("Paiement sur place")
+                if !series.conditions.isEmpty { Text(series.conditions).fixedSize(horizontal: false, vertical: true) }
+            }
+        } header: { Text("Détails").drivyFormSectionHeader() }
             .drivyFormRows()
-        actions(series, me)
     }
 
     @ViewBuilder private func actions(_ series: SchoolCourseSeries, _ me: SchoolCourseLearnerState) -> some View {
         Section {
             switch me.state {
             case .available:
-                primary("S’inscrire", id: "course-enroll") { confirmsEnroll = true }
+                primary("S’inscrire", id: "course-enroll") { review = SchoolCourseEnrollmentReview(action: .enroll) }
             case .full:
                 if me.waitlistEnabled {
                     primary("Rejoindre la liste d’attente", id: "course-join-waitlist") { Task { await model.perform(.joinWaitlist) } }
@@ -124,7 +112,7 @@ struct SchoolCourseLearnerView: View {
             case .offered:
                 if let offer = me.offer {
                     if model.cancellationClosed() { DrivyActionNote(text: "Le délai d’annulation est passé.") }
-                    primary("Accepter la place", id: "course-accept-offer") { confirmsAccept = true }
+                    primary("Accepter la place", id: "course-accept-offer") { review = SchoolCourseEnrollmentReview(action: .accept(offerID: offer.id)) }
                     secondary("Refuser", id: "course-decline-offer") { Task { await model.perform(.decline(offerID: offer.id)) } }
                 }
             case .enrolled:
@@ -133,6 +121,8 @@ struct SchoolCourseLearnerView: View {
                         secondary("Annuler l’inscription", id: "course-cancel", role: .destructive) { confirmsCancel = true }
                     } else {
                         DrivyActionNote(text: "Le délai d’annulation est passé.")
+                        // L’entrée existante ne propose que les contacts autorisés et n’envoie rien à l’ouverture.
+                        SchoolMessagingEntryButton()
                         if let url = SchoolCourseEnrollmentFormat.mailURL(me.contactEmail, courseTitle: series.title) {
                             // Ouvre seulement la messagerie : rien n’est envoyé ni annulé par l’app.
                             secondary("Contacter l’école", id: "course-contact-school") { openURL(url) }
@@ -200,47 +190,54 @@ struct SchoolLearnerCoursesView: View {
                         }
                     }
                 }
-                if let progress = model.progress, !progress.completions.isEmpty || !model.tracked.isEmpty {
+                if !model.activeEnrollments.isEmpty {
                     Section {
-                        ForEach(model.tracked) { enrollment in
-                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                Text(model.title(for: enrollment.seriesId) ?? "Cours collectif").font(.body.weight(.semibold))
-                                Text(SchoolCourseSheetFormat.progress(enrollment.requirements))
-                                    .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("learner-course-progress")
-                        }
-                        ForEach(progress.completions) { completion in
-                            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
-                                Image(systemName: "checkmark.seal.fill").foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
+                        ForEach(model.activeEnrollments) { enrollment in
+                            Button { open(enrollment.seriesId) } label: {
                                 VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                                    Text(completion.typeTitle).font(.body.weight(.semibold))
-                                    if let date = SchoolLesson.date(completion.validatedAt) {
-                                        Text("Validé le \(SchoolCourseEnrollmentFormat.day(date, zone: model.timeZone))")
-                                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                                    Text(model.title(for: enrollment.seriesId) ?? "Cours collectif").font(.body.weight(.semibold))
+                                    if let next = model.nextOccurrence(for: enrollment.seriesId) {
+                                        Text(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: model.timeZone))
+                                            .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+                                    }
+                                    if let tracked = model.tracked.first(where: { $0.seriesId == enrollment.seriesId }) {
+                                        Text(SchoolCourseSheetFormat.progress(tracked.requirements))
+                                            .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
                                     }
                                 }
                                 .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("learner-course-completion")
+                            .accessibilityHint("Ouvre ton inscription")
+                            .accessibilityIdentifier("learner-course-progress")
                         }
-                    } header: { Text("Mes cours") }
+                    } header: { Text("Mes inscriptions") }
+                }
+                if let progress = model.progress, !progress.completions.isEmpty {
+                    Section {
+                        ForEach(progress.completions) { completion in
+                            if let seriesID = completion.seriesId {
+                                Button { open(seriesID) } label: { completionRow(completion) }
+                                    .accessibilityHint("Ouvre le cours effectué")
+                            } else {
+                                completionRow(completion)
+                            }
+                        }
+                    } header: { Text("Cours effectués") }
                 }
                 if !model.hasLoaded && model.errorMessage == nil {
                     DrivyLoadingState(title: "Chargement…")
-                } else if model.hasLoaded && model.courses.isEmpty {
-                    Text("Aucun cours à venir").foregroundStyle(DrivyTheme.muted)
+                } else if model.hasLoaded && model.availableCourses.isEmpty {
+                    Section { Text("Aucun autre cours disponible").foregroundStyle(DrivyTheme.muted) } header: { Text("Disponibles") }
                 } else {
                     Section {
-                        ForEach(model.courses) { course in
+                        ForEach(model.availableCourses) { course in
                             Button { open(course.id) } label: { row(course) }
                                 .accessibilityHint("Ouvre le cours")
                                 .accessibilityIdentifier("learner-course-row")
                         }
-                    }
+                    } header: { Text("Disponibles") }
                 }
             }
             .navigationTitle("Cours collectifs").navigationBarTitleDisplayMode(.inline)
@@ -252,6 +249,22 @@ struct SchoolLearnerCoursesView: View {
             }
         }
         .tint(DrivyTheme.accent)
+    }
+
+    private func completionRow(_ completion: SchoolCourseProgress.Completion) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
+            Image(systemName: "checkmark.seal.fill").foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(completion.typeTitle).font(.body.weight(.semibold))
+                if let date = SchoolLesson.date(completion.validatedAt) {
+                    Text("Validé le \(SchoolCourseEnrollmentFormat.day(date, zone: model.timeZone))")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("learner-course-completion")
     }
 
     private func row(_ course: SchoolCourseSeries) -> some View {
@@ -310,7 +323,6 @@ struct SchoolCourseRosterSection: View {
     @Bindable var model: SchoolCourseRosterWorkspace
     @State private var choosesLearner = false
     @State private var cancelling: SchoolCourseRosterEnrollment?
-    @State private var reason = ""
 
     var body: some View {
         Section {
@@ -322,10 +334,13 @@ struct SchoolCourseRosterSection: View {
                     HStack {
                         Text(row.learnerDisplayName.isEmpty ? "Élève" : row.learnerDisplayName)
                         Spacer(minLength: DrivySpacing.xs)
-                        Button("Annuler l’inscription", role: .destructive) { reason = ""; cancelling = row }
-                            .buttonStyle(.borderless)
+                        Menu {
+                            Button("Annuler l’inscription", role: .destructive) { cancelling = row }
+                        } label: {
+                            Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
+                        }
                             .disabled(model.isBusy)
-                            .accessibilityLabel("Annuler l’inscription de \(row.learnerDisplayName)")
+                            .accessibilityLabel("Actions pour \(row.learnerDisplayName)")
                     }
                 }
                 Button { choosesLearner = true } label: { Label("Inscrire un élève", systemImage: "person.badge.plus") }
@@ -337,21 +352,8 @@ struct SchoolCourseRosterSection: View {
         } header: { Text("Inscrits").drivyFormSectionHeader() }
             .drivyFormRows()
             .task { await model.load() }
-            .confirmationDialog("Inscrire un élève", isPresented: $choosesLearner, titleVisibility: .visible) {
-                ForEach(model.candidates.prefix(20)) { learner in
-                    Button(learner.displayName) { Task { await model.enroll(learner) } }
-                }
-                Button("Annuler", role: .cancel) {}
-            } message: { Text("L’inscription couvre toutes les séances.") }
-            .alert("Annuler l’inscription", isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } })) {
-                TextField("Motif", text: $reason)
-                Button("Annuler l’inscription", role: .destructive) {
-                    if let row = cancelling { Task { await model.cancel(row, reason: reason) } }
-                    cancelling = nil
-                }
-                .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Button("Garder", role: .cancel) { cancelling = nil }
-            } message: { Text("Le motif est obligatoire.") }
+            .sheet(isPresented: $choosesLearner) { SchoolCourseParticipantPicker(model: model) }
+            .sheet(item: $cancelling) { row in SchoolCourseCancelEnrollmentSheet(model: model, row: row) }
         if let waitlist = model.roster?.waitlist, !waitlist.isEmpty {
             Section {
                 ForEach(waitlist) { entry in
@@ -378,7 +380,8 @@ struct SchoolLearnerCourseEntry: ViewModifier {
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let model, let offer = model.offers.first {
+                if let model {
+                  if let offer = model.offers.first {
                     Button {
                         offered = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: offer.seriesId,
                             timeZone: model.timeZone, client: model.client)
@@ -390,12 +393,27 @@ struct SchoolLearnerCourseEntry: ViewModifier {
                     .buttonStyle(.plain)
                     .accessibilityHint("Ouvre le cours")
                     .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
+                  } else if let enrollment = model.nextEnrollment(), let next = model.nextOccurrence(for: enrollment.seriesId) {
+                    Button {
+                        offered = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: enrollment.seriesId,
+                            timeZone: model.timeZone, client: model.client)
+                    } label: {
+                        DrivyEntityRow(title: model.title(for: enrollment.seriesId) ?? "Cours collectif",
+                            meta: SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: model.timeZone),
+                            leading: .symbol("person.3"), showsChevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Prochain cours, \(model.title(for: enrollment.seriesId) ?? "Cours collectif"), \(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: model.timeZone))")
+                    .accessibilityIdentifier("learner-next-course")
+                    .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
+                  }
                 }
             }
             .toolbar {
                 if model != nil {
                     ToolbarItem(placement: .primaryAction) {
                         Button { presented = model } label: { Label("Cours collectifs", systemImage: "person.3") }
+                            .labelStyle(.titleAndIcon)
                             .accessibilityIdentifier("learner-courses")
                     }
                 }
@@ -404,7 +422,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
             // Toucher une notification de cours : sa fiche s’ouvre, relue auprès de l’école (aucun droit déduit de la charge utile).
             .onChange(of: SchoolPushCenter.shared.pendingSeriesID) { _, _ in openPendingSeries() }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active, let model { Task { await model.refreshOffers() } }
+                if phase == .active, let model { Task { await model.load() } }
             }
             .sheet(item: $presented, onDismiss: { Task { await model?.load() } }) { courses in
                 SchoolLearnerCoursesView(model: courses)
@@ -421,8 +439,11 @@ struct SchoolLearnerCourseEntry: ViewModifier {
     }
 
     private func prepare() async {
-        guard let client, let schoolID else { model = nil; return }
-        if model?.schoolID != schoolID { model = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: timeZone, client: client) }
+        guard let client, let schoolID else { model = nil; presented = nil; offered = nil; return }
+        if model?.schoolID != schoolID {
+            presented = nil; offered = nil
+            model = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: timeZone, client: client)
+        }
         await model?.load()
     }
 }

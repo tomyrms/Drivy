@@ -88,6 +88,84 @@ import Testing
         #expect(form.totalMinutes == series.totalMinutes)
     }
 
+    @Test func untouchedNewCourseDoesNotAskToDiscardLoadedDefaults() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: CourseSelectionTransport(series: series))
+        let editor = SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: instructorID, timeZone: "Europe/Zurich", client: client, catalogue: nil)
+        #expect(!editor.hasUnsavedChanges)
+        await editor.load()
+        #expect(!editor.hasUnsavedChanges && editor.form.typeID == typeID)
+        let original = editor.form
+        editor.form.title = "Nouveau titre"
+        #expect(editor.hasUnsavedChanges)
+        editor.form = original
+        #expect(!editor.hasUnsavedChanges)
+        editor.newTypeTitle = "Nouveau type"
+        #expect(editor.hasUnsavedChanges)
+    }
+
+    @Test func resavingAWebDraftPreservesItsTeachingLanguage() throws {
+        let json = String(decoding: seriesJSON(), as: UTF8.self).replacingOccurrences(of: "\"teachingLanguage\":null", with: "\"teachingLanguage\":\"de\"")
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: Data(json.utf8))
+        let body = try #require(SchoolCourseForm(series: series).body(operationID: UUID(), timeZone: "Europe/Zurich"))
+        #expect(body.teachingLanguage == "de")
+    }
+
+    @Test func nextSessionIncludesRunningThenFutureSessionsAndEndsAfterTheLast() throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON())
+        #expect(SchoolCoursePresentation.nextOccurrence(series, now: try #require(SchoolLesson.date("2030-03-04T18:00:00Z")))?.id == series.occurrences[0].id)
+        #expect(SchoolCoursePresentation.nextOccurrence(series, now: try #require(SchoolLesson.date("2030-03-04T20:00:00Z")))?.id == series.occurrences[1].id)
+        #expect(SchoolCoursePresentation.nextOccurrence(series, now: try #require(SchoolLesson.date("2030-03-11T20:00:00Z"))) == nil)
+        #expect(!SchoolCoursePresentation.allAttendanceRequired(series))
+    }
+
+    @Test func participantModesFollowServerRightsIndependentlyOfTheCourseDates() {
+        #expect(SchoolCourseParticipantMode.available(nil).isEmpty)
+        #expect(SchoolCourseParticipantMode.available(SchoolCourseSheetRights(canTakeAttendance: false, canRecordPayment: true, canValidate: false)) == [.payments])
+        #expect(SchoolCourseParticipantMode.available(SchoolCourseSheetRights(canTakeAttendance: true, canRecordPayment: false, canValidate: true)) == [.attendance, .validation])
+        #expect(SchoolCourseParticipantMode.available(SchoolCourseSheetRights(canTakeAttendance: true, canRecordPayment: true, canValidate: true)) == [.attendance, .payments, .validation])
+        #expect(SchoolCourseEnrollmentFormat.cancellationMessage(1) == "Ton inscription à la séance sera annulée.")
+        #expect(SchoolCourseEnrollmentFormat.cancellationMessage(4) == "Ton inscription aux 4 séances sera annulée.")
+    }
+
+    @Test func participantSearchDoesNotTruncateTheLastHomonyms() {
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: CourseJourneyReadTransport(responses: [:]))
+        let learners = (1...32).map { index in
+            SchoolLearner(id: UUID(), schoolId: schoolID, personId: UUID(), version: 1, displayName: index > 30 ? "Zoé Exemple" : "Élève \(index)",
+                contactEmail: nil, contactPhone: nil, archivedAt: nil, profileReadiness: nil, profilePhotoDocumentId: nil)
+        }
+        let roster = SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: seriesID, client: client, learners: learners)
+        #expect(roster.candidates.count == 32)
+        let matches = SchoolLearnerIndex(learners: roster.candidates).filter("zoe")
+        #expect(Set(matches.map(\.id)) == Set(learners.suffix(2).map(\.id)))
+        let references = HomonymReference.references(roster.candidates.map { ($0.id, $0.displayName) })
+        #expect(references[learners[30].id] != nil && references[learners[30].id] != references[learners[31].id])
+    }
+
+    @Test func enrolledCourseStillOpensWhenMissingFromCatalogueAndProgressIsOffline() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON(status: "PUBLISHED", publishedAt: "2030-01-01T08:00:00Z"))
+        let enrollment = try JSONDecoder().decode(SchoolCourseEnrollment.self, from: Data(enrollmentJSON().utf8))
+        let responses = ["course-series": Data("{\"items\":[]}".utf8),
+            "course-enrollments/me": try JSONEncoder().encode(SchoolCourseMine(items: [enrollment], offers: [])),
+            "course-series/\(seriesID)": try JSONEncoder().encode(series)]
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: CourseJourneyReadTransport(responses: responses))
+        let courses = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: "Europe/Zurich", client: client)
+        let now = try #require(SchoolLesson.date("2030-03-10T08:00:00Z"))
+        await courses.load(now: now)
+        #expect(courses.courses.isEmpty && courses.availableCourses.isEmpty)
+        #expect(courses.title(for: seriesID) == series.title && courses.series(for: seriesID) == series)
+        #expect(courses.nextEnrollment(now: now)?.id == enrollmentID)
+        #expect(courses.nextOccurrence(for: seriesID, now: now)?.id == series.occurrences[1].id)
+    }
+
+    @Test func enrollmentReviewCannotConfirmAChangedStateOrAnotherOffer() throws {
+        let available = try JSONDecoder().decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "AVAILABLE")).me
+        let enrolled = try JSONDecoder().decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "ENROLLED", enrollment: enrollmentJSON())).me
+        #expect(SchoolCourseEnrollmentReview(action: .enroll).isAvailable(in: available))
+        #expect(!SchoolCourseEnrollmentReview(action: .enroll).isAvailable(in: enrolled))
+        #expect(!SchoolCourseEnrollmentReview(action: .accept(offerID: offerID)).isAvailable(in: available))
+    }
+
     @Test func wordingStaysShort() {
         #expect(SchoolCourseFormat.cancellationSentence(hours: 24) == "Annulation libre jusqu’à 24 h avant la première séance")
         #expect(SchoolCourseFormat.duration(minutes: 450) == "7 h 30")
@@ -469,6 +547,17 @@ private struct CourseSelectionTransport: SchoolHTTPTransport {
         } else { payload = try JSONEncoder().encode(series) }
         let body: [String: Any] = ["data": try JSONSerialization.jsonObject(with: payload), "requestId": "selection-test",
                                    "serverTime": "2026-10-26T12:00:00Z"]
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, contentType: "application/json")
+    }
+}
+
+private struct CourseJourneyReadTransport: SchoolHTTPTransport {
+    let responses: [String: Data]
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let url = request.url!
+        let route = url.pathComponents.dropFirst(4).joined(separator: "/")
+        guard let data = responses[route], (request.httpMethod ?? "GET") == "GET" else { throw URLError(.notConnectedToInternet) }
+        let body: [String: Any] = ["data": try JSONSerialization.jsonObject(with: data), "requestId": "course-journey", "serverTime": "2030-03-10T08:00:00Z"]
         return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, contentType: "application/json")
     }
 }

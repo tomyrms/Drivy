@@ -1,6 +1,20 @@
 import Foundation
 import Observation
 
+enum SchoolCourseParticipantMode: String, CaseIterable, Identifiable {
+    case attendance, payments, validation
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .attendance: "Appel"; case .payments: "Règlements"; case .validation: "Validation" }
+    }
+    static func available(_ rights: SchoolCourseSheetRights?) -> [Self] {
+        guard let rights else { return [] }
+        let modes: [Self?] = [rights.canTakeAttendance ? .attendance : nil, rights.canRecordPayment ? .payments : nil,
+                             rights.canValidate ? .validation : nil]
+        return modes.compactMap { $0 }
+    }
+}
+
 /// Commandes de la feuille d’un cours ; la clé décrit l’intention pour rejouer la même opération.
 enum SchoolCourseSheetAction: Equatable, Sendable {
     case attendance(enrollmentID: UUID, occurrenceID: UUID, status: SchoolCourseAttendanceStatus, expectedVersion: Int?)

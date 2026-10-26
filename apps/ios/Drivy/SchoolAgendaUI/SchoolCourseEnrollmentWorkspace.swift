@@ -34,6 +34,9 @@ import Observation
         SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "d MMMM yyyy")
     }
     static func sessions(_ count: Int) -> String { count == 1 ? "la séance" : "les \(count) séances" }
+    static func cancellationMessage(_ count: Int) -> String {
+        count == 1 ? "Ton inscription à la séance sera annulée." : "Ton inscription aux \(count) séances sera annulée."
+    }
     static func mailURL(_ email: String?, courseTitle: String) -> URL? {
         guard let email = email?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty, email.contains("@"),
               !email.contains(where: { $0.isWhitespace || $0 == "?" || $0 == "&" }) else { return nil }
@@ -111,7 +114,12 @@ struct SchoolCourseOperationMemory {
             if errorMessage != nil && reply != nil { errorMessage = nil }
             if following == nil { await loadFollow() }
         } catch is CancellationError {
-        } catch { errorMessage = Self.message(error) }
+        } catch {
+            if let failure = error as? SchoolPlanningFailure, [.unauthorized, .forbidden, .notFound].contains(failure) {
+                reply = nil; following = nil
+            }
+            errorMessage = Self.message(error)
+        }
     }
 
     /// Écrit la commande ; rien n’est annoncé avant la réponse de l’école.
@@ -129,6 +137,9 @@ struct SchoolCourseOperationMemory {
         catch {
             memory.fail(error)
             errorMessage = Self.message(error)
+            if let failure = error as? SchoolPlanningFailure, [.unauthorized, .forbidden, .notFound].contains(failure) {
+                reply = nil; following = nil
+            }
             // Un refus motivé dit que l’état a changé : la fiche se relit sans effacer le message.
             if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
                 let kept = errorMessage
@@ -172,6 +183,8 @@ struct SchoolCourseOperationMemory {
     private(set) var progress: SchoolCourseProgress?
     /// Titres des cours déjà commencés, absents de la liste à venir.
     private(set) var startedTitles: [UUID: String] = [:]
+    /// Séries autorisées encore suivies, même si leur première séance est passée.
+    private(set) var followedSeries: [UUID: SchoolCourseSeries] = [:]
     private(set) var isLoading = false
     private(set) var hasLoaded = false
     var errorMessage: String?
@@ -188,15 +201,39 @@ struct SchoolCourseOperationMemory {
         mine?.items.contains { $0.seriesId == seriesID && $0.status == .active } == true
     }
     func title(for seriesID: UUID) -> String? { courses.first { $0.id == seriesID }?.title ?? startedTitles[seriesID] }
+    var activeEnrollments: [SchoolCourseEnrollment] { (mine?.items ?? []).filter { $0.status == .active } }
+    var availableCourses: [SchoolCourseSeries] {
+        let engaged = Set(activeEnrollments.map(\.seriesId) + offers.map(\.seriesId))
+        return courses.filter { !engaged.contains($0.id) }
+    }
+    func series(for seriesID: UUID) -> SchoolCourseSeries? {
+        courses.first { $0.id == seriesID } ?? followedSeries[seriesID]
+    }
+    func nextOccurrence(for seriesID: UUID, now: Date = Date()) -> SchoolCourseOccurrence? {
+        series(for: seriesID)?.occurrences.filter { ($0.end ?? .distantPast) > now }
+            .min { ($0.start ?? .distantFuture) < ($1.start ?? .distantFuture) }
+    }
+    func nextEnrollment(now: Date = Date()) -> SchoolCourseEnrollment? {
+        activeEnrollments.filter { nextOccurrence(for: $0.seriesId, now: now) != nil }
+            .min { (nextOccurrence(for: $0.seriesId, now: now)?.start ?? .distantFuture)
+                < (nextOccurrence(for: $1.seriesId, now: now)?.start ?? .distantFuture) }
+    }
     /// Inscriptions comptant des séances obligatoires.
     var tracked: [SchoolCourseProgress.Enrollment] { (progress?.enrollments ?? []).filter { $0.requirements.required > 0 } }
 
     /// La progression ne bloque pas la liste : une panne la laisse simplement absente.
     func loadProgress() async {
-        guard let fresh = try? await client.progress(schoolID: schoolID), !Task.isCancelled else { return }
-        progress = fresh
-        for enrollment in fresh.enrollments where title(for: enrollment.seriesId) == nil {
-            if let series = try? await client.series(schoolID: schoolID, id: enrollment.seriesId) { startedTitles[series.id] = series.title }
+        if let fresh = try? await client.progress(schoolID: schoolID), !Task.isCancelled { progress = fresh }
+        guard !Task.isCancelled else { return }
+        let seriesIDs = Set(activeEnrollments.map(\.seriesId) + (progress?.enrollments.map(\.seriesId) ?? [])
+            + (progress?.completions.compactMap(\.seriesId) ?? []))
+        followedSeries = followedSeries.filter { seriesIDs.contains($0.key) }
+        startedTitles = startedTitles.filter { seriesIDs.contains($0.key) }
+        for seriesID in seriesIDs where !courses.contains(where: { $0.id == seriesID }) {
+            guard !Task.isCancelled else { return }
+            if let series = try? await client.series(schoolID: schoolID, id: seriesID), !Task.isCancelled {
+                startedTitles[series.id] = series.title; followedSeries[series.id] = series
+            }
         }
     }
 

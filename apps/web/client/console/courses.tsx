@@ -6,6 +6,7 @@ import { CheckField, ConfirmDialog, Facts, Notice, SelectField, StatusBadge, Sym
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice } from './layout';
 import { RequestFailure } from '../protocol';
+import { distinctLabel, homonymReferences } from '../person-reference';
 import {
   LIMITS, REASON_LIMIT, courseRosterSchema, enrollableLearners, policyBody, policyForm, policyProblems, reasonProblem, rescheduleBody, sourceLabel,
   type CourseEnrollment, type CourseRoster, type PolicyForm,
@@ -64,7 +65,7 @@ export function CourseWorkspace({ seriesId, selectedOccurrenceId, catalogue, onC
     const series = await readSchool(schoolId, `course-series/${seriesId}`, courseSeriesSchema);
     if (series.id !== seriesId || series.schoolId !== schoolId) throw new RequestFailure('INVALID_RESPONSE');
     return series;
-  }, [schoolId, seriesId], `${schoolId}/${seriesId ?? 'new'}`);
+  }, [schoolId, seriesId], `${schoolId}/${seriesId ?? 'new'}`, `course-series/${seriesId ?? 'new'}`);
   return <LoadState loaded={loaded} label="Lecture du cours…">{series => selectedOccurrenceId && (!series || !series.occurrences.some(item => item.id === selectedOccurrenceId))
     ? <Notice tone="warning" title="Séance indisponible" actions={<button type="button" className="button quiet" onClick={onClose}>Retour à l’agenda</button>}><p>Cette séance n’apparaît plus dans le cours. Actualisez l’agenda pour retrouver ses dates.</p></Notice>
     : series && series.status !== 'DRAFT'
@@ -90,8 +91,16 @@ function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClos
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newType, setNewType] = useState<{ title: string; description: string } | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([selectedSessionKey ?? baseline.sessions[0]?.key].filter((key): key is string => key !== undefined)));
   const dirty = JSON.stringify(form) !== JSON.stringify(baseline) || current?.id !== series?.id;
-  useUnsavedChanges(dirty && JSON.stringify(form) !== JSON.stringify(current ? formFromSeries(current, timeZone) : baseline));
+  const pendingKind = runner.pending?.meta.kind;
+  const formSent = pendingKind === 'createCourseSeries' || pendingKind === 'updateCourseSeries' || pendingKind === 'publishCourseSeries';
+  const unsent = (!formSent && JSON.stringify(form) !== JSON.stringify(current ? formFromSeries(current, timeZone) : baseline))
+    || (pendingKind !== 'createCourseType' && Boolean(newType?.title || newType?.description));
+  const releaseGuard = useUnsavedChanges(unsent);
+  const close = () => { releaseGuard(); onClose(); };
 
   const problems = validate(form, timeZone);
   const shown = touched ? problems : { fields: {}, sessions: {} };
@@ -130,9 +139,9 @@ function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClos
     return saved;
   }
 
-  async function saveDraft() {
+  async function saveDraft(closeAfter = false) {
     const saved = await save();
-    if (saved !== undefined) onSaved(saved);
+    if (saved !== undefined) { releaseGuard(); onSaved(saved); if (closeAfter) onClose(); }
   }
 
   async function publish() {
@@ -151,7 +160,7 @@ function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClos
     if (result.status === 'rejected') { runner.clearOutcome(); refuse(result.code, result.message); return; }
     if (result.status !== 'confirmed') return;
     const parsed = envelope(courseSeriesSchema).safeParse(result.body);
-    onSaved(parsed.success ? parsed.data.data : null);
+    releaseGuard(); onSaved(parsed.success ? parsed.data.data : null);
   }
 
   async function createType() {
@@ -179,7 +188,7 @@ function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClos
     <div className="course-editor-heading">
       <h2 id={`${uid}-title`} className="section-title">{current ? current.title || 'Cours collectif' : 'Nouveau cours collectif'}</h2>
       {current && <StatusBadge tone="neutral" symbol="edit">Brouillon</StatusBadge>}
-      <button type="button" className="button quiet" onClick={onClose}>Fermer</button>
+      <button type="button" className="button quiet" disabled={runner.busy} onClick={() => unsent ? setClosing(true) : close()}>Fermer</button>
     </div>
     {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
     <OutcomeNotice outcome={runner.outcome?.tone === 'success' ? null : runner.outcome} />
@@ -220,6 +229,12 @@ function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClos
           const problem = shown.sessions[session.key];
           return <li key={session.key} ref={session.key === selectedSessionKey ? selectedSession : undefined} tabIndex={session.key === selectedSessionKey ? -1 : undefined}
             aria-current={session.key === selectedSessionKey ? 'true' : undefined} className={problem ? 'course-session invalid' : 'course-session'} aria-label={`Séance ${index + 1}`}>
+            <details open={expanded.has(session.key) || Boolean(problem)} onToggle={event => {
+              const open = event.currentTarget.open;
+              setExpanded(previous => { const next = new Set(previous); if (open) next.add(session.key); else next.delete(session.key); return next; });
+            }}>
+            <summary>Séance {index + 1}{session.date ? ` · ${session.date.split('-').reverse().join('.')}` : ''}{session.start && session.end ? ` · ${session.start}–${session.end}` : ''}</summary>
+            <div className="course-session-fields">
             <TextField label="Date" type="date" value={session.date} onChange={date => setSession(session.key, { date })} required />
             <TextField label="Début" type="time" value={session.start} onChange={start => setSession(session.key, { start })} required />
             <TextField label="Fin" type="time" value={session.end} onChange={end => setSession(session.key, { end })} required />
@@ -228,29 +243,41 @@ function CourseEditor({ series, selectedOccurrenceId, catalogue: initial, onClos
             {form.sessions.length > 1 && <button type="button" className="button quiet" aria-label={`Retirer la séance ${index + 1}`}
               onClick={() => set('sessions', form.sessions.filter(item => item.key !== session.key))}>Retirer</button>}
             {problem && <p className="field-error"><Symbol kind="alert" bare />{problem}</p>}
+            </div></details>
           </li>;
         })}</ol>
         {form.sessions.length < LIMITS.sessions && <button type="button" className="button secondary"
-          onClick={() => set('sessions', [...form.sessions, emptySession(form.sessions.at(-1))])}><Symbol kind="plus" bare />Ajouter une séance</button>}
+          onClick={() => { const added = emptySession(form.sessions.at(-1)); set('sessions', [...form.sessions, added]); setExpanded(new Set([added.key])); }}><Symbol kind="plus" bare />Ajouter une séance</button>}
       </fieldset>
-
-      <section className="course-preview" aria-labelledby={`${uid}-preview`}>
-        <h3 id={`${uid}-preview`} className="section-title">Aperçu</h3>
-        {overview.sessions.length === 0 ? <p className="caption">Aucune séance complète.</p> : <>
-          <ul className="course-preview-list">{overview.sessions.map(item => <li key={item.key}>
-            <time dateTime={new Date(item.start).toISOString()}>{formatDay(item.start, timeZone)}</time>{' '}
-            {formatClock(item.start, timeZone)}–{formatClock(item.end, timeZone)}
-          </li>)}</ul>
-          <p className="row-meta">{overview.sessions.length} {overview.sessions.length === 1 ? 'séance' : 'séances'} · {formatHours(overview.totalMinutes)}</p>
-        </>}
-        <p className="row-meta">{cancellationLabel(policyHours)}</p>
-      </section>
 
       {catalogue.canManage && <div className="button-row">
         <button type="submit" className="button secondary" disabled={busy} aria-busy={runner.busy}>Enregistrer le brouillon</button>
-        <button type="button" className="button primary" disabled={busy} onClick={() => void publish()}>Publier</button>
+        <button type="button" className="button primary" disabled={busy} onClick={() => { setTouched(true); if (!hasProblems(problems)) setReviewing(true); }}>Vérifier et publier</button>
       </div>}
     </form>
+    <ConfirmDialog open={closing} busy={runner.busy} title="Fermer sans enregistrer ?" confirmLabel="Abandonner les modifications"
+      onCancel={() => setClosing(false)} onConfirm={close}>
+      <p>Les modifications de ce cours ne sont pas enregistrées.</p>
+      <button type="button" className="button secondary" disabled={busy || hasProblems(problems)} onClick={() => void saveDraft(true)}>Enregistrer le brouillon et fermer</button>
+      {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
+      <OutcomeNotice outcome={runner.outcome?.tone === 'success' ? null : runner.outcome} />
+    </ConfirmDialog>
+    <ConfirmDialog open={reviewing} busy={busy} title="Publier ce cours ?" confirmLabel="Publier le cours"
+      onCancel={() => setReviewing(false)} onConfirm={() => void publish()}>
+      <h3>{form.title}</h3>
+      {form.description && <p>{form.description}</p>}
+      <Facts items={[[ 'Lieu', form.location || 'Non renseigné' ], ['Capacité', form.capacity],
+        ['Séances', `${overview.sessions.length} · ${formatHours(overview.totalMinutes)}`]]} />
+      <ol className="course-preview-list">{overview.sessions.map(item => <li key={item.key}>
+        <time dateTime={new Date(item.start).toISOString()}>{formatDay(item.start, timeZone)}</time>{' '}
+        {formatClock(item.start, timeZone)}–{formatClock(item.end, timeZone)}
+        <span className="row-meta"> · {form.sessions.find(session => session.key === item.key)?.attendanceRequired ? 'Présence obligatoire' : 'Facultative'}</span>
+      </li>)}</ol>
+      <p>{cancellationLabel(policyHours)}</p>
+      {form.conditions && <p className="preserve-lines">{form.conditions}</p>}
+      {error && <Notice tone="error" title="Non publié"><p>{error}</p></Notice>}
+      <OutcomeNotice outcome={runner.outcome?.tone === 'success' ? null : runner.outcome} />
+    </ConfirmDialog>
   </section>;
 }
 
@@ -263,9 +290,12 @@ function CourseSheet({ series, selectedOccurrenceId, onClose, onSaved, reload }:
   const runner = useCommandRunner();
   const [capacity, setCapacity] = useState(String(series.capacity));
   const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
   const problem = capacity === String(series.capacity) ? null : capacityProblem(capacity, series);
   const busy = runner.busy || Boolean(runner.pending);
-  useUnsavedChanges(capacity !== String(series.capacity));
+  const unsent = !runner.pending && capacity !== String(series.capacity);
+  const releaseGuard = useUnsavedChanges(unsent);
+  const close = () => { releaseGuard(); onClose(); };
 
   async function change() {
     if (problem || busy || capacity === String(series.capacity)) return;
@@ -280,7 +310,7 @@ function CourseSheet({ series, selectedOccurrenceId, onClose, onSaved, reload }:
     }
     if (result.status !== 'confirmed') return;
     const parsed = envelope(courseSeriesSchema).safeParse(result.body);
-    onSaved(parsed.success ? parsed.data.data : null);
+    releaseGuard(); onSaved(parsed.success ? parsed.data.data : null);
   }
 
   const status = series.status === 'CANCELLED' ? 'Annulé' : series.status === 'CLOSED' ? 'Clos' : null;
@@ -288,7 +318,7 @@ function CourseSheet({ series, selectedOccurrenceId, onClose, onSaved, reload }:
     <div className="course-editor-heading">
       <h2 className="section-title">{series.title}</h2>
       {status && <StatusBadge tone="neutral" symbol="ban">{status}</StatusBadge>}
-      <button type="button" className="button quiet" onClick={onClose}>Fermer</button>
+      <button type="button" className="button quiet" disabled={runner.busy} onClick={() => unsent ? setClosing(true) : onClose()}>Fermer</button>
     </div>
     {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
     <OutcomeNotice outcome={runner.outcome?.tone === 'success' ? null : runner.outcome} />
@@ -319,6 +349,8 @@ function CourseSheet({ series, selectedOccurrenceId, onClose, onSaved, reload }:
       <CourseRosterPanel series={series} />
       <CourseDangerZone series={series} onSaved={onSaved} reload={reload} />
     </>}
+    <ConfirmDialog open={closing} busy={busy} title="Fermer sans enregistrer ?" confirmLabel="Abandonner les modifications"
+      onCancel={() => setClosing(false)} onConfirm={close}><p>La capacité modifiée n’est pas enregistrée.</p></ConfirmDialog>
   </section>;
 }
 
@@ -330,8 +362,8 @@ function CourseRosterPanel({ series }: { series: CourseSeries }) {
   const timeZone = school.timeZone;
   const runner = useCommandRunner();
   const [revision, setRevision] = useState(0);
-  const roster = useLoad(() => readSchool(schoolId, `course-series/${series.id}/enrollments`, courseRosterSchema), [schoolId, series.id, series.version, revision]);
-  const learners = useLoad(() => readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), [schoolId]);
+  const roster = useLoad(() => readSchool(schoolId, `course-series/${series.id}/enrollments`, courseRosterSchema), [schoolId, series.id, series.version, revision], undefined, `course-roster/${series.id}`);
+  const learners = useLoad(() => readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' }), [schoolId], undefined, 'learners/status=ALL');
   const [learner, setLearner] = useState('');
   const [cancelling, setCancelling] = useState<CourseEnrollment | null>(null);
   const [reason, setReason] = useState('');
@@ -357,9 +389,8 @@ function CourseRosterPanel({ series }: { series: CourseSeries }) {
     const command = createCommand({ schoolId, kind: 'staffCancelCourseEnrollment', path: `course-enrollments/${cancelling.id}/staff-cancel`, ifMatch: cancelling.version,
       resourceId: cancelling.id, resourceVersion: cancelling.version, body: { reason: reason.trim() } });
     const result = await runner.run(command, 'Inscription annulée.');
-    setCancelling(null); setReason(''); setReasonTouched(false);
     if (result.status === 'rejected') { refuse(result.code, result.message); return; }
-    if (result.status === 'confirmed') setRevision(value => value + 1);
+    if (result.status === 'confirmed') { setCancelling(null); setReason(''); setReasonTouched(false); setRevision(value => value + 1); }
   }
 
   return <section className="section-stack" aria-label="Inscriptions">
@@ -368,14 +399,18 @@ function CourseRosterPanel({ series }: { series: CourseSeries }) {
     <OutcomeNotice outcome={runner.outcome} />
     <LoadState loaded={roster} label="Lecture des inscrits…">{(value: CourseRoster) => {
       const active = value.items.filter(item => item.status === 'ACTIVE');
-      const options = enrollableLearners(learners.data?.items ?? [], value).map(item => ({ value: item.id, label: item.displayName }));
+      const candidates = enrollableLearners(learners.data?.items ?? [], value);
+      const references = homonymReferences(candidates.map(item => ({ id: item.id, label: item.displayName })));
+      const options = candidates.map(item => ({ value: item.id, label: distinctLabel(item.displayName, references.get(item.id)) }));
       return <>
         {active.length === 0 ? <p className="row-meta">Aucun inscrit</p> : <ul className="row-list">{value.items.map(item => <li key={item.id} className={item.status === 'CANCELLED' ? 'muted-row' : undefined}>
           <span className="row-title">{item.learnerDisplayName || 'Élève'}</span>{' '}
           <span className="row-meta">{sourceLabel(item.source)} · annulation libre jusqu’au <time dateTime={item.selfCancelDeadline}>{formatInstant(item.selfCancelDeadline, timeZone)}</time></span>{' '}
           {item.status === 'CANCELLED'
             ? <StatusBadge tone="neutral" symbol="ban">Annulée</StatusBadge>
-            : <button type="button" className="button quiet" disabled={busy} onClick={() => { setError(null); setReason(''); setReasonTouched(false); setCancelling(item); }}>Annuler l’inscription</button>}
+            : <details className="course-enrollment-actions"><summary>Actions pour {item.learnerDisplayName || 'cet élève'}</summary>
+              <button type="button" className="button quiet" disabled={busy} onClick={() => { setError(null); setReason(''); setReasonTouched(false); setCancelling(item); }}>Annuler l’inscription</button>
+            </details>}
         </li>)}</ul>}
         {value.waitlist.length > 0 && <>
           <h3 className="section-title">Liste d’attente</h3>
@@ -395,7 +430,9 @@ function CourseRosterPanel({ series }: { series: CourseSeries }) {
     <ConfirmDialog open={cancelling !== null} busy={busy} title="Annuler l’inscription" confirmLabel="Annuler l’inscription"
       onCancel={() => setCancelling(null)} onConfirm={() => void cancel()}>
       <p>{cancelling?.learnerDisplayName || 'Élève'}</p>
+      <p>Son inscription à toute la série sera annulée.</p>
       <TextArea label="Motif" value={reason} onChange={setReason} maxLength={REASON_LIMIT} rows={3} required error={reasonTouched ? reasonProblem(reason) : null} />
+      {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
     </ConfirmDialog>
   </section>;
 }
@@ -416,7 +453,8 @@ function CourseFactsSheet({ series }: { series: CourseSeries }) {
   const { schoolId, school } = useConsole();
   const timeZone = school.timeZone;
   const runner = useCommandRunner();
-  const loaded = useLoad(() => readSchool(schoolId, `course-series/${series.id}/sheet`, courseSheetSchema), [schoolId, series.id, series.version]);
+  const loaded = useLoad(() => readSchool(schoolId, `course-series/${series.id}/sheet`, courseSheetSchema), [schoolId, series.id, series.version], undefined, `course-sheet/${series.id}`);
+  const [mode, setMode] = useState<'attendance' | 'payments' | 'validation'>('attendance');
   const [fresh, setFresh] = useState<CourseSheetData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<FactDialog>(null);
@@ -475,8 +513,8 @@ function CourseFactsSheet({ series }: { series: CourseSeries }) {
   const shortDay = (instant: string) => new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'short', timeZone }).format(new Date(instant));
   const longDate = (instant: string) => new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', year: 'numeric', timeZone }).format(new Date(instant));
 
-  return <section className="section-stack" aria-label="Feuille du cours">
-    <h3 className="section-title">Feuille du cours</h3>
+  return <section className="section-stack" aria-label="Suivi des participants">
+    <h3 className="section-title">Participants</h3>
     {error && <Notice tone="error" title="Non enregistré"><p>{error}</p></Notice>}
     <OutcomeNotice outcome={runner.outcome} />
     <LoadState loaded={loaded} label="Lecture de la feuille…">{(read: CourseSheetData) => {
@@ -485,24 +523,33 @@ function CourseFactsSheet({ series }: { series: CourseSeries }) {
       const rows = sheet.rows;
       if (rows.length === 0) return <p className="row-meta">Aucun inscrit</p>;
       const now = Date.now();
-      return <div className="course-sheet-scroll">
-        <table className="course-sheet">
+      const modes = [
+        ...(sheet.rights.canTakeAttendance ? [{ key: 'attendance' as const, title: 'Appel' }] : []),
+        ...(sheet.rights.canRecordPayment ? [{ key: 'payments' as const, title: 'Règlements' }] : []),
+        ...(sheet.rights.canValidate ? [{ key: 'validation' as const, title: 'Validation' }] : []),
+      ];
+      const selectedMode = modes.some(item => item.key === mode) ? mode : modes[0]?.key;
+      if (!selectedMode) return null;
+      return <>
+        <div className="button-row compact" role="group" aria-label="Suivi des participants">{modes.map(item => <button key={item.key} type="button"
+          className={`button ${selectedMode === item.key ? 'secondary' : 'quiet'}`} aria-pressed={selectedMode === item.key} onClick={() => setMode(item.key)}>{item.title}</button>)}</div>
+        <div className="course-sheet-scroll"><table className="course-sheet" aria-label={modes.find(item => item.key === selectedMode)?.title}>
           <thead><tr>
             <th scope="col">Élève</th>
-            {occurrences.map(item => <th scope="col" key={item.id}>
+            {selectedMode === 'attendance' && occurrences.map(item => <th scope="col" key={item.id}>
               <time dateTime={item.startsAt}>{shortDay(item.startsAt)}</time>
               {!item.attendanceRequired && <span className="row-meta"> · Facultative</span>}
             </th>)}
-            <th scope="col">Séances</th>
-            {sheet.rights.canRecordPayment && <th scope="col" className="course-sheet-group">Règlement</th>}
-            {sheet.rights.canValidate && <th scope="col" className="course-sheet-group">Validation</th>}
+            {selectedMode === 'validation' && <th scope="col">Présences requises</th>}
+            {selectedMode === 'payments' && <th scope="col" className="course-sheet-group">Règlement</th>}
+            {selectedMode === 'validation' && <th scope="col" className="course-sheet-group">Validation</th>}
           </tr></thead>
           <tbody>{rows.map(row => {
             const name = row.learnerDisplayName || 'Élève';
             const completion = activeCompletion(row);
             return <tr key={row.enrollmentId} className={row.status === 'CANCELLED' ? 'muted-row' : undefined}>
               <th scope="row">{name}{row.status === 'CANCELLED' && <>{' '}<StatusBadge tone="neutral" symbol="ban">Annulée</StatusBadge></>}</th>
-              {occurrences.map(item => {
+              {selectedMode === 'attendance' && occurrences.map(item => {
                 const cell = attendanceCell(row, item.id);
                 const editable = canMarkAttendance(sheet, row, item, now);
                 return <td key={item.id}>
@@ -513,11 +560,11 @@ function CourseFactsSheet({ series }: { series: CourseSeries }) {
                         onClick={() => mark(row, item.id, status)}>{attendanceLabels[status]}</button>)}
                     </div>
                     : cell.status ? <span>{attendanceLabels[cell.status]}</span>
-                      : <span className="row-meta" aria-label={occurrenceStarted(item, now) ? 'Non saisi' : 'À venir'}>{'·'}</span>}
+                      : <span className="row-meta">{occurrenceStarted(item, now) ? 'À renseigner' : 'À venir'}</span>}
                 </td>;
               })}
-              <td>{requirementLabel(row.requirements)}</td>
-              {sheet.rights.canRecordPayment && <td className="course-sheet-group">
+              {selectedMode === 'validation' && <td>{requirementLabel(row.requirements)}</td>}
+              {selectedMode === 'payments' && <td className="course-sheet-group">
                 <ul className="row-list">{row.payments.map(payment => <li key={payment.id} className={payment.voidedAt ? 'muted-row' : undefined}>
                   <span>Payé sur place {formatCents(payment.amountCents)}</span>
                   {payment.voidedAt
@@ -527,7 +574,7 @@ function CourseFactsSheet({ series }: { series: CourseSeries }) {
                 {row.status === 'ACTIVE' && <button type="button" className="button quiet" disabled={busy} onClick={() => open({ kind: 'pay', row })}>
                   {activePayments(row).length ? 'Ajouter un règlement' : 'Enregistrer un règlement'}</button>}
               </td>}
-              {sheet.rights.canValidate && <td className="course-sheet-group">
+              {selectedMode === 'validation' && <td className="course-sheet-group">
                 {completion
                   ? <><span>Validé le <time dateTime={completion.validatedAt}>{longDate(completion.validatedAt)}</time></span>{' '}
                     {completion.seriesId === sheet.series.id && <button type="button" className="button quiet" disabled={busy} onClick={() => open({ kind: 'revoke', row, completionId: completion.id })}>Retirer</button>}</>
@@ -536,7 +583,7 @@ function CourseFactsSheet({ series }: { series: CourseSeries }) {
             </tr>;
           })}</tbody>
         </table>
-      </div>;
+      </div></>;
     }}</LoadState>
     <ConfirmDialog open={dialog !== null} busy={busy}
       title={dialog?.kind === 'pay' ? 'Règlement sur place' : dialog?.kind === 'void' ? 'Annuler le règlement' : 'Retirer la validation'}

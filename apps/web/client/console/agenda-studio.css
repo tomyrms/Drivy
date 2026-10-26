@@ -67,6 +67,12 @@
 .course-sessions { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .course-session { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; padding-block-end: 12px; border-block-end: 1px solid var(--line, rgb(0 0 0 / .1)); }
 .course-session .field-error { grid-column: 1 / -1; }
+.course-session > details { grid-column: 1 / -1; }
+.course-session summary { cursor: pointer; padding-block: 10px; font-weight: 600; }
+.course-session-fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); align-items: end; padding-block: 12px; }
+.preserve-lines { white-space: pre-wrap; }
+.course-enrollment-actions { margin-block-start: 4px; }
+.course-enrollment-actions summary { cursor: pointer; color: var(--muted); font-size: .875rem; padding-block: 8px; }
 .course-preview-list { margin: 0; padding-inline-start: 1.2rem; display: grid; gap: 4px; }
 .course-preview-list > [aria-current="true"], .course-sessions > [aria-current="true"] { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 .course-editor-heading { display: flex; gap: 12px; align-items: center; }

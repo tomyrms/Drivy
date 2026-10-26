@@ -10,6 +10,7 @@ import { ConsoleContext, type ConsoleContextValue } from '../client/console/cont
 import { InvitationsSection, TeamSection } from '../client/console/people';
 import { LearnersSection } from '../client/console/learners';
 import { AgendaSection } from '../client/console/agenda';
+import { CourseWorkspace } from '../client/console/courses';
 import { TripsSection } from '../client/console/trips';
 import { AvailabilitySection } from '../client/console/availability';
 import { ConfigurationSection } from '../client/console/configuration';
@@ -154,6 +155,16 @@ if (agendaFixture) {
   if (agendaFixture === 'course-only') db.lessons = [];
   if (agendaFixture === 'empty') { db.lessons = []; db['course-series'] = []; }
   if (agendaFixture === 'cap') db['course-series'] = Array.from({ length: 200 }, (_, index) => syntheticCourse(`Cours ${index + 1}`, [['2026-09-28T07:00:00.000Z', marieId]]));
+  if (agendaFixture === 'course-review') {
+    const future = new Date(Date.now() + 7 * 86400000); future.setUTCHours(17, 0, 0, 0);
+    db['course-series'] = [syntheticCourse('Sensibilisation du soir', Array.from({ length: 4 }, (_, index) =>
+      [new Date(future.getTime() + index * 7 * 86400000).toISOString(), marieId]), parameters.get('draft') === '1' ? 'DRAFT' : 'PUBLISHED')];
+    db['course-series'][0].description = 'Anticiper les dangers et partager la route. Exercices en groupe et échanges autour de situations concrètes.';
+    db['course-series'][0].conditions = 'Apporte ton permis d’élève. Le règlement se fait sur place à la première séance.';
+    db['course-series'][0].selfCancellationDeadline = new Date(future.getTime() - 86400000).toISOString();
+    for (let index = 1; index <= 32; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(),
+      displayName: index > 30 ? 'Zoé Exemple' : `Élève Exemple ${String(index).padStart(2, '0')}` });
+  }
   (window as unknown as { __agendaReview: unknown }).__agendaReview = {
     setCourseFailure: (status: number | null) => { agendaCourseFailure = status; },
     setCourseDelay: (milliseconds: number) => { agendaCourseDelay = milliseconds; },
@@ -253,10 +264,18 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
       const series = db['course-series'].find((item: any) => item.id === path.split('/')[1]);
       return series ? reply(200, envelope(series), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
     }
-    if (agendaFixture && /^course-series\/[^/]+\/enrollments$/.test(path)) return reply(200, envelope({ items: [], waitlist: [] }), url.href);
+    if (agendaFixture && /^course-series\/[^/]+\/enrollments$/.test(path)) {
+      const series = db['course-series'].find((item: any) => item.id === path.split('/')[1]);
+      const items = agendaFixture === 'course-review' ? db.learners.slice(0, 2).map((learner: any) => ({ id: learner.id, seriesId: series.id,
+        learnerId: learner.id, learnerDisplayName: learner.displayName, version: 1, status: 'ACTIVE', source: 'SELF',
+        selfCancelDeadline: series.selfCancellationDeadline, createdAt: stamp, cancelledAt: null, cancelKind: null, cancelReason: null })) : [];
+      return reply(200, envelope({ items, waitlist: [] }), url.href);
+    }
     if (agendaFixture && /^course-series\/[^/]+\/sheet$/.test(path)) {
       const series = db['course-series'].find((item: any) => item.id === path.split('/')[1]);
-      return series ? reply(200, envelope({ series, rights: { canTakeAttendance: true, canRecordPayment: true, canValidate: true }, rows: [] }), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
+      const rows = agendaFixture === 'course-review' ? db.learners.slice(0, 2).map((learner: any) => ({ enrollmentId: learner.id, learnerId: learner.id,
+        learnerDisplayName: learner.displayName, status: 'ACTIVE', cancelledAt: null, attendance: [], requirements: { required: 4, present: 0, missing: 4 }, payments: [], completion: null })) : [];
+      return series ? reply(200, envelope({ series, rights: { canTakeAttendance: true, canRecordPayment: true, canValidate: true }, rows }), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
     }
     if (/^lessons\/[^/]+$/.test(path)) {
       if (agendaLessonFailure) return reply(agendaLessonFailure, { code: agendaLessonFailure === 403 ? 'ACCESS_DENIED' : 'LESSON_NOT_FOUND' }, url.href);
@@ -433,7 +452,8 @@ if (saved) {
 }
 reviewWindow.__reviewSnapshot = () => structuredClone({ db, school: value.school, membership: value.membership, themeState, administrativeProfile, policyState, setupDraft, fixtureSequence });
 const pages: Record<string, () => JSX.Element> = { learners: LearnersSection, agenda: AgendaSection, trips: TripsSection, team: TeamSection, availability: AvailabilitySection, absences: () => <AvailabilitySection section="absences" />, config: ConfigurationSection, privacy: PrivacySection, profile: ProfileFieldsSection, overview: OverviewSection, themes: ObservationThemesSection, formations: FormationsSection,
-  formation: FormationsSection, 'formation-new': FormationsSection, uncategorized: UncategorizedTariffsSection, conditions: TermsArchiveSection };
+  formation: FormationsSection, 'formation-new': FormationsSection, uncategorized: UncategorizedTariffsSection, conditions: TermsArchiveSection,
+  course: CourseReview };
 const Page = pages[page ?? ''] ?? InvitationsSection;
 const shell = parameters.get('shell') === '1';
 if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls', 'choices'].includes(page ?? '')) {
@@ -457,6 +477,12 @@ createRoot(document.getElementById('root')!).render(
   page === 'choices' ? <ChoicesReview /> : page === 'controls' ? <ControlsReview /> : page === 'opening' || page === 'operator' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={page === 'operator'} /> : location.pathname === '/app/preferences' ? <PreferencesPage /> : entry ? <App invitationLink={{ token: null, error: false }} /> : shell ? <ManagementConsole /> : <ConsoleContext.Provider value={value}><div className="console-shell"><main className="console-main"><Page /></main></div></ConsoleContext.Provider>);
 
 /** Local component review only: these controls change fixture state and never submit a school command. */
+function CourseReview() {
+  const [open, setOpen] = useState(true);
+  return open ? <CourseWorkspace seriesId={db['course-series']?.[0]?.id ?? null} catalogue={db['course-catalogue']}
+    onClose={() => setOpen(false)} onSaved={() => setOpen(false)} /> : <button className="button secondary" onClick={() => setOpen(true)}>Rouvrir le cours</button>;
+}
+
 function ControlsReview() {
   const [unchecked, setUnchecked] = useState(false), [checked, setChecked] = useState(true);
   const [days, setDays] = useState([true, false]), [confirmed, setConfirmed] = useState(false);
