@@ -1,0 +1,42 @@
+{
+  "checkedAt": "2026-10-26T10:15:15.686Z",
+  "browser": "156.0.4314.42",
+  "scope": "Edge, vrais composants React, données et transport synthétiques en mémoire. Aucune API/PostgreSQL, VoiceOver ou mesure de performance réelle qualifiée.",
+  "checks": [
+    "Chronologie mixte, compteurs de jour/semaine et ouverture de la bonne série",
+    "Moniteur de séance, série à plusieurs moniteurs et compteur filtré",
+    "Actualiser relit chaque source une seule fois, conserve semaine et focus",
+    "Panne des cours : lectures conservées, fraîcheur honnête et reprise ciblée",
+    "Refus des cours : purge du cache refusé et leçons préservées",
+    "Erreur initiale des cours ne devient pas un agenda vide",
+    "Jour uniquement collectif : aucun faux zéro leçon",
+    "Vide confirmé de toutes les sources",
+    "Limite de 200 séries : couverture non exhaustive annoncée",
+    "Réponse retardée après changement de semaine ignorée",
+    "Recherche : périmètre explicite, focus préservé, retour du dossier et choix de date",
+    "Rendu before 1440px light : aucune erreur JS ni débordement horizontal",
+    "Rendu before 1440px dark : aucune erreur JS ni débordement horizontal",
+    "Rendu before 390px light : aucune erreur JS ni débordement horizontal",
+    "Rendu before 390px dark : aucune erreur JS ni débordement horizontal",
+    "Rendu after 1440px light : aucune erreur JS ni débordement horizontal",
+    "Rendu after 1440px dark : aucune erreur JS ni débordement horizontal",
+    "Rendu after 390px light : aucune erreur JS ni débordement horizontal",
+    "Rendu after 390px dark : aucune erreur JS ni débordement horizontal"
+  ],
+  "regressions": [
+    "Avant : 09 h, 14 h, 11 h dans deux listes distinctes.",
+    "Avant : le filtre Marie retire tous ses cours.",
+    "Avant : Actualiser ne recharge pas les cours ni leur titre modifié."
+  ],
+  "failures": [],
+  "captures": [
+    "before-1440-light.png",
+    "before-1440-dark.png",
+    "before-390-light.png",
+    "before-390-dark.png",
+    "after-1440-light.png",
+    "after-1440-dark.png",
+    "after-390-light.png",
+    "after-390-dark.png"
+  ]
+}

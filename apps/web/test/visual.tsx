@@ -124,6 +124,38 @@ const db: Record<string, any> = {
   'profile-field-policies': [{ id: uuid(), schoolId, version: 1, status: 'PUBLISHED', effectiveFrom: '2026-09-01T00:00:00.000Z', noticeVersionId: noticeId, approvedByMembershipId: lucId,
     fields: ['firstName', 'lastName'].map(field => ({ field, requirement: 'REQUIRED', stage: 'JOIN', purposeCode: 'IDENTIFICATION', explanation: 'Identifier la personne.' })) }],
 };
+// Synthetic mixed agenda, opt-in; never imported by the production entry.
+const agendaFixture = parameters.get('agenda');
+let agendaCourseFailure: number | null = null, agendaCourseDelay = 0;
+if (agendaFixture) {
+  const courseTypeId = uuid();
+  const syntheticCourse = (title: string, sessions: [string, string][], status = 'PUBLISHED') => {
+    const occurrences = sessions.map(([startsAt, instructorMembershipId], index) => ({ id: uuid(), position: index + 1, startsAt,
+      endsAt: new Date(Date.parse(startsAt) + 3600000).toISOString(), timeZone: 'Europe/Zurich', instructorMembershipId,
+      instructorDisplayName: db.members.find((member: any) => member.id === instructorMembershipId).displayName, attendanceRequired: true }));
+    return { id: uuid(), schoolId, version: 1, status, typeId: courseTypeId, typeTitle: 'Sensibilisation', title, description: '',
+      location: 'Salle de formation', conditions: 'Conditions synthétiques', teachingLanguage: 'fr', responsibleMembershipId: lucId,
+      responsibleDisplayName: 'Luc Martin', capacity: 10, seatsTaken: 3, remainingSeats: 7, minParticipants: null, policyVersion: 1,
+      selfCancelHours: 24, selfCancellationDeadline: '2026-09-27T06:00:00.000Z', firstStartsAt: occurrences[0]!.startsAt,
+      lastEndsAt: occurrences.at(-1)!.endsAt, totalMinutes: occurrences.length * 60, publishedAt: stamp, occurrences, canManage: true };
+  };
+  db['course-catalogue'] = { schoolId, canManage: true, types: [{ id: courseTypeId, schoolId: null, stableKey: 'AWARENESS', title: 'Sensibilisation', description: '', version: 1, predefined: true }],
+    policy: { version: 1, selfCancelHours: 24, offerResponseMinutes: 720 }, instructors: [lucId, marieId].map(id => ({ membershipId: id, displayName: db.members.find((member: any) => member.id === id).displayName })) };
+  db.lessons = [{ ...db.lessons[0], plannedStart: '2026-09-28T09:00:00.000Z', plannedEnd: '2026-09-28T10:00:00.000Z' }];
+  db['course-series'] = [syntheticCourse('Sensibilisation du matin', [['2026-09-28T07:00:00.000Z', marieId], ['2026-09-29T07:00:00.000Z', lucId]]),
+    syntheticCourse('Premiers secours', [['2026-09-28T12:00:00.000Z', marieId]]),
+    syntheticCourse('Cours annulé', [['2026-09-30T07:00:00.000Z', lucId]], 'CANCELLED'),
+    syntheticCourse('Cours en préparation', [['2026-09-30T07:00:00.000Z', marieId]], 'DRAFT')];
+  if (agendaFixture === 'course-only') db.lessons = [];
+  if (agendaFixture === 'empty') { db.lessons = []; db['course-series'] = []; }
+  if (agendaFixture === 'cap') db['course-series'] = Array.from({ length: 200 }, (_, index) => syntheticCourse(`Cours ${index + 1}`, [['2026-09-28T07:00:00.000Z', marieId]]));
+  (window as unknown as { __agendaReview: unknown }).__agendaReview = {
+    setCourseFailure: (status: number | null) => { agendaCourseFailure = status; },
+    setCourseDelay: (milliseconds: number) => { agendaCourseDelay = milliseconds; },
+    setCourseTitle: (title: string) => { if (db['course-series'][0]) db['course-series'][0].title = title; },
+    instructorIds: { first: lucId, second: marieId }, courseIds: db['course-series'].map((course: any) => course.id),
+  };
+}
 if (parameters.get('stress') === '1') {
   db.learners[0].displayName = 'Éloïse-Marie de Montmollin-Châteauneuf';
   db.members[1].displayName = 'Marie-Christine Dupré de Villeneuve';
@@ -197,6 +229,18 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     }
     if (reviewState === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
     if (path === parameters.get('fail') || (reviewState === 'directory-error' && path === 'learners')) return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+    if (agendaFixture && path === 'course-catalogue') return reply(200, envelope(db['course-catalogue']), url.href);
+    if (agendaFixture && path === 'course-series') {
+      const items = structuredClone(db['course-series'].filter((series: any) => series.occurrences.some((occurrence: any) =>
+        (!url.searchParams.get('from') || occurrence.endsAt > url.searchParams.get('from')!) && (!url.searchParams.get('to') || occurrence.startsAt < url.searchParams.get('to')!))));
+      if (agendaCourseDelay) await new Promise(resolve => setTimeout(resolve, agendaCourseDelay));
+      if (agendaCourseFailure) return reply(agendaCourseFailure, { code: agendaCourseFailure === 403 ? 'ACCESS_DENIED' : 'SERVICE_UNAVAILABLE' }, url.href);
+      return reply(200, envelope({ items }), url.href);
+    }
+    if (agendaFixture && /^course-series\/[^/]+$/.test(path)) {
+      const series = db['course-series'].find((item: any) => item.id === path.split('/')[1]);
+      return series ? reply(200, envelope(series), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
+    }
     if (/^learners\/[^/]+$/.test(path)) {
       const learner = findLearner(path.split('/')[1]!);
       return learner ? reply(200, envelope(learner), url.href) : reply(404, { code: 'LEARNER_NOT_FOUND' }, url.href);

@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 26 octobre 2026 : agenda unifié, qualification ciblée en cours
+
+Lot #144/#145/#146/#147/#172/#173 sur `codex/agenda-fiable-20261026`, base `fcfdfde`, worktree isolé. Le natif `290cd87` distingue lecture des cours, erreur, reprise et données conservées dans leur portée ; liste, repères et résumés partagent une chronologie leçons/séances. Le web actualise toutes les sources, filtre les cours par formateur de séance et compte les événements visibles. La limite existante de 200 séries est signalée comme couverture potentiellement partielle, sans nouveau contrat ni migration.
+
+- Exécuté web sous Node 24.22.1 : typages et build ; 69 tests ciblés puis 8 tests de projection après alignement du départage horaire iOS/web (un nouveau scénario). Recette Edge : 19 contrôles, zéro échec ; trois défauts reproduits sur la baseline ; huit captures avant/après clair/sombre à 1440 et 390 px.
+- Exécuté scripts : 17 tests de sélection Apple et 11 contrôles du script de captures. Revue indépendante native et web sans défaut bloquant confirmé.
+- En cours sur Apple : tests métier agenda `40305925081`, UI iPhone/iPad `40305929146`, captures `40305933009`, IPA `40305925127`. Les captures de référence avant correction sont produites par `40305370458` sur `fda97e5`.
+- Aucune issue clôturée à ce stade, aucune compilation Swift locale revendiquée, aucune intervention homelab. VoiceOver/GPS/batterie physiques non exécutés. Détails et preuves : [agenda-fiable-20261026.md](agenda-fiable-20261026.md).
+
 ## 25 octobre 2026 à 15:33 UTC : cours déployés, worker de notifications actif
 
 Accord du porteur à 15:28 UTC.

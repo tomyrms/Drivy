@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-10-26T10:16:41.49Z",
+  "browser": "156.0.4314.42",
+  "scope": "Edge, vrais composants React, données et transport synthétiques en mémoire. Aucune API/PostgreSQL, VoiceOver ou mesure de performance réelle qualifiée.",
+  "checks": [
+    "Rendu before 1440px light : aucune erreur JS ni débordement horizontal",
+    "Rendu before 1440px dark : aucune erreur JS ni débordement horizontal",
+    "Rendu before 390px light : aucune erreur JS ni débordement horizontal",
+    "Rendu before 390px dark : aucune erreur JS ni débordement horizontal",
+    "Rendu after 1440px light : aucune erreur JS ni débordement horizontal",
+    "Rendu after 1440px dark : aucune erreur JS ni débordement horizontal",
+    "Rendu after 390px light : aucune erreur JS ni débordement horizontal",
+    "Rendu after 390px dark : aucune erreur JS ni débordement horizontal"
+  ],
+  "regressions": [],
+  "failures": [],
+  "captures": [
+    "before-1440-light.png",
+    "before-1440-dark.png",
+    "before-390-light.png",
+    "before-390-dark.png",
+    "after-1440-light.png",
+    "after-1440-dark.png",
+    "after-390-light.png",
+    "after-390-dark.png"
+  ]
+}

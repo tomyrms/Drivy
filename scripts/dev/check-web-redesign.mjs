@@ -300,16 +300,16 @@ try {
     });
     await scenario('Agenda : semaine, moniteur et recherche conservés au retour du dossier', 'page=agenda&shell=1', async h => {
       await h.page.getByRole('button', { name: 'Semaine suivante', exact: true }).click();
-      await h.page.getByRole('heading', { name: 'Aucune leçon cette semaine', exact: true }).waitFor();
+      await h.page.getByRole('heading', { name: 'Aucun rendez-vous cette semaine', exact: true }).waitFor();
       await h.page.getByRole('button', { name: 'Semaine précédente', exact: true }).click();
       await h.page.getByLabel('Moniteur', { exact: true }).click(); await h.page.getByRole('combobox', { name: 'Rechercher : Moniteur', exact: true }).fill('Marie');
       await h.page.getByRole('option', { name: 'Marie Dupont', exact: true }).click();
-      await h.page.getByLabel('Élève', { exact: true }).fill('eloise');
+      await h.page.getByLabel('Rechercher un élève parmi les leçons', { exact: true }).fill('eloise');
       const previous = h.page.url(); assert.equal(new URL(previous).searchParams.get('week'), '2026-09-28'); assert(new URL(previous).searchParams.has('instructor')); assert(!previous.includes('eloise'));
       await h.page.locator('.agenda-lesson').first().click(); await h.page.getByRole('heading', { name: 'Éloïse Müller', exact: true }).waitFor();
       await h.page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
       await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor(); assert.equal(h.page.url(), previous);
-      assert.equal(await h.page.getByLabel('Élève', { exact: true }).inputValue(), 'eloise');
+      assert.equal(await h.page.getByLabel('Rechercher un élève parmi les leçons', { exact: true }).inputValue(), 'eloise');
       await h.page.getByLabel('Moniteur', { exact: true }).filter({ hasText: 'Marie Dupont' }).waitFor();
       await h.page.locator('.agenda-lesson').first().waitFor();
       assert.equal(await h.page.locator('.agenda-lesson').count(), 2);
@@ -318,7 +318,7 @@ try {
       const home = h.page.getByRole('link', { name: 'Planning', exact: true });
       assert.equal(new URL(await home.getAttribute('href'), origin).href, previous);
       await home.click(); await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor();
-      assert.equal(h.page.url(), previous); assert.equal(await h.page.getByLabel('Élève', { exact: true }).inputValue(), 'eloise');
+      assert.equal(h.page.url(), previous); assert.equal(await h.page.getByLabel('Rechercher un élève parmi les leçons', { exact: true }).inputValue(), 'eloise');
     });
     await scenario('Dossier direct inexistant : réponse 404 distincte d’une panne', 'page=learners&shell=1&selection=missing', async h => {
       await h.page.getByText('Cette information n’est pas disponible avec vos accès actuels.', { exact: true }).waitFor();

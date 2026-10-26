@@ -18,6 +18,21 @@ Conformément à #132/#84, les campagnes API/PostgreSQL, web complète et ouvert
 
 Le scope métier Apple `agenda` sélectionne les tests d'agenda, de chargement des cours et du transport synthétique. Les tests UI ciblés, captures iPhone/iPad et IPA sont exécutés séparément. Une compilation n'est pas une preuve de fonctionnement.
 
-## État initial
+## Réalisation
 
-Préparation des fixtures et des sélections de tests. Aucun correctif produit qualifié ni déploiement à ce stade. Les résultats et liens seront ajoutés après exécution. GPS, batterie et VoiceOver sur appareil physique ne sont pas qualifiés par ce lot.
+- Natif : lecture des cours indépendante des leçons, reprise ciblée, conservation uniquement à portée identique et purge des accès refusés. Compte, école, droits, filtre, fuseau et fenêtre participent à la portée. Les réponses dépassées sont ignorées. Tirer pour actualiser et revenir au premier plan relisent les deux sources.
+- Web : le bouton Actualiser et la relecture automatique relisent leçons, répertoire et cours, sans doubler les requêtes en vol ni changer sélection, focus ou recherche. L'heure globale est la plus ancienne des lectures réussies ; une source en erreur interdit le statut global « À jour ».
+- Projection commune sur chaque support : ordre début, fin puis identité stable ; une occurrence est distincte de sa série. Brouillons et annulations restent identifiés. Le filtre porte sur le formateur de la séance, pas le responsable de la série. Repères et compteurs reprennent la projection affichée.
+- Couverture : le contrat `course-series` est borné à 200 séries sans pagination. Atteindre cette borne rend la couverture potentiellement partielle ; aucune exhaustivité n'est affirmée. La recherche web par élève annonce son périmètre limité aux leçons. Aucune réservation, publication, inscription ou règle de droit modifiée.
+
+## Preuves exécutées et restantes
+
+Web, Node 24.22.1 : typages client/tests/serveur et build Vite réussis. 69 tests ciblés sur cinq fichiers réussis, puis 8 tests de projection réussis après alignement du départage horaire (un scénario ajouté). Le build final a été rejoué après cet ajustement.
+
+La recette `scripts/dev/check-agenda-integration.mjs` utilise les vraies vues React avec transport synthétique. Elle a reproduit trois défauts sur la baseline avant correction : ordre 09 h/14 h/11 h, cours masqués par le filtre moniteur, cours non actualisés. Après correction : 19 contrôles réussis, aucun échec ; erreurs 503 et 403, reprise, couverture partielle, cours seuls, vrai vide, réponse tardive, navigation et focus inclus. [Résultats](proofs/agenda-20261026/web/results.json), [captures renouvelées](proofs/agenda-20261026/web/captures-results.json), [avant](proofs/agenda-20261026/web/before-1440-light.png), [après](proofs/agenda-20261026/web/after-1440-light.png), [petit écran sombre](proofs/agenda-20261026/web/after-390-dark.png). Les captures ont été inspectées : pas de débordement horizontal ou de régression visuelle bloquante relevée.
+
+Scripts : 17 tests de sélection Apple et 11 tests de captures réussis. Revue indépendante du chargement, du contexte et des projections native/web : aucun défaut bloquant confirmé.
+
+Sur Apple, candidat natif `290cd87` : [métier ciblé](https://github.com/tomyrms/Drivy/actions/runs/40305925081), [UI iPhone/iPad](https://github.com/tomyrms/Drivy/actions/runs/40305929146), [captures](https://github.com/tomyrms/Drivy/actions/runs/40305933009), [IPA](https://github.com/tomyrms/Drivy/actions/runs/40305925127) en cours. [Captures avant correction](https://github.com/tomyrms/Drivy/actions/runs/40305370458) sur `fda97e5` : mêmes fixtures, vues de référence.
+
+Aucun déploiement, changement de base, données réelles ni clôture d'issue à ce stade. Ces tests UI synthétiques ne qualifient pas VoiceOver sur appareil physique, le GPS ou la batterie.
