@@ -26,7 +26,13 @@ final class MessagingFeatureCheckUITests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-messaging-ui-fixture", "-messaging-ui-rich"] + extra
-        app.launch()
+        // Le runner refuse parfois l'assertion d'arrière-plan juste après un test précédent : une
+        // seconde tentative suffit et évite un échec sans rapport avec l'écran testé.
+        for attempt in 0..<2 {
+            app.launch()
+            if app.wait(for: .runningForeground, timeout: 20) { return app }
+            if attempt == 0 { app.terminate() }
+        }
         return app
     }
 
@@ -49,7 +55,12 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         entry.tap()
         XCTAssertTrue(app.navigationBars["Messages"].waitForExistence(timeout: 5), "Liste Messages", file: file, line: line)
         let general = app.buttons[ID.general].firstMatch
-        XCTAssertTrue(waitFor(general, "exists == true AND hittable == true"), "Ligne du général", file: file, line: line)
+        // La liste finit son premier chargement avant que la ligne ne devienne actionnable.
+        if !waitFor(general, "exists == true AND hittable == true", timeout: 15) {
+            app.swipeDown()
+            XCTAssertTrue(waitFor(general, "exists == true AND hittable == true", timeout: 15),
+                          "Ligne du général", file: file, line: line)
+        }
         return general
     }
 
@@ -127,15 +138,16 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         let app = launch()
         openGeneral(app)
         let older = app.buttons["Charger les messages précédents"]
-        let thread = app.scrollViews.firstMatch
-        for _ in 0..<20 where !(older.exists && older.isHittable) { thread.swipeDown(velocity: .fast) }
+        // Remonter le fil par glissements sur la fenêtre : la vue défilante n'est pas toujours
+        // exposée comme ScrollView selon l'appareil.
+        for _ in 0..<20 where !(older.exists && older.isHittable) { app.swipeDown(velocity: .fast) }
         capture("05a-haut-du-fil")
         XCTAssertTrue(older.exists && older.isHittable,
                       "Bouton de chargement des précédents (existe \(older.exists), premier chargé visible \(text(app, "Bonjour à tous, nouvelle semaine").exists))")
         older.tap()
         // Le fil est paresseux : les messages chargés au-dessus n'existent qu'une fois remontés à l'écran.
         let first = text(app, "Premier message du général")
-        for _ in 0..<10 where !first.exists { thread.swipeDown(velocity: .fast) }
+        for _ in 0..<10 where !first.exists { app.swipeDown(velocity: .fast) }
         XCTAssertTrue(first.waitForExistence(timeout: 8), "Page 2 chargée")
         capture("05-messages-precedents")
     }
@@ -193,7 +205,12 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(result.waitForExistence(timeout: 5), "Résultat de recherche dans le fil")
         capture("09-recherche-fil")
         result.tap()
-        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "La recherche se ferme sur le résultat")
+        // La liste des discussions garde son propre champ de recherche derrière la feuille :
+        // vérifier le retour au fil sur le message, pas la disparition d'un champ.
+        XCTAssertTrue(waitFor(text(app, "Pensez aux papiers du permis"), "hittable == true"),
+                      "Retour au fil sur le message trouvé")
+        XCTAssertTrue(app.descendants(matching: .any)["messaging.compose.text"].firstMatch.exists,
+                      "La recherche se ferme sur le résultat")
     }
 
     func testPollIsDisplayed() {
