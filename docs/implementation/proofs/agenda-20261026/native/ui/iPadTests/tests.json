@@ -1,0 +1,62 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "556B1354-B29F-4DFE-997B-F17886ECD500",
+      "deviceName" : "iPad Air 11-inch (M4)",
+      "modelName" : "iPad Air 11-inch (M4)",
+      "osBuildNumber" : "23E254a",
+      "osVersion" : "26.4.1",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "44s",
+                  "durationInSeconds" : 44.33917999267578,
+                  "name" : "testMixedDayUsesOneChronologyAndOpensTheLesson()",
+                  "nodeIdentifier" : "SchoolAgendaUITests/testMixedDayUsesOneChronologyAndOpensTheLesson()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyUITests/SchoolAgendaUITests/testMixedDayUsesOneChronologyAndOpensTheLesson",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                },
+                {
+                  "duration" : "1m 39s",
+                  "durationInSeconds" : 99.73614799976349,
+                  "name" : "testRefreshFailureRetainsCoursesAndSelectionUntilRetry()",
+                  "nodeIdentifier" : "SchoolAgendaUITests/testRefreshFailureRetainsCoursesAndSelectionUntilRetry()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyUITests/SchoolAgendaUITests/testRefreshFailureRetainsCoursesAndSelectionUntilRetry",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "SchoolAgendaUITests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyUITests/SchoolAgendaUITests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "DrivyUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/Drivy/DrivyUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "Drivy",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

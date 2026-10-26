@@ -1,0 +1,70 @@
+{
+  "scope": "Lot agenda ciblé, sans qualification physique ni campagne globale #84",
+  "issues": [144, 145, 146, 147, 172, 173, 175],
+  "pullRequest": "https://github.com/tomyrms/Drivy/pull/178",
+  "productCommit": "23b19f30baa7225ba5d686c18a8c005a494b51cc",
+  "uiTestCommit": "00f0f4595400c66838d0d17728562f1c0df79f70",
+  "unchangedProductTrees": {
+    "apps/ios/Drivy": "6c5bd311e7542ef6165e2c74b0af3f16134e8cdf",
+    "apps/web": "fef17b534d9a833914f7c3c880adac8cb9330606"
+  },
+  "nativeUnit": {
+    "run": 40317621203,
+    "artifact": 12648985172,
+    "testsPassed": 58,
+    "executionsPassedIncludingParameters": 62,
+    "failed": 0,
+    "skipped": 0,
+    "summary": "native/unit/summary.json",
+    "inventory": "native/unit/tests.json"
+  },
+  "nativeUI": {
+    "devices": ["iPhone 17 Pro", "iPad Air 11-inch (M4)"],
+    "coveredCasesPerDevice": 6,
+    "allSixRerunTogetherOnFinalCommit": false,
+    "fourUnchangedCasesPerDevice": {
+      "commit": "bee144c2a91aa6ec4f182bcb76f7139404047701",
+      "run": 40315360630,
+      "proof": "native/ui-bee144c-failure.json",
+      "note": "Les quatre cas réussis sont conservés ; les deux échecs de ce run restent documentés."
+    },
+    "twoCorrectedCasesPerDevice": {
+      "run": 40320751020,
+      "artifact": 12650236977,
+      "passedPerDevice": 2,
+      "failed": 0,
+      "skipped": 0,
+      "summaries": ["native/ui/Tests/summary.json", "native/ui/iPadTests/summary.json"]
+    }
+  },
+  "apiAndWeb": {
+    "run": 40320751047,
+    "apiTestsPassedOnPostgreSQL": 745,
+    "webTestsPassed": 363,
+    "typechecksAndBuilds": "PASSED",
+    "schoolOpeningBrowserRun": 40318236608,
+    "schoolOpeningBrowserResult": "PASSED",
+    "targetedAgendaChecks": 19,
+    "additionalExactNavigationScenarios": 10
+  },
+  "ipa": {
+    "run": 40317577943,
+    "artifact": 12648660060,
+    "build": 381,
+    "signed": false,
+    "sha256VerifiedAfterDownload": "bda1e104263ff434eb12e2e640757ec73e5bced1ca71e0b735b3c49288cdcde7",
+    "metadata": "native/ipa/build-info.json"
+  },
+  "nativeVisuals": {
+    "commit": "849bb274a24d34f4bb1ff309b83fa824ba858cbf",
+    "normalRun": 40312188189,
+    "normalReviewedPng": 12,
+    "largeTextRun": 40310718202,
+    "largeTextReviewedPng": 12,
+    "baselineRun": 40308624259,
+    "baselineReviewedValidPng": 7,
+    "baselineExcludedLoadingPng": 1
+  },
+  "physicalVoiceOverGpsBattery": "NOT_EXECUTED",
+  "deployed": false
+}

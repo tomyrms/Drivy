@@ -1,13 +1,14 @@
 # État de la réalisation
 
-## 26 octobre 2026 : agenda unifié, qualification ciblée en cours
+## 26 octobre 2026 : agenda unifié, lot qualifié pour intégration
 
-Lot #144/#145/#146/#147/#172/#173 sur `codex/agenda-fiable-20261026`, base `fcfdfde`, worktree isolé. Le natif `290cd87` distingue lecture des cours, erreur, reprise et données conservées dans leur portée ; liste, repères et résumés partagent une chronologie leçons/séances. Le web actualise toutes les sources, filtre les cours par formateur de séance et compte les événements visibles. La limite existante de 200 séries est signalée comme couverture potentiellement partielle, sans nouveau contrat ni migration.
+Lot #144/#145/#146/#147/#172/#173/#175 sur `codex/agenda-fiable-20261026`. Leçons et séances partagent la chronologie, les repères et les compteurs ; les sources se relisent avec erreurs et couverture partielle explicites ; l'ouverture conserve le rendez-vous choisi. Produit `23b19f3`, inchangé dans `00f0f45` qui ajuste uniquement deux tests UI. Aucun nouveau contrat API ni migration.
 
-- Exécuté web sous Node 24.22.1 : typages et build ; 69 tests ciblés puis 8 tests de projection après alignement du départage horaire iOS/web (un nouveau scénario). Recette Edge : 19 contrôles, zéro échec ; trois défauts reproduits sur la baseline ; huit captures avant/après clair/sombre à 1440 et 390 px.
-- Exécuté scripts : 17 tests de sélection Apple et 11 contrôles du script de captures. Revue indépendante native et web sans défaut bloquant confirmé.
-- Apple `290cd87` : 48 tests métier réussis (`40305925081`) et IPA compilée/vérifiée (`40305925127`). La revue des captures avant correction a révélé une enveloppe synthétique invalide : captures impropres à la comparaison, UI et captures candidates interrompues. Fixture corrigée et quatre scénarios via les vrais clients ajoutés ; nouvelle qualification à exécuter. Navigation exacte de la leçon web (#175) et de l'occurrence en cours de finition pour satisfaire #144.
-- Aucune issue clôturée à ce stade, aucune compilation Swift locale revendiquée, aucune intervention homelab. VoiceOver/GPS/batterie physiques non exécutés. Détails et preuves : [agenda-fiable-20261026.md](agenda-fiable-20261026.md).
+- Vérifications finales sous Node 24.22.1, `00f0f45` : [745 tests API/PostgreSQL, 363 tests web, typages, builds et intégrité réussis](https://github.com/tomyrms/Drivy/actions/runs/40320751047) ; [ouverture d'école réussie sur `b42e5ea`](https://github.com/tomyrms/Drivy/actions/runs/40318236608), sources web/API inchangées. Recette Edge : 19 contrôles agenda et 10 scénarios de navigation exacte réussis, avec captures inspectées.
+- Apple `23b19f3` : [58 tests métier, 62 exécutions avec paramètres réussis](https://github.com/tomyrms/Drivy/actions/runs/40317621203), aucun échec ni saut. [IPA 381](https://github.com/tomyrms/Drivy/actions/runs/40317577943) non signée pour iLoader, téléchargée et empreinte vérifiée.
+- Visuel `849bb27` : 24 PNG après correction (12 normaux, 12 en grands textes) et 7 références valides inspectés sur iPhone/iPad, clair/sombre. Chronologie, jour avec cours seul et erreur confirmés dans les zones visibles ; limites sous le pli et absence de preuve VoiceOver consignées dans le rapport.
+- UI : [2 tests réussis sur iPhone et 2 sur iPad](https://github.com/tomyrms/Drivy/actions/runs/40320751020) dans `00f0f45`, zéro échec ni saut. Avec les 4 autres cas déjà réussis sur chaque appareil dans `bee144c`, couverture de 6 cas par appareil ; seuls 2 ont été réexécutés sur le dernier commit. Produit et fixtures restent identiques à `23b19f3`.
+- Exception CI temporaire retirée, workflows habituels restaurés. Intégration et clôture suivies par la [PR #178](https://github.com/tomyrms/Drivy/pull/178), sans les annoncer déjà effectuées. Aucun déploiement ; aucune qualification globale #84 ni preuve physique VoiceOver, GPS ou batterie. [Rapport, preuves et historique des échecs](agenda-fiable-20261026.md).
 
 ## 25 octobre 2026 à 15:33 UTC : cours déployés, worker de notifications actif
 

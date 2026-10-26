@@ -1,0 +1,43 @@
+{
+  "deviceFamily": "iPad",
+  "appearance": "light",
+  "capture": "XCUIScreen.main.screenshot",
+  "orientation": "XCUIDevice.shared.orientation",
+  "appleLanguages": [
+    "fr"
+  ],
+  "appleLocale": "fr_CH",
+  "imageRotationApplied": false,
+  "files": [
+    {
+      "file": "iPad-agenda-courses-error-light-portrait-synthetic.png",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "orientation": "portrait",
+      "sha256": "a956618c4dc0abf214dcb23bf80ad23451d71c57fdf05798b7e74adee0b4c99c"
+    },
+    {
+      "file": "iPad-agenda-mixed-light-portrait-synthetic.png",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "orientation": "portrait",
+      "sha256": "e783baebbf3e46439638776c0bf391254a150bb2ceaf9725407567568052e9df"
+    },
+    {
+      "file": "iPad-agenda-mixed-month-light-portrait-synthetic.png",
+      "storedWidthPixels": 2064,
+      "storedHeightPixels": 2752,
+      "displayWidthPixels": 2064,
+      "displayHeightPixels": 2752,
+      "exifOrientation": 1,
+      "orientation": "portrait",
+      "sha256": "69d2799a500322b1ff397dd9c4fdcdaa4932072938cb523c5cac87df347a438c"
+    }
+  ]
+}
