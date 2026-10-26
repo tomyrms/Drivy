@@ -1,5 +1,16 @@
 # État de la réalisation
 
+## 26 octobre 2026 à 13:25 UTC : agenda web et BFF déployés
+
+Version `71390e97d3c3ac313673635fe06c40c2f8e98c46` activée sur CT114. La [PR #178](https://github.com/tomyrms/Drivy/pull/178) est fusionnée et les issues #144/#145/#146/#147/#172/#173/#175 sont fermées.
+
+- Sauvegarde préalable CT113 : 2 276 844 octets, catalogue et blocs vérifiés. Registre de 53 migrations ; aucune migration exécutée.
+- Web seul redémarré, actif avec son répertoire réel vérifié. API, identité, ingress et worker de cours conservent leurs PID et répertoires ; environnements privés inchangés.
+- Override actif `90-qa84-web-anchor.conf`, sauvegarde de retour dédiée à cette bascule ; retour vers `5888f03` documenté dans le [compte rendu de déploiement](web-agenda-deployment-20261026.md).
+- 35 contrôles HTTPS réussis (20 fichiers du build, neuf routes SPA, session et refus attendus), puis écran anonyme inspecté dans Chromium sans erreur, avertissement ni requête échouée.
+- Contrôle final à 13:28:07 UTC : cinq services actifs sans redémarrage automatique, readiness API interne 200, 53 migrations et empreintes attendues confirmées en lecture seule. Journal web sans entrée depuis la bascule ; API/worker/`current` restent sur `5888f03`.
+- L’IPA 381 reste non signée pour iLoader : son installation est distincte du déploiement web.
+
 ## 26 octobre 2026 : agenda unifié, lot qualifié pour intégration
 
 Lot #144/#145/#146/#147/#172/#173/#175 sur `codex/agenda-fiable-20261026`. Leçons et séances partagent la chronologie, les repères et les compteurs ; les sources se relisent avec erreurs et couverture partielle explicites ; l'ouverture conserve le rendez-vous choisi. Produit `23b19f3`, inchangé dans `00f0f45` qui ajuste uniquement deux tests UI. Aucun nouveau contrat API ni migration.

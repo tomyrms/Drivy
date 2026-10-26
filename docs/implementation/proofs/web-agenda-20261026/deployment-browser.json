@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-10-26T13:27:23.839Z",
+  "commit": "71390e97d3c3ac313673635fe06c40c2f8e98c46",
+  "status": 200,
+  "loginVisible": true,
+  "checks": [
+    {
+      "path": "/app/bff/schools/10000000-0000-4000-8000-000000000001/lessons/10000000-0000-4000-8000-000000000002",
+      "status": 401,
+      "code": "SESSION_EXPIRED",
+      "passed": true
+    },
+    {
+      "path": "/app/bff/schools/10000000-0000-4000-8000-000000000001/lessons/10000000-0000-4000-8000-000000000002?unexpected=1",
+      "status": 404,
+      "code": "NOT_FOUND",
+      "passed": true
+    },
+    {
+      "path": "/refonte/health/ready",
+      "status": 404,
+      "code": "NOT_FOUND",
+      "passed": true
+    }
+  ],
+  "consoleErrors": 0,
+  "consoleWarnings": 0,
+  "pageErrors": 0,
+  "failedRequests": 0,
+  "passed": true
+}
