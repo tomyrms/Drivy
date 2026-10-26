@@ -77,3 +77,4 @@
 .course-preview-list > [aria-current="true"], .course-sessions > [aria-current="true"] { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
 .course-editor-heading { display: flex; gap: 12px; align-items: center; }
 .course-editor-heading > .button { margin-inline-start: auto; }
+.lesson-planning-fields { border: 0; margin: 0; padding: 0; min-inline-size: 0; }

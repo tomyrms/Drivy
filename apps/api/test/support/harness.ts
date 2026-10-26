@@ -99,7 +99,7 @@ let ajv:Ajv2020|undefined;
 export function withoutExtensions(value:unknown):unknown{
  if(Array.isArray(value))return value.map(withoutExtensions);
  if(value!==null&&typeof value==='object'){
-  const entries=Object.entries(value as Record<string,unknown>).filter(([key])=>!(['learnerDisplayName','instructorDisplayName'].includes(key)&&'plannedStart'in(value as object))&&!(key==='startNowBlockerCode'&&'offeringId'in(value as object)));
+  const entries=Object.entries(value as Record<string,unknown>).filter(([key])=>!(['learnerDisplayName','instructorDisplayName'].includes(key)&&'plannedStart'in(value as object))&&!(key==='startNowBlockerCode'&&'offeringId'in(value as object))&&!(key==='label'&&'offeringKey'in(value as object)&&'defaultPriceCents'in(value as object)));
   return Object.fromEntries(entries.map(([key,item])=>[key,withoutExtensions(item)]));
  }
  return value;

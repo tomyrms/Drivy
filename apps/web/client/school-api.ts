@@ -53,6 +53,7 @@ export const memberSchema = z.object({
 export const invitationOptionsSchema = z.object({ emailInvitationsAvailable: z.boolean(), codeInvitationsAvailable: z.boolean() });
 export const offeringSchema = z.object({
   id, schoolId: id, version, offeringKey: z.string(), categoryCode: z.string(), curriculumVersionId: id, policyVersionId: id,
+  label: z.string().max(120).nullable().optional(),
   enabled: z.boolean(), defaultDurationMinutes: z.number().int().min(1).max(480), defaultPriceCents: z.number().int().min(0),
 });
 export const competencySchema = z.object({ id, key: z.string(), label: z.string(), description: z.string(), sortOrder: z.number().int() });
@@ -120,7 +121,7 @@ export const permitSchema = z.object({
   validUntil: civil.nullable(), decision: z.enum(['APPROVED', 'REJECTED']), reviewerMembershipId: id, reviewedAt: timestamp,
   reason: z.string().nullable(), isExpired: z.boolean(),
 });
-/** Leçon planifiée : lecture seule dans la gestion (la planification se fait dans l'app). */
+/** Projection légère d'une leçon dans l'agenda ; les mutations lisent aussi ses snapshots contractuels. */
 export const lessonSchema = z.object({
   id, schoolId: id, version, trainingId: id, learnerId: id, instructorMembershipId: id, plannedStart: timestamp, plannedEnd: timestamp,
   timeZone: z.string(), meetingPoint: z.string(), status: z.enum(['PLANNED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']),

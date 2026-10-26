@@ -26,7 +26,7 @@ export function readCourseCatalogue(schoolId: string): Promise<CourseCatalogue> 
   return readSchool(schoolId, 'course-catalogue', courseCatalogueSchema);
 }
 
-/** Bouton « Ajouter » de l'agenda : une leçon se planifie dans l'app, un cours collectif ici. */
+/** Création contextualisée depuis l'agenda du bureau. */
 export function AgendaAddMenu({ canCreateCourse, onCourse, onLesson }: { canCreateCourse: boolean; onCourse: () => void; onLesson: () => void }) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -46,13 +46,6 @@ export function AgendaAddMenu({ canCreateCourse, onCourse, onLesson }: { canCrea
       {canCreateCourse && <button type="button" className="button quiet" onClick={() => { setOpen(false); onCourse(); }}>Cours collectif</button>}
     </div>}
   </div>;
-}
-
-/** Leçon : même indication qu'ailleurs, la planification se fait dans l'app. */
-export function LessonInAppDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return <ConfirmDialog open={open} busy={false} title="Planifier une leçon" confirmLabel="Compris" onCancel={onClose} onConfirm={onClose}>
-    <p>Dans l’app Drivy, ouvrez le dossier de l’élève puis choisissez « Planifier une leçon ».</p>
-  </ConfirmDialog>;
 }
 
 /** Ouvre un cours : édition du brouillon, fiche d'un cours publié. `seriesId` absent : nouveau cours. */

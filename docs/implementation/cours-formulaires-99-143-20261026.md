@@ -44,3 +44,6 @@ Tests Apple ajoutés dans `SchoolCourseClientTests` : brouillon neuf propre/modi
 Les lots A/F de #99 ne sont pas déclarés entièrement qualifiés : captures natives avant/après identiques, iPhone étroit/courant, iPad, clair/sombre, clavier et grands textes ; VoiceOver physique ; offre proche de l’expiration, retrait de droits, conflit et réseau lent en situation intégrée. La revue Windows ne remplace pas ces essais. Le rapprochement du responsable du cours vers une conversation directe n’est pas inventé à partir de son nom : l’entrée de contacts autorisés est la solution disponible sans extension d’API.
 
 Les commandes natives de cours conservent encore leur intention en mémoire ; leur reprise durable après arrêt forcé reste dans les lots dédiés #126–#130. Ce changement ne prétend pas livrer leur refonte de réactivité. Aucun déploiement effectué.
+## Complément de qualification Apple du 26 octobre
+
+La campagne agenda sur `bd5cbdc` (run `40332817407`) est passée : 65 tests, 69 exécutions paramétrées, aucun échec ou test ignoré. Résumé conservé dans `proofs/parcours-20261026/agenda-bd5cbdc/summary.json`. Cette preuve ne remplace pas les qualifications UI cours/VoiceOver : les tests UI cours, profil et récupération sont traités séparément par la campagne du lot.

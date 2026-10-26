@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:offering-label:1",
+  "title": "Libellé métier d’une version de formation",
+  "$comment": "Extension additive du 26 octobre 2026, issue #51. OpenAPI canonique 3.11.0 conservé. GET /v1/schools/{schoolId}/offerings et POST /offerings exposent le label déjà porté par la version (formation-catalogue). Les contrôles de lecture et d’écriture restent inchangés. Une ancienne version sans nom retourne null ; aucune clé technique n’est transformée en libellé.",
+  "type": "object",
+  "required": ["label"],
+  "properties": { "label": { "type": ["string", "null"], "maxLength": 120 } }
+}

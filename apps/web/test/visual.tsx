@@ -127,6 +127,7 @@ const db: Record<string, any> = {
 };
 // Synthetic mixed agenda, opt-in; never imported by the production entry.
 const agendaFixture = parameters.get('agenda');
+const lessonReceipts = new Map<string, unknown>();
 let agendaCourseFailure: number | null = null, agendaCourseDelay = 0;
 let agendaLessonFailure: number | null = null, agendaLessonResponse = 'valid';
 let agendaReportMismatch = false;
@@ -164,6 +165,14 @@ if (agendaFixture) {
     db['course-series'][0].selfCancellationDeadline = new Date(future.getTime() - 86400000).toISOString();
     for (let index = 1; index <= 32; index++) db.learners.push({ ...db.learners[1], id: uuid(), personId: uuid(),
       displayName: index > 30 ? 'Zoé Exemple' : `Élève Exemple ${String(index).padStart(2, '0')}` });
+  }
+  if (agendaFixture === 'lesson-planning') {
+    const future = new Date(Date.now() + 2 * 86400000); future.setUTCHours(9, 0, 0, 0);
+    db['course-series'] = [];
+    db['service-products'] = db['service-products'].map((item: any, index: number) => ({ ...item, current: index !== 0, siteId: null }));
+    db.lessons = [{ ...db.lessons[0], id: uuid(), version: 1, status: 'PLANNED', plannedStart: future.toISOString(), plannedEnd: new Date(future.getTime() + 45 * 60000).toISOString(),
+      actualStart: null, actualEnd: null, learnerDisplayName: 'Éloïse Müller', instructorDisplayName: 'Marie Dupont', priceCentsSnapshot: 9500, bufferMinutesSnapshot: 10,
+      commercialSelection: { mode: 'UNIT_PRICE', serviceProductVersionId: db['service-products'][0].id, quantity: 1, entitlementLotId: null, acceptedTermsVersionId: termsId }, commercialRevisionVersion: 1 }];
   }
   (window as unknown as { __agendaReview: unknown }).__agendaReview = {
     setCourseFailure: (status: number | null) => { agendaCourseFailure = status; },
@@ -277,6 +286,8 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
         learnerDisplayName: learner.displayName, status: 'ACTIVE', cancelledAt: null, attendance: [], requirements: { required: 4, present: 0, missing: 4 }, payments: [], completion: null })) : [];
       return series ? reply(200, envelope({ series, rights: { canTakeAttendance: true, canRecordPayment: true, canValidate: true }, rows }), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
     }
+    if (agendaFixture === 'lesson-planning' && path === 'lessons/availability') return reply(200, envelope({ available: reviewState !== 'slot-conflict', reasonCode: reviewState === 'slot-conflict' ? 'SLOT_CONFLICT' : null }), url.href);
+    if (agendaFixture === 'lesson-planning' && path.startsWith('operations/')) return lessonReceipts.has(path.split('/')[1]!) ? reply(200, envelope(lessonReceipts.get(path.split('/')[1]!)), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
     if (/^lessons\/[^/]+$/.test(path)) {
       if (agendaLessonFailure) return reply(agendaLessonFailure, { code: agendaLessonFailure === 403 ? 'ACCESS_DENIED' : 'LESSON_NOT_FOUND' }, url.href);
       const lesson = structuredClone(db.lessons.find((item: any) => item.id === path.split('/')[1]));
@@ -337,6 +348,21 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     gpsIdentityConfirmed = true; return reply(200, { ok: true }, url.href);
   }
   log.push(`${method} ${path} ${JSON.stringify(body)} if-match=${(init?.headers as Record<string, string>)?.['If-Match'] ?? ''}`);
+  if (agendaFixture === 'lesson-planning' && method === 'POST' && (path === 'lessons' || /^lessons\/[^/]+\/(move|cancel)$/.test(path))) {
+    if (reviewState === 'mutation-error') return reply(409, { code: 'SLOT_CONFLICT' }, url.href);
+    if (reviewState === 'conflict') return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    const original = path === 'lessons' ? null : db.lessons.find((item: any) => item.id === path.split('/')[1]);
+    if (original && (init?.headers as Record<string, string>)?.['If-Match'] !== `"${original.version}"`) return reply(412, { code: 'VERSION_CONFLICT' }, url.href);
+    const cancelled = path.endsWith('/cancel');
+    const lesson = original ? { ...original, ...(cancelled ? { status: 'CANCELLED' } : { plannedStart: body.plannedStart, plannedEnd: body.plannedEnd, meetingPoint: body.meetingPoint, instructorMembershipId: body.instructorMembershipId }),
+      ...(body.commercialChange ? { priceCentsSnapshot: body.commercialChange.agreedPriceCents, commercialSelection: body.commercialChange.commercialSelection, commercialRevisionVersion: original.commercialRevisionVersion + 1 } : {}), version: original.version + 1 }
+      : { ...db.lessons[0], ...body, id: uuid(), schoolId, version: 1, learnerId: db.trainings.find((item: any) => item.id === body.trainingId).learnerId,
+        status: 'PLANNED', priceCentsSnapshot: body.agreedPriceCents, bufferMinutesSnapshot: body.bufferMinutes, actualStart: null, actualEnd: null, commercialRevisionVersion: 1 };
+    if (original) db.lessons[db.lessons.indexOf(original)] = lesson; else db.lessons.push(lesson);
+    lessonReceipts.set(body.operationId, { operationId: body.operationId, commandType: original ? cancelled ? 'CANCEL_LESSON' : 'MOVE_LESSON' : 'CREATE_LESSON', resourceType: 'Lesson', resourceId: lesson.id, resourceVersion: lesson.version, committedAt: new Date().toISOString() });
+    if (reviewState === 'response-lost') throw new TypeError('Synthetic lost response');
+    return reply(original ? 200 : 201, envelope(lesson), url.href);
+  }
   if (method === 'PATCH' && path === '') {
     if (schoolConflictOnce) { schoolConflictOnce = false; value.school.version++; value.school.contactPhone = '+41 21 555 00 00'; return reply(412, { code: 'VERSION_CONFLICT' }, url.href); }
     if (reviewState === 'mutation-error') return reply(409, { code: 'INVALID_REQUEST' }, url.href);
@@ -459,7 +485,7 @@ const shell = parameters.get('shell') === '1';
 if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls', 'choices'].includes(page ?? '')) {
   const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', formation: 'formations', 'formation-new': 'formations', uncategorized: 'prestations', conditions: 'conditions', legacy: 'offres', 'legacy-current': 'referentiels' };
   const routeParameters = new URLSearchParams();
-  if (page === 'agenda') routeParameters.set('week', '2026-09-28');
+  if (page === 'agenda') routeParameters.set('week', agendaFixture === 'lesson-planning' ? db.lessons[0].plannedStart.slice(0, 10) : '2026-09-28');
   if (page === 'formation') { routeParameters.set('category', parameters.get('category') ?? 'B'); if (parameters.get('view')) routeParameters.set('view', parameters.get('view')!); }
   if (page === 'formation-new') routeParameters.set('view', 'nouvelle');
   // Ancienne adresse d'une version précédente du programme B (offre v1).

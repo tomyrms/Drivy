@@ -46,7 +46,7 @@ Les activités d’ordinateur de l’administrateur quittent l’iPhone pour une
 | Écran (chemin) | Lectures | Écritures (commande, If-Match) |
 |---|---|---|
 | Préparation (`apercu`) | école, readiness, data-policy, listes du catalogue et des champs | — (prochaines étapes calculées) |
-| Agenda (`agenda`) | leçons de la semaine, élèves actifs ou archivés, moniteurs | Lecture seule ; démarrage et fin dans l’app. `actualStart` distingue une leçon commencée ; un horaire dépassé sans démarrage reste « En attente ». |
+| Agenda (`agenda`) | leçons de la semaine, élèves actifs ou archivés, moniteurs | Création, déplacement avec accord et annulation d’une leçon non commencée ; contrôle serveur des créneaux et des conditions, reprise AP72. Démarrage et fin dans l’app. `actualStart` distingue une leçon commencée ; un horaire dépassé sans démarrage reste « En attente ». |
 | Disponibilités (`disponibilites`) | moniteurs, horaires et absences | Ajout et retrait versionné des horaires et absences |
 | Dossiers (`eleves`) | élèves, formations, affectations, permis, progression, bilans publiés | Ouverture et transition des formations, affectation/retrait du moniteur, permis, archivage/restauration |
 | Trajets (`trajets`) | captures autorisées dans l’école, filtre élève ou pages de l’historique | Lecture seule |

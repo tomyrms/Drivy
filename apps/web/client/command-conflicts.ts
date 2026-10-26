@@ -14,7 +14,7 @@ export function commandConflictKeys(command: SchoolCommand): readonly string[] {
   // Scheduling and enrolment share occupancy and eligibility, even across two series.
   if (['createAvailabilityRule', 'updateAvailabilityRule', 'removeAvailabilityRule', 'createClosure', 'removeClosure',
     'createCourseSeries', 'updateCourseSeries', 'publishCourseSeries', 'changeCourseCapacity', 'staffEnrollCourse',
-    'staffCancelCourseEnrollment', 'cancelCourseSeries', 'rescheduleCourseSeries'].includes(kind)) return ['planning'];
+    'staffCancelCourseEnrollment', 'cancelCourseSeries', 'rescheduleCourseSeries', 'createLesson', 'moveLesson', 'cancelLesson'].includes(kind)) return ['planning'];
   if (kind === 'createCourseType') return ['course-types'];
   // Attendance, payment and completion currently return a common roster projection.
   if (['recordCourseAttendance', 'recordCoursePayment', 'voidCoursePayment', 'validateCourse', 'revokeCourseCompletion'].includes(kind)) return ['course-facts'];

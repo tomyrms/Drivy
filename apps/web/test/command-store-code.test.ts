@@ -94,6 +94,27 @@ describe('Activation GPS : confirmation durable et reprise', () => {
   });
 });
 
+describe('Leçons du bureau : réponse perdue et commande unique', () => {
+  test.each(['createLesson', 'moveLesson', 'cancelLesson'] as const)('%s retrouve le reçu exact sans une deuxième mutation', async kind => {
+    const store = await loadStore(), lessonId = randomUUID();
+    const command = createCommand({ schoolId, kind, path: kind === 'createLesson' ? 'lessons' : `lessons/${lessonId}/${kind === 'moveLesson' ? 'move' : 'cancel'}`,
+      resourceVersion: kind === 'createLesson' ? 0 : 2, ...(kind !== 'createLesson' ? { resourceId: lessonId, ifMatch: 2 } : {}),
+      body: { meetingPoint: 'Lieu synthétique confidentiel' } });
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    expect((await store.submit(command, 'csrf')).status).toBe('pending');
+    expect(store.getSnapshot().revision).toBe(0);
+    expect(writes.join(' ')).not.toContain('Lieu synthétique confidentiel');
+    const fetch = answer(200, envelope({ operationId: command.operationId,
+      commandType: { createLesson: 'CREATE_LESSON', moveLesson: 'MOVE_LESSON', cancelLesson: 'CANCEL_LESSON' }[kind],
+      resourceType: 'Lesson', resourceId: lessonId, resourceVersion: 3, committedAt: '2026-10-26T08:00:00.000Z' }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await store.verify(schoolId)).status).toBe('confirmed');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0]![0])).toContain(`/operations/${command.operationId}`);
+    expect(store.get(schoolId)).toBeUndefined();
+  });
+});
+
 describe('Changement de personne : aucune commande du compte précédent', () => {
   const change = (gpsEnabled: boolean) => createCommand({ schoolId, kind: 'updateModules', path: 'modules',
     ifMatch: 4, resourceVersion: 4, body: { gpsEnabled } });
