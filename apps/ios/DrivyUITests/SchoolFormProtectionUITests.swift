@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor final class SchoolFormProtectionUITests: XCTestCase {
-    func testProfileAsksOnlyAfterEditingAndContinueKeepsTheEntry() {
+    func testProfileAsksOnlyAfterEditingAndContinueKeepsTheEntry() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = "profile"
@@ -24,7 +24,7 @@ import XCTest
         let stay = app.alerts.buttons.matching(identifier: "Continuer").firstMatch
         XCTAssertTrue(stay.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.alerts.buttons.matching(identifier: "Quitter sans enregistrer").firstMatch.exists)
-        stay.tap()
+        try tapAlertAction(in: app, identifier: "Continuer")
         XCTAssertEqual(name.value as? String, edited, "Continuer conserve exactement la valeur saisie")
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Profil conservé après Continuer — données synthétiques"

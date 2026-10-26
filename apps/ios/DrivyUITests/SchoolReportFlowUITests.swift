@@ -2,14 +2,12 @@ import XCTest
 
 /// Parcours représentatif du bilan V4. À exécuter sur runner Apple avec les fixtures visuelles existantes.
 @MainActor final class SchoolReportFlowUITests: XCTestCase {
-    func testKeepDraftClosesAndReopensTheSameText() {
+    func testKeepDraftClosesAndReopensTheSameText() throws {
         continueAfterFailure = false
         let app = launch("lesson-draft")
         editDraft(in: app, text: " Brouillon conservé après fermeture")
         closeReport(in: app)
-        let keep = app.alerts.buttons.matching(identifier: "lesson-keep-draft-close").firstMatch
-        XCTAssertTrue(keep.waitForExistence(timeout: 5), app.debugDescription)
-        keep.tap()
+        try tapAlertAction(in: app, identifier: "lesson-keep-draft-close")
         let open = app.buttons["Ouvrir la leçon"]
         XCTAssertTrue(open.waitForExistence(timeout: 5), app.debugDescription)
         open.tap()
@@ -22,14 +20,12 @@ import XCTest
         add(attachment)
     }
 
-    func testFailedDraftWriteDoesNotCloseOrDiscardTheText() {
+    func testFailedDraftWriteDoesNotCloseOrDiscardTheText() throws {
         continueAfterFailure = false
         let app = launch("lesson-draft-error")
         editDraft(in: app, text: " Texte gardé malgré la panne")
         closeReport(in: app)
-        let keep = app.alerts.buttons.matching(identifier: "lesson-keep-draft-close").firstMatch
-        XCTAssertTrue(keep.waitForExistence(timeout: 5), app.debugDescription)
-        keep.tap()
+        try tapAlertAction(in: app, identifier: "lesson-keep-draft-close")
         XCTAssertTrue(app.buttons["Fermer"].waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.buttons["Ouvrir la leçon"].isHittable)
         XCTAssertTrue(waitUntil {

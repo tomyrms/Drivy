@@ -8,7 +8,8 @@ import XCTest
         let add = app.buttons["course-staff-enroll"]
         XCTAssertTrue(add.waitForExistence(timeout: 15), app.debugDescription)
         add.tap()
-        let search = app.textFields.firstMatch
+        let search = app.descendants(matching: .any).matching(NSPredicate(format: "elementType == %lu OR elementType == %lu",
+            XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.searchField.rawValue)).firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
         search.tap(); search.typeText("Zoe")
         let candidates = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Zoé Exemple", "Réf."))
@@ -63,7 +64,7 @@ import XCTest
         XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Inscrit")
     }
 
-    func testPaymentsBeforeFirstSessionAndEditedAmountSurviveCloseAndFailure() {
+    func testPaymentsBeforeFirstSessionAndEditedAmountSurviveCloseAndFailure() throws {
         let app = launch("course-payments-before-start")
         defer { app.terminate() }
         let modes = app.segmentedControls["course-participant-mode"]
@@ -78,14 +79,14 @@ import XCTest
         amount.tap(); amount.typeText("80")
         app.navigationBars["Payé sur place"].buttons["Fermer"].tap()
         XCTAssertTrue(app.alerts["Quitter sans conserver le montant ?"].waitForExistence(timeout: 5), app.debugDescription)
-        app.alerts.buttons.matching(identifier: "Continuer").firstMatch.tap()
+        try tapAlertAction(in: app, identifier: "Continuer")
         XCTAssertEqual(amount.value as? String, "80")
         app.buttons["course-payment-submit"].tap()
         XCTAssertTrue(app.navigationBars["Payé sur place"].exists)
         XCTAssertEqual(amount.value as? String, "80")
     }
 
-    func testCourseEditorProtectsOnlyAnActualChange() {
+    func testCourseEditorProtectsOnlyAnActualChange() throws {
         let app = launch("course-editor")
         defer { app.terminate() }
         let title = app.textFields["course-title"]
@@ -95,7 +96,7 @@ import XCTest
         title.tap(); title.typeText(" modifié")
         app.navigationBars["Brouillon"].buttons["Fermer"].tap()
         XCTAssertTrue(app.alerts["Quitter sans enregistrer ?"].waitForExistence(timeout: 5), app.debugDescription)
-        app.alerts.buttons.matching(identifier: "Continuer").firstMatch.tap()
+        try tapAlertAction(in: app, identifier: "Continuer")
         XCTAssertTrue((title.value as? String)?.contains("modifié") == true)
     }
 
