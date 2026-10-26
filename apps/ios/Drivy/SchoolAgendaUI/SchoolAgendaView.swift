@@ -242,7 +242,7 @@ struct SchoolAgendaView: View {
                             .accessibilityHint("Ouvre la leçon")
                             .accessibilityIdentifier("agenda-event-lesson-\(lesson.id.uuidString)")
                         case .course(let item):
-                            Button { open(item.series) } label: {
+                            Button { open(item.series, occurrenceID: item.occurrence.id) } label: {
                                 courseRow(item, position: .at(index, count: dailyEvents.count))
                                     .accessibilityIdentifier("agenda-event-course-\(item.occurrence.id.uuidString)")
                             }
@@ -391,14 +391,14 @@ struct SchoolAgendaView: View {
             details: details, state: item.series.status == .cancelled ? .cancelled : nil,
             note: item.series.isDraft ? DrivyRowNote(text: "Brouillon") : nil, railPosition: position)
     }
-    private func open(_ series: SchoolCourseSeries) {
+    private func open(_ series: SchoolCourseSeries, occurrenceID: UUID) {
         guard let membership = workspace.membership else { return }
         if series.isDraft && series.canManage {
             courseEditor = SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
-                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series)
+                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series, selectedOccurrenceID: occurrenceID)
         } else {
             courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series,
-                learners: workspace.learners)
+                learners: workspace.learners, selectedOccurrenceID: occurrenceID)
         }
     }
     private func newCourseEditor() -> SchoolCourseEditorWorkspace? {

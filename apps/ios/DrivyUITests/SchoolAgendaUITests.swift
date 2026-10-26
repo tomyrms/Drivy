@@ -50,6 +50,24 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Sensibilisation"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
     }
 
+    func testEachOccurrenceOfTheSameSeriesOpensItsOwnSelectedSession() {
+        let app = launch("agenda-mixed")
+        defer { app.terminate() }
+        for time in ["14:00", "09:00"] {
+            let occurrence = course(at: time, in: app)
+            XCTAssertTrue(occurrence.waitForExistence(timeout: 20), app.debugDescription)
+            reveal(occurrence, in: app, upwards: time == "14:00")
+            occurrence.tap()
+            let selected = element("course-selected-occurrence", in: app)
+            XCTAssertTrue(selected.waitForExistence(timeout: 15), app.debugDescription)
+            XCTAssertTrue(selected.label.contains(time), app.debugDescription)
+            XCTAssertTrue(selected.isSelected, app.debugDescription)
+            XCTAssertTrue(selected.isHittable, app.debugDescription)
+            app.buttons["Fermer"].tap()
+            XCTAssertTrue(app.segmentedControls["agenda-display-mode"].waitForExistence(timeout: 15), app.debugDescription)
+        }
+    }
+
     func testCourseFailureKeepsLessonsAndRetryRestoresTheMixedDay() {
         let app = launch("agenda-courses-error")
         defer { app.terminate() }
