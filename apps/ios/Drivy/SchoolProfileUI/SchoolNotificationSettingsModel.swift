@@ -204,10 +204,15 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
                         state = .conflict
                         errorMessage = "Tes préférences ont changé ailleurs. Les autres choix ont été conservés."
                         continue
-                    } catch { handleReadFailure(error); return }
+                    } catch {
+                        guard isCurrent, generation == expected else { return }
+                        handleReadFailure(error); return
+                    }
                 }
                 if let failure = error as? SchoolPlanningFailure, case .rejected = failure {
-                    settle(attempt); _ = persist(); state = .rejected
+                    settle(attempt)
+                    guard persist() else { return }
+                    state = .rejected
                     errorMessage = Self.message(error)
                 } else if error as? SchoolPlanningFailure == .unauthorized || error as? SchoolPlanningFailure == .forbidden {
                     confirmed = nil; state = .unconfirmed; errorMessage = Self.message(error)
