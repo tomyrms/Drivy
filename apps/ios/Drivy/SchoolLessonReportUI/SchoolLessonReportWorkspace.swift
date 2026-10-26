@@ -358,7 +358,7 @@ import Observation
         // Une relecture garde l’état affiché : `needsReload`, les notes et la saisie ne changent qu’à son résultat.
         isLoading = true; errorMessage = nil; pendingReviewed = false
         defer { wake() }
-        do { pending = try outbox.pending(for: scope); storageAccessible = true }
+        do { pending = try outbox.pending(for: scope, domain: .teaching); storageAccessible = true }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
             // Le compte et la leçon se lisent ensemble ; rien n’est montré avant que les droits du compte soient relus.

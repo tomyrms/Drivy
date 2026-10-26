@@ -315,9 +315,27 @@ import Testing
         #expect(edited.localDraftError == nil && drafts.values.isEmpty)
     }
 
+    @Test func anUnconfirmedInvitationDoesNotBlockSavingTheLessonReport() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("drivy-report-domains-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outbox = EncryptedSchoolCommandOutbox(directory: directory, keyData: Data(repeating: 8, count: 32))
+        let operationID = UUID(), scope = ConfigurationFixture.scope()
+        let invitation = PendingSchoolCommand(id: operationID, scope: scope, kind: .createInvitation,
+            resourceVersion: 0, createdAt: Date(),
+            body: try JSONSerialization.data(withJSONObject: ["operationId": operationID.uuidString]))
+        try outbox.save(invitation)
+        let model = workspace(LessonFinishServer(), outbox: outbox, drafts: LocalDraftStub())
+        await model.load()
+        #expect(model.pending == nil && model.canMutate)
+        model.nextStep = "Reprendre les priorités"
+        #expect(await model.saveDraft())
+        #expect(model.reportSaveConfirmed)
+        #expect(try outbox.pendingCommands(for: scope) == [invitation])
+    }
+
     // MARK: Données de test
 
-    private func workspace(_ server: LessonFinishServer, outbox: ConfigurationOutboxStub, drafts: LocalDraftStub) -> SchoolLessonReportWorkspace {
+    private func workspace(_ server: LessonFinishServer, outbox: any SchoolCommandOutbox, drafts: LocalDraftStub) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: ["INSTRUCTOR"], grants: ["permit_review"], accessEpoch: 1)
         let client = SchoolLessonReportClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)

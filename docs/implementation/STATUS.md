@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 26 octobre 2026 — vague parcours, première preuve bilan
+
+- #162/#163 : 101 tests Swift réussis (105 cas paramétrés), zéro échec/ignoré, sur Apple au commit `2b0c952` : [run 40328492050](https://github.com/tomyrms/Drivy/actions/runs/40328492050). UI iPhone/iPad encore en cours. [Détail](bilan-brouillon-162-163-20261026.md).
+- Socle natif #106/#107/#119 intégré en `d85bd00`/`d88757f` ; tests Apple à lancer. Le bilan adopte le domaine pédagogique ; test de coexistence avec une invitation préparé.
+- #50 : le porteur demande de préparer l'intégration et de choisir le relais e-mail plus tard. Aucune activation ni annonce d'envoi réel avant configuration et qualification.
+- Les lots messagerie, cours/formulaires et web restent en réalisation. Aucun déploiement ni validation physique revendiqués.
+
+
 ## 26 octobre 2026 : vague parcours, bilan #162/#163 prêt pour qualification ciblée
 
 - Worktree isolé, branche `codex/bilans-reactivite-parcours-20261026` : correctifs Messages jusqu'à `da7f8f3` conservés et agenda `71390e9` intégré. [Périmètre demandé](vague-parcours-20261026.md).
