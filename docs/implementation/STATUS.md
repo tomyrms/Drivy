@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 26 octobre 2026 — récupération intégrée et reçus Messages
+
+- #50 : [158 contrôles navigateur réussis](https://github.com/tomyrms/Drivy/actions/runs/40334928759) sur `9105617`, dont les huit scénarios de récupération avec Keycloak/Mailpit isolés. [Preuve et limites](account-recovery-20261026.md). SMTP cible reporté à la demande du porteur ; activation réelle désactivée.
+- Agenda/cours : [65 tests métier réussis, 69 exécutions avec paramètres, zéro échec/ignoré](https://github.com/tomyrms/Drivy/actions/runs/40332817407) sur `bd5cbdc`. [Résumé Apple](proofs/parcours-20261026/agenda-bd5cbdc/summary.json). UI cours/profil/récupération en cours ; reprise UI bilan encore attendue.
+- #104 : reçus serveur atomiques en `103c3a8`, journal natif avec identité stable et contrôle de reçu en `828e284`, reprise d'une écriture locale interrompue en `14ba07c`. Neuf tests PostgreSQL de mutations plus 22 régressions messagerie réussis. [Installation future API avant IPA et limites](messaging-mutation-receipts-104-20261026.md). Nouveaux tests UI synthétiques 1/5/15 secondes préparés, pas encore exécutés.
+- #51 : revue finale en cours ; frontière bureau ADMIN conservée. Campagne complète, PR et IPA finales à venir. Aucun déploiement ni validation physique annoncé.
+
+
 ## 26 octobre 2026 — socle réactivité qualifié sur Apple
 
 - Socle natif #106/#107/#119 : [79 tests réussis, zéro échec/ignoré](https://github.com/tomyrms/Drivy/actions/runs/40331345770) sur `0c3a712`, et IPA compilée. [Détail et preuve](reactivite-native-106-107-119-20261026.md#exécution-apple-du-socle).
