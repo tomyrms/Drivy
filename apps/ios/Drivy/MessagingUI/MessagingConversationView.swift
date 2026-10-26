@@ -372,6 +372,9 @@ struct MessagingConversationView: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) { proxy.scrollTo(anchor, anchor: .top) }
         }
+        // La variation de hauteur arrive après ce cycle : garder le drapeau le temps que la
+        // correction d'ancrage ne soit pas prise pour un suivi du bas du fil.
+        try? await Task.sleep(for: .milliseconds(400))
         loadingOlder = false
     }
 
@@ -386,7 +389,12 @@ struct MessagingConversationView: View {
             await show(notice: "Message indisponible")
             return
         }
+        // Laisse la feuille de recherche se refermer : un défilement lancé pendant sa disparition est perdu.
+        try? await Task.sleep(for: .milliseconds(350))
         withAnimation(DrivyMotion.settle(reduceMotion)) { proxy.scrollTo(id, anchor: .center) }
+        // Deuxième passe après le rendu paresseux du voisinage, sinon la cible reste hors écran.
+        try? await Task.sleep(for: .milliseconds(250))
+        proxy.scrollTo(id, anchor: .center)
         withAnimation(DrivyMotion.feedback(reduceMotion)) { highlighted = id }
         try? await Task.sleep(for: .milliseconds(1_500))
         if highlighted == id { withAnimation(DrivyMotion.settle(reduceMotion)) { highlighted = nil } }
