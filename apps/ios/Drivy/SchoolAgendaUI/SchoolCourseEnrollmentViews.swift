@@ -321,8 +321,15 @@ struct SchoolCourseOfferBanner: View {
 /// Inscrits et file d’un cours publié, pour le personnel habilité.
 struct SchoolCourseRosterSection: View {
     @Bindable var model: SchoolCourseRosterWorkspace
-    @State private var choosesLearner = false
-    @State private var cancelling: SchoolCourseRosterEnrollment?
+    @State private var presented: Destination?
+
+    private enum Destination: Identifiable {
+        case enroll
+        case cancel(SchoolCourseRosterEnrollment)
+        var id: String {
+            switch self { case .enroll: "enroll"; case .cancel(let row): "cancel-\(row.id)" }
+        }
+    }
 
     var body: some View {
         Section {
@@ -335,7 +342,7 @@ struct SchoolCourseRosterSection: View {
                         Text(row.learnerDisplayName.isEmpty ? "Élève" : row.learnerDisplayName)
                         Spacer(minLength: DrivySpacing.xs)
                         Menu {
-                            Button("Annuler l’inscription", role: .destructive) { cancelling = row }
+                            Button("Annuler l’inscription", role: .destructive) { presented = .cancel(row) }
                         } label: {
                             Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
                         }
@@ -343,17 +350,22 @@ struct SchoolCourseRosterSection: View {
                             .accessibilityLabel("Actions pour \(row.learnerDisplayName)")
                     }
                 }
-                Button { choosesLearner = true } label: { Label("Inscrire un élève", systemImage: "person.badge.plus") }
+                Button { presented = .enroll } label: { Label("Inscrire un élève", systemImage: "person.badge.plus") }
                     .disabled(model.isBusy || model.candidates.isEmpty)
                     .accessibilityIdentifier("course-staff-enroll")
+                    // Une Section est aplatie par Form : présenter depuis une ligne réellement rendue.
+                    .sheet(item: $presented) { destination in
+                        switch destination {
+                        case .enroll: SchoolCourseParticipantPicker(model: model)
+                        case .cancel(let row): SchoolCourseCancelEnrollmentSheet(model: model, row: row)
+                        }
+                    }
             } else if model.isLoading {
                 DrivyLoadingState(title: "Chargement…")
             }
         } header: { Text("Inscrits").drivyFormSectionHeader() }
             .drivyFormRows()
             .task { await model.load() }
-            .sheet(isPresented: $choosesLearner) { SchoolCourseParticipantPicker(model: model) }
-            .sheet(item: $cancelling) { row in SchoolCourseCancelEnrollmentSheet(model: model, row: row) }
         if let waitlist = model.roster?.waitlist, !waitlist.isEmpty {
             Section {
                 ForEach(waitlist) { entry in

@@ -16,13 +16,16 @@ import XCTest
         XCTAssertFalse(app.alerts.firstMatch.exists)
         for _ in 0..<3 where !name.isHittable { app.swipeUp() }
         XCTAssertTrue(name.isHittable, app.debugDescription)
+        let initial = name.value as? String
         name.tap(); name.typeText(" Test fermeture")
+        let edited = name.value as? String
+        XCTAssertNotEqual(edited, initial, "Le champ doit avoir été modifié avant de tester sa conservation")
         close.tap()
         let stay = app.alerts.buttons.matching(identifier: "Continuer").firstMatch
         XCTAssertTrue(stay.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(app.alerts.buttons.matching(identifier: "Quitter sans enregistrer").firstMatch.exists)
         stay.tap()
-        XCTAssertTrue((name.value as? String)?.contains("Test fermeture") == true)
+        XCTAssertEqual(name.value as? String, edited, "Continuer conserve exactement la valeur saisie")
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Profil conservé après Continuer — données synthétiques"
         attachment.lifetime = .keepAlways; add(attachment)

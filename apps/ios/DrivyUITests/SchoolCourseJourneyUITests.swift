@@ -17,7 +17,7 @@ import XCTest
         XCTAssertNotEqual(candidates.element(boundBy: 0).label, candidates.element(boundBy: 1).label)
         candidates.element(boundBy: 1).tap()
         XCTAssertTrue(app.buttons["Inscrire à toute la série"].waitForExistence(timeout: 10), app.debugDescription)
-        app.buttons.matching(identifier: "Annuler").firstMatch.tap()
+        dismissConfirmation(in: app, cancelLabel: "Annuler")
         XCTAssertTrue(search.exists)
     }
 
@@ -58,7 +58,8 @@ import XCTest
         XCTAssertTrue(cancel.waitForExistence(timeout: 15), app.debugDescription)
         cancel.tap()
         XCTAssertTrue(app.staticTexts["Ton inscription aux 4 séances sera annulée."].waitForExistence(timeout: 10), app.debugDescription)
-        app.buttons.matching(identifier: "Garder").firstMatch.tap()
+        dismissConfirmation(in: app, cancelLabel: "Garder")
+        XCTAssertTrue(app.staticTexts["Ton inscription aux 4 séances sera annulée."].waitForNonExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Inscrit")
     }
 
@@ -110,5 +111,14 @@ import XCTest
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 { if element.exists && element.isHittable { return }; app.swipeUp() }
         XCTAssertTrue(element.exists && element.isHittable, app.debugDescription)
+    }
+    private func dismissConfirmation(in app: XCUIApplication, cancelLabel: String) {
+        let cancel = app.buttons.matching(identifier: cancelLabel).firstMatch
+        if cancel.exists && cancel.isHittable { cancel.tap() }
+        else if app.otherElements["PopoverDismissRegion"].exists { app.otherElements["PopoverDismissRegion"].tap() }
+        else {
+            // iOS 26 peut présenter le rôle Annuler comme un toucher hors du popover, sans bouton nommé.
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        }
     }
 }
