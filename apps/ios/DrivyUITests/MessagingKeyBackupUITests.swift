@@ -37,6 +37,8 @@ final class MessagingKeyBackupUITests: XCTestCase {
         let button = app.buttons["messaging.backup.restore"]
         if !button.isHittable { app.swipeUp() }
         button.tap()
+        // L'erreur est en tête du formulaire : la ramener à l'écran (liste paresseuse).
+        app.swipeDown(); app.swipeDown()
     }
 
     /// #170 : retour, glissement et balayage de la feuille ne font pas disparaître la clé ; sortie explicite avertie.
@@ -64,7 +66,11 @@ final class MessagingKeyBackupUITests: XCTestCase {
         XCTAssertTrue(app.buttons["messaging.backup.exit.confirm"].waitForExistence(timeout: 5))
         attach(app, "backup-sortie-avertie")
         let back = app.buttons["messaging.backup.exit.cancel"]
-        if back.exists && back.isHittable { back.tap() } else { app.buttons["Revenir à la clé"].firstMatch.tap() }
+        // iOS 26 peut présenter la feuille d'action sans bouton d'annulation visible : toucher hors de la feuille.
+        if back.exists && back.isHittable { back.tap() }
+        else if app.otherElements["PopoverDismissRegion"].exists { app.otherElements["PopoverDismissRegion"].tap() }
+        else { window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
+        XCTAssertFalse(app.buttons["messaging.backup.exit.confirm"].waitForExistence(timeout: 1))
         XCTAssertTrue(key.waitForExistence(timeout: 2))
 
         // Quitter sans la clé : retour aux réglages, la clé ne réapparaît jamais.
