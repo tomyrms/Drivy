@@ -1,10 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { reportHistory } from '../client/dossier-model.js';
+import { lessonMatchesSelection, reportHistory, reportsMatchLesson } from '../client/dossier-model.js';
 
 const lesson = (id: string, plannedStart: string, timeZone: string, published = true) => ({
   id, plannedStart, timeZone, currentPublishedRevisionId: published ? `${id}-report` : null,
 });
 const ids = (lessons: { id: string }[]) => lessons.map(item => item.id);
+
+describe('Contexte exact de leçon', () => {
+  const response = { id: 'lesson', schoolId: 'school', learnerId: 'learner' };
+  const selection = { lessonId: 'lesson', schoolId: 'school', learnerId: 'learner' };
+  it('n’accepte que le rendez-vous, l’école et l’élève demandés', () => {
+    expect(lessonMatchesSelection(response, selection)).toBe(true);
+    for (const field of ['id', 'schoolId', 'learnerId'] as const) expect(lessonMatchesSelection({ ...response, [field]: 'another' }, selection)).toBe(false);
+  });
+  it('refuse un bilan d’une autre leçon, même dans la même école', () => {
+    const reports = [{ lessonId: response.id, schoolId: response.schoolId }];
+    expect(reportsMatchLesson(reports, response)).toBe(true);
+    expect(reportsMatchLesson([...reports, { ...reports[0]!, lessonId: 'other' }], response)).toBe(false);
+    expect(reportsMatchLesson([{ ...reports[0]!, schoolId: 'other' }], response)).toBe(false);
+  });
+});
 
 describe('Historique des bilans par période', () => {
   const sameInstant = [

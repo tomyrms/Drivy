@@ -4,13 +4,29 @@ import SwiftUI
 struct SchoolAgendaDaySummary: Equatable, Sendable {
     var active = 0
     var closed = 0
+    var courseActive = 0
+    var courseClosed = 0
+    var courseDraft = 0
+    var isComplete = true
 
     static let empty = SchoolAgendaDaySummary()
 
-    var total: Int { active + closed }
-    var marks: [SchoolAgendaDayMark] { SchoolAgendaMonth.marks(active: active, closed: closed) }
-    /// Lu par VoiceOver après le jour : « mardi 14 octobre, 3 leçons ».
-    var spokenCount: String { total == 0 ? "" : total == 1 ? "1 leçon" : "\(total) leçons" }
+    var lessonCount: Int { active + closed }
+    var courseCount: Int { courseActive + courseClosed + courseDraft }
+    var total: Int { lessonCount + courseCount }
+    var marks: [SchoolAgendaDayMark] {
+        SchoolAgendaMonth.marks(active: active + courseActive, closed: closed + courseClosed, provisional: courseDraft)
+    }
+    /// Des événements visibles, jamais une promesse de disponibilité.
+    var spokenCount: String {
+        var parts: [String] = []
+        if lessonCount > 0 { parts.append(lessonCount == 1 ? "1 leçon" : "\(lessonCount) leçons") }
+        if courseCount > 0 { parts.append(courseCount == 1 ? "1 séance collective" : "\(courseCount) séances collectives") }
+        if courseDraft > 0 { parts.append(courseDraft == 1 ? "dont 1 brouillon" : "dont \(courseDraft) brouillons") }
+        if courseClosed > 0 { parts.append(courseClosed == 1 ? "dont 1 séance annulée" : "dont \(courseClosed) séances annulées") }
+        if !isComplete { parts.append("Agenda incomplet") }
+        return parts.joined(separator: ", ")
+    }
 }
 
 /// Marques d’activité d’un jour, communes à la semaine et au mois : un point plein par leçon,
@@ -43,6 +59,8 @@ struct SchoolAgendaDayDots: View {
             Circle().fill(activeInk).frame(width: 5, height: 5)
         case .closed:
             Circle().strokeBorder(closedInk, lineWidth: 1).frame(width: 5, height: 5)
+        case .provisional:
+            Rectangle().strokeBorder(closedInk, lineWidth: 1).frame(width: 5, height: 5)
         case .more:
             Capsule().fill(activeInk).frame(width: 11, height: 5)
         }
@@ -135,6 +153,7 @@ struct SchoolAgendaMonthGrid: View {
         // « Aujourd’hui » ne se lit pas qu’à la couleur du chiffre.
         .accessibilityLabel(label(for: day, today: today))
         .accessibilityValue(daySummary.spokenCount)
+        .accessibilityIdentifier(SchoolAgendaMonth.dayIdentifier(day, calendar: calendar))
         .accessibilityAddTraits(selected ? [.isSelected] : [])
         .accessibilityShowsLargeContentViewer()
     }

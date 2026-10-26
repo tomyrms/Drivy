@@ -124,6 +124,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['course-completions', ':id', 'revoke'], bodyLimit: 2_048 },
   // Lectures seules : agenda de l'école, progression et bilans publiés.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
+  { method: 'GET', segments: ['lessons', ':id'] },
   { method: 'GET', segments: ['captures'], query: list },
   { method: 'GET', segments: ['lessons', ':id', 'reports'], query: list },
   { method: 'GET', segments: ['trainings', ':id', 'progress'] },

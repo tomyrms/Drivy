@@ -575,6 +575,7 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
         let token = try await accessToken()
         do { return try await perform(target, method: method, body: body, operation: operation, version: version, expected: expected, token: token) }
         catch SchoolPlanningFailure.unauthorized {
+            guard !Task.isCancelled else { throw SchoolPlanningFailure.unauthorized }
             // Un seul renouvellement forcé, même opération et même clé d’idempotence (le 401 précède tout traitement).
             guard await tokenSource.invalidateAccessToken(token) else { throw SchoolPlanningFailure.unauthorized }
             let renewed = try await accessToken()
@@ -606,8 +607,13 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
         if let version { request.setValue("\"\(version)\"", forHTTPHeaderField: "If-Match") }
         let response: SchoolHTTPResponse
         do { response = try await transport.send(request) } catch { throw error.unlessCancelled(SchoolPlanningFailure.unavailable) }
-        try Task.checkCancellation()
         guard response.url == target, response.data.count <= SchoolURLSessionTransport.maximumResponseBytes else { throw SchoolPlanningFailure.invalidResponse }
+        // Un refus reçu reste connu même si l'appelant a annulé sa lecture : il
+        // doit pouvoir retirer les données dont l'accès vient d'être refusé.
+        if [401, 403, 404].contains(response.status) {
+            throw SchoolPlanningClient.failure(response.status, nil)
+        }
+        try Task.checkCancellation()
         let contentType = response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased()
         guard response.status == expected else {
             let problem = contentType == "application/problem+json" ? (try? JSONDecoder().decode(Problem.self, from: response.data)) : nil

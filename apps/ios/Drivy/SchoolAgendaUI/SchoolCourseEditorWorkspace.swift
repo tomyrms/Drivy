@@ -80,7 +80,7 @@ struct SchoolCourseForm: Equatable, Sendable {
         minParticipants = series.minParticipants
         occurrences = series.occurrences.sorted { $0.position < $1.position }.compactMap { occurrence in
             guard let start = occurrence.start, let end = occurrence.end else { return nil }
-            return SchoolCourseOccurrenceDraft(startsAt: start, endsAt: end, instructorID: occurrence.instructorMembershipId,
+            return SchoolCourseOccurrenceDraft(id: occurrence.id, startsAt: start, endsAt: end, instructorID: occurrence.instructorMembershipId,
                 attendanceRequired: occurrence.attendanceRequired)
         }
     }
@@ -108,6 +108,9 @@ enum SchoolCourseFormat {
     let membershipID: UUID
     let timeZone: String
     let client: SchoolCourseClient
+    let selectedOccurrenceID: UUID?
+    private(set) var selectedOccurrenceAvailable = true
+    private(set) var accessUnavailable = false
     private(set) var catalogue: SchoolCourseCatalogue?
     /// Brouillon enregistré ; `nil` tant que rien n’a été écrit.
     private(set) var series: SchoolCourseSeries?
@@ -122,9 +125,13 @@ enum SchoolCourseFormat {
     @ObservationIgnored private var pending: (key: String, operation: UUID)?
 
     init(schoolID: UUID, membershipID: UUID, timeZone: String, client: SchoolCourseClient,
-         catalogue: SchoolCourseCatalogue?, series: SchoolCourseSeries? = nil, day: Date = Date()) {
+         catalogue: SchoolCourseCatalogue?, series: SchoolCourseSeries? = nil, day: Date = Date(), selectedOccurrenceID: UUID? = nil) {
         self.schoolID = schoolID; self.membershipID = membershipID; self.timeZone = timeZone; self.client = client
         self.catalogue = catalogue; self.series = series
+        self.selectedOccurrenceID = selectedOccurrenceID
+        selectedOccurrenceAvailable = selectedOccurrenceID.map { selected in
+            series?.occurrences.contains { $0.id == selected } == true
+        } ?? true
         if let series { form = SchoolCourseForm(series: series) }
         else {
             form.responsibleID = membershipID
@@ -138,12 +145,21 @@ enum SchoolCourseFormat {
     }
 
     var isNew: Bool { series == nil }
+    var focusedOccurrenceID: UUID? {
+        guard !accessUnavailable, selectedOccurrenceAvailable, let selectedOccurrenceID,
+              form.occurrences.contains(where: { $0.id == selectedOccurrenceID }) else { return nil }
+        return selectedOccurrenceID
+    }
+    var selectionMessage: String? {
+        !selectedOccurrenceAvailable && !accessUnavailable
+            ? "Cette séance n’est plus disponible. Ferme le cours pour actualiser l’agenda." : nil
+    }
     var types: [SchoolCourseType] { catalogue?.types ?? [] }
     var instructors: [SchoolCourseInstructor] { catalogue?.instructors ?? [] }
     var selfCancelHours: Int { catalogue?.policy.selfCancelHours ?? series?.selfCancelHours ?? 24 }
     var problem: String? { form.problem() }
-    var canSave: Bool { !isBusy && catalogue != nil && problem == nil }
-    var canPublish: Bool { !isBusy && catalogue != nil && form.problem(publishing: true) == nil }
+    var canSave: Bool { !isBusy && !accessUnavailable && selectionMessage == nil && catalogue?.canManage == true && problem == nil }
+    var canPublish: Bool { !isBusy && !accessUnavailable && selectionMessage == nil && catalogue?.canManage == true && form.problem(publishing: true) == nil }
     var publishProblem: String? { problem ?? form.problem(publishing: true) }
 
     func load() async {
@@ -153,8 +169,19 @@ enum SchoolCourseFormat {
             catalogue = try await client.catalogue(schoolID: schoolID)
             applyCatalogueDefaults()
             if catalogue?.canManage == false { errorMessage = SchoolCourseClient.failure(403, "COURSE_ACCESS_REQUIRED").errorDescription }
+            if let selectedOccurrenceID, let series {
+                let fresh = try await client.series(schoolID: schoolID, id: series.id)
+                guard !Task.isCancelled else { return }
+                selectedOccurrenceAvailable = fresh.isDraft && fresh.occurrences.contains { $0.id == selectedOccurrenceID }
+                if !hasUnsavedChanges && fresh.isDraft {
+                    self.series = fresh; form = SchoolCourseForm(series: fresh)
+                }
+            }
         } catch is CancellationError { return }
-        catch { if catalogue == nil { errorMessage = message(error) } }
+        catch {
+            if let failure = error as? SchoolPlanningFailure, [.unauthorized, .forbidden, .notFound].contains(failure) { accessUnavailable = true }
+            if catalogue == nil || selectedOccurrenceID != nil { errorMessage = message(error) }
+        }
     }
 
     func addOccurrence() {
@@ -278,17 +305,19 @@ private extension SchoolCourseForm {
 }
 
 /// Une séance de cours telle que la liste du jour l’affiche.
-struct SchoolAgendaCourseItem: Identifiable, Equatable {
+struct SchoolAgendaCourseItem: Identifiable, Equatable, Sendable {
     let series: SchoolCourseSeries
     let occurrence: SchoolCourseOccurrence
     var id: UUID { occurrence.id }
 
-    /// Séances qui commencent le jour donné (fuseau du calendrier de l’école), par heure de début. Les cours annulés n’y sont pas.
+    /// Séances autorisées qui commencent ce jour ; leur statut reste visible, même après annulation.
     static func items(_ series: [SchoolCourseSeries], on day: Date, calendar: Calendar) -> [SchoolAgendaCourseItem] {
-        series.filter { $0.status != .cancelled }
-            .flatMap { course in course.occurrences.map { SchoolAgendaCourseItem(series: course, occurrence: $0) } }
+        series.flatMap { course in course.occurrences.map { SchoolAgendaCourseItem(series: course, occurrence: $0) } }
             .filter { item in item.occurrence.start.map { calendar.isDate($0, inSameDayAs: day) } ?? false }
-            .sorted { ($0.occurrence.start ?? .distantPast) < ($1.occurrence.start ?? .distantPast) }
+            .sorted {
+                if $0.occurrence.start != $1.occurrence.start { return ($0.occurrence.start ?? .distantPast) < ($1.occurrence.start ?? .distantPast) }
+                return $0.id.uuidString < $1.id.uuidString
+            }
     }
 }
 
@@ -297,6 +326,8 @@ struct SchoolAgendaCourseItem: Identifiable, Equatable {
     let id = UUID()
     let schoolID: UUID
     let client: SchoolCourseClient
+    let selectedOccurrenceID: UUID?
+    private(set) var accessUnavailable = false
     private(set) var series: SchoolCourseSeries
     var capacity: Int
     private(set) var isBusy = false
@@ -305,21 +336,38 @@ struct SchoolAgendaCourseItem: Identifiable, Equatable {
     /// Inscrits et file, seulement pour qui gère un cours publié.
     let roster: SchoolCourseRosterWorkspace?
 
-    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = []) {
+    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = [], selectedOccurrenceID: UUID? = nil) {
         self.schoolID = schoolID; self.client = client; self.series = series; capacity = series.capacity
+        self.selectedOccurrenceID = selectedOccurrenceID
         roster = series.canManage && series.status == .published
             ? SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: series.id, client: client, learners: learners) : nil
         roster?.onChange = { [weak self] in await self?.refresh() }
     }
     var minimumCapacity: Int { min(200, max(1, series.seatsTaken, series.minParticipants ?? 1)) }
+    var focusedOccurrenceID: UUID? {
+        guard !accessUnavailable, let selectedOccurrenceID, series.occurrences.contains(where: { $0.id == selectedOccurrenceID }) else { return nil }
+        return selectedOccurrenceID
+    }
+    var selectionMessage: String? {
+        selectedOccurrenceID != nil && focusedOccurrenceID == nil && !accessUnavailable
+            ? "Cette séance n’est plus disponible. Ferme le cours pour actualiser l’agenda." : nil
+    }
     var canChangeCapacity: Bool {
-        series.canManage && series.status == .published && !isBusy && capacity != series.capacity && (minimumCapacity...200).contains(capacity)
+        !accessUnavailable && selectionMessage == nil && series.canManage && series.status == .published && !isBusy && capacity != series.capacity && (minimumCapacity...200).contains(capacity)
     }
 
     func refresh() async {
-        guard !isBusy, let fresh = try? await client.series(schoolID: schoolID, id: series.id) else { return }
-        if capacity == series.capacity { capacity = fresh.capacity }
-        series = fresh
+        guard !isBusy else { return }
+        do {
+            let fresh = try await client.series(schoolID: schoolID, id: series.id)
+            guard !Task.isCancelled else { return }
+            if capacity == series.capacity { capacity = fresh.capacity }
+            series = fresh; errorMessage = nil; accessUnavailable = false
+        } catch is CancellationError { return }
+        catch {
+            if let failure = error as? SchoolPlanningFailure, [.unauthorized, .forbidden, .notFound].contains(failure) { accessUnavailable = true }
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? "Le cours n’a pas pu être actualisé."
+        }
     }
     func changeCapacity() async {
         guard canChangeCapacity else { return }

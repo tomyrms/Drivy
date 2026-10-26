@@ -2,6 +2,15 @@ import { dayOf } from './agenda-model.js';
 
 type ReportLesson = { plannedStart: string; timeZone: string; currentPublishedRevisionId?: string | null | undefined };
 
+/** A copied navigation ID is a selection, never permission or evidence of its learner. */
+export function lessonMatchesSelection(lesson: { id: string; schoolId: string; learnerId: string }, selection: { lessonId: string; schoolId: string; learnerId: string }): boolean {
+  return lesson.id === selection.lessonId && lesson.schoolId === selection.schoolId && lesson.learnerId === selection.learnerId;
+}
+
+export function reportsMatchLesson(reports: readonly { lessonId: string; schoolId: string }[], lesson: { id: string; schoolId: string }): boolean {
+  return reports.every(report => report.lessonId === lesson.id && report.schoolId === lesson.schoolId);
+}
+
 /** A lesson keeps its historical time zone, including after the school's zone changes. */
 export function reportHistory<T extends ReportLesson>(lessons: readonly T[], period: { year: string; month: string }, truncated: boolean) {
   const reported = lessons.filter(lesson => lesson.currentPublishedRevisionId)

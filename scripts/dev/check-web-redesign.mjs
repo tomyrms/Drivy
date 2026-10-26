@@ -38,6 +38,7 @@ async function harness(parameters, options = {}) {
   return { context, page, boot, errors, open, reload };
 }
 const settle = page => page.waitForTimeout(550);
+const sameNavigationURL = (actual, expected) => { const a = new URL(actual), b = new URL(expected); a.searchParams.sort(); b.searchParams.sort(); assert.equal(a.href, b.href); };
 const noOverflow = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 const auditAccessibility = page => page.evaluate(async () => {
   const result = await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] }, resultTypes: ['violations', 'incomplete'] });
@@ -300,25 +301,27 @@ try {
     });
     await scenario('Agenda : semaine, moniteur et recherche conservés au retour du dossier', 'page=agenda&shell=1', async h => {
       await h.page.getByRole('button', { name: 'Semaine suivante', exact: true }).click();
-      await h.page.getByRole('heading', { name: 'Aucune leçon cette semaine', exact: true }).waitFor();
+      await h.page.getByRole('heading', { name: 'Aucun rendez-vous cette semaine', exact: true }).waitFor();
       await h.page.getByRole('button', { name: 'Semaine précédente', exact: true }).click();
       await h.page.getByLabel('Moniteur', { exact: true }).click(); await h.page.getByRole('combobox', { name: 'Rechercher : Moniteur', exact: true }).fill('Marie');
       await h.page.getByRole('option', { name: 'Marie Dupont', exact: true }).click();
-      await h.page.getByLabel('Élève', { exact: true }).fill('eloise');
-      const previous = h.page.url(); assert.equal(new URL(previous).searchParams.get('week'), '2026-09-28'); assert(new URL(previous).searchParams.has('instructor')); assert(!previous.includes('eloise'));
+      await h.page.getByLabel('Rechercher un élève parmi les leçons', { exact: true }).fill('eloise');
+      let previous = h.page.url(); assert.equal(new URL(previous).searchParams.get('week'), '2026-09-28'); assert(new URL(previous).searchParams.has('instructor')); assert(!previous.includes('eloise'));
       await h.page.locator('.agenda-lesson').first().click(); await h.page.getByRole('heading', { name: 'Éloïse Müller', exact: true }).waitFor();
+      const returnURL = new URL(previous); returnURL.searchParams.set('lesson', new URL(h.page.url()).searchParams.get('lesson')); previous = returnURL.href;
       await h.page.getByRole('button', { name: 'Retour à l’agenda', exact: true }).click();
-      await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor(); assert.equal(h.page.url(), previous);
-      assert.equal(await h.page.getByLabel('Élève', { exact: true }).inputValue(), 'eloise');
+      await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor(); sameNavigationURL(h.page.url(), previous);
+      assert.equal(await h.page.getByLabel('Rechercher un élève parmi les leçons', { exact: true }).inputValue(), 'eloise');
       await h.page.getByLabel('Moniteur', { exact: true }).filter({ hasText: 'Marie Dupont' }).waitFor();
       await h.page.locator('.agenda-lesson').first().waitFor();
       assert.equal(await h.page.locator('.agenda-lesson').count(), 2);
       await h.page.getByRole('link', { name: 'Disponibilités', exact: true }).click();
       await h.page.getByRole('heading', { name: 'Disponibilités', exact: true }).waitFor();
+      const sharedPlanningFilters = new URL(previous); sharedPlanningFilters.searchParams.delete('lesson'); previous = sharedPlanningFilters.href;
       const home = h.page.getByRole('link', { name: 'Planning', exact: true });
-      assert.equal(new URL(await home.getAttribute('href'), origin).href, previous);
+      sameNavigationURL(new URL(await home.getAttribute('href'), origin).href, previous);
       await home.click(); await h.page.getByRole('heading', { name: 'Agenda', exact: true }).waitFor();
-      assert.equal(h.page.url(), previous); assert.equal(await h.page.getByLabel('Élève', { exact: true }).inputValue(), 'eloise');
+      sameNavigationURL(h.page.url(), previous); assert.equal(await h.page.getByLabel('Rechercher un élève parmi les leçons', { exact: true }).inputValue(), 'eloise');
     });
     await scenario('Dossier direct inexistant : réponse 404 distincte d’une panne', 'page=learners&shell=1&selection=missing', async h => {
       await h.page.getByText('Cette information n’est pas disponible avec vos accès actuels.', { exact: true }).waitFor();

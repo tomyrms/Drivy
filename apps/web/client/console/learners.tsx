@@ -17,7 +17,7 @@ import { readError, useCommandRunner, useConsole, useLoad, useRouteSelection, us
 import { useListState } from './list-state';
 import { RequestFailure } from '../protocol';
 import { consolePath } from './route';
-import { permitSummary, TrainingFollowUp } from './dossier';
+import { permitSummary, SelectedLessonContext, TrainingFollowUp } from './dossier';
 import { ProfileCompletion } from './profile-completion';
 import { GpsConsentLine } from './gps-consent';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
@@ -36,9 +36,13 @@ type Dossier = { assignments: Assignment[]; permits: Permit[] | null; permitErro
 
 /** Élèves : dossier, formations, moniteurs, permis et suivi. Les leçons se planifient dans l'app. */
 export function LearnersSection() {
-  const { schoolId, school, membership, navigate, routeQuery } = useConsole();
+  const { schoolId, school, membership, navigate, routeQuery, setRouteQuery } = useConsole();
   const { revision } = useCommandSnapshot();
-  const [selected, setSelected] = useRouteSelection();
+  const [selected, selectLearner] = useRouteSelection();
+  const setSelected = (selection: string | null) => {
+    if (routeQuery?.lesson && setRouteQuery) setRouteQuery({ ...routeQuery, selection: selection ?? undefined, lesson: undefined });
+    else selectLearner(selection);
+  };
   const [search, setSearch] = useListState('learners/search', '');
   const [statusFilter, setStatusFilter] = useListState<'active' | 'archived' | 'all'>('learners/status', 'active');
   const [readinessFilter, setReadinessFilter] = useListState<'all' | 'incomplete'>('learners/readiness', 'all');
@@ -168,7 +172,7 @@ export function LearnersSection() {
 
   return (
     <div className="section-stack">
-      {routeQuery?.from === 'agenda' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
+      {(routeQuery?.from === 'agenda' || routeQuery?.lesson) && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor, lesson: routeQuery.lesson })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
       {routeQuery?.from === 'trajets' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: routeQuery.learner, week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour aux trajets</button></div>}
       {!current && <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />}
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
@@ -203,7 +207,7 @@ export function LearnersSection() {
               const categories = activeTrainings.map(category).filter(Boolean);
               return <tr key={learner.id} className={learner.id === selected ? 'is-selected' : undefined}>
                 <th scope="row" className="record-identity"><a className="record-link person-cell" aria-current={learner.id === selected ? 'true' : undefined}
-                  href={consolePath(schoolId, 'eleves', { ...routeQuery, selection: learner.id })}
+                  href={consolePath(schoolId, 'eleves', { ...routeQuery, selection: learner.id, lesson: undefined })}
                   onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); runner.clearOutcome(); setSelected(learner.id); } }}>
                   <PersonAvatar name={learner.displayName} /><span className="person-name">{learner.displayName}</span></a></th>
                 <td data-label="Contact" className="record-contact"><span>{learner.contactEmail ?? learner.contactPhone ?? <span className="row-meta">Non renseigné</span>}</span>
@@ -227,6 +231,7 @@ export function LearnersSection() {
           actions={current.archivedAt ? membership.roles.includes('ADMIN') && <button type="button" className="button secondary" disabled={!canWrite}
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
+          {routeQuery?.lesson && <SelectedLessonContext key={`${schoolId}/${current.id}/${routeQuery.lesson}`} schoolId={schoolId} learnerId={current.id} lessonId={routeQuery.lesson} competencies={competencies} instructorName={name} />}
           {!current.archivedAt && notReady(current) && <ProfileCompletion schoolId={schoolId} learner={current} canEdit={canEdit && membership.roles.includes('ADMIN')} />}
           <div className="detail-links"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Voir les trajets</button></div>
           {!current.archivedAt && <GpsConsentLine learnerId={current.id} />}

@@ -124,6 +124,50 @@ const db: Record<string, any> = {
   'profile-field-policies': [{ id: uuid(), schoolId, version: 1, status: 'PUBLISHED', effectiveFrom: '2026-09-01T00:00:00.000Z', noticeVersionId: noticeId, approvedByMembershipId: lucId,
     fields: ['firstName', 'lastName'].map(field => ({ field, requirement: 'REQUIRED', stage: 'JOIN', purposeCode: 'IDENTIFICATION', explanation: 'Identifier la personne.' })) }],
 };
+// Synthetic mixed agenda, opt-in; never imported by the production entry.
+const agendaFixture = parameters.get('agenda');
+let agendaCourseFailure: number | null = null, agendaCourseDelay = 0;
+let agendaLessonFailure: number | null = null, agendaLessonResponse = 'valid';
+let agendaReportMismatch = false;
+const hiddenAgendaLessons = new Set<string>();
+if (agendaFixture) {
+  const courseTypeId = uuid();
+  const syntheticCourse = (title: string, sessions: [string, string][], status = 'PUBLISHED') => {
+    const occurrences = sessions.map(([startsAt, instructorMembershipId], index) => ({ id: uuid(), position: index + 1, startsAt,
+      endsAt: new Date(Date.parse(startsAt) + 3600000).toISOString(), timeZone: 'Europe/Zurich', instructorMembershipId,
+      instructorDisplayName: db.members.find((member: any) => member.id === instructorMembershipId).displayName, attendanceRequired: true }));
+    return { id: uuid(), schoolId, version: 1, status, typeId: courseTypeId, typeTitle: 'Sensibilisation', title, description: '',
+      location: 'Salle de formation', conditions: 'Conditions synthétiques', teachingLanguage: 'fr', responsibleMembershipId: lucId,
+      responsibleDisplayName: 'Luc Martin', capacity: 10, seatsTaken: 3, remainingSeats: 7, minParticipants: null, policyVersion: 1,
+      selfCancelHours: 24, selfCancellationDeadline: '2026-09-27T06:00:00.000Z', firstStartsAt: occurrences[0]!.startsAt,
+      lastEndsAt: occurrences.at(-1)!.endsAt, totalMinutes: occurrences.length * 60, publishedAt: stamp, occurrences, canManage: true };
+  };
+  db['course-catalogue'] = { schoolId, canManage: true, types: [{ id: courseTypeId, schoolId: null, stableKey: 'AWARENESS', title: 'Sensibilisation', description: '', version: 1, predefined: true }],
+    policy: { version: 1, selfCancelHours: 24, offerResponseMinutes: 720 }, instructors: [lucId, marieId].map(id => ({ membershipId: id, displayName: db.members.find((member: any) => member.id === id).displayName })) };
+  db.lessons = [{ ...db.lessons[0], plannedStart: '2026-09-28T09:00:00.000Z', plannedEnd: '2026-09-28T10:00:00.000Z' }];
+  if (agendaFixture === 'lesson-context') db.lessons.push({ ...db.lessons[0], id: uuid(), version: 1, status: 'PLANNED', currentPublishedRevisionId: null,
+    plannedStart: '2026-09-28T14:00:00.000Z', plannedEnd: '2026-09-28T15:00:00.000Z', meetingPoint: 'Parking synthétique de l’après-midi' });
+  db['course-series'] = [syntheticCourse('Sensibilisation du matin', [['2026-09-28T07:00:00.000Z', marieId], ['2026-09-29T07:00:00.000Z', lucId]]),
+    syntheticCourse('Premiers secours', [['2026-09-28T12:00:00.000Z', marieId]]),
+    syntheticCourse('Cours annulé', [['2026-09-30T07:00:00.000Z', lucId]], 'CANCELLED'),
+    syntheticCourse('Cours en préparation', [['2026-09-30T07:00:00.000Z', marieId]], 'DRAFT')];
+  if (agendaFixture === 'course-only') db.lessons = [];
+  if (agendaFixture === 'empty') { db.lessons = []; db['course-series'] = []; }
+  if (agendaFixture === 'cap') db['course-series'] = Array.from({ length: 200 }, (_, index) => syntheticCourse(`Cours ${index + 1}`, [['2026-09-28T07:00:00.000Z', marieId]]));
+  (window as unknown as { __agendaReview: unknown }).__agendaReview = {
+    setCourseFailure: (status: number | null) => { agendaCourseFailure = status; },
+    setCourseDelay: (milliseconds: number) => { agendaCourseDelay = milliseconds; },
+    setCourseTitle: (title: string) => { if (db['course-series'][0]) db['course-series'][0].title = title; },
+    removeOccurrence: (id: string) => { for (const series of db['course-series']) series.occurrences = series.occurrences.filter((item: any) => item.id !== id); },
+    occurrenceIds: db['course-series'].map((series: any) => series.occurrences.map((item: any) => item.id)),
+    setLessonFailure: (status: number | null) => { agendaLessonFailure = status; },
+    setLessonResponse: (kind: string) => { agendaLessonResponse = kind; },
+    setReportMismatch: (mismatch: boolean) => { agendaReportMismatch = mismatch; },
+    hideLessonFromList: (id: string) => hiddenAgendaLessons.add(id),
+    lessonIds: db.lessons.map((lesson: any) => lesson.id), learnerId: learnerA, schoolId,
+    instructorIds: { first: lucId, second: marieId }, courseIds: db['course-series'].map((course: any) => course.id),
+  };
+}
 if (parameters.get('stress') === '1') {
   db.learners[0].displayName = 'Éloïse-Marie de Montmollin-Châteauneuf';
   db.members[1].displayName = 'Marie-Christine Dupré de Villeneuve';
@@ -197,6 +241,32 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     }
     if (reviewState === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
     if (path === parameters.get('fail') || (reviewState === 'directory-error' && path === 'learners')) return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+    if (agendaFixture && path === 'course-catalogue') return reply(200, envelope(db['course-catalogue']), url.href);
+    if (agendaFixture && path === 'course-series') {
+      const items = structuredClone(db['course-series'].filter((series: any) => series.occurrences.some((occurrence: any) =>
+        (!url.searchParams.get('from') || occurrence.endsAt > url.searchParams.get('from')!) && (!url.searchParams.get('to') || occurrence.startsAt < url.searchParams.get('to')!))));
+      if (agendaCourseDelay) await new Promise(resolve => setTimeout(resolve, agendaCourseDelay));
+      if (agendaCourseFailure) return reply(agendaCourseFailure, { code: agendaCourseFailure === 403 ? 'ACCESS_DENIED' : 'SERVICE_UNAVAILABLE' }, url.href);
+      return reply(200, envelope({ items }), url.href);
+    }
+    if (agendaFixture && /^course-series\/[^/]+$/.test(path)) {
+      const series = db['course-series'].find((item: any) => item.id === path.split('/')[1]);
+      return series ? reply(200, envelope(series), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
+    }
+    if (agendaFixture && /^course-series\/[^/]+\/enrollments$/.test(path)) return reply(200, envelope({ items: [], waitlist: [] }), url.href);
+    if (agendaFixture && /^course-series\/[^/]+\/sheet$/.test(path)) {
+      const series = db['course-series'].find((item: any) => item.id === path.split('/')[1]);
+      return series ? reply(200, envelope({ series, rights: { canTakeAttendance: true, canRecordPayment: true, canValidate: true }, rows: [] }), url.href) : reply(404, { code: 'NOT_FOUND' }, url.href);
+    }
+    if (/^lessons\/[^/]+$/.test(path)) {
+      if (agendaLessonFailure) return reply(agendaLessonFailure, { code: agendaLessonFailure === 403 ? 'ACCESS_DENIED' : 'LESSON_NOT_FOUND' }, url.href);
+      const lesson = structuredClone(db.lessons.find((item: any) => item.id === path.split('/')[1]));
+      if (!lesson) return reply(404, { code: 'LESSON_NOT_FOUND' }, url.href);
+      if (agendaLessonResponse === 'wrong-school') lesson.schoolId = '99999999-9999-4999-8999-999999999999';
+      if (agendaLessonResponse === 'wrong-learner') lesson.learnerId = learnerB;
+      if (agendaLessonResponse === 'wrong-id') lesson.id = '99999999-9999-4999-8999-999999999999';
+      return reply(200, envelope(lesson), url.href);
+    }
     if (/^learners\/[^/]+$/.test(path)) {
       const learner = findLearner(path.split('/')[1]!);
       return learner ? reply(200, envelope(learner), url.href) : reply(404, { code: 'LEARNER_NOT_FOUND' }, url.href);
@@ -233,8 +303,8 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     if (/^trainings\/[^/]+\/assignments$/.test(path)) return reply(200, envelope({ items: db.assignments, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/permit-checks$/.test(path)) return reply(200, envelope({ items: db.permits, nextCursor: null }), url.href);
     if (/^trainings\/[^/]+\/progress$/.test(path)) return reply(200, envelope({ trainingId: trainingA, computedAt: stamp, unobservedCompetencyIds: [comp2], items: [{ competencyId: comp1, label: 'Démarrer et s’arrêter', level: 'GUIDED', context: 'Parking', observedAt: stamp, sourceLessonId: lessonDone, sourceRevisionId: uuid() }] }), url.href);
-    if (/^lessons\/[^/]+\/reports$/.test(path)) return reply(200, envelope({ items: [{ id: uuid(), schoolId, version: 1, lessonId: lessonDone, sequence: 1, authorMembershipId: marieId, publishedAt: stamp, workedOn: 'Démarrage en côte', observationText: 'Bonne maîtrise du point de patinage.', nextStep: 'Ronds-points', correctionReason: null, observations: [{ competencyId: comp1, level: 'GUIDED', context: 'Parking' }] }], nextCursor: null }), url.href);
-    const list = path === 'lessons' ? db.lessons.filter((lesson: any) => (!url.searchParams.get('instructorMembershipId') || lesson.instructorMembershipId === url.searchParams.get('instructorMembershipId')) && (!url.searchParams.get('trainingId') || lesson.trainingId === url.searchParams.get('trainingId')) && (!url.searchParams.get('from') || lesson.plannedEnd > url.searchParams.get('from')!) && (!url.searchParams.get('to') || lesson.plannedStart < url.searchParams.get('to')!))
+    if (/^lessons\/[^/]+\/reports$/.test(path)) return reply(200, envelope({ items: [{ id: uuid(), schoolId, version: 1, lessonId: agendaReportMismatch ? '99999999-9999-4999-8999-999999999999' : path.split('/')[1], sequence: 1, authorMembershipId: marieId, publishedAt: stamp, workedOn: 'Démarrage en côte', observationText: 'Bonne maîtrise du point de patinage.', nextStep: 'Ronds-points', correctionReason: null, observations: [{ competencyId: comp1, level: 'GUIDED', context: 'Parking' }] }], nextCursor: null }), url.href);
+    const list = path === 'lessons' ? db.lessons.filter((lesson: any) => !hiddenAgendaLessons.has(lesson.id) && (!url.searchParams.get('instructorMembershipId') || lesson.instructorMembershipId === url.searchParams.get('instructorMembershipId')) && (!url.searchParams.get('trainingId') || lesson.trainingId === url.searchParams.get('trainingId')) && (!url.searchParams.get('from') || lesson.plannedEnd > url.searchParams.get('from')!) && (!url.searchParams.get('to') || lesson.plannedStart < url.searchParams.get('to')!))
       : path === 'trainings' && url.searchParams.has('learnerId') ? db.trainings.filter((training: any) => training.learnerId === url.searchParams.get('learnerId'))
       : db[path.replace('availability-rules', 'availability').replace('closures', 'closures')] ?? [];
     return reply(200, envelope({ items: list, nextCursor: null }), url.href);

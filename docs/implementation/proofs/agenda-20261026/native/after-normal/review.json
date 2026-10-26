@@ -1,0 +1,37 @@
+{
+  "reviewedAt": "2026-10-26",
+  "scope": "Revue visuelle de fixtures synthétiques, sans qualification globale du candidat.",
+  "commit": "849bb274a24d34f4bb1ff309b83fa824ba858cbf",
+  "workflowRunId": 40312188189,
+  "workflowRunUrl": "https://github.com/tomyrms/Drivy/actions/runs/40312188189",
+  "jobId": 121535847440,
+  "artifactId": 12645833278,
+  "artifactSha256": "97cb726625a989962220dc246c1a21c5c223c653ce9ddbc9650fc55904937292",
+  "mode": "visual_only",
+  "orientation": "portrait",
+  "requestedAndReportedContentSize": "large",
+  "screens": ["agenda-mixed", "agenda-mixed-month", "agenda-courses-error"],
+  "devices": ["iPhone 17 Pro", "iPad Pro 13-inch (M5)"],
+  "appearances": ["light", "dark"],
+  "visualCaptureRuns": 4,
+  "passedTestsPerRun": 1,
+  "testIdentifier": "VisualOrientationTests/testRequestedScreensAtRealOrientations()",
+  "pngInspected": 12,
+  "pngHashesMatchOrientationManifests": true,
+  "originalPngBytesPreserved": true,
+  "baseline": "../before",
+  "baselinePngInspected": 7,
+  "observations": [
+    "Les 12 captures montrent l'écran demandé stabilisé, sans écran vide ni indicateur de chargement persistant.",
+    "En semaine sur iPhone et en semaine/mois sur iPad, l'ordre visible est 09:00 cours, 11:00 leçon, 14:00 cours. Un fil continu relie les trois rendez-vous. L'ancien ordre visible était 11:00, 09:00, 14:00.",
+    "Les huit vues mixtes montrent trois points le 26 et un point le 27, jour avec uniquement un cours dans la fixture. La référence ne montrait qu'un point le 26 et aucun le 27.",
+    "Les quatre vues d'échec montrent l'explication Cours non actualisés et le bouton Réessayer, suivis de la leçon de 11:00. Le texte et le bouton sont intégralement visibles et lisibles en clair et sombre.",
+    "Les textes, horaires, repères et commandes visibles restent lisibles en clair et sombre à la taille normale documentée. Aucun chevauchement nouveau n'est observé dans les zones comparables."
+  ],
+  "limits": [
+    "En vue mois sur iPhone, la liste de rendez-vous est hors pli et partiellement masquée par la barre d'onglets, comme dans la référence. Ces deux images prouvent les repères du calendrier, pas l'ordre complet de la liste.",
+    "Le résumé des comptes est exposé par spokenCount comme valeur d'accessibilité des jours ; il n'est pas un texte visible dans ces captures. Son annonce n'est pas qualifiée par cette revue d'images.",
+    "La référence ne contient aucune capture valide de l'erreur et ne contient pas iPad semaine clair. Leur rendu après est inspecté, sans comparaison avant correspondante.",
+    "Les images ne prouvent pas l'action Réessayer, la reprise après interruption, la navigation vers le détail ni VoiceOver sur appareil physique. Des corrections et des tests UI distincts restent suivis par la campagne principale ; ce SHA n'est pas présenté comme globalement qualifié."
+  ]
+}

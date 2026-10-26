@@ -144,7 +144,7 @@ describe('revalidation métier juste avant le transport',()=>{
 });
 
 describe('replanification et confirmations devenues fausses',()=>{
- const later=(series:{id:string},day:number)=>({operationId:randomUUID(),occurrences:[{position:1,startsAt:at(day,8),endsAt:at(day,11),instructorMembershipId:id.otherInstructorMember}]});
+ const later=(_series:{id:string},day:number)=>({operationId:randomUUID(),occurrences:[{position:1,startsAt:at(day,8),endsAt:at(day,11),instructorMembershipId:id.otherInstructorMember}]});
  async function current(series:Series){return (await api('GET',`/course-series/${series.id}/sheet`)).series.version as number;}
 
  it('offre révoquée par replanification puis réémise : la nouvelle offre est notifiée',async()=>{

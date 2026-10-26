@@ -23,7 +23,7 @@ export async function verifyV3Agenda(options: {
   const params = new URL(response.url()).searchParams;
   assert(response.status() === 200 && params.get('to') === '2027-02-21T23:00:00.000Z' && params.get('instructorMembershipId') === instructorId,
     'V3 agenda : date directe convertie en semaine Europe/Zurich, filtre moniteur conservé dans la vraie requête API');
-  await page.getByText('Aucune leçon cette semaine', { exact: true }).waitFor();
+  await page.getByText('Aucun rendez-vous cette semaine', { exact: true }).waitFor();
   assert(await page.getByRole('searchbox', { name: 'Élève', exact: true }).inputValue() === 'Élève',
     'V3 agenda : la recherche élève reste intacte après le saut de date');
   await page.goBack();
