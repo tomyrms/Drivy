@@ -4,7 +4,7 @@ import Observation
 /// Lecture indépendante des cours : une réponse de leçons ne valide jamais cette source.
 @MainActor @Observable final class SchoolAgendaCourses {
     enum State: Equatable {
-        case idle, loading, loaded, partial, failed(String)
+        case idle, loading, loaded, partial, interrupted, failed(String)
     }
 
     private(set) var state: State = .idle
@@ -19,14 +19,17 @@ import Observation
 
     func error(in wanted: SchoolAgendaScope, timeZone: String) -> String? {
         guard scope == wanted else { return nil }
+        let reason: String
         switch state {
         case .partial:
             return "Cours partiellement chargés. Certaines séances peuvent manquer."
-        case .failed(let reason):
-            let retained = readAt.map { " Dernière lecture réussie le \(SchoolDateFormat.template("dMMMMyHHmm", $0, zone: timeZone))." } ?? ""
-            return "Cours non actualisés. \(reason)\(retained)"
+        case .interrupted:
+            reason = "L’actualisation a été interrompue. Réessaie pour retrouver les cours de cette période."
+        case .failed(let failure): reason = failure
         default: return nil
         }
+        let retained = readAt.map { " Dernière lecture réussie le \(SchoolDateFormat.template("dMMMMyHHmm", $0, zone: timeZone))." } ?? ""
+        return "Cours non actualisés. \(reason)\(retained)"
     }
 
     func reset() {
@@ -40,7 +43,13 @@ import Observation
         let id = UUID(); requestID = id
         if scope != wanted { items = []; readAt = nil }
         scope = wanted; state = .loading
-        defer { if requestID == id && state == .loading { state = .idle } }
+        // Une tâche annulée est terminée : laisser un état d'attente ferait tourner
+        // le chargement sans requête ni commande pour réessayer.
+        defer {
+            if requestID == id && state == .loading {
+                state = isCurrent() ? .interrupted : .idle
+            }
+        }
         do {
             let fresh = try await fetch()
             guard !Task.isCancelled, requestID == id, isCurrent() else { return false }
@@ -51,7 +60,7 @@ import Observation
         } catch {
             guard requestID == id, isCurrent() else { return false }
             if Task.isCancelled || error is CancellationError {
-                state = .idle
+                state = .interrupted
                 return false
             }
             if let failure = error as? SchoolPlanningFailure,

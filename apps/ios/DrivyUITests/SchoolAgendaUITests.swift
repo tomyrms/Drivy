@@ -18,9 +18,15 @@ import XCTest
         XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
         reveal(lesson, in: app)
         lesson.tap()
-        XCTAssertTrue(element("lesson-summary", in: app).waitForExistence(timeout: 15), app.debugDescription)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Camille Perret")).firstMatch.exists,
+        XCTAssertTrue(app.navigationBars["Leçon"].waitForExistence(timeout: 15), app.debugDescription)
+        let state = element("lesson-state", in: app)
+        XCTAssertTrue(state.waitForExistence(timeout: 15), app.debugDescription)
+        // La fixture est à 11 h aujourd'hui : son état dépend de l'heure du runner.
+        XCTAssertTrue(["Planifiée", "En attente"].contains(state.label), app.debugDescription)
+        XCTAssertTrue(app.buttons["lesson-open-dossier"].label.contains("Camille Perret"), app.debugDescription)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "11:00", "12:00")).firstMatch.exists,
             app.debugDescription)
+        XCTAssertTrue(app.buttons["lesson-start"].exists, app.debugDescription)
     }
 
     func testCollectiveOnlyDayIsCountedInWeekAndMonthAndOpensItsCourse() {

@@ -71,11 +71,12 @@ import Testing
         gate.finish(1, with: [course()]); _ = await reading.value
         #expect(model.items.isEmpty)
         #expect(model.readAt == nil)
+        #expect(model.state == .idle && model.error(in: wanted, timeZone: "Europe/Zurich") == nil)
         model.reset()
         #expect(model.scope == nil)
     }
 
-    @Test func cancellationDoesNotBecomeANetworkFailureOrAcceptItsResponse() async {
+    @Test func cancelledInitialReadCanRetryWithoutAcceptingItsResponseOrSpinningForever() async {
         let model = SchoolAgendaCourses(), gate = AgendaCourseReadGate(), wanted = scope
         let reading = Task { await model.load(scope: wanted) { try await gate.fetch(1) } }
         await gate.waitForStart(1)
@@ -83,7 +84,34 @@ import Testing
         gate.finish(1, with: [course()]); _ = await reading.value
         #expect(model.items.isEmpty)
         #expect(!model.isComplete(in: wanted))
-        #expect(model.error(in: wanted, timeZone: "Europe/Zurich") == nil)
+        #expect(model.state == .interrupted && !model.isLoading(in: wanted))
+        #expect(model.error(in: wanted, timeZone: "Europe/Zurich")?.contains("L’actualisation a été interrompue") == true)
+        await model.load(scope: wanted) { [] }
+        #expect(model.isComplete(in: wanted) && model.error(in: wanted, timeZone: "Europe/Zurich") == nil)
+    }
+
+    @Test func cancelledRefreshKeepsItsLastReadAndOffersRetryAfterAFetchFailure() async {
+        let model = SchoolAgendaCourses(), gate = AgendaCourseReadGate(), wanted = scope, original = course()
+        await model.load(scope: wanted) { [original] }
+        let readAt = model.readAt
+        let reading = Task {
+            await model.load(scope: wanted) {
+                _ = try await gate.fetch(1)
+                throw URLError(.notConnectedToInternet)
+            }
+        }
+        await gate.waitForStart(1)
+        reading.cancel()
+        gate.finish(1, with: []); _ = await reading.value
+        #expect(model.state == .interrupted && !model.isLoading(in: wanted))
+        #expect(model.items(in: wanted) == [original] && model.readAt == readAt)
+        #expect(!model.isComplete(in: wanted))
+        let message = model.error(in: wanted, timeZone: "Europe/Zurich")
+        #expect(message?.contains("L’actualisation a été interrompue") == true)
+        #expect(message?.contains("Dernière lecture réussie") == true)
+        let fresh = course(id: 2)
+        await model.load(scope: wanted) { [fresh] }
+        #expect(model.items(in: wanted) == [fresh] && model.isComplete(in: wanted))
     }
 
     @Test func revokedAccessDiscardsPreviouslyReadCoursesAndRequestsAccountRefresh() async {
