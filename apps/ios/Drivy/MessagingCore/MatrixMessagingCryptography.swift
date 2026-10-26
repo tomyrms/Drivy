@@ -201,13 +201,21 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         try guardScope(scope)
         return try await shielded {
             let machine = try await open()
-            let key = try BackupRecoveryKey.fromBase58(key: recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines))
-            let info = try await relay.call(scope: scope, deviceID: deviceID, method: "GET",
+            // Seuls une clé illisible, une sauvegarde absente ou une clé publique différente sont un refus de clé.
+            // Réseau, session, contexte et réponse invalide gardent leur propre cause (#169).
+            guard let key = try? BackupRecoveryKey.fromBase58(key: recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                throw MessagingFailure.recoveryKeyRefused
+            }
+            let info: Data
+            do {
+                info = try await relay.call(scope: scope, deviceID: deviceID, method: "GET",
                                             path: ["room_keys", "version"], query: [], body: nil)
-            guard let object = try JSONSerialization.jsonObject(with: info) as? [String: Any],
+            } catch MessagingCryptoRelayFailure.notFound { throw MessagingFailure.recoveryKeyRefused }
+            guard let object = try? JSONSerialization.jsonObject(with: info) as? [String: Any],
                   let version = object["version"] as? String,
                   let auth = object["auth_data"] as? [String: Any],
-                  auth["public_key"] as? String == key.megolmV1PublicKey().publicKey else { throw MessagingFailure.protectionUnavailable }
+                  let publicKey = auth["public_key"] as? String else { throw MessagingFailure.invalidResponse }
+            guard publicKey == key.megolmV1PublicKey().publicKey else { throw MessagingFailure.recoveryKeyRefused }
             let raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["room_keys", "keys"],
                                            query: [URLQueryItem(name: "version", value: version)], body: nil)
             let backup = try Self.decryptBackup(raw, key: key)

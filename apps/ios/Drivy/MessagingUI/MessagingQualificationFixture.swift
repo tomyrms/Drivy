@@ -343,10 +343,21 @@ private actor MessagingQualificationMemory: MessagingProtectedOutbox, MessagingP
 }
 
 private actor MessagingQualificationKeys: MessagingKeyManagement {
-    func backupPending(scope: MessagingScope) -> Bool { false }
-    func enableBackup(scope: MessagingScope) throws -> String { throw MessagingFailure.protectionUnavailable }
+    /// `-messaging-ui-backup` : clé et erreurs synthétiques pour qualifier l'écran (#169/#170/#141), jamais une vraie clé.
+    private let backupScenarios = ProcessInfo.processInfo.arguments.contains("-messaging-ui-backup")
+    func backupPending(scope: MessagingScope) -> Bool { backupScenarios }
+    func enableBackup(scope: MessagingScope) throws -> String {
+        guard backupScenarios else { throw MessagingFailure.protectionUnavailable }
+        return "SYNT HETI QUEX CLEF TEST UNIQ UEME NTUI"
+    }
     func restoreBackup(recoveryKey: String, scope: MessagingScope) throws -> (imported: Int, failed: Int) {
-        throw MessagingFailure.protectionUnavailable
+        guard backupScenarios else { throw MessagingFailure.protectionUnavailable }
+        switch recoveryKey {
+        case "reseau": throw MessagingFailure.unavailable
+        case "session": throw MessagingFailure.accessChanged
+        case "partielle": return (imported: 2, failed: 1)
+        default: throw MessagingFailure.recoveryKeyRefused
+        }
     }
     func ownDevices(scope: MessagingScope) -> [MessagingOwnDevice] { [] }
     func deviceVerificationSnapshot(scope: MessagingScope) -> MessagingDeviceVerificationSnapshot {
