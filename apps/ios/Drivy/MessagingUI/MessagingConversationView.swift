@@ -162,6 +162,11 @@ struct MessagingConversationView: View {
     private func thread(_ proxy: ScrollViewProxy) -> some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                // La pastille épinglée flotte au-dessus du fil : réserver sa hauteur pour ne pas
+                // masquer « Charger les messages précédents » ni le premier message.
+                if !workspace.pinnedMessages(conversationID).isEmpty {
+                    Color.clear.frame(height: DrivyLayout.tapTarget)
+                }
                 if workspace.canLoadMoreMessages(conversationID) {
                     Button {
                         Task { await loadOlder(proxy) }
