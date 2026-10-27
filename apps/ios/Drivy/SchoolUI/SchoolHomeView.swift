@@ -462,15 +462,18 @@ struct SchoolHomeView: View {
                 learnerStatusContent(height: proxy.size.height)
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
             }
-            .refreshable {
-                await workspace.refreshLearners(minimumInterval: 0)
-                if workspace.learner != nil {
-                    await workspace.loadTrainings()
-                    await workspace.loadRemainingTrainings()
-                }
-            }
+            .refreshable { await refreshLearnerStatus() }
         }
         .background(DrivyTheme.surface)
+    }
+
+    /// Relit le dossier et ses formations : le geste de tirer et le bouton « Actualiser » des états d’attente.
+    private func refreshLearnerStatus() async {
+        await workspace.refreshLearners(minimumInterval: 0)
+        if workspace.learner != nil {
+            await workspace.loadTrainings()
+            await workspace.loadRemainingTrainings()
+        }
     }
 
     /// `height` : la hauteur visible. Dans le défilement, un état vide se centre sur elle comme hors défilement.
@@ -488,11 +491,14 @@ struct SchoolHomeView: View {
             ContentUnavailableView(archived ? "École archivée" : "L’école se prépare", systemImage: archived ? "archivebox" : "building.2")
                 .frame(minHeight: height)
         } else if ownLearner == nil {
-            ContentUnavailableView("Dossier pas encore ouvert", systemImage: "person.crop.circle.badge.questionmark",
-                description: Text("Ton école l’ouvrira bientôt."))
+            SchoolLearnerWaitingState(title: "Dossier pas encore ouvert", symbol: "person.crop.circle.badge.questionmark",
+                message: "Tes leçons apparaîtront ici quand ton école l’aura ouvert.", school: workspace.school,
+                refresh: { await refreshLearnerStatus() })
                 .frame(minHeight: height)
         } else {
-            ContentUnavailableView("Aucune formation", systemImage: "steeringwheel")
+            SchoolLearnerWaitingState(title: "Aucune formation", symbol: "steeringwheel",
+                message: "Tes leçons apparaîtront ici quand ton école t’aura ouvert une formation.", school: workspace.school,
+                refresh: { await refreshLearnerStatus() })
                 .frame(minHeight: height)
         }
     }
@@ -565,6 +571,60 @@ struct SchoolHomeView: View {
         }
     }
 
+}
+
+/// Ce que l’élève attend de son école, un dossier ou une formation à ouvrir (#139) : un fait, sans délai promis, et ce
+/// qu’il peut faire lui-même. Le contact vient des coordonnées que l’école publie ; sans elles, aucun bouton n’est posé.
+/// Actualiser ne crée rien : une panne revient en erreur, jamais en écran vide.
+private struct SchoolLearnerWaitingState: View {
+    let title: String
+    let symbol: String
+    let message: String
+    let school: SchoolDetails?
+    let refresh: () async -> Void
+    @State private var refreshing = false
+
+    private var contactLinks: [SchoolLearnerContactLink] {
+        guard let school else { return [] }
+        return SchoolLearnerContactLink.links(for: SchoolLearnerContact(email: school.contactEmail, phone: school.contactPhone))
+    }
+
+    var body: some View {
+        ContentUnavailableView {
+            Label(title, systemImage: symbol)
+        } description: {
+            Text(message)
+        } actions: {
+            VStack(spacing: DrivySpacing.s) {
+                let links = contactLinks
+                if !links.isEmpty {
+                    Menu {
+                        ForEach(links) { link in
+                            Link(destination: link.url) { Label(link.title, systemImage: link.symbol) }
+                        }
+                    } label: {
+                        Label("Contacter l’école", systemImage: "building.2")
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .accessibilityIdentifier("learner-status-contact")
+                }
+                Button {
+                    Task {
+                        refreshing = true
+                        await refresh()
+                        refreshing = false
+                    }
+                } label: {
+                    DrivyBusyLabel(title: "Actualiser", busyTitle: "Actualisation…", isBusy: refreshing)
+                }
+                .buttonStyle(DrivySecondaryButtonStyle())
+                .disabled(refreshing)
+                .accessibilityIdentifier("learner-status-refresh")
+            }
+            .frame(maxWidth: 320)
+        }
+    }
 }
 
 /// Messages pendant un trajet : l’onglet reste à sa place, sans rien des conversations. On ne l’atteint que

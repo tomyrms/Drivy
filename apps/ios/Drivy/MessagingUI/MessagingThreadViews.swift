@@ -721,6 +721,8 @@ struct MessagingSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var results: [MessagingHistoryEntry] = []
+    /// La recherche dont `results` est la réponse : « Aucun résultat » n’est dit qu’une fois elle terminée.
+    @State private var searchedQuery: String?
 
     var body: some View {
         NavigationStack {
@@ -746,6 +748,11 @@ struct MessagingSearchView: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("messaging.search.result")
                     }
+                    if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty && searchedQuery == query {
+                        DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                            actionTitle: "Effacer la recherche", action: { query = "" })
+                            .buttonStyle(.borderless)
+                    }
                 } header: {
                     Text(conversationTitle.map { "Dans « \($0) »" } ?? "Dans cette conversation")
                 }
@@ -753,16 +760,14 @@ struct MessagingSearchView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(DrivyTheme.canvas)
-            .overlay {
-                if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty {
-                    ContentUnavailableView.search(text: query)
-                }
-            }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher dans cette conversation")
             .task(id: query) {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
-                results = await workspace.search(query, conversationID: conversationID)
+                let found = await workspace.search(query, conversationID: conversationID)
+                guard !Task.isCancelled else { return }
+                results = found
+                searchedQuery = query
             }
             .navigationTitle("Rechercher")
             .navigationBarTitleDisplayMode(.inline)

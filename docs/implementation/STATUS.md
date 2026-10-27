@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 27 octobre 2026 — audit UX, lot 2 : écrans vides et dossier (#139, #140, #154)
+
+- Branche `claude/audit-ux-lots-2-4`, sur le lot 1. États d'attente de l'élève avec contact de l'école et « Actualiser », une seule ligne d'écran vide et de recherche sans résultat, contacts qui distinguent attente, panne et absence, en-tête de dossier sans faux bouton. [Détail](audit-ux-lot2-etats-vides-20261027.md).
+- iOS seulement, rien à déployer. Tests non lancés avant l'essai du porteur.
+
 ## 27 octobre 2026 — audit UX, lot 1 : navigation et paramètres (#133 à #138)
 
 - Branche `claude/lot1-navigation-parametres`. Onglet Messages stable pendant un trajet, même sélecteur pour « Changer d'école », engrenage direct « Paramètres de Messages », « Historique des leçons », Notifications dans Paramètres. Règles de vocabulaire et d'ouverture des pages écrites. [Détail](navigation-parametres-lot1-20261027.md).

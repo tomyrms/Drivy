@@ -31,7 +31,8 @@ struct SchoolLessonHistoryView: View {
         Group {
             if let model {
                 SchoolLessonHistoryList(model: model, uploads: uploads, filter: $filter, search: appliedSearch,
-                    learnerName: learnerName, open: { selectedLesson = $0 }, refresh: refresh)
+                    learnerName: learnerName, open: { selectedLesson = $0 }, refresh: refresh,
+                    clearSearch: { search = "" })
             } else {
                 placeholder
             }
@@ -206,6 +207,8 @@ private struct SchoolLessonHistoryList: View {
     let learnerName: (UUID) -> String
     let open: (SchoolLesson) -> Void
     let refresh: () async -> Void
+    /// Vide le champ de recherche : la liste revient aussitôt à tout l’historique.
+    let clearSearch: () -> Void
 
     /// Rows left under the one that asks for the next page.
     private static let prefetchDistance = 20
@@ -291,7 +294,9 @@ private struct SchoolLessonHistoryList: View {
                 }
             } else if isSearching {
                 Section {
-                    DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass")
+                    // Même ligne que les autres recherches de l’app (#140) : le titre et de quoi repartir.
+                    DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                        actionTitle: "Effacer la recherche", action: clearSearch)
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("lessons-history-no-result")
                 }

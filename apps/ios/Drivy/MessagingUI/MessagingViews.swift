@@ -69,6 +69,24 @@ struct MessagingInboxView: View {
 
     // MARK: Liste
 
+    /// L’absence est une ligne de la liste, comme dans Élèves (#140) : sous le général s’il est là, jamais par-dessus.
+    @ViewBuilder private var inboxEmptyState: some View {
+        if !query.isEmpty && visibleConversations.isEmpty && !generalMatchesQuery {
+            DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                actionTitle: "Effacer la recherche", action: { query = "" })
+                .buttonStyle(.borderless)
+                .listRowSeparator(.hidden)
+                .drivyPlainRows()
+        } else if workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
+                    && workspace.error == nil {
+            DrivyEmptyState(title: "Aucune conversation", symbol: "bubble.left.and.bubble.right",
+                actionTitle: "Nouvelle conversation", action: { choosesContact = true })
+                .buttonStyle(.borderless)
+                .listRowSeparator(.hidden)
+                .drivyPlainRows()
+        }
+    }
+
     private var inbox: some View {
         List {
             if let error = workspace.error {
@@ -113,6 +131,7 @@ struct MessagingInboxView: View {
                 Button("Charger plus") { Task { await workspace.loadConversations(more: true); await workspace.loadPreviews() } }
                     .frame(minHeight: 44)
             }
+            if !(workspace.loading && !workspace.hasLoadedConversations) { inboxEmptyState }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -121,16 +140,6 @@ struct MessagingInboxView: View {
         .overlay {
             if workspace.loading && !workspace.hasLoadedConversations {
                 ProgressView("Chargement")
-            } else if !query.isEmpty && visibleConversations.isEmpty && !generalMatchesQuery {
-                ContentUnavailableView.search(text: query)
-            } else if workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
-                        && workspace.error == nil {
-                ContentUnavailableView {
-                    Label("Aucune conversation", systemImage: "bubble.left.and.bubble.right")
-                } actions: {
-                    Button("Nouvelle conversation") { choosesContact = true }
-                }
-                .padding(.top, 88)
             }
         }
         .navigationTitle("Messages")
@@ -371,6 +380,8 @@ private struct MessagingContactPicker: View {
     let choose: (MessagingContact) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    /// Tant que la lecture n’a pas répondu, rien n’est dit des contacts : « Aucun contact » n’est jamais une attente.
+    @State private var loaded = false
 
     private var contacts: [MessagingContact] {
         let all = workspace.contacts.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
@@ -380,38 +391,58 @@ private struct MessagingContactPicker: View {
 
     var body: some View {
         NavigationStack {
-            List(contacts) { contact in
-                Button { choose(contact) } label: {
-                    HStack(spacing: DrivySpacing.m) {
-                        DrivyAvatar(name: contact.displayName, size: 40, photo: workspace.photos[contact.id])
-                        Text(contact.displayName).foregroundStyle(DrivyTheme.text)
-                        Spacer()
+            List {
+                ForEach(contacts) { contact in
+                    Button { choose(contact) } label: {
+                        HStack(spacing: DrivySpacing.m) {
+                            DrivyAvatar(name: contact.displayName, size: 40, photo: workspace.photos[contact.id])
+                            Text(contact.displayName).foregroundStyle(DrivyTheme.text)
+                            Spacer()
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(contact.displayName)
+                    .task { if workspace.photos[contact.id] == nil { await workspace.loadPhoto(contact.id) } }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(contact.displayName)
-                .task { if workspace.photos[contact.id] == nil { await workspace.loadPhoto(contact.id) } }
+                contactsState
             }
             .listStyle(.plain)
-            .overlay {
-                if contacts.isEmpty {
-                    if query.isEmpty {
-                        ContentUnavailableView("Aucun contact", systemImage: "person.crop.circle.badge.questionmark")
-                    } else {
-                        ContentUnavailableView.search(text: query)
-                    }
-                }
-            }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher")
             .navigationTitle("Nouvelle conversation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
             }
-            .task { await workspace.loadContacts() }
+            .task { await load() }
         }
         .accessibilityIdentifier("messaging.contacts")
+    }
+
+    private func load() async {
+        await workspace.loadContacts()
+        loaded = true
+    }
+
+    /// Attente, panne et vraie absence se distinguent (#140) ; une panne garde « Réessayer ».
+    @ViewBuilder private var contactsState: some View {
+        if contacts.isEmpty {
+            Group {
+                if !loaded {
+                    DrivyLoadingState(title: "Chargement des contacts…")
+                } else if workspace.contacts.isEmpty, let error = workspace.error {
+                    SchoolErrorNotice(message: error.localizedDescription, retry: { loaded = false; Task { await load() } })
+                } else if query.isEmpty {
+                    DrivyEmptyState(title: "Aucun contact", symbol: "person.crop.circle.badge.questionmark")
+                } else {
+                    DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                        actionTitle: "Effacer la recherche", action: { query = "" })
+                }
+            }
+            .buttonStyle(.borderless)
+            .listRowSeparator(.hidden)
+            .drivyPlainRows()
+        }
     }
 }
