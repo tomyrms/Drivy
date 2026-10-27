@@ -280,15 +280,36 @@ private enum ExyteBubbleMetrics {
         return canInteract(wire)
     }
 
-    /// Exyte ferme le menu avant cet appel (#102) ; l'intention est posée sans attendre le réseau.
+    /// Exyte ferme le menu avant cet appel (#102) ; l'intention est posée aussitôt, sans attendre le réseau.
     func react(_ reaction: ReactionType, displayID: String) {
         guard case .emoji(let emoji) = reaction, MessagingReactionPalette.all.contains(emoji),
               let wire = item(displayID)?.message, canInteract(wire) else { return }
-        let workspace = workspace
+        workspace.toggleReaction(emoji, on: wire)
+    }
+
+    /// Appui sur les réactions d'une bulle : retire la mienne, ou reprend la seule réaction présente.
+    /// Faux quand le choix est ambigu (plusieurs réactions) : le menu s'ouvre alors sur la palette.
+    func tapReactions(displayID: String) -> Bool {
+        guard let wire = item(displayID)?.message, canInteract(wire) else { return true }
+        let mine = wire.meta.reactions.filter { $0.personIDs.contains(accountID) }.map(\.emoji)
+        let present = wire.meta.reactions.map(\.emoji)
+        guard let emoji = mine.count == 1 ? mine.first : (mine.isEmpty && present.count == 1 ? present.first : nil)
+        else { return false }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        workspace.toggleReaction(emoji, on: wire)
+        return true
+    }
+
+    /// Clavier ouvert : il se ferme d'abord, puis le menu s'ouvre sur une mise en page stable. Exyte ignore le
+    /// clavier pendant son menu, ce qui faisait sauter le fil sous le doigt.
+    func openMenu(_ show: @escaping () -> Void) {
+        guard !reporting else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        guard composer.isFocused else { return show() }
+        composer.blur()
         Task { @MainActor in
-            // Laisse l'aperçu se refermer avant que la réaction locale ne change la mise en page.
-            try? await Task.sleep(for: .milliseconds(250))
-            workspace.toggleReaction(emoji, on: wire)
+            try? await Task.sleep(for: .milliseconds(320))
+            show()
         }
     }
 
@@ -496,15 +517,15 @@ struct MessagingConversationView: View {
             .showAvatar(isGeneral)
             .avatarSize(avatarSize: ExyteBubbleMetrics.avatar)
             .avatarBuilder { user in MessagingThreadAvatar(workspace: workspace, user: user) }
-            .swipeActions(edge: .leading, performsFirstActionWithFullSwipe: true, items: [replySwipe(thread)])
             .showScrollToBottomButton(false)
             .showNetworkConnectionProblem(false)
-            .showMessageMenuOnLongPress(!thread.reporting)
+            // Appui long et glisser sont portés par la ligne : plus courts, et le clavier se ferme avant le menu.
+            .showMessageMenuOnLongPress(false)
             .linkPreviewsEnabled(false)
             .setAvailableInputs([.text])
             .keyboardDismissMode(.interactive)
             .setMessageFont(UIFont.preferredFont(forTextStyle: .body))
-            .messageMenuAnimationDuration(reduceMotion ? 0.1 : 0.25)
+            .messageMenuAnimationDuration(reduceMotion ? 0.1 : 0.15)
             .contentInsets(top: pinned ? DrivyLayout.tapTarget : 0)
             .onContentOffsetChange { thread.offsetChanged($0) }
             .scrollTo(thread.scrollRequest)
@@ -515,17 +536,6 @@ struct MessagingConversationView: View {
                                shouldShowOverviewFor: { !$0.reactions.isEmpty })
             .localization(.drivy)
             .chatTheme(.drivy)
-    }
-
-    private func replySwipe(_ thread: MessagingThreadModel) -> SwipeAction {
-        SwipeAction(action: { message, _ in thread.reply(displayID: message.id) },
-                    activeFor: { thread.canReact(displayID: $0.id) },
-                    background: DrivyTheme.canvas) {
-            Image(systemName: "arrowshape.turn.up.left.fill")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(DrivyTheme.accent)
-                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-        }
     }
 
     @ViewBuilder private var noticeView: some View {
@@ -653,6 +663,10 @@ private struct MessagingThreadRow: View {
     let thread: MessagingThreadModel
     let params: MessageBuilderParameters
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Glisser vers la gauche : la bulle suit le doigt, la réponse part au relâcher une fois le seuil franchi.
+    @State private var swipe: CGFloat = 0
+    @State private var swipeArmed = false
+    private static let swipeThreshold: CGFloat = 48
 
     private var workspace: MessagingWorkspace { thread.workspace }
 
@@ -677,8 +691,16 @@ private struct MessagingThreadRow: View {
                     MessagingThreadStateLine(thread: thread, item: item)
                         .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
                 }
+                .offset(x: swipe)
+                .overlay(alignment: .trailing) { swipeHint }
             }
             .padding(.vertical, 2)
+            .gesture(MessagingReplySwipeGesture(isEnabled: thread.canReact(displayID: item.id),
+                                                onChanged: { swipeChanged($0) },
+                                                onEnded: { swipeEnded(item.id) }))
+            .gesture(MessagingMenuPressGesture(isEnabled: !thread.reporting) {
+                thread.openMenu(params.showContextMenuClosure)
+            })
             .background(highlighted ? DrivyTheme.accentSoft : Color.clear,
                         in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             .animation(DrivyMotion.settle(reduceMotion), value: highlighted)
@@ -698,12 +720,57 @@ private struct MessagingThreadRow: View {
                 .accessibilityAction(named: "Voir les votes") { thread.votersFor = wire }
                 .accessibilityActions { actions(item) }
         } else {
+            let hasReactions = !(item.message?.meta.reactions.isEmpty ?? true)
             params.defaultMessageView()
+                // Les pastilles de réaction d'Exyte n'ont pas d'action : un appui dans leur bande, au-dessus de la
+                // bulle, retire ma réaction (ou reprend la seule présente) sans passer par le menu.
+                .simultaneousGesture(SpatialTapGesture().onEnded { value in
+                    guard value.location.y <= reactionBand else { return }
+                    if !thread.tapReactions(displayID: item.id) { thread.openMenu(params.showContextMenuClosure) }
+                }, including: hasReactions && !thread.reporting ? .all : .subviews)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(thread.accessibilityLabel(item))
                 .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
                 .accessibilityActions { actions(item) }
         }
+    }
+
+    /// Hauteur de la bande des réactions dans `MessageView` d'Exyte 3.3.0 : marge haute de la ligne, puis pastilles
+    /// (ligne de texte + 2 × 6 pt), dont le bas chevauche la bulle.
+    private var reactionBand: CGFloat {
+        let groupTop = params.positionInGroup == .first || params.positionInGroup == .single
+        let dayTop = params.positionInMessagesSection == .first || params.positionInMessagesSection == .single
+        let top: CGFloat = groupTop && !dayTop ? 8 : 4
+        return top + (UIFont.preferredFont(forTextStyle: .body).lineHeight + 12) * 0.8
+    }
+
+    @ViewBuilder private var swipeHint: some View {
+        if swipe < 0 {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(swipeArmed ? DrivyTheme.accent : DrivyTheme.muted)
+                .scaleEffect(swipeArmed ? 1.1 : 0.85)
+                .opacity(min(1, -swipe / Self.swipeThreshold))
+                .padding(.trailing, DrivySpacing.m)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func swipeChanged(_ translation: CGFloat) {
+        let pull = min(0, translation)
+        // Résistance au-delà du seuil : le geste reste court et lisible.
+        swipe = pull > -Self.swipeThreshold ? pull : -Self.swipeThreshold + (pull + Self.swipeThreshold) * 0.3
+        let armed = pull <= -Self.swipeThreshold
+        if armed != swipeArmed {
+            swipeArmed = armed
+            if armed { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        }
+    }
+
+    private func swipeEnded(_ displayID: String) {
+        if swipeArmed { thread.reply(displayID: displayID) }
+        swipeArmed = false
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.2)) { swipe = 0 }
     }
 
     /// Mêmes actions que le menu et le glisser, accessibles sans geste.
@@ -1101,6 +1168,8 @@ private struct MessagingThreadComposer: View {
         .padding(.horizontal, DrivySpacing.xs)
         .padding(.vertical, DrivySpacing.xs)
         .onChange(of: composer.focusRequest) { _, _ in focused = true }
+        .onChange(of: composer.blurRequest) { _, _ in focused = false }
+        .onChange(of: focused) { _, value in composer.isFocused = value }
     }
 
     private func replyPreview(_ message: MessagingWireMessage) -> some View {

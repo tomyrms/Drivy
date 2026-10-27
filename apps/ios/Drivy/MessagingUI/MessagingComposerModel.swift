@@ -23,6 +23,10 @@ import Observation
     private(set) var queuedDates: [UUID: Date] = [:]
     /// Incrémenté pour demander le focus du champ (réponse, mention).
     private(set) var focusRequest = 0
+    /// Incrémenté pour fermer le clavier (ouverture du menu d'un message).
+    private(set) var blurRequest = 0
+    /// Miroir du focus du champ, tenu par la vue.
+    var isFocused = false
 
     init(workspace: MessagingWorkspace, conversationID: UUID) {
         self.workspace = workspace
@@ -81,6 +85,8 @@ import Observation
         replyTo = message
         focusRequest += 1
     }
+
+    func blur() { blurRequest += 1 }
 
     func insertMention(_ person: MessagingContact) {
         guard let replaced = MessagingMentionToken.replacing(in: draft, with: person.displayName) else { return }
