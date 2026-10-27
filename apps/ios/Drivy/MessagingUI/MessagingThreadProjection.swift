@@ -11,12 +11,8 @@ struct MessagingThreadItem: Identifiable, Sendable {
     let id: String
     let source: Source
     let senderID: UUID
-    /// Date d'acceptation serveur ; pour un envoi en attente, date de présentation (jamais affichée comme heure d'envoi).
+    /// Date d'acceptation serveur ; pour un envoi en attente, moment de sa rédaction.
     let date: Date
-    /// Premier message d'un groupe : l'auteur s'affiche (général seulement).
-    let startsGroup: Bool
-    /// Dernier message d'un groupe : heure et accusés s'affichent.
-    let endsGroup: Bool
 
     var message: MessagingWireMessage? {
         if case .message(let message) = source { return message }
@@ -30,35 +26,21 @@ struct MessagingThreadItem: Identifiable, Sendable {
 }
 
 enum MessagingThreadProjection {
-    /// Deux messages du même auteur à moins de cinq minutes forment un groupe.
-    static let groupWindow: TimeInterval = 300
-
     /// Ordre ascendant : messages serveur dans l'ordre reçu, puis envois en attente dans l'ordre de la file.
     /// Les identités sont uniques : un doublon (accusé et relecture simultanés) garde la version serveur.
     /// - Parameters:
     ///   - clientIDs: message serveur → envoi local qui l'a produit, connu après l'accusé.
     ///   - pendingDates: première présentation de chaque envoi en attente, pour un placement stable.
     static func items(messages: [MessagingWireMessage], pending: [MessagingPending], accountID: UUID,
-                      clientIDs: [UUID: UUID], pendingDates: [UUID: Date], now: Date,
-                      calendar: Calendar = .current) -> [MessagingThreadItem] {
-        func grouped(_ a: MessagingWireMessage, _ b: MessagingWireMessage) -> Bool {
-            a.senderID == b.senderID && calendar.isDate(a.acceptedAt, inSameDayAs: b.acceptedAt)
-                && abs(b.acceptedAt.timeIntervalSince(a.acceptedAt)) < groupWindow
-        }
+                      clientIDs: [UUID: UUID], pendingDates: [UUID: Date], now: Date) -> [MessagingThreadItem] {
         var seen: Set<String> = []
         var result: [MessagingThreadItem] = []
         result.reserveCapacity(messages.count + pending.count)
-        for index in messages.indices {
-            let message = messages[index]
+        for message in messages {
             let id = (clientIDs[message.id] ?? message.id).uuidString
             guard seen.insert(id).inserted else { continue }
-            let previous = index > messages.startIndex ? messages[index - 1] : nil
-            let next = index < messages.endIndex - 1 ? messages[index + 1] : nil
-            let newDay = previous.map { !calendar.isDate($0.acceptedAt, inSameDayAs: message.acceptedAt) } ?? true
             result.append(MessagingThreadItem(id: id, source: .message(message), senderID: message.senderID,
-                date: message.acceptedAt,
-                startsGroup: newDay || previous.map { !grouped($0, message) } ?? true,
-                endsGroup: next.map { !grouped(message, $0) } ?? true))
+                                              date: message.acceptedAt))
         }
         // Un envoi en attente reste sous le dernier message reçu, même mis en file avant lui hors connexion.
         let floor = messages.last?.acceptedAt ?? .distantPast
@@ -66,7 +48,7 @@ enum MessagingThreadProjection {
             let id = entry.clientMessageID.uuidString
             guard seen.insert(id).inserted else { continue }
             result.append(MessagingThreadItem(id: id, source: .pending(entry), senderID: accountID,
-                date: max(pendingDates[entry.clientMessageID] ?? now, floor), startsGroup: true, endsGroup: true))
+                                              date: max(pendingDates[entry.clientMessageID] ?? now, floor)))
         }
         return result
     }

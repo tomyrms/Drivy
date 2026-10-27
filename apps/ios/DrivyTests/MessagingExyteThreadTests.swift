@@ -7,11 +7,6 @@ final class MessagingExyteThreadTests: XCTestCase {
     private let school = UUID(), account = UUID(), other = UUID(), conversation = UUID()
     private var scope: MessagingScope { MessagingScope(accountID: account, schoolID: school, accessEpoch: 1) }
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
-    private var calendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Europe/Zurich")!
-        return calendar
-    }
 
     private func wire(_ sender: UUID, at offset: TimeInterval, sequence: Int) -> MessagingWireMessage {
         MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: sender,
@@ -26,7 +21,7 @@ final class MessagingExyteThreadTests: XCTestCase {
     private func items(_ messages: [MessagingWireMessage], pending: [MessagingPending] = [],
                        clientIDs: [UUID: UUID] = [:], dates: [UUID: Date] = [:]) -> [MessagingThreadItem] {
         MessagingThreadProjection.items(messages: messages, pending: pending, accountID: account, clientIDs: clientIDs,
-                                        pendingDates: dates, now: start, calendar: calendar)
+                                        pendingDates: dates, now: start)
     }
 
     // MARK: Projection
@@ -62,17 +57,6 @@ final class MessagingExyteThreadTests: XCTestCase {
     func testServerOrderIsKeptEvenWhenDatesDisagree() {
         let later = wire(other, at: 120, sequence: 1), earlier = wire(other, at: 60, sequence: 2)
         XCTAssertEqual(items([later, earlier]).map(\.id), [later.id.uuidString, earlier.id.uuidString])
-    }
-
-    func testGroupsFollowAuthorFiveMinutesAndDay() {
-        let a = wire(other, at: 0, sequence: 1)
-        let b = wire(other, at: 120, sequence: 2)          // même auteur, 2 min : même groupe
-        let c = wire(other, at: 120 + 301, sequence: 3)    // plus de 5 min : nouveau groupe
-        let d = wire(account, at: 120 + 360, sequence: 4)  // autre auteur
-        let e = wire(account, at: 86_400 * 2, sequence: 5) // autre jour
-        let result = items([a, b, c, d, e])
-        XCTAssertEqual(result.map(\.startsGroup), [true, false, true, true, true])
-        XCTAssertEqual(result.map(\.endsGroup), [false, true, true, true, true])
     }
 
     func testOnlyAcceptedSendsMapToTheirServerMessage() {

@@ -2,7 +2,8 @@ import ExyteChat
 import SwiftUI
 
 /// Thème Exyte raccordé aux tokens Drivy (#182) : aucune couleur de démonstration de la bibliothèque.
-/// Les bulles restent dessinées par Drivy ; ces couleurs couvrent le fond de liste, le menu et les reprises internes.
+/// Bulle émise : aplat d'accent doux et encre Drivy. Bulle reçue : surface atténuée, lisible sur le fond clair
+/// sans le filet que la bulle d'Exyte ne dessine pas.
 extension ChatTheme {
     static var drivy: ChatTheme {
         ChatTheme(colors: ChatTheme.Colors(
@@ -14,7 +15,7 @@ extension ChatTheme {
             messageReadStatus: DrivyTheme.accent,
             messageMyText: DrivyTheme.text,
             messageMyTimeText: DrivyTheme.textTertiary,
-            messageFriendBG: DrivyTheme.surfaceRaised,
+            messageFriendBG: DrivyTheme.surfaceMuted,
             messageFriendText: DrivyTheme.text,
             messageFriendTimeText: DrivyTheme.textTertiary,
             messageSystemBG: DrivyTheme.surfaceMuted,

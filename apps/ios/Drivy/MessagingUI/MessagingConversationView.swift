@@ -1,8 +1,381 @@
+import ExyteChat
 import SwiftUI
 
-/// Conversation v2 : fil ancré en bas (anciens en haut, récents près du composeur), séparateurs de jour,
-/// regroupement par auteur, envois en attente intégrés au fil, bandeau épinglé, recherche locale,
-/// sélection pour signalement, lecture seule après la fin du lien (composeur masqué).
+/// Actions du menu Exyte, calculées par message à partir des droits Drivy puis revérifiées à l'exécution.
+/// Aucune n'est marquée destructive : l'alerte interne d'Exyte n'est pas traduite, la confirmation reste Drivy.
+enum MessagingExyteMenuAction: String, CaseIterable, MessageMenuAction, Sendable {
+    case reply, pin, unpin, copy, deleteForMe, deleteForEveryone
+
+    static let customDataKey = "drivy.menu"
+
+    func title() -> String {
+        switch self {
+        case .reply: "Répondre"
+        case .pin: "Épingler"
+        case .unpin: "Désépingler"
+        case .copy: "Copier"
+        case .deleteForMe: "Supprimer pour moi"
+        case .deleteForEveryone: "Supprimer pour tous"
+        }
+    }
+
+    func icon() -> Image {
+        switch self {
+        case .reply: Image(systemName: "arrowshape.turn.up.left")
+        case .pin: Image(systemName: "pin")
+        case .unpin: Image(systemName: "pin.slash")
+        case .copy: Image(systemName: "doc.on.doc")
+        case .deleteForMe: Image(systemName: "trash")
+        case .deleteForEveryone: Image(systemName: "trash.slash")
+        }
+    }
+
+    static func menuItems(for message: ExyteChat.Message) -> [MessagingExyteMenuAction] {
+        message.customData[customDataKey] as? [MessagingExyteMenuAction] ?? []
+    }
+}
+
+/// Repères de `MessageView` d'Exyte 3.3.0 : citation, auteur et états s'alignent sur la bulle de la bibliothèque.
+private enum ExyteBubbleMetrics {
+    static let screenEdge: CGFloat = 12
+    static let spacing: CGFloat = 6
+    static let status: CGFloat = 10
+    static let opposite: CGFloat = 70
+    static let avatar: CGFloat = 32
+    static let radius: CGFloat = 20
+}
+
+/// État de présentation du fil. Les builders d'Exyte sont capturés une fois par la liste : ils ne lisent que ce
+/// modèle et le workspace, jamais une valeur figée au premier rendu.
+@MainActor
+@Observable final class MessagingThreadModel {
+    let workspace: MessagingWorkspace
+    let composer: MessagingComposerModel
+    let conversationID: UUID
+    let isGeneral: Bool
+    /// Mise en évidence brève après une citation, une épingle ou une recherche (identifiant serveur).
+    private(set) var highlighted: UUID?
+    var reporting = false
+    var reportSelection: Set<UUID> = []
+    private(set) var atBottom = true
+    var unseenBelow = false
+    private(set) var scrollRequest: ScrollToParams?
+    private(set) var notice: String?
+    var confirmDeleteForEveryone: MessagingWireMessage?
+    var confirmClosePoll: MessagingWireMessage?
+    var votersFor: MessagingWireMessage?
+    var showPollComposer = false
+    private(set) var loadingOlder = false
+    /// Hauteur du pied (composeur, signalement), qu'Exyte place sous la liste : le bouton de retour reste au-dessus.
+    private(set) var footerHeight: CGFloat = 0
+    /// Déchiffrement tenté, réussi ou non : distingue « en cours » de « indisponible ».
+    private(set) var attempted: Set<UUID> = []
+
+    init(workspace: MessagingWorkspace, composer: MessagingComposerModel, conversationID: UUID, isGeneral: Bool) {
+        self.workspace = workspace
+        self.composer = composer
+        self.conversationID = conversationID
+        self.isGeneral = isGeneral
+    }
+
+    private var access: MessagingConversationAccess { workspace.access(for: conversationID) }
+    private var accountID: UUID { workspace.scope.accountID }
+
+    var items: [MessagingThreadItem] {
+        MessagingThreadProjection.items(messages: workspace.visibleMessages(conversationID),
+            pending: composer.visibleQueue, accountID: accountID,
+            clientIDs: MessagingThreadProjection.clientIDs(workspace.sendStates),
+            pendingDates: composer.queuedDates, now: Date())
+    }
+
+    func item(_ displayID: String) -> MessagingThreadItem? { items.first { $0.id == displayID } }
+
+    func displayID(for messageID: UUID) -> String? { items.first { $0.message?.id == messageID }?.id }
+
+    // MARK: Modèle Exyte
+
+    /// Bulle, heure, coches d'état et réactions sont rendues par Exyte. Le texte déchiffré ne vit qu'en mémoire,
+    /// sans aperçu de lien ni cache de la bibliothèque.
+    func exyteMessage(_ item: MessagingThreadItem) -> ExyteChat.Message {
+        let actions = menuActions(item)
+        var message = ExyteChat.Message(id: item.id, user: user(item.senderID), status: status(item),
+                                        createdAt: item.date, attributedText: text(item), reactions: reactions(item),
+                                        customData: [MessagingExyteMenuAction.customDataKey: actions])
+        // L'égalité d'Exyte ignore `customData` : une révision déterministe force la reconfiguration de la cellule
+        // quand ses actions ou ses ajouts Drivy changent, sans changer d'identité.
+        var hasher = Hasher()
+        hasher.combine(actions)
+        hasher.combine(reporting)
+        if let wire = item.message {
+            hasher.combine(wire.meta.pinned)
+            hasher.combine(wire.meta.replyToMessageID)
+            hasher.combine(wire.meta.poll != nil)
+        }
+        message.triggerRedraw = Self.revision(hasher.finalize())
+        return message
+    }
+
+    func user(_ personID: UUID) -> ExyteChat.User {
+        ExyteChat.User(id: personID.uuidString, name: workspace.displayName(personID), avatarURL: nil,
+                       isCurrentUser: personID == accountID)
+    }
+
+    private func text(_ item: MessagingThreadItem) -> AttributedString {
+        if let entry = item.pending {
+            let content = entry.recoveryContent.flatMap(MessagingPlainContent.decode)
+            if let text = content?.text { return MessagingMentionToken.styled(text, names: workspace.knownDisplayNames) }
+            return AttributedString(content?.summary ?? "Message")
+        }
+        guard let wire = item.message else { return AttributedString() }
+        // L'effacement chez tous n'est annoncé qu'après la relecture serveur.
+        if !wire.meta.deletedForEveryone, workspace.mutation(.deleteForEveryone, on: wire) != nil {
+            return Self.notice("Suppression en cours")
+        }
+        if wire.meta.deletedForEveryone { return Self.notice("Message supprimé") }
+        if let content = workspace.contents[wire.id] {
+            if let text = content.text { return MessagingMentionToken.styled(text, names: workspace.knownDisplayNames) }
+            return AttributedString(content.summary)
+        }
+        if let code = workspace.decryptionCodes[wire.id] { return Self.notice("Illisible sur cet appareil · \(code)") }
+        return Self.notice(attempted.contains(wire.id) ? "Message protégé indisponible" : "Déchiffrement…")
+    }
+
+    private static func notice(_ text: String) -> AttributedString {
+        var value = AttributedString(text)
+        value.inlinePresentationIntent = .emphasized
+        value.foregroundColor = DrivyTheme.muted
+        return value
+    }
+
+    /// Une réaction Exyte par personne : la bulle et l'aperçu du menu montrent qui a réagi.
+    /// La mienne reste provisoire tant que le serveur ne l'a pas confirmée.
+    private func reactions(_ item: MessagingThreadItem) -> [ExyteChat.Reaction] {
+        guard let wire = item.message, !wire.meta.deletedForEveryone else { return [] }
+        var result: [ExyteChat.Reaction] = []
+        for (index, reaction) in wire.meta.reactions.enumerated() {
+            let status = workspace.mutation(.reaction(reaction.emoji), on: wire)?.status
+            for (offset, person) in reaction.personIDs.enumerated() {
+                let provisional = person == accountID && status != nil && status != .confirmed
+                result.append(ExyteChat.Reaction(id: "\(reaction.emoji)|\(person.uuidString)", user: user(person),
+                    createdAt: wire.acceptedAt.addingTimeInterval(Double(index * 1_000 + offset)),
+                    type: .emoji(reaction.emoji), status: provisional ? .sending : .sent))
+            }
+        }
+        return result
+    }
+
+    /// Coches seulement pour un événement réel : accusé serveur pour « envoyé », reçu de lecture pour « lu ».
+    private func status(_ item: MessagingThreadItem) -> ExyteChat.Message.Status? {
+        if let entry = item.pending {
+            switch workspace.sendStatus(entry.clientMessageID) {
+            case .failed?, .unconfirmed?, .uncertain?:
+                // L'icône d'erreur d'Exyte renvoie ce brouillon vide : il ne porte que l'identité de l'envoi.
+                return .error(DraftMessage(id: item.id, text: "", medias: [], giphyMedia: nil, recording: nil,
+                                           replyMessage: nil, createdAt: item.date))
+            case .accepted?: return .sent
+            default: return .sending
+            }
+        }
+        guard let wire = item.message, wire.senderID == accountID, !wire.meta.deletedForEveryone else { return nil }
+        let readers = workspace.readers(of: wire)
+        return readers.isEmpty ? .sent : .readBy(readers.map(\.uuidString))
+    }
+
+    func menuActions(_ item: MessagingThreadItem) -> [MessagingExyteMenuAction] {
+        guard !reporting else { return [] }
+        guard let wire = item.message else { return pendingText(item) == nil ? [] : [.copy] }
+        var actions: [MessagingExyteMenuAction] = []
+        if !wire.meta.deletedForEveryone && access.canWrite {
+            actions += [.reply, wire.meta.pinned ? .unpin : .pin]
+        }
+        if !wire.meta.deletedForEveryone, workspace.contents[wire.id]?.text != nil { actions.append(.copy) }
+        actions.append(.deleteForMe)
+        if !wire.meta.deletedForEveryone,
+           MessagingPermissions.canDeleteForEveryone(senderID: wire.senderID, account: accountID, access: access) {
+            actions.append(.deleteForEveryone)
+        }
+        return actions
+    }
+
+    private func pendingText(_ item: MessagingThreadItem) -> String? {
+        item.pending?.recoveryContent.flatMap(MessagingPlainContent.decode)?.text
+    }
+
+    private static func revision(_ value: Int) -> UUID? {
+        let hex = String(UInt64(bitPattern: Int64(value)), radix: 16)
+        let padded = String(repeating: "0", count: 16 - hex.count) + hex
+        return UUID(uuidString: "00000000-0000-0000-\(padded.prefix(4))-\(padded.dropFirst(4))")
+    }
+
+    // MARK: Accessibilité
+
+    /// Une bulle = un élément VoiceOver : auteur, texte, heure, réactions et état réel.
+    func accessibilityLabel(_ item: MessagingThreadItem) -> String {
+        var parts = [item.senderID == accountID ? "Vous" : workspace.displayName(item.senderID),
+                     String(text(item).characters), item.date.formatted(date: .omitted, time: .shortened)]
+        if let wire = item.message {
+            if wire.meta.pinned { parts.append("épinglé") }
+            let reactions = wire.meta.reactions.map { "\(MessagingReactionPalette.label($0.emoji)) \($0.personIDs.count)" }
+            if !reactions.isEmpty { parts.append("réactions : " + reactions.joined(separator: ", ")) }
+            let readers = wire.senderID == accountID ? workspace.readers(of: wire) : []
+            if !readers.isEmpty {
+                parts.append(isGeneral ? "lu par " + readers.map(workspace.displayName).joined(separator: ", ") : "lu")
+            }
+        } else if let entry = item.pending {
+            switch workspace.sendStatus(entry.clientMessageID) {
+            case .failed?: parts.append("échec de l'envoi")
+            case .unconfirmed?, .uncertain?: parts.append("envoi non confirmé")
+            case .offline?: parts.append("en attente de connexion")
+            case .accepted?: parts.append("envoyé")
+            default: parts.append("envoi en cours")
+            }
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    func needsSendRetry(_ item: MessagingThreadItem) -> Bool {
+        guard let entry = item.pending else { return false }
+        switch workspace.sendStatus(entry.clientMessageID) {
+        case .failed?, .unconfirmed?, .uncertain?: return true
+        default: return false
+        }
+    }
+
+    // MARK: Actions
+
+    private func canInteract(_ message: MessagingWireMessage) -> Bool {
+        !message.meta.deletedForEveryone && access.canWrite && !reporting
+    }
+
+    /// Les droits sont relus au moment de l'action : un menu resté ouvert n'élargit jamais l'accès.
+    func perform(_ action: MessagingExyteMenuAction, displayID: String) {
+        guard let item = item(displayID) else { return }
+        switch action {
+        case .copy:
+            if let wire = item.message {
+                guard !wire.meta.deletedForEveryone, let text = workspace.contents[wire.id]?.text else { return }
+                UIPasteboard.general.string = text
+            } else if let text = pendingText(item) {
+                UIPasteboard.general.string = text
+            }
+        case .reply:
+            guard let wire = item.message, canInteract(wire) else { return }
+            composer.reply(to: wire)
+        case .pin, .unpin:
+            guard let wire = item.message, canInteract(wire) else { return }
+            workspace.setPinned(wire, pinned: action == .pin)
+        case .deleteForMe:
+            guard let wire = item.message else { return }
+            workspace.delete(wire, for: .me)
+        case .deleteForEveryone:
+            guard let wire = item.message, !wire.meta.deletedForEveryone,
+                  MessagingPermissions.canDeleteForEveryone(senderID: wire.senderID, account: accountID, access: access)
+            else { return }
+            confirmDeleteForEveryone = wire
+        }
+    }
+
+    func canReact(displayID: String) -> Bool {
+        guard let wire = item(displayID)?.message else { return false }
+        return canInteract(wire)
+    }
+
+    /// Exyte ferme le menu avant cet appel (#102) ; l'intention est posée sans attendre le réseau.
+    func react(_ reaction: ReactionType, displayID: String) {
+        guard case .emoji(let emoji) = reaction, MessagingReactionPalette.all.contains(emoji),
+              let wire = item(displayID)?.message, canInteract(wire) else { return }
+        let workspace = workspace
+        Task { @MainActor in
+            // Laisse l'aperçu se refermer avant que la réaction locale ne change la mise en page.
+            try? await Task.sleep(for: .milliseconds(250))
+            workspace.toggleReaction(emoji, on: wire)
+        }
+    }
+
+    func reply(displayID: String) {
+        guard let wire = item(displayID)?.message, canInteract(wire) else { return }
+        composer.reply(to: wire)
+    }
+
+    /// Même envoi, même identifiant : jamais un second message.
+    func retrySend(displayID: String) {
+        guard let entry = item(displayID)?.pending else { return }
+        composer.retry(entry)
+    }
+
+    func decrypt(_ message: MessagingWireMessage) async {
+        _ = await workspace.content(for: message)
+        attempted.insert(message.id)
+    }
+
+    func toggleReport(_ id: UUID) {
+        if reportSelection.contains(id) { reportSelection.remove(id) } else { reportSelection.insert(id) }
+    }
+
+    // MARK: Défilement
+
+    /// Liste inversée : un décalage nul est le bas du fil.
+    func offsetChanged(_ offset: CGFloat) {
+        let bottom = offset < 48
+        if bottom != atBottom { atBottom = bottom }
+        if bottom && unseenBelow { unseenBelow = false }
+    }
+
+    func footerResized(_ height: CGFloat) {
+        if abs(height - footerHeight) > 0.5 { footerHeight = height }
+    }
+
+    func scrollToNewest() {
+        unseenBelow = false
+        request(ScrollToParams(.newestMessage))
+    }
+
+    /// La demande est retirée après sa prise en compte : la même cible peut être redemandée.
+    private func request(_ params: ScrollToParams) {
+        scrollRequest = params
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(800))
+            if scrollRequest == params { scrollRequest = nil }
+        }
+    }
+
+    /// Les anciens messages s'ajoutent au-dessus ; Exyte garde le premier message visible à sa place.
+    func loadOlder() async {
+        guard !loadingOlder, workspace.canLoadMoreMessages(conversationID) else { return }
+        loadingOlder = true
+        await workspace.loadMessages(conversationID, more: true)
+        loadingOlder = false
+    }
+
+    /// Citation, épingle ou recherche : charge le contexte si besoin, puis met le message brièvement en évidence.
+    func jump(to id: UUID) async {
+        var pages = 0
+        while displayID(for: id) == nil, workspace.canLoadMoreMessages(conversationID), pages < 10 {
+            await workspace.loadMessages(conversationID, more: true)
+            pages += 1
+        }
+        guard let target = displayID(for: id) else {
+            await show(notice: "Message indisponible")
+            return
+        }
+        // Laisse la feuille de recherche se refermer : un défilement lancé pendant sa disparition est perdu.
+        try? await Task.sleep(for: .milliseconds(350))
+        request(ScrollToParams(messageID: target, position: .middle))
+        highlighted = id
+        try? await Task.sleep(for: .milliseconds(1_500))
+        if highlighted == id { highlighted = nil }
+    }
+
+    func show(notice text: String) async {
+        notice = text
+        AccessibilityNotification.Announcement(text).post()
+        try? await Task.sleep(for: .seconds(3))
+        if notice == text { notice = nil }
+    }
+}
+
+/// Conversation (#182) : liste, bulles, heure, coches, réactions, avatars, menu et glisser pour répondre d'Exyte Chat,
+/// aux couleurs Drivy ; composeur, sondages, citations, droits, E2EE, file protégée et états d'envoi restent Drivy.
 struct MessagingConversationView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,251 +389,779 @@ struct MessagingConversationView: View {
     let mutedUntil: Date?
     let readStateVersion: Int
     let isGeneral: Bool
-    @State private var selectedMentions: [MessagingMentionSelection] = []
-    @State private var draft = ""
-    @State private var draftReady = false
-    @State private var draftFailure: String?
-    @State private var queued: [MessagingPending] = []
-    /// Échec avant la mise en file (protection indisponible, contexte changé) : le brouillon reste.
-    @State private var deliveryLabel: String?
-    @State private var sending = false
-    @State private var replyTo: MessagingWireMessage?
-    @State private var showPollComposer = false
+    @State private var thread: MessagingThreadModel
     @State private var showSearch = false
     @State private var showMembers = false
-    @State private var reporting = false
-    @State private var reportSelection: Set<UUID> = []
     @State private var reportSent = false
-    @State private var scrollTarget: UUID?
-    @State private var highlighted: UUID?
-    @State private var notice: String?
-    @State private var atBottom = true
-    @State private var unseenBelow = false
-    @State private var loadingOlder = false
-    /// Saut en cours vers une citation, une épingle ou un résultat : le suivi du bas ne doit pas le contrarier.
-    @State private var jumping: UUID?
-    @FocusState private var composerFocused: Bool
 
-    private static let bottomID = "messaging.thread.bottom"
-    /// Deux messages du même auteur à moins de cinq minutes forment un groupe.
-    private static let groupWindow: TimeInterval = 300
+    init(workspace: MessagingWorkspace, conversationID: UUID, title: String, detail: String?, lastSequence: Int,
+         lastReadSequence: Int, mutedUntil: Date?, readStateVersion: Int, isGeneral: Bool) {
+        self.workspace = workspace
+        self.conversationID = conversationID
+        self.title = title
+        self.detail = detail
+        self.lastSequence = lastSequence
+        self.lastReadSequence = lastReadSequence
+        self.mutedUntil = mutedUntil
+        self.readStateVersion = readStateVersion
+        self.isGeneral = isGeneral
+        let composer = MessagingComposerModel(workspace: workspace, conversationID: conversationID)
+        _thread = State(initialValue: MessagingThreadModel(workspace: workspace, composer: composer,
+                                                           conversationID: conversationID, isGeneral: isGeneral))
+    }
 
-    private var access: MessagingConversationAccess { workspace.access(for: conversationID) }
-    /// Ordre ascendant : le plus ancien en haut, le plus récent en bas.
-    private var messages: [MessagingWireMessage] { workspace.visibleMessages(conversationID) }
+    private var composer: MessagingComposerModel { thread.composer }
 
     var body: some View {
         VStack(spacing: 0) {
-            statusStrip
-            ScrollViewReader { proxy in
-                thread(proxy)
-                    .overlay(alignment: .top) {
-                        // Épinglé en pastille flottante au-dessus du fil : il ne pousse plus le contenu.
-                        VStack(spacing: 0) {
-                            MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { scrollTarget = $0 }
-                            noticeView
+            MessagingConversationStatusStrip(workspace: workspace, conversationID: conversationID,
+                                             detail: detail, mutedUntil: mutedUntil)
+            chat
+                .overlay(alignment: .top) {
+                    VStack(spacing: 0) {
+                        MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { id in
+                            Task { await thread.jump(to: id) }
                         }
+                        noticeView
                     }
-                    .overlay(alignment: .bottomTrailing) { jumpToBottom(proxy) }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        // #100 : fond Drivy continu jusqu'au bord, clavier compris ; seul le fond déborde.
-                        footer.background(DrivyTheme.surface.ignoresSafeArea(.container, edges: .bottom)
-                            .ignoresSafeArea(.keyboard, edges: .bottom))
-                    }
-                    .onChange(of: scrollTarget) { _, target in
-                        guard let target else { return }
-                        scrollTarget = nil
-                        Task { await jump(to: target, proxy: proxy) }
-                    }
-                    .onChange(of: messages.last?.id) { _, _ in
-                        if atBottom || messages.last?.senderID == workspace.scope.accountID {
-                            scrollToBottom(proxy, animated: true)
-                        } else {
-                            unseenBelow = true
-                        }
-                    }
-                    .onChange(of: queued.count) { old, new in
-                        if new > old { scrollToBottom(proxy, animated: true) }
-                    }
-                    .onChange(of: composerFocused) { _, focused in
-                        guard focused, atBottom else { return }
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(300))
-                            scrollToBottom(proxy, animated: true)
-                        }
-                    }
-            }
+                }
+                .overlay(alignment: .bottomTrailing) { jumpToBottom }
         }
         .background(DrivyTheme.canvas.ignoresSafeArea())
         .toolbarBackground(DrivyTheme.canvas, for: .navigationBar)
-        .navigationTitle(reporting ? "Signaler" : title)
+        .navigationTitle(thread.reporting ? "Signaler" : title)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: scenePhase == .active && atBottom ? workspace.lastReadableSequence(conversationID) : nil) { if scenePhase == .active, atBottom, let seq = workspace.lastReadableSequence(conversationID) { await workspace.conversationViewed(conversationID, upTo: seq) } }
-        .onAppear { connectivity.start(); MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID, atBottom: atBottom) }
-        .onDisappear { connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
-        .onChange(of: atBottom) { _, bottom in MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID, atBottom: bottom) }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await workspace.refreshVisible(conversationID: conversationID) } }
-        }
-        .onChange(of: connectivity.available) { _, available in
-            workspace.setNetworkAvailable(available)
-            if available { Task { await workspace.refreshVisible(conversationID: conversationID) } }
-        }
-        .onChange(of: workspace.error) { _, failure in
-            if failure == .contextChanged || failure == .accessChanged {
-                draft = ""; queued = []; selectedMentions = []; draftReady = false; replyTo = nil
-            }
-        }
-        .onChange(of: workspace.resumeGeneration) { _, _ in
-            Task {
-                guard workspace.error != .accessChanged && workspace.error != .contextChanged else { return }
-                do { queued = try await workspace.outbox.pending(currentScope: workspace.scope)
-                    .filter { $0.conversationID == conversationID } }
-                catch { deliveryLabel = (error as? MessagingFailure ?? .protectionUnavailable).localizedDescription }
-            }
-        }
-        .sheet(isPresented: $showPollComposer) {
+        .toolbar { toolbar }
+        .modifier(lifecycle)
+        .sheet(isPresented: $thread.showPollComposer) {
             MessagingPollComposer { poll, multiple in
-                await send(MessagingPlainContent(poll: poll), pollAllowsMultiple: multiple)
+                await composer.send(MessagingPlainContent(poll: poll), pollAllowsMultiple: multiple)
             }
         }
         .sheet(isPresented: $showSearch) {
             // La feuille se ferme depuis ici : avec `.searchable` actif, `dismiss()` ne fermait que le champ.
-            MessagingSearchView(workspace: workspace, conversationID: conversationID, conversationTitle: title) {
+            MessagingSearchView(workspace: workspace, conversationID: conversationID, conversationTitle: title) { id in
                 showSearch = false
-                scrollTarget = $0
+                Task { await thread.jump(to: id) }
+            }
+        }
+        .sheet(item: $thread.votersFor) { message in
+            // Présentée par la conversation, pas depuis la cellule : état du sondage relu à l'ouverture.
+            if let poll = (workspace.message(message.id, in: conversationID) ?? message).meta.poll {
+                MessagingPollVotersSheet(workspace: workspace, poll: poll, content: workspace.contents[message.id]?.poll)
             }
         }
         .navigationDestination(isPresented: $showMembers) { MessagingMembersView(workspace: workspace) }
         .alert("Signalement transmis", isPresented: $reportSent) { Button("OK") {} }
-        .toolbar { toolbar }
-        .task {
-            if isGeneral { await workspace.loadGeneralMembers(); await workspace.loadMembers() }
-            if !workspace.hasLoadedMessages(conversationID) { await workspace.loadMessages(conversationID) }
-            do {
-                draft = try await workspace.loadDraft(conversationID)
-                queued = try await workspace.outbox.pending(currentScope: workspace.scope)
-                    .filter { $0.conversationID == conversationID }
-                draftReady = true
-            } catch { draftFailure = (error as? MessagingFailure ?? .protectionUnavailable).localizedDescription }
+        .confirmationDialog("Supprimer pour tout le monde ?",
+                            isPresented: Binding(get: { thread.confirmDeleteForEveryone != nil },
+                                                 set: { if !$0 { thread.confirmDeleteForEveryone = nil } }),
+                            titleVisibility: .visible, presenting: thread.confirmDeleteForEveryone) { message in
+            Button("Supprimer pour tout le monde", role: .destructive) { workspace.delete(message, for: .everyone) }
         }
-        .task(id: draft) {
-            guard draftReady, access.canWrite else { return }
-            do {
-                try await Task.sleep(for: .milliseconds(250))
-                try Task.checkCancellation()
-                try await workspace.saveDraft(draft, conversationID: conversationID)
-                draftFailure = nil
-            } catch is CancellationError {} catch {
-                draftFailure = (error as? MessagingFailure ?? .protectionUnavailable).localizedDescription
+        .confirmationDialog("Clore le sondage ?",
+                            isPresented: Binding(get: { thread.confirmClosePoll != nil },
+                                                 set: { if !$0 { thread.confirmClosePoll = nil } }),
+                            titleVisibility: .visible, presenting: thread.confirmClosePoll) { message in
+            Button("Clore le sondage", role: .destructive) { Task { await workspace.closePoll(message) } }
+        }
+    }
+
+    private var lifecycle: MessagingThreadLifecycle {
+        MessagingThreadLifecycle(workspace: workspace, thread: thread, connectivity: connectivity,
+                                 conversationID: conversationID, scenePhase: scenePhase)
+    }
+
+    // MARK: Fil
+
+    @ViewBuilder private var chat: some View {
+        let thread = thread
+        let pinned = !workspace.pinnedMessages(conversationID).isEmpty
+        ChatView(messages: thread.items.map(thread.exyteMessage), chatType: .conversation, replyMode: .quote,
+                 // Exyte ne rappelle cette fonction que pour l'icône d'erreur d'un envoi : c'est un nouvel essai.
+                 didSendMessage: { draft in if let id = draft.id { thread.retrySend(displayID: id) } },
+                 messageBuilder: { params in MessagingThreadRow(thread: thread, params: params) },
+                 inputViewBuilder: { _ in MessagingThreadFooter(thread: thread, onReported: { reportSent = true }) },
+                 messageMenuAction: { (action: MessagingExyteMenuAction, _, message) in
+                     thread.perform(action, displayID: message.id)
+                 })
+            .showDateHeaders(true)
+            .dateHeaderBuilder { date in MessagingDaySeparator(date: date) }
+            .mainHeaderBuilder { MessagingOlderMessagesButton(thread: thread) }
+            .enableLoadMoreOlderMessages(hasMoreToLoad: workspace.canLoadMoreMessages(conversationID),
+                                         handleClosure: { await thread.loadOlder() },
+                                         loadingIndicatorBuilder: { ProgressView().padding(DrivySpacing.s) })
+            .showMessageTimeView(true)
+            .showUsername(false)
+            .showAvatar(isGeneral)
+            .avatarSize(avatarSize: ExyteBubbleMetrics.avatar)
+            .avatarBuilder { user in MessagingThreadAvatar(workspace: workspace, user: user) }
+            .swipeActions(edge: .leading, performsFirstActionWithFullSwipe: true, items: [replySwipe(thread)])
+            .showScrollToBottomButton(false)
+            .showNetworkConnectionProblem(false)
+            .showMessageMenuOnLongPress(!thread.reporting)
+            .linkPreviewsEnabled(false)
+            .setAvailableInputs([.text])
+            .keyboardDismissMode(.interactive)
+            .setMessageFont(UIFont.preferredFont(forTextStyle: .body))
+            .messageMenuAnimationDuration(reduceMotion ? 0.1 : 0.25)
+            .contentInsets(top: pinned ? DrivyLayout.tapTarget : 0)
+            .onContentOffsetChange { thread.offsetChanged($0) }
+            .scrollTo(thread.scrollRequest)
+            .onMessageReaction(didReactTo: { message, draft in thread.react(draft.type, displayID: message.id) },
+                               canReactTo: { thread.canReact(displayID: $0.id) },
+                               availableReactionsFor: { _ in MessagingReactionPalette.all.map { ReactionType.emoji($0) } },
+                               allowEmojiSearchFor: { _ in false },
+                               shouldShowOverviewFor: { !$0.reactions.isEmpty })
+            .localization(.drivy)
+            .chatTheme(.drivy)
+    }
+
+    private func replySwipe(_ thread: MessagingThreadModel) -> SwipeAction {
+        SwipeAction(action: { message, _ in thread.reply(displayID: message.id) },
+                    activeFor: { thread.canReact(displayID: $0.id) },
+                    background: DrivyTheme.canvas) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(DrivyTheme.accent)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+        }
+    }
+
+    @ViewBuilder private var noticeView: some View {
+        if let notice = thread.notice {
+            Label(notice, systemImage: "exclamationmark.bubble")
+                .font(.footnote)
+                .foregroundStyle(DrivyTheme.text)
+                .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
+                .background(DrivyTheme.surfaceRaised, in: Capsule())
+                .overlay(Capsule().stroke(DrivyTheme.border))
+                .padding(.top, DrivySpacing.xs)
+                .transition(.opacity)
+                .accessibilityIdentifier("messaging.notice")
+        }
+    }
+
+    @ViewBuilder private var jumpToBottom: some View {
+        if !thread.atBottom {
+            let unseen = thread.unseenBelow
+            Button { thread.scrollToNewest() } label: {
+                HStack(spacing: DrivySpacing.xxs) {
+                    Image(systemName: "arrow.down")
+                    if unseen { Text("Nouveaux messages").font(.footnote.weight(.semibold)) }
+                }
+                .foregroundStyle(unseen ? DrivyTheme.onAccent : DrivyTheme.accent)
+                .padding(.horizontal, unseen ? DrivySpacing.s : 0)
+                .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
+                .background(unseen ? AnyShapeStyle(DrivyTheme.accentFill) : AnyShapeStyle(DrivyTheme.surfaceRaised), in: Capsule())
+                .overlay(Capsule().stroke(DrivyTheme.border, lineWidth: unseen ? 0 : 1))
+                .shadow(color: DrivyTheme.shadow.opacity(0.12), radius: 6, y: 2)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, DrivySpacing.m)
+            .padding(.bottom, thread.footerHeight + DrivySpacing.s)
+            .accessibilityLabel(unseen ? "Nouveaux messages, revenir en bas" : "Revenir en bas")
+            .accessibilityIdentifier("messaging.scroll.bottom")
+            .transition(.opacity)
+        }
+    }
+
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button("Rechercher", systemImage: "magnifyingglass") { showSearch = true }
+                .accessibilityIdentifier("messaging.search.open")
+            Menu("Options", systemImage: "ellipsis.circle") {
+                if isGeneral { Button("Membres", systemImage: "person.3") { showMembers = true } }
+                Button("Signaler des messages", systemImage: "exclamationmark.bubble") { thread.reporting = true }
+                Divider()
+                Button("Mettre en sourdine une heure") {
+                    Task { await workspace.silence(conversationID: conversationID,
+                        fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(3_600),
+                        fallbackVersion: readStateVersion) }
+                }
+                Button("Réactiver les notifications") {
+                    Task { await workspace.unsilence(conversationID: conversationID,
+                        fallbackSequence: lastReadSequence, fallbackVersion: readStateVersion) }
+                }
+            }
+            .accessibilityIdentifier("messaging.options")
+        }
+    }
+}
+
+/// Cycle de vie de la conversation : chargement, brouillon protégé, lecture réelle, reprise et contexte actif.
+private struct MessagingThreadLifecycle: ViewModifier {
+    let workspace: MessagingWorkspace
+    let thread: MessagingThreadModel
+    let connectivity: MessagingConnectivity
+    let conversationID: UUID
+    let scenePhase: ScenePhase
+
+    private var composer: MessagingComposerModel { thread.composer }
+    /// Dernier message reçu (hors envois locaux), pour décider du suivi du bas.
+    private var lastDelivered: MessagingWireMessage? { workspace.visibleMessages(conversationID).last }
+
+    func body(content: Content) -> some View {
+        content
+            // Lecture : application active ET bas du fil affiché, jamais la seule préparation d'une cellule.
+            .task(id: scenePhase == .active && thread.atBottom ? workspace.lastReadableSequence(conversationID) : nil) {
+                if scenePhase == .active, thread.atBottom, let seq = workspace.lastReadableSequence(conversationID) {
+                    await workspace.conversationViewed(conversationID, upTo: seq)
+                }
+            }
+            .task(id: thread.atBottom) {
+                MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID,
+                                                atBottom: thread.atBottom)
+            }
+            .onAppear { connectivity.start() }
+            .onDisappear { connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
+            .onChange(of: lastDelivered?.id) { _, _ in
+                guard let last = lastDelivered else { return }
+                if last.senderID == workspace.scope.accountID {
+                    if !thread.atBottom { thread.scrollToNewest() }
+                } else if !thread.atBottom {
+                    thread.unseenBelow = true
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await workspace.refreshVisible(conversationID: conversationID) } }
+            }
+            .onChange(of: connectivity.available) { _, available in
+                workspace.setNetworkAvailable(available)
+                if available { Task { await workspace.refreshVisible(conversationID: conversationID) } }
+            }
+            .onChange(of: workspace.error) { _, failure in
+                if failure == .contextChanged || failure == .accessChanged { composer.reset() }
+            }
+            .onChange(of: workspace.resumeGeneration) { _, _ in Task { await composer.resume() } }
+            .task {
+                if thread.isGeneral { await workspace.loadGeneralMembers(); await workspace.loadMembers() }
+                if !workspace.hasLoadedMessages(conversationID) { await workspace.loadMessages(conversationID) }
+                await composer.load()
+            }
+            .task(id: composer.draft) {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled else { return }
+                await composer.persistDraft()
+            }
+    }
+}
+
+/// Ligne du fil : bulle Exyte (ou carte de sondage de même forme), avec les ajouts Drivy alignés sur elle :
+/// auteur dans le général, citation qui mène au message, épingle, états de synchronisation, sélection.
+private struct MessagingThreadRow: View {
+    let thread: MessagingThreadModel
+    let params: MessageBuilderParameters
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var workspace: MessagingWorkspace { thread.workspace }
+
+    var body: some View {
+        if let item = thread.item(params.message.id) {
+            let mine = item.senderID == workspace.scope.accountID
+            let highlighted = item.message.map { thread.highlighted == $0.id } ?? false
+            selectable(item) {
+                VStack(spacing: 2) {
+                    if thread.isGeneral, !mine, params.positionInGroup == .first || params.positionInGroup == .single {
+                        Text(workspace.displayName(item.senderID))
+                            .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                            .padding(.horizontal, ExyteBubbleMetrics.screenEdge)
+                            .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
+                            .accessibilityHidden(true)
+                    }
+                    if let quoted = item.message?.meta.replyToMessageID ?? item.pending?.replyToMessageID {
+                        MessagingThreadQuote(thread: thread, quotedID: quoted, mine: mine)
+                            .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
+                    }
+                    bubble(item, mine: mine)
+                    MessagingThreadStateLine(thread: thread, item: item)
+                        .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
+                }
+            }
+            .padding(.vertical, 2)
+            .background(highlighted ? DrivyTheme.accentSoft : Color.clear,
+                        in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            .animation(DrivyMotion.settle(reduceMotion), value: highlighted)
+            .task(id: item.message?.id) {
+                if let wire = item.message, !wire.meta.deletedForEveryone, workspace.contents[wire.id] == nil {
+                    await thread.decrypt(wire)
+                }
             }
         }
     }
 
-    // MARK: - Fil
+    @ViewBuilder private func bubble(_ item: MessagingThreadItem, mine: Bool) -> some View {
+        if let wire = item.message, !wire.meta.deletedForEveryone, workspace.mutation(.deleteForEveryone, on: wire) == nil,
+           let poll = workspace.contents[wire.id]?.poll, let state = wire.meta.poll {
+            MessagingThreadPollBubble(thread: thread, message: wire, poll: poll, state: state, mine: mine,
+                                      showsAvatar: params.positionInGroup == .last || params.positionInGroup == .single)
+                .accessibilityAction(named: "Voir les votes") { thread.votersFor = wire }
+                .accessibilityActions { actions(item) }
+        } else {
+            params.defaultMessageView()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(thread.accessibilityLabel(item))
+                .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
+                .accessibilityActions { actions(item) }
+        }
+    }
 
-    private func thread(_ proxy: ScrollViewProxy) -> some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                // La pastille épinglée flotte au-dessus du fil : réserver sa hauteur pour ne pas
-                // masquer « Charger les messages précédents » ni le premier message.
-                if !workspace.pinnedMessages(conversationID).isEmpty {
-                    Color.clear.frame(height: DrivyLayout.tapTarget)
-                }
-                if workspace.canLoadMoreMessages(conversationID) {
-                    Button {
-                        Task { await loadOlder(proxy) }
-                    } label: {
-                        HStack(spacing: DrivySpacing.xs) {
-                            if loadingOlder { ProgressView().controlSize(.small) }
-                            Text("Charger les messages précédents")
-                        }
-                        .font(.subheadline)
-                        .frame(minHeight: DrivyLayout.tapTarget)
-                        .padding(.horizontal, DrivySpacing.m)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(DrivyTheme.accent)
-                    .disabled(loadingOlder)
-                    .padding(.vertical, DrivySpacing.xs)
-                }
-                ForEach(rows) { row in
-                    if let day = row.dayBreak { daySeparator(day) }
-                    rowView(row)
-                        .padding(.top, row.startsGroup ? DrivySpacing.xs : 2)
-                        .id(row.message.id)
-                }
-                ForEach(queued.filter { !workspace.isDelivered($0) }, id: \.clientMessageID) { entry in
-                    MessagingPendingBubble(entry: entry, status: workspace.sendStatus(entry.clientMessageID)) {
-                        retry(entry)
-                    }
-                    .padding(.top, 2)
-                    .id(entry.clientMessageID)
-                }
-                Color.clear.frame(height: DrivySpacing.xs).id(Self.bottomID)
+    /// Mêmes actions que le menu et le glisser, accessibles sans geste.
+    @ViewBuilder private func actions(_ item: MessagingThreadItem) -> some View {
+        if thread.canReact(displayID: item.id) {
+            Button("Répondre") { thread.reply(displayID: item.id) }
+            ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
+                Button("Réagir : \(MessagingReactionPalette.label(emoji))") { thread.react(.emoji(emoji), displayID: item.id) }
             }
-            .padding(.horizontal, DrivySpacing.s)
-            .frame(maxWidth: DrivyLayout.readingColumn)
+        }
+        ForEach(thread.menuActions(item).filter { $0 != .reply }, id: \.self) { action in
+            Button(action.title()) { thread.perform(action, displayID: item.id) }
+        }
+        if let wire = item.message, workspace.mutationAttention(for: wire)?.needsAttention == true {
+            Button("Réessayer la synchronisation") { workspace.retryMutations(for: wire) }
+        }
+        if thread.needsSendRetry(item) {
+            Button("Réessayer l'envoi") { thread.retrySend(displayID: item.id) }
+        }
+    }
+
+    @ViewBuilder private func selectable<Content: View>(_ item: MessagingThreadItem,
+                                                        @ViewBuilder content: () -> Content) -> some View {
+        if thread.reporting, let wire = item.message, !wire.meta.deletedForEveryone {
+            let selected = thread.reportSelection.contains(wire.id)
+            Button { thread.toggleReport(wire.id) } label: {
+                HStack(spacing: 0) {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? DrivyTheme.accent : DrivyTheme.muted)
+                        .font(.title3)
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                        .padding(.leading, DrivySpacing.xs)
+                        .accessibilityHidden(true)
+                    content()
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? [.isSelected] : [])
+            .accessibilityHint("Sélectionne ce message pour le signalement")
+        } else {
+            content()
+        }
+    }
+}
+
+/// Aligne un ajout Drivy sur le bord de la bulle Exyte (avatar, coche d'état et marge opposée compris).
+private struct BubbleAligned: ViewModifier {
+    let mine: Bool
+    let isGeneral: Bool
+
+    func body(content: Content) -> some View {
+        let avatar = isGeneral && !mine ? ExyteBubbleMetrics.avatar + ExyteBubbleMetrics.spacing : 0
+        let status = mine ? ExyteBubbleMetrics.status + ExyteBubbleMetrics.spacing : 0
+        content
+            .padding(.leading, mine ? ExyteBubbleMetrics.opposite : ExyteBubbleMetrics.screenEdge + avatar)
+            .padding(.trailing, mine ? ExyteBubbleMetrics.screenEdge + status : ExyteBubbleMetrics.opposite)
+            .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+    }
+}
+
+/// Citation au dessin des réponses Exyte ; un appui mène au message cité, chargé au besoin.
+private struct MessagingThreadQuote: View {
+    let thread: MessagingThreadModel
+    let quotedID: UUID
+    let mine: Bool
+
+    var body: some View {
+        let workspace = thread.workspace
+        let quoted = workspace.message(quotedID, in: thread.conversationID)
+        let summary: String = {
+            guard let quoted else { return "Message indisponible" }
+            if quoted.meta.deletedForEveryone { return "Message supprimé" }
+            return workspace.contents[quotedID]?.summary ?? "Message"
+        }()
+        Button { Task { await thread.jump(to: quotedID) } } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                if let quoted {
+                    Text(workspace.displayName(quoted.senderID)).fontWeight(.semibold).foregroundStyle(DrivyTheme.accent)
+                }
+                Text(summary).lineLimit(2).foregroundStyle(DrivyTheme.muted)
+            }
+            .font(.caption)
+            .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
+            .background((mine ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted).opacity(0.8),
+                        in: RoundedRectangle(cornerRadius: ExyteBubbleMetrics.radius, style: .continuous))
+            .padding(mine ? .trailing : .leading, 10)
+            .overlay(alignment: mine ? .trailing : .leading) {
+                Capsule().fill(DrivyTheme.accent).frame(width: 2)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("En réponse à : \(summary)")
+        .accessibilityHint("Affiche le message cité")
+    }
+}
+
+/// Sondage dans une bulle de même forme et des mêmes couleurs que les bulles Exyte.
+private struct MessagingThreadPollBubble: View {
+    let thread: MessagingThreadModel
+    let message: MessagingWireMessage
+    let poll: MessagingPlainContent.Poll
+    let state: MessagingPollState
+    let mine: Bool
+    let showsAvatar: Bool
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: ExyteBubbleMetrics.spacing) {
+            if thread.isGeneral && !mine {
+                Group {
+                    if showsAvatar {
+                        MessagingThreadAvatar(workspace: thread.workspace, user: thread.user(message.senderID))
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: ExyteBubbleMetrics.avatar, height: ExyteBubbleMetrics.avatar)
+            }
+            VStack(alignment: .trailing, spacing: DrivySpacing.xxs) {
+                MessagingPollCard(workspace: thread.workspace, message: message, poll: poll, state: state,
+                                  onShowVoters: { thread.votersFor = message },
+                                  onClose: { thread.confirmClosePoll = message })
+                Text(message.acceptedAt, style: .time).font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+            }
+            .frame(minWidth: 220)
+            .padding(DrivySpacing.s)
+            .background(mine ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted,
+                        in: RoundedRectangle(cornerRadius: ExyteBubbleMetrics.radius, style: .continuous))
+            if mine { Color.clear.frame(width: ExyteBubbleMetrics.status) }
+        }
+        .padding(.horizontal, ExyteBubbleMetrics.screenEdge)
+        .padding(mine ? .leading : .trailing, ExyteBubbleMetrics.opposite)
+        .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+    }
+}
+
+/// Avatar du général : photo obtenue par le chargeur autorisé de Drivy, jamais une URL confiée à Exyte.
+private struct MessagingThreadAvatar: View {
+    let workspace: MessagingWorkspace
+    let user: ExyteChat.User
+
+    var body: some View {
+        let id = UUID(uuidString: user.id)
+        DrivyAvatar(name: user.name, size: ExyteBubbleMetrics.avatar, photo: id.flatMap { workspace.photos[$0] })
+            .task(id: user.id) {
+                if let id, workspace.members.first(where: { $0.id == id })?.hasPhoto == true {
+                    await workspace.loadPhoto(id)
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// États Drivy sous la bulle : épingle, synchronisation lente, hors connexion, refus, envoi à reprendre.
+private struct MessagingThreadStateLine: View {
+    let thread: MessagingThreadModel
+    let item: MessagingThreadItem
+
+    private var workspace: MessagingWorkspace { thread.workspace }
+
+    var body: some View {
+        if let message = item.message {
+            VStack(alignment: .leading, spacing: 2) {
+                if message.meta.pinned {
+                    Label("Épinglé", systemImage: "pin.fill")
+                        .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                mutationStatus(message)
+            }
+        } else if let entry = item.pending {
+            pendingStatus(entry)
+        }
+    }
+
+    /// Rien sous 5 s, puis lenteur, puis reprise proposée.
+    @ViewBuilder private func mutationStatus(_ message: MessagingWireMessage) -> some View {
+        if let rejection = workspace.rejection(for: message.id) {
+            Button { workspace.clearRejection(message.id) } label: {
+                Label(rejection.summary, systemImage: "exclamationmark.triangle")
+                    .font(.caption2).foregroundStyle(DrivyTheme.danger)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(rejection.summary). \(rejection.failure.localizedDescription)")
+            .accessibilityHint("Masque l'erreur")
+            .accessibilityIdentifier("messaging.mutation.rejected")
+        } else if let status = workspace.mutationAttention(for: message) {
+            switch status {
+            case .slow:
+                Label("Synchronisation…", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityLabel("En cours de synchronisation")
+                    .accessibilityIdentifier("messaging.mutation.slow")
+            case .offline:
+                Label("En attente de connexion", systemImage: "wifi.slash")
+                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityIdentifier("messaging.mutation.offline")
+            case .unconfirmed, .uncertain:
+                Button { workspace.retryMutations(for: message) } label: {
+                    Label("Modification non confirmée · Réessayer", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                        .font(.caption2).foregroundStyle(DrivyTheme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Modification non confirmée")
+                .accessibilityHint("Renvoie la même modification")
+                .accessibilityIdentifier("messaging.mutation.retry")
+            case .storageFailed:
+                Button { workspace.retryMutations(for: message) } label: {
+                    Label("Modification non conservée · Réessayer", systemImage: "exclamationmark.triangle")
+                        .font(.caption2).foregroundStyle(DrivyTheme.danger)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Réessaie de conserver la modification sur cet appareil avant de la synchroniser")
+                .accessibilityIdentifier("messaging.mutation.storageFailed")
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    /// Envoi normal (moins de 5 s) : seule la coche d'Exyte parle. Un vrai problème est nommé et réessayable.
+    @ViewBuilder private func pendingStatus(_ entry: MessagingPending) -> some View {
+        switch workspace.sendStatus(entry.clientMessageID) {
+        case .failed(let failure)?:
+            HStack(spacing: DrivySpacing.xs) {
+                Label("Échec", systemImage: "exclamationmark.circle").foregroundStyle(DrivyTheme.danger)
+                    .accessibilityLabel("Échec : \(MessagingDiagnostics.shared.describe(failure))")
+                retryButton
+            }
+            .font(.caption2)
+        case .unconfirmed?, .uncertain?:
+            HStack(spacing: DrivySpacing.xs) {
+                Label("Non confirmé", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    .foregroundStyle(DrivyTheme.muted)
+                retryButton
+            }
+            .font(.caption2)
+        case .offline?:
+            Label("En attente de connexion", systemImage: "wifi.slash").font(.caption2).foregroundStyle(DrivyTheme.muted)
+        case .slow?:
+            Label("Envoi…", systemImage: "clock").font(.caption2).foregroundStyle(DrivyTheme.muted)
+        default:
+            EmptyView()
+        }
+    }
+
+    private var retryButton: some View {
+        Button("Réessayer") { thread.retrySend(displayID: item.id) }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(DrivyTheme.accent)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .accessibilityHint("Renvoie le même message")
+            .accessibilityIdentifier("messaging.pending.retry")
+    }
+}
+
+/// Bouton explicite, accessible, en tête du fil : la pagination automatique d'Exyte reste un raccourci.
+private struct MessagingOlderMessagesButton: View {
+    let thread: MessagingThreadModel
+
+    var body: some View {
+        if thread.workspace.canLoadMoreMessages(thread.conversationID) {
+            Button {
+                Task { await thread.loadOlder() }
+            } label: {
+                HStack(spacing: DrivySpacing.xs) {
+                    if thread.loadingOlder { ProgressView().controlSize(.small) }
+                    Text("Charger les messages précédents")
+                }
+                .font(.subheadline)
+                .frame(minHeight: DrivyLayout.tapTarget)
+                .padding(.horizontal, DrivySpacing.m)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(DrivyTheme.accent)
+            .disabled(thread.loadingOlder)
+            .padding(.vertical, DrivySpacing.xs)
             .frame(maxWidth: .infinity)
         }
-        .scrollContentBackground(.hidden)
-        .background(DrivyTheme.canvas)
-        .scrollDismissesKeyboard(.interactively)
-        .defaultScrollAnchor(.bottom, for: .initialOffset)
-        // Pas d'ancrage `.alignment` : il recollait le fil au bas dès que le contenu grandissait, ce qui
-        // annulait la position gardée au chargement des précédents et le saut vers un résultat de recherche.
-        // Le suivi du bas est explicite ci-dessous, seulement quand l'utilisateur y est déjà.
-        .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
-            ScrollMetrics(distanceToBottom: geometry.contentSize.height - geometry.visibleRect.maxY,
-                          contentHeight: geometry.contentSize.height,
-                          containerHeight: geometry.containerSize.height)
-        } action: { old, new in
-            // Une variation de taille (clavier, rotation, déchiffrement, réaction) ne fait jamais quitter le bas.
-            if atBottom && (old.containerHeight != new.containerHeight || old.contentHeight != new.contentHeight)
-                && !loadingOlder && jumping == nil {
-                if new.distanceToBottom > 1 { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
-                return
+    }
+}
+
+/// Pied du fil : composeur Drivy, barre de signalement ou lecture seule. Un seul champ, un seul focus.
+private struct MessagingThreadFooter: View {
+    let thread: MessagingThreadModel
+    let onReported: () -> Void
+
+    private var workspace: MessagingWorkspace { thread.workspace }
+
+    var body: some View {
+        Group {
+            if thread.reporting {
+                reportBar
+            } else if workspace.access(for: thread.conversationID).isReadOnly {
+                // Fin du lien : l'historique reste lisible, aucun envoi possible.
+                Label("Lecture seule", systemImage: "lock")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .frame(maxWidth: .infinity).padding()
+                    .accessibilityIdentifier("messaging.readonly")
+            } else {
+                MessagingThreadComposer(thread: thread, composer: thread.composer)
             }
-            atBottom = new.distanceToBottom < 48
-            if atBottom { unseenBelow = false }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { thread.footerResized($0) }
+        // #100 : fond Drivy continu jusqu'au bord, clavier compris ; seul le fond déborde.
+        .background(DrivyTheme.surface.ignoresSafeArea(.container, edges: .bottom)
+            .ignoresSafeArea(.keyboard, edges: .bottom))
     }
 
-    private struct ScrollMetrics: Equatable {
-        let distanceToBottom: CGFloat
-        let contentHeight: CGFloat
-        let containerHeight: CGFloat
-    }
-
-    private struct ThreadRow: Identifiable {
-        let message: MessagingWireMessage
-        let dayBreak: Date?
-        let startsGroup: Bool
-        let endsGroup: Bool
-        var id: UUID { message.id }
-    }
-
-    private var rows: [ThreadRow] {
-        let list = messages
-        let calendar = Calendar.current
-        func grouped(_ a: MessagingWireMessage, _ b: MessagingWireMessage) -> Bool {
-            a.senderID == b.senderID && calendar.isDate(a.acceptedAt, inSameDayAs: b.acceptedAt)
-                && abs(b.acceptedAt.timeIntervalSince(a.acceptedAt)) < Self.groupWindow
+    private var reportBar: some View {
+        HStack {
+            Button("Annuler") {
+                Task {
+                    if await workspace.abandonReport(conversationID: thread.conversationID) {
+                        thread.reporting = false
+                        thread.reportSelection = []
+                    }
+                }
+            }
+            .frame(minHeight: DrivyLayout.tapTarget)
+            Spacer()
+            Button("Transmettre (\(thread.reportSelection.count))") {
+                let selected = workspace.visibleMessages(thread.conversationID).filter { thread.reportSelection.contains($0.id) }
+                Task {
+                    if await workspace.report(selected, conversationID: thread.conversationID) {
+                        thread.reporting = false; thread.reportSelection = []; onReported()
+                    }
+                }
+            }
+            .bold()
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .disabled(thread.reportSelection.isEmpty)
+            .accessibilityIdentifier("messaging.report.send")
         }
-        return list.indices.map { index in
-            let message = list[index]
-            let previous = index > list.startIndex ? list[index - 1] : nil
-            let next = index < list.endIndex - 1 ? list[index + 1] : nil
-            let newDay = previous.map { !calendar.isDate($0.acceptedAt, inSameDayAs: message.acceptedAt) } ?? true
-            return ThreadRow(message: message,
-                             dayBreak: newDay ? message.acceptedAt : nil,
-                             startsGroup: newDay || previous.map { !grouped($0, message) } ?? true,
-                             endsGroup: next.map { !grouped(message, $0) } ?? true)
+        .padding(.horizontal, DrivySpacing.m)
+    }
+}
+
+private struct MessagingThreadComposer: View {
+    let thread: MessagingThreadModel
+    @Bindable var composer: MessagingComposerModel
+    @FocusState private var focused: Bool
+
+    private var workspace: MessagingWorkspace { thread.workspace }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            if let failure = composer.deliveryLabel ?? composer.draftFailure {
+                Text(failure)
+                    .font(.footnote).foregroundStyle(DrivyTheme.danger)
+                    .padding(.horizontal, DrivySpacing.s)
+                    .accessibilityIdentifier(composer.deliveryLabel != nil ? "messaging.delivery" : "messaging.draft.error")
+            }
+            if let replyTo = composer.replyTo { replyPreview(replyTo) }
+            if thread.isGeneral, let query = composer.mentionQuery { mentionSuggestions(query) }
+            HStack(alignment: .bottom, spacing: DrivySpacing.xs) {
+                Menu {
+                    Button("Sondage", systemImage: "chart.bar.xaxis") { thread.showPollComposer = true }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .frame(width: 36, height: 36)
+                        .background(DrivyTheme.surfaceMuted, in: Circle())
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Plus d'options")
+                .accessibilityIdentifier("messaging.compose.more")
+                TextField("Message", text: $composer.draft, axis: .vertical)
+                    .lineLimit(1...6)
+                    .focused($focused)
+                    .foregroundStyle(DrivyTheme.text)
+                    .padding(.horizontal, DrivySpacing.s)
+                    .padding(.vertical, 10)
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .accessibilityLabel("Rédiger un message")
+                    .accessibilityIdentifier("messaging.compose.text")
+                Button {
+                    Task { if await composer.sendText() { thread.scrollToNewest() } }
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(composer.canSend ? DrivyTheme.onAccent : DrivyTheme.disabledText)
+                        .frame(width: 36, height: 36)
+                        .background(composer.canSend ? DrivyTheme.accentFill : DrivyTheme.disabledSurface, in: Circle())
+                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Envoyer")
+                .disabled(!composer.canSend)
+            }
         }
+        .padding(.horizontal, DrivySpacing.xs)
+        .padding(.vertical, DrivySpacing.xs)
+        .onChange(of: composer.focusRequest) { _, _ in focused = true }
     }
 
-    private func daySeparator(_ date: Date) -> some View {
-        Text(Self.dayLabel(date))
+    private func replyPreview(_ message: MessagingWireMessage) -> some View {
+        HStack(spacing: DrivySpacing.xs) {
+            RoundedRectangle(cornerRadius: 1.5).fill(DrivyTheme.accent).frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Réponse à \(workspace.displayName(message.senderID))").font(.caption.bold()).foregroundStyle(DrivyTheme.accent)
+                Text(workspace.contents[message.id]?.summary ?? "Message").font(.caption).lineLimit(1).foregroundStyle(DrivyTheme.muted)
+            }
+            Spacer(minLength: 0)
+            Button("Annuler la réponse", systemImage: "xmark.circle.fill") { composer.replyTo = nil }
+                .labelStyle(.iconOnly).foregroundStyle(DrivyTheme.muted)
+                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+        }
+        .padding(.leading, DrivySpacing.s)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("messaging.reply.preview")
+    }
+
+    private func mentionSuggestions(_ query: String) -> some View {
+        let people = MessagingMentionToken.filter(workspace.generalMembers.filter { $0.id != workspace.scope.accountID },
+                                                   query: query, name: \.displayName)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(people.prefix(6)) { person in
+                    Button { composer.insertMention(person) } label: {
+                        HStack(spacing: DrivySpacing.s) {
+                            DrivyAvatar(name: person.displayName, size: 28, photo: workspace.photos[person.id])
+                            Text(person.displayName).foregroundStyle(DrivyTheme.text)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, DrivySpacing.s)
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Mentionner \(person.displayName)")
+                }
+                if people.isEmpty {
+                    Text("Aucun participant").font(.footnote).foregroundStyle(DrivyTheme.muted)
+                        .padding(DrivySpacing.s)
+                }
+            }
+        }
+        .frame(maxHeight: 6 * DrivyLayout.tapTarget)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Participants à mentionner")
+        .accessibilityIdentifier("messaging.mention.suggestions")
+        .task { if workspace.generalMembers.isEmpty { await workspace.loadGeneralMembers() } }
+    }
+}
+
+/// Séparateur de jour, en tête de chaque section d'Exyte.
+struct MessagingDaySeparator: View {
+    let date: Date
+
+    var body: some View {
+        Text(Self.label(date))
             .font(.caption.weight(.semibold))
             .foregroundStyle(DrivyTheme.muted)
             .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xxs)
@@ -270,7 +1171,7 @@ struct MessagingConversationView: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    private static func dayLabel(_ date: Date) -> String {
+    static func label(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) { return "Aujourd'hui" }
         if calendar.isDateInYesterday(date) { return "Hier" }
@@ -279,26 +1180,16 @@ struct MessagingConversationView: View {
         }
         return date.formatted(.dateTime.day().month(.wide).year())
     }
+}
 
-    @ViewBuilder private func rowView(_ row: ThreadRow) -> some View {
-        let message = row.message
-        let bubble = MessagingBubble(workspace: workspace, message: message, isGeneral: isGeneral,
-            selecting: reporting, selected: reportSelection.contains(message.id),
-            showsAuthor: row.startsGroup, showsMeta: row.endsGroup, highlighted: highlighted == message.id,
-            onReply: { replyTo = message; composerFocused = true }, onJump: { scrollTarget = $0 })
-        if reporting && !message.meta.deletedForEveryone {
-            Button {
-                if reportSelection.contains(message.id) { reportSelection.remove(message.id) } else { reportSelection.insert(message.id) }
-            } label: { bubble }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(reportSelection.contains(message.id) ? [.isSelected] : [])
-            .accessibilityHint("Sélectionne ce message pour le signalement")
-        } else {
-            bubble
-        }
-    }
+/// Bandeau d'état de la conversation : erreurs, détail, sourdine et sa synchronisation.
+struct MessagingConversationStatusStrip: View {
+    let workspace: MessagingWorkspace
+    let conversationID: UUID
+    let detail: String?
+    let mutedUntil: Date?
 
-    @ViewBuilder private var statusStrip: some View {
+    var body: some View {
         let muted = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil).map { $0 > Date() } ?? false
         let muteStatus = workspace.muteAttention(conversationID)
         if workspace.error != nil || workspace.actionError != nil || detail != nil || muted || muteStatus != nil {
@@ -341,408 +1232,5 @@ struct MessagingConversationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DrivyTheme.surface)
         }
-    }
-
-    @ViewBuilder private var noticeView: some View {
-        if let notice {
-            Label(notice, systemImage: "exclamationmark.bubble")
-                .font(.footnote)
-                .foregroundStyle(DrivyTheme.text)
-                .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-                .background(DrivyTheme.surfaceRaised, in: Capsule())
-                .overlay(Capsule().stroke(DrivyTheme.border))
-                .padding(.top, DrivySpacing.xs)
-                .transition(.opacity)
-                .accessibilityIdentifier("messaging.notice")
-        }
-    }
-
-    @ViewBuilder private func jumpToBottom(_ proxy: ScrollViewProxy) -> some View {
-        if !atBottom {
-            Button { scrollToBottom(proxy, animated: true) } label: {
-                HStack(spacing: DrivySpacing.xxs) {
-                    Image(systemName: "arrow.down")
-                    if unseenBelow { Text("Nouveaux messages").font(.footnote.weight(.semibold)) }
-                }
-                .foregroundStyle(unseenBelow ? DrivyTheme.onAccent : DrivyTheme.accent)
-                .padding(.horizontal, unseenBelow ? DrivySpacing.s : 0)
-                .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
-                .background(unseenBelow ? AnyShapeStyle(DrivyTheme.accentFill) : AnyShapeStyle(DrivyTheme.surfaceRaised), in: Capsule())
-                .overlay(Capsule().stroke(DrivyTheme.border, lineWidth: unseenBelow ? 0 : 1))
-                .shadow(color: DrivyTheme.shadow.opacity(0.12), radius: 6, y: 2)
-            }
-            .buttonStyle(.plain)
-            .padding(DrivySpacing.m)
-            .accessibilityLabel(unseenBelow ? "Nouveaux messages, revenir en bas" : "Revenir en bas")
-            .accessibilityIdentifier("messaging.scroll.bottom")
-            .transition(.opacity)
-        }
-    }
-
-    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
-        withAnimation(animated ? DrivyMotion.settle(reduceMotion) : nil) {
-            proxy.scrollTo(Self.bottomID, anchor: .bottom)
-        }
-        unseenBelow = false
-    }
-
-    /// Les anciens messages arrivent au-dessus : le premier message lu reste à sa place.
-    private func loadOlder(_ proxy: ScrollViewProxy) async {
-        guard !loadingOlder else { return }
-        let anchor = messages.first?.id
-        loadingOlder = true
-        await workspace.loadMessages(conversationID, more: true)
-        if let anchor {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { proxy.scrollTo(anchor, anchor: .top) }
-            // Le fil n'est plus en bas : sans cela, la prochaine variation de hauteur l'y ramène.
-            atBottom = false
-        }
-        // La variation de hauteur arrive après ce cycle : garder le drapeau le temps que la
-        // correction d'ancrage ne soit pas prise pour un suivi du bas du fil.
-        try? await Task.sleep(for: .milliseconds(400))
-        loadingOlder = false
-    }
-
-    /// Citation, épingle ou recherche : charge le contexte si besoin, puis met le message brièvement en évidence.
-    private func jump(to id: UUID, proxy: ScrollViewProxy) async {
-        var pages = 0
-        while !messages.contains(where: { $0.id == id }), workspace.canLoadMoreMessages(conversationID), pages < 10 {
-            await workspace.loadMessages(conversationID, more: true)
-            pages += 1
-        }
-        guard messages.contains(where: { $0.id == id }) else {
-            await show(notice: "Message indisponible")
-            return
-        }
-        // Laisse la feuille de recherche se refermer : un défilement lancé pendant sa disparition est perdu.
-        jumping = id
-        defer { jumping = nil }
-        try? await Task.sleep(for: .milliseconds(350))
-        withAnimation(DrivyMotion.settle(reduceMotion)) { proxy.scrollTo(id, anchor: .center) }
-        // Deuxième passe après le rendu paresseux du voisinage, sinon la cible reste hors écran.
-        try? await Task.sleep(for: .milliseconds(250))
-        proxy.scrollTo(id, anchor: .center)
-        atBottom = false
-        withAnimation(DrivyMotion.feedback(reduceMotion)) { highlighted = id }
-        try? await Task.sleep(for: .milliseconds(1_500))
-        if highlighted == id { withAnimation(DrivyMotion.settle(reduceMotion)) { highlighted = nil } }
-    }
-
-    private func show(notice text: String) async {
-        withAnimation(DrivyMotion.feedback(reduceMotion)) { notice = text }
-        AccessibilityNotification.Announcement(text).post()
-        try? await Task.sleep(for: .seconds(3))
-        if notice == text { withAnimation(DrivyMotion.feedback(reduceMotion)) { notice = nil } }
-    }
-
-    // MARK: - Pied
-
-    @ViewBuilder private var footer: some View {
-        if reporting {
-            HStack {
-                Button("Annuler") {
-                    Task {
-                        if await workspace.abandonReport(conversationID: conversationID) {
-                            reporting = false
-                            reportSelection = []
-                        }
-                    }
-                }
-                .frame(minHeight: DrivyLayout.tapTarget)
-                Spacer()
-                Button("Transmettre (\(reportSelection.count))") {
-                    let selected = messages.filter { reportSelection.contains($0.id) }
-                    Task {
-                        if await workspace.report(selected, conversationID: conversationID) {
-                            reporting = false; reportSelection = []; reportSent = true
-                        }
-                    }
-                }
-                .bold()
-                .frame(minHeight: DrivyLayout.tapTarget)
-                .disabled(reportSelection.isEmpty)
-                .accessibilityIdentifier("messaging.report.send")
-            }
-            .padding(.horizontal, DrivySpacing.m)
-        } else if access.isReadOnly {
-            // Fin du lien : l'historique reste lisible, aucun envoi possible.
-            Label("Lecture seule", systemImage: "lock")
-                .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                .frame(maxWidth: .infinity).padding()
-                .accessibilityIdentifier("messaging.readonly")
-        } else {
-            composer
-        }
-    }
-
-    private var canSend: Bool {
-        !sending && draftReady && draftFailure == nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            if let failure = deliveryLabel ?? draftFailure {
-                Text(failure)
-                    .font(.footnote).foregroundStyle(DrivyTheme.danger)
-                    .padding(.horizontal, DrivySpacing.s)
-                    .accessibilityIdentifier(deliveryLabel != nil ? "messaging.delivery" : "messaging.draft.error")
-            }
-            if let replyTo { replyPreview(replyTo) }
-            if isGeneral, let query = mentionQuery { mentionSuggestions(query) }
-            HStack(alignment: .bottom, spacing: DrivySpacing.xs) {
-                Menu {
-                    Button("Sondage", systemImage: "chart.bar.xaxis") { showPollComposer = true }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
-                        .frame(width: 36, height: 36)
-                        .background(DrivyTheme.surfaceMuted, in: Circle())
-                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Plus d'options")
-                .accessibilityIdentifier("messaging.compose.more")
-                TextField("Message", text: $draft, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($composerFocused)
-                    .foregroundStyle(DrivyTheme.text)
-                    .padding(.horizontal, DrivySpacing.s)
-                    .padding(.vertical, 10)
-                    .frame(minHeight: DrivyLayout.tapTarget)
-                    .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .accessibilityLabel("Rédiger un message")
-                    .accessibilityIdentifier("messaging.compose.text")
-                    .onChange(of: draft) { _, text in
-                        // Une mention effacée du texte n'est plus envoyée (#101).
-                        selectedMentions.removeAll { !text.contains("@\($0.displayName)") }
-                    }
-                Button {
-                    Task { _ = await send(MessagingPlainContent(text: draft)) }
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(canSend ? DrivyTheme.onAccent : DrivyTheme.disabledText)
-                        .frame(width: 36, height: 36)
-                        .background(canSend ? DrivyTheme.accentFill : DrivyTheme.disabledSurface, in: Circle())
-                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Envoyer")
-                .disabled(!canSend)
-            }
-        }
-        .padding(.horizontal, DrivySpacing.xs)
-        .padding(.vertical, DrivySpacing.xs)
-    }
-
-    private func replyPreview(_ message: MessagingWireMessage) -> some View {
-        HStack(spacing: DrivySpacing.xs) {
-            RoundedRectangle(cornerRadius: 1.5).fill(DrivyTheme.accent).frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Réponse à \(workspace.displayName(message.senderID))").font(.caption.bold()).foregroundStyle(DrivyTheme.accent)
-                Text(workspace.contents[message.id]?.summary ?? "Message").font(.caption).lineLimit(1).foregroundStyle(DrivyTheme.muted)
-            }
-            Spacer(minLength: 0)
-            Button("Annuler la réponse", systemImage: "xmark.circle.fill") { self.replyTo = nil }
-                .labelStyle(.iconOnly).foregroundStyle(DrivyTheme.muted)
-                .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-        }
-        .padding(.leading, DrivySpacing.s)
-        .fixedSize(horizontal: false, vertical: true)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("messaging.reply.preview")
-    }
-
-    /// Jeton `@xxx` en cours de frappe à la fin du brouillon (#101), nil sinon.
-    private var mentionQuery: String? { MessagingMentionToken.query(in: draft) }
-
-    private func mentionSuggestions(_ query: String) -> some View {
-        let people = MessagingMentionToken.filter(workspace.generalMembers.filter { $0.id != workspace.scope.accountID },
-                                                   query: query, name: \.displayName)
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(people.prefix(6)) { person in
-                    Button { insertMention(person) } label: {
-                        HStack(spacing: DrivySpacing.s) {
-                            DrivyAvatar(name: person.displayName, size: 28, photo: workspace.photos[person.id])
-                            Text(person.displayName).foregroundStyle(DrivyTheme.text)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, DrivySpacing.s)
-                        .frame(minHeight: DrivyLayout.tapTarget)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Mentionner \(person.displayName)")
-                }
-                if people.isEmpty {
-                    Text("Aucun participant").font(.footnote).foregroundStyle(DrivyTheme.muted)
-                        .padding(DrivySpacing.s)
-                }
-            }
-        }
-        .frame(maxHeight: 6 * DrivyLayout.tapTarget)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Participants à mentionner")
-        .accessibilityIdentifier("messaging.mention.suggestions")
-        .task { if workspace.generalMembers.isEmpty { await workspace.loadGeneralMembers() } }
-    }
-
-    private func insertMention(_ person: MessagingContact) {
-        guard let replaced = MessagingMentionToken.replacing(in: draft, with: person.displayName) else { return }
-        draft = replaced
-        if !selectedMentions.contains(where: { $0.personID == person.id }) && selectedMentions.count < 8 {
-            selectedMentions.append(MessagingMentionSelection(personID: person.id, displayName: person.displayName))
-        }
-        composerFocused = true
-    }
-
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            Button("Rechercher", systemImage: "magnifyingglass") { showSearch = true }
-                .accessibilityIdentifier("messaging.search.open")
-            Menu("Options", systemImage: "ellipsis.circle") {
-                if isGeneral { Button("Membres", systemImage: "person.3") { showMembers = true } }
-                Button("Signaler des messages", systemImage: "exclamationmark.bubble") { reporting = true }
-                Divider()
-                Button("Mettre en sourdine une heure") {
-                    Task { await workspace.silence(conversationID: conversationID,
-                        fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(3_600),
-                        fallbackVersion: readStateVersion) }
-                }
-                Button("Réactiver les notifications") {
-                    Task { await workspace.unsilence(conversationID: conversationID,
-                        fallbackSequence: lastReadSequence, fallbackVersion: readStateVersion) }
-                }
-            }
-            .accessibilityIdentifier("messaging.options")
-        }
-    }
-
-    // MARK: - Envoi
-
-    /// La file chiffrée sur disque précède toute tentative réseau. `sending` ne couvre que la mise en file
-    /// durable : l'envoi réseau part ensuite dans la file FIFO du workspace, sans bloquer le compositeur.
-    private func send(_ content: MessagingPlainContent, pollAllowsMultiple: Bool = false) async -> Bool {
-        guard !sending, draftReady, access.canWrite else { return false }
-        sending = true
-        let isText = content.poll == nil
-        let submitted = draft
-        let submittedMentions = selectedMentions.map(\.personID)
-        do {
-            let entry = try await workspace.enqueue(content: content, conversationID: conversationID,
-                mentions: submittedMentions, replyTo: replyTo?.id, pollAllowsMultiple: pollAllowsMultiple)
-            deliveryLabel = nil
-            queued.append(entry)
-            replyTo = nil
-            if selectedMentions.map(\.personID) == submittedMentions { selectedMentions = [] }
-            if isText && draft == submitted { draft = "" }
-            sending = false
-            workspace.scheduleSend(entry)
-            if isText {
-                // Brouillon vidé après la mise en file durable ; la saisie suivante reste protégée.
-                try? await workspace.saveDraft(draft, conversationID: conversationID)
-            }
-            return true
-        } catch {
-            sending = false
-            deliveryLabel = MessagingDiagnostics.shared.describe(error as? MessagingFailure ?? .protectionUnavailable)
-            return false
-        }
-    }
-
-    private func retry(_ entry: MessagingPending) {
-        workspace.retrySend(entry)
-    }
-}
-
-/// Envoi encore dans la file protégée : bulle sortante avec son état réel. « Envoyé » seulement après l'accusé.
-struct MessagingPendingBubble: View {
-    let entry: MessagingPending
-    let status: MessagingWorkspace.SendStatus?
-    let onRetry: () -> Void
-
-    private var summary: String {
-        entry.recoveryContent.flatMap(MessagingPlainContent.decode)?.summary ?? "Message"
-    }
-
-    private var refused: MessagingFailure? {
-        if case .failed(let failure)? = status { return failure }
-        return nil
-    }
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: DrivySpacing.xxs) {
-            // Même bulle qu'un message envoyé : pas de contour pointillé qui clignote pendant l'envoi normal.
-            // Seul un vrai problème (refus) change la bulle ; les autres états restent sur la ligne d'état.
-            Text(summary)
-                .foregroundStyle(DrivyTheme.text)
-                .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-                .background(DrivyTheme.accentSoft, in: MessagingBubbleShape(mine: true, tail: true))
-                .overlay(MessagingBubbleShape(mine: true, tail: true)
-                    .stroke(refused == nil ? Color.clear : DrivyTheme.danger, lineWidth: 1))
-                .opacity(quiet ? 1 : 0.85)
-            stateLine.font(.caption2)
-                .transition(.opacity)
-        }
-        .animation(.easeOut(duration: 0.2), value: quiet)
-        .padding(.leading, 56)
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("messaging.pending")
-    }
-
-    /// Envoi normal en cours (moins de 5 s) ou accepté : aucune mention d'état, la bulle est déjà à sa place.
-    private var quiet: Bool {
-        switch status {
-        case .queued?, .sending?, .accepted?, nil: true
-        default: false
-        }
-    }
-
-    @ViewBuilder private var stateLine: some View {
-        switch status {
-        case .failed(let failure)?:
-            HStack(spacing: DrivySpacing.xs) {
-                Label("Échec", systemImage: "exclamationmark.circle")
-                    .foregroundStyle(DrivyTheme.danger)
-                    .accessibilityLabel("Échec : \(MessagingDiagnostics.shared.describe(failure))")
-                retryButton
-            }
-        case .unconfirmed?, .uncertain?:
-            HStack(spacing: DrivySpacing.xs) {
-                Label("Non confirmé", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
-                    .foregroundStyle(DrivyTheme.muted)
-                    .accessibilityLabel("Envoi non confirmé")
-                retryButton
-            }
-        case .offline?:
-            Label("En attente de connexion", systemImage: "wifi.slash").foregroundStyle(DrivyTheme.muted)
-        case .slow?:
-            Label("Envoi…", systemImage: "clock").foregroundStyle(DrivyTheme.muted)
-        case .accepted?:
-            // Coche discrète le temps que le message serveur remplace la bulle.
-            Image(systemName: "checkmark").foregroundStyle(DrivyTheme.textTertiary)
-                .accessibilityLabel("Envoyé")
-                .accessibilityIdentifier("messaging.pending.sent")
-        case .sending?, .queued?, nil:
-            // Rien à lire pendant un envoi normal ; VoiceOver annonce l'état.
-            Color.clear.frame(height: 0).accessibilityLabel("Envoi en cours")
-        }
-    }
-
-    private var retryButton: some View {
-        Button("Réessayer", action: onRetry)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(DrivyTheme.accent)
-            .frame(minHeight: DrivyLayout.tapTarget)
-            .accessibilityHint("Renvoie le même message")
-            .accessibilityIdentifier("messaging.pending.retry")
     }
 }
