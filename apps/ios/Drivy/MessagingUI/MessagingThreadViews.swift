@@ -211,6 +211,8 @@ struct MessagingBubble: View {
     var showsMeta = true
     /// Mise en évidence brève après une citation, une épingle ou une recherche.
     var highlighted = false
+    /// Faux dans le fil Exyte (#182) : son menu remplace le menu contextuel, les actions d'accessibilité restent.
+    var showsNativeMenu = true
     let onReply: () -> Void
     let onJump: (UUID) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -277,8 +279,7 @@ struct MessagingBubble: View {
                         .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
                         .padding(.horizontal, DrivySpacing.s)
                 }
-                bubble
-                    .contextMenu { if !selecting { menu } }
+                nativeMenu(bubble)
                     .offset(x: swipe)
                     .overlay(alignment: .trailing) { swipeHint }
                     .simultaneousGesture(replySwipe, including: canInteract ? .all : .subviews)
@@ -332,6 +333,15 @@ struct MessagingBubble: View {
         .sheet(item: Binding(get: { votersFor.map { MessagingPollVotersSheet.Item(poll: $0) } },
                              set: { if $0 == nil { votersFor = nil } })) { item in
             MessagingPollVotersSheet(workspace: workspace, poll: item.poll, content: content?.poll)
+        }
+    }
+
+    /// Constant pour une bulle donnée : aucune interaction de menu n'est installée sous celui d'Exyte.
+    @ViewBuilder private func nativeMenu(_ content: some View) -> some View {
+        if showsNativeMenu {
+            content.contextMenu { if !selecting { menu } }
+        } else {
+            content
         }
     }
 

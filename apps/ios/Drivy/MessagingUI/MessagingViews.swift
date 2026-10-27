@@ -13,6 +13,8 @@ struct MessagingInboxView: View {
     @State private var query = ""
     @State private var choosesContact = false
     @State private var showsSettings = false
+    /// Comparaison locale du fil Exyte (#182), désactivée par défaut jusqu'à la parité des parcours.
+    @AppStorage(MessagingThreadRenderer.exyteKey) private var exyteThread = false
 
     fileprivate struct Route: Identifiable, Hashable {
         let id: UUID
@@ -148,6 +150,8 @@ struct MessagingInboxView: View {
                 Menu {
                     Button("Réglages", systemImage: "gearshape") { showsSettings = true }
                         .accessibilityIdentifier("messaging.settings.open")
+                    Toggle("Fil Exyte (essai)", systemImage: "testtube.2", isOn: $exyteThread)
+                        .accessibilityIdentifier("messaging.thread.exyte")
                 } label: {
                     Label("Plus", systemImage: "ellipsis.circle")
                 }
@@ -199,10 +203,17 @@ struct MessagingInboxView: View {
     }
 
     @ViewBuilder private func conversation(_ selected: Route) -> some View {
-        MessagingConversationView(workspace: workspace, conversationID: selected.id,
-            title: selected.title, detail: selected.detail, lastSequence: selected.sequence,
-            lastReadSequence: selected.readSequence, mutedUntil: selected.mutedUntil,
-            readStateVersion: selected.readStateVersion, isGeneral: selected.isGeneral)
+        if exyteThread {
+            MessagingExyteConversationView(workspace: workspace, conversationID: selected.id,
+                title: selected.title, detail: selected.detail, lastSequence: selected.sequence,
+                lastReadSequence: selected.readSequence, mutedUntil: selected.mutedUntil,
+                readStateVersion: selected.readStateVersion, isGeneral: selected.isGeneral)
+        } else {
+            MessagingConversationView(workspace: workspace, conversationID: selected.id,
+                title: selected.title, detail: selected.detail, lastSequence: selected.sequence,
+                lastReadSequence: selected.readSequence, mutedUntil: selected.mutedUntil,
+                readStateVersion: selected.readStateVersion, isGeneral: selected.isGeneral)
+        }
     }
 
     // MARK: Chargement
