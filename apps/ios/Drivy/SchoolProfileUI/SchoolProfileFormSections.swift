@@ -45,7 +45,7 @@ struct SchoolProfileFieldSections: View {
         if email || phone {
             Section {
                 if email {
-                    profileField("E-mail", text: $model.draft.contactEmail, prompt: "nom@exemple.ch", identifier: "profile-email", field: .contactEmail)
+                    profileField("E-mail de contact", text: $model.draft.contactEmail, prompt: "nom@exemple.ch", identifier: "profile-email", field: .contactEmail)
                         .textContentType(.emailAddress).keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .id(SchoolProfileField.contactEmail)

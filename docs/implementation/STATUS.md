@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 27 octobre 2026 — audit UX, lot 4 : Mon profil (#155 à #158)
+
+- Branche `claude/audit-ux-lots-2-4`. Résultat de la photo près d'elle et alerte de sortie exacte, cadrage avant envoi (ImageIO, 512 px, sans métadonnées), aperçu du nom affiché, « E-mail de contact », explications à la demande. [Détail](audit-ux-lot4-mon-profil-20261027.md).
+- iOS seulement, rien à déployer. Nouveau test `SchoolProfilePhotoCropTests` écrit, pas encore exécuté.
+
 ## 27 octobre 2026 — audit UX, lot 3 : liste des élèves (#151, #152, #153)
 
 - Branche `claude/audit-ux-lots-2-4`. Photos autorisées dans la liste, repère « Réf. » pour les homonymes, filtre serveur « Profil à compléter » combiné à la recherche. [Détail](audit-ux-lot3-liste-eleves-20261027.md).

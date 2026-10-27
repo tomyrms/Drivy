@@ -19,6 +19,8 @@ struct SchoolMyProfileView: View {
     @FocusState private var focusedField: SchoolProfileField?
     @State private var focusApplied = false
     @State private var pickedPhoto: PhotosPickerItem?
+    /// La photo choisie, en attente de son cadrage : rien n’est envoyé avant « Utiliser ».
+    @State private var cropping: PhotoCropRequest?
     @State private var confirmsPhotoRemoval = false
     @State private var confirmsDiscard = false
     @State private var showsGuidedWelcome = false
@@ -51,6 +53,9 @@ struct SchoolMyProfileView: View {
             .alert("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard) {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) { }
+            } message: {
+                // La photo part seule, dès qu’elle est cadrée : la fermeture n’abandonne que le reste (#155).
+                if editor.photoChanged { Text("Ta photo est déjà enregistrée. Seuls les autres changements seront perdus.") }
             }
             .confirmationDialog("Retirer la photo ?", isPresented: $confirmsPhotoRemoval, titleVisibility: .visible) {
                 Button("Retirer la photo", role: .destructive) { upload(nil) }
@@ -83,6 +88,12 @@ struct SchoolMyProfileView: View {
             if let dossier { SchoolProfileContextSections(model: dossier, resumeOnboarding: { showsGuidedWelcome = true }) }
         }
         .disabled(editor.isLoading)
+        .sheet(item: $cropping) { request in
+            SchoolProfilePhotoCropView(image: request.image, confirm: { rect in
+                cropping = nil
+                finishCrop(request.preview, crop: rect)
+            }, cancel: { cropping = nil })
+        }
         .scrollContentBackground(.hidden)
         .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
@@ -107,15 +118,26 @@ struct SchoolMyProfileView: View {
 
     // MARK: Sections
 
+    /// Le nom affiché saisi, ou celui du compte tant qu’il est vide : l’aperçu de la photo le montre tel quel.
+    private var previewName: String {
+        editor.trimmed.displayName.isEmpty ? (workspace.person?.displayName ?? "") : editor.trimmed.displayName
+    }
+
     private var photoSection: some View {
         Section {
             HStack(spacing: DrivySpacing.m) {
                 ZStack {
-                    DrivyAvatar(name: editor.trimmed.displayName.isEmpty ? (workspace.person?.displayName ?? "") : editor.trimmed.displayName,
-                        size: 72, photo: workspace.selfPhoto?.data)
+                    DrivyAvatar(name: previewName, size: 72, photo: workspace.selfPhoto?.data)
                     if editor.isSavingPhoto { ProgressView().accessibilityLabel("Envoi de la photo…") }
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    // L’aperçu : la photo et le nom affiché, comme les membres de l’école les voient (#157).
+                    Text(previewName)
+                        .font(.headline)
+                        .foregroundStyle(DrivyTheme.text)
+                        .lineLimit(2)
+                        .accessibilityLabel("Aperçu : \(previewName)")
+                        .accessibilityIdentifier("self-display-name-preview")
                     PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
                         Text(workspace.selfPhoto == nil ? "Ajouter une photo" : "Changer la photo")
                     }
@@ -129,6 +151,14 @@ struct SchoolMyProfileView: View {
                 .disabled(editor.isBusy)
             }
             .padding(.vertical, DrivySpacing.xxs)
+            // Le résultat de la photo, près d’elle : elle s’enregistre sans le bouton « Enregistrer » (#155).
+            if let error = editor.photoErrorMessage {
+                DrivyFormMessage(text: error, tone: .danger)
+                    .accessibilityIdentifier("my-profile-photo-error")
+            } else if let result = editor.photoResult {
+                DrivyFormMessage(text: result)
+                    .accessibilityIdentifier("my-profile-photo-result")
+            }
         }
         .drivyFormRows()
     }
@@ -151,7 +181,8 @@ struct SchoolMyProfileView: View {
                 .textContentType(.givenName).textInputAutocapitalization(.words).autocorrectionDisabled()
             field("Nom", text: $editor.edit.lastName, identifier: "self-last-name", field: .lastName)
                 .textContentType(.familyName).textInputAutocapitalization(.words).autocorrectionDisabled()
-            DrivyFormField(label: "Nom affiché", text: $editor.edit.displayName, identifier: "self-display-name")
+            DrivyFormField(label: "Nom affiché", text: $editor.edit.displayName, identifier: "self-display-name",
+                info: "Le nom que voient les membres de ton école, dans les listes et Messages. Ton prénom et ton nom ne changent pas.")
                 .textContentType(.name).textInputAutocapitalization(.words).autocorrectionDisabled()
             if editor.hasEdits, !editor.displayNameValid {
                 DrivyFormMessage(text: editor.trimmed.displayName.isEmpty ? "Renseigne le nom affiché."
@@ -163,10 +194,12 @@ struct SchoolMyProfileView: View {
 
     private var contactSection: some View {
         Section {
-            field("E-mail", text: $editor.edit.contactEmail, prompt: "nom@exemple.ch", identifier: "self-email", field: .contactEmail)
+            // L’adresse où l’école peut écrire, distincte de celle de la connexion (#158).
+            field("E-mail de contact", text: $editor.edit.contactEmail, prompt: "nom@exemple.ch", identifier: "self-email",
+                  field: .contactEmail, info: "L’adresse où ton école peut t’écrire. L’adresse de connexion ne change pas.")
                 .textContentType(.emailAddress).keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
-            if !editor.emailValid { DrivyFormMessage(text: "Vérifie le format de l’adresse e-mail.", tone: .danger) }
+            if !editor.emailValid { DrivyFormMessage(text: "Vérifie le format de l’e-mail de contact.", tone: .danger) }
             field("Téléphone", text: $editor.edit.contactPhone, identifier: "self-phone", field: .contactPhone)
                 .textContentType(.telephoneNumber).keyboardType(.phonePad)
             if !editor.phoneValid { DrivyFormMessage(text: "Ce numéro contient un caractère inattendu.", tone: .danger) }
@@ -235,9 +268,10 @@ struct SchoolMyProfileView: View {
         }
     }
 
-    private func field(_ title: String, text: Binding<String>, prompt: String? = nil, identifier: String, field: SchoolProfileField) -> some View {
+    private func field(_ title: String, text: Binding<String>, prompt: String? = nil, identifier: String, field: SchoolProfileField,
+                       info: String? = nil) -> some View {
         DrivyFormField(label: title, text: text, prompt: prompt, identifier: identifier, isMissing: isMissing(field),
-                       focus: $focusedField, focusValue: field)
+                       focus: $focusedField, focusValue: field, info: info)
             .id(field)
     }
 
@@ -275,11 +309,23 @@ struct SchoolMyProfileView: View {
         }
     }
 
+    /// Le fichier choisi est redressé et réduit hors du fil principal, puis proposé au cadrage.
     private func prepare(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self),
-              let jpeg = await Task.detached(priority: .userInitiated, operation: { SchoolProfilePhotoEncoder.squareJPEG(from: data) }).value
+              let preview = await Task.detached(priority: .userInitiated, operation: { SchoolProfilePhotoEncoder.uprightPreview(from: data) }).value,
+              let image = UIImage(data: preview)
         else { editor.failPhoto(); return }
-        upload(jpeg)
+        cropping = PhotoCropRequest(preview: preview, image: image)
+    }
+
+    /// Seul le carré cadré part, réencodé sans métadonnées.
+    private func finishCrop(_ preview: Data, crop: CGRect) {
+        Task {
+            guard let jpeg = await Task.detached(priority: .userInitiated, operation: {
+                SchoolProfilePhotoEncoder.squareJPEG(fromPreview: preview, crop: crop)
+            }).value else { editor.failPhoto(); return }
+            upload(jpeg)
+        }
     }
 
     private func upload(_ jpeg: Data?) {
@@ -289,4 +335,11 @@ struct SchoolMyProfileView: View {
             }
         }
     }
+}
+
+/// Une photo choisie, réduite, en attente de son cadrage.
+private struct PhotoCropRequest: Identifiable {
+    let id = UUID()
+    let preview: Data
+    let image: UIImage
 }
