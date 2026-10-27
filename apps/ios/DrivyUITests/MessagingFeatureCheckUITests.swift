@@ -125,7 +125,8 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         let app = launch()
         openGeneral(app)
         let newest = text(app, "Rendez-vous à 14 h devant l'auto-école")
-        XCTAssertTrue(waitFor(newest, "hittable == true"), "Le plus récent est visible")
+        // Simulateur iPad chargé : une lecture de la hiérarchie y prend jusqu'à 4 s.
+        XCTAssertTrue(waitFor(newest, "hittable == true", timeout: 15), "Le plus récent est visible")
         let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertLessThan(composer.frame.minY - newest.frame.maxY, 260, "Récent près du composeur")
@@ -145,9 +146,12 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(older.exists && older.isHittable,
                       "Bouton de chargement des précédents (existe \(older.exists), premier chargé visible \(text(app, "Bonjour à tous, nouvelle semaine").exists))")
         older.tap()
+        // La page 2 est la dernière : le bouton disparaît quand elle est arrivée. Glisser avant, fil
+        // encore tout en haut, fermait la feuille Messages de la fixture au lieu de remonter.
+        XCTAssertTrue(older.waitForNonExistence(timeout: 10), "Page 2 reçue")
         // Le fil est paresseux : les messages chargés au-dessus n'existent qu'une fois remontés à l'écran.
         let first = text(app, "Premier message du général")
-        for _ in 0..<10 where !first.exists { app.swipeDown(velocity: .fast) }
+        for _ in 0..<6 where !first.waitForExistence(timeout: 1) { app.swipeDown() }
         XCTAssertTrue(first.waitForExistence(timeout: 8), "Page 2 chargée")
         capture("05-messages-precedents")
     }
@@ -201,7 +205,8 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("papiers")
-        let result = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Pensez aux papiers du permis'")).firstMatch
+        // L'épinglé du fil, resté derrière la feuille, porte le même texte : viser la ligne de résultat.
+        let result = app.buttons.matching(NSPredicate(format: "identifier == 'messaging.search.result' AND label CONTAINS 'Pensez aux papiers du permis'")).firstMatch
         XCTAssertTrue(result.waitForExistence(timeout: 5), "Résultat de recherche dans le fil")
         capture("09-recherche-fil")
         result.tap()

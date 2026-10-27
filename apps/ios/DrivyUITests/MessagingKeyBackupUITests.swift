@@ -37,8 +37,8 @@ final class MessagingKeyBackupUITests: XCTestCase {
         let button = app.buttons["messaging.backup.restore"]
         if !button.isHittable { app.swipeUp() }
         button.tap()
-        // L'erreur est en tête du formulaire : la ramener à l'écran (liste paresseuse).
-        app.swipeDown(); app.swipeDown()
+        // Le formulaire ramène lui-même l'erreur à l'écran. Pas de glissement vers le bas :
+        // sur iPad, Messages est une feuille, et un glissement en haut du formulaire la fermait.
     }
 
     /// #170 : retour, glissement et balayage de la feuille ne font pas disparaître la clé ; sortie explicite avertie.
@@ -68,14 +68,14 @@ final class MessagingKeyBackupUITests: XCTestCase {
         let back = app.buttons["messaging.backup.exit.cancel"]
         // iOS 26 peut présenter la feuille d'action sans bouton d'annulation visible : toucher hors de la feuille.
         if back.exists && back.isHittable { back.tap() }
-        else if app.otherElements["PopoverDismissRegion"].exists { app.otherElements["PopoverDismissRegion"].tap() }
+        else if app.otherElements["PopoverDismissRegion"].exists { app.otherElements["PopoverDismissRegion"].firstMatch.tap() }
         else { window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap() }
         XCTAssertFalse(app.buttons["messaging.backup.exit.confirm"].waitForExistence(timeout: 1))
         XCTAssertTrue(key.waitForExistence(timeout: 2))
 
         // Quitter sans la clé : retour aux réglages, la clé ne réapparaît jamais.
         app.buttons["messaging.backup.exit"].tap()
-        app.buttons["messaging.backup.exit.confirm"].tap()
+        app.buttons["messaging.backup.exit.confirm"].firstMatch.tap()
         let open = app.buttons["messaging.backup.open"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
@@ -122,6 +122,7 @@ final class MessagingKeyBackupUITests: XCTestCase {
         attach(app, "backup-cle-refusee-grand-texte")
 
         restore(app, "partielle")
+        app.swipeUp(); app.swipeUp()
         let partial = app.descendants(matching: .any)["messaging.backup.notRestored"]
         XCTAssertTrue(partial.waitForExistence(timeout: 5))
         XCTAssertFalse(error.exists)

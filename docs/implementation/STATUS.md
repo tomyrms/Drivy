@@ -1128,3 +1128,11 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - PASS : tests metier iOS (run 40299656866), verifications API (6bfea69), IPA avec Messages (40299653098).
 - En cours : MessagingFeatureCheckUITests + MessagingThreadUITests (40301689859). Echecs connus sur c84d489 : reaction (cible non actionnable), chargement des precedents.
 - NOT_EXECUTED : essai iPhone de la fermeture de palette, du glisser pour repondre et du gras des mentions.
+
+## 27 octobre 2026 : messagerie (#98, #100 à #104, #141, #169, #170) verte en UI iPhone et iPad
+
+- PASS : MessagingFeatureCheckUITests 17/17 sur iPhone et sur iPad (run 40467664787, 696d01d) ; MessagingKeyBackupUITests 4/4 sur iPhone et sur iPad (run 40463125585, a4acced) ; IPA d'intégration avec accès Messages (run 40463298255, 01109b1 = master + PR #180 + cette branche, code app identique à 696d01d).
+- Corrigé : le test de recherche visait la pastille épinglée restée derrière la feuille (même texte) au lieu du résultat, désormais identifié `messaging.search.result`. Sur iPad, glisser vers le bas en haut du formulaire de sauvegarde fermait la feuille Messages : le formulaire ramène lui-même l'erreur de restauration à l'écran (#169), le test ne glisse plus. testLoadOlderMessages attend la page 2 avant de glisser.
+- PR #180 : la recette navigateur suivait encore l'ancien relais « Planifier dans l'app Drivy » retiré par #51 ; elle suit la planification depuis l'agenda web (run 40422727867, b41d7b9). Un contrôle réussi n'est plus annoncé comme l'étape en échec. Liste Swift des captures alignée sur capture-screens.sh (48 tests Python de qualification réussis localement).
+- NOT_EXECUTED : essai sur iPhone ou iPad physique de cette IPA ; campagne complète iOS sur le dernier SHA ; validation finale de la PR #180 relancée.
+- BLOCKED : notification de mention et de nouveau message, migration 20261025_messaging_mention_push.sql non déployée.

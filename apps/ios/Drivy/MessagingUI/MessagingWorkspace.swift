@@ -82,6 +82,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
     /// Actions sensibles en cours : « En cours » visible, effet annoncé seulement après confirmation.
     private(set) var operationsInProgress: Set<String> = []
     private var reloadAgain: Set<UUID> = []
+    /// Pages anciennes demandées pendant une relecture, à rejouer ensuite.
+    private var olderAgain: Set<UUID> = []
     let mutationLatency: MessagingMutationLatency
     /// Au-delà, une intention confirmée mais toujours absente des relectures cède à l'état serveur.
     static let confirmationGrace: TimeInterval = 30
@@ -178,12 +180,19 @@ struct MessagingInboxPreview: Equatable, Sendable {
         guard !loadingMessages.contains(conversationID) else {
             // Relecture demandée pendant une autre : relancée après, pour ne pas garder une page antérieure à l'écriture.
             if !more { reloadAgain.insert(conversationID) }
+            // Une page ancienne demandée pendant une relecture ne doit pas être perdue en silence :
+            // l'appui sur « Charger les messages précédents » restait alors sans effet.
+            else { olderAgain.insert(conversationID) }
             return
         }
         guard !more || messageCursors[conversationID] != nil else { return }
         loadingMessages.insert(conversationID); defer { loadingMessages.remove(conversationID) }
         _ = await restoreMutations()
         defer {
+            if olderAgain.remove(conversationID) != nil, currentScope() == scope,
+               messageCursors[conversationID] != nil {
+                Task { await self.loadMessages(conversationID, more: true, marksVisible: false) }
+            }
             if reloadAgain.remove(conversationID) != nil, currentScope() == scope {
                 Task { await self.loadMessages(conversationID, marksVisible: false) }
             }
@@ -417,6 +426,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
             rejections = [:]
             restoredMutations = []
             reloadAgain = []
+            olderAgain = []
             sendStates = [:]
             sendQueues = [:]
             sendClocks = [:]
