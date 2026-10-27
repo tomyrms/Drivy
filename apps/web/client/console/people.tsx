@@ -8,7 +8,7 @@ import {
 } from '../invitation-model';
 import { invitationOptionsSchema, memberSchema, offeringSchema, readAll, readSchool } from '../school-api';
 import { CheckField, ConfirmDialog, EmptyState, Facts, Notice, SelectField, StatusBadge, Symbol, TextArea, TextField, formatDateTime, type Tone } from '../ui';
-import { useCommandRunner, useConsole, useLoad, useRouteSelection, useUnsavedChanges } from './context';
+import { pendingResourceLabel, useCommandRunner, useConsole, useLoad, usePendingCreations, usePendingResources, useRouteSelection, useUnsavedChanges } from './context';
 import { DirectoryRow } from './directory';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
 import { useListState } from './list-state';
@@ -43,6 +43,7 @@ export function TeamSection() {
   const { revision, confirmed } = useCommandSnapshot();
   const submittedOperation = useRef<string | null>(null);
   const runner = useCommandRunner();
+  const pendingResources = usePendingResources(schoolId);
   const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
   const [filter, setFilter] = useListState('team/search', '');
   const [showLearners, setShowLearners] = useListState('team/learners', false);
@@ -160,7 +161,8 @@ export function TeamSection() {
                 {references.has(item.id) && <span className="record-secondary">Réf. {references.get(item.id)}</span>}
                 {item.id === membership.membershipId && <span className="record-secondary">Vous</span>}</th>
               <td data-label="Rôles">{rolesText(item.roles)}</td>
-              <td data-label="Accès">{item.status === 'ACTIVE' ? 'Actif' : <span className="record-attention"><Symbol kind="ban" bare />Inactif</span>}</td>
+              <td data-label="Accès">{pendingLabelOf(pendingResources, item.id) ? <StatusBadge tone="neutral" symbol="clock">{pendingLabelOf(pendingResources, item.id)}</StatusBadge>
+                : item.status === 'ACTIVE' ? 'Actif' : <span className="record-attention"><Symbol kind="ban" bare />Inactif</span>}</td>
             </tr>)}</tbody></table></div>}
           <ListPagination page={currentPage} pageSize={pageSize} total={visible.length} onPageChange={setPage} label="Pagination des membres" />
         </>}
@@ -228,6 +230,12 @@ const invitationStatus = (status: Invitation['status']): { label: string; tone: 
   PENDING: { label: 'En attente', tone: 'accent' as Tone }, ACCEPTED: { label: 'Acceptée', tone: 'success' as Tone },
   REVOKED: { label: 'Révoquée', tone: 'neutral' as Tone }, EXPIRED: { label: 'Expirée', tone: 'warning' as Tone },
 })[status];
+/** What a followed request is doing to this row, if anything. */
+function pendingLabelOf(pending: ReadonlyMap<string, string>, id: string): string | undefined {
+  const kind = pending.get(id.toLowerCase());
+  return kind ? pendingResourceLabel[kind as keyof typeof pendingResourceLabel] : undefined;
+}
+
 function InvitationState({ status }: { status: Invitation['status'] }) {
   return status === 'EXPIRED' || status === 'REVOKED'
     ? <StatusBadge tone={invitationStatus(status).tone} symbol={status === 'EXPIRED' ? 'clock' : 'ban'}>{invitationStatus(status).label}</StatusBadge>
@@ -273,6 +281,8 @@ export function InvitationsSection() {
   const team = routeQuery?.audience === 'team';
   const { revision } = useCommandSnapshot();
   const runner = useCommandRunner(() => { releaseChanges(); setCreating(null); setEmail(''); setInvitedRoles(['LEARNER']); setRevokeReason(''); });
+  const pendingResources = usePendingResources(schoolId);
+  const pendingCreations = usePendingCreations(schoolId, 'createInvitation');
   const loaded = useLoad(async () => {
     const [invitations, offerings, members, options] = await Promise.all([
       readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema),
@@ -411,13 +421,15 @@ export function InvitationsSection() {
             {search && <button type="button" className="button quiet" onClick={() => setSearch('')}>Effacer la recherche</button>}
           </div>
           <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'invitation' : 'invitations'}{visible.length !== items.length ? ` sur ${items.length}` : ''}</p>
+          {pendingCreations > 0 && <p className="caption with-symbol" role="status"><Symbol kind="clock" bare />{pendingCreations === 1 ? 'Création d’une invitation en cours' : `Création de ${pendingCreations} invitations en cours`}</p>}
           {data?.truncated && <Notice tone="warning" title="Liste partielle" live={false}><p>Seules les 1 000 premières invitations sont chargées : la recherche et les comptes portent sur celles-ci.</p></Notice>}
           {visible.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation trouvée" message="" />
           : <ul className="directory-list" aria-label="Invitations de l’école, les plus récentes d’abord">
             {visible.map(item => <DirectoryRow key={item.id} title={label(item)} selected={item.id === selected && !creating}
               onSelect={() => leaveForm(() => { setCreating(null); setCodeMissing(false); setRevokeReason(''); setSelected(item.id); })}
               meta={<>{team && <>{rolesText(item.roles)} · </>}Expire le <time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></>}
-              detail={<InvitationState status={item.status} />} />)}
+              detail={pendingLabelOf(pendingResources, item.id) ? <StatusBadge tone="neutral" symbol="clock">{pendingLabelOf(pendingResources, item.id)}</StatusBadge>
+                : <InvitationState status={item.status} />} />)}
           </ul>}
           </>}
         detail={creating === 'code' ? <DetailPanel focusKey="create-code" title="Code élève">
