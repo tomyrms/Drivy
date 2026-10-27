@@ -984,8 +984,10 @@ private struct MessagingReplyBubble: View {
         }
     }
 
+    /// Même dimensionnement que `MessageStatusView` d'Exyte : icône ajustée dans 40 × 10 pt, posée dans la colonne
+    /// de 10 pt ; la double coche garde ainsi sa largeur naturelle, comme sur les bulles sans citation.
     private func statusImage(_ image: Image, _ color: Color) -> some View {
-        image.renderingMode(.template).resizable().scaledToFit().foregroundStyle(color)
+        image.renderingMode(.template).resizable().aspectRatio(contentMode: .fit).foregroundStyle(color).frame(width: 40)
     }
 }
 
