@@ -37,8 +37,8 @@ final class MessagingKeyBackupUITests: XCTestCase {
         let button = app.buttons["messaging.backup.restore"]
         if !button.isHittable { app.swipeUp() }
         button.tap()
-        // L'erreur est en tête du formulaire : la ramener à l'écran (liste paresseuse).
-        app.swipeDown(); app.swipeDown()
+        // Le formulaire ramène lui-même l'erreur à l'écran. Pas de glissement vers le bas :
+        // sur iPad, Messages est une feuille, et un glissement en haut du formulaire la fermait.
     }
 
     /// #170 : retour, glissement et balayage de la feuille ne font pas disparaître la clé ; sortie explicite avertie.

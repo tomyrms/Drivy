@@ -172,8 +172,25 @@ struct MessagingKeyBackupView: View {
     @State private var confirmsExit = false
     @Environment(\.dismiss) private var dismiss
     @AccessibilityFocusState private var errorFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let errorRow = "messaging.backup.errorRow"
 
     var body: some View {
+        ScrollViewReader { proxy in
+            form.onChange(of: model.failure) { _, value in
+                errorFocused = value != nil
+                // L'erreur s'insère en tête du formulaire, loin du bouton touché : en grand texte
+                // ou sur iPad elle restait hors écran. La montrer une fois la ligne insérée.
+                guard value != nil else { return }
+                DispatchQueue.main.async {
+                    withAnimation(DrivyMotion.settle(reduceMotion)) { proxy.scrollTo(Self.errorRow, anchor: .top) }
+                }
+            }
+        }
+    }
+
+    private var form: some View {
         Form {
             if model.pending {
                 Section {
@@ -187,6 +204,7 @@ struct MessagingKeyBackupView: View {
                     DrivyFormMessage(text: failure.message, tone: failure.tone)
                         .accessibilityIdentifier("messaging.backup.error")
                         .accessibilityFocused($errorFocused)
+                        .id(Self.errorRow)
                     if let code = model.diagnosticCode {
                         Text("Code : \(code)")
                             .font(.footnote.monospaced())
@@ -283,7 +301,6 @@ struct MessagingKeyBackupView: View {
             Text("Elle ne sera plus jamais affichée. Sans elle, tes messages ne pourront pas être restaurés sur un autre appareil.")
         }
         .task { await model.refresh() }
-        .onChange(of: model.failure) { _, value in errorFocused = value != nil }
         .onAppear { model.purgeIfContextChanged() }
         .onDisappear { model.purgeIfContextChanged() }
     }
