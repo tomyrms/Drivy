@@ -81,6 +81,16 @@ regroupement.
   bulle, hauteur calculée sur `MessageView` 3.3.0) retire ma réaction ou reprend la seule présente, sinon ouvre le menu.
 - Non exécuté : tests Swift et UI (IPA seule, à la demande du porteur).
 
+## Affichage des réponses (`08e9fdb`)
+
+Retour du porteur : la citation en petite bulle séparée au-dessus de la réponse n'était pas convaincante. Une réponse
+est maintenant une bulle Drivy (`MessagingReplyBubble`) aux mesures de `MessageView` d'Exyte 3.3.0 (rayon 20, marges
+12/8, heure 10 pt, coches du thème, réactions en pastilles) qui porte en tête `MessagingQuoteBlock` : bandeau d'accent
+de 4 pt, auteur (« Vous » pour soi), une ou deux lignes du message cité, « indisponible » ou « supprimé » en italique.
+`MatchWidthStack` fait épouser à la bulle son contenu tout en étendant la citation à sa largeur. Les pastilles de
+réaction de ces bulles sont des boutons (ajout ou retrait direct). La bande « Répondre à… » du composeur reprend le même
+dessin. Messages sans citation : bulle Exyte inchangée. Non exécuté : tests, comparaison visuelle sur appareil.
+
 ## Points relus dans le code d'Exyte (lecture, non exécutés)
 
 - `ChatView` crée toujours un `CLLocationManager` (via `LiveLocationBroadcaster`) sans demande d'autorisation ni mise à
