@@ -37,7 +37,8 @@ elif [[ "$unit_only" == 1 ]]; then
   if [[ "$unit_test_scope" == all ]]; then
     test_options=(-only-testing:DrivyTests)
   elif [[ "$unit_test_scope" == messaging ]]; then
-    for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests; do
+    for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
+      MessagingExyteThreadTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reactivity ]]; then
