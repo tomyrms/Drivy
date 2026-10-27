@@ -11,7 +11,10 @@ import XCTest
         let search = app.descendants(matching: .any).matching(NSPredicate(format: "elementType == %lu OR elementType == %lu",
             XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.searchField.rawValue)).firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
-        focusForTyping(search); search.typeText("Zoe")
+        // Le cadre d'accessibilité du champ remonte sous la barre de navigation (fond du safeAreaInset) :
+        // son centre tombe sur la barre. Toucher le champ visible, ancré en bas du cadre.
+        focusForTyping(search, at: CGVector(dx: 0, dy: -(12 + 22)))
+        search.typeText("Zoe")
         let candidates = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Zoé Exemple", "Réf."))
         XCTAssertTrue(candidates.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(candidates.count, 2, app.debugDescription)
@@ -114,12 +117,16 @@ import XCTest
         XCTAssertTrue(element.exists && element.isHittable, app.debugDescription)
     }
     private func dismissConfirmation(in app: XCUIApplication, cancelLabel: String) {
-        let cancel = app.buttons.matching(identifier: cancelLabel).firstMatch
-        if cancel.exists && cancel.isHittable { cancel.tap() }
-        else if app.otherElements["PopoverDismissRegion"].exists { app.otherElements["PopoverDismissRegion"].tap() }
-        else {
-            // iOS 26 peut présenter le rôle Annuler comme un toucher hors du popover, sans bouton nommé.
-            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        // iOS 26 expose parfois Button > Button : le conteneur ne déclenche pas l'action, viser le bouton terminal.
+        let leaves = app.buttons.matching(identifier: cancelLabel).allElementsBoundByIndex.filter {
+            $0.descendants(matching: .button).matching(identifier: cancelLabel).count == 0 && $0.isHittable
         }
+        if let cancel = leaves.first { cancel.tap(); return }
+        // iPad : le rôle Annuler d'un popover se joue hors de lui. Sur une feuille, deux régions existent :
+        // la dernière est celle du popover, au premier plan ; la première fermerait la feuille.
+        let regions = app.otherElements.matching(identifier: "PopoverDismissRegion")
+        if regions.count > 0 { regions.element(boundBy: regions.count - 1).tap(); return }
+        // iOS 26 peut présenter le rôle Annuler comme un toucher hors du popover, sans bouton nommé.
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
     }
 }
