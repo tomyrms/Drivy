@@ -83,8 +83,14 @@ déchiffrement) pour reconfigurer la cellule sans changer d'identité.
   [run 40560998430](https://github.com/tomyrms/Drivy/actions/runs/40560998430) sur `05bf364`.
 - PASS : compilation de l'IPA avec la vue Exyte, sans avertissement sur les nouveaux fichiers,
   [run 40562721790](https://github.com/tomyrms/Drivy/actions/runs/40562721790) sur `96de414` (IPA zippée de 17,6 Mo).
-- NOT_EXECUTED : `MessagingExyteThreadTests` (l'IPA ne compile pas la cible de tests), captures, VoiceOver, iPad,
-  clavier matériel, mesures de fluidité et de mémoire, capture réseau, GPS pendant une leçon.
+- PASS : la cible DrivyTests compile avec Exyte sans le lier ; périmètre `messaging` (désormais avec
+  `MessagingExyteThreadTests`) : 72 tests, zéro échec, dont les 10 nouveaux,
+  [run 40567843643](https://github.com/tomyrms/Drivy/actions/runs/40567843643) sur `430e5d7`.
+- PASS : IPA à installer, base `master` à jour (`54b6ea9` et suivants) et accès Messages compilé,
+  [run 40569715322](https://github.com/tomyrms/Drivy/actions/runs/40569715322) sur `430e5d7`. **Toute IPA de ce
+  chantier se lance avec `-f messaging_qualification=true`** : sans l'option, l'IPA n'a pas d'accès Messages.
+- NOT_EXECUTED : tests UI avec le réglage activé, captures, VoiceOver, iPad, clavier matériel, mesures de fluidité et
+  de mémoire, capture réseau, GPS pendant une leçon.
 
 ## Reste à faire (lots C et D de #182)
 
@@ -94,7 +100,8 @@ déchiffrement) pour reconfigurer la cellule sans changer d'identité.
 2. Vérifier dans une cellule Exyte les présentations portées par la bulle (« Voir les votes », dialogue « Réagir »
    des actions d'accessibilité, « Clore le sondage ? ») ; si `UIHostingConfiguration` les ignore, les remonter au
    niveau de la vue.
-3. Tests UI : rejouer les parcours messagerie critiques avec le réglage activé (argument de lancement à ajouter).
+3. Tests UI : rejouer les parcours messagerie critiques avec le réglage activé. Aucun code à ajouter : `@AppStorage`
+   lit l'argument de lancement `-messaging.thread.exyte YES`.
 4. Trancher Giphy (fork minimal ou acceptation de la MPL) avant toute diffusion publique.
 5. Basculer seulement après parité : retirer `MessagingConversationView`, le réglage et `showsNativeMenu`.
 

@@ -2,9 +2,10 @@
 
 ## 27 octobre 2026 — #182 Exyte Chat en comparaison locale
 
-- Branche `claude/182-exyte-chat` depuis `claude/integration-20261027` (`4014c52`). Exyte Chat 3.3.0 exacte et ses six dépendances verrouillées ; IPA compilée avec la dépendance ([run 40560998430](https://github.com/tomyrms/Drivy/actions/runs/40560998430)).
+- Branche `claude/182-exyte-chat` depuis `claude/integration-20261027` (`4014c52`), `master` fusionné ensuite. Exyte Chat 3.3.0 exacte et ses six dépendances verrouillées ; IPA compilée avec la dépendance ([run 40560998430](https://github.com/tomyrms/Drivy/actions/runs/40560998430)).
 - Fil Exyte derrière le réglage « Fil Exyte (essai) » (Messages › Plus), désactivé par défaut : liste, pagination et menu d’Exyte ; bulles, composeur, droits, E2EE et file protégée Drivy. [Décisions, matrice et reprise](reprise-exyte-chat-182-20261027.md).
-- À trancher : Giphy (binaire MPL 2.0) est embarqué d’office par Exyte. Tests Swift, captures, VoiceOver, iPad, réseau et GPS : NOT_EXECUTED. Aucun déploiement.
+- Tests métier `messaging` : 72 réussis, zéro échec, dont 10 nouveaux ([run 40567843643](https://github.com/tomyrms/Drivy/actions/runs/40567843643)). IPA avec accès Messages sur `430e5d7`, base `master` à jour ([run 40569715322](https://github.com/tomyrms/Drivy/actions/runs/40569715322)).
+- À trancher : Giphy (binaire MPL 2.0) est embarqué d’office par Exyte. Tests UI avec le réglage, captures, VoiceOver, iPad, réseau et GPS : NOT_EXECUTED. Aucun déploiement.
 
 ## 26 octobre 2026 — récupération intégrée et reçus Messages
 
