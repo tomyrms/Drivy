@@ -89,7 +89,8 @@ jobs:
     name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && inputs.ui_iphone_only && 'Parcours UI iPhone seul' || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
-    timeout-minutes: 90
+    # Campagne complète iPhone puis iPad : 94 min le 27 octobre, coupée à 90.
+    timeout-minutes: 150
     env:
       QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
       DRIVY_MESSAGING_QUALIFICATION: ${{ inputs.messaging_qualification && '1' || '0' }}
