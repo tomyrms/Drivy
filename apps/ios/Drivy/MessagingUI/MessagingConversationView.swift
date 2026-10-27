@@ -232,8 +232,12 @@ private enum ExyteBubbleMetrics {
                      String(text(item).characters), item.date.formatted(date: .omitted, time: .shortened)]
         if let wire = item.message {
             if wire.meta.pinned { parts.append("épinglé") }
-            let reactions = wire.meta.reactions.map { "\(MessagingReactionPalette.label($0.emoji)) \($0.personIDs.count)" }
-            if !reactions.isEmpty { parts.append("réactions : " + reactions.joined(separator: ", ")) }
+            let reactions = wire.meta.reactions.map { reaction in
+                "\(MessagingReactionPalette.label(reaction.emoji)) \(reaction.personIDs.count)"
+                    + (reaction.personIDs.contains(accountID) ? ", vous avez réagi" : "")
+                    + Self.syncSuffix(workspace.mutation(.reaction(reaction.emoji), on: wire)?.status)
+            }
+            if !reactions.isEmpty { parts.append("réactions : " + reactions.joined(separator: " ; ")) }
             let readers = wire.senderID == accountID ? workspace.readers(of: wire) : []
             if !readers.isEmpty {
                 parts.append(isGeneral ? "lu par " + readers.map(workspace.displayName).joined(separator: ", ") : "lu")
@@ -248,6 +252,17 @@ private enum ExyteBubbleMetrics {
             }
         }
         return parts.joined(separator: ", ")
+    }
+
+    /// Réaction encore provisoire : son état est lu avec elle, jamais présenté comme confirmé.
+    private static func syncSuffix(_ status: MessagingMutationStatus?) -> String {
+        switch status {
+        case .sending?, .slow?: ", en cours de synchronisation"
+        case .unconfirmed?, .uncertain?: ", modification non confirmée"
+        case .offline?: ", en attente de connexion"
+        case .storageFailed?: ", modification non conservée"
+        default: ""
+        }
     }
 
     func needsSendRetry(_ item: MessagingThreadItem) -> Bool {
@@ -734,19 +749,15 @@ private struct MessagingThreadRow: View {
                 .accessibilityAction(named: "Voir les votes") { thread.votersFor = wire }
                 .accessibilityActions { actions(item) }
         } else if let quoted = thread.quotedID(item) {
-            let quote = thread.quote(quoted)
             MessagingReplyBubble(thread: thread, item: item, message: params.message, quotedID: quoted, mine: mine,
                                  showsAvatar: params.positionInGroup == .last || params.positionInGroup == .single,
-                                 topPadding: bubbleTopPadding)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("En réponse à \(quote.author ?? "un message") : \(quote.summary). "
-                                    + thread.accessibilityLabel(item))
-                .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
-                .accessibilityAction(named: "Afficher le message cité") { Task { await thread.jump(to: quoted) } }
-                .accessibilityActions { actions(item) }
+                                 topPadding: bubbleTopPadding) { actions(item) }
+                .accessibilityElement(children: .contain)
         } else {
             let hasReactions = !(item.message?.meta.reactions.isEmpty ?? true)
             params.defaultMessageView()
+                // Toute la bande est touchable, pas seulement les pastilles dessinées.
+                .contentShape(Rectangle())
                 // Les pastilles de réaction d'Exyte n'ont pas d'action : un appui dans leur bande, au-dessus de la
                 // bulle, retire ma réaction (ou reprend la seule présente) sans passer par le menu.
                 .simultaneousGesture(SpatialTapGesture().onEnded { value in
@@ -888,6 +899,8 @@ private struct MessagingQuoteBlock: View {
             .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("En réponse à \(quote.author ?? "un message") : \(quote.summary)")
+        .accessibilityHint("Affiche le message cité")
         .task(id: quotedID) {
             let workspace = thread.workspace
             if let quoted = workspace.message(quotedID, in: thread.conversationID), !quoted.meta.deletedForEveryone,
@@ -900,7 +913,7 @@ private struct MessagingQuoteBlock: View {
 
 /// Bulle d'une réponse, dessinée par Drivy aux mesures de `MessageView` d'Exyte 3.3.0 (rayon, marges, heure, coches,
 /// réactions) : la citation fait partie de la bulle au lieu de flotter au-dessus.
-private struct MessagingReplyBubble: View {
+private struct MessagingReplyBubble<Actions: View>: View {
     let thread: MessagingThreadModel
     let item: MessagingThreadItem
     let message: ExyteChat.Message
@@ -908,6 +921,7 @@ private struct MessagingReplyBubble: View {
     let mine: Bool
     let showsAvatar: Bool
     let topPadding: CGFloat
+    @ViewBuilder let actions: () -> Actions
 
     private static let timeFont = Font(UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: 10)))
     private var reactionSize: CGFloat {
@@ -964,6 +978,10 @@ private struct MessagingReplyBubble: View {
             }
             .padding(.top, 6)
             .padding(.bottom, 8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(thread.accessibilityLabel(item))
+            .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
+            .accessibilityActions(actions)
         }
         .background(mine ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted,
                     in: RoundedRectangle(cornerRadius: ExyteBubbleMetrics.radius, style: .continuous))

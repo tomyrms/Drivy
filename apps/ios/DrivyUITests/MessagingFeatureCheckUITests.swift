@@ -64,8 +64,10 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         return general
     }
 
+    /// Texte exact, ou bulle du fil (#182) : une bulle Exyte est un seul élément « auteur, texte, heure… ».
     private func text(_ app: XCUIApplication, _ value: String) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "label == %@", value)).firstMatch
+        app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ OR (identifier == 'messaging.message' AND label CONTAINS %@)", value, value)).firstMatch
     }
 
     private func openGeneral(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
@@ -139,20 +141,14 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         let app = launch()
         openGeneral(app)
         let older = app.buttons["Charger les messages précédents"]
-        // Remonter le fil par glissements sur la fenêtre : la vue défilante n'est pas toujours
-        // exposée comme ScrollView selon l'appareil.
-        for _ in 0..<20 where !(older.exists && older.isHittable) { app.swipeDown(velocity: .fast) }
-        capture("05a-haut-du-fil")
-        XCTAssertTrue(older.exists && older.isHittable,
-                      "Bouton de chargement des précédents (existe \(older.exists), premier chargé visible \(text(app, "Bonjour à tous, nouvelle semaine").exists))")
-        older.tap()
-        // La page 2 est la dernière : le bouton disparaît quand elle est arrivée. Glisser avant, fil
-        // encore tout en haut, fermait la feuille Messages de la fixture au lieu de remonter.
-        XCTAssertTrue(older.waitForNonExistence(timeout: 10), "Page 2 reçue")
-        // Le fil est paresseux : les messages chargés au-dessus n'existent qu'une fois remontés à l'écran.
         let first = text(app, "Premier message du général")
-        for _ in 0..<6 where !first.waitForExistence(timeout: 1) { app.swipeDown() }
-        XCTAssertTrue(first.waitForExistence(timeout: 8), "Page 2 chargée")
+        // Remonter le fil : Exyte charge la page suivante en atteignant le haut, le bouton reste un secours.
+        for _ in 0..<20 where !(older.exists && older.isHittable) && !first.exists { app.swipeDown(velocity: .fast) }
+        capture("05a-haut-du-fil")
+        if older.exists && older.isHittable { older.tap() }
+        // La liste ne garde que les cellules visibles : la page 2 apparaît une fois remontée à l'écran.
+        for _ in 0..<8 where !first.waitForExistence(timeout: 1) { app.swipeDown() }
+        XCTAssertTrue(first.waitForExistence(timeout: 8), "Page 2 chargée (bouton \(older.exists))")
         capture("05-messages-precedents")
     }
 
@@ -161,25 +157,26 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         openGeneral(app)
         let target = text(app, "Leçon de conduite confirmée")
         XCTAssertTrue(waitFor(target, "hittable == true"))
-        let mine = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'vous avez réagi'")).firstMatch
         capture("06-avant-reaction")
-        XCTAssertTrue(mine.waitForExistence(timeout: 5), "Ma réaction existante est marquée")
-        XCTAssertTrue(mine.label.hasPrefix("Pouce levé, 2"), "Capsule : \(mine.label)")
-        target.press(forDuration: 1.2)
+        XCTAssertTrue(waitFor(target, "label CONTAINS 'Pouce levé 2, vous avez réagi'"), "Ma réaction existante : \(target.label)")
+        target.press(forDuration: 0.6)
         let heart = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
         XCTAssertTrue(heart.waitForExistence(timeout: 5), "Palette de réactions dans le menu")
+        let reply = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Répondre'")).firstMatch
+        XCTAssertTrue(reply.exists, "Actions du menu")
         capture("06a-menu-reactions")
         heart.tap()
-        XCTAssertTrue(app.buttons["Répondre"].waitForNonExistence(timeout: 3), "#102 : le menu se ferme après le choix")
-        let capsule = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Cœur, 1'")).firstMatch
-        XCTAssertTrue(capsule.waitForExistence(timeout: 5), "Capsule Cœur mise à jour")
+        XCTAssertTrue(reply.waitForNonExistence(timeout: 3), "#102 : le menu se ferme après le choix")
+        XCTAssertTrue(waitFor(text(app, "Leçon de conduite confirmée"), "label CONTAINS 'Cœur 1, vous avez réagi'"),
+                      "Réaction Cœur appliquée sur la bulle")
         capture("06b-reaction-appliquee")
     }
 
     func testQuotedReplyShowsAndJumps() {
         let app = launch()
         openGeneral(app)
-        let quote = app.buttons.matching(NSPredicate(format: "label == 'En réponse à : Pensez aux papiers du permis'")).firstMatch
+        let quote = app.buttons.matching(NSPredicate(
+            format: "label BEGINSWITH 'En réponse à' AND label CONTAINS 'Pensez aux papiers du permis'")).firstMatch
         XCTAssertTrue(quote.waitForExistence(timeout: 5), "Citation du message 20")
         capture("07-reponse-citee")
         quote.tap()
