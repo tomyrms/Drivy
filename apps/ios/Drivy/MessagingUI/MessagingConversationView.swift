@@ -92,6 +92,23 @@ private enum ExyteBubbleMetrics {
 
     func displayID(for messageID: UUID) -> String? { items.first { $0.message?.id == messageID }?.id }
 
+    /// Message cité par une ligne, sauf si elle est supprimée : sa citation disparaît avec elle.
+    func quotedID(_ item: MessagingThreadItem) -> UUID? {
+        if let entry = item.pending { return entry.replyToMessageID }
+        guard let wire = item.message, !wire.meta.deletedForEveryone,
+              workspace.mutation(.deleteForEveryone, on: wire) == nil else { return nil }
+        return wire.meta.replyToMessageID
+    }
+
+    /// Auteur et extrait du message cité ; « indisponible » ou « supprimé » sont dits, jamais devinés.
+    func quote(_ id: UUID) -> (author: String?, summary: String, available: Bool) {
+        guard let quoted = workspace.message(id, in: conversationID) else { return (nil, "Message indisponible", false) }
+        let author = quoted.senderID == accountID ? "Vous" : workspace.displayName(quoted.senderID)
+        if quoted.meta.deletedForEveryone { return (author, "Message supprimé", false) }
+        guard let content = workspace.contents[id] else { return (author, "Message", true) }
+        return (author, content.summary, true)
+    }
+
     // MARK: Modèle Exyte
 
     /// Bulle, heure, coches d'état et réactions sont rendues par Exyte. Le texte déchiffré ne vit qu'en mémoire,
@@ -683,10 +700,6 @@ private struct MessagingThreadRow: View {
                             .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
                             .accessibilityHidden(true)
                     }
-                    if let quoted = item.message?.meta.replyToMessageID ?? item.pending?.replyToMessageID {
-                        MessagingThreadQuote(thread: thread, quotedID: quoted, mine: mine)
-                            .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
-                    }
                     bubble(item, mine: mine)
                     MessagingThreadStateLine(thread: thread, item: item)
                         .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
@@ -716,8 +729,20 @@ private struct MessagingThreadRow: View {
         if let wire = item.message, !wire.meta.deletedForEveryone, workspace.mutation(.deleteForEveryone, on: wire) == nil,
            let poll = workspace.contents[wire.id]?.poll, let state = wire.meta.poll {
             MessagingThreadPollBubble(thread: thread, message: wire, poll: poll, state: state, mine: mine,
-                                      showsAvatar: params.positionInGroup == .last || params.positionInGroup == .single)
+                                      showsAvatar: params.positionInGroup == .last || params.positionInGroup == .single,
+                                      quotedID: wire.meta.replyToMessageID)
                 .accessibilityAction(named: "Voir les votes") { thread.votersFor = wire }
+                .accessibilityActions { actions(item) }
+        } else if let quoted = thread.quotedID(item) {
+            let quote = thread.quote(quoted)
+            MessagingReplyBubble(thread: thread, item: item, message: params.message, quotedID: quoted, mine: mine,
+                                 showsAvatar: params.positionInGroup == .last || params.positionInGroup == .single,
+                                 topPadding: bubbleTopPadding)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("En réponse à \(quote.author ?? "un message") : \(quote.summary). "
+                                    + thread.accessibilityLabel(item))
+                .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
+                .accessibilityAction(named: "Afficher le message cité") { Task { await thread.jump(to: quoted) } }
                 .accessibilityActions { actions(item) }
         } else {
             let hasReactions = !(item.message?.meta.reactions.isEmpty ?? true)
@@ -738,10 +763,14 @@ private struct MessagingThreadRow: View {
     /// Hauteur de la bande des réactions dans `MessageView` d'Exyte 3.3.0 : marge haute de la ligne, puis pastilles
     /// (ligne de texte + 2 × 6 pt), dont le bas chevauche la bulle.
     private var reactionBand: CGFloat {
+        bubbleTopPadding + (UIFont.preferredFont(forTextStyle: .body).lineHeight + 12) * 0.8
+    }
+
+    /// Marge haute de `MessageView` : plus grande en tête d'un groupe d'auteur, sauf en tête de journée.
+    private var bubbleTopPadding: CGFloat {
         let groupTop = params.positionInGroup == .first || params.positionInGroup == .single
         let dayTop = params.positionInMessagesSection == .first || params.positionInMessagesSection == .single
-        let top: CGFloat = groupTop && !dayTop ? 8 : 4
-        return top + (UIFont.preferredFont(forTextStyle: .body).lineHeight + 12) * 0.8
+        return groupTop && !dayTop ? 8 : 4
     }
 
     @ViewBuilder private var swipeHint: some View {
@@ -831,39 +860,197 @@ private struct BubbleAligned: ViewModifier {
     }
 }
 
-/// Citation au dessin des réponses Exyte ; un appui mène au message cité, chargé au besoin.
-private struct MessagingThreadQuote: View {
+/// Citation intégrée en tête de bulle : bandeau d'accent, auteur, une ou deux lignes du message cité.
+/// Un appui mène au message cité, chargé au besoin.
+private struct MessagingQuoteBlock: View {
     let thread: MessagingThreadModel
     let quotedID: UUID
     let mine: Bool
 
     var body: some View {
-        let workspace = thread.workspace
-        let quoted = workspace.message(quotedID, in: thread.conversationID)
-        let summary: String = {
-            guard let quoted else { return "Message indisponible" }
-            if quoted.meta.deletedForEveryone { return "Message supprimé" }
-            return workspace.contents[quotedID]?.summary ?? "Message"
-        }()
+        let quote = thread.quote(quotedID)
         Button { Task { await thread.jump(to: quotedID) } } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                if let quoted {
-                    Text(workspace.displayName(quoted.senderID)).fontWeight(.semibold).foregroundStyle(DrivyTheme.accent)
+            HStack(spacing: 0) {
+                Rectangle().fill(DrivyTheme.accent).frame(width: 4)
+                VStack(alignment: .leading, spacing: 1) {
+                    if let author = quote.author {
+                        Text(author).font(.footnote.weight(.semibold)).foregroundStyle(DrivyTheme.accent).lineLimit(1)
+                    }
+                    Text(quote.summary).font(.footnote).italic(!quote.available)
+                        .foregroundStyle(DrivyTheme.muted).lineLimit(2)
                 }
-                Text(summary).lineLimit(2).foregroundStyle(DrivyTheme.muted)
+                .padding(.horizontal, DrivySpacing.xs).padding(.vertical, 6)
             }
-            .font(.caption)
-            .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
-            .background((mine ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted).opacity(0.8),
-                        in: RoundedRectangle(cornerRadius: ExyteBubbleMetrics.radius, style: .continuous))
-            .padding(mine ? .trailing : .leading, 10)
-            .overlay(alignment: mine ? .trailing : .leading) {
-                Capsule().fill(DrivyTheme.accent).frame(width: 2)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Teinte de la bulle porteuse : accent pour mes messages, surface claire pour les autres.
+            .background(mine ? DrivyTheme.accent.opacity(0.12) : DrivyTheme.surfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("En réponse à : \(summary)")
-        .accessibilityHint("Affiche le message cité")
+        .task(id: quotedID) {
+            let workspace = thread.workspace
+            if let quoted = workspace.message(quotedID, in: thread.conversationID), !quoted.meta.deletedForEveryone,
+               workspace.contents[quotedID] == nil {
+                await thread.decrypt(quoted)
+            }
+        }
+    }
+}
+
+/// Bulle d'une réponse, dessinée par Drivy aux mesures de `MessageView` d'Exyte 3.3.0 (rayon, marges, heure, coches,
+/// réactions) : la citation fait partie de la bulle au lieu de flotter au-dessus.
+private struct MessagingReplyBubble: View {
+    let thread: MessagingThreadModel
+    let item: MessagingThreadItem
+    let message: ExyteChat.Message
+    let quotedID: UUID
+    let mine: Bool
+    let showsAvatar: Bool
+    let topPadding: CGFloat
+
+    private static let timeFont = Font(UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: 10)))
+    private var reactionSize: CGFloat {
+        ("🙃" as NSString).size(withAttributes: [.font: UIFont.preferredFont(forTextStyle: .body)]).width + 12
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: ExyteBubbleMetrics.spacing) {
+            if thread.isGeneral && !mine {
+                Group {
+                    if showsAvatar {
+                        MessagingThreadAvatar(workspace: thread.workspace, user: message.user)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: ExyteBubbleMetrics.avatar, height: ExyteBubbleMetrics.avatar)
+            }
+            VStack(alignment: mine ? .leading : .trailing, spacing: -reactionSize / 3) {
+                if !message.reactions.isEmpty {
+                    MessagingReactionChips(reactions: message.reactions, mine: mine, size: reactionSize) { emoji in
+                        thread.react(.emoji(emoji), displayID: item.id)
+                    }
+                    .offset(x: mine ? -reactionSize / 2 : reactionSize / 2)
+                    .zIndex(1)
+                }
+                bubble
+            }
+            if mine {
+                status.frame(width: ExyteBubbleMetrics.status, height: ExyteBubbleMetrics.status)
+            }
+        }
+        .padding(.top, topPadding)
+        .padding(.horizontal, ExyteBubbleMetrics.screenEdge)
+        .padding(mine ? .leading : .trailing, ExyteBubbleMetrics.opposite)
+        .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+    }
+
+    private var bubble: some View {
+        MatchWidthStack(spacing: 0) {
+            MessagingQuoteBlock(thread: thread, quotedID: quotedID, mine: mine)
+                .padding([.top, .horizontal], 6)
+            ZStack(alignment: .bottomTrailing) {
+                // Espace réservé en fin de texte : l'heure se pose sur la dernière ligne, ou en dessous si elle est pleine.
+                Text(message.attributedText + AttributedString("\u{2003}\u{2003}"))
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                Text(message.createdAt, format: .dateTime.hour().minute())
+                    .font(Self.timeFont)
+                    .foregroundStyle(DrivyTheme.textTertiary)
+                    .padding(.trailing, 12)
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 8)
+        }
+        .background(mine ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted,
+                    in: RoundedRectangle(cornerRadius: ExyteBubbleMetrics.radius, style: .continuous))
+    }
+
+    /// Mêmes icônes et couleurs que la coche d'Exyte ; l'erreur réessaie le même envoi.
+    @ViewBuilder private var status: some View {
+        let images = ChatTheme.drivy.images.message
+        switch message.status {
+        case .sending?: statusImage(images.sending, DrivyTheme.muted)
+        case .sent?: statusImage(images.sent, DrivyTheme.muted)
+        case .delivered?: statusImage(images.delivered, DrivyTheme.muted)
+        case .readBy?: statusImage(images.read, DrivyTheme.accent)
+        case .error?:
+            Button { thread.retrySend(displayID: item.id) } label: { statusImage(images.error, DrivyTheme.danger) }
+                .buttonStyle(.plain)
+        case nil: Color.clear
+        }
+    }
+
+    private func statusImage(_ image: Image, _ color: Color) -> some View {
+        image.renderingMode(.template).resizable().scaledToFit().foregroundStyle(color)
+    }
+}
+
+/// Pastilles de réaction au dessin d'Exyte, mais touchables : un appui ajoute ou retire cette réaction.
+private struct MessagingReactionChips: View {
+    let reactions: [ExyteChat.Reaction]
+    let mine: Bool
+    let size: CGFloat
+    let onTap: (String) -> Void
+
+    private static let limit = 5
+
+    var body: some View {
+        let sorted = reactions.sorted { $0.createdAt > $1.createdAt }
+        let overflow = sorted.count > Self.limit
+        let shown = overflow ? Array(sorted.prefix(Self.limit - 1)) : sorted
+        HStack(spacing: -size / 5) {
+            if !mine && overflow { chip("+\(sorted.count - Self.limit + 1)", own: false, sending: false) }
+            ForEach(mine ? shown : Array(shown.reversed()), id: \.id) { reaction in
+                if case .emoji(let emoji) = reaction.type {
+                    Button { onTap(emoji) } label: {
+                        chip(emoji, own: reaction.user.isCurrentUser, sending: reaction.status == .sending)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            if mine && overflow { chip("+\(sorted.count - Self.limit + 1)", own: false, sending: false) }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func chip(_ text: String, own: Bool, sending: Bool) -> some View {
+        Text(text)
+            .font(.body)
+            .opacity(sending ? 0.7 : 1)
+            .padding(6)
+            .background(Circle().fill(own ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted))
+            .overlay(Circle().stroke(DrivyTheme.canvas, style: StrokeStyle(lineWidth: 2, dash: sending ? [4, 3] : [])))
+    }
+}
+
+/// Empile ses éléments à la largeur du plus large, bornée par la place offerte : la bulle épouse son contenu et la
+/// citation s'étend sur toute la largeur de la bulle.
+private struct MatchWidthStack: Layout {
+    var spacing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = matchedWidth(for: proposal, subviews: subviews)
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        return CGSize(width: width, height: heights.reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for subview in subviews {
+            let height = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            subview.place(at: CGPoint(x: bounds.minX, y: y), proposal: ProposedViewSize(width: bounds.width, height: height))
+            y += height + spacing
+        }
+    }
+
+    private func matchedWidth(for proposal: ProposedViewSize, subviews: Subviews) -> CGFloat {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        guard let available = proposal.width else { return ideal }
+        return min(ideal, available)
     }
 }
 
@@ -875,6 +1062,7 @@ private struct MessagingThreadPollBubble: View {
     let state: MessagingPollState
     let mine: Bool
     let showsAvatar: Bool
+    let quotedID: UUID?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: ExyteBubbleMetrics.spacing) {
@@ -889,6 +1077,7 @@ private struct MessagingThreadPollBubble: View {
                 .frame(width: ExyteBubbleMetrics.avatar, height: ExyteBubbleMetrics.avatar)
             }
             VStack(alignment: .trailing, spacing: DrivySpacing.xxs) {
+                if let quotedID { MessagingQuoteBlock(thread: thread, quotedID: quotedID, mine: mine) }
                 MessagingPollCard(workspace: thread.workspace, message: message, poll: poll, state: state,
                                   onShowVoters: { thread.votersFor = message },
                                   onClose: { thread.confirmClosePoll = message })
@@ -1112,6 +1301,7 @@ private struct MessagingThreadComposer: View {
     let thread: MessagingThreadModel
     @Bindable var composer: MessagingComposerModel
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var workspace: MessagingWorkspace { thread.workspace }
 
@@ -1167,26 +1357,43 @@ private struct MessagingThreadComposer: View {
         }
         .padding(.horizontal, DrivySpacing.xs)
         .padding(.vertical, DrivySpacing.xs)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: composer.replyTo?.id)
         .onChange(of: composer.focusRequest) { _, _ in focused = true }
         .onChange(of: composer.blurRequest) { _, _ in focused = false }
         .onChange(of: focused) { _, value in composer.isFocused = value }
     }
 
+    /// Même dessin que la citation dans la bulle : on voit déjà la réponse telle qu'elle partira.
     private func replyPreview(_ message: MessagingWireMessage) -> some View {
-        HStack(spacing: DrivySpacing.xs) {
-            RoundedRectangle(cornerRadius: 1.5).fill(DrivyTheme.accent).frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Réponse à \(workspace.displayName(message.senderID))").font(.caption.bold()).foregroundStyle(DrivyTheme.accent)
-                Text(workspace.contents[message.id]?.summary ?? "Message").font(.caption).lineLimit(1).foregroundStyle(DrivyTheme.muted)
+        let quote = thread.quote(message.id)
+        let title = message.senderID == workspace.scope.accountID
+            ? "Répondre à votre message" : "Répondre à \(quote.author ?? "ce message")"
+        return HStack(spacing: DrivySpacing.xs) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(DrivyTheme.accent)
+                .frame(width: DrivyLayout.tapTarget)
+                .accessibilityHidden(true)
+            HStack(spacing: 0) {
+                Rectangle().fill(DrivyTheme.accent).frame(width: 4)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.footnote.weight(.semibold)).foregroundStyle(DrivyTheme.accent).lineLimit(1)
+                    Text(quote.summary).font(.footnote).italic(!quote.available)
+                        .foregroundStyle(DrivyTheme.muted).lineLimit(1)
+                }
+                .padding(.horizontal, DrivySpacing.xs).padding(.vertical, 6)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .background(DrivyTheme.surfaceMuted)
+            .clipShape(RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
             Button("Annuler la réponse", systemImage: "xmark.circle.fill") { composer.replyTo = nil }
                 .labelStyle(.iconOnly).foregroundStyle(DrivyTheme.muted)
                 .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
         }
-        .padding(.leading, DrivySpacing.s)
         .fixedSize(horizontal: false, vertical: true)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(title) : \(quote.summary)")
         .accessibilityIdentifier("messaging.reply.preview")
     }
 
