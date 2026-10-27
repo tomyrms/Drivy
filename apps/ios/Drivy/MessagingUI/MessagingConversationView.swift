@@ -923,7 +923,7 @@ private struct MessagingReplyBubble<Actions: View>: View {
     let topPadding: CGFloat
     @ViewBuilder let actions: () -> Actions
 
-    private static let timeFont = Font(UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: 10)))
+    private static var timeFont: Font { Font(UIFontMetrics.default.scaledFont(for: UIFont.systemFont(ofSize: 10))) }
     private var reactionSize: CGFloat {
         ("🙃" as NSString).size(withAttributes: [.font: UIFont.preferredFont(forTextStyle: .body)]).width + 12
     }
