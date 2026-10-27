@@ -611,22 +611,9 @@ final class SchoolCaptureSessionController {
         state = .preparing; transition = .resuming; errorMessage = nil
         defer { endTransition(.resuming, request: request) }
         do {
-            // Hors réseau ou école injoignable : le bail local encore valable suffit à rouvrir un segment, comme
-            // après une perte de signal. Un trajet clos par l’école pendant la pause se découvre alors au premier
-            // envoi (elle refuse les lots au-delà de sa borne). Un refus (401, 403, 404) reste un refus.
-            let current: SchoolCaptureStoredSession?
-            do { current = try await active.transfer.refresh(captureID: active.session.id) }
-            catch SchoolCaptureFailure.unavailable where active.lease.permitsCollection() { current = nil }
-            guard generation == request, state == .preparing, !active.terminalRequested else { return }
-            if let current, current.serverCapture.captureState != .authorized {
-                // L’école a clos le trajet pendant la pause : sans cette branche l’état restait
-                // « Préparation du GPS » sans aucune commande. On scelle localement, GPS arrêté.
-                let boundary = active.stopBoundary()
-                active.terminalRequested = true; active.local.halt()
-                errorMessage = "L’école a arrêté ce trajet. Les positions déjà enregistrées sont conservées."
-                await finish(active, request: request, boundary: boundary, reason: .deviceError)
-                return
-            }
+            // #111 : le bail local encore valable (`canResume`) rouvre le segment sans attendre le réseau, comme après
+            // une perte de signal. L’école est relue ensuite : un trajet clos pendant la pause s’arrête alors et se
+            // scelle (elle refuse de toute façon les lots au-delà de sa borne). Un refus (401, 403, 404) reste un refus.
             try await openSegment(active, request: request, reason: .resume)
         } catch {
             guard generation == request, state == .preparing, !active.terminalRequested else { return }
@@ -635,7 +622,30 @@ final class SchoolCaptureSessionController {
             if active.handle != nil {
                 await finish(active, request: request, boundary: boundary, reason: .deviceError)
             } else { state = .paused }
+            return
         }
+        guard generation == request, state == .recording, !active.terminalRequested else { return }
+        Task { await confirmResumedCapture(active, request: request) }
+    }
+
+    /// Relecture de l’école après une reprise locale. École injoignable : rien ne change, comme pendant une perte de
+    /// signal. Trajet clos pendant la pause ou accès refusé : la collecte s’arrête et se scelle, positions conservées.
+    private func confirmResumedCapture(_ active: Context, request: UUID) async {
+        let current: SchoolCaptureStoredSession?
+        var refusal: (any Error)?
+        do { current = try await active.transfer.refresh(captureID: active.session.id) }
+        catch SchoolCaptureFailure.unavailable { return }
+        catch is CancellationError { return }
+        catch { current = nil; refusal = error }
+        guard generation == request, context === active, state == .recording, !active.terminalRequested else { return }
+        if let refusal {
+            errorMessage = message(refusal)
+        } else if let current, current.serverCapture.captureState != .authorized {
+            errorMessage = "L’école a arrêté ce trajet. Les positions déjà enregistrées sont conservées."
+        } else { return }
+        let boundary = active.stopBoundary()
+        active.terminalRequested = true; active.local.halt(); transition = nil
+        await finish(active, request: request, boundary: boundary, reason: .deviceError)
     }
 
     func stop(reason: SchoolCaptureLocalStopReason = .userStop) async {
