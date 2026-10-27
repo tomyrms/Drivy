@@ -756,14 +756,19 @@ private struct MessagingThreadRow: View {
         } else {
             let hasReactions = !(item.message?.meta.reactions.isEmpty ?? true)
             params.defaultMessageView()
-                // Toute la bande est touchable, pas seulement les pastilles dessinées.
-                .contentShape(Rectangle())
-                // Les pastilles de réaction d'Exyte n'ont pas d'action : un appui dans leur bande, au-dessus de la
-                // bulle, retire ma réaction (ou reprend la seule présente) sans passer par le menu.
-                .simultaneousGesture(SpatialTapGesture().onEnded { value in
-                    guard value.location.y <= reactionBand else { return }
-                    if !thread.tapReactions(displayID: item.id) { thread.openMenu(params.showContextMenuClosure) }
-                }, including: hasReactions && !thread.reporting ? .all : .subviews)
+                // Les pastilles de réaction d'Exyte n'ont pas d'action : une zone transparente posée sur toute leur
+                // bande, au-dessus de la bulle, retire ma réaction (ou reprend la seule présente) sans passer par le
+                // menu. Posée par-dessus, elle reçoit l'appui quelle que soit la façon dont la bulle traite les touchers.
+                .overlay(alignment: .top) {
+                    if hasReactions && !thread.reporting {
+                        Color.clear
+                            .frame(height: reactionBand)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if !thread.tapReactions(displayID: item.id) { thread.openMenu(params.showContextMenuClosure) }
+                            }
+                    }
+                }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(thread.accessibilityLabel(item))
                 .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
