@@ -114,11 +114,17 @@ final class DrivyAPIClient: SchoolAPI {
         try await learners(schoolID: schoolID, query: "", cursor: nil, instructorMembershipID: nil, status: "ALL", own: true)
     }
 
+    func incompleteLearners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner> {
+        try await learners(schoolID: schoolID, query: query, cursor: cursor, instructorMembershipID: nil, requiresAction: true)
+    }
+
     func learners(schoolID: UUID, query: String, cursor: String?, instructorMembershipID: UUID?,
-                  status: String? = nil, own: Bool = false, pageSize: Int = 50) async throws -> SchoolPage<SchoolLearner> {
+                  status: String? = nil, own: Bool = false, requiresAction: Bool = false,
+                  pageSize: Int = 50) async throws -> SchoolPage<SchoolLearner> {
         var items = [URLQueryItem(name: "limit", value: String(min(100, max(1, pageSize))))]
         if let status { items.append(URLQueryItem(name: "status", value: status)) }
         if own { items.append(URLQueryItem(name: "own", value: "true")) }
+        if requiresAction { items.append(URLQueryItem(name: "requiresAction", value: "true")) }
         if let instructorMembershipID { items.append(URLQueryItem(name: "instructorMembershipId", value: instructorMembershipID.uuidString)) }
         if !query.isEmpty { items.append(URLQueryItem(name: "q", value: query)) }
         if let cursor { items.append(URLQueryItem(name: "cursor", value: cursor)) }

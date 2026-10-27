@@ -21,6 +21,8 @@ final class SchoolWorkspace {
     private(set) var trainings: [SchoolTraining] = []
     private(set) var selectedLearnerID: UUID?
     private(set) var searchText = ""
+    /// Seulement les dossiers dont le profil est à compléter (#153) : un filtre du serveur, jamais de la page chargée.
+    private(set) var showsIncompleteProfilesOnly = false
     private(set) var nextLearnersCursor: String?
     private(set) var nextTrainingsCursor: String?
 
@@ -222,10 +224,18 @@ final class SchoolWorkspace {
         return peoplePhotos[personID] ?? nil
     }
 
+    /// Lectures de photo en cours : la liste et le dossier d’une même personne ne la demandent qu’une fois.
+    @ObservationIgnored private var loadingPhotos: Set<UUID> = []
+
     func loadPhoto(for personID: UUID) async {
-        guard personID != person?.personId, peoplePhotos[personID] == nil else { return }
+        guard personID != person?.personId, peoplePhotos[personID] == nil, !loadingPhotos.contains(personID) else { return }
+        let scope = schoolScope
+        loadingPhotos.insert(personID)
+        defer { loadingPhotos.remove(personID) }
         do {
             let data = try await api.personPhoto(personID: personID)
+            // Une réponse arrivée après un changement d’école n’est pas rangée dans la nouvelle portée.
+            guard scope == schoolScope else { return }
             peoplePhotos[personID] = .some(data)
         } catch {
             // Une photo manquante n’est pas une erreur à montrer : les initiales restent.
@@ -347,6 +357,19 @@ final class SchoolWorkspace {
         }
     }
 
+    /// Le filtre « Profil à compléter » relit la liste depuis la première page, recherche en cours comprise.
+    func setIncompleteProfilesOnly(_ value: Bool) async {
+        guard value != showsIncompleteProfilesOnly else { return }
+        showsIncompleteProfilesOnly = value
+        await searchLearners(searchText)
+    }
+
+    /// Une page de la liste de l’équipe, filtre compris.
+    private func staffLearnersPage(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner> {
+        if showsIncompleteProfilesOnly { return try await api.incompleteLearners(schoolID: schoolID, query: query, cursor: cursor) }
+        return try await api.learners(schoolID: schoolID, query: query, cursor: cursor)
+    }
+
     /// Immediate equivalent used for explicit retry and deterministic tests.
     func searchLearners(_ text: String) async {
         let sameQuery = text.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedQuery
@@ -371,7 +394,7 @@ final class SchoolWorkspace {
         do {
             let page: SchoolPage<SchoolLearner>
             if entryDestination == .learner && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
-            else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
+            else { page = try await staffLearnersPage(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             if entryDestination == .learner && query.isEmpty {
@@ -461,7 +484,7 @@ final class SchoolWorkspace {
         isLoadingMoreLearners = true
         learnersError = nil
         do {
-            let page = try await api.learners(schoolID: schoolID, query: query, cursor: cursor)
+            let page = try await staffLearnersPage(schoolID: schoolID, query: query, cursor: cursor)
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             guard page.nextCursor != cursor,
@@ -611,7 +634,7 @@ final class SchoolWorkspace {
             // L’élève cherche son seul dossier, archivé compris ; l’équipe garde la liste des dossiers actifs.
             let page: SchoolPage<SchoolLearner>
             if entryDestination == .learner && query.isEmpty { page = try await api.ownLearners(schoolID: schoolID) }
-            else { page = try await api.learners(schoolID: schoolID, query: query, cursor: nil) }
+            else { page = try await staffLearnersPage(schoolID: schoolID, query: query, cursor: nil) }
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             if entryDestination == .learner && query.isEmpty {
@@ -634,6 +657,9 @@ final class SchoolWorkspace {
         schoolScope = UUID()
         membership = nil
         school = nil
+        // Les photos et le filtre appartiennent à l’école quittée : rien n’en reparaît dans la suivante.
+        peoplePhotos = [:]
+        showsIncompleteProfilesOnly = false
         schoolError = nil
         isLoadingSchool = false
         learnersReadAt = nil

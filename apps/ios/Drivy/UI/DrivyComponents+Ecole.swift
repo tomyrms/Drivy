@@ -113,6 +113,8 @@ private struct DrivySchoolButtonLabel: View {
 /// Leading visual of an entity row: initials for a person, a symbol otherwise.
 enum DrivyRowLeading {
     case avatar(String)
+    /// Une personne avec sa photo autorisée, déjà lue ; les initiales tant qu’elle manque, sans changer la hauteur.
+    case person(String, photo: Data?)
     case symbol(String)
     /// Catégorie de permis (`categoryCode`) : son véhicule dans la même pastille qu’un symbole.
     case license(String)
@@ -170,6 +172,8 @@ struct DrivyEntityRow: View {
         switch leading {
         case .avatar(let name):
             DrivyAvatar(name: name, isSelected: isSelected)
+        case .person(let name, let photo):
+            DrivyAvatar(name: name, isSelected: isSelected, photo: photo)
         case .symbol(let symbol):
             Image(systemName: symbol)
                 .font(.body)
