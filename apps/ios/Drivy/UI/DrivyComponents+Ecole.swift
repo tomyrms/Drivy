@@ -304,7 +304,8 @@ struct DrivyFormField: View {
             .accessibilityHidden(true)
             field
                 .accessibilityLabel(label)
-                .accessibilityValue(isMissing ? "À renseigner" : "")
+                // La valeur forcée remplaçait la saisie : VoiceOver annonçait un champ vide.
+                .accessibilityValue(text.isEmpty ? (isMissing ? "À renseigner" : "") : text)
                 .accessibilityIdentifier(identifier ?? "")
         }
         .padding(.vertical, DrivySpacing.xxs)
