@@ -69,6 +69,18 @@ Perdu par rapport à l'ancien fil : l'appui direct sur une réaction pour la ret
 la retire), « Lu par N » visible dans le général (reste dans l'étiquette VoiceOver) et la fenêtre de 5 minutes du
 regroupement.
 
+## Retours du porteur sur l'IPA `908aad3` (corrigés en `b4a2e9d`, IPA `f86d68d`)
+
+- Répondre : glisser vers la **gauche**, en un geste. `MessagingReplySwipeGesture` (`UIPanGestureRecognizer` qui ne
+  démarre que vers la gauche et à l'horizontale ; la liste attend son échec) remplace l'action de liste d'Exyte.
+- Menu trop lent : `MessagingMenuPressGesture` (0,25 s au lieu des 0,5 s figés chez Exyte) ouvre le menu dès la
+  reconnaissance, via `MessageBuilderParameters.showContextMenuClosure` ; animation 0,15 s ; réaction sans délai.
+- Clavier ouvert : le composeur perd le focus, puis le menu s'ouvre 320 ms plus tard ; Exyte ignore le clavier pendant
+  son menu (`ignoresSafeArea(.keyboard)`), ce qui faisait sauter le fil.
+- Réaction retirée d'un appui : les pastilles d'Exyte n'ont pas d'action ; un appui dans leur bande (au-dessus de la
+  bulle, hauteur calculée sur `MessageView` 3.3.0) retire ma réaction ou reprend la seule présente, sinon ouvre le menu.
+- Non exécuté : tests Swift et UI (IPA seule, à la demande du porteur).
+
 ## Points relus dans le code d'Exyte (lecture, non exécutés)
 
 - `ChatView` crée toujours un `CLLocationManager` (via `LiveLocationBroadcaster`) sans demande d'autorisation ni mise à
