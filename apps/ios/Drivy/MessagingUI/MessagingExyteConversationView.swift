@@ -60,6 +60,8 @@ enum MessagingExyteMenuAction: String, CaseIterable, MessageMenuAction, Sendable
     var confirmDeleteForEveryone: MessagingWireMessage?
     var showPollComposer = false
     private(set) var loadingOlder = false
+    /// Hauteur du pied (composeur, signalement), qu'Exyte place sous la liste : le bouton de retour reste au-dessus.
+    private(set) var footerHeight: CGFloat = 0
 
     init(workspace: MessagingWorkspace, composer: MessagingComposerModel, conversationID: UUID, isGeneral: Bool) {
         self.workspace = workspace
@@ -204,6 +206,10 @@ enum MessagingExyteMenuAction: String, CaseIterable, MessageMenuAction, Sendable
         let bottom = offset < 48
         if bottom != atBottom { atBottom = bottom }
         if bottom && unseenBelow { unseenBelow = false }
+    }
+
+    func footerResized(_ height: CGFloat) {
+        if abs(height - footerHeight) > 0.5 { footerHeight = height }
     }
 
     func scrollToNewest() {
@@ -410,8 +416,7 @@ struct MessagingExyteConversationView: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, DrivySpacing.m)
-            // Au-dessus du composeur, qu'Exyte place sous la liste.
-            .padding(.bottom, DrivyLayout.tapTarget + DrivySpacing.l)
+            .padding(.bottom, thread.footerHeight + DrivySpacing.s)
             .accessibilityLabel(unseen ? "Nouveaux messages, revenir en bas" : "Revenir en bas")
             .accessibilityIdentifier("messaging.scroll.bottom")
             .transition(.opacity)
@@ -588,6 +593,7 @@ private struct MessagingExyteFooter: View {
                 MessagingExyteComposer(thread: thread, composer: thread.composer)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { thread.footerResized($0) }
         // #100 : fond Drivy continu jusqu'au bord, clavier compris ; seul le fond déborde.
         .background(DrivyTheme.surface.ignoresSafeArea(.container, edges: .bottom)
             .ignoresSafeArea(.keyboard, edges: .bottom))
