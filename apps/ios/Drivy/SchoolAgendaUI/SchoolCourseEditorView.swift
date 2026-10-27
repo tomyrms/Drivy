@@ -80,11 +80,6 @@ struct SchoolCourseEditorView: View {
                     onFinished(series)
                     dismiss()
                 }
-                .alert("Nouveau type", isPresented: $addsType) {
-                    TextField("Nom du type", text: $model.newTypeTitle)
-                    Button("Créer") { Task { await model.createType() } }
-                    Button("Annuler", role: .cancel) { model.newTypeTitle = "" }
-                }
                 .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
                     Button("Enregistrer le brouillon et quitter") { Task { await model.saveDraft() } }.disabled(!model.canSave)
                     Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
@@ -110,9 +105,13 @@ struct SchoolCourseEditorView: View {
                 ForEach(model.types) { type in Text(type.title).tag(Optional(type.id)) }
             }
             .accessibilityIdentifier("course-type")
-            Button { addsType = true } label: { Label("Nouveau type", systemImage: "plus") }
+            Button { model.errorMessage = nil; addsType = true } label: { Label("Nouveau type", systemImage: "plus") }
                 .disabled(model.isBusy)
                 .accessibilityIdentifier("course-new-type")
+                // Un petit formulaire, comme sur le web : nom et description du type (#160).
+                .sheet(isPresented: $addsType) {
+                    SchoolCourseTypeCreationSheet(model: model, close: { addsType = false })
+                }
             TextField("Titre", text: $model.form.title)
                 .accessibilityIdentifier("course-title")
             TextField("Description", text: $model.form.description, axis: .vertical)
@@ -120,6 +119,15 @@ struct SchoolCourseEditorView: View {
             TextField("Lieu", text: $model.form.location, axis: .vertical)
                 .lineLimit(1...3)
                 .textContentType(.fullStreetAddress)
+            // Mêmes langues que le web ; « Non précisée » laisse la langue vide (#159).
+            Picker("Langue", selection: $model.form.teachingLanguage) {
+                Text("Non précisée").tag(nil as String?)
+                ForEach(SchoolCourseLanguage.all) { language in Text(language.label).tag(Optional(language.id)) }
+                if let code = model.form.teachingLanguage, !SchoolCourseLanguage.all.contains(where: { $0.id == code }) {
+                    Text(code.uppercased()).tag(Optional(code))
+                }
+            }
+            .accessibilityIdentifier("course-language")
             Picker("Responsable", selection: $model.form.responsibleID) {
                 if !model.instructors.contains(where: { $0.membershipId == model.form.responsibleID }), let id = model.form.responsibleID {
                     Text(responsibleName(id)).tag(Optional(id))
@@ -387,5 +395,59 @@ struct SchoolCourseDetailView: View {
         case .cancelled: "Annulé"
         case .closed: "Clos"
         }
+    }
+}
+
+/// « Nouveau type » (#160) : nom et description, comme sur le web. Annuler revient au cours sans rien toucher ; le type
+/// créé est aussitôt choisi. Une réponse perdue se rejoue avec la même opération.
+private struct SchoolCourseTypeCreationSheet: View {
+    @Bindable var model: SchoolCourseEditorWorkspace
+    let close: () -> Void
+    @FocusState private var titleFocused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let message = model.errorMessage {
+                    Section { DrivyFormMessage(text: message, tone: .danger) }
+                        .drivyFormRows()
+                }
+                Section {
+                    TextField("Nom du type", text: $model.newTypeTitle)
+                        .focused($titleFocused)
+                        .accessibilityIdentifier("course-new-type-title")
+                    TextField("Description", text: $model.newTypeDescription, axis: .vertical)
+                        .lineLimit(2...6)
+                        .accessibilityIdentifier("course-new-type-description")
+                }
+                .drivyFormRows()
+            }
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
+            .navigationTitle("Nouveau type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") {
+                        model.newTypeTitle = ""; model.newTypeDescription = ""
+                        close()
+                    }
+                    .disabled(model.isBusy)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { Task { if await model.createType() { close() } } } label: {
+                        DrivyBusyLabel(title: "Créer", busyTitle: "Création…", isBusy: model.isBusy)
+                    }
+                    .disabled(!model.canCreateType)
+                    .accessibilityIdentifier("course-new-type-create")
+                }
+            }
+            .onAppear { titleFocused = true }
+        }
+        .tint(DrivyTheme.accent)
+        .interactiveDismissDisabled(model.isBusy)
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationSizing(.form)
     }
 }

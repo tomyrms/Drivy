@@ -654,7 +654,10 @@ struct SchoolRootView: View {
             photoLoader: { [weak workspace] id in
                 await workspace?.loadPhoto(for: id)
                 return await workspace?.photo(for: id)
-            }, currentScope: {
+            },
+            // Le nom de l’école n’est dit qu’à un compte de plusieurs écoles (#176).
+            schoolName: person.memberships.count > 1 ? membership.schoolName : nil,
+            currentScope: {
                 guard identity.isAuthenticated, workspace.school?.status == "ACTIVE",
                       let person = workspace.person, let membership = workspace.membership else { return nil }
                 return MessagingScope(accountID: person.personId, schoolID: membership.schoolId,

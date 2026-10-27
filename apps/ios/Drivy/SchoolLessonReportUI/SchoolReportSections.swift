@@ -150,12 +150,46 @@ struct SchoolLessonReplayLinks: View {
         let replayable = model.replayableCaptures
         ForEach(Array(replayable.enumerated()), id: \.element.id) { index, capture in
             Button { router.openReplay(capture, model: model, context: context) } label: {
-                Text(replayable.count == 1 ? "Revoir le trajet" : "Revoir le trajet \(index + 1)")
+                Text(replayable.count == 1 ? "Revoir le trajet"
+                     : "Revoir le trajet de \(SchoolReplayLabel.title(capture, index: index, among: replayable, zone: model.lesson?.timeZone))")
                     .frame(minHeight: DrivyLayout.tapTarget)
                     .contentShape(Rectangle())
             }
+            .accessibilityLabel(replayable.count == 1 ? "Revoir le trajet"
+                : "Revoir le \(SchoolReplayLabel.spoken(capture, index: index, zone: model.lesson?.timeZone))")
             .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
         }
+    }
+}
+
+/// Un trajet de la leçon nommé par ce qui le distingue (#164) : « 14:05 · 32 min », plus son état s’il est inhabituel
+/// (« Partiel »). Une heure ou une durée manquante n’est jamais devinée ; le numéro ne s’ajoute que si deux trajets se
+/// lisent pareil. La clé d’ouverture reste l’identifiant du trajet, quel que soit l’ordre.
+@MainActor enum SchoolReplayLabel {
+    static func details(_ capture: SchoolCaptureSession, zone: String?) -> String {
+        var parts: [String] = []
+        if let start = SchoolLesson.date(capture.authorizedAt) { parts.append(SchoolDateFormat.time(start, zone: zone ?? "Europe/Zurich")) }
+        if let duration = SchoolTripsWorkspace.duration(capture) { parts.append(duration) }
+        if let badge = SchoolTripsWorkspace.badge(capture) { parts.append(badge.title) }
+        return parts.joined(separator: " · ")
+    }
+
+    static func title(_ capture: SchoolCaptureSession, index: Int, among captures: [SchoolCaptureSession], zone: String?) -> String {
+        let base = details(capture, zone: zone)
+        guard !base.isEmpty else { return "trajet \(index + 1)" }
+        let twins = captures.filter { details($0, zone: zone) == base }.count > 1
+        return twins ? "\(base) · trajet \(index + 1)" : base
+    }
+
+    /// « trajet 2, commencé à 14:05, 32 minutes, Partiel » : la durée dite en toutes lettres.
+    static func spoken(_ capture: SchoolCaptureSession, index: Int, zone: String?) -> String {
+        var parts = ["trajet \(index + 1)"]
+        if let start = SchoolLesson.date(capture.authorizedAt) {
+            parts.append("commencé à \(SchoolDateFormat.time(start, zone: zone ?? "Europe/Zurich"))")
+        }
+        if let duration = SchoolTripsWorkspace.spokenDuration(capture) { parts.append(duration) }
+        if let badge = SchoolTripsWorkspace.badge(capture) { parts.append(badge.title) }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -208,8 +242,11 @@ struct SchoolLessonTripMap: View {
         } else if captures.count > 1 {
             Menu {
                 ForEach(Array(captures.enumerated()), id: \.element.id) { index, capture in
-                    Button("Trajet \(index + 1)") { router.openReplay(capture, model: model, context: context) }
-                        .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
+                    Button(SchoolReplayLabel.title(capture, index: index, among: captures, zone: model.lesson?.timeZone)) {
+                        router.openReplay(capture, model: model, context: context)
+                    }
+                    .accessibilityLabel(SchoolReplayLabel.spoken(capture, index: index, zone: model.lesson?.timeZone))
+                    .accessibilityIdentifier("lesson-replay-\(capture.id.uuidString)")
                 }
             } label: { LessonReplayGlyph() }
                 .buttonStyle(.plain)
@@ -572,6 +609,17 @@ struct SchoolReportReviewSection: View {
         }
     }
 
+    /// Ce que verra l’élève, élément par élément (#165) : lu dans les réglages de partage de cette leçon, sans rien publier
+    /// ni changer d’identité. Le bilan suit l’enregistrement ; trajet et observations suivent leur propre réglage.
+    private var learnerPreview: [SchoolReportLearnerPreviewItem] {
+        let observations = model.lessonObservations
+        return SchoolReportFlowRules.learnerPreview(sharingKnown: model.sharing != nil, tripShared: model.captureShared,
+            hasTrip: review.hasTrip, observationCount: observations.count,
+            privateObservationCount: observations.filter { model.isPrivate($0) }.count,
+            goalCount: model.goals.filter { !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count,
+            hasPrivateNote: !model.administrativeNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
     private var visibility: some View {
         Section {
             switch review.visibility {
@@ -583,7 +631,11 @@ struct SchoolReportReviewSection: View {
                 Label(review.visibility.pendingLabel, systemImage: "exclamationmark.circle")
                     .foregroundStyle(DrivyTheme.muted)
             }
-        } header: { Text("Partage").drivyFormSectionHeader() }
+            ForEach(learnerPreview, id: \.label) { item in
+                Label(item.label, systemImage: item.visible == true ? "person.2" : item.visible == false ? "lock" : "exclamationmark.circle")
+                    .foregroundStyle(item.visible == nil ? DrivyTheme.muted : DrivyTheme.text)
+            }
+        } header: { Text("Ce que verra l’élève").drivyFormSectionHeader() }
             .drivyFormRows()
             .accessibilityIdentifier("lesson-report-review-visibility")
     }

@@ -86,12 +86,22 @@ struct SchoolCourseOperationMemory {
     /// Le type de cours est suivi (prochaines sessions, #40) ; `nil` tant que l’école ne l’a pas dit.
     private(set) var following: Bool?
     private(set) var isUpdatingFollow = false
+    private(set) var isLoadingFollow = false
+    /// La lecture du suivi a échoué : la ligne le dit et propose « Réessayer », sans rien abonner ni désabonner (#161).
+    private(set) var followReadFailed = false
 
-    /// Lecture séparée : une panne laisse seulement le bouton absent.
+    /// Lecture séparée : une panne ne touche que cette ligne, le reste de la fiche reste utilisable.
     func loadFollow() async {
-        guard let typeID = series?.typeId, !isUpdatingFollow,
-              let types = try? await client.follows(schoolID: schoolID), !Task.isCancelled else { return }
-        following = types.contains(typeID)
+        guard let typeID = series?.typeId, !isUpdatingFollow, !isLoadingFollow else { return }
+        isLoadingFollow = true; defer { isLoadingFollow = false }
+        do {
+            let types = try await client.follows(schoolID: schoolID)
+            guard !Task.isCancelled, series?.typeId == typeID else { return }
+            following = types.contains(typeID); followReadFailed = false
+        } catch is CancellationError {
+        } catch {
+            if !Task.isCancelled { followReadFailed = true }
+        }
     }
 
     /// Geste explicite : l’autorisation système n’est demandée qu’en s’abonnant. Rien n’est annoncé avant l’école.

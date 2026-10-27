@@ -8,6 +8,8 @@ struct SchoolAgendaView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selectedDate = Date()
+    /// « Aller à une date » : le calendrier ouvert depuis le mois affiché (#148).
+    @State private var choosesDate = false
     /// Semaine ou mois : relu au lancement, retenu à chaque choix. Le jour choisi est le même dans les deux.
     @State private var displayMode = SchoolAgendaDisplayMode.stored
     /// Sens du dernier changement de mois : la grille suivante arrive de ce côté.
@@ -305,14 +307,35 @@ struct SchoolAgendaView: View {
                 periodControls
             }
         }
+        .sheet(isPresented: $choosesDate) {
+            SchoolAgendaDateChooser(date: selectedDate, calendar: calendar) { date in
+                choosesDate = false
+                select(date)
+            }
+        }
     }
+    /// Le mois affiché ouvre le calendrier : une date éloignée s’atteint d’un geste, sans enchaîner les flèches (#148).
     private var periodTitle: some View {
         let month = displayMode == .month
-        return Text(formattedDay(selectedDate, template: "MMMM yyyy").capitalizedFirst)
-            .font(month ? Font.headline : Font.subheadline.weight(.semibold))
+        let title = formattedDay(selectedDate, template: "MMMM yyyy").capitalizedFirst
+        return Button { choosesDate = true } label: {
+            HStack(spacing: DrivySpacing.xxs) {
+                Text(title)
+                    .font(month ? Font.headline : Font.subheadline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
             .foregroundStyle(month ? DrivyTheme.text : DrivyTheme.muted)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityAddTraits(.isHeader)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint("Choisir une date")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("agenda-go-to-date")
     }
     private var periodControls: some View {
         let month = displayMode == .month
@@ -736,5 +759,51 @@ extension SchoolAgendaClient {
             canUseDiagnostic: { controller.canPrepareCapture },
             settleInterruptedCaptures: { lessonID in await controller.settleInterruptedCaptures(lessonID: lessonID) },
             makeLocationSource: makeSource)
+    }
+}
+
+/// « Aller à une date » (#148) : le calendrier natif dans le fuseau de l’école, la date affichée déjà choisie. « Annuler »
+/// ne change rien ; « Afficher » ouvre ce jour dans l’affichage en cours, filtres compris.
+private struct SchoolAgendaDateChooser: View {
+    let calendar: Calendar
+    let choose: (Date) -> Void
+    @State private var date: Date
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    init(date: Date, calendar: Calendar, choose: @escaping (Date) -> Void) {
+        _date = State(initialValue: date)
+        self.calendar = calendar
+        self.choose = choose
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .drivyControlTint()
+                    .padding(.horizontal, DrivySpacing.m)
+                    .accessibilityIdentifier("agenda-date-chooser")
+            }
+            .background(DrivyTheme.canvas)
+            .environment(\.timeZone, calendar.timeZone)
+            .environment(\.calendar, calendar)
+            .environment(\.locale, Locale(identifier: "fr_CH"))
+            .navigationTitle("Aller à une date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Afficher") { choose(date) }
+                        .accessibilityIdentifier("agenda-date-chooser-confirm")
+                }
+            }
+        }
+        .tint(DrivyTheme.accent)
+        .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.form)
     }
 }

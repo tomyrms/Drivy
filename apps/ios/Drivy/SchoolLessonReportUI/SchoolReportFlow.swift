@@ -18,6 +18,12 @@ enum SchoolReportReviewVisibility: Equatable, Sendable {
     }
 }
 
+/// Une ligne de « Ce que verra l’élève » (#165). `visible` : `nil` quand le réglage n’a pas été lu.
+struct SchoolReportLearnerPreviewItem: Equatable, Sendable {
+    let label: String
+    let visible: Bool?
+}
+
 struct SchoolReportReview: Equatable, Sendable {
     struct TextItem: Equatable, Sendable {
         let label: String
@@ -113,6 +119,38 @@ enum SchoolReportFlowRules {
         }
         return SchoolReportReview(texts: texts, competencies: reviewed, visibility: visibility,
             hasTrip: hasTrip, lessonObservationCount: lessonObservationCount)
+    }
+
+    /// Trajet, observations, objectifs et note, tels que l’élève les recevra (#165). Sans réglage de partage lu, rien
+    /// n’est affirmé pour le trajet et les observations. Les objectifs lui sont toujours rendus, la note pour moi jamais.
+    static func learnerPreview(sharingKnown: Bool, tripShared: Bool, hasTrip: Bool, observationCount: Int,
+                               privateObservationCount: Int, goalCount: Int, hasPrivateNote: Bool) -> [SchoolReportLearnerPreviewItem] {
+        var items: [SchoolReportLearnerPreviewItem] = []
+        if hasTrip {
+            items.append(!sharingKnown ? .init(label: "Trajet : visibilité à vérifier", visible: nil)
+                : tripShared ? .init(label: "Trajet visible par l’élève", visible: true) : .init(label: "Trajet pour moi", visible: false))
+        }
+        if observationCount > 0 {
+            if !sharingKnown {
+                items.append(.init(label: "Observations : visibilité à vérifier", visible: nil))
+            } else {
+                let kept = min(max(0, privateObservationCount), observationCount)
+                let shown = observationCount - kept
+                if shown > 0 {
+                    items.append(.init(label: shown == 1 ? "1 observation visible par l’élève" : "\(shown) observations visibles par l’élève",
+                                       visible: true))
+                }
+                if kept > 0 {
+                    items.append(.init(label: kept == 1 ? "1 observation pour moi" : "\(kept) observations pour moi", visible: false))
+                }
+            }
+        }
+        if goalCount > 0 {
+            items.append(.init(label: goalCount == 1 ? "1 objectif visible par l’élève" : "\(goalCount) objectifs visibles par l’élève",
+                               visible: true))
+        }
+        if hasPrivateNote { items.append(.init(label: "Note pour moi, jamais montrée à l’élève", visible: false)) }
+        return items
     }
 
     static func showsEvidenceInReview(isWide: Bool) -> Bool { !isWide }

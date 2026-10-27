@@ -8,14 +8,14 @@ Lister les issues ouvertes jamais commencées, proposer des lots, réaliser ceux
 
 | Lot | Tickets | Branche | État |
 |---|---|---|---|
-| 1 navigation et paramètres | #133 à #138 | `claude/lot1-navigation-parametres` (`db82402`) | Validé à l'essai par le porteur (IPA build 413). Tests UI ciblés lancés : run 40594859821. |
+| 1 navigation et paramètres | #133 à #138 | `claude/lot1-navigation-parametres` (`db82402`) | Validé à l'essai (IPA build 413). Tests UI ciblés iPhone et iPad réussis : run 40594859821. |
 | 2 écrans vides et dossier | #139, #140, #154 | `claude/audit-ux-lots-2-4` (`c314c52`) | Compilé. En attente d'essai. |
 | 3 liste des élèves | #151, #152, #153 | `claude/audit-ux-lots-2-4` (`3b6ff2e`) | En attente d'essai. |
 | 4 Mon profil | #155 à #158 | `claude/audit-ux-lots-2-4` (`e1a5d5d`) | Compilé. En attente d'essai. |
-| 5 agenda et planification | #148, #149, #150 | — | Proposé, non validé. |
-| 6 cours collectifs | #159, #160, #161 | — | Proposé, non validé. |
-| 7 bilan et trajets | #164, #165 | — | Proposé, non validé. |
-| 8 messagerie hors fil | #166, #167, #171, #176 | — | Proposé, non validé. |
+| 5 agenda et planification | #148, #149, #150 | `claude/audit-ux-lots-5-8` | Demandé le 28/10, en attente d'essai. |
+| 6 cours collectifs | #159, #160, #161 | `claude/audit-ux-lots-5-8` | Demandé le 28/10, en attente d'essai. |
+| 7 bilan et trajets | #164, #165 | `claude/audit-ux-lots-5-8` | Demandé le 28/10, en attente d'essai. |
+| 8 messagerie hors fil | #166, #167, #171, #176 | `claude/audit-ux-lots-5-8` | Demandé le 28/10, en attente d'essai. |
 | à fermer | #174 | — | Sans objet depuis #51 (le web planifie les leçons). |
 
 IPA livrées au porteur : branche d'intégration `claude/integration-lots-1-4-20261027` = lots 1 à 4 + `claude/182-exyte-chat` (PR #184, autre session), compilée avec `-f messaging_qualification=true`.
@@ -28,7 +28,7 @@ IPA livrées au porteur : branche d'intégration `claude/integration-lots-1-4-20
 ## Fusion prévue
 
 1. Après l'essai : tests UI ciblés (`NativeNavigationTests`, `MessagingKeyBackupUITests`, `MessagingOwnDevicesUITests`, `MessagingThreadUITests`, `SchoolEntryTests`, `DossierRefreshTests`) et tests métier (`SchoolProfilePhotoCropTests` et la suite `all`).
-2. PR de `claude/lot1-navigation-parametres` puis de `claude/audit-ux-lots-2-4` vers master. Ne pas fusionner la branche d'intégration : elle contient la PR #184 d'une autre session.
+2. PR de `claude/lot1-navigation-parametres`, puis `claude/audit-ux-lots-2-4`, puis `claude/audit-ux-lots-5-8` vers master. Ne pas fusionner la branche d'intégration : elle contient la PR #184 d'une autre session.
 3. iOS seulement : aucun déploiement homelab.
 
 ## Pour Codex

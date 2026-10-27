@@ -8,6 +8,11 @@ struct SchoolPlanningView: View {
     var onConfirmedLesson: @MainActor (SchoolLesson) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.schoolPlanningHelp) private var help
+    /// Un blocage a envoyé vers le web ou le contact de l’école : au retour dans l’app, la situation est relue.
+    @State private var leftForHelp = false
     @State private var confirmsCancellation = false
     @State private var isPreparingCancellation = false
     @State private var cancellationPreparationError: String?
@@ -67,6 +72,13 @@ struct SchoolPlanningView: View {
             .task {
                 model.readsForCancellation = cancelling
                 if model.school == nil { await model.load() }
+            }
+            // Retour du web ou d’un contact : la saisie reste, la formation, les affectations et les disponibilités
+            // sont relues plutôt que supposées corrigées (#150).
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active, leftForHelp else { return }
+                leftForHelp = false
+                Task { await model.load() }
             }
             .task(id: model.slotValidationRequest) {
                 if !cancelling, model.slotValidationRequest != nil { await model.validateSlot(debounced: true) }
@@ -145,7 +157,8 @@ struct SchoolPlanningView: View {
                     if model.isLoading && model.trainings.isEmpty {
                         DrivySkeletonRow().drivySkeleton("Chargement de la formation…")
                     } else if model.trainings.isEmpty {
-                        formNote("Aucune formation active. L’administration peut en ouvrir une depuis le dossier de cet élève.")
+                        blocker(admin: "Aucune formation active. Ouvre-la depuis le dossier de l’élève, sur le web.",
+                                other: "Aucune formation active. L’administration peut en ouvrir une.")
                     }
                 }
             } else {
@@ -210,12 +223,20 @@ struct SchoolPlanningView: View {
             }
             .onChange(of: model.instructorID) { _, _ in model.agreementConfirmed = false }
             if model.assignedInstructors.isEmpty && !model.isLoading {
-                formNote("Aucun moniteur affecté ne couvre ce créneau.")
+                blocker(admin: "Aucun moniteur affecté ne couvre ce créneau. Les affectations se gèrent sur le web.",
+                        other: "Aucun moniteur affecté ne couvre ce créneau. L’administration gère les affectations.")
             }
             if model.awaitingSuggestedSlot {
                 // La date n’apparaît qu’une fois le prochain créneau libre calculé : aucune date provisoire ne saute.
                 DrivySkeletonRows(count: 2).drivySkeleton("Recherche du prochain créneau libre…")
                     .accessibilityIdentifier("planning-next-slot-searching")
+                // Sans attendre la recherche, lente ou en panne (#149).
+                Button("Choisir moi-même", systemImage: "calendar") {
+                    beginEditing()
+                    model.chooseStartManually()
+                }
+                .disabled(!model.canMutate)
+                .accessibilityIdentifier("planning-choose-start")
             } else {
                 // Rendez-vous resté en attente après son horaire : la borne ne masque pas sa date réelle. Sans cela le
                 // sélecteur affichait aujourd’hui pendant que le formulaire refusait encore l’horaire passé.
@@ -256,7 +277,8 @@ struct SchoolPlanningView: View {
                         SchoolErrorNotice(message: error, retry: { Task { await model.loadAvailability() } })
                     }
                     if model.availabilityLoaded && model.availability.isEmpty {
-                        formNote("Aucune disponibilité : ajoute-la sur le web.")
+                        blocker(admin: "Aucune disponibilité : ajoute-la sur le web.",
+                                other: "Aucune disponibilité. L’administration les ajoute sur le web.")
                     }
                     ForEach(model.availability) { rule in
                         VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -491,6 +513,48 @@ struct SchoolPlanningView: View {
     }
     private func formNote(_ text: String) -> some View {
         Text(text).font(.subheadline).foregroundStyle(DrivyTheme.muted).fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Un blocage dit qui peut agir et propose une vraie destination (#150) : le portail pour l’administration, les
+    /// coordonnées publiées de l’école sinon. Un lien n’envoie rien : il ouvre le web, Téléphone, Messages ou Mail.
+    @ViewBuilder private func blocker(admin: String, other: String) -> some View {
+        formNote(help.manageURL != nil ? admin : other)
+        if let url = help.manageURL {
+            Button("Ouvrir sur le web", systemImage: "safari") { leave(to: url) }
+                .accessibilityIdentifier("planning-blocker-web")
+        } else if !help.schoolContact.isEmpty {
+            Menu {
+                ForEach(help.schoolContact) { link in
+                    Button(link.title, systemImage: link.symbol) { leave(to: link.url) }
+                }
+            } label: {
+                Label("Contacter l’école", systemImage: "building.2")
+            }
+            .accessibilityIdentifier("planning-blocker-contact")
+        }
+    }
+
+    private func leave(to url: URL) {
+        leftForHelp = true
+        openURL(url)
+    }
+}
+
+/// Ce que la planification propose quand elle bloque (#150) : le portail de gestion pour l’administration, les
+/// coordonnées publiées de l’école pour les autres comptes. Posé par l’accueil, lu par chaque feuille de planification.
+struct SchoolPlanningHelp {
+    var manageURL: URL? = nil
+    var schoolContact: [SchoolLearnerContactLink] = []
+}
+
+private struct SchoolPlanningHelpKey: EnvironmentKey {
+    static let defaultValue = SchoolPlanningHelp()
+}
+
+extension EnvironmentValues {
+    var schoolPlanningHelp: SchoolPlanningHelp {
+        get { self[SchoolPlanningHelpKey.self] }
+        set { self[SchoolPlanningHelpKey.self] = newValue }
     }
 }
 

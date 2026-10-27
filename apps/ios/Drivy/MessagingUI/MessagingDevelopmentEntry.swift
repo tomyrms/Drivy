@@ -7,6 +7,7 @@ enum MessagingDevelopmentEntry {
     static func make(scope: MessagingScope, baseURL: URL, tokenSource: any AccessTokenSource,
                      transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
                      photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
+                     schoolName: String? = nil,
                      arguments: [String] = ProcessInfo.processInfo.arguments,
                      currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) -> SchoolMessagingEntry? {
         let allowed = SchoolMessagingDevelopment.permitted(arguments: arguments, schoolIsActive: true)
@@ -20,7 +21,7 @@ enum MessagingDevelopmentEntry {
         return SchoolMessagingEntry(scopeID: scopeID,
             isQualification: SchoolMessagingDevelopment.isQualificationBuild, makeView: { peerID in
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay,
-                currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID))
+                currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID, schoolName: schoolName))
         })
     }
 }
@@ -32,6 +33,7 @@ private struct MessagingDevelopmentContainer: View {
     let currentScope: @MainActor @Sendable () -> MessagingScope?
     let photoLoader: @Sendable (UUID) async -> Data?
     let initialPeerID: UUID?
+    let schoolName: String?
     @State private var workspace: MessagingWorkspace?
     @State private var keys: MatrixMessagingCryptography?
     @State private var failure: MessagingFailure?
@@ -40,7 +42,7 @@ private struct MessagingDevelopmentContainer: View {
         Group {
             if let workspace {
                 MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys,
-                                   currentScope: currentScope)
+                                   schoolName: schoolName, currentScope: currentScope)
             } else if let failure {
                 ContentUnavailableView("Messages indisponibles", systemImage: "lock.shield",
                     description: Text(failure.localizedDescription))

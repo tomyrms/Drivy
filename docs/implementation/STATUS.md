@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 28 octobre 2026 — audit UX, lots 5 à 8 (#148-#150, #159-#161, #164-#165, #166/#167/#171/#176)
+
+- Branche `claude/audit-ux-lots-5-8`, sur les lots 2 à 4. Agenda : aller à une date, choisir soi-même l'horaire, sorties des blocages. Cours : langue, type avec description, suivi toujours visible. Bilan : trajets nommés par leur horaire, « Ce que verra l'élève ». Messages : état vide avec le général, recherche au-delà de la page, recherche des membres, école en sous-titre. [Détail](audit-ux-lots5-8-20261028.md).
+- iOS seulement, rien à déployer. Tests non lancés avant l'essai du porteur.
+
 ## 27 octobre 2026 — audit UX, lot 4 : Mon profil (#155 à #158)
 
 - Branche `claude/audit-ux-lots-2-4`. Résultat de la photo près d'elle et alerte de sortie exacte, cadrage avant envoi (ImageIO, 512 px, sans métadonnées), aperçu du nom affiché, « E-mail de contact », explications à la demande. [Détail](audit-ux-lot4-mon-profil-20261027.md).

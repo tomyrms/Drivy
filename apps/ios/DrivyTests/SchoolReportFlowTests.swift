@@ -486,4 +486,30 @@ final class LocalDraftStub: SchoolReportLocalDraftStore {
     func read() throws -> Data? { value }
     func write(_ data: Data) throws { writes += 1; value = data }
     func clear() throws { value = nil }
+
+    // MARK: Ce que verra l’élève (#165)
+
+    @Test func learnerPreviewSplitsSharedAndKeptObservations() {
+        let items = SchoolReportFlowRules.learnerPreview(sharingKnown: true, tripShared: false, hasTrip: true,
+            observationCount: 3, privateObservationCount: 1, goalCount: 2, hasPrivateNote: true)
+        #expect(items == [
+            .init(label: "Trajet pour moi", visible: false),
+            .init(label: "2 observations visibles par l’élève", visible: true),
+            .init(label: "1 observation pour moi", visible: false),
+            .init(label: "2 objectifs visibles par l’élève", visible: true),
+            .init(label: "Note pour moi, jamais montrée à l’élève", visible: false),
+        ])
+    }
+
+    @Test func learnerPreviewAffirmsNothingWithoutSharingSettings() {
+        let items = SchoolReportFlowRules.learnerPreview(sharingKnown: false, tripShared: true, hasTrip: true,
+            observationCount: 2, privateObservationCount: 0, goalCount: 0, hasPrivateNote: false)
+        #expect(items.allSatisfy { $0.visible == nil })
+        #expect(items.count == 2)
+    }
+
+    @Test func learnerPreviewIsEmptyWithoutContent() {
+        #expect(SchoolReportFlowRules.learnerPreview(sharingKnown: true, tripShared: true, hasTrip: false,
+            observationCount: 0, privateObservationCount: 0, goalCount: 0, hasPrivateNote: false).isEmpty)
+    }
 }

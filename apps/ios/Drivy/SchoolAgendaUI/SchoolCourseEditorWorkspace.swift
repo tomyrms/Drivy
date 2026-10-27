@@ -20,7 +20,7 @@ struct SchoolCourseForm: Equatable, Sendable {
     var description = ""
     var location = ""
     var conditions = ""
-    /// Conservée lors de la reprise d’un brouillon créé sur le web, même si ce formulaire ne l’édite pas.
+    /// Langue du cours, comme sur le web (#159) ; `nil` : non précisée. Une valeur inconnue reçue est conservée telle quelle.
     var teachingLanguage: String?
     var responsibleID: UUID?
     var capacity = 12
@@ -119,6 +119,8 @@ enum SchoolCourseFormat {
     private(set) var series: SchoolCourseSeries?
     var form = SchoolCourseForm()
     var newTypeTitle = ""
+    /// Description du type, comme sur le web (#160) ; distincte de celle de la série.
+    var newTypeDescription = ""
     private(set) var isLoading = false
     private(set) var isBusy = false
     var errorMessage: String?
@@ -208,22 +210,33 @@ enum SchoolCourseFormat {
         form.occurrences.removeAll { $0.id == id }
     }
 
-    /// Type propre à l’école, créé sur place puis choisi.
-    func createType() async {
+    /// Nom et description dans les bornes du serveur (120 et 2 000 caractères).
+    var canCreateType: Bool {
         let title = newTypeTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isBusy, !title.isEmpty, title.utf16.count <= 120 else { return }
+        return !isBusy && !title.isEmpty && title.utf16.count <= 120
+            && newTypeDescription.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 2000
+    }
+
+    /// Type propre à l’école, créé sur place puis choisi. Une réponse perdue se rejoue avec la même opération : un
+    /// nouvel essai ne crée pas un second type.
+    @discardableResult func createType() async -> Bool {
+        let title = newTypeTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = newTypeDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canCreateType else { return false }
         pendingIntent = .type
         isBusy = true; errorMessage = nil; defer { isBusy = false }
-        let operation = operationID(for: "type|\(title)")
+        let operation = operationID(for: "type|\(title)|\(description)")
         do {
-            let type = try await client.createType(schoolID: schoolID, body: SchoolCourseTypeBody(operationId: operation, title: title, description: ""))
+            let type = try await client.createType(schoolID: schoolID,
+                body: SchoolCourseTypeBody(operationId: operation, title: title, description: description))
             pending = nil
             if let catalogue {
                 self.catalogue = SchoolCourseCatalogue(schoolId: catalogue.schoolId, canManage: catalogue.canManage,
                     types: catalogue.types.filter { $0.id != type.id } + [type], policy: catalogue.policy, instructors: catalogue.instructors)
             }
-            form.typeID = type.id; newTypeTitle = ""
-        } catch { fail(error) }
+            form.typeID = type.id; newTypeTitle = ""; newTypeDescription = ""
+            return true
+        } catch { fail(error); return false }
     }
 
     /// Écrit le brouillon ; le succès n’est annoncé qu’après la réponse de l’école.
@@ -410,4 +423,13 @@ struct SchoolAgendaCourseItem: Identifiable, Equatable, Sendable {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "La capacité n’a pas pu être changée."
         }
     }
+}
+
+/// Langues proposées pour un cours, les mêmes que le web et que le contrat (`fr`, `de`, `it`, `en`).
+struct SchoolCourseLanguage: Identifiable {
+    let id: String
+    let label: String
+
+    static let all = [SchoolCourseLanguage(id: "fr", label: "Français"), SchoolCourseLanguage(id: "de", label: "Allemand"),
+                      SchoolCourseLanguage(id: "it", label: "Italien"), SchoolCourseLanguage(id: "en", label: "Anglais")]
 }
