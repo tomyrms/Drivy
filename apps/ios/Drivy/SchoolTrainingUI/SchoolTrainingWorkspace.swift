@@ -122,6 +122,11 @@ import Observation
             if error as? SchoolAPIError == .notFound { clear() }
             fail(error); return
         }
+        // #117 : la progression se lit en même temps que les leçons, plus après elles. Seul le dernier bilan évalué,
+        // qui se repère dans les leçons, attend leur lecture.
+        let progressRead: Task<Void, Never>? = hasPedagogicalRole
+            ? Task { [weak self] in await self?.loadProgress(evaluatingLast: false) } : nil
+        defer { progressRead?.cancel() }
         do {
             // Une relecture ne tronque jamais sous les yeux ce qui est montré : les pages déjà lues (« Afficher
             // d’autres leçons », historique complet) sont relues en entier, puis la liste est remplacée d’un coup.
@@ -150,7 +155,11 @@ import Observation
         }
         guard request == generation, !invalidated, !accessRevoked else { return }
         isLoading = false
-        if hasPedagogicalRole { await loadProgress() }
+        if let progressRead {
+            await progressRead.value
+            guard request == generation, !invalidated, !accessRevoked else { return }
+            await loadLastEvaluated(request: request, detailRequest: progressRequest)
+        }
         if historyRequested { await loadHistory() }
     }
     func loadMore() async {
@@ -199,7 +208,7 @@ import Observation
             if nextCursor == cursor || errorMessage != nil { return }
         }
     }
-    func loadProgress(keepingCurrent: Bool = true) async {
+    func loadProgress(keepingCurrent: Bool = true, evaluatingLast: Bool = true) async {
         guard !invalidated, !accessRevoked, hasPedagogicalRole, let training else { return }
         let request = generation; progressRequest = UUID(); let detailRequest = progressRequest
         progressError = nil
@@ -234,7 +243,7 @@ import Observation
                 progressError = SchoolTrainingAccess.message(error)
             }
         }
-        guard request == generation, detailRequest == progressRequest, !invalidated, !accessRevoked else { return }
+        guard evaluatingLast, request == generation, detailRequest == progressRequest, !invalidated, !accessRevoked else { return }
         await loadLastEvaluated(request: request, detailRequest: detailRequest)
     }
     /// Une lecture de plus par formation, seulement quand la leçon évaluée change : une révision publiée ne change pas.

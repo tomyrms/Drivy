@@ -57,6 +57,39 @@ import Testing
         }
     }
 
+    /// #112 : les signalements d’une leçon s’alignent ; ceux d’une autre leçon, la fin de leçon ou une autre époque attendent.
+    @Test func observationsOfOneLessonQueueAndStillBlockTheRestOfTeaching() throws {
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let lesson = UUID()
+            let first = try observation(lesson), second = try observation(lesson)
+            try store.save(first)
+            try store.save(second)
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(observation(UUID())) }
+            let completion = PendingSchoolCommand(id: UUID(), scope: scope, kind: .completeLesson, resourceVersion: 1,
+                createdAt: Date(), body: try JSONSerialization.data(withJSONObject: ["operationId": UUID().uuidString]),
+                resourceID: lesson)
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(completion) }
+            let newScope = SchoolCommandScope(personID: scope.personID, schoolID: scope.schoolID,
+                membershipID: scope.membershipID, accessEpoch: 2, apiBaseURL: scope.apiBaseURL)
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(observation(lesson, scope: newScope)) }
+            // Une invitation reste indépendante du domaine pédagogique.
+            try store.save(command(.createInvitation))
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try reopened.pendingCommands(for: scope).prefix(2) == [first, second])
+            #expect(try reopened.pending(for: scope, domain: .teaching) == first)
+            try reopened.remove(first)
+            #expect(try store.pending(for: scope, domain: .teaching) == second)
+        }
+    }
+
+    private func observation(_ lesson: UUID, scope: SchoolCommandScope? = nil) throws -> PendingSchoolCommand {
+        let id = UUID()
+        return PendingSchoolCommand(id: id, scope: scope ?? self.scope, kind: .createObservation, resourceVersion: 0,
+            createdAt: Date(), body: try JSONSerialization.data(withJSONObject: ["operationId": id.uuidString]),
+            routeResourceID: lesson)
+    }
+
     private func command(_ kind: SchoolCommandKind, scope: SchoolCommandScope? = nil) throws -> PendingSchoolCommand {
         let id = UUID(), scope = scope ?? self.scope
         return PendingSchoolCommand(id: id, scope: scope, kind: kind,
