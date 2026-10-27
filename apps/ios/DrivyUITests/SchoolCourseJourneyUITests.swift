@@ -11,7 +11,7 @@ import XCTest
         let search = app.descendants(matching: .any).matching(NSPredicate(format: "elementType == %lu OR elementType == %lu",
             XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.searchField.rawValue)).firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 10), app.debugDescription)
-        search.tap(); search.typeText("Zoe")
+        focusForTyping(search); search.typeText("Zoe")
         let candidates = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Zoé Exemple", "Réf."))
         XCTAssertTrue(candidates.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(candidates.count, 2, app.debugDescription)

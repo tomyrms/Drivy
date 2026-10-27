@@ -1142,3 +1142,10 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - PR #180 : la recette navigateur suivait encore l'ancien relais « Planifier dans l'app Drivy » retiré par #51 ; elle suit la planification depuis l'agenda web (run 40422727867, b41d7b9). Un contrôle réussi n'est plus annoncé comme l'étape en échec. Liste Swift des captures alignée sur capture-screens.sh (48 tests Python de qualification réussis localement).
 - NOT_EXECUTED : essai sur iPhone ou iPad physique de cette IPA ; campagne complète iOS sur le dernier SHA ; validation finale de la PR #180 relancée.
 - BLOCKED : notification de mention et de nouveau message, migration 20261025_messaging_mention_push.sql non déployée.
+
+## 27 octobre 2026 : master 54b6ea9 déployé (messagerie, bilans, planning web)
+
+- PR #180 et #181 fusionnées. Release `54b6ea9` installée après sauvegarde vérifiée de `drivy_refonte` ; migrations 53 → 55 ; API, web et worker sur la release, override web retiré. [Compte rendu et retour arrière](deploiement-messagerie-20261027.md).
+- Validation finale de `4014c52` (run 40545726242) : tout réussi sauf la campagne iOS, coupée à 90 min ; deux tests de saisie iPhone corrigés en `75c8851`, fin de la campagne iPad non exécutée. Limite du job portée à 150 min.
+- Mentions : push générique actif côté serveur. Nouveau message : pas de push (#74, choix ouverts dans #66).
+- NOT_EXECUTED : essai sur iPhone/iPad physique, réception push réelle, campagne iOS complète sur `54b6ea9`.
