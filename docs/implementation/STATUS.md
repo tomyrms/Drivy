@@ -1150,3 +1150,10 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Tests : recherche des participants touchée sur le champ visible (son cadre d'accessibilité remonte sous la barre), confirmation fermée par le bouton terminal ou la région du popover au premier plan.
 - PASS : SchoolCourseJourneyUITests et SchoolFormProtectionUITests, 7/7 sur iPhone et sur iPad (run 40574916579, b40ac04).
 - NOT_EXECUTED : écoute VoiceOver réelle sur appareil.
+
+## 28 octobre 2026 : réactivité, lots A à D (#111 à #113, #115, #117, #121 à #123)
+
+- Branche `claude/reactivite-20261028`. Signaler en file (#112), préparation saisissable pendant l'envoi (#113), reprise GPS sans attendre l'école (#111), replay rouvert depuis un cache en mémoire et progression lue avec les leçons (#115, #117), états en cours sur les lignes web et coordonnées modifiables pendant l'envoi (#121 à #123). [Détail](reactivite-lots-20261028.md).
+- PASS : compilation de l'app (IPA, run 40603892937, d4da07b) ; `npm run typecheck` et 401 tests web.
+- NOT_EXECUTED : tests Swift ajoutés et adaptés (la cible de tests n'est pas compilée par l'IPA) ; essai sur appareil ; réseau dégradé réel.
+- Issues livrées fermées avec leurs commits : #38 à #42, #51, #79 à #82, #88, #98, #100 à #104, #141, #143, #162, #163, #169, #170 ; #75 renvoyée à #97.
