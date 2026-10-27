@@ -20,6 +20,12 @@
 - Branche `claude/lot1-navigation-parametres`. Onglet Messages stable pendant un trajet, même sélecteur pour « Changer d'école », engrenage direct « Paramètres de Messages », « Historique des leçons », Notifications dans Paramètres. Règles de vocabulaire et d'ouverture des pages écrites. [Détail](navigation-parametres-lot1-20261027.md).
 - iOS seulement, rien à déployer. IPA d'essai à compiler ; tests non lancés avant l'essai du porteur. Aucun résultat VoiceOver ou appareil revendiqué.
 
+## 27 octobre 2026 — #182 fil Messages présenté par Exyte Chat
+
+- À la demande du porteur, le fil Exyte est le fil par défaut ; l’ancien fil et le réglage d’essai sont retirés. Bulles, heure, coches d’état, réactions, avatars, menu et glisser pour répondre d’Exyte 3.3.0 aux couleurs Drivy ; composeur, citations, sondages, droits, E2EE et file protégée Drivy. [Décisions, matrice et reprise](reprise-exyte-chat-182-20261027.md), PR brouillon #184.
+- IPA avec accès Messages sur `908aad3` ([run 40574156686](https://github.com/tomyrms/Drivy/actions/runs/40574156686)). Tests métier `messaging` après la bascule : 71 réussis, zéro échec ([run 40575602130](https://github.com/tomyrms/Drivy/actions/runs/40575602130)).
+- Tests UI de messagerie à adapter (ancien menu et accusé « Lu »), captures, VoiceOver, iPad, réseau et GPS : NOT_EXECUTED. À trancher : Giphy (binaire MPL 2.0) embarqué d’office par Exyte. Aucun déploiement.
+
 ## 26 octobre 2026 — récupération intégrée et reçus Messages
 
 - #50 : [158 contrôles navigateur réussis](https://github.com/tomyrms/Drivy/actions/runs/40334928759) sur `9105617`, dont les huit scénarios de récupération avec Keycloak/Mailpit isolés. [Preuve et limites](account-recovery-20261026.md). SMTP cible reporté à la demande du porteur ; activation réelle désactivée.
