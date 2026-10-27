@@ -245,7 +245,8 @@ struct SchoolLearnerTripsView: View {
     private func open(_ trip: SchoolCaptureTrip) {
         guard replay == nil, let model, SchoolTripsWorkspace.isReplayable(trip.capture) else { return }
         replay = SchoolTripReplayRoute(
-            model: SchoolCaptureReplayWorkspace(scope: model.scope, client: model.client, captureID: trip.capture.id),
+            model: SchoolCaptureReplayWorkspace(scope: model.scope, client: model.client, captureID: trip.capture.id,
+                                                cache: .shared),
             learnerName: SchoolTripsWorkspace.learnerTitle(trip), lessonTimeZone: trip.lessonTimeZone)
     }
 }
