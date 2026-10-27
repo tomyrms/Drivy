@@ -1143,3 +1143,10 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Validation finale de `4014c52` (run 40545726242) : tout réussi sauf la campagne iOS, coupée à 90 min ; deux tests de saisie iPhone corrigés en `75c8851`, fin de la campagne iPad non exécutée. Limite du job portée à 150 min.
 - Mentions : push générique actif côté serveur. Nouveau message : pas de push (#74, choix ouverts dans #66).
 - NOT_EXECUTED : essai sur iPhone/iPad physique, réception push réelle, campagne iOS complète sur `54b6ea9`.
+
+## 27 octobre 2026 : deux tests UI de #180 corrigés, lecture VoiceOver des champs
+
+- `DrivyFormField` forçait une valeur d'accessibilité vide : VoiceOver n'annonçait jamais la saisie. La valeur est désormais le texte saisi, ou « À renseigner » pour un champ requis vide.
+- Tests : recherche des participants touchée sur le champ visible (son cadre d'accessibilité remonte sous la barre), confirmation fermée par le bouton terminal ou la région du popover au premier plan.
+- PASS : SchoolCourseJourneyUITests et SchoolFormProtectionUITests, 7/7 sur iPhone et sur iPad (run 40574916579, b40ac04).
+- NOT_EXECUTED : écoute VoiceOver réelle sur appareil.
