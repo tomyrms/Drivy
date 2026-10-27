@@ -1,11 +1,10 @@
 # État de la réalisation
 
-## 27 octobre 2026 — #182 Exyte Chat en comparaison locale
+## 27 octobre 2026 — #182 fil Messages présenté par Exyte Chat
 
-- Branche `claude/182-exyte-chat` depuis `claude/integration-20261027` (`4014c52`), `master` fusionné ensuite. Exyte Chat 3.3.0 exacte et ses six dépendances verrouillées ; IPA compilée avec la dépendance ([run 40560998430](https://github.com/tomyrms/Drivy/actions/runs/40560998430)).
-- Fil Exyte derrière le réglage « Fil Exyte (essai) » (Messages › Plus), désactivé par défaut : liste, pagination et menu d’Exyte ; bulles, composeur, droits, E2EE et file protégée Drivy. [Décisions, matrice et reprise](reprise-exyte-chat-182-20261027.md).
-- Tests métier `messaging` : 72 réussis, zéro échec, dont 10 nouveaux ([run 40567843643](https://github.com/tomyrms/Drivy/actions/runs/40567843643)). IPA avec accès Messages sur `430e5d7`, base `master` à jour ([run 40569715322](https://github.com/tomyrms/Drivy/actions/runs/40569715322)).
-- À trancher : Giphy (binaire MPL 2.0) est embarqué d’office par Exyte. Tests UI avec le réglage, captures, VoiceOver, iPad, réseau et GPS : NOT_EXECUTED. Aucun déploiement.
+- À la demande du porteur, le fil Exyte est le fil par défaut ; l’ancien fil et le réglage d’essai sont retirés. Bulles, heure, coches d’état, réactions, avatars, menu et glisser pour répondre d’Exyte 3.3.0 aux couleurs Drivy ; composeur, citations, sondages, droits, E2EE et file protégée Drivy. [Décisions, matrice et reprise](reprise-exyte-chat-182-20261027.md), PR brouillon #184.
+- IPA avec accès Messages sur `908aad3` ([run 40574156686](https://github.com/tomyrms/Drivy/actions/runs/40574156686)). Tests métier `messaging` après la bascule : 71 réussis, zéro échec ([run 40575602130](https://github.com/tomyrms/Drivy/actions/runs/40575602130)).
+- Tests UI de messagerie à adapter (ancien menu et accusé « Lu »), captures, VoiceOver, iPad, réseau et GPS : NOT_EXECUTED. À trancher : Giphy (binaire MPL 2.0) embarqué d’office par Exyte. Aucun déploiement.
 
 ## 26 octobre 2026 — récupération intégrée et reçus Messages
 
