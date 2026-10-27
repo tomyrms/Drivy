@@ -463,8 +463,8 @@ struct SchoolCaptureLiveView: View {
                 signal.buttonStyle(DrivySecondaryButtonStyle())
             }
         }
-        // L’envoi qui suit un signalement est bref : il ne grise pas la commande. La palette s’ouvre, l’écriture
-        // suivante attend la fin de cet envoi et le double envoi reste refusé par l’enregistreur.
+        // Les signalements en file ne grisent pas la commande (#112) : chaque geste est conservé sur l’appareil et part
+        // à la suite du précédent. Seule une autre demande de l’école ferme « Signaler ».
         .disabled(!recorder.acceptsSignal || isFinishing)
         // À l’ouverture seulement : la fermeture (enregistrée ou non) ne double pas le retour de succès.
         .sensoryFeedback(trigger: observationMoment?.id) { _, moment in moment != nil ? .impact(weight: .medium) : nil }
@@ -569,6 +569,7 @@ struct SchoolCaptureLiveView: View {
             DrivyInlineMessage(text: recorder.errorMessage
                 ?? (recorder.pendingIsForeign
                     ? "Une autre demande de l’école attend d’être vérifiée. Elle empêche de signaler pour l’instant."
+                    : recorder.queuedCount > 1 ? "\(recorder.queuedCount) signalements attendent leur envoi."
                     : "Une observation attend son envoi."), tone: .warning)
             if recorder.canRetry {
                 Button("Réessayer l’envoi", systemImage: "arrow.clockwise") { Task { await recorder.retry() } }

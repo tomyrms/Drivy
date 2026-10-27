@@ -58,8 +58,9 @@ struct SchoolObservationEditor: Identifiable {
         guard canMutate, let lesson, observations.count < 100 else { return false }
         return lesson.status == "PLANNED" || (lesson.status == "COMPLETED" && draft?.basePublicationVersion == lesson.publicationVersion)
     }
-    /// Signalement tout juste posé depuis cet écran, encore en cours d’envoi.
-    private var liveSendInFlight: Bool { live?.isSettlingGesture == true }
+    /// Signalements posés depuis cet écran dont la file est en cours d’envoi : ils ne se présentent pas comme une
+    /// demande à vérifier (#112).
+    private var liveSendInFlight: Bool { live?.isSettlingGesture == true || (live?.isSending == true && live?.owns(pending) == true) }
     /// Demande restée en attente, sans envoi en cours : elle seule se montre et ferme les modifications.
     var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) && !liveSendInFlight }
     /// Ce que l’écran présente. Une relecture ou un envoi bref laissent en place la liste, ses menus et la barre
@@ -128,9 +129,9 @@ struct SchoolObservationEditor: Identifiable {
     }
     func liveRecorder() -> SchoolLiveObservationRecorder? {
         guard acceptsAdd, !isBusy, lesson?.status == "PLANNED" else { return nil }
-        // Le signalement précédent part encore : le même enregistreur ouvre la palette et fait attendre la seule
-        // écriture suivante, comme pendant le trajet. Un nouvel enregistreur lirait cette demande comme un blocage.
-        if let live, live.isSettlingGesture, live.acceptsSignal { return live }
+        // La file de cet écran part encore : le même enregistreur ouvre la palette et place le geste suivant à sa
+        // suite, comme pendant le trajet. Un nouvel enregistreur lirait cette demande comme un blocage.
+        if let live, live.acceptsSignal, live.isSending || live.owns(pending) { return live }
         let recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client,
             themeStore: SchoolObservationThemeStores.store(for: scope, client: client.themeClient),
             rankingStore: SchoolObservationRankingStores.store(for: scope, client: client.rankingClient),

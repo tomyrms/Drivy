@@ -190,19 +190,19 @@ import Testing
         #expect(await server.operations().removals.isEmpty)
     }
 
-    @Test func aFailedSendClosesSignalAndARequestedRetryKeepsItClosedUntilItsResult() async throws {
+    @Test func aFailedSendKeepsSignalOpenAndARequestedRetryNamesItsWait() async throws {
         let outbox = LiveUndoOutbox(), server = LiveUndoServer(offline: true, holdsCreate: true)
         let model = recorder(outbox, server)
         #expect(model.markMoment())
         #expect(model.acceptsSignal && model.isSettlingGesture)
         try await waitUntil { model.errorMessage != nil && !model.isSending }
-        // L’échec dure : « Signaler » se ferme, avec son explication et son nouvel essai.
-        #expect(!model.acceptsSignal && !model.isSettlingGesture && model.canRetry)
+        // L’échec dure : la demande reste en file avec son explication et son nouvel essai, « Signaler » reste ouvert (#112).
+        #expect(model.acceptsSignal && !model.isSettlingGesture && model.canRetry)
         await server.setOffline(false)
         let retrying = Task { await model.retry() }
         try await waitForCreate(server)
-        // Un nouvel essai n’est pas l’envoi bref qui suit le geste : aucun aller-retour d’apparence.
-        #expect(model.isSending && !model.isSettlingGesture && !model.acceptsSignal)
+        // Un nouvel essai n’est pas l’envoi bref qui suit le geste : il se nomme dans le panneau.
+        #expect(model.isSending && !model.isSettlingGesture && model.acceptsSignal)
         await server.releaseCreate()
         await retrying.value
         #expect(model.acceptsSignal && model.canRecord && model.confirmed == 1 && outbox.value == nil)
@@ -215,7 +215,7 @@ import Testing
         try await waitUntil { model.confirmed == 1 && !model.isSending }
         let id = try #require(model.lastAdded?.id)
         #expect(await model.undoLastAdded(id: id))
-        #expect(model.isSending && model.isSettlingGesture && model.acceptsSignal && !model.canRecord)
+        #expect(model.isSending && model.isSettlingGesture && model.acceptsSignal && model.canRecord)
         try await waitUntil { model.undoState == .confirmed && !model.isSending }
         #expect(!model.isSettlingGesture && model.acceptsSignal && model.canRecord && outbox.value == nil)
     }
