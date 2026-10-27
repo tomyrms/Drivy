@@ -4,24 +4,44 @@ import SwiftUI
 struct MessagingMembersView: View {
     let workspace: MessagingWorkspace
     @State private var profile: MessagingMember?
-    @State private var pendingRemoval: MessagingMember?
-    @State private var pendingReinstatement: MessagingMember?
+    /// Une seule confirmation à la fois : deux `confirmationDialog` sur la même vue
+    /// se neutralisent (seul le dernier attaché se présente de façon fiable).
+    private enum PendingAction: Identifiable {
+        case remove(MessagingMember)
+        case reinstate(MessagingMember)
+        var id: String {
+            switch self {
+            case .remove(let m): "remove-\(m.id)"
+            case .reinstate(let m): "reinstate-\(m.id)"
+            }
+        }
+        var title: String {
+            switch self {
+            case .remove: "Retirer du général ?"
+            case .reinstate: "Réintégrer dans le général ?"
+            }
+        }
+    }
+    @State private var pending: PendingAction?
 
     private var isAdmin: Bool { workspace.members.first { $0.id == workspace.scope.accountID }?.isGroupAdmin ?? false }
 
     var body: some View {
         List {
             if let failure = workspace.actionError {
-                Text(failure.localizedDescription).foregroundStyle(.red).accessibilityIdentifier("messaging.members.error")
+                Text(failure.localizedDescription).foregroundStyle(DrivyTheme.danger).accessibilityIdentifier("messaging.members.error")
             }
             ForEach(workspace.members) { member in
                 Button { profile = member } label: {
                     HStack(spacing: 12) {
                         DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
-                        Text(member.displayName).foregroundStyle(.primary)
+                        Text(member.displayName).foregroundStyle(DrivyTheme.text)
                         Spacer()
-                        if member.isGroupAdmin {
-                            Text("Admin").font(.caption).foregroundStyle(.secondary)
+                        if workspace.isInProgress(MessagingWorkspace.memberOperation(member.id)) {
+                            Text("En cours").font(.caption).foregroundStyle(DrivyTheme.muted)
+                                .accessibilityIdentifier("messaging.members.inProgress")
+                        } else if member.isGroupAdmin {
+                            Text("Admin").font(.caption).foregroundStyle(DrivyTheme.muted)
                         }
                     }
                 }
@@ -31,7 +51,7 @@ struct MessagingMembersView: View {
                 .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
                 .swipeActions {
                     if isAdmin && member.id != workspace.scope.accountID {
-                        Button("Retirer", role: .destructive) { pendingRemoval = member }
+                        Button("Retirer", role: .destructive) { pending = .remove(member) }
                         Button(member.isGroupAdmin ? "Retirer admin" : "Nommer admin") {
                             Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
                         }
@@ -43,7 +63,7 @@ struct MessagingMembersView: View {
                                systemImage: "person.badge.shield.checkmark") {
                             Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
                         }
-                        Button("Retirer du général", systemImage: "person.badge.minus", role: .destructive) { pendingRemoval = member }
+                        Button("Retirer du général", systemImage: "person.badge.minus", role: .destructive) { pending = .remove(member) }
                     }
                 }
             }
@@ -52,9 +72,9 @@ struct MessagingMembersView: View {
                     ForEach(workspace.removedMembers) { member in
                         HStack(spacing: 12) {
                             DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
-                            Text(member.displayName).foregroundStyle(.secondary)
+                            Text(member.displayName).foregroundStyle(DrivyTheme.muted)
                             Spacer()
-                            Button("Réintégrer") { pendingReinstatement = member }
+                            Button("Réintégrer") { pending = .reinstate(member) }
                                 .buttonStyle(.borderless)
                                 .accessibilityLabel("Réintégrer \(member.displayName)")
                                 .accessibilityIdentifier("messaging.members.reinstate")
@@ -73,21 +93,22 @@ struct MessagingMembersView: View {
         .sheet(item: $profile) { member in
             MessagingMemberProfileView(member: member, photo: workspace.photos[member.id])
         }
-        .confirmationDialog("Retirer du général ?", isPresented: Binding(get: { pendingRemoval != nil },
-                                                                         set: { if !$0 { pendingRemoval = nil } }),
-                            presenting: pendingRemoval) { member in
-            Button("Retirer \(member.displayName)", role: .destructive) {
-                Task { await workspace.removeMember(member.id) }
+        .confirmationDialog(pending?.title ?? "", isPresented: Binding(get: { pending != nil },
+                                                                       set: { if !$0 { pending = nil } }),
+                            titleVisibility: .visible,
+                            presenting: pending) { action in
+            switch action {
+            case .remove(let member):
+                Button("Retirer \(member.displayName)", role: .destructive) {
+                    Task { await workspace.removeMember(member.id) }
+                }
+                .accessibilityIdentifier("messaging.members.confirmRemove")
+            case .reinstate(let member):
+                Button("Réintégrer \(member.displayName)") {
+                    Task { await workspace.reinstateMember(member.id) }
+                }
+                .accessibilityIdentifier("messaging.members.confirmReinstate")
             }
-            .accessibilityIdentifier("messaging.members.confirmRemove")
-        }
-        .confirmationDialog("Réintégrer dans le général ?", isPresented: Binding(get: { pendingReinstatement != nil },
-                                                                                 set: { if !$0 { pendingReinstatement = nil } }),
-                            presenting: pendingReinstatement) { member in
-            Button("Réintégrer \(member.displayName)") {
-                Task { await workspace.reinstateMember(member.id) }
-            }
-            .accessibilityIdentifier("messaging.members.confirmReinstate")
         }
     }
 }
@@ -103,7 +124,7 @@ struct MessagingMemberProfileView: View {
             VStack(spacing: 16) {
                 DrivyAvatar(name: member.displayName, size: 120, photo: photo)
                 Text(member.displayName).font(.title2.bold()).multilineTextAlignment(.center)
-                if member.isGroupAdmin { Text("Administrateur du groupe").foregroundStyle(.secondary) }
+                if member.isGroupAdmin { Text("Administrateur du groupe").foregroundStyle(DrivyTheme.muted) }
                 Spacer()
             }
             .padding(.top, 32)
@@ -130,24 +151,50 @@ struct MessagingPinnedBanner: View {
                 onSelect(current.id)
                 index = (index + 1) % pinned.count
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "pin.fill").foregroundStyle(.tint).accessibilityHidden(true)
+                // Une seule ligne compacte, flottante, sans bloc pleine largeur (retour du porteur).
+                HStack(spacing: DrivySpacing.xs) {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .accessibilityHidden(true)
                     Text(workspace.contents[current.id]?.summary ?? "Message épinglé")
-                        .lineLimit(1).font(.subheadline)
-                    Spacer()
+                        .lineLimit(1).font(.footnote).foregroundStyle(DrivyTheme.text)
                     if pinned.count > 1 {
-                        Text("\(min(index, pinned.count - 1) + 1)/\(pinned.count)").font(.caption).foregroundStyle(.secondary)
+                        Text("\(min(index, pinned.count - 1) + 1)/\(pinned.count)")
+                            .font(.caption2.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
                     }
                 }
-                .padding(.horizontal).padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(.bar)
+                .padding(.horizontal, DrivySpacing.s).padding(.vertical, 6)
+                .background(DrivyTheme.surfaceRaised, in: Capsule())
+                .overlay(Capsule().stroke(DrivyTheme.border, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                .frame(maxWidth: 320)
+                .padding(.top, DrivySpacing.xxs)
+                .frame(minHeight: DrivyLayout.tapTarget)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Message épinglé : \(workspace.contents[current.id]?.summary ?? "")")
             .accessibilityHint(pinned.count > 1 ? "Affiche le message, puis le suivant au prochain appui" : "Affiche le message")
             .accessibilityIdentifier("messaging.pinned")
         }
+    }
+}
+
+/// Forme d'une bulle : coins arrondis, coin côté auteur resserré sur le dernier message d'un groupe.
+/// L'émis et le reçu se distinguent par l'alignement et ce coin, pas seulement par la couleur.
+struct MessagingBubbleShape: Shape {
+    let mine: Bool
+    let tail: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let large: CGFloat = 18
+        let small: CGFloat = tail ? 4 : 18
+        let radii = RectangleCornerRadii(topLeading: large,
+                                         bottomLeading: mine ? large : small,
+                                         bottomTrailing: mine ? small : large,
+                                         topTrailing: large)
+        return UnevenRoundedRectangle(cornerRadii: radii, style: .continuous).path(in: rect)
     }
 }
 
@@ -158,46 +205,128 @@ struct MessagingBubble: View {
     let isGeneral: Bool
     var selecting = false
     var selected = false
+    /// Premier message d'un groupe : l'auteur s'affiche (général seulement).
+    var showsAuthor = true
+    /// Dernier message d'un groupe : heure et accusés s'affichent.
+    var showsMeta = true
+    /// Mise en évidence brève après une citation, une épingle ou une recherche.
+    var highlighted = false
     let onReply: () -> Void
     let onJump: (UUID) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var content: MessagingPlainContent?
     @State private var loaded = false
-    @State private var confirmDeleteEveryone = false
+    /// Un seul dialogue par bulle : deux `confirmationDialog` sur la même vue se neutralisent.
+    private enum BubbleDialog { case deleteEveryone, react }
+    @State private var dialog: BubbleDialog?
     @State private var votersFor: MessagingPollState?
+    /// Glissement vers la gauche pour répondre, borné pour rester un geste discret.
+    @State private var swipe: CGFloat = 0
+    @State private var swipeArmed = false
+    private static let swipeThreshold: CGFloat = 56
+
+    private var replySwipe: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onChanged { value in
+                // Horizontal vers la gauche seulement : le défilement vertical du fil reste prioritaire.
+                guard value.translation.width < 0, abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                swipe = max(value.translation.width, -Self.swipeThreshold - 16)
+                let armed = swipe <= -Self.swipeThreshold
+                if armed != swipeArmed {
+                    swipeArmed = armed
+                    if armed { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                }
+            }
+            .onEnded { _ in
+                if swipeArmed { onReply() }
+                swipeArmed = false
+                withAnimation(DrivyMotion.settle(reduceMotion)) { swipe = 0 }
+            }
+    }
+
+    @ViewBuilder private var swipeHint: some View {
+        if swipe < 0 {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(swipeArmed ? DrivyTheme.accent : DrivyTheme.muted)
+                .opacity(min(1, -swipe / Self.swipeThreshold))
+                .offset(x: 28)
+                .accessibilityHidden(true)
+        }
+    }
 
     private var mine: Bool { message.senderID == workspace.scope.accountID }
+    /// Noms connus du contexte (membres du général, contacts) : un `@Nom` correspondant passe en gras.
+    private var mentionNames: [String] { workspace.knownDisplayNames }
     private var access: MessagingConversationAccess { workspace.access(for: message.conversationID) }
+    private var canInteract: Bool { !message.meta.deletedForEveryone && access.canWrite && !selecting }
 
     var body: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .bottom, spacing: DrivySpacing.xs) {
             if selecting {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .foregroundStyle(selected ? DrivyTheme.accent : DrivyTheme.muted)
                     .font(.title3)
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                     .accessibilityHidden(true)
             }
-            if mine { Spacer(minLength: 40) }
-            VStack(alignment: mine ? .trailing : .leading, spacing: 4) {
-                if isGeneral && !mine {
-                    Text(workspace.displayName(message.senderID)).font(.caption.bold()).foregroundStyle(.secondary)
+            if mine { Spacer(minLength: 56) }
+            VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
+                if isGeneral && !mine && showsAuthor {
+                    Text(workspace.displayName(message.senderID))
+                        .font(.caption.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                        .padding(.horizontal, DrivySpacing.s)
                 }
                 bubble
-                if !message.meta.reactions.isEmpty { reactions }
-                if mine, !message.meta.deletedForEveryone { receipt }
+                    .contextMenu { if !selecting { menu } }
+                    .offset(x: swipe)
+                    .overlay(alignment: .trailing) { swipeHint }
+                    .simultaneousGesture(replySwipe, including: canInteract ? .all : .subviews)
+                if !message.meta.reactions.isEmpty { reactions.padding(.top, -6).padding(.horizontal, DrivySpacing.xs) }
+                if showsMeta || message.meta.pinned { meta.padding(.horizontal, DrivySpacing.xs) }
+                syncStatus.padding(.horizontal, DrivySpacing.xs)
             }
-            if !mine { Spacer(minLength: 40) }
+            if !mine { Spacer(minLength: 56) }
         }
-        .listRowSeparator(.hidden)
+        .padding(.vertical, 2)
+        .background(highlighted ? DrivyTheme.accentSoft : Color.clear,
+                    in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
+        .animation(DrivyMotion.settle(reduceMotion), value: highlighted)
         .task(id: message.id) {
             if !message.meta.deletedForEveryone { content = await workspace.content(for: message) }
             loaded = true
         }
-        .contextMenu { if !selecting { menu } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("messaging.message")
-        .confirmationDialog("Supprimer pour tout le monde ?", isPresented: $confirmDeleteEveryone) {
-            Button("Supprimer pour tout le monde", role: .destructive) {
-                Task { await workspace.delete(message, for: .everyone) }
+        .accessibilityActions {
+            if canInteract {
+                Button("Répondre", action: onReply)
+                Button("Réagir") { dialog = .react }
+            }
+            if let text = content?.text, !message.meta.deletedForEveryone, !selecting {
+                Button("Copier") { UIPasteboard.general.string = text }
+            }
+            if canInteract {
+                Button(message.meta.pinned ? "Désépingler" : "Épingler") {
+                    workspace.setPinned(message, pinned: !message.meta.pinned)
+                }
+            }
+            if workspace.mutationAttention(for: message)?.needsAttention == true {
+                Button("Réessayer la synchronisation") { workspace.retryMutations(for: message) }
+            }
+        }
+        .confirmationDialog(dialog == .react ? "Réagir" : "Supprimer pour tout le monde ?",
+                            isPresented: Binding(get: { dialog != nil }, set: { if !$0 { dialog = nil } })) {
+            if dialog == .react {
+                ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
+                    Button("\(emoji) \(MessagingReactionPalette.label(emoji))") {
+                        react(emoji)
+                    }
+                }
+            } else {
+                Button("Supprimer pour tout le monde", role: .destructive) {
+                    workspace.delete(message, for: .everyone)
+                }
             }
         }
         .sheet(item: Binding(get: { votersFor.map { MessagingPollVotersSheet.Item(poll: $0) } },
@@ -207,33 +336,48 @@ struct MessagingBubble: View {
     }
 
     @ViewBuilder private var bubble: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let shape = MessagingBubbleShape(mine: mine, tail: showsMeta)
+        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             if let replyID = message.meta.replyToMessageID { quote(replyID) }
-            if message.meta.deletedForEveryone {
-                Label("Message supprimé", systemImage: "nosign").italic().foregroundStyle(.secondary)
+            if !message.meta.deletedForEveryone, workspace.mutation(.deleteForEveryone, on: message) != nil {
+                // L'effacement chez tous n'est annoncé qu'après la relecture serveur.
+                Label("Suppression en cours", systemImage: "hourglass").italic().foregroundStyle(DrivyTheme.muted)
+                    .accessibilityIdentifier("messaging.deleting")
+            } else if message.meta.deletedForEveryone {
+                Label("Message supprimé", systemImage: "nosign").italic().foregroundStyle(DrivyTheme.muted)
                     .accessibilityIdentifier("messaging.deleted")
             } else if let poll = content?.poll, let state = message.meta.poll {
                 MessagingPollCard(workspace: workspace, message: message, poll: poll, state: state,
                                   onShowVoters: { votersFor = state })
+                    .frame(minWidth: 220)
             } else if let text = content?.text {
-                Text(text).textSelection(.enabled)
+                Text(MessagingMentionToken.styled(text, names: mentionNames)).foregroundStyle(DrivyTheme.text).textSelection(.enabled)
             } else if loaded, let code = workspace.decryptionCodes[message.id] {
-                Label("Illisible sur cet appareil · \(code)", systemImage: "lock").foregroundStyle(.secondary)
+                Label("Illisible sur cet appareil · \(code)", systemImage: "lock").foregroundStyle(DrivyTheme.muted)
                     .accessibilityIdentifier("messaging.undecryptable")
             } else if loaded {
-                Label("Message protégé indisponible", systemImage: "lock").foregroundStyle(.secondary)
+                Label("Message protégé indisponible", systemImage: "lock").foregroundStyle(DrivyTheme.muted)
             } else {
                 ProgressView().accessibilityLabel("Déchiffrement")
             }
-            HStack(spacing: 4) {
-                if message.meta.pinned { Image(systemName: "pin.fill").accessibilityLabel("Épinglé") }
-                Text(message.acceptedAt, style: .time)
-            }
-            .font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(10)
-        .background(mine ? Color.accentColor.opacity(0.15) : Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 14))
+        .padding(.horizontal, DrivySpacing.s).padding(.vertical, DrivySpacing.xs)
+        .background(mine ? DrivyTheme.accentSoft : DrivyTheme.surfaceRaised, in: shape)
+        .overlay(shape.stroke(mine ? Color.clear : DrivyTheme.border, lineWidth: 0.5))
+        .contentShape(.contextMenuPreview, shape)
+    }
+
+    private var meta: some View {
+        HStack(spacing: DrivySpacing.xxs) {
+            if message.meta.pinned {
+                Image(systemName: "pin.fill").accessibilityLabel("Épinglé")
+            }
+            if showsMeta {
+                Text(message.acceptedAt, style: .time)
+                if mine, !message.meta.deletedForEveryone { receipt }
+            }
+        }
+        .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
     }
 
     private func quote(_ id: UUID) -> some View {
@@ -244,13 +388,18 @@ struct MessagingBubble: View {
             return workspace.contents[id]?.summary ?? "Message"
         }()
         return Button { onJump(id) } label: {
-            HStack(spacing: 6) {
-                Rectangle().fill(.tint).frame(width: 3)
-                VStack(alignment: .leading) {
-                    if let quoted { Text(workspace.displayName(quoted.senderID)).font(.caption.bold()) }
-                    Text(summary).font(.caption).lineLimit(2).foregroundStyle(.secondary)
+            HStack(spacing: DrivySpacing.xs) {
+                RoundedRectangle(cornerRadius: 1.5).fill(DrivyTheme.accent).frame(width: 3)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let quoted {
+                        Text(workspace.displayName(quoted.senderID)).font(.caption.bold()).foregroundStyle(DrivyTheme.accent)
+                    }
+                    Text(summary).font(.caption).lineLimit(2).foregroundStyle(DrivyTheme.muted)
                 }
+                Spacer(minLength: 0)
             }
+            .padding(DrivySpacing.xs)
+            .background(DrivyTheme.surfaceMuted.opacity(0.7), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .fixedSize(horizontal: false, vertical: true)
         }
         .buttonStyle(.plain)
@@ -258,20 +407,89 @@ struct MessagingBubble: View {
         .accessibilityHint("Affiche le message cité")
     }
 
+    /// Agrégats collés sous la bulle : emoji et nombre, ma réaction cernée d'accent.
     private var reactions: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: DrivySpacing.xxs) {
             ForEach(message.meta.reactions, id: \.emoji) { reaction in
                 let reacted = reaction.personIDs.contains(workspace.scope.accountID)
-                Button { Task { await workspace.toggleReaction(reaction.emoji, on: message) } } label: {
-                    Text("\(reaction.emoji) \(reaction.personIDs.count)").font(.caption)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(reacted ? Color.accentColor.opacity(0.25) : Color(.tertiarySystemFill), in: Capsule())
+                let status = workspace.mutation(.reaction(reaction.emoji), on: message)?.status
+                let provisional = status != nil && status != .confirmed
+                Button { workspace.toggleReaction(reaction.emoji, on: message) } label: {
+                    HStack(spacing: 3) {
+                        Text(reaction.emoji)
+                        Text(reaction.personIDs.count.formatted())
+                            .font(.caption.weight(reacted ? .semibold : .regular).monospacedDigit())
+                            .foregroundStyle(reacted ? DrivyTheme.accent : DrivyTheme.muted)
+                    }
+                    .font(.caption)
+                    .padding(.horizontal, DrivySpacing.xs).padding(.vertical, 3)
+                    .background(reacted ? DrivyTheme.accentSoft : DrivyTheme.surfaceRaised, in: Capsule())
+                    .overlay(Capsule().stroke(reacted ? DrivyTheme.accent : DrivyTheme.border, lineWidth: reacted ? 1.5 : 0.5))
+                    .opacity(provisional && status != .sending ? 0.6 : 1)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!access.canWrite)
                 .accessibilityLabel("\(MessagingReactionPalette.label(reaction.emoji)), \(reaction.personIDs.count)"
-                    + (reacted ? ", dont vous" : ""))
+                    + (reacted ? ", vous avez réagi" : "") + Self.syncSuffix(status))
+                .accessibilityAddTraits(reacted ? [.isSelected] : [])
                 .accessibilityHint(reaction.personIDs.map(workspace.displayName).joined(separator: ", "))
+            }
+        }
+    }
+
+    static func syncSuffix(_ status: MessagingMutationStatus?) -> String {
+        switch status {
+        case .sending?, .slow?: ", en cours de synchronisation"
+        case .unconfirmed?, .uncertain?: ", modification non confirmée"
+        case .offline?: ", en attente de connexion"
+        case .storageFailed?: ", modification non conservée"
+        default: ""
+        }
+    }
+
+    /// Indication discrète au niveau de l'élément : rien sous 5 s, puis lenteur, puis reprise proposée.
+    @ViewBuilder private var syncStatus: some View {
+        if let rejection = workspace.rejection(for: message.id) {
+            Button { workspace.clearRejection(message.id) } label: {
+                Label(rejection.summary, systemImage: "exclamationmark.triangle")
+                    .font(.caption2).foregroundStyle(DrivyTheme.danger)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(rejection.summary). \(rejection.failure.localizedDescription)")
+            .accessibilityHint("Masque l'erreur")
+            .accessibilityIdentifier("messaging.mutation.rejected")
+        } else if let status = workspace.mutationAttention(for: message) {
+            switch status {
+            case .slow:
+                Label("Synchronisation…", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityLabel("En cours de synchronisation")
+                    .accessibilityIdentifier("messaging.mutation.slow")
+            case .offline:
+                Label("En attente de connexion", systemImage: "wifi.slash")
+                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityIdentifier("messaging.mutation.offline")
+            case .unconfirmed, .uncertain:
+                Button { workspace.retryMutations(for: message) } label: {
+                    Label("Modification non confirmée · Réessayer", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                        .font(.caption2).foregroundStyle(DrivyTheme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Modification non confirmée")
+                .accessibilityHint("Renvoie la même modification")
+                .accessibilityIdentifier("messaging.mutation.retry")
+            case .storageFailed:
+                Button { workspace.retryMutations(for: message) } label: {
+                    Label("Modification non conservée · Réessayer", systemImage: "exclamationmark.triangle")
+                        .font(.caption2).foregroundStyle(DrivyTheme.danger)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Réessaie de conserver la modification sur cet appareil avant de la synchroniser")
+                .accessibilityIdentifier("messaging.mutation.storageFailed")
+            default:
+                EmptyView()
             }
         }
     }
@@ -279,36 +497,57 @@ struct MessagingBubble: View {
     @ViewBuilder private var receipt: some View {
         let readers = workspace.readers(of: message)
         if !readers.isEmpty {
-            let label = isGeneral ? "Lu par \(readers.count)" : "Lu"
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+            let label = isGeneral ? "· Lu par \(readers.count)" : "· Lu"
+            Text(label)
                 .accessibilityLabel(isGeneral ? "Lu par \(readers.map(workspace.displayName).joined(separator: ", "))" : "Lu")
                 .accessibilityIdentifier("messaging.read")
         }
     }
 
+    /// Ne bloque jamais l'action d'un menu : l'intention est posée après la fermeture, sans attendre le réseau.
+    private func react(_ emoji: String) {
+        let workspace = workspace, message = message
+        Task { @MainActor in
+            // Laisse l'aperçu se refermer avant que la réaction locale ne change la mise en page.
+            try? await Task.sleep(for: .milliseconds(250))
+            workspace.toggleReaction(emoji, on: message)
+        }
+    }
+
     @ViewBuilder private var menu: some View {
         if !message.meta.deletedForEveryone && access.canWrite {
-            Menu("Réagir", systemImage: "face.smiling") {
+            // Réactions en tête du menu, palette compacte. Une palette garde le menu ouvert par défaut :
+            // chaque bouton force la fermeture du menu et de l'aperçu dès le choix (retour du porteur).
+            ControlGroup {
                 ForEach(MessagingReactionPalette.all, id: \.self) { emoji in
-                    Button("\(emoji) \(MessagingReactionPalette.label(emoji))") {
-                        Task { await workspace.toggleReaction(emoji, on: message) }
+                    let reacted = message.meta.reactions.first { $0.emoji == emoji }?
+                        .personIDs.contains(workspace.scope.accountID) ?? false
+                    Button {
+                        react(emoji)
+                    } label: {
+                        Text(emoji)
                     }
+                    .accessibilityLabel(MessagingReactionPalette.label(emoji) + (reacted ? ", vous avez réagi" : ""))
+                    .menuActionDismissBehavior(.enabled)
                 }
             }
+            .controlGroupStyle(.palette)
+            .menuActionDismissBehavior(.enabled)
             Button("Répondre", systemImage: "arrowshape.turn.up.left", action: onReply)
             Button(message.meta.pinned ? "Désépingler" : "Épingler", systemImage: message.meta.pinned ? "pin.slash" : "pin") {
-                Task { await workspace.setPinned(message, pinned: !message.meta.pinned) }
+                workspace.setPinned(message, pinned: !message.meta.pinned)
             }
         }
         if let text = content?.text, !message.meta.deletedForEveryone {
             Button("Copier", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
         }
+        Divider()
         Button("Supprimer pour moi", systemImage: "trash", role: .destructive) {
-            Task { await workspace.delete(message, for: .me) }
+            workspace.delete(message, for: .me)
         }
         if !message.meta.deletedForEveryone,
            MessagingPermissions.canDeleteForEveryone(senderID: message.senderID, account: workspace.scope.accountID, access: access) {
-            Button("Supprimer pour tout le monde", systemImage: "trash.slash", role: .destructive) { confirmDeleteEveryone = true }
+            Button("Supprimer pour tout le monde", systemImage: "trash.slash", role: .destructive) { dialog = .deleteEveryone }
         }
     }
 }
@@ -332,24 +571,31 @@ struct MessagingPollCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Label(poll.question, systemImage: "chart.bar.xaxis").font(.headline)
             Text(state.closed ? "Sondage clos" : (state.allowsMultiple ? "Plusieurs choix possibles" : "Un seul choix"))
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(DrivyTheme.muted)
+            if workspace.mutation(.vote, on: message).map({ $0.status != .confirmed }) == true {
+                // Totaux provisoires : jamais présentés comme confirmés.
+                Text("Vote en cours d'enregistrement").font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                    .accessibilityIdentifier("messaging.poll.pending")
+            }
             ForEach(poll.options, id: \.id) { option in
                 let votes = state.options.first { $0.optionID == option.id }?.voterIDs.count ?? 0
                 let chosen = myVotes.contains(option.id)
                 Button {
                     let next = MessagingPollRules.toggled(myVotes, option: option.id, allowsMultiple: state.allowsMultiple)
-                    Task { await workspace.vote(message, optionIDs: next) }
+                    workspace.vote(message, optionIDs: next)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Image(systemName: chosen ? (state.allowsMultiple ? "checkmark.square.fill" : "checkmark.circle.fill")
                                                      : (state.allowsMultiple ? "square" : "circle"))
-                                .foregroundStyle(chosen ? Color.accentColor : .secondary)
-                            Text(option.label).foregroundStyle(.primary)
+                                .foregroundStyle(chosen ? DrivyTheme.accent : DrivyTheme.muted)
+                            Text(option.label).foregroundStyle(DrivyTheme.text)
                             Spacer()
-                            Text(votes.formatted()).foregroundStyle(.secondary)
+                            Text(votes.formatted()).foregroundStyle(DrivyTheme.muted)
                         }
-                        ProgressView(value: total == 0 ? 0 : Double(votes) / Double(total)).accessibilityHidden(true)
+                        ProgressView(value: total == 0 ? 0 : Double(votes) / Double(total))
+                            .tint(chosen ? DrivyTheme.accent : DrivyTheme.rail)
+                            .accessibilityHidden(true)
                     }
                 }
                 .buttonStyle(.plain)
@@ -363,7 +609,10 @@ struct MessagingPollCard: View {
             HStack {
                 Button("Voir les votes", action: onShowVoters).font(.subheadline)
                 Spacer()
-                if MessagingPermissions.canClosePoll(state, account: workspace.scope.accountID, access: access) {
+                if workspace.isInProgress(MessagingWorkspace.pollCloseOperation(message.id)) {
+                    Text("Clôture en cours").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .accessibilityIdentifier("messaging.poll.closing")
+                } else if MessagingPermissions.canClosePoll(state, account: workspace.scope.accountID, access: access) {
                     Button("Clore", role: .destructive) { confirmClose = true }.font(.subheadline)
                 }
             }
@@ -388,7 +637,7 @@ struct MessagingPollVotersSheet: View {
             List(poll.options, id: \.optionID) { option in
                 Section(content?.options.first { $0.id == option.optionID }?.label ?? option.optionID) {
                     if option.voterIDs.isEmpty {
-                        Text("Aucun vote").foregroundStyle(.secondary)
+                        Text("Aucun vote").foregroundStyle(DrivyTheme.muted)
                     }
                     ForEach(option.voterIDs, id: \.self) { person in
                         HStack {
@@ -463,10 +712,11 @@ struct MessagingPollComposer: View {
     }
 }
 
-/// Recherche locale dans l'historique déchiffré stocké sur l'appareil.
+/// Recherche locale dans l'historique déchiffré stocké sur l'appareil, limitée à cette conversation.
 struct MessagingSearchView: View {
     let workspace: MessagingWorkspace
     let conversationID: UUID
+    var conversationTitle: String? = nil
     let onSelect: (UUID) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -474,25 +724,40 @@ struct MessagingSearchView: View {
 
     var body: some View {
         NavigationStack {
-            List(results) { entry in
-                Button { onSelect(entry.messageID); dismiss() } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(workspace.displayName(entry.senderID)).font(.caption.bold())
-                            Spacer()
-                            Text(entry.acceptedAt, format: .dateTime.day().month().hour().minute()).font(.caption).foregroundStyle(.secondary)
+            List {
+                Section {
+                    ForEach(results) { entry in
+                        Button { onSelect(entry.messageID); dismiss() } label: {
+                            HStack(alignment: .top, spacing: DrivySpacing.s) {
+                                DrivyAvatar(name: workspace.displayName(entry.senderID), size: 32, photo: workspace.photos[entry.senderID])
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack {
+                                        Text(workspace.displayName(entry.senderID)).font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(DrivyTheme.text)
+                                        Spacer()
+                                        Text(entry.acceptedAt, format: .dateTime.day().month().hour().minute())
+                                            .font(.caption).foregroundStyle(DrivyTheme.muted)
+                                    }
+                                    Text(entry.content.summary).font(.subheadline).lineLimit(3).foregroundStyle(DrivyTheme.text)
+                                }
+                            }
+                            .padding(.vertical, DrivySpacing.xxs)
                         }
-                        Text(entry.content.summary).lineLimit(3).foregroundStyle(.primary)
+                        .accessibilityElement(children: .combine)
                     }
+                } header: {
+                    Text(conversationTitle.map { "Dans « \($0) »" } ?? "Dans cette conversation")
                 }
-                .accessibilityElement(children: .combine)
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(DrivyTheme.canvas)
             .overlay {
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty {
                     ContentUnavailableView.search(text: query)
                 }
             }
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Rechercher dans cette conversation")
             .task(id: query) {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }

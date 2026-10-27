@@ -88,6 +88,9 @@ describe('cours collectifs : corps et aperçu', () => {
     const result = formFromSeries(series, zone);
     expect(result).toMatchObject({ capacity: '8', minimum: '', language: 'de' });
     expect(result.sessions[0]).toMatchObject({ date: '2026-11-03', start: '18:00', end: '20:15', attendanceRequired: false });
+    // La protection de fermeture compare le formulaire au cours relu : les clés ne créent pas de faux changement.
+    expect(formFromSeries(series, zone)).toEqual(result);
+    expect(result.sessions[0]!.key).toBe(type);
   });
   it('prépare un formulaire vide avec le seul moniteur', () => {
     const result = emptyForm({ types: [], instructors: [{ membershipId: instructor, displayName: 'A' }] });

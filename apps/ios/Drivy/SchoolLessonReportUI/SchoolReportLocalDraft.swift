@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Darwin
 
 /// Saisie d’un bilan pas encore envoyée, gardée sur l’appareil entre deux ouvertures de l’app.
 /// `base` est le contenu que l’école avait enregistré quand la saisie a été faite : la saisie n’est reprise
@@ -29,6 +30,12 @@ protocol SchoolReportLocalDraftStore: AnyObject {
     func read(scope: SchoolCommandScope, draftID: UUID) throws -> SchoolReportLocalDraft?
     func save(_ draft: SchoolReportLocalDraft, scope: SchoolCommandScope) throws
     func remove(scope: SchoolCommandScope, draftID: UUID) throws
+    /// Abandon confirmé par la personne : seul ce chemin peut retirer un fichier illisible.
+    func discard(scope: SchoolCommandScope, draftID: UUID) throws
+}
+
+extension SchoolReportLocalDraftStore {
+    func discard(scope: SchoolCommandScope, draftID: UUID) throws { try remove(scope: scope, draftID: draftID) }
 }
 
 /// Un fichier chiffré par bilan, avec la clé de la file des demandes (même coffre du trousseau).
@@ -64,6 +71,8 @@ final class EncryptedSchoolReportDraftStore: SchoolReportLocalDraftStore {
 
     func save(_ draft: SchoolReportLocalDraft, scope: SchoolCommandScope) throws {
         do {
+            // Ne jamais remplacer un fichier d'un autre contexte, corrompu ou privé de sa clé.
+            _ = try read(scope: scope, draftID: draft.draftID)
             let data = try JSONEncoder().encode(draft)
             guard data.count + 28 <= maximumBytes else { throw SchoolConfigurationFailure.storage }
             let box = try AES.GCM.seal(data, using: key(create: true), authenticating: authenticatedData(scope: scope, draftID: draft.draftID))
@@ -75,14 +84,24 @@ final class EncryptedSchoolReportDraftStore: SchoolReportLocalDraftStore {
             values.isExcludedFromBackup = true
             try protectedDirectory.setResourceValues(values)
             try encrypted.write(to: file(for: draft.draftID), options: [.atomic, .completeFileProtection])
-            removeExpired(now: draft.savedAt)
+            try synchronize(file(for: draft.draftID), directory: false)
+            try synchronize(directory, directory: true)
+            removeExpired(now: draft.savedAt, scope: scope)
         } catch { throw SchoolConfigurationFailure.storage }
     }
 
     func remove(scope: SchoolCommandScope, draftID: UUID) throws {
+        _ = try read(scope: scope, draftID: draftID)
+        try discard(scope: scope, draftID: draftID)
+    }
+
+    func discard(scope: SchoolCommandScope, draftID: UUID) throws {
         let file = file(for: draftID)
         guard FileManager.default.fileExists(atPath: file.path) else { return }
-        do { try FileManager.default.removeItem(at: file) }
+        do {
+            try FileManager.default.removeItem(at: file)
+            try synchronize(directory, directory: true)
+        }
         catch { throw SchoolConfigurationFailure.storage }
     }
 
@@ -96,13 +115,14 @@ final class EncryptedSchoolReportDraftStore: SchoolReportLocalDraftStore {
     }
 
     /// Un bilan jamais repris ne reste pas indéfiniment sur l’appareil.
-    private func removeExpired(now: Date) {
+    private func removeExpired(now: Date, scope: SchoolCommandScope) {
         let manager = FileManager.default
         guard let files = try? manager.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
         for file in files where file.pathExtension == "bin" {
-            guard let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
-                  now.timeIntervalSince(modified) > retention else { continue }
-            try? manager.removeItem(at: file)
+            guard let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent),
+                  let draft = try? read(scope: scope, draftID: id),
+                  now.timeIntervalSince(draft.savedAt) > retention else { continue }
+            try? remove(scope: scope, draftID: id)
         }
     }
 
@@ -116,8 +136,24 @@ final class EncryptedSchoolReportDraftStore: SchoolReportLocalDraftStore {
             return SymmetricKey(data: data)
         }
         guard create else { throw SchoolConfigurationFailure.storage }
+        // La clé est partagée entre les bilans : ne pas en créer une nouvelle au-dessus de fichiers existants.
+        if FileManager.default.fileExists(atPath: directory.path) {
+            let existing = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            guard !existing.contains(where: { $0.pathExtension == "bin" }) else { throw SchoolConfigurationFailure.storage }
+        }
         let generated = SymmetricKey(size: .bits256)
         try vault.write(generated.withUnsafeBytes { Data($0) })
         return generated
+    }
+
+    private func synchronize(_ url: URL, directory: Bool) throws {
+        try url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw SchoolConfigurationFailure.storage }
+            let descriptor = Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | (directory ? O_DIRECTORY : 0))
+            guard descriptor >= 0 else { throw SchoolConfigurationFailure.storage }
+            defer { Darwin.close(descriptor) }
+            let result = directory ? Darwin.fsync(descriptor) : Darwin.fcntl(descriptor, F_FULLFSYNC)
+            guard result == 0 else { throw SchoolConfigurationFailure.storage }
+        }
     }
 }

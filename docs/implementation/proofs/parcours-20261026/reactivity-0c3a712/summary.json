@@ -1,0 +1,46 @@
+{
+  "devicesAndConfigurations" : [
+    {
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "0183276C-C5F7-4A53-B0AF-C3D9117595F6",
+        "deviceName" : "iPhone 17 Pro",
+        "modelName" : "iPhone 17 Pro",
+        "osBuildNumber" : "23E254a",
+        "osVersion" : "26.4.1",
+        "platform" : "iOS Simulator"
+      },
+      "expectedFailures" : 0,
+      "failedTests" : 0,
+      "passedTests" : 79,
+      "skippedTests" : 0,
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Test Scheme Action"
+      }
+    }
+  ],
+  "environmentDescription" : "Drivy · Built with macOS 26.6.2",
+  "expectedFailures" : 0,
+  "failedTests" : 0,
+  "finishTime" : 1793022151.073,
+  "passedTests" : 79,
+  "result" : "Passed",
+  "skippedTests" : 0,
+  "startTime" : 1793022027.798,
+  "statistics" : [
+
+  ],
+  "testFailures" : [
+
+  ],
+  "title" : "Test - Drivy",
+  "topInsights" : [
+    {
+      "category" : "Longest Test Runs",
+      "impact" : "75% of duration",
+      "text" : "1 longest test run with outlier durations exceeding 9.60s (three standard deviations)"
+    }
+  ],
+  "totalTestCount" : 79
+}

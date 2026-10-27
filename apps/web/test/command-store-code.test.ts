@@ -9,12 +9,13 @@ import { invitationSchema, issuedCodeOf, parseInvitationResponse } from '../clie
  */
 type Store = {
   submit(command: unknown, csrf: string): Promise<{ status: string; body?: unknown; code?: string; needsLogin?: boolean }>;
-  verify(schoolId: string): Promise<{ status: string; message?: string }>;
-  resend(schoolId: string, csrf: string): Promise<{ status: string; code?: string; message?: string }>;
-  release(schoolId: string): void;
-  get(schoolId: string): { phase: string; notRecorded: boolean; unverifiable: boolean; message: string; command: unknown } | undefined;
+  verify(schoolId: string, operationId?: string): Promise<{ status: string; message?: string }>;
+  resend(schoolId: string, csrf: string, operationId?: string): Promise<{ status: string; code?: string; message?: string }>;
+  release(schoolId: string, operationId?: string): void;
+  get(schoolId: string, operationId?: string): { phase: string; notRecorded: boolean; unverifiable: boolean; message: string; command: unknown } | undefined;
   getSnapshot(): { revision: number; confirmed: unknown };
   scopeToPerson(personId: string): boolean;
+  scopeToAccess(schoolId: string, membershipId: string, accessEpoch: number): void;
   clear(): void;
 };
 type Actions = (entry: { command: unknown; phase: string; notRecorded: boolean; unverifiable: boolean }) => { resend: boolean; release: boolean };
@@ -90,6 +91,27 @@ describe('Activation GPS : confirmation durable et reprise', () => {
       expect(store.getSnapshot().revision).toBe(0);
       expect(store.get(schoolId)).toBeUndefined();
     }
+  });
+});
+
+describe('Leçons du bureau : réponse perdue et commande unique', () => {
+  test.each(['createLesson', 'moveLesson', 'cancelLesson'] as const)('%s retrouve le reçu exact sans une deuxième mutation', async kind => {
+    const store = await loadStore(), lessonId = randomUUID();
+    const command = createCommand({ schoolId, kind, path: kind === 'createLesson' ? 'lessons' : `lessons/${lessonId}/${kind === 'moveLesson' ? 'move' : 'cancel'}`,
+      resourceVersion: kind === 'createLesson' ? 0 : 2, ...(kind !== 'createLesson' ? { resourceId: lessonId, ifMatch: 2 } : {}),
+      body: { meetingPoint: 'Lieu synthétique confidentiel' } });
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    expect((await store.submit(command, 'csrf')).status).toBe('pending');
+    expect(store.getSnapshot().revision).toBe(0);
+    expect(writes.join(' ')).not.toContain('Lieu synthétique confidentiel');
+    const fetch = answer(200, envelope({ operationId: command.operationId,
+      commandType: { createLesson: 'CREATE_LESSON', moveLesson: 'MOVE_LESSON', cancelLesson: 'CANCEL_LESSON' }[kind],
+      resourceType: 'Lesson', resourceId: lessonId, resourceVersion: 3, committedAt: '2026-10-26T08:00:00.000Z' }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await store.verify(schoolId)).status).toBe('confirmed');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0]![0])).toContain(`/operations/${command.operationId}`);
+    expect(store.get(schoolId)).toBeUndefined();
   });
 });
 
@@ -290,7 +312,7 @@ describe('Demande suivie : chaque état garde une issue', () => {
     store.clear();
   });
 
-  test('404 puis renvoi refusé : l’école n’avait aucune trace, le refus est définitif et les écrans se relisent', async () => {
+  test('404 puis renvoi refusé : le premier envoi peut encore avoir été appliqué, son suivi est conservé', async () => {
     const store = await loadStore();
     vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
     await store.submit(create(), 'csrf');
@@ -298,10 +320,10 @@ describe('Demande suivie : chaque état garde une issue', () => {
     await store.verify(schoolId);
     const revision = store.getSnapshot().revision;
     vi.stubGlobal('fetch', answer(409, { code: 'INVITATION_ALREADY_PENDING' }));
-    expect(await store.resend(schoolId, 'csrf')).toMatchObject({ status: 'rejected', code: 'INVITATION_ALREADY_PENDING' });
-    expect(store.get(schoolId)).toBeUndefined();
-    expect(store.getSnapshot().revision).toBe(revision + 1);
-    expect(session.snapshot()).toEqual(['[]']);
+    expect(await store.resend(schoolId, 'csrf')).toMatchObject({ status: 'pending' });
+    expect(store.get(schoolId)).toMatchObject({ phase: 'review' });
+    expect(store.getSnapshot().revision).toBe(revision);
+    expect(store.get(schoolId)?.message).toContain('ne prouve pas');
   });
 
   test('404 puis renvoi accepté : la demande est confirmée par la réponse', async () => {
@@ -378,7 +400,56 @@ describe('Demande suivie : chaque état garde une issue', () => {
     vi.stubGlobal('fetch', answer(404, { code: 'NOT_FOUND' }));
     await store.verify(schoolId);
     expect(pendingActions(store.get(schoolId)!)).toEqual({ resend: false, release: true });
-    expect(store.get(schoolId)?.message).toContain('refaites la modification');
+    expect(store.get(schoolId)?.message).toContain('avant de refaire la modification');
     store.clear();
+  });
+});
+
+describe('Ordonnancement par dépendances, pas par école', () => {
+  const themes = () => createCommand({ schoolId, kind: 'saveObservationThemes', path: 'observation-themes',
+    ifMatch: 2, resourceVersion: 2, body: { themes: [] } });
+  const policy = () => createCommand({ schoolId, kind: 'saveCoursePolicy', path: 'course-policy',
+    ifMatch: 1, resourceVersion: 1, body: { cancellationHours: 24 } });
+
+  test('deux ressources indépendantes partent ensemble ; une seconde intention conflictuelle reste dans son formulaire', async () => {
+    const store = await loadStore(), first = themes(), independent = policy();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const send = vi.fn(async (input: URL | string) => { await gate; return answer(200, envelope({ schoolId, version: 3 }))(input); });
+    vi.stubGlobal('fetch', send);
+    const a = store.submit(first, 'csrf'), b = store.submit(independent, 'csrf');
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(await store.submit(themes(), 'csrf')).toMatchObject({ status: 'rejected', code: 'LOCAL_COMMAND_CONFLICT' });
+    release();
+    expect((await a).status).toBe('confirmed'); expect((await b).status).toBe('confirmed');
+    expect(store.get(schoolId)).toBeUndefined();
+    expect(store.getSnapshot().revision).toBe(2);
+  });
+
+  test('vérification et arrêt de suivi ciblent une opération précise parmi deux demandes', async () => {
+    const store = await loadStore(), first = themes(), second = policy();
+    vi.stubGlobal('fetch', answer(503, { code: 'SERVICE_UNAVAILABLE' }));
+    await store.submit(first, 'csrf'); await store.submit(second, 'csrf');
+    vi.stubGlobal('fetch', answer(404, { code: 'NOT_FOUND' }));
+    await store.verify(schoolId, second.operationId);
+    store.release(schoolId, second.operationId);
+    expect(store.get(schoolId, first.operationId)?.command).toEqual(first);
+    expect(store.get(schoolId, second.operationId)).toBeUndefined();
+    expect(session.snapshot().join('')).toContain(first.operationId);
+    expect(session.snapshot().join('')).not.toContain(second.operationId);
+  });
+
+  test('changer d’époque empêche le rejeu et ignore la réponse tardive sans perdre la référence du reçu', async () => {
+    const store = await loadStore(), member = randomUUID(), command = themes();
+    store.scopeToAccess(schoolId, member, 1);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (input: URL | string) => { await gate; return answer(200, envelope({ schoolId, version: 3 }))(input); }));
+    const sending = store.submit(command, 'csrf');
+    store.scopeToAccess(schoolId, member, 2); release(); await sending;
+    expect(store.get(schoolId, command.operationId)).toMatchObject({ phase: 'orphaned', command: null });
+    expect(store.getSnapshot().revision).toBe(0);
+    await store.resend(schoolId, 'new-csrf', command.operationId);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

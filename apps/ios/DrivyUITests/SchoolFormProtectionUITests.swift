@@ -1,0 +1,33 @@
+import XCTest
+
+@MainActor final class SchoolFormProtectionUITests: XCTestCase {
+    func testProfileAsksOnlyAfterEditingAndContinueKeepsTheEntry() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = "profile"
+        app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
+        app.launch()
+        let close = app.buttons["my-profile-close"]
+        let name = app.textFields["self-display-name"]
+        XCTAssertTrue(close.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(name.waitForExistence(timeout: 10), app.debugDescription)
+        // Cette fixture présente le profil à la racine : le geste propre ne crée aucun dialogue.
+        close.tap()
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+        for _ in 0..<3 where !name.isHittable { app.swipeUp() }
+        XCTAssertTrue(name.isHittable, app.debugDescription)
+        let initial = name.value as? String
+        focusForTyping(name); name.typeText(" Test fermeture")
+        let edited = name.value as? String
+        XCTAssertNotEqual(edited, initial, "Le champ doit avoir été modifié avant de tester sa conservation")
+        close.tap()
+        let stay = app.alerts.buttons.matching(identifier: "Continuer").firstMatch
+        XCTAssertTrue(stay.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.alerts.buttons.matching(identifier: "Quitter sans enregistrer").firstMatch.exists)
+        try tapAlertAction(in: app, identifier: "Continuer")
+        XCTAssertEqual(name.value as? String, edited, "Continuer conserve exactement la valeur saisie")
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Profil conservé après Continuer — données synthétiques"
+        attachment.lifetime = .keepAlways; add(attachment)
+    }
+}

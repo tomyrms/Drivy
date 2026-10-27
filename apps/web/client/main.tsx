@@ -25,7 +25,10 @@ async function loadPage() {
   root.render(<div className="app-shell"><main className="main"><p role="status">Chargement de Drivy…</p></main></div>);
   try {
     // Exclusive surfaces are loaded only when requested. Styles and link sanitization stay shared.
-    if (window.location.pathname.replace(/\/$/, '') === '/app/preferences') {
+    if (window.location.pathname === '/app/recover') {
+      const { AccountRecoveryPage } = await import('./account-recovery');
+      root.render(<AccountRecoveryPage />);
+    } else if (window.location.pathname.replace(/\/$/, '') === '/app/preferences') {
       const { PreferencesPage } = await import('./preferences');
       root.render(<PreferencesPage />);
     } else if (isOpening || window.location.pathname === '/app/operateur') {

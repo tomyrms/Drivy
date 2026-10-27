@@ -25,6 +25,7 @@ struct SchoolLessonReportView: View {
     /// « Commencer la leçon » direct depuis Aujourd’hui qui n’a pas abouti : sa raison, au-dessus de la fiche.
     var startIssue: String? = nil
     var outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()
+    var localDrafts: (any SchoolReportLocalDraftStore)? = nil
     @State private var model: SchoolLessonReportWorkspace?
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.dismiss) private var dismiss
@@ -102,18 +103,19 @@ struct SchoolLessonReportView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") {
-                    if hasUnsavedChanges {
+                    if hasUnsavedChanges || model?.requiresLocalDraftResolution == true {
                         confirmsDiscard = true
                     } else {
                         // Sans saisie à garder, le brouillon local éventuel est retiré avec la fiche.
-                        model?.persistLocalDraft(); model?.close(); dismiss()
+                        guard model?.closeWithoutLocalEdits() ?? true else { return }
+                        dismiss()
                     }
                 }
                 // Un réglage de partage, bref, ne grise pas « Fermer » : sa demande reste dans la file chiffrée.
                 .disabled(model?.holdsScreen == true || isCompletingLesson)
             }
         }
-        .interactiveDismissDisabled(hasUnsavedChanges || model?.isBusy == true || isCompletingLesson)
+        .interactiveDismissDisabled(hasUnsavedChanges || model?.requiresLocalDraftResolution == true || model?.isBusy == true || isCompletingLesson)
         .onChange(of: scenePhase) { _, phase in
             guard let model, matches(model) else { return }
             // L’app quitte le premier plan : la saisie du bilan est écrite sur l’appareil avant tout verrouillage.
@@ -122,16 +124,32 @@ struct SchoolLessonReportView: View {
             Task { await model.load() }
         }
         .onChange(of: model?.reportSaveConfirmed) { _, confirmed in
-            guard confirmed == true else { return }
+            guard confirmed == true, let model, matches(model), !model.isInvalidated else { return }
             // Racine visible : le trajet se ferme après la descente de la feuille. Bilan enregistré depuis une étape
             // poussée : la racine a déjà disparu, le trajet se ferme tout de suite, sous la feuille.
             if isOnScreen { closesLessonFlowOnDisappear = true } else { capture?.closeLessonFlow(lessonID: lessonID) }
-            model?.close()
+            model.close()
             dismiss()
         }
-        .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
-            Button("Quitter sans enregistrer", role: .destructive) { model?.discardLocalDraft(); model?.close(); dismiss() }
+        .alert("Quitter la leçon ?", isPresented: $confirmsDiscard) {
+            if let model, matches(model), model.canKeepLocalDraft {
+                Button("Conserver le brouillon et quitter") {
+                    guard matches(model), model.keepLocalDraftAndClose() else { return }
+                    dismiss()
+                }
+                .accessibilityIdentifier("lesson-keep-draft-close")
+            }
+            Button("Quitter sans enregistrer", role: .destructive) {
+                guard let model, matches(model), model.discardLocalDraft(explicit: true) else { return }
+                model.close(); dismiss()
+            }
             Button("Continuer", role: .cancel) { }
+        } message: {
+            Text(model?.localDraftReadFailed == true
+                ? "Le brouillon de cet appareil n’a pas pu être relu. Quitter sans enregistrer le supprime."
+                : model?.pending != nil
+                ? "La demande déjà envoyée à l’école reste à vérifier. Quitter ne l’annule pas."
+                : "Les modifications n’ont pas encore été enregistrées auprès de l’école.")
         }
         .onAppear { isOnScreen = true }
         .onDisappear {
@@ -147,7 +165,8 @@ struct SchoolLessonReportView: View {
             let scope = SchoolCommandScope(personID: person.personId, schoolID: membership.schoolId, membershipID: membership.membershipId, accessEpoch: membership.accessEpoch, apiBaseURL: client.baseURL.absoluteString)
             // Le brouillon local suit la file chiffrée de l’app. Une file de substitution (revue visuelle, tests)
             // n’écrit rien sur l’appareil : la saisie y reste en mémoire.
-            let drafts: (any SchoolReportLocalDraftStore)? = outbox is EncryptedSchoolCommandOutbox ? EncryptedSchoolReportDraftStore() : nil
+            let drafts: (any SchoolReportLocalDraftStore)? = localDrafts
+                ?? (outbox is EncryptedSchoolCommandOutbox ? EncryptedSchoolReportDraftStore() : nil)
             let value = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lessonID, client: client, outbox: outbox,
                 localDrafts: drafts)
             model = value; await value.load()

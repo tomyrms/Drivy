@@ -43,6 +43,10 @@ it('catalogue réel approuvé → formation → affectation, avec héritage et r
  expect(curriculumWithoutReason.statusCode,curriculumWithoutReason.body).toBe(201);
  const offerBody={operationId:randomUUID(),offeringKey:'test-b',categoryCode:'B',curriculumVersionId:c.json().data.id,policyVersionId:p.json().data.id,enabled:true,defaultDurationMinutes:50,defaultPriceCents:9000};
  const o=await call('POST',`${path}/offerings`,offerBody);expect(o.statusCode,o.body).toBe(201);
+ expect(o.json().data.label).toBeNull();
+ // Le libellé métier déjà enregistré par le parcours formations ne doit pas devenir une clé technique à l'écran.
+ await pool.query('UPDATE drivy.offering_version SET label=$2 WHERE id=$1',[o.json().data.id,'Parcours accompagné']);
+ expect((await call('GET',`${path}/offerings`)).json().data.items.find((item:{id:string})=>item.id===o.json().data.id).label).toBe('Parcours accompagné');
  expect((await call('GET',`${path}/offerings`,undefined,undefined,'demo-alice')).json().data.items[0].id).toBe(o.json().data.id);
  const command={operationId:randomUUID(),learnerId:id.aliceLearner,offeringId:o.json().data.id};
  const created=await call('POST',`${path}/trainings`,command);expect(created.statusCode,created.body).toBe(201);const trainingId=created.json().data.id;

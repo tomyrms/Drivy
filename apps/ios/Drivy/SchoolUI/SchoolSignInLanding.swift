@@ -10,8 +10,10 @@ struct SchoolSignInLanding: View {
     let signIn: (_ email: String, _ password: String) -> Void
     let joinWithCode: () -> Void
     var clearError: () -> Void = {}
+    var recoveryClient: SchoolAccountRecoveryClient? = nil
     @State private var email = ""
     @State private var password = ""
+    @State private var showsRecovery = false
     @FocusState private var focus: SchoolAccountFieldID?
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -66,6 +68,9 @@ struct SchoolSignInLanding: View {
         }
         .onChange(of: email) { _, _ in if errorMessage != nil { clearError() } }
         .onChange(of: password) { _, _ in if errorMessage != nil { clearError() } }
+        .sheet(isPresented: $showsRecovery) {
+            if let recoveryClient { SchoolAccountRecoveryView(client: recoveryClient) }
+        }
     }
 
     private var form: some View {
@@ -75,6 +80,13 @@ struct SchoolSignInLanding: View {
             SchoolAccountField(label: "Mot de passe", text: $password, kind: .currentPassword, id: .password, focus: $focus,
                                error: isWorking ? nil : errorMessage, identifier: "school-sign-in-password",
                                submitLabel: .go, onSubmit: submit)
+            if recoveryClient != nil {
+                Button("Mot de passe oublié") {
+                    focus = nil; password = ""; clearError(); showsRecovery = true
+                }
+                .frame(minHeight: DrivyLayout.tapTarget)
+                .accessibilityIdentifier("school-forgot-password")
+            }
         }
         .disabled(isWorking)
     }

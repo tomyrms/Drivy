@@ -12,7 +12,8 @@ import { FirstLessonActions } from './overview';
 import { PlanningReadinessBanner } from './planning-readiness';
 import { useListState } from './list-state';
 import { distinctLabel, homonymReferences } from '../person-reference';
-import { AgendaAddMenu, CoursePolicyDialog, CourseWorkspace, LessonInAppDialog, readCourseCatalogue } from './courses';
+import { AgendaAddMenu, CoursePolicyDialog, CourseWorkspace, readCourseCatalogue } from './courses';
+import { LessonWorkspace } from './lesson-planning';
 import { courseSeriesListSchema } from './course-model';
 import { agendaCountLabel, agendaCounts, agendaDays, agendaReadStatus } from './agenda-projection';
 import { readSchool } from '../school-api';
@@ -38,9 +39,9 @@ const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: strin
   'to-finish': { label: 'À terminer', tone: 'warning', symbol: 'clock' },
 };
 
-/** Agenda de l'école en lecture seule : la planification des leçons se fait dans l'app. */
+/** Agenda de l'école : leçons et cours partagent les règles d'occupation du serveur. */
 export function AgendaSection() {
-  const { schoolId, school, navigate, routeQuery, setRouteQuery } = useConsole();
+  const { schoolId, school, navigate, routeQuery, setRouteQuery, confirmNavigation } = useConsole();
   const { revision } = useCommandSnapshot();
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
@@ -87,7 +88,11 @@ export function AgendaSection() {
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfStale); };
   }, [refreshLessons, refreshDirectory, refreshCourses]);
   const [course, setCourse] = useState<{ id: string | null; occurrenceId?: string } | null>(null);
-  const [lessonHelp, setLessonHelp] = useState(false);
+  const [lesson, setLesson] = useState<{ id: string | null } | null>(() => routeQuery?.view === 'nouvelle' ? { id: null } : null);
+  useEffect(() => { if (routeQuery?.view === 'nouvelle') setLesson({ id: null }); }, [routeQuery?.view, routeQuery?.learner]);
+  const changeWorkspace = (action: () => void) => confirmNavigation ? confirmNavigation(action) : action();
+  const openLesson = (id: string | null) => changeWorkspace(() => { setCourse(null); setLesson({ id }); if (id) setRouteQuery?.({ ...routeQuery, lesson: id, view: undefined }, true, true); });
+  const openCourse = (selection: { id: string | null; occurrenceId?: string }) => changeWorkspace(() => { setLesson(null); setCourse(selection); });
   const [coursePolicy, setCoursePolicy] = useState(false);
   const reloadCourses = courses.refresh ?? courses.reload;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
@@ -123,13 +128,15 @@ export function AgendaSection() {
   return (
     <div className="section-stack agenda-studio">
       <SectionHeading context="Planning" title="Agenda" actions={<div className="agenda-freshness">
-        <AgendaAddMenu canCreateCourse={catalogue.data?.canManage === true} onLesson={() => setLessonHelp(true)} onCourse={() => setCourse({ id: null })} />
+        <AgendaAddMenu canCreateCourse={catalogue.data?.canManage === true} onLesson={() => openLesson(null)} onCourse={() => openCourse({ id: null })} />
         {catalogue.data?.canManage === true && <button type="button" className="button quiet" onClick={() => setCoursePolicy(true)}>Réglages des cours</button>}
         {freshness.readAt !== undefined && <span className="caption">{freshness.complete ? 'À jour à ' : 'Lecture partielle à '}<time dateTime={new Date(freshness.readAt).toISOString()}>{formatClock(freshness.readAt, school.timeZone)}</time></span>}
         <button type="button" className="button quiet" onClick={refreshNow} disabled={initialLoading} aria-busy={initialLoading}>
           <Symbol kind="refresh" bare />Actualiser</button>
       </div>} />
-      <LessonInAppDialog open={lessonHelp} onClose={() => setLessonHelp(false)} />
+      {lesson && <LessonWorkspace key={lesson.id ?? `new/${routeQuery?.learner ?? ''}`} lessonId={lesson.id} learnerId={routeQuery?.learner}
+        onClose={() => { setLesson(null); if (routeQuery?.view === 'nouvelle') setRouteQuery?.({ ...routeQuery, view: undefined }, true, true); window.requestAnimationFrame(() => document.getElementById(`agenda-lesson-${lesson.id}`)?.focus()); }}
+        onSaved={refreshNow} onDossier={(learnerId, lessonId) => navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: monday, instructor: instructor || undefined })} />}
       {catalogue.data?.canManage === true && <CoursePolicyDialog open={coursePolicy} catalogue={catalogue.data} onClose={() => setCoursePolicy(false)} onSaved={catalogue.reload} />}
       {course && catalogue.data && <CourseWorkspace key={`${course.id ?? 'new'}/${course.occurrenceId ?? ''}`} seriesId={course.id} selectedOccurrenceId={course.occurrenceId} catalogue={catalogue.data}
         onClose={() => { setCourse(null); window.requestAnimationFrame(() => document.getElementById(`agenda-course-${course.id}-${course.occurrenceId}`)?.focus()); }}
@@ -185,7 +192,7 @@ export function AgendaSection() {
                 const { series, occurrence } = event;
                 const [start, end] = formatTimeRange(occurrence.startsAt, occurrence.endsAt, school.timeZone).split('–');
                 return <li key={event.key} className={series.status === 'CANCELLED' ? 'muted-row' : undefined}>
-                  <button id={`agenda-course-${series.id}-${occurrence.id}`} type="button" className="agenda-lesson" onClick={() => setCourse({ id: series.id, occurrenceId: occurrence.id })}>
+                  <button id={`agenda-course-${series.id}-${occurrence.id}`} type="button" className="agenda-lesson" onClick={() => openCourse({ id: series.id, occurrenceId: occurrence.id })}>
                     <span className="agenda-time"><time dateTime={occurrence.startsAt}>{start}</time><span className="visually-hidden"> à </span><time dateTime={occurrence.endsAt}>{end}</time></span>
                     <span className="agenda-identity">
                       <span className="agenda-identity-top"><span className="row-title">{series.title}</span>
@@ -205,8 +212,7 @@ export function AgendaSection() {
               const [start, end] = formatTimeRange(lesson.plannedStart, lesson.plannedEnd, school.timeZone).split('–');
               return <li key={event.key} className={lesson.status === 'CANCELLED' ? 'muted-row' : undefined}>
                 <button id={`agenda-lesson-${lesson.id}`} type="button" className="agenda-lesson" aria-current={routeQuery?.lesson === lesson.id ? 'true' : undefined} onClick={() => {
-                    setRouteQuery?.({ ...routeQuery, lesson: lesson.id }, true, true);
-                    navigate('eleves', { selection: lesson.learnerId, lesson: lesson.id, from: 'agenda', week: monday, instructor: instructor || undefined });
+                    openLesson(lesson.id);
                   }}>
                   <span className="agenda-time"><time dateTime={lesson.plannedStart}>{start}</time><span className="visually-hidden"> à </span><time dateTime={lesson.plannedEnd}>{end}</time></span>
                   <span className="agenda-identity">
@@ -218,7 +224,7 @@ export function AgendaSection() {
                     <span className="row-meta agenda-lesson-meta"><span>{memberName(lesson.instructorMembershipId)}</span>{lesson.meetingPoint && <span>{lesson.meetingPoint}</span>}</span>
                   </span>
                   <span className="agenda-open-indicator flip"><Symbol kind="back" bare /></span>
-                  <span className="visually-hidden">Ouvrir le dossier</span>
+                  <span className="visually-hidden">Ouvrir la leçon</span>
                 </button>
               </li>;
             })}</ul>

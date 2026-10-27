@@ -8,7 +8,7 @@ final class MessagingOwnDevicesUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["messages-entry"].waitForExistence(timeout: 10))
         app.buttons["messages-entry"].tap()
-        app.buttons["messaging.settings.open"].tap()
+        app.buttons["messaging.inbox.more"].tap(); app.buttons["messaging.settings.open"].tap()
         let open = app.buttons["messaging.devices.open"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()

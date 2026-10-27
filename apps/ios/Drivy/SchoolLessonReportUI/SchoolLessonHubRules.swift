@@ -121,13 +121,12 @@ enum SchoolLessonHubRules {
             && (workedOn + observationText + nextStep).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Libellé du bouton du bilan : ce qui est enregistré, et qui le lira. L’enregistrement devient aussitôt
+    /// Libellé terminal du bilan : l’enregistrement ferme la fiche. Il devient aussitôt
     /// la version lue par l’élève, sauf bilan gardé pour soi. `shared` vaut `nil` quand le réglage de partage
     /// n’a pas pu être lu : le libellé ne promet alors rien.
     static func saveReportTitle(isEmpty: Bool, shared: Bool?) -> String {
-        if isEmpty { return "Enregistrer sans bilan" }
-        guard let shared else { return "Enregistrer le bilan" }
-        return shared ? "Enregistrer et partager le bilan" : "Enregistrer le bilan pour moi"
+        if isEmpty { return "Enregistrer sans bilan et fermer" }
+        return shared == false ? "Enregistrer pour moi et fermer" : "Enregistrer et fermer"
     }
 
     /// Avant un départ confirmé, compatibilité GPS à 30 minutes près du créneau ; ensuite la leçon fait foi.

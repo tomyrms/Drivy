@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useCommandSnapshot } from '../command-store';
 import { readSchool } from '../school-api';
 import { setupDraftSchema } from '../setup-model';
-import { ConfirmDialog, Symbol, type Tone } from '../ui';
+import { Symbol, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 import { consolePath, readNavigationQuery } from './route';
@@ -25,14 +25,8 @@ type NextAction = z.infer<typeof nextActionsSchema>['actions'][number];
 
 function ActionLink({ action }: { action: NextAction }) {
   const { schoolId, navigate } = useConsole();
-  const [showApp, setShowApp] = useState(false);
   const query = readNavigationQuery(new URLSearchParams(action.query).toString());
-  if (action.code === 'PLAN_FIRST_LESSON') return <>
-    <button type="button" className="preparation-link" onClick={() => setShowApp(true)}><span className="row-title">Planifier dans l’app Drivy</span><span className="flip"><Symbol kind="back" bare /></span></button>
-    <ConfirmDialog open={showApp} busy={false} title="Votre première leçon" confirmLabel="Voir le dossier" onCancel={() => setShowApp(false)} onConfirm={() => { setShowApp(false); navigate('eleves', { selection: query.selection ?? query.learner }); }}>
-      <p>Connectez-vous à l’app Drivy avec votre compte moniteur. Dans Élèves, ouvrez le dossier puis choisissez « Planifier une leçon ».</p>
-    </ConfirmDialog>
-  </>;
+  if (action.code === 'PLAN_FIRST_LESSON') return <button type="button" className="preparation-link" onClick={() => navigate('agenda', { view: 'nouvelle', learner: query.selection ?? query.learner })}><span className="row-title">Planifier une leçon</span><span className="flip"><Symbol kind="back" bare /></span></button>;
   return <a className="preparation-link" href={consolePath(schoolId, action.section, query)} onClick={event => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
     event.preventDefault(); navigate(action.section, query);

@@ -165,7 +165,7 @@ describe('Liste blanche des routes de gestion', () => {
     for (const [method, path, search] of [
       ['GET', `/schools/${school}/lessons`, '?trainingId=1'],
       ['GET', `/schools/${school}/lessons`, '?status=PLANNED'],
-      ['POST', `/schools/${school}/lessons/${school}/cancel`, ''],
+      ['POST', `/schools/${school}/lessons/${school}/start`, ''],
       ['PATCH', `/schools/${school}/members/${school}/deactivate`, ''],
       ['POST', `/schools/${school}/trainings/${training}/assignments/${assignment}/remove`, ''],
       ['GET', `/schools/${school}/report-drafts`, ''],
@@ -175,7 +175,7 @@ describe('Liste blanche des routes de gestion', () => {
       ['DELETE', `/schools/${school}/observation-themes`, ''], ['GET', `/schools/${school}/observation-themes/vehicle`, ''],
       ['PUT', `/schools/${school}/observation-themes/vehicle`, ''], ['GET', `/schools/${school}/observation-themes`, '?limit=5'],
       ['PATCH', `/schools/${school}/offerings`, ''],
-      ['POST', `/schools/${school}/lessons`, ''],
+      ['POST', `/schools/${school}/lessons/start-now`, ''],
       ['GET', `/schools/not-a-uuid`, ''],
       ['GET', `/schools/${school}/../me`, ''],
       ['GET', `/schools/${school}/%2e%2e/me`, ''],

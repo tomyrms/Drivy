@@ -1,5 +1,36 @@
 # État de la réalisation
 
+## 26 octobre 2026 — récupération intégrée et reçus Messages
+
+- #50 : [158 contrôles navigateur réussis](https://github.com/tomyrms/Drivy/actions/runs/40334928759) sur `9105617`, dont les huit scénarios de récupération avec Keycloak/Mailpit isolés. [Preuve et limites](account-recovery-20261026.md). SMTP cible reporté à la demande du porteur ; activation réelle désactivée.
+- Agenda/cours : [65 tests métier réussis, 69 exécutions avec paramètres, zéro échec/ignoré](https://github.com/tomyrms/Drivy/actions/runs/40332817407) sur `bd5cbdc`. [Résumé Apple](proofs/parcours-20261026/agenda-bd5cbdc/summary.json). UI cours/profil/récupération en cours ; reprise UI bilan encore attendue.
+- #104 : reçus serveur atomiques en `103c3a8`, journal natif avec identité stable et contrôle de reçu en `828e284`, reprise d'une écriture locale interrompue en `14ba07c`. Neuf tests PostgreSQL de mutations plus 22 régressions messagerie réussis. [Installation future API avant IPA et limites](messaging-mutation-receipts-104-20261026.md). Nouveaux tests UI synthétiques 1/5/15 secondes préparés, pas encore exécutés.
+- #51 : revue finale en cours ; frontière bureau ADMIN conservée. Campagne complète, PR et IPA finales à venir. Aucun déploiement ni validation physique annoncé.
+
+
+## 26 octobre 2026 — socle réactivité qualifié sur Apple
+
+- Socle natif #106/#107/#119 : [79 tests réussis, zéro échec/ignoré](https://github.com/tomyrms/Drivy/actions/runs/40331345770) sur `0c3a712`, et IPA compilée. [Détail et preuve](reactivite-native-106-107-119-20261026.md#exécution-apple-du-socle).
+- Web : socle et pilote réglages en `dbd868b`, 84 tests ciblés, concurrence des préférences vérifiée sur PostgreSQL17.11 isolé, quatre parcours navigateur synthétiques. Revalidation du compte actif après verrou ajoutée en `120f24a`.
+- Cours/formulaires en `50cd527`, entrée récupération native en `bd5cbdc`, intégration serveur/web #50 en `cc85d22` et correctifs de recette suivants. Apple ciblé et recette réelle Keycloak/Mailpit encore en cours ; SMTP réel non activé.
+- Les deux nouveaux tests UI du bilan ont échoué sur un sélecteur XCTest ambigu (boutons imbriqués). Ciblage corrigé en `ab9a2d3`, reprise programmée ; pas de validation UI revendiquée.
+- Messagerie durable en `fcc3c35` ; reçu serveur contre les anciennes requêtes retardées en réalisation. Planification web #51 en réalisation. Aucun déploiement.
+
+
+## 26 octobre 2026 — vague parcours, première preuve bilan
+
+- #162/#163 : 101 tests Swift réussis (105 cas paramétrés), zéro échec/ignoré, sur Apple au commit `2b0c952` : [run 40328492050](https://github.com/tomyrms/Drivy/actions/runs/40328492050). UI iPhone/iPad encore en cours. [Détail](bilan-brouillon-162-163-20261026.md).
+- Socle natif #106/#107/#119 intégré en `d85bd00`/`d88757f` ; tests Apple à lancer. Le bilan adopte le domaine pédagogique ; test de coexistence avec une invitation préparé.
+- #50 : le porteur demande de préparer l'intégration et de choisir le relais e-mail plus tard. Aucune activation ni annonce d'envoi réel avant configuration et qualification.
+- Les lots messagerie, cours/formulaires et web restent en réalisation. Aucun déploiement ni validation physique revendiqués.
+
+
+## 26 octobre 2026 : vague parcours, bilan #162/#163 prêt pour qualification ciblée
+
+- Worktree isolé, branche `codex/bilans-reactivite-parcours-20261026` : correctifs Messages jusqu'à `da7f8f3` conservés et agenda `71390e9` intégré. [Périmètre demandé](vague-parcours-20261026.md).
+- Bilan : conservation locale proposée avant sortie, fermeture après écriture réussie seulement, erreur réessayable sans perte de saisie. Suppression locale refusée signalée ; commande déjà partie jamais annulée fictivement. Action « Enregistrer et fermer » et variantes privées/vides. [Détail](bilan-brouillon-162-163-20261026.md).
+- Tests Swift et UI préparés, pas encore exécutés sur Apple. Mode ciblé `reports` ajouté sans réduire la campagne complète. Aucun déploiement ni résultat physique annoncé.
+
 ## 26 octobre 2026 à 13:25 UTC : agenda web et BFF déployés
 
 Version `71390e97d3c3ac313673635fe06c40c2f8e98c46` activée sur CT114. La [PR #178](https://github.com/tomyrms/Drivy/pull/178) est fusionnée et les issues #144/#145/#146/#147/#172/#173/#175 sont fermées.
@@ -1077,3 +1108,23 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 ### Progression des compétences (essai terrain du 30 septembre 2026)
 
 Écrit, non exécuté : la migration `020_admin_progress_read.sql` (progression lisible en lecture seule par l'administration de l'école, bilans et brouillons inchangés), le rappel du niveau actuel de chaque compétence dans le bilan d'une nouvelle leçon (sans l'écrire dans ce bilan), et la relecture de la formation à chaque affichage. Les tests PostgreSQL (`lesson-reports.integration.test.ts`) et Swift (`SchoolLessonFinishTests`, `SchoolLessonHubTests`) tournent dans la CI « Refonte · vérifications ». À revérifier sur l'iPhone après déploiement (sauvegarde de la base d'abord) : enchaîner deux leçons, puis ouvrir la progression en moniteur, en élève et en administrateur.
+ 
+## Messagerie #98 refonte UI/UX (25 octobre 2026) 
+ 
+- PASS : IPA d'essai compilee (run 40214002610), tests metier iOS complets (run 40214008527). 
+- FAIL hors perimetre : typecheck API (variable inutilisee dans course-push-revalidation, deja sur master). 
+- NOT_EXECUTED : tests UI messagerie, captures avant/apres iPhone/iPad clair/sombre/grands textes, essai sur appareil.
+- PASS : tests UI MessagingThreadUITests et MessagingOwnDevicesUITests iPhone/iPad (run 40215297685). 
+- PASS : IPA avec acces Messages (run 40215714427).
+
+## #100-#104 (25 octobre 2026, b6673c6)
+
+- PASS : tests metier iOS complets (runs 40236644565, 40237951212), verifications API/PostgreSQL (40237952137), IPA avec acces Messages (40239305741).
+- NOT_EXECUTED : controle UI fonctionnel MessagingFeatureCheckUITests sur le dernier SHA, recette reseau 1/5/15 s, essai iPhone, push reel.
+- BLOCKED : alerte de mention (migration 20261025 non deployee) ; aucune alerte � nouveau message � cote serveur.
+
+## Retours porteur 25 octobre soir (6bfea69)
+
+- PASS : tests metier iOS (run 40299656866), verifications API (6bfea69), IPA avec Messages (40299653098).
+- En cours : MessagingFeatureCheckUITests + MessagingThreadUITests (40301689859). Echecs connus sur c84d489 : reaction (cible non actionnable), chargement des precedents.
+- NOT_EXECUTED : essai iPhone de la fermeture de palette, du glisser pour repondre et du gras des mentions.

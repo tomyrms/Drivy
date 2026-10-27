@@ -12,6 +12,12 @@ struct SchoolPlanningView: View {
     @State private var isPreparingCancellation = false
     @State private var cancellationPreparationError: String?
     @State private var document: SchoolPlanningDocument?
+    @State private var firstEditedState: SchoolPlanningDraftSnapshot?
+    @State private var confirmsDiscard = false
+
+    private var hasUnsentChanges: Bool {
+        model.pending == nil && !model.writeConfirmed && firstEditedState.map { $0 != model.draftSnapshot } == true
+    }
 
     private var title: String { cancelling ? "Annuler la leçon" : model.originalLesson == nil ? "Planifier une leçon" : "Déplacer la leçon" }
     var body: some View {
@@ -46,7 +52,10 @@ struct SchoolPlanningView: View {
             .environment(\.timeZone, TimeZone(identifier: model.timeZone) ?? .current)
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy || isPreparingCancellation) }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Fermer") { if hasUnsentChanges { confirmsDiscard = true } else { dismiss() } }
+                        .disabled(model.isBusy || isPreparingCancellation)
+                }
                 // Relecture du planning, nouvel élève ou nouvelle formation : l’attente se lit dans la barre,
                 // le formulaire ne reçoit pas de ligne et ne se décale pas. Le premier chargement garde son squelette.
                 if model.school != nil && model.isLoading {
@@ -68,6 +77,10 @@ struct SchoolPlanningView: View {
                 if !cancelling, model.nextSlotRequest != nil { await model.findSuggestedSlot() }
             }
             .sheet(item: $document) { SchoolPlanningDocumentView(document: $0) }
+            .alert("Quitter sans conserver la saisie ?", isPresented: $confirmsDiscard) {
+                Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                Button("Continuer", role: .cancel) {}
+            }
             .alert("Annuler cette leçon ?", isPresented: $confirmsCancellation) {
                 Button("Annuler la leçon", role: .destructive) {
                     Task {
@@ -101,8 +114,14 @@ struct SchoolPlanningView: View {
             }
             }
         }
-        .interactiveDismissDisabled(model.isBusy || isPreparingCancellation)
+        .interactiveDismissDisabled(model.isBusy || isPreparingCancellation || hasUnsentChanges)
         .tint(DrivyTheme.accent)
+    }
+
+    /// La lecture et la proposition automatique de créneau ne sont pas des modifications de l’utilisateur.
+    private func beginEditing() { if firstEditedState == nil { firstEditedState = model.draftSnapshot } }
+    private func editing<Value>(_ binding: Binding<Value>) -> Binding<Value> {
+        Binding(get: { binding.wrappedValue }, set: { value in beginEditing(); binding.wrappedValue = value })
     }
 
     @ViewBuilder private var bookingFields: some View {
@@ -110,6 +129,7 @@ struct SchoolPlanningView: View {
             if model.originalLesson == nil {
                 NavigationLink {
                     SchoolLearnerSearchList(learners: model.learners, selectedID: model.learnerID) { id in
+                        beginEditing()
                         Task { await model.selectLearner(id) }
                     }
                 } label: {
@@ -154,7 +174,7 @@ struct SchoolPlanningView: View {
             LabeledContent("Formation") { DrivingLicenseValue(code: training.categoryCode) }
         } else {
             Picker("Formation", selection: Binding(get: { model.trainingID }, set: { id in
-                if let id { Task { await model.selectTraining(id) } }
+                if let id { beginEditing(); Task { await model.selectTraining(id) } }
             })) {
                 Text("Choisir une formation").tag(nil as UUID?)
                 ForEach(model.trainings) { training in
@@ -166,7 +186,7 @@ struct SchoolPlanningView: View {
     /// Déplacement : la durée et le prix restent ceux de la leçon, sauf si le moniteur les change.
     private var keptTermsFields: some View {
         Section {
-            Toggle("Changer la durée ou le tarif", isOn: $model.changesCommercialTerms)
+            Toggle("Changer la durée ou le tarif", isOn: editing($model.changesCommercialTerms))
                 .drivyControlTint()
                 .disabled(!model.canMutate)
             if !model.changesCommercialTerms, let lesson = model.originalLesson {
@@ -180,7 +200,7 @@ struct SchoolPlanningView: View {
     }
     private var scheduleFields: some View {
         Section {
-            Picker("Moniteur", selection: $model.instructorID) {
+            Picker("Moniteur", selection: editing($model.instructorID)) {
                 Text("Choisir un moniteur").tag(nil as UUID?)
                 ForEach(model.assignedInstructors) { instructor in Text(model.instructorLabel(instructor)).tag(Optional(instructor.id)) }
                 if let selected = model.instructors.first(where: { $0.id == model.instructorID }),
@@ -206,7 +226,7 @@ struct SchoolPlanningView: View {
             }
             suggestedSlotNotice
             if model.originalLesson == nil || model.changesCommercialTerms {
-                Picker("Durée", selection: Binding(get: { model.duration }, set: { model.selectDuration($0) })) {
+                Picker("Durée", selection: Binding(get: { model.duration }, set: { beginEditing(); model.selectDuration($0) })) {
                     ForEach(model.durationChoices, id: \.self) { minutes in Text("\(minutes) min").tag(minutes) }
                 }
                 .accessibilityIdentifier("planning-duration")
@@ -216,13 +236,13 @@ struct SchoolPlanningView: View {
             }
             slotStatus
             DisclosureGroup("Détails du rendez-vous") {
-                SchoolMeetingPointField(text: $model.meetingPoint)
+                SchoolMeetingPointField(text: editing($model.meetingPoint))
                 .onChange(of: model.meetingPoint) { _, _ in model.agreementConfirmed = false }
                 if model.meetingPointTooLong {
                     DrivyFormMessage(text: "Raccourcis le lieu à 500 caractères.", tone: .danger)
                 }
                 if model.originalLesson == nil {
-                    Stepper("Temps entre deux leçons : \(model.bufferMinutes) min", value: $model.bufferMinutes, in: 0...240, step: 5)
+                    Stepper("Temps entre deux leçons : \(model.bufferMinutes) min", value: editing($model.bufferMinutes), in: 0...240, step: 5)
                         .accessibilityLabel("Temps entre deux leçons")
                         .accessibilityValue("\(model.bufferMinutes) minutes")
                 }
@@ -267,7 +287,7 @@ struct SchoolPlanningView: View {
     }
     /// Un choix à la main l’emporte sur la proposition : elle ne revient plus remplacer l’horaire saisi.
     private var startSelection: Binding<Date> {
-        Binding(get: { model.startsAt }, set: { model.chooseStart($0) })
+        Binding(get: { model.startsAt }, set: { beginEditing(); model.chooseStart($0) })
     }
     /// Seulement l’inhabituel : aucune ligne quand un créneau est trouvé.
     @ViewBuilder private var suggestedSlotNotice: some View {
@@ -323,7 +343,7 @@ struct SchoolPlanningView: View {
                 }
                 .accessibilityIdentifier("planning-tariff")
             } else if model.needsTariffChoice {
-                Picker("Tarif", selection: $model.productID) {
+                Picker("Tarif", selection: editing($model.productID)) {
                     Text("Choisir un tarif").tag(nil as UUID?)
                     ForEach(model.compatibleProducts) { product in
                         Text(SchoolPlanningFormat.tariff(product, quantity: model.quantityCovered(by: product))).tag(Optional(product.id))
@@ -361,8 +381,8 @@ struct SchoolPlanningView: View {
     @ViewBuilder private var reviewFields: some View {
         if model.originalLesson != nil {
             Section {
-                TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: $model.reason, axis: .vertical).lineLimit(2...4)
-                Toggle("Le nouvel horaire est convenu", isOn: $model.agreementConfirmed)
+                TextField(model.changesCommercialTerms ? "Motif du changement" : "Motif facultatif", text: editing($model.reason), axis: .vertical).lineLimit(2...4)
+                Toggle("Le nouvel horaire est convenu", isOn: editing($model.agreementConfirmed))
                     .drivyControlTint()
             } header: { Text("Motif et accord").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -444,14 +464,14 @@ struct SchoolPlanningView: View {
                 .drivyFormRows()
         }
         Section {
-            Picker("Motif", selection: $model.cancellationReason) {
+            Picker("Motif", selection: editing($model.cancellationReason)) {
                 Text("Choisir un motif").tag("")
                 Text("Demande de l’élève").tag("LEARNER_REQUEST")
                 Text("Moniteur indisponible").tag("INSTRUCTOR_UNAVAILABLE")
                 Text("Fermeture de l’école").tag("SCHOOL_CLOSURE")
                 Text("Autre motif").tag("OTHER")
             }
-            TextField("Précision facultative", text: $model.reason, axis: .vertical).lineLimit(3...6)
+            TextField("Précision facultative", text: editing($model.reason), axis: .vertical).lineLimit(3...6)
             // Explication seulement en cas d’erreur : la limite n’apparaît qu’une fois dépassée.
             if model.reasonTooLong {
                 DrivyFormMessage(text: "Raccourcis la précision à 1 000 caractères.", tone: .danger)

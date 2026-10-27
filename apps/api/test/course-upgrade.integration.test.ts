@@ -6,7 +6,7 @@ import { migrate, migrationFilePattern } from '../scripts/migrations.js';
 import { canRead, eligibleContacts, findOrCreatePrivate, sendEnvelope } from '../src/messaging.js';
 import { freshDatabase, id, prepareSchool } from './support/harness.js';
 
-const coursePattern = /^04[2-6]_/;
+const coursePattern = /^04[2-6]_|^20261025_messaging_mention_push/;
 const migrationDirectory = new URL('../migrations/', import.meta.url);
 const actor = { schoolId: id.schoolA, personId: id.instructor, membershipId: id.instructorMember };
 
@@ -52,7 +52,7 @@ describe('course upgrade after the dated production messaging migrations', () =>
     const functions = (await pool.query(`SELECT p.oid::regprocedure::text AS signature,pg_get_functiondef(p.oid) AS definition,
       p.proacl::text AS acl,p.proowner::regrole::text AS owner,p.prosecdef,p.proconfig
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-      WHERE n.nspname='drivy' AND p.proname LIKE 'messaging_%' ORDER BY signature`)).rows;
+      WHERE n.nspname='drivy' AND p.proname LIKE 'messaging_%' AND p.proname<>'messaging_mention_enqueue' ORDER BY signature`)).rows;
     const tables = (await pool.query(`SELECT c.relname,c.relacl::text AS acl,c.relowner::regrole::text AS owner,
       c.relrowsecurity,c.relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
       WHERE n.nspname='drivy' AND c.relname LIKE 'messaging_%' AND c.relkind='r' ORDER BY c.relname`)).rows;
@@ -89,7 +89,7 @@ describe('course upgrade after the dated production messaging migrations', () =>
     const names = (await readdir(migrationDirectory)).filter(name => migrationFilePattern.test(name)).sort();
     const courses = names.filter(name => coursePattern.test(name));
     expect(courses).toEqual(['042_collective_courses.sql', '043_course_enrollment_waitlist_cancellation.sql',
-      '044_course_attendance_payment_completion.sql', '045_course_notifications.sql', '046_course_push_revalidation.sql']);
+      '044_course_attendance_payment_completion.sql', '045_course_notifications.sql', '046_course_push_revalidation.sql', '20261025_messaging_mention_push.sql']);
     const beforeRegistry = await registry();
     expect(beforeRegistry.map(row => row.name)).toEqual(names.filter(name => !coursePattern.test(name)));
     expect(beforeRegistry.filter(row => /^0\d{2}_/.test(row.name))).toHaveLength(41);

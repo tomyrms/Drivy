@@ -193,7 +193,7 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
             _ = try await c.restoreBackup(recoveryKey: wrongKey, scope: bScope)
             XCTFail("Une clé valide mais étrangère doit être refusée.")
         } catch {
-            XCTAssertTrue(error as? MessagingFailure == .protectionUnavailable, "La mauvaise clé doit être refusée sans divulgation.")
+            XCTAssertTrue(error as? MessagingFailure == .recoveryKeyRefused, "La mauvaise clé doit être refusée sans divulgation.")
         }
         enter("C-RESTORE")
         let restored = try await c.restoreBackup(recoveryKey: recoveryKey, scope: bScope)

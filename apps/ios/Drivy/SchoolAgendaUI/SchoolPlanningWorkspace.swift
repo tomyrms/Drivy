@@ -15,6 +15,20 @@ struct SchoolPlanningInstructor: Identifiable {
     let displayName: String
 }
 
+/// Valeurs saisies, distinctes du chargement, de la disponibilité et de la demande déjà conservée dans la file.
+struct SchoolPlanningDraftSnapshot: Equatable {
+    let learnerID: UUID?, trainingID: UUID?, instructorID: UUID?, productID: UUID?
+    let startsAt: Date
+    let duration: Int
+    let meetingPoint: String
+    let bufferMinutes: Int
+    let quantity: Int
+    let agreementConfirmed: Bool
+    let changesCommercialTerms: Bool
+    let reason: String
+    let cancellationReason: String
+}
+
 @MainActor @Observable final class SchoolPlanningWorkspace: Identifiable {
     let id = UUID()
     let scope: SchoolCommandScope
@@ -126,6 +140,12 @@ struct SchoolPlanningInstructor: Identifiable {
     }
     var reason = ""
     var cancellationReason = ""
+    var draftSnapshot: SchoolPlanningDraftSnapshot {
+        SchoolPlanningDraftSnapshot(learnerID: learnerID, trainingID: trainingID, instructorID: instructorID, productID: productID,
+            startsAt: startsAt, duration: duration, meetingPoint: meetingPoint, bufferMinutes: bufferMinutes, quantity: quantity,
+            agreementConfirmed: agreementConfirmed, changesCommercialTerms: changesCommercialTerms, reason: reason,
+            cancellationReason: cancellationReason)
+    }
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, date: Date = Date(), lesson: SchoolLesson? = nil,
          suggestingNextSlotFrom: Date? = nil, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
@@ -290,7 +310,7 @@ struct SchoolPlanningInstructor: Identifiable {
         confirmedLesson = nil; confirmedLessonReference = nil
         defer { if request == generation { isLoading = false } }
         var storageError: String?
-        do { pending = try outbox.pending(for: scope); storageAvailable = true }
+        do { pending = try outbox.pending(for: scope, domain: .teaching); storageAvailable = true }
         catch { storageError = SchoolConfigurationFailure.storage.localizedDescription }
         do {
             let person = try await client.reader.me()
@@ -626,7 +646,7 @@ struct SchoolPlanningInstructor: Identifiable {
             do { try outbox.save(command) }
             catch {
                 storageAvailable = false
-                if let existing = try? outbox.pending(for: scope) { pending = existing }
+                if let existing = try? outbox.pending(for: scope, domain: .teaching) { pending = existing }
                 throw error
             }
         } catch { fail(error); return false }

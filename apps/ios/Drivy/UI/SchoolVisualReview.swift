@@ -19,11 +19,13 @@ struct SchoolVisualReview: View {
                 SchoolEntryVisualReview(screen: screen)
             } else if SchoolAccountVisualReview.screenNames.contains(screen) {
                 SchoolAccountVisualReview(screen: screen)
+            } else if SchoolCourseVisualReview.screens.contains(screen) {
+                SchoolCourseVisualReview(screen: screen)
             } else if let context {
                 switch screen {
                 case "gps-choice", "signal", "signal-all", "observations", "capture-preparation", "live", "live-waiting":
                     SchoolFieldVisualReview(screen: screen, context: context)
-                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit":
+                case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known", "planning-settings", "invitations", "invitation-create", "invitation-detail", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit", "lesson-draft", "lesson-draft-error":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled", "lesson-competencies", "lesson-route",
                      "learner-lesson", "learner-lesson-planned":
@@ -117,7 +119,8 @@ struct SchoolVisualReview: View {
         .environment(\.locale, Locale(identifier: "fr_CH"))
         .tint(DrivyTheme.accent)
         .task {
-            guard !SchoolAccountVisualReview.screenNames.contains(screen), !SchoolEntryVisualReview.screenNames.contains(screen) else { return }
+            guard !SchoolAccountVisualReview.screenNames.contains(screen), !SchoolEntryVisualReview.screenNames.contains(screen),
+                  !SchoolCourseVisualReview.screens.contains(screen) else { return }
             guard context == nil else { return }
             do {
                 context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "learner-lesson",

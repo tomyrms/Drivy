@@ -1,6 +1,6 @@
 import Foundation
 
-struct MessagingReadState: Sendable {
+struct MessagingReadState: Codable, Equatable, Sendable {
     let lastReadSequence: Int
     let mutedUntil: Date?
     let version: Int

@@ -69,6 +69,33 @@ describe('#43 tick : expiration autonome, ciblage, rappels, minimum',()=>{
 });
 
 describe('#44 préférences et #40 abonnement',()=>{
+ it.each([false,true])('deux appareils sur la même version : une seule écriture, ligne existante=%s',async(existing)=>{
+  await pool.query('DELETE FROM drivy.notification_preference WHERE person_id=$1',[id.bob]);
+  const initial={courseOffers:true,courseReminders:true,courseChanges:true,courseStaffAlerts:true};
+  if(existing)expect((await call('PUT','/v1/me/notification-preferences',initial as never,1,'demo-bob')).statusCode).toBe(200);
+  const before=(await call('GET','/v1/me/notification-preferences',undefined,null,'demo-bob')).json().data;
+  const choices=[{...initial,courseOffers:false},{...initial,courseReminders:false}];
+  // Hold the owner so both API transactions have reached the same contention point.
+  const blocker=await pool.connect();await blocker.query('BEGIN');
+  await blocker.query('SELECT id FROM drivy.person WHERE id=$1 FOR UPDATE',[id.bob]);
+  const requests=choices.map(body=>call('PUT','/v1/me/notification-preferences',body as never,before.version,'demo-bob'));
+  try{
+   // Both route transactions must wait for the owner's lock before reading the preference version.
+   const deadline=Date.now()+5_000;
+   while(Date.now()<deadline){
+    const waiting=await pool.query<{n:number}>(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%drivy.person%FOR UPDATE%'`);
+    if(waiting.rows[0]!.n>=2)break;
+    await new Promise(resolve=>setTimeout(resolve,10));
+   }
+  }finally{await blocker.query('COMMIT');blocker.release();}
+  const results=await Promise.all(requests);
+  expect(results.map(result=>result.statusCode).sort()).toEqual([200,412]);
+  const winner=results.findIndex(result=>result.statusCode===200);
+  const after=(await call('GET','/v1/me/notification-preferences',undefined,null,'demo-bob')).json().data;
+  expect(after).toEqual({...choices[winner],version:before.version+1});
+  // Preserve the default fixture for the following notification targeting scenarios.
+  expect((await call('PUT','/v1/me/notification-preferences',initial as never,after.version,'demo-bob')).statusCode).toBe(200);
+ });
  it('préférence désactivée : aucune notification de cette catégorie, l’information reste consultable',async()=>{
   const prefs=await call('GET','/v1/me/notification-preferences',undefined,null,'demo-bob');
   expect(prefs.json().data).toMatchObject({courseOffers:true,courseReminders:true});

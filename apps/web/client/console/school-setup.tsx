@@ -64,7 +64,8 @@ export function SchoolSetupGuide({ catalogueOnly = false, onClose }: { catalogue
   const needsAdoption = useRef(false);
   const localOperation = useRef<string | null>(null);
   const followedSetup = useRef<{ operationId: string; kind: 'saveSetupDraft' | 'applySetupDraft' } | null>(null);
-  const pending = snapshot.entries.get(schoolId);
+  const pending = [...snapshot.entries.values()].find(entry => entry.meta.schoolId === schoolId
+    && (entry.meta.kind === 'saveSetupDraft' || entry.meta.kind === 'applySetupDraft'));
   const hasPendingRequest = useRef(false);
   hasPendingRequest.current = !!pending;
   if (pending?.meta.kind === 'saveSetupDraft' || pending?.meta.kind === 'applySetupDraft') followedSetup.current = { operationId: pending.meta.operationId, kind: pending.meta.kind };

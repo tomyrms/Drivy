@@ -63,12 +63,19 @@ final class MessagingThreadUITests: XCTestCase {
                       "La feuille Messages doit être présentée", file: file, line: line)
         XCTAssertTrue(app.staticTexts["Aucune conversation"].waitForExistence(timeout: 5),
                       "La fixture doit avoir terminé le chargement des discussions", file: file, line: line)
-        let open = app.buttons["messaging.members.open"]
+        // #98 : les membres du général s'ouvrent depuis les options de la conversation, plus depuis la liste.
+        let general = app.buttons["messaging.general.open"]
         let ready = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == true AND hittable == true"), object: open)
+            predicate: NSPredicate(format: "exists == true AND hittable == true"), object: general)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed,
-                       "L'entrée Membres doit être actionnable", file: file, line: line)
-        open.tap()
+                       "Le général doit être actionnable", file: file, line: line)
+        general.tap()
+        let options = app.buttons["messaging.options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 5), "Options du général", file: file, line: line)
+        options.tap()
+        let members = app.buttons["Membres"]
+        XCTAssertTrue(members.waitForExistence(timeout: 3), "Entrée Membres du général", file: file, line: line)
+        members.tap()
         let list = app.descendants(matching: .any)["messaging.members"]
         XCTAssertTrue(list.waitForExistence(timeout: 5),
                       "L'unique appui doit ouvrir les membres du général", file: file, line: line)
@@ -98,7 +105,7 @@ final class MessagingThreadUITests: XCTestCase {
         let entry = app.buttons["messages-entry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
-        app.buttons["Général de l'école"].tap()
+        app.buttons["messaging.general.open"].tap()
         let more = app.buttons["messaging.compose.more"]
         XCTAssertTrue(more.waitForExistence(timeout: 5), "La fixture autorise la composition")
         more.tap()
@@ -118,7 +125,7 @@ final class MessagingThreadUITests: XCTestCase {
         let entry = app.buttons["messages-entry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
-        app.buttons["Général de l'école"].tap()
+        app.buttons["messaging.general.open"].tap()
         app.buttons["messaging.search.open"].tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
     }
@@ -130,7 +137,7 @@ final class MessagingThreadUITests: XCTestCase {
         let entry = app.buttons["messages-entry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
-        app.buttons["messaging.settings.open"].tap()
+        app.buttons["messaging.inbox.more"].tap(); app.buttons["messaging.settings.open"].tap()
         let open = app.buttons["messaging.backup.open"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
@@ -145,8 +152,8 @@ final class MessagingThreadUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["messages-entry"].waitForExistence(timeout: 10))
         app.buttons["messages-entry"].tap()
-        XCTAssertTrue(app.buttons["Général de l'école"].waitForExistence(timeout: 5))
-        app.buttons["Général de l'école"].tap()
+        XCTAssertTrue(app.buttons["messaging.general.open"].waitForExistence(timeout: 5))
+        app.buttons["messaging.general.open"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["messaging.readonly"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.descendants(matching: .any)["messaging.compose.text"].exists)
         XCTAssertFalse(app.buttons["Envoyer"].exists)
@@ -157,8 +164,8 @@ final class MessagingThreadUITests: XCTestCase {
         let app = launch()
         XCTAssertTrue(app.buttons["messages-entry"].waitForExistence(timeout: 10))
         app.buttons["messages-entry"].tap()
-        XCTAssertTrue(app.buttons["Général de l'école"].waitForExistence(timeout: 5))
-        app.buttons["Général de l'école"].tap()
+        XCTAssertTrue(app.buttons["messaging.general.open"].waitForExistence(timeout: 5))
+        app.buttons["messaging.general.open"].tap()
         let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
@@ -181,7 +188,7 @@ final class MessagingThreadUITests: XCTestCase {
         let entry = app.buttons["messages-entry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
-        app.buttons["Général de l'école"].tap()
+        app.buttons["messaging.general.open"].tap()
         let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         let readOnly = app.descendants(matching: .any)["messaging.readonly"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))

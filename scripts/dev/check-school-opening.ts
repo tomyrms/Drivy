@@ -23,6 +23,7 @@ import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
 import { verifyAuditV2 } from './check-audit-v2-acceptance.js';
 import { verifySchoolFormations } from './check-school-formations.js';
 import { verifyPersonalWelcome } from './check-personal-welcome.js';
+import { verifyAccountRecovery } from './check-school-account-recovery.js';
 import { verifySchoolCodeEntry } from './check-school-code-entry.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
@@ -53,7 +54,8 @@ function mailLink(text:string,expectedOrigin:string,path:string) {
   const links=(text.match(/https?:\/\/[^\s<>]+/g)??[]).map(value=>new URL(value)).filter(url=>url.origin===expectedOrigin&&url.pathname===path);
   if(links.length!==1||links[0]!.username||links[0]!.password)throw new Error('MAIL_LINK_INVALID');return links[0]!.href;
 }
-function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);}
+// Un contrôle réussi n'est jamais présenté comme l'étape en échec si l'action suivante échoue.
+function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);stage=`après « ${label} »`;}
 function docker(args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn('docker',args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('DOCKER_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('DOCKER_FAILED')));});}
 function runBuild(command:string,args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn(command,args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('IDENTITY_BUILD_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('IDENTITY_BUILD_FAILED')));});}
 async function buildIdentityProvider(temporary:string) {
@@ -127,7 +129,7 @@ async function main() {
     await writeFile(envPath,`KC_BOOTSTRAP_ADMIN_USERNAME=drivy-e2e-admin\nKC_BOOTSTRAP_ADMIN_PASSWORD=${adminPassword}\nKC_HOSTNAME=${keycloakOrigin}\nKC_HTTP_ENABLED=true\nKC_LOG_LEVEL=warn\n`,{mode:0o600});
     stage='serveur OIDC éphémère avec le fournisseur d’identité compilé';
     await docker(['run','--detach','--rm','--name',containerName,'--env-file',envPath,'--publish','127.0.0.1:8081:8080','--add-host','host.docker.internal:host-gateway',
-      '--mount',`type=bind,source=${identityProviderJar},target=/opt/keycloak/providers/drivy-direct-grant-auth-time.jar,readonly`,keycloakImage,'start-dev']);containerStarted=true;
+      '--mount',`type=bind,source=${identityProviderJar},target=/opt/keycloak/providers/drivy-direct-grant-auth-time.jar,readonly`,'--mount',`type=bind,source=${fileURLToPath(new URL('../../infra/identity/themes/drivy/',import.meta.url))},target=/opt/keycloak/themes/drivy,readonly`,keycloakImage,'start-dev']);containerStarted=true;
     await waitFor(`${keycloakOrigin}/realms/master/.well-known/openid-configuration`);
     const authentication=await fetch(`${keycloakOrigin}/realms/master/protocol/openid-connect/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
       body:new URLSearchParams({client_id:'admin-cli',grant_type:'password',username:'drivy-e2e-admin',password:adminPassword})});
@@ -135,7 +137,7 @@ async function main() {
     const realm=JSON.parse(await readFile(new URL('../../infra/dev/realm.json',import.meta.url),'utf8')) as Record<string,unknown>;
     Object.assign(realm,JSON.parse(await readFile(new URL('../../infra/identity/direct-grant-flow.json',import.meta.url),'utf8')));
     // L'inscription libre est fermée : un compte ne se crée qu'avec un code ou un lien valable, par le client de service de l'API.
-    realm.realm=realmName;realm.displayName='Drivy · Recette synthétique';realm.registrationAllowed=false;realm.verifyEmail=false;realm.resetPasswordAllowed=false;
+    realm.realm=realmName;realm.displayName='Drivy · Recette synthétique';realm.registrationAllowed=false;realm.verifyEmail=false;realm.resetPasswordAllowed=true;realm.loginTheme='drivy';
     realm.smtpServer={host:'host.docker.internal',port:'1025',from:'identity@drivy.example.invalid',ssl:'false',starttls:'false',auth:'false'};
     realm.clients=[{clientId:'drivy-web-e2e',protocol:'openid-connect',enabled:true,publicClient:false,secret:clientSecret,standardFlowEnabled:true,
       directAccessGrantsEnabled:true,implicitFlowEnabled:false,serviceAccountsEnabled:false,fullScopeAllowed:false,
@@ -184,10 +186,10 @@ async function main() {
     const nextAuthTime=await authenticationTime(nextGrant);
     assert(nextAuthTime>initialAuthTime&&nextAuthTime>=nextLoginStarted&&nextAuthTime<=Math.floor(Date.now()/1000),
       'Une nouvelle validation du mot de passe produit une nouvelle preuve récente');
-    const config={origin,apiBaseURL:apiOrigin,issuer,clientId:'drivy-web-e2e',clientSecret,development:true,host:'127.0.0.1',port:3002};
+    const config={origin,apiBaseURL:apiOrigin,issuer,clientId:'drivy-web-e2e',clientSecret,development:true,host:'127.0.0.1',port:3002,accountRecoveryEnabled:true};
     const invitationMail:InvitationMailConfig={webURL:`${origin}/app/invitation`,encryptionKey:randomBytes(32).toString('hex'),host:'127.0.0.1',port:1025,
       secure:false,requireTLS:false,from:'school@drivy.example.invalid'};
-    api=buildApp({pool:runtime,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/protocol/openid-connect/certs`}),
+    api=buildApp({pool:runtime,accountRecovery:{available:true,recoveryUrl:origin+'/app/recover'},verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/protocol/openid-connect/certs`}),
       cursorSecret:syntheticSecret(),invitationMail,schoolOpening:{operators:[{issuer,subject:operatorList[0]!.id}],validityDays:7},
       provisionAccount:createKeycloakProvisioner({baseURL:keycloakOrigin,realm:realmName,clientId:'drivy-accounts-e2e',clientSecret:accountsSecret})});
     const sessionStore=new SessionStore();
@@ -522,6 +524,7 @@ async function main() {
     assert((await administration.query('SELECT modules FROM drivy.school WHERE id=$1',[school.id])).rows[0].modules.gpsEnabled===true,
       'Le réglage GPS est accepté et durable après confirmation explicite avec la preuve récente');
     await page.screenshot({path:resolve(artifactDirectory,'13-gps-enabled-synthetic.png'),fullPage:true});
+    await verifyAccountRecovery({browser,origin,apiOrigin,issuer,keycloakOrigin,realmName,adminPassword,clientId:'drivy-web-e2e',clientSecret,ownMail,mailLink,assert,setStage:value=>{stage=value;}});
     await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
       scope:'Chromium desktop et viewport mobile, Keycloak réel à inscription fermée, création de compte par code et par lien d’invitation SMTP, connexion par formulaire, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);

@@ -1,10 +1,11 @@
 import Foundation
 import CryptoKit
 import Security
+import Darwin
 
 /// Protection locale au repos uniquement. Ne fournit PAS le chiffrement de bout en bout #67.
 /// Un snapshot par compte/école/époque/URL API ; aucune donnée de personne dans le chemin ou les logs.
-actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDrafts, MessagingProtectedReports {
+actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDrafts, MessagingProtectedReports, MessagingProtectedMutations {
     private struct Snapshot: Codable {
         let scopeFingerprint: String
         var pending: [MessagingPending]
@@ -16,6 +17,8 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
     private let expectedScope: MessagingScope
     private let folder: URL
     private let file: URL
+    private var mutationFile: URL { folder.appendingPathComponent(fingerprint + "-mutations.sealed") }
+    private var mutationAuthentication: Data { Data((fingerprint + "|mutations-v1").utf8) }
     private let fingerprint: String
     private static let service = "ch.drivy.messaging.local.v1"
     private static let keyAccount = "protected-snapshot-key"
@@ -118,11 +121,73 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
               report.items.allSatisfy({ !$0.ciphertext.payload.isEmpty }) else { throw MessagingFailure.invalidResponse }
     }
 
+    private struct MutationSnapshot: Codable {
+        let version: Int
+        let scopeFingerprint: String
+        var entries: [MessagingStoredMutation]
+    }
+
+    func mutationEntries(scope: MessagingScope) throws -> [MessagingStoredMutation] {
+        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
+        return try loadMutations(scope).entries
+    }
+
+    func putMutation(_ entry: MessagingStoredMutation, replacing clock: UUID?, scope: MessagingScope) throws {
+        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
+        guard entry.isValid else { throw MessagingFailure.invalidResponse }
+        var snapshot = try loadMutations(scope)
+        if let index = snapshot.entries.firstIndex(where: { $0.key == entry.key }) {
+            let current = snapshot.entries[index]
+            guard current.value.clock == clock || current == entry else { throw MessagingFailure.stateConflict }
+            snapshot.entries[index] = entry
+        } else {
+            guard clock == nil else { throw MessagingFailure.stateConflict }
+            guard snapshot.entries.count < 500 else { throw MessagingFailure.protectionUnavailable }
+            snapshot.entries.append(entry)
+        }
+        try saveMutations(snapshot)
+    }
+
+    func removeMutation(_ key: MessagingMutationKey, id: UUID, clock: UUID, scope: MessagingScope) throws {
+        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
+        var snapshot = try loadMutations(scope)
+        snapshot.entries.removeAll { $0.key == key && $0.value.id == id && $0.value.clock == clock }
+        try saveMutations(snapshot)
+    }
+
+    private func loadMutations(_ scope: MessagingScope) throws -> MutationSnapshot {
+        try verify(scope)
+        guard FileManager.default.fileExists(atPath: mutationFile.path) else {
+            return MutationSnapshot(version: 2, scopeFingerprint: fingerprint, entries: [])
+        }
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: mutationFile.path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  let size = attributes[.size] as? NSNumber, size.intValue <= Self.maxBytes else { throw MessagingFailure.protectionUnavailable }
+            let bytes = try Data(contentsOf: mutationFile)
+            guard bytes.count <= Self.maxBytes else { throw MessagingFailure.protectionUnavailable }
+            let clear = try AES.GCM.open(AES.GCM.SealedBox(combined: bytes), using: key(create: false), authenticating: mutationAuthentication)
+            let snapshot = try JSONDecoder().decode(MutationSnapshot.self, from: clear)
+            guard (1...2).contains(snapshot.version), snapshot.scopeFingerprint == fingerprint, snapshot.entries.count <= 500,
+                  Set(snapshot.entries.map(\.key)).count == snapshot.entries.count,
+                  snapshot.entries.allSatisfy(\.isValid) else { throw MessagingFailure.protectionUnavailable }
+            return snapshot
+        } catch { throw MessagingFailure.protectionUnavailable }
+    }
+
+    private func saveMutations(_ snapshot: MutationSnapshot) throws {
+        guard snapshot.scopeFingerprint == fingerprint else { throw MessagingFailure.contextChanged }
+        // Une version antérieure qui ignorerait l'identité de requête doit refuser le journal, jamais la perdre.
+        let current = MutationSnapshot(version: 2, scopeFingerprint: snapshot.scopeFingerprint, entries: snapshot.entries)
+        try save(JSONEncoder().encode(current), to: mutationFile, authentication: mutationAuthentication)
+    }
+
     /// À invoquer explicitement lors d'une révocation connue ; une clé d'une autre époque ne récupère pas ce fichier.
     func purge(scope: MessagingScope) throws {
         Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+        if FileManager.default.fileExists(atPath: mutationFile.path) { try FileManager.default.removeItem(at: mutationFile) }
     }
 
     private func verify(_ scope: MessagingScope) throws {
@@ -154,8 +219,14 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
     private func save(_ snapshot: Snapshot) throws {
         guard snapshot.scopeFingerprint == fingerprint else { throw MessagingFailure.contextChanged }
         let clear = try JSONEncoder().encode(snapshot)
+        try save(clear, to: file, authentication: Data(fingerprint.utf8))
+    }
+
+    private func save(_ clear: Data, to target: URL, authentication: Data) throws {
         guard clear.count <= Self.maxBytes - 128 else { throw MessagingFailure.protectionUnavailable }
-        let sealed = try AES.GCM.seal(clear, using: key(create: true), authenticating: Data(fingerprint.utf8))
+        let mayCreateKey = !FileManager.default.fileExists(atPath: file.path)
+            && !FileManager.default.fileExists(atPath: mutationFile.path)
+        let sealed = try AES.GCM.seal(clear, using: key(create: mayCreateKey), authenticating: authentication)
         guard let bytes = sealed.combined, bytes.count <= Self.maxBytes else { throw MessagingFailure.protectionUnavailable }
         let temporary = folder.appendingPathComponent(UUID().uuidString + ".tmp")
         guard FileManager.default.createFile(atPath: temporary.path, contents: nil,
@@ -166,13 +237,26 @@ actor MessagingProtectedStore: MessagingProtectedOutbox, MessagingProtectedDraft
             try handle.write(contentsOf: bytes)
             try handle.synchronize()
             try handle.close()
-            if FileManager.default.fileExists(atPath: file.path) {
-                _ = try FileManager.default.replaceItemAt(file, withItemAt: temporary)
-            } else { try FileManager.default.moveItem(at: temporary, to: file) }
-            try Self.protect(file)
+            if FileManager.default.fileExists(atPath: target.path) {
+                _ = try FileManager.default.replaceItemAt(target, withItemAt: temporary)
+            } else { try FileManager.default.moveItem(at: temporary, to: target) }
+            try Self.protect(target)
+            try Self.synchronize(target, directory: false)
+            try Self.synchronize(folder, directory: true)
         } catch {
             try? FileManager.default.removeItem(at: temporary)
             throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    private static func synchronize(_ url: URL, directory: Bool) throws {
+        try url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { throw MessagingFailure.protectionUnavailable }
+            let descriptor = Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | (directory ? O_DIRECTORY : 0))
+            guard descriptor >= 0 else { throw MessagingFailure.protectionUnavailable }
+            defer { Darwin.close(descriptor) }
+            let result = directory ? Darwin.fsync(descriptor) : Darwin.fcntl(descriptor, F_FULLFSYNC)
+            guard result == 0 else { throw MessagingFailure.protectionUnavailable }
         }
     }
 

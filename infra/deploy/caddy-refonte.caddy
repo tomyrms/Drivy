@@ -9,6 +9,11 @@ log_skip @drivyRefonteSensitive
 handle @drivyRefonteSensitive {
     # L'ordre interne est conservé : l'autorisation précède le refus du reste d'identity.
     route {
+        # #50 reste fermé tant que SMTP et la limitation directe des demandes ne sont pas qualifiés.
+        # Retirer ce refus uniquement avec la garde décrite dans account-recovery-20261026.md.
+        handle /identity/realms/drivy/login-actions/reset-credentials* {
+            respond "La récupération est momentanément indisponible." 503
+        }
         handle @drivyWeb {
             # Le service web lit l'adresse du visiteur dans X-Forwarded-For (WEB_TRUST_PROXY=true) pour limiter les
             # connexions par adresse : une seule valeur, celle de la connexion reçue, jamais celle qu'un client envoie.

@@ -75,17 +75,22 @@ export async function processPushBatch(pool:Pool,sender:PushSender|undefined,lim
   await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_course_worker');await db.query('SELECT drivy.course_notifications_tick()');await db.query('COMMIT');
   if(!sender)return 0;
   await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_course_worker');
-  const due=(await db.query<{id:string;person_id:string;title:string;body:string;series_id:string|null;valid_until:Date|null;category:string;dedupe_key:string;attempts:number}>(
-   `SELECT id,person_id,title,body,series_id,valid_until,category,dedupe_key,attempts FROM drivy.push_notification WHERE status='PENDING' AND available_at<=now() ORDER BY available_at LIMIT $1 FOR UPDATE SKIP LOCKED`,[limit])).rows;
+  const due=(await db.query<{id:string;person_id:string;title:string;body:string;series_id:string|null;conversation_id:string|null;message_id:string|null;school_id:string;message_sequence:string|null;valid_until:Date|null;category:string;dedupe_key:string;attempts:number}>(
+   `SELECT id,person_id,title,body,series_id,conversation_id,message_id,school_id,message_sequence,valid_until,category,dedupe_key,attempts FROM drivy.push_notification WHERE status='PENDING' AND available_at<=now() ORDER BY available_at LIMIT $1 FOR UPDATE SKIP LOCKED`,[limit])).rows;
   for(const n of due){
    // Relecture à chaque notification, y compris après un tick ancien ou une reprise.
    // Aucun accès direct aux tables métier n'est accordé au rôle du worker.
-   if(!(await db.query<{allowed:boolean}>('SELECT drivy.course_push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed)continue;
+   if(!(await db.query<{allowed:boolean}>('SELECT drivy.push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed)continue;
    const devices=(await db.query<{id:string;token:string;environment:'SANDBOX'|'PRODUCTION'}>('SELECT id,token,environment FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL',[n.person_id])).rows;
    if(!devices.length){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code='NO_DEVICE' WHERE id=$1",[n.id]);continue;}
    let sent=false,retry=false;
    for(const d of devices){
-    const result=await sender.send(d.token,d.environment,{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category},n.valid_until,n.dedupe_key);
+    // Mention (#101) : titre générique, aucun contenu ni nom d'auteur, seulement les identifiants d'ouverture.
+    const payload=n.category==='MESSAGE_MENTION'
+     ?{aps:{alert:{title:n.title},sound:'default','thread-id':`messaging:${n.school_id}:${n.conversation_id}`},kind:'MESSAGING',
+       schoolId:n.school_id,conversationId:n.conversation_id,messageId:n.message_id,sequence:Number(n.message_sequence),category:n.category}
+     :{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category};
+    const result=await sender.send(d.token,d.environment,payload,n.valid_until,n.dedupe_key);
     if(result==='SENT')sent=true;else if(result==='INVALID_TOKEN')await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE id=$1',[d.id]);else retry=true;
    }
    // Un envoi réussi ne vaut ni lecture ni acceptation. Un échec est retenté au plus 5 fois, puis abandonné (la donnée reste visible dans l'app).

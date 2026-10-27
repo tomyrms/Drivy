@@ -4,7 +4,8 @@
  * Anything else is refused before an access token is ever used: this is not an open proxy.
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
-type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action' | 'activate' | 'category';
+type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action' | 'activate' | 'category'
+  | 'plannedStart' | 'plannedEnd' | 'timeZone' | 'bufferMinutes' | 'excludeLessonId';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -122,8 +123,12 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['course-payments', ':id', 'void'], bodyLimit: 2_048 },
   { method: 'POST', segments: ['course-enrollments', ':id', 'validate'], bodyLimit: 2_048 },
   { method: 'POST', segments: ['course-completions', ':id', 'revoke'], bodyLimit: 2_048 },
-  // Lectures seules : agenda de l'école, progression et bilans publiés.
+  // Leçons individuelles : mêmes commandes et disponibilité que l'app, sans capture GPS.
   { method: 'GET', segments: ['lessons'], query: [...list, 'from', 'to', 'trainingId', 'instructorMembershipId'] },
+  { method: 'GET', segments: ['lessons', 'availability'], query: ['trainingId', 'instructorMembershipId', 'plannedStart', 'plannedEnd', 'timeZone', 'bufferMinutes', 'excludeLessonId'] },
+  { method: 'POST', segments: ['lessons'], bodyLimit: 8_192 },
+  { method: 'POST', segments: ['lessons', ':id', 'move'], ifMatch: true, bodyLimit: 8_192 },
+  { method: 'POST', segments: ['lessons', ':id', 'cancel'], ifMatch: true, bodyLimit: 4_096 },
   { method: 'GET', segments: ['lessons', ':id'] },
   { method: 'GET', segments: ['captures'], query: list },
   { method: 'GET', segments: ['lessons', ':id', 'reports'], query: list },
@@ -144,6 +149,11 @@ const queryRules: Record<QueryKey, RegExp> = {
   status: /^(?:ACTIVE|ARCHIVED|ALL|DRAFT|PUBLISHED|CANCELLED|CLOSED)$/,
   trainingId: uuid,
   instructorMembershipId: uuid,
+  excludeLessonId: uuid,
+  plannedStart: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
+  plannedEnd: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
+  timeZone: /^[A-Za-z0-9_+/-]{1,100}$/,
+  bufferMinutes: /^(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-3][0-9]|240)$/,
   from: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
   to: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
 };

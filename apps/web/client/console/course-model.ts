@@ -77,7 +77,7 @@ export function formFromSeries(series: CourseSeries, timeZone: string): SeriesFo
     language, responsible: series.responsibleMembershipId, capacity: String(series.capacity), minimum: series.minParticipants === null ? '' : String(series.minParticipants),
     sessions: series.occurrences.map(occurrence => {
       const start = instantToSchoolTime(occurrence.startsAt, timeZone), end = instantToSchoolTime(occurrence.endsAt, timeZone);
-      return { key: sessionKey(), date: start.slice(0, 10), start: start.slice(11, 16), end: end.slice(11, 16),
+      return { key: occurrence.id, date: start.slice(0, 10), start: start.slice(11, 16), end: end.slice(11, 16),
         instructor: occurrence.instructorMembershipId, attendanceRequired: occurrence.attendanceRequired };
     }),
   };

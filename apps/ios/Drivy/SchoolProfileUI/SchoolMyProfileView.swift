@@ -50,6 +50,7 @@ struct SchoolMyProfileView: View {
             }
             .alert("Quitter sans enregistrer tes changements ?", isPresented: $confirmsDiscard) {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                Button("Continuer", role: .cancel) { }
             }
             .confirmationDialog("Retirer la photo ?", isPresented: $confirmsPhotoRemoval, titleVisibility: .visible) {
                 Button("Retirer la photo", role: .destructive) { upload(nil) }
@@ -182,11 +183,13 @@ struct SchoolMyProfileView: View {
 
     /// Préférences du compte (#44) ; absent sans configuration de l’école.
     @ViewBuilder private var notificationsSection: some View {
-        if let client = SchoolPushCenter.shared.client {
+        if let client = SchoolPushCenter.shared.client, let personID = workspace.person?.personId {
             Section {
                 NavigationLink {
                     SchoolNotificationSettingsView(client: client,
-                        isStaff: workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true)
+                        scope: AccountIntentScope(personID: personID, apiBaseURL: client.baseURL.absoluteString),
+                        isStaff: workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true,
+                        contextIsCurrent: { workspace.person?.personId == personID && !workspace.requiresAuthentication && !workspace.accessRevoked })
                 } label: { Text("Notifications") }
                     .disabled(editor.hasEdits || editor.isBusy)
                     .accessibilityIdentifier("my-profile-notifications")

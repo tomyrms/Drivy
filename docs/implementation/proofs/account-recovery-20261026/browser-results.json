@@ -1,0 +1,29 @@
+{
+  "scope": "Edge, UI réelle, BFF synthétique; aucun courrier ni fournisseur d’identité",
+  "checks": [
+    {
+      "available": false,
+      "colorScheme": "light",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "available": true,
+      "colorScheme": "light",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "available": false,
+      "colorScheme": "dark",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "available": true,
+      "colorScheme": "dark",
+      "width": 1440,
+      "passed": true
+    }
+  ]
+}

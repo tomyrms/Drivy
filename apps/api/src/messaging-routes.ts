@@ -10,6 +10,8 @@ import { eligibleContacts, generalMembers, generalRemovedMembers, findOrCreateGe
   resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, conversationMembers, deleteMessage, setReaction, setPinned,
   setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, reinstateGeneralMember, createReport, listReports, reactionPalette, type MessagingActor } from './messaging.js';
 import { mapDatabaseError } from './messaging-view.js';
+import { lockCommandOperation } from './commands.js';
+import { executeMessagingMutation, messagingMutation, type MessagingMutation } from './messaging-commands.js';
 
 const id = z.uuid();
 const base = z.object({ schoolId: id });
@@ -26,7 +28,7 @@ const directoryQuery = z.object({ limit: z.coerce.number().int().min(1).max(100)
 export function registerMessaging(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier } & MessagingAccessOptions) {
   const enabled = messagingSchoolGate(options);
   async function execute<T>(headers: IncomingHttpHeaders, requestId: string,
-    schoolId: string, work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>): Promise<T> {
+    schoolId: string, work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>, mutation?:MessagingMutation): Promise<T> {
     if (!enabled(schoolId)) throw messagingUnavailable();
     const expectedActor = id.parse(headers['x-drivy-expected-person-id']);
     const expectedEpoch = z.coerce.number().int().positive().safe().parse(headers['x-drivy-expected-access-epoch']);
@@ -48,16 +50,18 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
       // Match schoolCommand: person, school, then membership, with epoch checked under lock.
       const person = await db.query('SELECT id FROM drivy.person WHERE id=$1 AND status=\'ACTIVE\' FOR SHARE', [personId]);
       if (!person.rows[0]) throw forbidden();
+      if (mutation) await lockCommandOperation(db,personId,mutation.operationId);
       const school = await db.query('SELECT id FROM drivy.school WHERE id=$1 AND status=\'ACTIVE\' FOR SHARE', [schoolId]);
       if (!school.rows[0]) throw forbidden();
       const member = await db.query<{ id: string; accessEpoch: number }>(`SELECT m.id,m.access_epoch AS "accessEpoch" FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
         WHERE m.school_id=$1 AND m.person_id=$2 AND m.status='ACTIVE' AND p.status='ACTIVE' FOR SHARE OF m`, [schoolId, personId]);
       if (!member.rows[0] || member.rows[0].accessEpoch !== expectedEpoch) throw forbidden();
       await db.query("SELECT set_config('app.membership_id',$1,true)", [member.rows[0].id]);
-      const result = await work(db, { schoolId, personId, membershipId: member.rows[0].id });
+      const actor = { schoolId, personId, membershipId: member.rows[0].id };
+      const result = mutation ? await executeMessagingMutation(db,actor,mutation,()=>work(db,actor)) : await work(db,actor);
       await db.query('COMMIT');
       return { ...(result as object), context: { schoolId, actorPersonId: personId, accessEpoch: member.rows[0].accessEpoch },
-        requestId, serverTime: new Date().toISOString() } as T;
+        ...(mutation ? {mutationReceipt:{operationId:mutation.operationId}} : {}), requestId, serverTime: new Date().toISOString() } as T;
     } catch (error) { broken = !(await rollbackQuietly(db)); throw mapDatabaseError(error); }
     finally { db.release(broken); }
   }
@@ -125,16 +129,19 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
   app.delete(messagePath, request => {
     const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
     const { scope } = z.object({ scope: z.enum(['me', 'everyone']) }).strict().parse(request.query);
-    return execute(request.headers, request.id, schoolId, (db, actor) => deleteMessage(db, actor, conversationId, messageId, scope).then(data => ({ data })));
+    return execute(request.headers, request.id, schoolId, (db, actor) => deleteMessage(db, actor, conversationId, messageId, scope).then(data => ({ data })),
+      messagingMutation(request.headers['idempotency-key'],scope==='me'?'MESSAGING_HIDE':'MESSAGING_DELETE',schoolId,conversationId,messageId,{scope}));
   });
   for (const active of [true, false]) {
     (active ? app.put.bind(app) : app.delete.bind(app))(`${messagePath}/reactions/:emoji`, request => {
       const { schoolId, conversationId, messageId, emoji } = messageParams.extend({ emoji: z.enum(reactionPalette) }).parse(request.params);
-      return execute(request.headers, request.id, schoolId, (db, actor) => setReaction(db, actor, conversationId, messageId, emoji, active).then(data => ({ data })));
+      return execute(request.headers, request.id, schoolId, (db, actor) => setReaction(db, actor, conversationId, messageId, emoji, active).then(data => ({ data })),
+        messagingMutation(request.headers['idempotency-key'],'MESSAGING_REACTION',schoolId,conversationId,messageId,{emoji,active}));
     });
     (active ? app.put.bind(app) : app.delete.bind(app))(`${messagePath}/pin`, request => {
       const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
-      return execute(request.headers, request.id, schoolId, (db, actor) => setPinned(db, actor, conversationId, messageId, active).then(data => ({ data })));
+      return execute(request.headers, request.id, schoolId, (db, actor) => setPinned(db, actor, conversationId, messageId, active).then(data => ({ data })),
+        messagingMutation(request.headers['idempotency-key'],'MESSAGING_PIN',schoolId,conversationId,messageId,{pinned:active}));
     });
     (active ? app.put.bind(app) : app.delete.bind(app))(`${path}/general/admins/:personId`, request => {
       const { schoolId, personId } = base.extend({ personId: id }).parse(request.params);
@@ -144,7 +151,8 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
   app.put(`${messagePath}/poll/votes`, request => {
     const { schoolId, conversationId, messageId } = messageParams.parse(request.params);
     const body = z.object({ optionIndexes: z.array(z.number().int().min(0).max(11)).max(12) }).strict().parse(request.body);
-    return execute(request.headers, request.id, schoolId, (db, actor) => setPollVotes(db, actor, conversationId, messageId, body.optionIndexes).then(data => ({ data })));
+    return execute(request.headers, request.id, schoolId, (db, actor) => setPollVotes(db, actor, conversationId, messageId, body.optionIndexes).then(data => ({ data })),
+      messagingMutation(request.headers['idempotency-key'],'MESSAGING_VOTE',schoolId,conversationId,messageId,body));
   });
   app.post(`${messagePath}/poll/close`, request => {
     const { schoolId, conversationId, messageId } = messageParams.parse(request.params);

@@ -5,9 +5,10 @@ import {
 } from './command-core';
 import { confirmedData, readSchool, receiptSchema, schoolFetch } from './school-api';
 import { RequestFailure } from './protocol';
+import { commandsConflict } from './command-conflicts';
 
 /**
- * One pending command per school, as on iPhone. The full request lives in memory only;
+ * Pending commands are tracked by operation, with conservative shared-resource conflicts. The request lives in memory only;
  * sessionStorage (this tab) keeps its identifiers so that a reload can still ask the school
  * for the AP72 receipt. Typed content never reaches browser storage.
  */
@@ -45,13 +46,15 @@ export function pendingActions(entry: Pick<PendingEntry, 'command' | 'phase' | '
 }
 
 const storageKey = 'drivy-gestion-demandes-v1';
-type Snapshot = { entries: ReadonlyMap<string, PendingEntry>; revision: number; confirmed: { kind: string; operationId: string; at: number } | null };
+type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number };
+type Snapshot = { entries: ReadonlyMap<string, PendingEntry>; revision: number; confirmed: Confirmation | null; confirmations: readonly Confirmation[] };
 
 class CommandStore {
-  private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null };
+  private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null, confirmations: [] };
   private readonly listeners = new Set<() => void>();
   private personId: string | null = null;
   private generation = 0;
+  private readonly accessScopes = new Map<string, string>();
 
   constructor() {
     try {
@@ -59,7 +62,7 @@ class CommandStore {
       const entries = new Map<string, PendingEntry>();
       if (Array.isArray(stored)) for (const value of stored.slice(0, 50)) {
         const meta = parseMetadata(value);
-        if (meta && !entries.has(meta.schoolId)) entries.set(meta.schoolId, { meta, command: null, phase: 'orphaned', needsLogin: false,
+        if (meta && !entries.has(meta.operationId)) entries.set(meta.operationId, { meta, command: null, phase: 'orphaned', needsLogin: false,
           notRecorded: false, maybeReceived: true, unverifiable: false, attempts: 1, message: 'Le résultat de cette demande reste à vérifier. Son contenu n’est plus disponible dans cette page.' });
       }
       this.snapshot = { ...this.snapshot, entries };
@@ -70,16 +73,31 @@ class CommandStore {
   getSnapshot = () => this.snapshot;
 
   /** `reread` makes every section read the school again, as a confirmation does. */
-  private update(schoolId: string, entry: PendingEntry | null, confirmed?: CommandMetadata, reread = false) {
+  private update(operationId: string, entry: PendingEntry | null, confirmed?: CommandMetadata, reread = false) {
     const entries = new Map(this.snapshot.entries);
-    if (entry) entries.set(schoolId, entry); else entries.delete(schoolId);
+    if (entry) entries.set(operationId, entry); else entries.delete(operationId);
+    const confirmation: Confirmation | null = confirmed ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now() } : null;
     this.snapshot = { entries, revision: this.snapshot.revision + (confirmed || reread ? 1 : 0),
-      confirmed: confirmed ? { kind: confirmed.kind, operationId: confirmed.operationId, at: Date.now() } : this.snapshot.confirmed };
+      confirmed: confirmation ?? this.snapshot.confirmed,
+      confirmations: confirmation ? [...this.snapshot.confirmations.slice(-49), confirmation] : this.snapshot.confirmations };
     try { window.sessionStorage.setItem(storageKey, JSON.stringify([...entries.values()].map(item => item.meta))); } catch { /* memory only */ }
     for (const listener of this.listeners) listener();
   }
 
-  get(schoolId: string): PendingEntry | undefined { return this.snapshot.entries.get(schoolId); }
+  get(schoolId: string, operationId?: string): PendingEntry | undefined {
+    return operationId ? this.snapshot.entries.get(operationId)?.meta.schoolId === schoolId ? this.snapshot.entries.get(operationId) : undefined
+      : [...this.snapshot.entries.values()].find(entry => entry.meta.schoolId === schoolId);
+  }
+
+  /** A changed membership may still verify its old receipt, but must never replay an old body. */
+  scopeToAccess(schoolId: string, membershipId: string, accessEpoch: number) {
+    const next = `${membershipId}/${accessEpoch}`, previous = this.accessScopes.get(schoolId);
+    this.accessScopes.set(schoolId, next);
+    if (previous === undefined || previous === next) return;
+    for (const entry of this.snapshot.entries.values()) if (entry.meta.schoolId === schoolId) {
+      this.update(entry.meta.operationId, { ...entry, command: null, phase: 'orphaned', message: 'Vos accès ont changé. Vérifiez le résultat de cette demande avant de refaire une modification.' });
+    }
+  }
 
   /** Same-account reconnection keeps its requests; another person must never reuse their content. */
   scopeToPerson(personId: string): boolean {
@@ -90,35 +108,40 @@ class CommandStore {
   }
 
   async submit(command: SchoolCommand, csrf: string): Promise<SubmitResult> {
-    if (this.get(command.schoolId)) return { status: 'pending', message: 'Une demande attend encore sa vérification. Traitez-la avant une autre modification.' };
-    this.update(command.schoolId, { meta: toMetadata(command), command, phase: 'sending', message: '', needsLogin: false, notRecorded: false,
+    const entries = [...this.snapshot.entries.values()];
+    if (entries.some(entry => entry.meta.schoolId === command.schoolId && commandsConflict(entry.command, command)))
+      return { status: 'rejected', code: 'LOCAL_COMMAND_CONFLICT', needsLogin: false, message: 'Une demande concernant les mêmes informations attend sa confirmation. Votre saisie est conservée.' };
+    if (entries.length >= 50 || entries.filter(entry => entry.phase === 'sending' || entry.phase === 'verifying').length >= 4)
+      return { status: 'rejected', code: 'LOCAL_COMMAND_LIMIT', needsLogin: false, message: 'Plusieurs demandes sont en cours. Réessayez après leur confirmation.' };
+    this.update(command.operationId, { meta: toMetadata(command), command, phase: 'sending', message: '', needsLogin: false, notRecorded: false,
       maybeReceived: false, unverifiable: false, attempts: 0 });
     return this.emit(command, csrf);
   }
 
-  async resend(schoolId: string, csrf: string): Promise<SubmitResult> {
-    const entry = this.get(schoolId);
+  async resend(schoolId: string, csrf: string, operationId?: string): Promise<SubmitResult> {
+    const entry = this.get(schoolId, operationId);
     if (!entry?.command || !pendingActions(entry).resend) return { status: 'pending', message: entry?.message ?? '' };
     return this.emit(entry.command, csrf);
   }
 
   private async emit(command: SchoolCommand, csrf: string): Promise<SubmitResult> {
     const generation = this.generation;
-    const previous = this.get(command.schoolId);
+    const accessScope = this.accessScopes.get(command.schoolId);
+    const previous = this.get(command.schoolId, command.operationId);
     const attempts = previous?.attempts ?? 0;
     const maybeReceived = previous?.maybeReceived ?? false;
     const base: PendingEntry = previous ?? { meta: toMetadata(command), command, phase: 'sending', message: '', needsLogin: false, notRecorded: false,
       maybeReceived: false, unverifiable: false, attempts: 0 };
-    this.update(command.schoolId, { ...base, command, phase: 'sending', message: '', needsLogin: false, attempts: attempts + 1 });
+    this.update(command.operationId, { ...base, command, phase: 'sending', message: '', needsLogin: false, attempts: attempts + 1 });
     const spec = commandSpecs[command.kind];
     const response = await schoolFetch(command.schoolId, command.path, { method: spec.method, headers: commandHeaders(command, csrf), body: command.body });
-    if (generation !== this.generation) return { status: 'pending', message: '' };
+    if (generation !== this.generation || accessScope !== this.accessScopes.get(command.schoolId)) return { status: 'pending', message: '' };
     if (response.status === spec.expectedStatus) {
       const data = confirmedData(response.body);
       const valid = data !== null && (data.schoolId === undefined || data.schoolId.toLowerCase() === command.schoolId.toLowerCase())
         && (data.version === undefined || data.version > command.resourceVersion)
         && (spec.target !== 'resource' || data.id === undefined || data.id.toLowerCase() === command.resourceId?.toLowerCase());
-      if (valid) { this.update(command.schoolId, null, toMetadata(command)); return { status: 'confirmed', body: response.body, via: 'response' }; }
+      if (valid) { this.update(command.operationId, null, toMetadata(command)); return { status: 'confirmed', body: response.body, via: 'response' }; }
       return this.keep(command, 'uncertain', 'INVALID_RESPONSE', false, attempts + 1, true);
     }
     const success = response.status >= 200 && response.status < 300;
@@ -128,7 +151,7 @@ class CommandStore {
     const outcome = success ? { type: 'uncertain' as const, code, needsLogin: false } : classifyFailure(response.status, code, !maybeReceived);
     if (outcome.type === 'rejected') {
       // Refused on a resend: nothing else tells the sections to read the school again.
-      this.update(command.schoolId, null, undefined, attempts > 0);
+      this.update(command.operationId, null, undefined, attempts > 0);
       return { status: 'rejected', code, message: commandMessage(code), needsLogin: outcome.needsLogin };
     }
     // The BFF refused the page's CSRF value before calling the school: this emission reached nobody.
@@ -139,26 +162,27 @@ class CommandStore {
     const message = phase === 'review'
       ? `${commandMessage(code)} Cette réponse ne prouve pas que la demande précédente est restée sans effet : vérifiez-la auprès de l’école.`
       : commandMessage(code);
-    this.update(command.schoolId, { meta: toMetadata(command), command, phase, message, needsLogin, notRecorded: false, maybeReceived, unverifiable: false, attempts });
+    this.update(command.operationId, { meta: toMetadata(command), command, phase, message, needsLogin, notRecorded: false, maybeReceived, unverifiable: false, attempts });
     return { status: 'pending', message };
   }
 
   /** AP72: ask the school whether this operation was committed, without sending it again. */
-  async verify(schoolId: string): Promise<SubmitResult> {
+  async verify(schoolId: string, operationId?: string): Promise<SubmitResult> {
     const generation = this.generation;
-    const entry = this.get(schoolId);
+    const accessScope = this.accessScopes.get(schoolId);
+    const entry = this.get(schoolId, operationId);
     if (!entry || entry.phase === 'sending' || entry.phase === 'verifying') return { status: 'pending', message: entry?.message ?? '' };
     const restore = entry.phase;
-    this.update(schoolId, { ...entry, phase: 'verifying' });
+    this.update(entry.meta.operationId, { ...entry, phase: 'verifying' });
     try {
       const receipt = await readSchool(schoolId, `operations/${entry.meta.operationId}`, receiptSchema);
-      if (generation !== this.generation) return { status: 'pending', message: '' };
+      if (generation !== this.generation || accessScope !== this.accessScopes.get(schoolId)) return { status: 'pending', message: '' };
       if (!receiptMatches(entry.meta, receipt)) throw new RequestFailure('INVALID_RESPONSE');
-      this.update(schoolId, null, entry.meta);
+      this.update(entry.meta.operationId, null, entry.meta);
       return { status: 'confirmed', body: null, via: 'receipt' };
     } catch (error) {
-      if (generation !== this.generation) return { status: 'pending', message: '' };
-      const current = this.get(schoolId);
+      if (generation !== this.generation || accessScope !== this.accessScopes.get(schoolId)) return { status: 'pending', message: '' };
+      const current = this.get(schoolId, entry.meta.operationId);
       if (current?.meta.operationId !== entry.meta.operationId) return { status: 'pending', message: '' };
       const failure = error instanceof RequestFailure ? error : new RequestFailure('INVALID_RESPONSE');
       const notRecorded = failure.status === 404;
@@ -166,27 +190,27 @@ class CommandStore {
       const unverifiable = failure.status === 403 || failure.code === 'INVALID_RESPONSE';
       const message = notRecorded
         ? entry.command
-          ? 'L’école ne retrouve pas cette demande : rien n’a été modifié. Renvoyez la même demande, ou abandonnez-la.'
-          : 'L’école ne retrouve pas cette demande : rien n’a été modifié. Son contenu n’est plus dans cette page : abandonnez-la, puis refaites la modification.'
+          ? 'L’école ne retrouve pas cette demande pour le moment. Son résultat reste inconnu. Renvoyez la même demande, ou arrêtez son suivi après vérification.'
+          : 'L’école ne retrouve pas cette demande pour le moment. Son résultat reste inconnu et son contenu n’est plus dans cette page : vérifiez les informations avant de refaire la modification.'
         : failure.status === 401 ? 'Votre connexion a expiré. Reconnectez-vous, puis vérifiez à nouveau.'
           : failure.status === 403 ? 'Vos accès actuels ne permettent pas de consulter ce résultat. Vérifiez à nouveau, ou arrêtez le suivi de cette demande.'
             : unverifiable ? 'La réponse de l’école ne permet pas d’établir le résultat. Vérifiez à nouveau, ou arrêtez le suivi de cette demande.'
               : 'Le résultat n’a pas pu être établi. La demande reste suivie : réessayez la vérification.';
-      this.update(schoolId, { ...current, phase: restore, message, notRecorded, unverifiable, needsLogin: failure.status === 401,
-        maybeReceived: notRecorded ? false : current.maybeReceived });
+      this.update(entry.meta.operationId, { ...current, phase: restore, message, notRecorded, unverifiable, needsLogin: failure.status === 401 });
       return { status: 'pending', message };
     }
   }
 
   /** Give up a request (unknown result, or no trace at the school), behind an explicit confirmation only. The sections then read the school again. */
-  release(schoolId: string) {
-    const entry = this.get(schoolId);
-    if (entry && pendingActions(entry).release) this.update(schoolId, null, undefined, true);
+  release(schoolId: string, operationId?: string) {
+    const entry = this.get(schoolId, operationId);
+    if (entry && pendingActions(entry).release) this.update(entry.meta.operationId, null, undefined, true);
   }
 
   clear() {
     this.generation++;
-    this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null };
+    this.accessScopes.clear();
+    this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null, confirmations: [] };
     try { window.sessionStorage.removeItem(storageKey); } catch { /* nothing stored */ }
     for (const listener of this.listeners) listener();
   }

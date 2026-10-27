@@ -157,12 +157,13 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   const finalAction=await read('setup-draft/next-actions',nextSchema);
   assert(ready.ready&&ready.blockers.length===0&&finalAction.actions[0]?.code==='PLAN_FIRST_LESSON'&&finalAction.actions[0]?.query?.selection===learner.id,
     'La préparation serveur de ce dossier autorise la planification seulement après ses vrais prérequis');
-  await agenda();await page.getByRole('button',{name:'Planifier dans l’app Drivy',exact:true}).click();
-  const appDialog=page.getByRole('dialog',{name:'Votre première leçon',exact:true});
-  await appDialog.getByText(/Connectez-vous à l’app Drivy avec votre compte moniteur/).waitFor();
-  await appDialog.getByRole('button',{name:'Voir le dossier',exact:true}).click();
-  assert(new URL(page.url()).pathname===`/app/gestion/${schoolId}/eleves`&&new URL(page.url()).searchParams.get('selection')===learner.id,
-    'Le relais vers l’app explique la planification et conserve le bon dossier sans inventer de lien d’installation');
+  // #51 : la première leçon se planifie depuis l'agenda du bureau, sur le dossier proposé par le guide.
+  setStage('première leçon : ouverture du planning web depuis le guide');
+  await agenda();await page.getByRole('region',{name:'Première leçon',exact:true}).getByRole('button',{name:'Planifier une leçon',exact:true}).click();
+  await page.getByRole('heading',{name:'Planifier une leçon',exact:true}).waitFor();
+  const planningUrl=new URL(page.url());
+  assert(planningUrl.pathname===`/app/gestion/${schoolId}/agenda`&&planningUrl.searchParams.get('view')==='nouvelle'&&planningUrl.searchParams.get('learner')===learner.id,
+    'Le guide ouvre le planning de l’agenda sur le dossier du bon élève');
 
   setStage('première leçon : créneau et réservation par l’API de l’app avec le vrai compte OIDC');
   const offering=(await read('offerings',offeringsSchema)).items.find(item=>item.id===training.offeringId&&item.enabled);
@@ -207,6 +208,11 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   await page.screenshot({path:resolve(artifactDirectory,'08-premiere-lecon-planifiee-synthetic.png'),fullPage:true});
   if(process.argv.includes('--v3'))await verifyV3Agenda({page,schoolPath,bff,civilDay,instructorId:founder.id,instructorName:founder.displayName,artifactDirectory,assert,setStage});
   if(process.argv.includes('--v4'))await verifyV4Web({page,schoolPath,bff,artifactDirectory,assert,setStage});
+  // #51 : la leçon s'ouvre d'abord dans l'agenda ; sa fiche mène au dossier du bon élève.
+  setStage('première leçon : fiche de la leçon depuis l’agenda');
   await page.locator('.agenda-lesson').click();
-  assert(new URL(page.url()).searchParams.get('selection')===learner.id,'La leçon de l’Agenda ouvre toujours le dossier du bon élève');
+  await page.waitForURL(url=>url.searchParams.get('lesson')===lesson.id,{waitUntil:'commit'});
+  await page.getByRole('button',{name:'Ouvrir le dossier élève',exact:true}).click();
+  await page.waitForURL(url=>url.pathname===`/app/gestion/${schoolId}/eleves`,{waitUntil:'commit'});
+  assert(new URL(page.url()).searchParams.get('selection')===learner.id,'La leçon de l’Agenda ouvre sa fiche, puis le dossier du bon élève');
 }

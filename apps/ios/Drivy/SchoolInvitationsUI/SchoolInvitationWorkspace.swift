@@ -125,7 +125,7 @@ final class SchoolInvitationWorkspace: Identifiable {
         needsReload = true
         var storageError: String?
         do {
-            pending = try outbox.pending(for: scope)
+            pending = try outbox.pending(for: scope, domain: .invitations)
             if pending == nil { pendingRequiresReview = false }
             storageAccessible = true
         } catch {

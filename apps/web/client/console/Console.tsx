@@ -2,6 +2,8 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import type { ReactNode } from 'react';
 import { commandSpecs } from '../command-core';
 import { commandStore, pendingActions, useCommandSnapshot } from '../command-store';
+import { commandRefreshesSchool } from '../command-conflicts';
+import { ScopedReadCache } from './load-model';
 import { endSession, meSchema, request, RequestFailure, roleLabel, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
@@ -77,6 +79,8 @@ export function ManagementConsole() {
   const draftScope = state.status === 'ready'
     ? `${state.me.personId}/${state.membership.schoolId}/${state.membership.membershipId}/${state.membership.accessEpoch}` : null;
   const drafts = useMemo(() => new Map<string, unknown>(), [draftScope]);
+  const readCache = useMemo(() => new ScopedReadCache(), [draftScope]);
+  useEffect(() => () => readCache.invalidate(), [readCache]);
   useEffect(() => () => { identityResult.current?.(false); identityResult.current = null; setIdentityDialog(null); }, [draftScope]);
 
   const acceptPerson = useCallback((me: Me): boolean => {
@@ -105,6 +109,7 @@ export function ManagementConsole() {
       if (!target) { setState(admin.length ? { status: 'choose', me, admin } : { status: 'denied', me, membership: null }); return; }
       const membership = me.memberships.find(member => member.schoolId.toLowerCase() === target.toLowerCase());
       if (!membership?.roles.includes('ADMIN')) { setState({ status: 'denied', me, membership: membership ?? null }); return; }
+      commandStore.scopeToAccess(membership.schoolId, membership.membershipId, membership.accessEpoch);
       const school = await readSchool(membership.schoolId, '', schoolSchema);
       if (current !== generation.current) return;
       if (school.id !== membership.schoolId) throw new RequestFailure('INVALID_RESPONSE');
@@ -230,6 +235,7 @@ export function ManagementConsole() {
     schoolId: state.membership.schoolId, me: state.me, membership: state.membership, school: state.school,
     canConfigureCatalog: state.membership.grants.includes('CONFIGURE_CATALOG'),
     drafts,
+    readCache,
     registerUnsavedChanges,
     confirmNavigation: proceedNavigation,
     setNavigationGuard: guard => { navigationGuard.current = guard; },
@@ -239,7 +245,10 @@ export function ManagementConsole() {
       if (!access || scope !== generation.current) return;
       if ('me' in access && acceptPerson(access.me)) generation.current++;
       if (access.status === 'unavailable') setState({ status: 'error', message: readError(access.error) });
-      else setState(access);
+      else {
+        if (access.status === 'ready') commandStore.scopeToAccess(access.membership.schoolId, access.membership.membershipId, access.membership.accessEpoch);
+        setState(access);
+      }
       if (access.status === 'signin') setSession(null);
     },
     csrf: () => csrf.current,
@@ -271,7 +280,7 @@ export function ManagementConsole() {
     login: options => { void login(options); },
     confirmIdentity,
     };
-  }, [state, route.query, route.section, drafts]);
+  }, [state, route.query, route.section, drafts, readCache]);
 
   const personName = state.status === 'ready' || state.status === 'choose' || state.status === 'denied' ? state.me.displayName : session?.user?.displayName;
   const adminSchools = state.status === 'ready' ? state.me.memberships.filter(member => member.roles.includes('ADMIN')) : [];
@@ -460,7 +469,9 @@ type Settled = { tone: 'success' | 'info' | 'error'; title: string; message?: st
 function PendingPanel() {
   const snapshot = useCommandSnapshot();
   const context = useContextSafe();
-  const entry = context ? snapshot.entries.get(context.schoolId) : undefined;
+  const entries = [...snapshot.entries.values()].filter(entry => entry.meta.schoolId === context?.schoolId);
+  const [selected, setSelected] = useState<string | null>(null);
+  const entry = entries.find(item => item.meta.operationId === selected) ?? entries.find(item => item.phase !== 'sending') ?? entries[0];
   const [settled, setSettled] = useState<Settled | null>(null);
   const [releasing, setReleasing] = useState(false);
   const releaseTitle = useRef<HTMLElement>(null);
@@ -478,14 +489,14 @@ function PendingPanel() {
   const what = `${commandSpecs[entry.meta.kind].label} · demandée le ${formatDateTime(new Date(entry.meta.createdAt).toISOString(), context.school.timeZone)}`;
   const confirmed: Settled = { tone: 'success', title: 'Résultat confirmé par l’école', message: `${what}.` };
   async function verify() {
-    const result = await commandStore.verify(context!.schoolId);
-    if (result.status === 'confirmed') { setSettled(confirmed); void context!.reloadSchool(); }
+    const result = await commandStore.verify(context!.schoolId, entry!.meta.operationId);
+    if (result.status === 'confirmed') { setSettled(confirmed); if (commandRefreshesSchool(entry!.meta.kind)) void context!.reloadSchool(); }
   }
   async function resend() {
     let token = context!.csrf();
     try { token = await context!.refreshCsrf(); } catch { /* keep the current token */ }
-    const result = await commandStore.resend(context!.schoolId, token);
-    if (result.status === 'confirmed') { setSettled(confirmed); void context!.reloadSchool(); }
+    const result = await commandStore.resend(context!.schoolId, token, entry!.meta.operationId);
+    if (result.status === 'confirmed') { setSettled(confirmed); if (commandRefreshesSchool(entry!.meta.kind)) void context!.reloadSchool(); }
     // Refused while the school held no trace of it: the request is over and nothing was changed.
     if (result.status === 'rejected') {
       setSettled({ tone: 'error', title: 'Demande refusée par l’école', message: `${what}. ${result.message}`, needsLogin: result.needsLogin });
@@ -493,13 +504,16 @@ function PendingPanel() {
     }
   }
   function release() {
-    commandStore.release(context!.schoolId);
-    setSettled({ tone: 'info', title: entry!.notRecorded ? 'Demande abandonnée' : 'Suivi arrêté', message: `${what}.` });
+    commandStore.release(context!.schoolId, entry!.meta.operationId);
+    setSettled({ tone: 'info', title: 'Suivi arrêté', message: `${what}. Son résultat doit être vérifié avant une nouvelle demande.` });
     void context!.reloadSchool();
   }
   if (entry.phase === 'sending' && entry.attempts <= 1) return null;
   return (
     <section className="pending-panel" aria-labelledby="pending-title" aria-live="polite">
+      {entries.length > 1 && <div className="button-row compact" aria-label="Demandes en attente">{entries.map(item =>
+        <button type="button" className="button quiet" aria-pressed={entry.meta.operationId === item.meta.operationId}
+          key={item.meta.operationId} onClick={() => setSelected(item.meta.operationId)}>{commandSpecs[item.meta.kind].label}</button>)}</div>}
       <div className="pending-heading">
         <Symbol kind="clock" />
         <div className="row-text">
@@ -520,7 +534,7 @@ function PendingPanel() {
         <Symbol kind="alert" />
         <div className="notice-body">
           <strong ref={releaseTitle} tabIndex={-1}>{entry.notRecorded ? 'Abandonner cette demande ?' : 'Arrêter le suivi de cette demande ?'}</strong>
-          <p>{entry.notRecorded ? 'L’école n’en a aucune trace : rien n’a été modifié.' : 'Son résultat restera inconnu : vérifiez ensuite les informations de l’école avant de refaire la modification.'}</p>
+          <p>Son résultat restera inconnu : vérifiez les informations de l’école avant de refaire la modification. Arrêter le suivi n’annule pas une demande déjà reçue.</p>
           <div className="notice-actions">
             <button type="button" className="button secondary" onClick={release}>{entry.notRecorded ? 'Abandonner la demande' : 'Arrêter le suivi'}</button>
             <button type="button" className="button quiet" onClick={() => setReleasing(false)}>{entry.notRecorded ? 'Garder la demande' : 'Continuer le suivi'}</button>

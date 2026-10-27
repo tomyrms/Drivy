@@ -31,6 +31,8 @@ struct MessagingConversation: Identifiable, Sendable {
     let lastReadSequence: Int
     let mutedUntil: Date?
     let readStateVersion: Int
+    /// Pair d'un échange privé (photo de la cellule), nil pour le général.
+    var peerPersonID: UUID? = nil
 }
 
 struct MessagingCiphertext: Codable, Sendable, Equatable {
@@ -72,6 +74,9 @@ struct MessagingAcknowledgement: Sendable {
 
 enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
     case protectionUnavailable, accessChanged, conversationUnavailable, unavailable, invalidResponse, contextChanged, stateConflict, deviceLimitReached, membersChanged
+    /// Clé de récupération mal formée, étrangère à la sauvegarde ou sauvegarde absente : volontairement indistincts.
+    case recoveryKeyRefused
+    case mutationReceiptUnavailable
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
@@ -83,6 +88,8 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
         case .stateConflict: "Cette conversation a changé sur un autre appareil. Actualise avant de réessayer."
         case .deviceLimitReached: "Trop d'appareils utilisent Messages sur ce compte. Retire un appareil puis réessaie. Rien n'a été envoyé."
         case .membersChanged: "Les participants ont changé. Ce message n'a pas été envoyé et reste conservé sur cet appareil."
+        case .recoveryKeyRefused: "Clé de récupération refusée. Rien n'a été modifié."
+        case .mutationReceiptUnavailable: "Le service doit être mis à jour pour confirmer ces modifications. Tes choix restent conservés."
         }
     }
 }

@@ -185,7 +185,7 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         do {
             _ = try await b2.restoreBackup(recoveryKey: BackupRecoveryKey().toBase58(), scope: bScope)
             XCTFail("Une autre clé ne doit pas restaurer la sauvegarde")
-        } catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        } catch { XCTAssertEqual(error as? MessagingFailure, .recoveryKeyRefused) }
         let restored = try await b2.restoreBackup(recoveryKey: recovery, scope: bScope)
         XCTAssertEqual(restored.imported, 1)
         XCTAssertEqual(restored.failed, 0)
@@ -227,7 +227,7 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         do {
             _ = try await b2.restoreBackup(recoveryKey: BackupRecoveryKey().toBase58(), scope: bScope)
             XCTFail("Une autre clé ne doit pas restaurer la sauvegarde")
-        } catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        } catch { XCTAssertEqual(error as? MessagingFailure, .recoveryKeyRefused) }
         let restored = try await b2.restoreBackup(recoveryKey: recovery, scope: bScope)
         XCTAssertEqual(restored.imported, 1)
         XCTAssertEqual(restored.failed, 0)
@@ -573,6 +573,30 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
             vault: MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain()))
     }
 
+    /// #169 : seule la vérification refuse la clé ; réseau, session et absence de réponse gardent leur cause.
+    func testRestoreFailureClassesNeverBlameKeyWhenRequestFailed() async throws {
+        let cases: [(any Error, MessagingFailure)] = [
+            (MessagingFailure.unavailable, .unavailable),
+            (MessagingFailure.accessChanged, .accessChanged),
+            (MessagingFailure.contextChanged, .contextChanged),
+            (MessagingFailure.invalidResponse, .invalidResponse),
+            (MessagingCryptoRelayFailure.notFound, .recoveryKeyRefused),
+        ]
+        let syntheticKey = BackupRecoveryKey().toBase58()
+        for (thrown, expected) in cases {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let crypto = try MatrixMessagingCryptography(scope: scope, relay: ThrowingRelay(error: thrown, base: InMemoryRelay().view(person)),
+                vault: MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain()))
+            do { _ = try await crypto.restoreBackup(recoveryKey: syntheticKey, scope: scope); XCTFail("\(expected)") }
+            catch { XCTAssertEqual(error as? MessagingFailure, expected) }
+        }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let crypto = try MatrixMessagingCryptography(scope: scope, relay: ThrowingRelay(error: MessagingFailure.unavailable, base: InMemoryRelay().view(person)),
+            vault: MessagingCryptoVault(scope: scope, root: root, keychain: FlakyKeychain()))
+        do { _ = try await crypto.restoreBackup(recoveryKey: "pas une clé", scope: scope); XCTFail() }
+        catch { XCTAssertEqual(error as? MessagingFailure, .recoveryKeyRefused) }
+    }
+
     func testCiphertextOnlyDecryptIsRefused() async throws {
         let relay = InMemoryRelay()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -580,6 +604,19 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         let envelope = MessagingCiphertext(scheme: "megolm.v1", keyID: "k", payload: Data("x".utf8))
         do { _ = try await crypto.decrypt(envelope, scope: scope, conversationID: conversation); XCTFail() }
         catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+    }
+}
+
+/// Relais synthétique : la lecture de la version de sauvegarde échoue avec l'erreur donnée (#169).
+private struct ThrowingRelay: MessagingCryptoRelay {
+    let error: any Error & Sendable
+    let base: InMemoryRelay.View
+    func call(scope: MessagingScope, deviceID: String, method: String, path: [String], query: [URLQueryItem], body: Data?) async throws -> Data {
+        if path.first == "room_keys" && method == "GET" { throw error }
+        return try await base.call(scope: scope, deviceID: deviceID, method: method, path: path, query: query, body: body)
+    }
+    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers {
+        try await base.members(scope: scope, deviceID: deviceID, conversationID: conversationID)
     }
 }
 

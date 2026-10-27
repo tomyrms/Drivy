@@ -13,6 +13,7 @@ export type CommandKind =
   | 'createProfilePolicy' | 'publishProfilePolicy'
   | 'createOffering' | 'createCurriculum' | 'createCatalogPolicy' | 'updateMember'
   | 'createCommercialTerms' | 'createServiceProduct'
+  | 'createLesson' | 'moveLesson' | 'cancelLesson'
   | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
@@ -34,6 +35,9 @@ interface CommandSpec {
 }
 
 export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
+  createLesson: { operationType: 'CREATE_LESSON', resourceType: 'Lesson', target: 'created', method: 'POST', expectedStatus: 201, label: 'Planification d’une leçon' },
+  moveLesson: { operationType: 'MOVE_LESSON', resourceType: 'Lesson', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Déplacement d’une leçon' },
+  cancelLesson: { operationType: 'CANCEL_LESSON', resourceType: 'Lesson', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Annulation d’une leçon' },
   updateSchool: { operationType: 'UPDATE_SCHOOL', resourceType: 'School', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Modification des coordonnées' },
   saveSetup: { operationType: 'SAVE_SCHOOL_SETUP', resourceType: 'SchoolSetup', target: 'school', method: 'PATCH', expectedStatus: 200, label: 'Enregistrement de l’avancement' },
   saveSetupDraft: { operationType: 'SAVE_SCHOOL_SETUP_DRAFT', resourceType: 'SchoolSetupDraft', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Enregistrement de la préparation' },
@@ -257,7 +261,18 @@ export function commandMessage(code: string): string {
     PROFILE_POLICY_RULE_INVALID: 'Vérifiez les champs, leur utilité et le moment où ils sont demandés.',
     PROFILE_POLICY_ALREADY_PUBLISHED: 'Cette version est déjà publiée.',
     PROFILE_POLICY_DATE_CONFLICT: 'Une version publiée utilise déjà cette date d’effet.',
-    INVALID_INTERVAL: 'La période indiquée n’est pas valide : la fin précède le début.',
+    INVALID_INTERVAL: 'Vérifiez les dates et la durée. Une leçon doit être future et durer de 1 à 480 minutes.',
+    SLOT_CONFLICT: 'Ce créneau vient d’être réservé. Choisissez une autre heure.',
+    SLOT_UNAVAILABLE: 'Ce créneau ne correspond pas aux disponibilités du moniteur.',
+    INSTRUCTOR_NOT_ASSIGNED: 'Le moniteur doit être affecté à cette formation et couvrir tout ce créneau.',
+    PROFILE_ACTION_REQUIRED: 'Complétez les informations requises du dossier élève avant de planifier.',
+    PROFILE_POLICY_NOT_READY: 'L’école doit publier les informations requises du profil avant de planifier.',
+    SCHOOL_POLICY_CHANGED: 'La procédure de l’école a changé. Rechargez les conditions avant de confirmer.',
+    LESSON_CLOSED: 'Cette leçon ne peut plus être modifiée. Actualisez sa fiche.',
+    LESSON_STARTED: 'Cette leçon a déjà commencé ou est terminée. Actualisez sa fiche.',
+    LESSON_COMMERCIAL_CHANGE_REQUIRED: 'Le changement de durée exige un changement explicite du tarif.',
+    PRICE_OVERRIDE_REQUIRED: 'Le prix doit correspondre à la prestation choisie.',
+    COMMERCIAL_TERMS_CHANGED: 'Les conditions ont changé. Relisez le tarif applicable avant de confirmer.',
     INVALID_SERVICE_PRODUCT: 'Une leçon individuelle exige une catégorie et une durée.',
     COMMERCIAL_TERMS_NOT_APPROVED: 'Choisissez des conditions commerciales approuvées pour activer cette prestation.',
     SITE_SETUP_REQUIRED: 'Les prestations par site ne sont pas encore disponibles.',

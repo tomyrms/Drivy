@@ -42,6 +42,10 @@ export interface CommandGuards<T> {
   replay?:(db:PoolClient,actor:CommandActor,data:T)=>Promise<T>;
 }
 export const commandHash = (body:unknown,expectedVersion:number|null) => createHash('sha256').update(canonical({body,expectedVersion})).digest('hex');
+/** Global per author, including commands sent to different schools. Take after person locks and before school locks. */
+export async function lockCommandOperation(db:PoolClient,personId:string,operationId:string) {
+  await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${personId}:${operationId.toLowerCase()}`]);
+}
 export async function recordCommand<T>(db:PoolClient,actor:CommandActor,schoolId:string,commandType:string,operationId:string,hash:string,effect:CommandEffect<T>) {
   const resourceVersion=effect.resourceVersion ?? (effect.data as {version?:number}).version ?? 1;
   await db.query(`INSERT INTO drivy.operation(actor_person_id,operation_id,school_id,command_type,payload_hash,resource_id,response_data,resource_version)
@@ -72,7 +76,7 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
     const person = await db.query("SELECT id FROM drivy.person WHERE id=ANY($1::uuid[]) AND status='ACTIVE' ORDER BY id FOR SHARE",[personIds]);
     if (person.rowCount!==personIds.length) throw forbidden();
     // La clé est globale pour cet auteur, même si deux commandes ciblent deux écoles.
-    await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`${personId}:${body.operationId.toLowerCase()}`]);
+    await lockCommandOperation(db,personId,body.operationId);
     const preliminary = await db.query<{id:string;roles:string[]}>("SELECT id,roles FROM drivy.membership WHERE school_id=$1 AND person_id=$2 AND status='ACTIVE'",[schoolId,personId]);
     if (!preliminary.rows[0]) throw notFound();
     if (!allowedRoles.some(role=>preliminary.rows[0]!.roles.includes(role))) throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires ne sont pas disponibles.');

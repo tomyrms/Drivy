@@ -167,6 +167,7 @@ struct UnavailableMessagingReportSealing: MessagingReportSealing {
 
 /// Actions de conversation v2. Chaque appel est rÃ©autorisÃ© par le serveur.
 protocol MessagingThreadActions: Sendable {
+    func mutate(scope: MessagingScope, key: MessagingMutationKey, value: MessagingMutationValue, requestID: UUID) async throws
     func delete(scope: MessagingScope, conversationID: UUID, messageID: UUID, for deletion: MessagingDeletionScope) async throws
     func setReaction(scope: MessagingScope, conversationID: UUID, messageID: UUID, emoji: String, active: Bool) async throws
     func setPinned(scope: MessagingScope, conversationID: UUID, messageID: UUID, pinned: Bool) async throws
@@ -179,6 +180,13 @@ protocol MessagingThreadActions: Sendable {
     /// Retirés du général encore dans l'école (administrateurs du groupe).
     func removedMembers(scope: MessagingScope) async throws -> [MessagingMember]
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws
+}
+
+extension MessagingThreadActions {
+    /// Une implémentation sans reçus ne peut pas dégrader silencieusement une reprise durable.
+    func mutate(scope: MessagingScope, key: MessagingMutationKey, value: MessagingMutationValue, requestID: UUID) async throws {
+        throw MessagingFailure.unavailable
+    }
 }
 
 struct UnavailableMessagingThreadActions: MessagingThreadActions {

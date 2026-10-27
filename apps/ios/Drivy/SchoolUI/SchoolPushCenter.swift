@@ -48,6 +48,7 @@ import UserNotifications
     /// Avant la déconnexion, tant que le jeton d’accès vaut encore : l’école cesse d’envoyer à cet appareil.
     /// Une panne n’empêche jamais la déconnexion ; l’école révoque d’elle-même un jeton refusé par Apple.
     func sessionEnding() async {
+        SchoolNotificationSettingsCache.reset()
         hasSession = false
         pendingSeriesID = nil
         guard let token = registeredToken ?? deviceToken, let client else { registeredToken = nil; return }
@@ -115,7 +116,9 @@ import UserNotifications
     /// App ouverte : la notification reste visible, le bandeau des places proposées se relit de son côté.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification)
         async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        // #103 : conversation active, bas du fil affiché → le fil se met à jour, pas de bannière en double.
+        if MessagingActiveConversation.suppresses(notification.request.content.userInfo) { return [] }
+        return [.banner, .list, .sound]
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {

@@ -106,6 +106,7 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
       <TextField name="email" label="E-mail" type="email" value={email} onChange={setEmail} autoComplete="username" inputMode="email" maxLength={254} required disabled={busy} />
       <TextField name="password" label="Mot de passe" type="password" value={password} onChange={setPassword} autoComplete="current-password" maxLength={128} required disabled={busy} />
       <button className="button primary" type="submit" disabled={busy || !email.trim() || !password}>{busy ? 'Connexion…' : 'Se connecter'}</button>
+      <a className="button quiet" href="/app/recover" target="_blank" rel="noopener noreferrer" onClick={() => setPassword('')}>Mot de passe oublié</a>
       {kind === null && <button className="button secondary" type="button" disabled={busy} onClick={() => go('code')}>J’ai un code</button>}
       {kind !== null && <button className="button quiet" type="button" disabled={busy} onClick={() => go('register')}>Créer un compte</button>}
     </form>}

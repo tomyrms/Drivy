@@ -8,6 +8,9 @@ struct SchoolCourseEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var addsType = false
+    @State private var confirmsDiscard = false
+    @State private var reviewsPublication = false
+    @State private var expandedOccurrences: Set<UUID> = []
     @AccessibilityFocusState private var focusedOccurrence: UUID?
     private static let errorAnchor = "course-error"
 
@@ -30,9 +33,8 @@ struct SchoolCourseEditorView: View {
                         if model.catalogue == nil {
                             if model.isLoading { Section { DrivyLoadingState(title: "Chargement…") }.drivyFormRows() }
                         } else {
-                            courseFields
-                            occurrenceFields
-                            summaryFields
+                            courseFields.disabled(model.isBusy || model.hasUnconfirmedOperation)
+                            occurrenceFields.disabled(model.isBusy || model.hasUnconfirmedOperation)
                             if typeSize.isAccessibilitySize { Section { actions }.drivyFormRows() }
                         }
                     }
@@ -47,13 +49,16 @@ struct SchoolCourseEditorView: View {
                 .environment(\.locale, Locale(identifier: "fr_CH"))
                 .navigationTitle(model.isNew ? "Cours collectif" : "Brouillon").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
+                    ToolbarItem(placement: .cancellationAction) { Button("Fermer") { close() }.disabled(model.isBusy) }
                     if model.catalogue != nil && model.isLoading {
                         ToolbarItem(placement: .primaryAction) { ProgressView().accessibilityLabel("Actualisation") }
                     }
                 }
                 .task {
                     await model.load()
+                    if expandedOccurrences.isEmpty, let first = model.focusedOccurrenceID ?? model.form.occurrences.first?.id {
+                        expandedOccurrences.insert(first)
+                    }
                     guard !Task.isCancelled, let target = model.focusedOccurrenceID else { return }
                     await Task.yield()
                     scroll.scrollTo(target, anchor: .top)
@@ -80,10 +85,23 @@ struct SchoolCourseEditorView: View {
                     Button("Créer") { Task { await model.createType() } }
                     Button("Annuler", role: .cancel) { model.newTypeTitle = "" }
                 }
+                .alert("Quitter sans enregistrer ?", isPresented: $confirmsDiscard) {
+                    Button("Enregistrer le brouillon et quitter") { Task { await model.saveDraft() } }.disabled(!model.canSave)
+                    Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
+                    Button("Continuer", role: .cancel) {}
+                }
+                .sheet(isPresented: $reviewsPublication) { SchoolCoursePublicationReviewView(model: model) }
             }
         }
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(model.isBusy || model.hasUnsavedChanges || model.hasUnconfirmedOperation)
         .tint(DrivyTheme.accent)
+    }
+
+    private func close() {
+        if model.hasUnconfirmedOperation {
+            model.errorMessage = "Une demande reste à confirmer. Réessaie avant de fermer : elle peut déjà avoir été reçue par l’école."
+        } else if model.hasUnsavedChanges { confirmsDiscard = true }
+        else { dismiss() }
     }
 
     @ViewBuilder private var courseFields: some View {
@@ -135,6 +153,9 @@ struct SchoolCourseEditorView: View {
         let count = model.form.occurrences.count
         ForEach(Array(model.form.occurrences.enumerated()), id: \.element.id) { index, occurrence in
             Section {
+              DisclosureGroup(isExpanded: Binding(get: { expandedOccurrences.contains(occurrence.id) }, set: { expanded in
+                  if expanded { expandedOccurrences.insert(occurrence.id) } else { expandedOccurrences.remove(occurrence.id) }
+              })) {
                 DatePicker("Début", selection: startBinding(occurrence.id), displayedComponents: [.date, .hourAndMinute])
                 DatePicker("Fin", selection: binding(occurrence.id, \.endsAt, occurrence.endsAt), in: occurrence.startsAt...,
                            displayedComponents: [.date, .hourAndMinute])
@@ -151,6 +172,15 @@ struct SchoolCourseEditorView: View {
                     .disabled(model.isBusy)
                     .accessibilityLabel("Retirer la séance \(index + 1)")
                 }
+              } label: {
+                  VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                      Text(SchoolPlanningFormat.instant(occurrence.startsAt, zone: model.timeZone)).monospacedDigit()
+                      Text(SchoolCourseFormat.duration(minutes: max(0, Int(occurrence.endsAt.timeIntervalSince(occurrence.startsAt) / 60))))
+                          .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                  }
+                  .fixedSize(horizontal: false, vertical: true)
+              }
+              .disabled(model.isBusy)
             } header: {
                 Text("Séance \(index + 1)").drivyFormSectionHeader()
                     .foregroundStyle(model.focusedOccurrenceID == occurrence.id ? DrivyTheme.accent : DrivyTheme.muted)
@@ -164,41 +194,31 @@ struct SchoolCourseEditorView: View {
         .datePickerStyle(.compact)
         .drivyControlTint()
         Section {
-            Button { model.addOccurrence() } label: { Label("Ajouter une séance", systemImage: "plus") }
+            Button {
+                model.addOccurrence()
+                if let added = model.form.occurrences.last?.id { expandedOccurrences = [added] }
+            } label: { Label("Ajouter une séance", systemImage: "plus") }
                 .disabled(model.isBusy || count >= SchoolCourseForm.maximumOccurrences)
                 .accessibilityIdentifier("course-add-occurrence")
         }
         .drivyFormRows()
     }
 
-    @ViewBuilder private var summaryFields: some View {
-        let sessions = model.form.sortedOccurrences
-        Section {
-            ForEach(sessions) { occurrence in
-                Text(SchoolPlanningFormat.instant(occurrence.startsAt, zone: model.timeZone) + " – "
-                     + SchoolDateFormat.time(occurrence.endsAt, zone: model.timeZone))
-                    .monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            LabeledContent("Total") { Text(SchoolCourseFormat.duration(minutes: model.form.totalMinutes)).monospacedDigit() }
-            Text(SchoolCourseFormat.cancellationSentence(hours: model.selfCancelHours))
-                .font(.subheadline)
-                .foregroundStyle(DrivyTheme.muted)
-                .fixedSize(horizontal: false, vertical: true)
-        } header: { Text("Aperçu").drivyFormSectionHeader() }
-            .drivyFormRows()
-    }
-
     @ViewBuilder private var actions: some View {
+        if model.hasUnconfirmedOperation {
+            Button("Réessayer la demande") { Task { await model.retryUnconfirmed() } }
+                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isBusy)
+                .accessibilityIdentifier("course-retry-command")
+        } else {
         if let problem = model.publishProblem, !model.isBusy {
             DrivyActionNote(text: problem, isError: model.problem != nil)
         }
         Button {
-            Task { await model.publish() }
+            reviewsPublication = true
         } label: {
             HStack(spacing: DrivySpacing.xs) {
                 if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
-                Text("Publier")
+                Text("Vérifier et publier")
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
@@ -209,6 +229,7 @@ struct SchoolCourseEditorView: View {
             .buttonStyle(DrivySecondaryButtonStyle())
             .disabled(!model.canSave)
             .accessibilityIdentifier("course-save-draft")
+        }
     }
 
     /// Liaison par identifiant : une séance retirée ne laisse pas d’index périmé.
@@ -246,10 +267,9 @@ struct SchoolCourseDetailView: View {
     @State private var attendance: SchoolCourseAttendanceWorkspace?
     @AccessibilityFocusState private var focusedOccurrence: UUID?
 
-    /// L’appel s’ouvre dès qu’une séance a commencé ; les droits sont relus par le serveur.
-    private var canTakeAttendance: Bool {
-        series.status == .published && series.occurrences.contains { ($0.start ?? .distantFuture) <= Date() }
-    }
+    /// La lecture des participants et des règlements ne dépend pas du début de la première séance.
+    /// La feuille relit les droits ; seules les présences restent limitées aux séances commencées.
+    private var canOpenParticipants: Bool { series.status != .draft }
 
     private var series: SchoolCourseSeries { model.series }
 
@@ -317,11 +337,11 @@ struct SchoolCourseDetailView: View {
                     }
                 } header: { Text("Inscriptions").drivyFormSectionHeader() }
                     .drivyFormRows()
-                if canTakeAttendance {
+                if canOpenParticipants {
                     Section {
                         Button {
                             attendance = SchoolCourseAttendanceWorkspace(schoolID: model.schoolID, seriesID: series.id, timeZone: timeZone, client: model.client)
-                        } label: { Label("Faire l’appel", systemImage: "checklist") }
+                        } label: { Label("Suivre les participants", systemImage: "checklist") }
                             .buttonStyle(DrivyPrimaryButtonStyle())
                             .disabled(model.isBusy)
                             .accessibilityIdentifier("course-take-attendance")

@@ -17,6 +17,7 @@ import { registerSchoolOpening } from './school-opening.js';
 import type { SchoolOpeningConfig } from './school-opening-model.js';
 import { registerInvitations } from './invitations.js';
 import { registerAccounts } from './accounts.js';
+import { registerAccountRecovery, type AccountRecoveryOptions } from './account-recovery.js';
 import type { AccountProvisioner } from './account-provisioning.js';
 import type { AttemptLimiter } from './attempt-limiter.js';
 import { registerProfiles } from './profiles.js';
@@ -107,7 +108,7 @@ const validationCodes = new Set(['INVALID_REQUEST', 'PAYLOAD_TOO_LARGE', 'UNSUPP
 /** Code métier et motif générique d'une réponse refusée : le message est un texte fixe du serveur, jamais une valeur reçue. */
 const responseProblem = new WeakMap<FastifyRequest, { errorCode: string; reason?: string }>();
 
-export function buildApp(options: { messaging?: MessagingQualification; pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean | FastifyServerOptions['logger']; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
+export function buildApp(options: { messaging?: MessagingQualification; accountRecovery?: AccountRecoveryOptions; pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean | FastifyServerOptions['logger']; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
   // Derrière le proxy public, l'adresse du client sert de clé aux freins des routes sans connexion (codes, création de compte).
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384, ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}) });
   const cursors = new Cursors(options.cursorSecret);
@@ -224,6 +225,7 @@ export function buildApp(options: { messaging?: MessagingQualification; pool: Po
   registerSchoolOpening(app,options);
   registerInvitations(app,options);
   registerAccounts(app,options);
+  registerAccountRecovery(app,options);
   registerProfiles(app,options);
   registerSelfProfile(app,options);
   registerCatalogue(app,options);
