@@ -144,14 +144,12 @@ struct MessagingInboxView: View {
                 .disabled(opening)
                 .accessibilityIdentifier("messaging.new")
             }
+            // Une seule destination : l’engrenage y mène directement, comme celui du Profil.
             ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    Button("Réglages", systemImage: "gearshape") { showsSettings = true }
-                        .accessibilityIdentifier("messaging.settings.open")
-                } label: {
-                    Label("Plus", systemImage: "ellipsis.circle")
+                Button { showsSettings = true } label: {
+                    Label("Paramètres de Messages", systemImage: "gearshape")
                 }
-                .accessibilityIdentifier("messaging.inbox.more")
+                .accessibilityIdentifier("messaging.settings.open")
             }
         }
         .navigationDestination(isPresented: $showsSettings) {

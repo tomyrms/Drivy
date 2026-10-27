@@ -516,25 +516,34 @@ struct SchoolHomeView: View {
     }
 
     /// Messages : l'inbox porte sa propre pile de navigation (et sa liste partagée sur iPad).
-    /// Absent sans composition explicite, et retiré tant qu'un trajet tourne, comme l'ancienne entrée.
-    private var activeMessagingEntry: SchoolMessagingEntry? { tripInProgress ? nil : messagingEntry }
-
+    /// Absent sans composition explicite. Pendant un trajet, l'onglet garde sa place pour que les autres ne bougent
+    /// pas, mais aucun échange n'est construit : ni liste, ni fil, ni saisie, ni lecture qui marquerait un message lu.
     @ViewBuilder private var messagesTab: some View {
-        if let entry = activeMessagingEntry {
-            entry.makeView(nil)
-                .id(entry.scopeID)
-                .tabItem { tabLabel("Messages", systemImage: "bubble.left.and.bubble.right", tab: .messages) }
-                .accessibilityIdentifier("messages-tab")
-                .tag(SchoolHomeTab.messages)
+        if let entry = messagingEntry {
+            Group {
+                if tripInProgress {
+                    SchoolMessagesPausedView(returnToTrip: { returnToCapture() })
+                } else {
+                    entry.makeView(nil)
+                        .id(entry.scopeID)
+                }
+            }
+            .tabItem {
+                tabLabel("Messages", systemImage: "bubble.left.and.bubble.right", tab: .messages)
+                    .accessibilityValue(tripInProgress ? "En pause pendant le trajet"
+                        : (requiredActions.needsAttention(.messages) ? "Action requise" : ""))
+            }
+            .accessibilityIdentifier("messages-tab")
+            .tag(SchoolHomeTab.messages)
         }
     }
 
     private var staffTabsAvailable: [SchoolHomeTab] {
-        [.session, .agenda, .learners, .profile] + (activeMessagingEntry == nil ? [] : [.messages])
+        [.session, .agenda, .learners, .profile] + (messagingEntry == nil ? [] : [.messages])
     }
 
     private var learnerTabsAvailable: [SchoolHomeTab] {
-        [.lessons, .progress, .profile] + (activeMessagingEntry == nil ? [] : [.messages])
+        [.lessons, .progress, .profile] + (messagingEntry == nil ? [] : [.messages])
     }
 
     /// Un trajet GPS tourne (ou attend encore la confirmation de l’école) : changer d’école fermerait sa portée.
@@ -556,6 +565,32 @@ struct SchoolHomeView: View {
         }
     }
 
+}
+
+/// Messages pendant un trajet : l’onglet reste à sa place, sans rien des conversations. On ne l’atteint que
+/// l’écran du trajet quitté (en plein écran, il n’y a pas d’onglets) : le retour au trajet y est proposé.
+private struct SchoolMessagesPausedView: View {
+    let returnToTrip: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView {
+                Label("Messages en pause", systemImage: "car")
+            } description: {
+                Text("Ils reviennent à la fin du trajet.")
+            } actions: {
+                Button("Revenir au trajet", action: returnToTrip)
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .frame(maxWidth: 320)
+                    .accessibilityIdentifier("messages-paused-return")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(DrivyTheme.surface)
+            .navigationTitle("Messages")
+            .navigationBarTitleDisplayMode(.large)
+        }
+        .accessibilityIdentifier("messages-paused")
+    }
 }
 
 private struct CaptureLessonRoute: Identifiable {

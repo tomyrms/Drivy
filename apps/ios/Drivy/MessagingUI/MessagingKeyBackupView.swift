@@ -129,7 +129,7 @@ final class MessagingKeyBackupModel {
     }
 }
 
-/// Réglages de Messages : point d'entrée de la sauvegarde des clés.
+/// Paramètres de Messages : point d'entrée de la sauvegarde des clés et des appareils.
 struct MessagingSettingsView: View {
     let keys: (any MessagingKeyManagement)?
     let scope: MessagingScope
@@ -161,7 +161,8 @@ struct MessagingSettingsView: View {
                 }
             }
         }
-        .navigationTitle("Réglages")
+        .navigationTitle("Paramètres de Messages")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("messaging.settings")
     }
 }

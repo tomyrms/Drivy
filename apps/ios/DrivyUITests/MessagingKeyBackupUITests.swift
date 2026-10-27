@@ -11,8 +11,8 @@ final class MessagingKeyBackupUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["messages-entry"].waitForExistence(timeout: 10))
         app.buttons["messages-entry"].tap()
-        XCTAssertTrue(app.buttons["messaging.inbox.more"].waitForExistence(timeout: 5))
-        app.buttons["messaging.inbox.more"].tap(); app.buttons["messaging.settings.open"].tap()
+        XCTAssertTrue(app.buttons["messaging.settings.open"].waitForExistence(timeout: 5))
+        app.buttons["messaging.settings.open"].tap()
         let open = app.buttons["messaging.backup.open"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
@@ -49,7 +49,7 @@ final class MessagingKeyBackupUITests: XCTestCase {
         let key = app.staticTexts["messaging.backup.key"]
         XCTAssertTrue(key.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["messaging.backup.key.once"].exists)
-        XCTAssertFalse(app.navigationBars.buttons["Réglages"].exists, "Pas de retour silencieux")
+        XCTAssertFalse(app.navigationBars.buttons["Paramètres de Messages"].exists, "Pas de retour silencieux")
         attach(app, "backup-cle-affichee")
 
         // Glissement depuis le bord gauche et balayage vers le bas de la feuille.

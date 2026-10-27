@@ -9,7 +9,7 @@ import XCTest
         trips.tap()
         let list = app.descendants(matching: .any)["lessons-history"]
         XCTAssertTrue(list.waitForExistence(timeout: 10), app.debugDescription)
-        let back = app.navigationBars["Leçons"].buttons.firstMatch
+        let back = app.navigationBars["Historique des leçons"].buttons.firstMatch
         XCTAssertTrue(back.exists)
         back.tap()
         XCTAssertTrue(trips.waitForExistence(timeout: 5))

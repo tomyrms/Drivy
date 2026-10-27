@@ -5,6 +5,7 @@ enum SchoolLearnerProfileRoute: Hashable {
     case settings
     case permit(UUID)
     case trips
+    case notifications
 }
 
 /// L’onglet Profil de l’élève : qui il est et dans quelle école (le crayon de l’en-tête ouvre « Mon profil »), ses
@@ -186,9 +187,11 @@ struct SchoolLearnerProfileTab: View {
 
     @ViewBuilder private func destination(_ route: SchoolLearnerProfileRoute) -> some View {
         switch route {
+        case .notifications:
+            SchoolNotificationSettingsDestination(workspace: workspace)
         case .settings:
             if let account {
-                SchoolLearnerSettingsView(workspace: workspace, account: account, recording: recording)
+                SchoolLearnerSettingsView(workspace: workspace, account: account, recording: recording, chooseSchool: chooseSchool)
             }
         case .permit(let id):
             if let model = models.first(where: { $0.trainingID == id }) {

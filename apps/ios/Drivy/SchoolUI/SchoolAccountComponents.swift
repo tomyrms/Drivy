@@ -24,9 +24,10 @@ struct SchoolAccountActions {
 
     /// Le compte et l’école, sans le verrou ni la déconnexion : les Paramètres de l’élève les rangent par sujet.
     /// `includesProfile` : faux sur le Profil du moniteur, où « Mon profil » s’ouvre par le crayon de l’en-tête
-    /// et vit dans Paramètres.
+    /// et vit dans Paramètres. `chooseSchool` : la feuille d’école des onglets, la même que le bouton de la barre.
     @MainActor @ViewBuilder
     func accountRows(workspace: SchoolWorkspace?, openURL: OpenURLAction, includesProfile: Bool = true,
+                     chooseSchool: (() -> Void)? = nil,
                      afterChangingSchool: @escaping () -> Void = {}) -> some View {
         // Aucun symbole de tête : chaque ligne se lit par son titre, une icône par ligne ne dit rien de plus.
         if includesProfile, let openProfile, let person = workspace?.person {
@@ -53,11 +54,7 @@ struct SchoolAccountActions {
                 .accessibilityIdentifier("open-school-management")
         }
         if let workspace, (workspace.person?.memberships.count ?? 0) > 1, !tripInProgress {
-            DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName, action: {
-                workspace.leaveSchool()
-                afterChangingSchool()
-            })
-            .accessibilityIdentifier("school-change-school")
+            SchoolChangeSchoolRow(workspace: workspace, chooseSchool: chooseSchool, afterChangingSchool: afterChangingSchool)
         }
         if let openJoinSchool {
             DrivyNavigationRow(title: "Rejoindre une école", action: openJoinSchool)
@@ -77,6 +74,29 @@ struct SchoolAccountActions {
     @MainActor func signOutRow() -> some View {
         SchoolSignOutRow(action: signOut, confirms: tripInProgress)
             .accessibilityIdentifier("school-sign-out")
+    }
+}
+
+/// « Changer d’école » ouvre le même choix que le bouton d’école de la barre, l’école ouverte cochée. Fermer ou
+/// reprendre l’école ouverte ne quitte rien ; seule une autre école vide l’ancienne portée. Dans les onglets, c’est
+/// la feuille de l’accueil (`chooseSchool`) : elle survit au changement, qui reconstruit les onglets. Ailleurs (feuille
+/// « Compte »), la ligne présente la même feuille et ne ferme la sienne qu’après un vrai changement.
+private struct SchoolChangeSchoolRow: View {
+    @Bindable var workspace: SchoolWorkspace
+    let chooseSchool: (() -> Void)?
+    let afterChangingSchool: () -> Void
+    @State private var choosesSchool = false
+    @State private var changedSchool = false
+
+    var body: some View {
+        DrivyNavigationRow(title: "Changer d’école", detail: workspace.membership?.schoolName, action: {
+            if let chooseSchool { chooseSchool() } else { changedSchool = false; choosesSchool = true }
+        })
+        .accessibilityIdentifier("school-change-school")
+        .sheet(isPresented: $choosesSchool, onDismiss: { if changedSchool { afterChangingSchool() } }) {
+            SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false },
+                didChangeSchool: { changedSchool = true })
+        }
     }
 }
 

@@ -150,10 +150,12 @@ struct SchoolChooserSheet: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var workspace: SchoolWorkspace
     let close: () -> Void
+    /// Une autre école a été choisie (pas l’école déjà ouverte).
+    var didChangeSchool: (() -> Void)? = nil
 
     var body: some View {
         NavigationStack {
-            SchoolChooserView(workspace: workspace, onSelect: close)
+            SchoolChooserView(workspace: workspace, onSelect: close, didChangeSchool: didChangeSchool)
                 .navigationTitle("Changer d’école")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -170,6 +172,7 @@ struct SchoolChooserSheet: View {
 struct SchoolChooserView: View {
     @Bindable var workspace: SchoolWorkspace
     var onSelect: (() -> Void)? = nil
+    var didChangeSchool: (() -> Void)? = nil
 
     var body: some View {
         ScrollView { choices }
@@ -185,6 +188,7 @@ struct SchoolChooserView: View {
                     // L’école déjà ouverte : on ferme sans tout reconstruire.
                     guard !isCurrent else { onSelect?(); return }
                     workspace.leaveSchool()
+                    didChangeSchool?()
                     onSelect?()
                     Task { await workspace.selectSchool(membership) }
                 } label: {

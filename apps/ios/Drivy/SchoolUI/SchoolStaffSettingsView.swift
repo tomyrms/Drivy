@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// Profil → Paramètres (moniteur, administration) : « Mon profil », préférences de leçon, signalements et leur
-/// classement, apparence, verrou de l’app et déconnexion. Mêmes lignes et même rangement que les Paramètres de l’élève
-/// (`SchoolLearnerSettingsView`) : rien n’est copié, chaque ligne vient de son écran ou de `SchoolAccountActions`.
+/// Profil → Paramètres (moniteur, administration) : « Mon profil », notifications, préférences de leçon, signalements
+/// et leur classement, apparence, verrou de l’app et déconnexion. Mêmes lignes et même rangement que les Paramètres de
+/// l’élève (`SchoolLearnerSettingsView`) : rien n’est copié, chaque ligne vient de son écran ou de `SchoolAccountActions`.
 /// Invitations et école restent sur le Profil.
+///
+/// Une seule règle d’ouverture (#136) : un formulaire qui s’enregistre par un bouton, avec sa saisie protégée à la
+/// fermeture (Mon profil, Préférences de leçon), s’ouvre en feuille ; une page dont chaque choix s’applique aussitôt
+/// (Notifications, Signalements) est poussée dans la pile, avec le retour.
 struct SchoolStaffSettingsView: View {
     let workspace: SchoolWorkspace
     let account: SchoolAccountActions?
@@ -45,13 +49,25 @@ struct SchoolStaffSettingsView: View {
                 }
                 .drivyFormRows()
             }
+            if SchoolNotificationSettingsDestination.isAvailable(workspace) {
+                Section {
+                    NavigationLink {
+                        SchoolNotificationSettingsDestination(workspace: workspace)
+                    } label: {
+                        Text("Notifications")
+                            .foregroundStyle(DrivyTheme.text)
+                    }
+                    .accessibilityIdentifier("settings-notifications")
+                }
+                .drivyFormRows()
+            }
             let planning = self.planning
             let themes = self.observationThemes
             if planning != nil || themes != nil {
                 // Chaque ligne se lit par son titre : un en-tête de section le redirait.
                 Section {
                     if let planning {
-                        // Une feuille s’ouvre : même ligne et même chevron que les autres destinations.
+                        // Un formulaire à enregistrer : il s’ouvre en feuille, avec « Fermer » protégé.
                         DrivyNavigationRow(title: "Préférences de leçon") {
                             openPlanningSettings(planning.scope, planning.client)
                         }
