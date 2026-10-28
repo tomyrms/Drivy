@@ -1263,3 +1263,22 @@ IPA du commit `77306e9882216688b3250c77f72047619c42ad04` compilée et vérifiée
 ## 28 octobre 2026 — web/API déployés et données/comptes réinitialisés sur demande
 
 Déploiement `a41cf64d153252dc133a60f29755f0685516be8f` exécuté ; [reçu, sauvegardes et retour arrière](deploiement-reset-253-20261028.md). Sauvegardes métier/identité restaurées avec succès dans deux bases temporaires puis copies temporaires supprimées. Migration additive qualifiée sur copie puis appliquée, registre 56. Réinitialisation transactionnelle des données métier et suppression ciblée des 5 comptes humains Drivy ; comptes techniques/configuration/références conservés. Contrôle final : 0 personne/école/appartenance/leçon ; 1 code d’ouverture et 2 références de cours. Services actifs, RLS/readiness et HTTPS vérifiés ; 21 fichiers publics correspondent au build. IPA combinée build 441 disponible, source native inchangée depuis 77306e98. GPS obligatoire reste désactivé/BLOCKED #266. Aucun compte créé pour le porteur, aucun test métier/UI/physique ni merge master exécuté ; attente de son essai.
+
+
+## 28 octobre 2026 — qualification après essai : épic #253 et 15 corrections UX B
+
+Le porteur a accepté l’essai puis demandé tests, corrections et clôtures. La PR #279 conserve #278 et la branche native UX B dans l’historique. Le [reçu de qualification](qualification-253-uxb-20261028.md) rassemble les preuves et la [revue de clôture](revue-cloture-253-20261028.md) les 24 sujets et 15 corrections.
+
+- Corrections après essai : permission d’audit précise du départ préparatoire GPS (migration additive), prérequis reliés aux faits de cours autorisés, heure serveur monotone pour les offres ; recettes actualisées sans suppression des contrôles métier. La sélection manuelle du replay possède une preuve exécutée de pause et de reprise.
+- PASS API/PostgreSQL : 796 tests ; web/BFF : 423 tests, aucun ignoré, sur `4a1a6885` (run40742565492). PASS navigateur : 162 contrôles sur `83aadc37` (run40743521660). Typage, compilation, contrats et intégrité documentaire réussis.
+- PASS Swift sur `94348f6f` : 1 091 tests, aucun échec/ignoré (run40742298060). PASS UI initiale : 16 tests iPhone et16 iPad sur `36d75142` (run40739185025) ; PASS cours corrigés : 7 iPhone et7 iPad sur `94348f6f` (run40745176299). Simulateurs iPhone17Pro/iPadAir11(M4), iOS26.4.1. Aucun résultat physique déduit.
+- IPA corrigée : version0.7.0 build442, SHA `94348f6f4b32c9e92c6e91843e40cf28aebd454a`, run40742302908, artefact12841010670. Archive téléchargée, trois empreintes concordantes, Messages de qualification inclus. Les sources natives sont identiques dans les commits ultérieurs ; API/web identiques au SHA qualifié, dernières recettes identiques à `83aadc37`.
+- Exploitation : version publiée toujours `a41cf64d`. Aucun nouveau déploiement ni effacement après l’essai. Le responsable de l’épic #280 a reçu les commits à intégrer et les contraintes de déploiement ; son worktree reste indépendant. Un prochain déploiement devra inclure la migration d’audit nouvelle après sauvegarde et accord distinct du porteur.
+- Limites conservées : S14/#266 est un audit terminé avec décision BLOCKED pour le GPS obligatoire réel ; configuration de qualification vide en exploitation. Lacunes S07 explicites. GPS/batterie/provenance réelle/délai de retrait distant/VoiceOver physique et qualification générale Messages non revendiqués. Le parent #192 n’entre pas dans les clôtures de cette livraison.
+
+## 28 octobre 2026 : qualification de l'audit UX B (PR #310, 15 issues)
+
+- Essai du porteur validé sur l'IPA `db855a85` (run 40727684500).
+- PASS : tests métier `db855a85` (run 40738918926), 864 tests Swift Testing en 79 suites, 202 XCTest, scénario réel du relais exécuté. Les deux premières tentatives ont échoué sur le seul `MatrixMessagingRelayIntegrationTests`, aux étapes READINESS puis CONVERSATION (relais jetable injoignable) ; la troisième est passée sans changement de code.
+- PASS : UI iPhone et iPad (run 40738923088), `SchoolCourseJourneyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests/testSearchInsideConversationFindsMessage`, 16 tests par appareil.
+- NOT_EXECUTED : VoiceOver physique, réseau dégradé réel. iOS seul, aucun déploiement.
