@@ -9,6 +9,13 @@ export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<Compone
   agenda: lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot }))),
   eleves: lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot }))),
   equipe: lazy(() => import('./access/access-page').then(module => ({ default: () => <module.AccessPilot /> }))),
+  // Formations et tarifs (#326, #327). Les adresses contextuelles ouvrent la même famille.
+  formations: lazy(() => import('./formations/catalogue-page').then(module => ({ default: module.FormationsPage }))),
+  offres: lazy(() => import('./formations/catalogue-page').then(module => ({ default: module.OffresPage }))),
+  referentiels: lazy(() => import('./formations/catalogue-page').then(module => ({ default: module.ReferentielsPage }))),
+  procedures: lazy(() => import('./formations/catalogue-page').then(module => ({ default: module.ProceduresPage }))),
+  prestations: lazy(() => import('./pricing/prestations-page').then(module => ({ default: module.PrestationsPage }))),
+  conditions: lazy(() => import('./pricing/terms-page').then(module => ({ default: module.TermsPage }))),
 };
 
 export const portalSections = Object.keys(portalPages) as SectionKey[];
