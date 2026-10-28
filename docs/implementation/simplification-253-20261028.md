@@ -2,6 +2,8 @@
 
 Actualisation après le mandat initial : l’[IPA combinée avec les 15 corrections UX B](preuve-ipa-253-uxb-20261028.md) a compilé. Le porteur a ensuite autorisé le [déploiement web/API et la remise à zéro des données et comptes](deploiement-reset-253-20261028.md), exécutés avec sauvegardes restaurées sur copies de contrôle. Les mentions de déploiement non exécuté ci-dessous décrivent l’état avant cette nouvelle autorisation ; le reçu fait foi pour l’état publié.
 
+Après acceptation de l'essai, le porteur a demandé les tests, corrections et clôtures. Le [reçu de qualification après essai](qualification-253-uxb-20261028.md) indique les SHA, résultats exécutés et correctifs ultérieurs ; il actualise les attentes de recette du tableau initial ci-dessous. La [revue de clôture](revue-cloture-253-20261028.md) conserve les comparaisons S01/S20 et les limites de chaque sujet.
+
 Mandat élargi par le porteur aux autres lots de l’épic, puis autorisation de travailler avec plusieurs agents. Branche `codex/simplification-253`, issue de `2c15a061` (premier accueil, PR #278). Le checkout de messagerie de l’autre intervenant n’est pas modifié. Aucun ticket n’est fermé sur la seule existence du code. Les prototypes abandonnés de `s01-premier-usage/` ne font pas partie de cette livraison.
 
 ## Parcours retenu — S01
@@ -25,7 +27,7 @@ Le nombre d’étapes du guide est observable dans le code ; aucun gain de temps
 | S07 #259 | Matrice versionnée et sourcée des 17 catégories/restrictions | Voir lacunes précises de la matrice ; aucune certification |
 | S08 #260 | Programmes distincts, clés stables, provenance, pas de variante créée par défaut | Propositions pédagogiques `NOT_QUALIFIED`, G/M séparés de la pratique |
 | S09 #261 | Comparaison, confirmation des ajouts seuls, personnalisation/historique conservés | Évolutions réglementaires complexes et transfert volontaire de dossiers hors mécanisme automatique |
-| S10 #262 | Aide contextuelle datée dans dossier/permis, sources et inconnus | Pas de preuve structurée des cours ni de connexion SARI ; aucun acquis déduit |
+| S10 #262 | Aide contextuelle datée dans dossier/permis, sources et faits internes de cours autorisés | Présence et validation interne distinguées ; aucune attestation officielle, dispense ni connexion SARI |
 | S11 #263 | Durée/prix réels, tarif par leçon, date scolaire proposée, pas de fin imposée | Prix null bloquant ; zéro reste un choix explicite |
 | S12 #264 | Questions communes, procédure versionnée, échéance avant réservation | Migration additive préparée, non exécutée ; collectifs et leurs 24 h distincts conservés |
 | S13 #265 | Une version de conditions partagée, publication groupée avec impact et conflit | Exceptions et engagements anciens conservés ; changement d’annulation exige sa procédure |
