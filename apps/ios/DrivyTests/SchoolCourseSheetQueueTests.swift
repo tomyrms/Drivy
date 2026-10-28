@@ -54,7 +54,8 @@ import Testing
         model.submit(.attendance(enrollmentID: learner, occurrenceID: occurrence, status: .absent, expectedVersion: nil), learnerName: "Alex")
         model.submit(.attendance(enrollmentID: learner, occurrenceID: occurrence, status: .excused, expectedVersion: nil), learnerName: "Alex")
         #expect(model.intents(for: learner).count == 2)
-        #expect(model.displayedStatus(try row(model, learner), occurrenceID: occurrence) == .excused)
+        let changing = try row(model, learner)
+        #expect(model.displayedStatus(changing, occurrenceID: occurrence) == .excused)
         await server.release()
         await eventually { model.lanes.isEmpty }
         let sent = await server.attendance
@@ -71,8 +72,10 @@ import Testing
         let learner = CourseSheetServer.first
         model.submit(.attendance(enrollmentID: learner, occurrenceID: occurrence, status: .present, expectedVersion: nil), learnerName: "Alex")
         await eventually { model.hasUnconfirmed }
-        let pending = try #require(model.unconfirmed(try row(model, learner)))
-        #expect(!model.isSending && model.displayedStatus(try row(model, learner), occurrenceID: occurrence) == .present)
+        let waiting = try row(model, learner)
+        let pending = try #require(model.unconfirmed(waiting))
+        #expect(!model.isSending)
+        #expect(model.displayedStatus(waiting, occurrenceID: occurrence) == .present)
         model.retry(learner)
         await eventually { model.lanes.isEmpty }
         let keys = await server.keys
@@ -90,9 +93,10 @@ import Testing
         model.submit(.payment(enrollmentID: learner, amountCents: 8000), learnerName: "Alex")
         model.submit(.payment(enrollmentID: learner, amountCents: 8000), learnerName: "Alex")
         // Deux versements identiques voulus restent deux demandes distinctes.
-        #expect(model.pendingPayments(try row(model, learner)).count == 2)
-        #expect(try row(model, learner).payments.isEmpty)
-        #expect(!model.canValidate(try row(model, learner)))
+        let paying = try row(model, learner)
+        #expect(model.pendingPayments(paying).count == 2)
+        #expect(paying.payments.isEmpty)
+        #expect(!model.canValidate(paying))
         await server.release()
         await eventually { model.lanes.isEmpty }
         #expect(try row(model, learner).payments.map(\.amountCents) == [8000, 8000])
