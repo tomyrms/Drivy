@@ -9,6 +9,7 @@ export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<Compone
   agenda: lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot }))),
   eleves: lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot }))),
   equipe: lazy(() => import('./team/team-page').then(module => ({ default: module.TeamPilot }))),
+  invitations: lazy(() => import('./invitations/invitations-page').then(module => ({ default: module.InvitationsPilot }))),
 };
 
 export const portalSections = Object.keys(portalPages) as SectionKey[];
