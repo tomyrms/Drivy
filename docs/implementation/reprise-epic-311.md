@@ -26,13 +26,27 @@ Note de passation tenue à jour pendant la reconstruction. Elle décrit l’éta
 
 Fichiers partagés autorisés : une entrée par page dans `pages.tsx`, un import dans `preview/families.ts`, un fichier `preview/families/<famille>.ts`. Le reste du socle n’est modifié que par le coordinateur. Les agents committent localement, sans push.
 
+### Interruption du 28 octobre, vers 22 h 20
+
+Les trois agents ont été arrêtés par la limite d’usage (reprise possible après 2 h 50, heure de Zurich). Rien n’est intégré de leur côté ; leurs travaux sont sur disque :
+
+- Équipe : non commité — `portal/access/access-controller.ts`, `access-page.tsx` modifiés ; `access-summary.tsx`, `members.ts`, dossier `portal/team/` créés.
+- Planning : commit `ff5cd95b` (retour vers l’agenda, focus sur le titre de la leçon) ; non commité : `agenda/lesson-workspace.tsx`, dossier `portal/availability/` (modèle pur des horaires en cours).
+- Catalogue : non commité — dossiers `portal/formations/` et `portal/pricing/`.
+
+À reprendre dans le même worktree par le même propriétaire, sans recommencer. Défaut relevé pour Planning : dans la vue semaine, le nom de l’élève est illisible (texte écrasé) dans les leçons du jour et dans la leçon terminée ; les autres jours s’affichent bien.
+
 ## Vagues suivantes prévues
 
 - Vague 2 : école (#320 ouverture/guide, #321 accueil, #330 réglages/confidentialité/GPS, #331 signalements), trajets (#332), participants et appel des cours (#329, même propriétaire que #328), entrée et compte (#319, #333).
-- Raccord authentifié (#316/R05) : monter `PortalFrame` + `portalPages` dans l’application réelle avec le même `ConsoleContext`, les mêmes gardes et le même store de commandes.
+- Raccord authentifié (#316/R05) : fait côté code, voir ci-dessous ; reste à l’exécuter contre une vraie BFF (homelab ou CI navigateur).
 - Fin : #334 retrait de l’ancien rendu après parité prouvée, #335 qualification écran par écran, #336 aperçu vérifiable puis campagnes.
 
 ## Corrigé par le coordinateur depuis la passation
 
 - Variantes `data-horizontal` / `data-vertical` absentes du socle (onglets du dossier élève côte à côte).
 - Ouverture de formation et affectation : la revue reste ouverte après un refus.
+- Exécution de la console extraite dans `console/management-runtime.ts` (`useManagementConsole`) ; la console historique la consomme sans changement de comportement (427 tests web inchangés).
+- `PortalConsole` (`portal/portal-console.tsx`) : même runtime, mêmes URL `/app/gestion/...`, pages du registre, sections non reconstruites renvoyant explicitement à l’ancienne présentation. Activation par navigateur avec `?presentation=nouvelle`, retour avec `?presentation=ancienne` ; défaut inchangé.
+- Les feuilles historiques ne sont plus liées par `index.html` : `legacy-styles.ts` les charge pour les seules surfaces historiques.
+- `test/portal-boundary.test.ts` interdit au portail d’atteindre l’ancien rendu ou l’aperçu synthétique, même transitivement.

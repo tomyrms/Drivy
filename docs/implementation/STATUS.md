@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 28 octobre 2026 — #311, généralisation lancée et console authentifiée raccordée
+
+- Après « continue » du porteur sur les trois pilotes : shell à cinq espaces (seules les sections reconstruites sont proposées), registre des pages, données fictives par famille, primitives shadcn complémentaires. Correctif dossier élève : formation et affectation restent ouvertes après un refus.
+- Console authentifiée reconstruite (#316) sur le même runtime que la console historique, activable par navigateur (`?presentation=nouvelle`). Défaut inchangé pour tous.
+- **Exécuté** : typage client et serveur, 430 tests web (dont frontière du portail, vérifiée par injection volontaire), build de production, build d’aperçu, captures 1440/390. **Non exécuté** : la console reconstruite contre une vraie BFF. Rien de publié ni déployé dans ce lot.
+- Agents Équipe (#325), Planning (#323/#328), Catalogue (#326/#327) arrêtés par la limite d’usage, travaux partiels non intégrés. [Reprise](reprise-epic-311.md).
+
 ## 28 octobre 2026 — #311, aperçu des trois pilotes publié
 
 - À la demande du porteur, Agenda et Élèves intégrés à l’aperçu à côté de « Modifier les accès », navigation commune protégée par la saisie, choix du scénario d’essai. Publié sur l’aperçu isolé au SHA `0688868d`, données fictives. [Publication et retour arrière](epic-311-preview-publication.md#publication-des-trois-pilotes).
