@@ -4,6 +4,8 @@ Base locale : `24a946bc` (produit publié `be8a0245`), contenant master `c94ec2b
 
 ## Jalon obligatoire
 
+**Périmètre immédiat réduit par le porteur le 28 octobre : une seule page à publier pour juger la DA.** Le coordinateur livre « Modifier les accès » en aperçu synthétique isolé. Les agents Agenda et Élève ont été arrêtés ; leurs travaux restent dans leurs worktrees, non intégrés. La validation de cette page précède la reprise des autres pilotes et la généralisation. Ce changement de périmètre ne satisfait ni les trois pilotes de #313 ni les 25 sous-issues de l’epic.
+
 Trois pilotes réels : accès d'un membre, agenda et fiche élève. Desktop 1440 / mobile 390, clair/sombre, lecture/édition avec confirmation, erreur et attente. Présenter le même SHA dans un aperçu synthétique accessible. **Ne pas généraliser les nouveaux écrans avant validation visuelle du porteur.** La suite R08–R22 conserve des propriétaires prévus, pas un statut réalisé. Tests étendus après essai ; contrôles indispensables, builds et typage maintenus.
 
 ## Propriétaires et frontière

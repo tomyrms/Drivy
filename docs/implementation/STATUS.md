@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 28 octobre 2026 — #311, premier aperçu limité à une page
+
+- À la demande du porteur, priorité à « Modifier les accès » pour juger la DA. Nouveau rendu shadcn/Base UI, rôles cumulés, autorisations, relecture/confirmation, lecture, erreur conservant le brouillon, clair/sombre et mobile.
+- Typage et essai navigateur ciblé réussis ; jeu de données fictif et entrée isolée. Compilation et publication consignées après exécution. [Détail et limites](epic-311-access-preview.md).
+- Agents Agenda et Élève arrêtés à ce jalon, travaux conservés séparément. Suite de #311 et grandes campagnes en attente du retour visuel ; aucune sous-issue déclarée terminée sur cet aperçu.
+
 ## 28 octobre 2026 — audit UX, lot 9 : fil de discussion (#142, #168, #177)
 
 - Branche `claude/audit-ux-lot9-fil`, sur master avec le fil Exyte. Zones d'appui des réactions et des reprises, menu de sourdine selon l'état réel avec l'heure de fin, erreurs qui s'expliquent avant de se masquer et sans renvoi aveugle. [Détail](audit-ux-lot9-fil-20261028.md).
