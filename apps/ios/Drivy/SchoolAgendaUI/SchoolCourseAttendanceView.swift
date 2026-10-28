@@ -29,7 +29,8 @@ struct SchoolCourseAttendanceView: View {
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
-            .navigationTitle("Participants").navigationBarTitleDisplayMode(.inline)
+            // Le cours en titre, dans chaque mode (#225) : on sait sur quoi on agit avant d’agir.
+            .navigationTitle(model.sheet?.series.title ?? "Participants").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") { if model.hasUnconfirmed { confirmsClose = true } else { dismiss() } }
                     .disabled(model.isSending)
@@ -83,13 +84,13 @@ struct SchoolCourseAttendanceView: View {
             Section {
                 if model.rows.isEmpty { Text("Aucun inscrit").foregroundStyle(DrivyTheme.muted) }
                 ForEach(model.rows) { row in paymentRow(row) }
-            } header: { Text("Règlements sur place").drivyFormSectionHeader() }
+            } header: { Text("Règlements · tout le cours").drivyFormSectionHeader() }
             .drivyFormRows()
         } else if mode == .validation && modes.contains(.validation) {
             Section {
                 if model.rows.isEmpty { Text("Aucun inscrit").foregroundStyle(DrivyTheme.muted) }
                 ForEach(model.rows) { row in validationRow(row) }
-            } header: { Text("Validation du cours").drivyFormSectionHeader() }
+            } header: { Text("Validation · tout le cours").drivyFormSectionHeader() }
             .drivyFormRows()
         }
     }
@@ -121,7 +122,7 @@ struct SchoolCourseAttendanceView: View {
                     else if onlyUnmarked && unmarked.isEmpty { Text("Appel complet").foregroundStyle(DrivyTheme.muted) }
                     ForEach(onlyUnmarked ? unmarked : model.rows) { row in learnerRow(row, occurrence: occurrence) }
                 } header: {
-                    Text(SchoolPlanningFormat.interval(occurrence.startsAt, occurrence.endsAt, zone: model.timeZone)).drivyFormSectionHeader()
+                    Text("Séance · \(SchoolPlanningFormat.interval(occurrence.startsAt, occurrence.endsAt, zone: model.timeZone))").drivyFormSectionHeader()
                 }
                 .drivyFormRows()
             }
@@ -225,9 +226,10 @@ struct SchoolCourseAttendanceView: View {
                             .accessibilityIdentifier("course-payment-void")
                     }
                 }
-                Button { paying = row } label: { Label("Payé sur place", systemImage: "banknote") }
+                // Une action, pas un état (#226) : « Payé » reste réservé aux montants enregistrés.
+                Button { paying = row } label: { Label("Enregistrer un règlement", systemImage: "banknote") }
                     .buttonStyle(DrivySecondaryButtonStyle())
-                    .accessibilityLabel("Payé sur place, \(name(row))")
+                    .accessibilityLabel("Enregistrer un règlement pour \(name(row))")
                     .accessibilityIdentifier("course-payment")
             }
             rowFeedback(row)

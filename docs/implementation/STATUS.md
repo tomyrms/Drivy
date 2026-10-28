@@ -1223,3 +1223,33 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 ## 28 octobre 2026 — Épic #253, implémentation de qualification
 
 Branche `codex/simplification-253`. [État des 24 sujets et recette](simplification-253-20261028.md). Guide unique, programmes suisses, conditions communes, échéance d’annulation, choix GPS personnel, départ atomique de qualification, bilan et aide intégrés. Typage et compilation API/web : PASS sous Node 24.22.1. Générateurs de contrats exécutés. Tests PostgreSQL/Swift/navigateur/physiques : NOT_EXECUTED, préparés pour après l’essai du porteur. Compilation Apple et IPA à relever après leur exécution. Migration additive d’annulation préparée, non exécutée. Mise en service GPS obligatoire BLOCKED par #266 ; configuration vide par défaut. Qualification des sources et preuves de cours limitée comme détaillé dans [la matrice suisse](regles-suisses-20261028.md). Aucun déploiement ni fusion de cette branche.
+## 28 octobre 2026 : cours collectifs, audit UX B29 à B31 et B34 (#221, #222, #223, #226)
+
+- Branche `claude/cours-audit-b29-b34-20261028`, partie de `master` `e5166404`. iOS seul : aucun contrat, aucune migration, aucun déploiement.
+- Langue du cours dans la fiche et la confirmation d'inscription, seulement si l'école l'a renseignée ; un code hors catalogue garde son nom système (#221). Haut de Leçons : les places proposées sont comptées et le prochain cours reste visible ; en très grand texte, une seule ligne les résume et ouvre la liste (#222). Refuser une place ou quitter la liste d'attente demande une confirmation qui dit la conséquence réelle des fonctions SQL : place passée à la personne suivante, rang perdu, retour en dernier (#223). « Payé sur place » devient « Enregistrer un règlement », feuille « Règlement sur place » (#226).
+- PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier et UI (deux tests métier ajoutés, test UI du règlement adapté au nouveau titre), essai du porteur, VoiceOver physique.
+
+## 28 octobre 2026 : replay, audit UX B42 à B44 (#234, #235, #236)
+
+- Branche `claude/replay-audit-b42-b44-20261028`, empilée sur celle des cours (#221-#226) pour une IPA commune. iOS seul : aucun contrat, aucune migration, aucun déploiement.
+- Choisir une observation (pastille, carte, liste, repère de la chronologie) met la lecture en pause sur elle : la tête de lecture ne la remplace plus ; « Lecture » reprend le suivi, précédente et suivante parcourent sans pause (#235). Un titre ou une note coupés à trois lignes affichent « Voir tout », qui met en pause et ouvre le texte entier ; fermer rend la sélection et l'instant (#234). Recherche (sans casse ni accents) et filtres par type dans la liste dès quatre observations ; le filtre s'applique au rail, à la liste, aux repères de la chronologie, aux épingles et au suivi automatique, jamais au tracé ni à ses interruptions ; rail avec « n sur N » qui efface d'un appui ; mention du chargement partiel (#236).
+- PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier (`SchoolReplayObservationFilterTests`, 3 tests ajoutés) et UI, essai du porteur, VoiceOver physique.
+
+## 28 octobre 2026 : Messages, audit UX B47, B50 et B51 (#239, #242, #243)
+
+- Même branche que le replay (#234-#236). iOS seul : aucun contrat, aucune migration, aucun déploiement.
+- Bulle illisible : la cause connue et la suite utile d'abord (« Pas encore lisible sur cet appareil… restaure tes clés » seulement pour `D-NOKEY` ; « non partagé avec cet appareil » pour une clé retenue ; « pour l'instant » pour le stockage local ; sinon cause non inventée), le code en petit dessous (#239). Sondage : les refus de `MessagingPollRules.validated` sont expliqués sous le champ concerné par `MessagingPollRules.problems` (mêmes règles, aucune limite ajoutée) ; un manque n'est signalé qu'après avoir quitté le champ (#242). Saisie protégée : glisser ne ferme plus une feuille remplie, Annuler demande confirmation, une mise en file échouée garde la saisie et le dit (#243).
+- PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier (2 tests XCTest ajoutés dans `MessagingThreadTests`) et UI Messages, essai du porteur, VoiceOver physique.
+
+## 28 octobre 2026 : audit UX B32, B33, B41, B52 et B53 (#224, #225, #233, #244, #245)
+
+- Même branche que le replay et Messages. iOS seul : aucun contrat, aucune migration, aucun déploiement.
+- Cours : une place proposée dont l'échéance passe pendant que la fiche est ouverte n'est plus présentée comme acceptable (« Délai de réponse passé ») ; une seule relecture à l'échéance et au retour dans l'app, rien n'est envoyé automatiquement (#224). Participants : le titre du cours remplace « Participants », la séance est nommée dans l'appel, règlements et validation disent porter sur tout le cours (#225).
+- Replay : « Tracé ajusté à la route », « … en partie », « Tracé GPS mesuré, sans ajustement », « Ajustement à la route… » ; aide à la demande sur le tracé et les pointillés ; « Incomplet » au lieu de « Partiel », aussi dans la liste des trajets (#233).
+- Recherche Messages : extrait centré sur la correspondance, occurrences en gras, mêmes règles de casse et d'accents, coupé entre caractères entiers (#245) ; « Recherche… » tant que la réponse n'est pas celle de la saisie, portée dite quand rien n'est trouvé (messages déjà ouverts sur cet appareil), historique illisible ou absent signalé (#244).
+- PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier (2 tests ajoutés, 2 adaptés) et UI, essai du porteur, VoiceOver physique.
+
+
+## 28 octobre 2026 — IPA combinée épic #253 et 15 corrections UX B
+
+À la demande du porteur, intégration de `claude/replay-audit-b42-b44-20261028` (`db855a853f9c64b438d521e25fbe2666f50145a5`) dans la branche de travail `codex/simplification-253`. Les 15 issues #221–226, #233–236, #239, #242–245 sont incluses ; aucune n’est fermée. Conflits de replay et de ce suivi résolus en conservant les deux ensembles. La compilation indépendante de la branche UX B a réussi (run 40727684500). Le run IPA 40730352252 de #253 seul a été annulé après l’élargissement ; il ne qualifie pas cette intégration. Nouvelle compilation combinée à relever après exécution. Tests ciblés et essai physique restent NOT_EXECUTED ; aucun merge vers master ni déploiement.

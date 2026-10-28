@@ -68,6 +68,7 @@ struct SchoolCourseEnrollmentReviewView: View {
                     Section {
                         Text(series.title).font(.headline)
                         if !series.location.isEmpty { Text(series.location) }
+                        if let language = SchoolCourseLanguage.phrase(for: series.teachingLanguage) { Text(language) }
                         Text("Inscription pour \(SchoolCourseEnrollmentFormat.sessions(series.occurrences.count)).")
                     }.drivyFormRows()
                     Section {

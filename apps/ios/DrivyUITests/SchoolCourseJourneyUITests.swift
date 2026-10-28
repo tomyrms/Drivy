@@ -97,13 +97,13 @@ import XCTest
         let amount = app.textFields["course-payment-amount"]
         XCTAssertTrue(amount.waitForExistence(timeout: 10), app.debugDescription)
         amount.tap(); amount.typeText("80")
-        app.navigationBars["Payé sur place"].buttons["Fermer"].tap()
+        app.navigationBars["Règlement sur place"].buttons["Fermer"].tap()
         XCTAssertTrue(app.alerts["Quitter sans conserver le montant ?"].waitForExistence(timeout: 5), app.debugDescription)
         try tapAlertAction(in: app, identifier: "Continuer")
         XCTAssertEqual(amount.value as? String, "80")
         app.buttons["course-payment-submit"].tap()
         // #129 : la feuille se ferme aussitôt ; le montant reste sur la ligne, à reprendre, jamais compté comme payé.
-        XCTAssertTrue(app.navigationBars["Payé sur place"].waitForNonExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.navigationBars["Règlement sur place"].waitForNonExistence(timeout: 5), app.debugDescription)
         let pending = app.descendants(matching: .any)["course-payment-pending"].firstMatch
         XCTAssertTrue(pending.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(pending.label.contains("80") && pending.label.hasPrefix("Règlement de"), pending.label)

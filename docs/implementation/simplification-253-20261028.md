@@ -49,6 +49,16 @@ Une notice valide d’ancien serveur sans `practicalStartPolicy` vaut LEGACY, co
 
 ## Vérifications effectuées avant l’IPA
 
+### Ajout demandé : 15 corrections de l’audit UX B
+
+Branche intégrée dans la branche de travail : `claude/replay-audit-b42-b44-20261028`, SHA `db855a853f9c64b438d521e25fbe2666f50145a5`. Son [run Apple indépendant](https://github.com/tomyrms/Drivy/actions/runs/40727684500) a réussi. Le premier run de #253 seul (40730352252) est abandonné après élargissement ; une nouvelle IPA doit compiler le commit combiné.
+
+- Cours #221–226 : langue renseignée, prochain cours et offres visibles ensemble, confirmation de refus/sortie, échéance d’offre relue, titre/séance/contexte du cours, enregistrement d’un règlement.
+- Replay #233–236 : vocabulaire et aide, observation entière, pause sur sélection, recherche/filtres cohérents dans carte/liste/chronologie/suivi. La provenance des positions ajoutée pour #253 est conservée.
+- Messages #239, #242–245 : causes lisibles, erreurs de sondage contextualisées, protection de la saisie, état/portée de recherche et extrait trouvé en gras. L’accès Messages de qualification reste inclus dans le build manuel.
+
+Ces changements supplémentaires sont uniquement natifs. Ils n’ajoutent aucune migration ou exigence de déploiement aux modifications #253 décrites ci-dessous. Tester ces trois groupes dans la même IPA ; les tests ciblés et UI de leur branche restent préparés, non exécutés, pour après l’essai du porteur. Aucun des 15 tickets fermé et aucune fusion vers `master`.
+
 Le 28 octobre 2026, Node 24.22.1 : typage API complet **PASS**, compilation API **PASS**, typage web **PASS**, compilation web **PASS**. Avertissement Vite existant sur le script classique `theme-init.js`, compilation terminée. Générateurs des trois contrats exécutés. Aucun test PostgreSQL, Swift, navigateur ou physique exécuté pour cette tranche. La migration SQL n’a pas été exécutée. La compilation Apple est à relever dans la preuve de livraison après le run, jamais déduite de ces contrôles TypeScript.
 
 ## Recette proposée

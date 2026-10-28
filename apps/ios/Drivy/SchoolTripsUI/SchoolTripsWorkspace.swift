@@ -181,7 +181,8 @@ import Observation
         if capture.captureState == .authorized { return SchoolTripBadge(title: "En cours", symbol: "record.circle", tone: .accent) }
         switch capture.syncState {
         case .synced: break
-        case .partial: return SchoolTripBadge(title: "Partiel", symbol: "exclamationmark.circle", tone: .warning)
+        // Même mot que le replay (#233) : des positions n’ont pas été reçues.
+        case .partial: return SchoolTripBadge(title: "Incomplet", symbol: "exclamationmark.circle", tone: .warning)
         case .localOnly, .uploading: return SchoolTripBadge(title: "Pas encore envoyé", symbol: "iphone.and.arrow.forward", tone: .warning)
         case .rejected: return SchoolTripBadge(title: "Envoi refusé", symbol: "xmark.octagon", tone: .danger)
         }

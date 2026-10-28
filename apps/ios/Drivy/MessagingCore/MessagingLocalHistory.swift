@@ -43,6 +43,49 @@ enum MessagingHistorySearch {
     }
 }
 
+/// Réponse de la recherche locale (#244) : sans historique protégé lisible, seuls les messages en mémoire sont cherchés.
+struct MessagingSearchOutcome: Sendable {
+    let entries: [MessagingHistoryEntry]
+    let historyAvailable: Bool
+}
+
+/// Extrait d’un résultat (#245) : le passage autour de la première correspondance, chaque occurrence mise en gras,
+/// avec les règles de casse et d’accents de la recherche. Coupé entre caractères entiers ; le texte reste du texte.
+enum MessagingSearchExcerpt {
+    static func make(_ content: MessagingPlainContent, query: String, context: Int = 40) -> AttributedString {
+        let source = content.poll.map { (["Sondage : \($0.question)"] + $0.options.map(\.label)).joined(separator: " · ") }
+            ?? content.text ?? ""
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        guard !needle.isEmpty, let first = source.range(of: needle, options: options) else {
+            let start = source.prefix(context * 3)
+            return AttributedString(flattened(String(start)) + (start.endIndex < source.endIndex ? "…" : ""))
+        }
+        let anchor = source.rangeOfComposedCharacterSequences(for: first)
+        let start = source.index(anchor.lowerBound, offsetBy: -context, limitedBy: source.startIndex) ?? source.startIndex
+        let end = source.index(anchor.upperBound, offsetBy: context * 2, limitedBy: source.endIndex) ?? source.endIndex
+        var result = AttributedString(start > source.startIndex ? "…" : "")
+        var cursor = start
+        while cursor < end, let next = source.range(of: needle, options: options, range: cursor..<end) {
+            let hit = source.rangeOfComposedCharacterSequences(for: next)
+            guard !hit.isEmpty, hit.lowerBound >= cursor, hit.upperBound <= end else { break }
+            result += AttributedString(flattened(String(source[cursor..<hit.lowerBound])))
+            var marked = AttributedString(flattened(String(source[hit])))
+            marked.inlinePresentationIntent = .stronglyEmphasized
+            result += marked
+            cursor = hit.upperBound
+        }
+        result += AttributedString(flattened(String(source[cursor..<end])))
+        if end < source.endIndex { result += AttributedString("…") }
+        return result
+    }
+
+    /// Un extrait tient sur peu de lignes : les sauts de ligne deviennent des espaces.
+    private static func flattened(_ text: String) -> String {
+        text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
+    }
+}
+
 actor MessagingSealedHistory: MessagingHistoryStore {
     private struct Snapshot: Codable {
         let scopeFingerprint: String

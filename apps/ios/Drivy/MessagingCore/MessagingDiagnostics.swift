@@ -4,6 +4,17 @@ import Foundation
 /// Reste une erreur fermée : aucun contenu n'est produit.
 struct MessagingDecryptionFailure: Error, Equatable, Sendable {
     let code: String
+
+    /// Ce que dit la bulle (#239) : la cause seulement quand le code la donne, la suite utile seulement quand elle
+    /// existe. La restauration des clés n’est proposée que pour une clé absente, jamais pour une panne.
+    static func explanation(for code: String) -> String {
+        if code == "D-NOKEY" {
+            return "Pas encore lisible sur cet appareil. Si cela dure, restaure tes clés dans les paramètres de Messages."
+        }
+        if code == "D-WITHHELD" || code.hasPrefix("D-WH-") { return "Ce message n’a pas été partagé avec cet appareil." }
+        if code == "D-STORE" { return "Lecture impossible pour l’instant sur cet appareil." }
+        return "Ce message ne peut pas être lu sur cet appareil."
+    }
 }
 
 /// Code court affiché sous une erreur de chiffrement pour la qualification sur appareil (#84).
