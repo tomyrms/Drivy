@@ -1158,3 +1158,9 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - NOT_EXECUTED : tests Swift ajoutés et adaptés (la cible de tests n'est pas compilée par l'IPA) ; essai sur appareil ; réseau dégradé réel.
 - Issues livrées fermées avec leurs commits : #38 à #42, #51, #79 à #82, #88, #98, #100 à #104, #141, #143, #162, #163, #169, #170 ; #75 renvoyée à #97.
 - Tests Apple sur `a817d92` : PASS, 847 tests métier sur 76 suites (run 40609074704) ; `FieldFlowTests` 10 parcours sur iPhone et iPad (run 40606267774, deux échecs d'infrastructure ou de délai sur un seul appareil chacun, relancés et réussis sur les deux appareils, run 40610221505). La première campagne métier (40606256388) avait révélé un vrai défaut de #111, « Terminer » pendant l'ouverture locale d'une reprise, corrigé en `a817d92`, et deux défauts de tests.
+
+## 28 octobre 2026 : master 7a7031d déployé (réactivité, PR #189)
+
+- Release `7a7031d` installée sur le homelab par `.local/deploy-reactivite-20261028.py` (copie du script du 27 octobre) : sauvegarde vérifiée de `drivy_refonte` (`/root/drivy_refonte-before-7a7031d…-20261028T100056Z-…dump`), 55 migrations inchangées et empreintes vérifiées, API, web et worker sur la release, API prête (200), web public 200 avec le nouveau bundle.
+- Seul le web change côté serveur (#121 à #123). Aucune migration.
+- NOT_EXECUTED : essai du portail web déployé par le porteur.
