@@ -61,7 +61,8 @@ final class MessagingThreadUITests: XCTestCase {
         // Synchroniser la feuille et le chargement initial avant l'unique action de navigation.
         XCTAssertTrue(app.navigationBars["Messages"].waitForExistence(timeout: 5),
                       "La feuille Messages doit être présentée", file: file, line: line)
-        XCTAssertTrue(app.staticTexts["Aucune conversation"].waitForExistence(timeout: 5),
+        // #166 : le général est là, l’état vide ne dit plus « Aucune conversation ».
+        XCTAssertTrue(app.staticTexts["Aucune conversation privée"].waitForExistence(timeout: 5),
                       "La fixture doit avoir terminé le chargement des discussions", file: file, line: line)
         // #98 : les membres du général s'ouvrent depuis les options de la conversation, plus depuis la liste.
         let general = app.buttons["messaging.general.open"]

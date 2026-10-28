@@ -135,6 +135,8 @@ struct SchoolCourseLearnerView: View {
             case .completed, .cancelled, .closed:
                 EmptyView()
             }
+            // Toujours une ligne (#161) : l’état connu, la lecture en cours, ou la panne avec « Réessayer ». Un état
+            // inconnu n’est jamais pris pour « non suivi » et aucune bascule ne part avant d’être connu.
             if let following = model.following {
                 Button(following ? "Ne plus prévenir" : "Prévenir des prochaines sessions",
                        systemImage: following ? "bell.slash" : "bell") {
@@ -143,6 +145,26 @@ struct SchoolCourseLearnerView: View {
                 .disabled(model.isBusy || model.isUpdatingFollow)
                 .accessibilityValue(model.isUpdatingFollow ? "Envoi en cours" : "")
                 .accessibilityIdentifier("course-follow")
+            } else if model.followReadFailed && !model.isLoadingFollow {
+                HStack(spacing: DrivySpacing.s) {
+                    Label("Suivi des prochaines sessions indisponible", systemImage: "bell.badge")
+                        .foregroundStyle(DrivyTheme.muted)
+                    Spacer(minLength: DrivySpacing.xs)
+                    Button("Réessayer") { Task { await model.loadFollow() } }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("course-follow-retry")
+                }
+                .accessibilityElement(children: .contain)
+            } else if model.series != nil {
+                HStack(spacing: DrivySpacing.s) {
+                    Label("Prévenir des prochaines sessions", systemImage: "bell")
+                        .foregroundStyle(DrivyTheme.muted)
+                    Spacer(minLength: DrivySpacing.xs)
+                    ProgressView()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue("Chargement")
+                .accessibilityIdentifier("course-follow-loading")
             }
         }
         .drivyFormRows()

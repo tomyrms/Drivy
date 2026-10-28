@@ -60,6 +60,7 @@ struct SchoolHomeView: View {
         .environment(requiredActions)
         .environment(\.schoolLearnerDossier, learnerDossierOpener)
         .environment(\.schoolMessagingEntry, tripInProgress ? nil : messagingEntry)
+        .environment(\.schoolPlanningHelp, planningHelp)
         .sheet(isPresented: $choosesSchool) {
             SchoolChooserSheet(workspace: workspace, close: { choosesSchool = false })
         }
@@ -550,6 +551,14 @@ struct SchoolHomeView: View {
 
     private var learnerTabsAvailable: [SchoolHomeTab] {
         [.lessons, .progress, .profile] + (messagingEntry == nil ? [] : [.messages])
+    }
+
+    /// Les sorties des blocages de planification : le portail pour l’administration, le contact publié de l’école sinon.
+    private var planningHelp: SchoolPlanningHelp {
+        let contact = workspace.school.map {
+            SchoolLearnerContactLink.links(for: SchoolLearnerContact(email: $0.contactEmail, phone: $0.contactPhone))
+        } ?? []
+        return SchoolPlanningHelp(manageURL: account?.manageURL, schoolContact: contact)
     }
 
     /// Un trajet GPS tourne (ou attend encore la confirmation de l’école) : changer d’école fermerait sa portée.

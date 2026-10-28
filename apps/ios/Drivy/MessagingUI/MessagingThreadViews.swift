@@ -23,53 +23,88 @@ struct MessagingMembersView: View {
         }
     }
     @State private var pending: PendingAction?
+    /// Recherche par nom dans les membres déjà autorisés (#171), sans casse ni accents ; rien d’autre n’est lu.
+    @State private var query = ""
 
     private var isAdmin: Bool { workspace.members.first { $0.id == workspace.scope.accountID }?.isGroupAdmin ?? false }
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private func matches(_ member: MessagingMember) -> Bool {
+        trimmedQuery.isEmpty || member.displayName.range(of: trimmedQuery, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+    private var shownMembers: [MessagingMember] { workspace.members.filter(matches) }
+    private var shownRemoved: [MessagingMember] { isAdmin ? workspace.removedMembers.filter(matches) : [] }
+    /// Repères des homonymes, la fin de l’identifiant : un appui agit toujours sur la bonne personne.
+    private var references: [UUID: String] {
+        HomonymReference.references((workspace.members + workspace.removedMembers).map { ($0.id, $0.displayName) })
+    }
+    /// La liste est lue en entier : le total est exact.
+    private var countLabel: String {
+        let total = workspace.members.count
+        let noun = total == 1 ? "membre" : "membres"
+        return trimmedQuery.isEmpty ? "\(total) \(noun)" : "\(shownMembers.count) sur \(total) \(noun)"
+    }
 
     var body: some View {
+        let homonyms = references
         List {
             if let failure = workspace.actionError {
                 Text(failure.localizedDescription).foregroundStyle(DrivyTheme.danger).accessibilityIdentifier("messaging.members.error")
             }
-            ForEach(workspace.members) { member in
-                Button { profile = member } label: {
-                    HStack(spacing: 12) {
-                        DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
-                        Text(member.displayName).foregroundStyle(DrivyTheme.text)
-                        Spacer()
-                        if workspace.isInProgress(MessagingWorkspace.memberOperation(member.id)) {
-                            Text("En cours").font(.caption).foregroundStyle(DrivyTheme.muted)
-                                .accessibilityIdentifier("messaging.members.inProgress")
-                        } else if member.isGroupAdmin {
-                            Text("Admin").font(.caption).foregroundStyle(DrivyTheme.muted)
-                        }
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(member.isGroupAdmin ? "\(member.displayName), administrateur du groupe" : member.displayName)
-                .accessibilityHint("Ouvre le profil")
-                .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
-                .swipeActions {
-                    if isAdmin && member.id != workspace.scope.accountID {
-                        Button("Retirer", role: .destructive) { pending = .remove(member) }
-                        Button(member.isGroupAdmin ? "Retirer admin" : "Nommer admin") {
-                            Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
-                        }
-                    }
-                }
-                .contextMenu {
-                    if isAdmin && member.id != workspace.scope.accountID {
-                        Button(member.isGroupAdmin ? "Retirer des administrateurs" : "Nommer administrateur",
-                               systemImage: "person.badge.shield.checkmark") {
-                            Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
-                        }
-                        Button("Retirer du général", systemImage: "person.badge.minus", role: .destructive) { pending = .remove(member) }
-                    }
-                }
+            if !trimmedQuery.isEmpty && shownMembers.isEmpty && shownRemoved.isEmpty {
+                DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                    actionTitle: "Effacer la recherche", action: { query = "" })
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("messaging.members.noResult")
             }
-            if isAdmin && !workspace.removedMembers.isEmpty {
+            Section {
+                ForEach(shownMembers) { member in
+                    Button { profile = member } label: {
+                        HStack(spacing: 12) {
+                            DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(member.displayName).foregroundStyle(DrivyTheme.text)
+                                if let reference = homonyms[member.id] {
+                                    Text("Réf. \(reference)").font(.caption).foregroundStyle(DrivyTheme.muted)
+                                }
+                            }
+                            Spacer()
+                            if workspace.isInProgress(MessagingWorkspace.memberOperation(member.id)) {
+                                Text("En cours").font(.caption).foregroundStyle(DrivyTheme.muted)
+                                    .accessibilityIdentifier("messaging.members.inProgress")
+                            } else if member.isGroupAdmin {
+                                Text("Admin").font(.caption).foregroundStyle(DrivyTheme.muted)
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel([member.displayName, homonyms[member.id].map { "Réf. \($0)" },
+                                         member.isGroupAdmin ? "administrateur du groupe" : nil].compactMap { $0 }.joined(separator: ", "))
+                    .accessibilityHint("Ouvre le profil")
+                    .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
+                    .swipeActions {
+                        if isAdmin && member.id != workspace.scope.accountID {
+                            Button("Retirer", role: .destructive) { pending = .remove(member) }
+                            Button(member.isGroupAdmin ? "Retirer admin" : "Nommer admin") {
+                                Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
+                            }
+                        }
+                    }
+                    .contextMenu {
+                        if isAdmin && member.id != workspace.scope.accountID {
+                            Button(member.isGroupAdmin ? "Retirer des administrateurs" : "Nommer administrateur",
+                                   systemImage: "person.badge.shield.checkmark") {
+                                Task { await workspace.setGroupAdmin(member.id, admin: !member.isGroupAdmin) }
+                            }
+                            Button("Retirer du général", systemImage: "person.badge.minus", role: .destructive) { pending = .remove(member) }
+                        }
+                    }
+                }
+            } header: {
+                Text(countLabel).accessibilityIdentifier("messaging.members.count")
+            }
+            if !shownRemoved.isEmpty {
                 Section("Retirés") {
-                    ForEach(workspace.removedMembers) { member in
+                    ForEach(shownRemoved) { member in
                         HStack(spacing: 12) {
                             DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
                             Text(member.displayName).foregroundStyle(DrivyTheme.muted)
@@ -87,6 +122,7 @@ struct MessagingMembersView: View {
             }
         }
         .navigationTitle("Membres")
+        .searchable(text: $query, prompt: "Rechercher un membre")
         .accessibilityIdentifier("messaging.members")
         .task { await workspace.loadMembers() }
         .refreshable { await workspace.loadMembers() }

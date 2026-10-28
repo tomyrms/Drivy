@@ -530,6 +530,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         }
         startsAt = date
     }
+    /// « Choisir moi-même » pendant la recherche (#149) : la date et l’heure s’ouvrent aussitôt sur l’horaire en place ;
+    /// une proposition arrivée ensuite ne remplace plus rien. « Planifier » revérifie toujours le créneau.
+    func chooseStartManually() { chooseStart(startsAt) }
     /// Aucun créneau dans la période : la recherche reprend au jour qui suit la dernière date examinée.
     func searchFurther() {
         guard case .exhausted(let through) = suggestedSlot, suggestedSlotNotice != nil,

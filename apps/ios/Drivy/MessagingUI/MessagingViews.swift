@@ -27,12 +27,16 @@ struct MessagingInboxView: View {
 
     private let keys: (any MessagingKeyManagement)?
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
+    /// L’école de cette messagerie, dite seulement à un compte de plusieurs écoles (#176) ; elle vient de la portée
+    /// avec laquelle l’entrée a été composée, jamais d’un cache d’une autre école.
+    private let schoolName: String?
 
     init(workspace: MessagingWorkspace, initialPeerID: UUID? = nil, keys: (any MessagingKeyManagement)? = nil,
-         currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
+         schoolName: String? = nil, currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
         _workspace = State(initialValue: workspace)
         self.initialPeerID = initialPeerID
         self.keys = keys
+        self.schoolName = schoolName
         self.currentScope = currentScope
     }
 
@@ -71,20 +75,41 @@ struct MessagingInboxView: View {
 
     /// L’absence est une ligne de la liste, comme dans Élèves (#140) : sous le général s’il est là, jamais par-dessus.
     @ViewBuilder private var inboxEmptyState: some View {
-        if !query.isEmpty && visibleConversations.isEmpty && !generalMatchesQuery {
-            DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
-                actionTitle: "Effacer la recherche", action: { query = "" })
-                .buttonStyle(.borderless)
-                .listRowSeparator(.hidden)
-                .drivyPlainRows()
-        } else if workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
-                    && workspace.error == nil {
-            DrivyEmptyState(title: "Aucune conversation", symbol: "bubble.left.and.bubble.right",
-                actionTitle: "Nouvelle conversation", action: { choosesContact = true })
-                .buttonStyle(.borderless)
-                .listRowSeparator(.hidden)
-                .drivyPlainRows()
+        Group {
+            if searchFoundNothing {
+                if workspace.canLoadMoreConversations {
+                    // La recherche ne lit que les conversations chargées (#167) : jamais un « aucun résultat » définitif.
+                    DrivyEmptyState(title: "Aucun résultat parmi les conversations chargées", symbol: "magnifyingglass",
+                        actionTitle: "Chercher dans plus de conversations", action: { loadMoreConversations() })
+                        .accessibilityIdentifier("messaging.search.partial")
+                } else {
+                    DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
+                        actionTitle: "Effacer la recherche", action: { query = "" })
+                }
+            } else if workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
+                        && workspace.error == nil {
+                if hasGeneral {
+                    // Le général est là : il n’est pas « aucune conversation », seulement aucune conversation privée (#166).
+                    DrivyEmptyState(title: "Aucune conversation privée", symbol: "person.2",
+                        actionTitle: "Nouvelle conversation", action: { choosesContact = true })
+                        .accessibilityIdentifier("messaging.inbox.noPrivate")
+                } else {
+                    DrivyEmptyState(title: "Aucune conversation", symbol: "bubble.left.and.bubble.right",
+                        actionTitle: "Nouvelle conversation", action: { choosesContact = true })
+                        .accessibilityIdentifier("messaging.inbox.empty")
+                }
+            }
         }
+        .buttonStyle(.borderless)
+        .listRowSeparator(.hidden)
+        .drivyPlainRows()
+    }
+
+    private var searchFoundNothing: Bool { !query.isEmpty && visibleConversations.isEmpty && !generalMatchesQuery }
+    private var hasGeneral: Bool { showsGeneralShortcut || workspace.conversations.contains { $0.kind == .schoolGeneral } }
+
+    private func loadMoreConversations() {
+        Task { await workspace.loadConversations(more: true); await workspace.loadPreviews() }
     }
 
     private var inbox: some View {
@@ -127,9 +152,11 @@ struct MessagingInboxView: View {
                     ? DrivyTheme.accent.opacity(0.12) : DrivyTheme.surface)
                 .accessibilityIdentifier(item.kind == .schoolGeneral ? "messaging.general.open" : "messaging.conversation.\(item.id)")
             }
-            if workspace.canLoadMoreConversations && query.isEmpty {
-                Button("Charger plus") { Task { await workspace.loadConversations(more: true); await workspace.loadPreviews() } }
+            // En recherche aussi : la conversation cherchée peut être sur une page suivante (#167).
+            if workspace.canLoadMoreConversations && !searchFoundNothing {
+                Button(query.isEmpty ? "Charger plus" : "Chercher dans plus de conversations") { loadMoreConversations() }
                     .frame(minHeight: 44)
+                    .accessibilityIdentifier("messaging.inbox.more-conversations")
             }
             if !(workspace.loading && !workspace.hasLoadedConversations) { inboxEmptyState }
         }
@@ -143,6 +170,7 @@ struct MessagingInboxView: View {
             }
         }
         .navigationTitle("Messages")
+        .messagingSchoolSubtitle(schoolName)
         .searchable(text: $query, prompt: "Rechercher une conversation")
         .refreshable { await reload() }
         .toolbar {
@@ -248,7 +276,8 @@ struct MessagingInboxView: View {
 
     private func open(_ item: MessagingConversation) {
         route = Route(id: item.id, title: item.kind == .schoolGeneral ? "Général" : item.title,
-                      detail: item.identityDetail, sequence: item.lastSequence, readSequence: item.lastReadSequence,
+                      detail: item.identityDetail ?? (item.kind == .schoolGeneral ? schoolName : nil),
+                      sequence: item.lastSequence, readSequence: item.lastReadSequence,
                       mutedUntil: item.mutedUntil, readStateVersion: item.readStateVersion,
                       isGeneral: item.kind == .schoolGeneral)
     }
@@ -268,7 +297,7 @@ struct MessagingInboxView: View {
         opening = true; defer { opening = false }
         if let id = await workspace.generalConversation() {
             let known = workspace.conversations.first { $0.id == id }
-            route = Route(id: id, title: "Général", detail: nil, sequence: known?.lastSequence ?? 0,
+            route = Route(id: id, title: "Général", detail: schoolName, sequence: known?.lastSequence ?? 0,
                           readSequence: known?.lastReadSequence ?? 0, mutedUntil: known?.mutedUntil,
                           readStateVersion: known?.readStateVersion ?? 0, isGeneral: true)
         }
@@ -444,5 +473,12 @@ private struct MessagingContactPicker: View {
             .listRowSeparator(.hidden)
             .drivyPlainRows()
         }
+    }
+}
+
+private extension View {
+    /// L’école sous le titre, seulement quand elle est utile à dire (#176).
+    @ViewBuilder func messagingSchoolSubtitle(_ name: String?) -> some View {
+        if let name, !name.isEmpty { navigationSubtitle(name) } else { self }
     }
 }
