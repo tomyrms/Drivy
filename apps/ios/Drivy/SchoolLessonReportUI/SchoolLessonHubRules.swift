@@ -45,7 +45,7 @@ enum SchoolGPSUnavailableReason: Equatable {
 
     func message(isAdministrator: Bool) -> String {
         switch self {
-        case .schoolUnavailable: "Les réglages GPS de l’école n’ont pas pu être vérifiés. Actualise les accès."
+        case .schoolUnavailable: "Les paramètres GPS de l’école n’ont pas pu être vérifiés. Actualise les accès."
         case .schoolInactive: "Le GPS n’est pas disponible tant que l’école n’est pas active."
         case .moduleDisabled:
             isAdministrator

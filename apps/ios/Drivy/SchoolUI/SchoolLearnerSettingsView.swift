@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Profil → Paramètres (élève) : le compte, l’enregistrement GPS, le verrou de l’app et la déconnexion. Les lignes
+/// Profil → Paramètres (élève) : le compte, les notifications, l’enregistrement GPS, le verrou de l’app et la déconnexion. Les lignes
 /// sont celles de `SchoolAccountActions`, partagées avec la feuille « Compte », le Profil et les Paramètres du moniteur : un seul
 /// jeu de réglages, rangé ici par sujet.
 struct SchoolLearnerSettingsView: View {
@@ -17,6 +17,8 @@ struct SchoolLearnerSettingsView: View {
     let workspace: SchoolWorkspace
     let account: SchoolAccountActions
     let recording: Recording?
+    /// La feuille d’école des onglets, la même que le bouton de la barre.
+    var chooseSchool: (() -> Void)? = nil
     @Environment(\.openURL) private var openURL
     @Environment(AppLock.self) private var appLock: AppLock?
 
@@ -27,12 +29,22 @@ struct SchoolLearnerSettingsView: View {
         List {
             Section {
                 // « Mon profil » ouvre la ligne du compte ; le crayon de l’en-tête du Profil y mène aussi.
-                account.accountRows(workspace: workspace, openURL: openURL)
+                account.accountRows(workspace: workspace, openURL: openURL, chooseSchool: chooseSchool)
                     .listRowInsets(rowInsets)
             } header: {
                 Text("Compte").drivyFormSectionHeader()
             }
             .drivyFormRows()
+            if SchoolNotificationSettingsDestination.isAvailable(workspace) {
+                Section {
+                    NavigationLink(value: SchoolLearnerProfileRoute.notifications) {
+                        Text("Notifications")
+                            .foregroundStyle(DrivyTheme.text)
+                    }
+                    .accessibilityIdentifier("settings-notifications")
+                }
+                .drivyFormRows()
+            }
             if let recording {
                 Section {
                     if let scope = recording.scope, let learnerID = recording.learnerID {

@@ -249,7 +249,7 @@ struct SchoolCapturePreparationView: View {
                     case .permission(let denied):
                         panelTitle("Autorise la localisation", symbol: "location.slash")
                         if denied {
-                            Button("Ouvrir les réglages", systemImage: "gearshape") {
+                            Button("Ouvrir Réglages", systemImage: "gearshape") {
                                 if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                             }.buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                         }
@@ -364,7 +364,7 @@ struct SchoolCapturePreparationView: View {
     private var diagnosticActions: some View {
         VStack(spacing: DrivySpacing.s) {
             if model.snapshot?.permission == .denied || model.snapshot?.permission == .restricted {
-                Button("Ouvrir les réglages de localisation", systemImage: "gearshape") {
+                Button("Ouvrir Réglages", systemImage: "gearshape") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                 }.buttonStyle(DrivySecondaryButtonStyle())
             } else if model.snapshot?.permission.permitsLocation != true {

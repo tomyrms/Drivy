@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Mon profil → Notifications : autorisation de l’appareil et préférences du compte.
+/// Paramètres → Notifications : autorisation de l’appareil et préférences du compte.
 struct SchoolNotificationSettingsView: View {
     @State private var model: SchoolNotificationSettingsModel
     /// Moniteur ou administration de l’école ouverte : seule condition pour voir les alertes d’équipe.
@@ -98,5 +98,24 @@ struct SchoolNotificationSettingsView: View {
             .accessibilityValue((category.value(in: preferences) ? "Activé" : "Désactivé")
                                 + (model.isPending(category) ? ", à synchroniser" : ""))
             .accessibilityIdentifier(id)
+    }
+}
+
+/// La page Notifications des Paramètres, pour l’élève comme pour l’équipe : une seule page et un seul modèle, hors de
+/// l’édition du profil (une saisie en cours n’en ferme plus l’accès). Absente sans service de notifications configuré.
+struct SchoolNotificationSettingsDestination: View {
+    let workspace: SchoolWorkspace
+
+    @MainActor static func isAvailable(_ workspace: SchoolWorkspace) -> Bool {
+        SchoolPushCenter.shared.client != nil && workspace.person != nil
+    }
+
+    var body: some View {
+        if let client = SchoolPushCenter.shared.client, let personID = workspace.person?.personId {
+            SchoolNotificationSettingsView(client: client,
+                scope: AccountIntentScope(personID: personID, apiBaseURL: client.baseURL.absoluteString),
+                isStaff: workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true,
+                contextIsCurrent: { workspace.person?.personId == personID && !workspace.requiresAuthentication && !workspace.accessRevoked })
+        }
     }
 }

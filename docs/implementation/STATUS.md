@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 27 octobre 2026 — audit UX, lot 1 : navigation et paramètres (#133 à #138)
+
+- Branche `claude/lot1-navigation-parametres`. Onglet Messages stable pendant un trajet, même sélecteur pour « Changer d'école », engrenage direct « Paramètres de Messages », « Historique des leçons », Notifications dans Paramètres. Règles de vocabulaire et d'ouverture des pages écrites. [Détail](navigation-parametres-lot1-20261027.md).
+- iOS seulement, rien à déployer. IPA d'essai à compiler ; tests non lancés avant l'essai du porteur. Aucun résultat VoiceOver ou appareil revendiqué.
+
 ## 26 octobre 2026 — récupération intégrée et reçus Messages
 
 - #50 : [158 contrôles navigateur réussis](https://github.com/tomyrms/Drivy/actions/runs/40334928759) sur `9105617`, dont les huit scénarios de récupération avec Keycloak/Mailpit isolés. [Preuve et limites](account-recovery-20261026.md). SMTP cible reporté à la demande du porteur ; activation réelle désactivée.

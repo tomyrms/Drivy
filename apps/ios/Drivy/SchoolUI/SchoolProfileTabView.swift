@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Le compte du moniteur ou de l’administration : qui il est, ses leçons et son compte (informations, invitations,
+/// Le compte du moniteur ou de l’administration : qui il est, l’historique de ses leçons et son compte (informations, invitations,
 /// école). Les réglages (préférences, signalements, apparence, verrou, déconnexion) sont dans Paramètres, poussés
 /// dans la même pile par l’engrenage. Le serveur décide de ce que ce compte lit dans l’historique des leçons.
 struct SchoolProfileTabView: View {
@@ -80,7 +80,8 @@ struct SchoolProfileTabView: View {
                     SchoolLessonHistoryView(workspace: workspace, agendaClient: agendaClient, captureController: captureController)
                 } label: {
                     // La cellule native assure déjà ses 44 pt : une hauteur de plus la rendait plus haute que ses voisines.
-                    Text("Leçons")
+                    // « Historique » : les leçons passées, pas le planning à venir de l’Agenda.
+                    Text("Historique des leçons")
                         .foregroundStyle(DrivyTheme.text)
                 }
                 .accessibilityIdentifier("profile-open-lessons")
@@ -90,7 +91,7 @@ struct SchoolProfileTabView: View {
         if let account, account.hasSchoolRows(workspace: workspace) {
             // « Mon profil » vit dans Paramètres ; le crayon de l’en-tête y mène aussi.
             Section {
-                account.accountRows(workspace: workspace, openURL: openURL, includesProfile: false)
+                account.accountRows(workspace: workspace, openURL: openURL, includesProfile: false, chooseSchool: chooseSchool)
                     .listRowInsets(rowInsets)
             } header: {
                 Text("Compte").drivyFormSectionHeader()

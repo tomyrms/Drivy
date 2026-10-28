@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Profil → Leçons : les leçons passées et à terminer, les plus récentes d’abord, par mois.
+/// Profil → Historique des leçons : les leçons passées et à terminer, les plus récentes d’abord, par mois.
 /// Un moniteur lit les siennes ; l’administration lit toute l’école (le serveur relit la portée).
 /// Une leçon s’ouvre dans la même feuille que depuis l’Agenda.
 struct SchoolLessonHistoryView: View {
@@ -36,7 +36,7 @@ struct SchoolLessonHistoryView: View {
                 placeholder
             }
         }
-        .navigationTitle("Leçons")
+        .navigationTitle("Historique des leçons")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: "Rechercher un élève")
         .toolbar {

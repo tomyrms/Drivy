@@ -80,7 +80,6 @@ struct SchoolMyProfileView: View {
             contactSection
             birthSection
             addressSection
-            notificationsSection
             if let dossier { SchoolProfileContextSections(model: dossier, resumeOnboarding: { showsGuidedWelcome = true }) }
         }
         .disabled(editor.isLoading)
@@ -179,23 +178,6 @@ struct SchoolMyProfileView: View {
         Section { birthRow } header: { header("Date de naissance", field: .birthDate) }
             .drivyFormRows()
             .id(SchoolProfileField.birthDate)
-    }
-
-    /// Préférences du compte (#44) ; absent sans configuration de l’école.
-    @ViewBuilder private var notificationsSection: some View {
-        if let client = SchoolPushCenter.shared.client, let personID = workspace.person?.personId {
-            Section {
-                NavigationLink {
-                    SchoolNotificationSettingsView(client: client,
-                        scope: AccountIntentScope(personID: personID, apiBaseURL: client.baseURL.absoluteString),
-                        isStaff: workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true,
-                        contextIsCurrent: { workspace.person?.personId == personID && !workspace.requiresAuthentication && !workspace.accessRevoked })
-                } label: { Text("Notifications") }
-                    .disabled(editor.hasEdits || editor.isBusy)
-                    .accessibilityIdentifier("my-profile-notifications")
-            }
-            .drivyFormRows()
-        }
     }
 
     private var addressSection: some View {

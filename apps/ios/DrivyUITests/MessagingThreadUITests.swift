@@ -137,7 +137,7 @@ final class MessagingThreadUITests: XCTestCase {
         let entry = app.buttons["messages-entry"]
         XCTAssertTrue(entry.waitForExistence(timeout: 10), "La fixture Messages doit être composée")
         entry.tap()
-        app.buttons["messaging.inbox.more"].tap(); app.buttons["messaging.settings.open"].tap()
+        app.buttons["messaging.settings.open"].tap()
         let open = app.buttons["messaging.backup.open"]
         XCTAssertTrue(open.waitForExistence(timeout: 5))
         open.tap()
