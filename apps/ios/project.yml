@@ -37,6 +37,10 @@ packages:
     exactVersion: 4.19.0
   MatrixSDKCrypto:
     path: Packages/MatrixSDKCrypto
+  # Présentation du fil de messagerie seulement (#182) : ni service, ni stockage, ni chiffrement.
+  ExyteChat:
+    url: https://github.com/exyte/Chat.git
+    exactVersion: 3.3.0
 targets:
   Drivy:
     type: application
@@ -49,6 +53,8 @@ targets:
       - package: AppAuth
       - package: SQLCipher
       - package: MatrixSDKCrypto
+      - package: ExyteChat
+        product: ExyteChat
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ch.drivy.qualification
