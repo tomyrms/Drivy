@@ -25,7 +25,15 @@ extension PendingSchoolCommand {
         guard scope.belongsToWorkspace(other.scope) else { return false }
         // Une commande d'une ancienne époque reste à résoudre avant toute autre émission dans cette école.
         guard scope == other.scope else { return true }
+        // Signalements d'une même leçon (#112) : créations indépendantes, envoyées dans l'ordre des gestes par leur
+        // enregistreur. Ils restent une barrière pour tout le reste du domaine pédagogique, fin de leçon comprise.
+        if queuesWithObservation(other) { return false }
         return kind.schedulingDomain.conflicts(with: other.kind.schedulingDomain)
+    }
+
+    func queuesWithObservation(_ other: Self) -> Bool {
+        kind == .createObservation && other.kind == .createObservation && scope == other.scope
+            && routeResourceID != nil && routeResourceID == other.routeResourceID
     }
 }
 

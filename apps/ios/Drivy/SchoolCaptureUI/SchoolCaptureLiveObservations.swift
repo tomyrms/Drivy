@@ -39,17 +39,26 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     }
 }
 
-/// Une demande à la fois, écrite dans la file chiffrée dès le geste. Aucun geste n'attend uniquement en mémoire.
-/// Le renvoi utilise la même opération et le même instant ; l'accès est relu par le client avant chaque envoi.
+/// Chaque geste est écrit dans la file chiffrée avant de rendre la main ; aucun signalement n’attend en mémoire.
+/// Les signalements de la leçon forment une file (#112) : un geste n’attend jamais l’envoi du précédent, même sans
+/// réseau. Ils partent dans l’ordre des gestes, un à la fois, avec la même opération et le même instant à chaque
+/// renvoi ; l’accès est relu par le client avant chaque envoi.
 @MainActor @Observable final class SchoolLiveObservationRecorder {
+    /// Au-delà, la leçon a besoin d’un retour du réseau : la file chiffrée de l’école reste bornée.
+    static let maximumQueued = 30
     let scope: SchoolCommandScope
     let lessonID: UUID
     private(set) var confirmed = 0
     private(set) var errorMessage: String?
-    private(set) var pending: PendingSchoolCommand?
+    /// Signalements de cette leçon conservés sur l’appareil, dans l’ordre des gestes.
+    private(set) var queue: [PendingSchoolCommand] = []
+    /// Autre demande de l’école, hors de cette file, qui empêche d’écrire (même domaine ou autre époque d’accès).
+    private(set) var foreign: PendingSchoolCommand?
+    /// Demande en tête : celle qui bloque, sinon le plus ancien signalement de la leçon encore à envoyer.
+    var pending: PendingSchoolCommand? { foreign ?? queue.first }
     private(set) var isSending = false
     /// Envoi qui suit le geste lui-même (signalement ou son annulation), jamais un nouvel essai. Bref et déjà
-    /// confirmé par le bandeau, il ne ferme pas « Signaler » : seule l’écriture suivante l’attend.
+    /// confirmé par le bandeau, il ne ferme pas « Signaler » et ne fait attendre aucune écriture.
     private(set) var isSettlingGesture = false
     private(set) var mapObservations: [SchoolLiveMapObservation] = []
     private(set) var lastAdded: SchoolLiveObservationReceipt?
@@ -70,16 +79,14 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     }
     /// Hauteur de la palette dès l’ouverture : les tuiles ne dépendent d’aucune lecture.
     var expectedTileCount: Int { themes.count }
-    var canRecord: Bool { !stopped && !isSending && pending == nil }
-    /// Rien de durable n’empêche d’ouvrir un signalement : ni arrêt, ni demande à vérifier ou à renvoyer.
-    /// L’écriture elle-même reste gardée par `canRecord`, une demande à la fois.
-    var acceptsSignal: Bool { !stopped && (pending == nil || isSettlingGesture) }
-    /// La file chiffrée n’accepte qu’une demande par école : une autre demande en attente (départ de
-    /// leçon, fin de leçon, note…) bloque « Signaler » sans être une observation de cette leçon.
-    var pendingIsForeign: Bool {
-        guard let pending else { return false }
-        return !(pending.kind == .createObservation && pending.routeResourceID == lessonID)
-    }
+    /// Signalements de la leçon pas encore confirmés par l’école.
+    var queuedCount: Int { queue.count }
+    var canRecord: Bool { !stopped && foreign == nil && queue.count < Self.maximumQueued }
+    /// Seule une autre demande de l’école ou un arrêt ferment « Signaler » ; les signalements en file, non.
+    var acceptsSignal: Bool { !stopped && foreign == nil }
+    /// Une autre demande en attente (départ de leçon, fin de leçon, note…) bloque « Signaler » sans être une
+    /// observation de cette leçon.
+    var pendingIsForeign: Bool { foreign != nil }
     @ObservationIgnored private let client: SchoolObservationClient
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private let onSettlement: (@MainActor () async -> Void)?
@@ -91,7 +98,15 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private var lastAddedCommand: PendingSchoolCommand?
     @ObservationIgnored private var lastAddedWasConfirmed = false
-    /// Renvoi automatique d’une demande restée en file faute de réseau : essais espacés, puis le dernier délai.
+    /// Gestes de cette instance : seuls eux peuvent être refusés « au premier envoi » sans vérification.
+    @ObservationIgnored private var createdHere: Set<UUID> = []
+    /// Demandes déjà parties au moins une fois depuis cette instance.
+    @ObservationIgnored private var attempted: Set<UUID> = []
+    /// Demande que l’envoi en cours porte, ou qu’il va porter dans ce tour.
+    @ObservationIgnored private var inFlightID: UUID?
+    /// L’instant appartient au geste d’ouverture : un second appui du même geste porte le même et n’écrit rien.
+    @ObservationIgnored private var lastGestureInstant: Date?
+    /// Renvoi automatique d’une file restée sur l’appareil faute de réseau : essais espacés, puis le dernier délai.
     @ObservationIgnored private let retryDelays: [Duration]
     @ObservationIgnored private var automaticRetry: Task<Void, Never>?
     @ObservationIgnored private var automaticRetryCount = 0
@@ -124,16 +139,16 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         self.permitsAnchor = permitsAnchor; self.prepareAnchor = prepareAnchor
         // Avant la première ouverture : l’ordre déjà figé pour cette leçon (reprise), sans rien figer encore.
         signalOrder = Self.resolvedSignalOrder(ranking: rankingStore, orders: orders, lessonID: lessonID, freezing: false)
-        do { pending = try outbox.pending(for: scope) }
+        do { try reload() }
         catch { stopped = true; errorMessage = "Le stockage protégé est indisponible. Aucune observation n’a été ajoutée." }
-        if let pending, pending.scope == scope, pending.kind == .createObservation, pending.routeResourceID == lessonID,
-           let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: pending.body) {
-            mapObservations = [.init(id: pending.id, body: body, isPending: true)]
-            if body.origin == "LIVE" {
-                lastAddedCommand = pending.withoutObservationUndo
-                lastAdded = .init(id: pending.id, displayTitle: body.eventKind == "MARKER" ? "Moment ajouté" : "Observation ajoutée")
-                if pending.observationUndoOperationID != nil { undoState = .pending }
-            }
+        for command in queue {
+            guard let body = try? JSONDecoder().decode(SchoolObservationBody.self, from: command.body) else { continue }
+            mapObservations.append(.init(id: command.id, body: body, isPending: true))
+        }
+        if let last = queue.last, let body = mapObservations.last(where: { $0.id == last.id })?.body, body.origin == "LIVE" {
+            lastAddedCommand = last.withoutObservationUndo
+            lastAdded = .init(id: last.id, displayTitle: body.eventKind == "MARKER" ? "Moment ajouté" : "Observation ajoutée")
+            if last.observationUndoOperationID != nil { undoState = .pending }
         }
     }
 
@@ -176,9 +191,15 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         save(theme: nil, status: nil, at: instant, anchor: anchor)
     }
 
+    /// Le signalement fait partie de la file de cette leçon (en attente ou en cours d’envoi).
+    func owns(_ command: PendingSchoolCommand?) -> Bool {
+        guard let command, !stopped else { return false }
+        return queue.contains { $0.id == command.id }
+    }
+
     private func save(theme: SchoolLiveObservationTheme?, status: SchoolObservationStatus?, at instant: Date,
                       anchor: SchoolLiveObservationAnchor?) -> Bool {
-        guard canRecord else { return false }
+        guard canRecord, lastGestureInstant != instant else { return false }
         if let anchor, permitsAnchor?(anchor) != true {
             errorMessage = "Le GPS a changé. Ferme puis rouvre Signaler pour enregistrer au bon endroit ou sans position."
             return false
@@ -192,25 +213,29 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
             // Le thème qualifie seul le signalement (#56) : aucune compétence n’est jointe ni déduite. Le service doit
             // porter la migration 036 avant cette version de l’app (docs/implementation/signalements-autonomes-20261021.md).
             themeKey: theme?.key)
+        let command: PendingSchoolCommand
         do {
-            let command = PendingSchoolCommand(id: operation, scope: scope, kind: .createObservation, resourceVersion: 0,
+            command = PendingSchoolCommand(id: operation, scope: scope, kind: .createObservation, resourceVersion: 0,
                 createdAt: instant, body: try JSONEncoder().encode(value), routeResourceID: lessonID)
             try outbox.save(command)
-            pending = command; errorMessage = nil
-            mapObservations.append(.init(id: operation, body: value, isPending: true))
-            lastAddedCommand = command; lastAddedWasConfirmed = false
-            lastAdded = .init(id: operation, displayTitle: theme == nil ? "Moment ajouté" : "Observation ajoutée")
-            undoState = .none; undoErrorMessage = nil
-            sendAfterGesture(command)
-            return true
         } catch {
+            // Une autre demande a pu prendre la place entre-temps : la relecture la nomme.
+            try? reload()
             errorMessage = "L’observation n’a pas été enregistrée. Vérifie les demandes en attente de la leçon."
             return false
         }
+        queue.append(command); createdHere.insert(operation); lastGestureInstant = instant
+        errorMessage = nil
+        mapObservations.append(.init(id: operation, body: value, isPending: true))
+        lastAddedCommand = command; lastAddedWasConfirmed = false
+        lastAdded = .init(id: operation, displayTitle: theme == nil ? "Moment ajouté" : "Observation ajoutée")
+        undoState = .none; undoErrorMessage = nil
+        startSending(afterGesture: true)
+        return true
     }
 
-    /// Accès changé ou trajet remplacé : plus aucun envoi depuis cette instance. Une demande déjà durable reste
-    /// dans la file chiffrée et se vérifie depuis les observations de la leçon.
+    /// Accès changé ou trajet remplacé : plus aucun envoi depuis cette instance. Les demandes déjà durables restent
+    /// dans la file chiffrée et se vérifient depuis les observations de la leçon.
     func stop() {
         stopped = true
         automaticRetry?.cancel(); automaticRetry = nil; waitsForNetwork = false
@@ -219,25 +244,39 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
 
     /// Sending the CREATE does not remove the right to request its durable withdrawal.
     func canUndo(_ id: UUID) -> Bool {
-        !stopped && lastAdded?.id == id && lastAddedCommand?.id == id && undoState == .none
-            && (pending == nil || (pending?.id == id && pending?.scope == scope))
+        guard !stopped, foreign == nil, lastAdded?.id == id, lastAddedCommand?.id == id, undoState == .none else { return false }
+        return queue.contains { $0.id == id } || queue.count < Self.maximumQueued
     }
 
-    /// True means the withdrawal intent is durable, not that the service has removed the observation.
+    /// Vrai : le retrait est durable, ou le geste n’avait jamais quitté l’appareil. Pas une confirmation de l’école.
     @discardableResult func undoLastAdded(id: UUID) async -> Bool {
         guard canUndo(id), let original = lastAddedCommand else { return false }
+        // Encore en file derrière un autre signalement, jamais parti : rien n’a atteint l’école, le geste s’efface.
+        if let queued = queue.first(where: { $0.id == id }), queued.observationUndoOperationID == nil,
+           createdHere.contains(id), !attempted.contains(id), inFlightID != id {
+            do { try outbox.remove(queued) }
+            catch {
+                undoErrorMessage = "L’annulation n’a pas pu être confirmée sur cet appareil. Réessaie."
+                return false
+            }
+            queue.removeAll { $0.id == id }
+            mapObservations.removeAll { $0.id == id }
+            lastAddedCommand = nil; undoState = .confirmed; undoErrorMessage = nil
+            if queue.isEmpty { errorMessage = nil }
+            return true
+        }
         let withdrawal = original.requestingObservationUndo(operationID: UUID())
         do {
             try outbox.save(withdrawal)
-            pending = withdrawal; undoState = .pending; undoErrorMessage = nil; errorMessage = nil
+            replaceOrAppend(withdrawal)
+            undoState = .pending; undoErrorMessage = nil; errorMessage = nil
             // A send already in flight will reread the upgraded command before acknowledging it.
-            if !isSending { sendAfterGesture(withdrawal) }
+            startSending(afterGesture: true)
             return true
         } catch {
             // An atomic write can have happened before a storage barrier failed. Keep that exact ID.
-            if let stored = try? outbox.pending(for: scope), stored.id == original.id,
-               stored.observationUndoOperationID != nil {
-                pending = stored; undoState = .pending
+            if let stored = try? storedCommand(original.id), stored.observationUndoOperationID != nil {
+                replaceOrAppend(stored); undoState = .pending
             }
             undoErrorMessage = "L’annulation n’a pas pu être confirmée sur cet appareil. Réessaie."
             return false
@@ -246,15 +285,13 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
 
     func refreshPending() {
         guard !stopped, !isSending else { return }
-        do { pending = try outbox.pending(for: scope); if pending == nil { errorMessage = nil } }
+        do { try reload(); if pending == nil { errorMessage = nil } }
         catch { errorMessage = "Le stockage protégé n’a pas pu être relu." }
     }
 
-    var canRetry: Bool {
-        !stopped && !isSending && pending?.scope == scope
-            && pending?.kind == .createObservation && pending?.routeResourceID == lessonID
-    }
-    /// Retour du réseau : une demande de cette leçon restée en file faute d’école joignable repart aussitôt.
+    var canRetry: Bool { !stopped && !isSending && foreign == nil && !queue.isEmpty }
+
+    /// Retour du réseau : la file de cette leçon, restée sur l’appareil faute d’école joignable, repart aussitôt.
     func retryAfterReconnection() async {
         guard waitsForNetwork else { return }
         automaticRetry?.cancel(); automaticRetry = nil
@@ -262,21 +299,39 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         await retry()
     }
 
+    /// Nouvel essai demandé : toute la file, dans l’ordre. Attend le résultat de chaque envoi.
     func retry() async {
-        guard canRetry, let initial = pending else { return }
-        // Une demande retirée ou remplacée depuis un autre écran (abandon, vérification réussie) n’est pas
-        // réécrite dans la file : l’état relu fait foi.
-        guard let stored = try? outbox.pending(for: scope),
-              stored.withoutObservationUndo == initial.withoutObservationUndo else { refreshPending(); return }
-        isSending = true
-        await transmit(stored)
+        guard canRetry else { return }
+        automaticRetry?.cancel(); automaticRetry = nil
+        isSending = true; isSettlingGesture = false
+        await drain()
     }
 
-    /// Nouvel essai espacé (5 s, 15 s, puis toutes les 60 s) tant que la demande en file est celle de cette leçon
-    /// et que l’école reste injoignable. Même opération, même corps : l’invariant d’une demande par école tient.
+    private func reload() throws {
+        let commands = try outbox.pendingCommands(for: scope)
+        queue = commands.filter(isQueued)
+        foreign = commands.first { command in
+            !isQueued(command) && (command.scope != scope || command.kind.schedulingDomain.conflicts(with: .teaching))
+        }
+    }
+
+    private func isQueued(_ command: PendingSchoolCommand) -> Bool {
+        command.scope == scope && command.kind == .createObservation && command.routeResourceID == lessonID
+    }
+
+    private func storedCommand(_ id: UUID) throws -> PendingSchoolCommand? {
+        try outbox.pendingCommands(for: scope).first { $0.id == id }
+    }
+
+    private func replaceOrAppend(_ command: PendingSchoolCommand) {
+        if let index = queue.firstIndex(where: { $0.id == command.id }) { queue[index] = command }
+        else { queue.append(command) }
+    }
+
+    /// Nouvel essai espacé (5 s, 15 s, puis toutes les 60 s) tant que la file de cette leçon attend et que l’école
+    /// reste injoignable. Mêmes opérations, mêmes corps.
     private func scheduleAutomaticRetry() {
-        guard !stopped, !retryDelays.isEmpty, let pending, pending.scope == scope,
-              pending.kind == .createObservation, pending.routeResourceID == lessonID else { return }
+        guard !stopped, !retryDelays.isEmpty, !queue.isEmpty, foreign == nil else { return }
         let delay = retryDelays[min(automaticRetryCount, retryDelays.count - 1)]
         automaticRetryCount += 1
         automaticRetry?.cancel()
@@ -288,26 +343,55 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         }
     }
 
-    /// L’envoi est réclamé dans le tour même de l’écriture durable : aucune image ne montre « attend son
-    /// envoi » pour une demande qui part aussitôt.
-    private func sendAfterGesture(_ command: PendingSchoolCommand) {
-        isSending = true; isSettlingGesture = true
-        Task { await transmit(command) }
+    /// L’envoi est réclamé dans le tour même de l’écriture durable : aucune image ne montre « attend son envoi »
+    /// pour une demande qui part aussitôt. Une file déjà en cours d’envoi prend le nouveau geste à sa suite.
+    private func startSending(afterGesture: Bool) {
+        guard !isSending, !stopped, let head = queue.first else { return }
+        automaticRetry?.cancel(); automaticRetry = nil
+        isSending = true; isSettlingGesture = afterGesture
+        // La tête part dans ce tour : une annulation immédiate passe par sa demande de retrait durable.
+        inFlightID = head.id
+        Task { await drain() }
     }
 
-    /// `isSending` est déjà vrai. La demande relue dans la file chiffrée fait foi à chaque tour.
-    private func transmit(_ initial: PendingSchoolCommand) async {
-        // Arrêt survenu entre le geste et le départ : la demande reste dans la file, sans réécriture.
-        guard !stopped else { isSending = false; isSettlingGesture = false; return }
-        // Premier envoi, dans le tour du geste : aucune réponse antérieure de l’école ne peut exister.
-        let followsGesture = isSettlingGesture
+    private enum Outcome { case settled, waiting(unreachable: Bool), stopped }
+
+    /// `isSending` est déjà vrai. Une demande à la fois, la plus ancienne d’abord ; un échec garde la suite en file.
+    private func drain() async {
         var unreachable = false
+        while !stopped, foreign == nil, let head = queue.first {
+            let outcome = await transmit(head)
+            if case .settled = outcome { continue }
+            if case .waiting(let offline) = outcome { unreachable = offline }
+            break
+        }
+        inFlightID = nil
+        isSending = false; isSettlingGesture = false
+        waitsForNetwork = unreachable && !stopped
+        if waitsForNetwork { scheduleAutomaticRetry() } else { automaticRetryCount = 0 }
+        // La feuille peut déjà être fermée : avertir son propriétaire après le résultat réseau,
+        // sans confondre la sauvegarde du geste et la confirmation de l’école.
+        await onSettlement?()
+    }
+
+    /// La demande relue dans la file chiffrée fait foi à chaque tour.
+    private func transmit(_ initial: PendingSchoolCommand) async -> Outcome {
+        // Arrêt survenu entre le geste et le départ : la demande reste dans la file, sans réécriture.
+        guard !stopped else { return .stopped }
+        // Premier envoi d’un geste de cette instance : aucune réponse antérieure de l’école ne peut exister.
+        let firstSend = createdHere.contains(initial.id) && !attempted.contains(initial.id)
+        attempted.insert(initial.id); inFlightID = initial.id
         var command = initial
         while true {
             do {
+                // Abandonnée ou vérifiée depuis un autre écran : l’état relu fait foi, rien n’est réécrit.
+                guard let current = try storedCommand(command.id) else {
+                    queue.removeAll { $0.id == command.id }
+                    return .settled
+                }
                 // Another observation screen may have upgraded this same command while we were idle.
-                if let current = try outbox.pending(for: scope), current.withoutObservationUndo == command.withoutObservationUndo {
-                    command = current; pending = current
+                if current != command, current.withoutObservationUndo == command.withoutObservationUndo {
+                    command = current; replaceOrAppend(current)
                 }
                 try outbox.save(command)
                 let body = try JSONDecoder().decode(SchoolObservationBody.self, from: command.body)
@@ -320,75 +404,71 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
                 }, validateContinuation: { [self] in
                     guard !stopped else { throw CancellationError() }
                 })
-                if let current = try outbox.pending(for: scope), current != command {
+                if let current = try storedCommand(command.id), current != command {
                     guard current.withoutObservationUndo == command, current.observationUndoOperationID != nil else {
                         throw SchoolConfigurationFailure.storage
                     }
                     // The CREATE succeeded, but its withdrawal now owns the durable slot.
-                    if stopped { break }
-                    command = current; pending = current; undoState = .pending
+                    if stopped { return .stopped }
+                    command = current; replaceOrAppend(current)
+                    if lastAdded?.id == command.id { undoState = .pending }
                     continue
                 }
                 try outbox.remove(command)
-                if !stopped {
-                    pending = nil; errorMessage = nil
-                    switch result {
-                    case .observation:
-                        confirmed += 1
-                        if lastAdded?.id == command.id { lastAddedWasConfirmed = true }
-                        if let index = mapObservations.firstIndex(where: { $0.id == command.id }) { mapObservations[index].isPending = false }
-                    case .removed:
-                        mapObservations.removeAll { $0.id == command.id }
-                        if lastAdded?.id == command.id {
-                            if lastAddedWasConfirmed { confirmed = max(0, confirmed - 1) }
-                            undoState = .confirmed; undoErrorMessage = nil
-                        }
+                queue.removeAll { $0.id == command.id }
+                guard !stopped else { return .stopped }
+                if queue.isEmpty { errorMessage = nil }
+                switch result {
+                case .observation:
+                    confirmed += 1
+                    if lastAdded?.id == command.id { lastAddedWasConfirmed = true }
+                    if let index = mapObservations.firstIndex(where: { $0.id == command.id }) { mapObservations[index].isPending = false }
+                case .removed:
+                    mapObservations.removeAll { $0.id == command.id }
+                    if lastAdded?.id == command.id {
+                        if lastAddedWasConfirmed { confirmed = max(0, confirmed - 1) }
+                        undoState = .confirmed; undoErrorMessage = nil
                     }
                 }
-                break
+                return .settled
             } catch {
                 // A concurrent undo must survive both a late response and an uncertain CREATE failure.
                 if !stopped, command.observationUndoOperationID == nil,
-                   let current = try? outbox.pending(for: scope), current.withoutObservationUndo == command,
+                   let current = try? storedCommand(command.id), current.withoutObservationUndo == command,
                    current.observationUndoOperationID != nil {
-                    command = current; pending = current; undoState = .pending
+                    command = current; replaceOrAppend(current)
+                    if lastAdded?.id == command.id { undoState = .pending }
                     continue
                 }
                 // Refus définitif de l’école au premier envoi (leçon close, limite atteinte, position qui n’est
                 // plus admissible) : rien n’a été enregistré et le même envoi serait refusé à nouveau. La demande
-                // quitte la file, qu’elle bloquerait pour toute autre écriture, et le bandeau cesse d’annoncer un ajout.
-                if !stopped, followsGesture, command.observationUndoOperationID == nil,
+                // quitte la file, le bandeau cesse d’annoncer un ajout et les signalements suivants partent.
+                if !stopped, firstSend, command.observationUndoOperationID == nil,
                    let refusal = error as? SchoolObservationFailure, refusal.permitsFreshCorrection,
                    (try? outbox.remove(command)) != nil {
-                    pending = nil
+                    queue.removeAll { $0.id == command.id }
                     mapObservations.removeAll { $0.id == command.id }
                     errorMessage = "Observation non enregistrée. \(refusal.errorDescription ?? "L’école l’a refusée.")"
                     if lastAdded?.id == command.id {
                         lastAddedCommand = nil; undoState = .refused; undoErrorMessage = errorMessage
                     }
-                    break
+                    return .settled
                 }
-                if !stopped {
-                    errorMessage = command.observationUndoOperationID == nil
-                        ? "Observation conservée sur cet appareil. Son envoi reste à confirmer."
-                        : "Annulation conservée sur cet appareil. Son retrait reste à confirmer."
-                    if command.observationUndoOperationID != nil {
-                        undoErrorMessage = (error as? SchoolObservationFailure)?.errorDescription ?? errorMessage
-                    }
-                    if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
-                        stop(); errorMessage = "Ton accès a changé. La demande reste conservée dans le compte d’origine."
-                    } else if error as? SchoolObservationFailure == .unavailable {
-                        unreachable = true
-                    }
+                guard !stopped else { return .stopped }
+                if command.observationUndoOperationID != nil {
+                    errorMessage = "Annulation conservée sur cet appareil. Son retrait reste à confirmer."
+                    undoErrorMessage = (error as? SchoolObservationFailure)?.errorDescription ?? errorMessage
+                } else if queue.count > 1 {
+                    errorMessage = "\(queue.count) signalements conservés sur cet appareil. Leur envoi reste à confirmer."
+                } else {
+                    errorMessage = "Observation conservée sur cet appareil. Son envoi reste à confirmer."
                 }
-                break
+                if error as? SchoolObservationFailure == .unauthorized || error as? SchoolObservationFailure == .forbidden {
+                    stop(); errorMessage = "Ton accès a changé. Les demandes restent conservées dans le compte d’origine."
+                    return .stopped
+                }
+                return .waiting(unreachable: error as? SchoolObservationFailure == .unavailable)
             }
         }
-        isSending = false; isSettlingGesture = false
-        waitsForNetwork = unreachable && !stopped
-        if waitsForNetwork { scheduleAutomaticRetry() } else { automaticRetryCount = 0 }
-        // La feuille peut déjà être fermée : avertir son propriétaire après le résultat réseau,
-        // sans confondre la sauvegarde du geste et la confirmation de l’école.
-        await onSettlement?()
     }
 }

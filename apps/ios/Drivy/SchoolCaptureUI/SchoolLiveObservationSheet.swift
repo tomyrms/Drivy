@@ -67,10 +67,9 @@ struct SchoolLiveObservationPalette: View {
     /// Changement de thème : un fondu bref même sous Réduire les animations, jamais un remplacement sec.
     private var motion: Animation { reduceMotion ? .easeInOut(duration: 0.16) : .easeOut(duration: 0.16) }
     private let statuses: [SchoolObservationStatus] = [.toWorkOn, .attention, .positive]
-    /// Une écriture attend : demande à vérifier, ou signalement précédent encore en cours d’envoi.
+    /// Une écriture attend : autre demande de l’école à vérifier. Un signalement précédent encore en cours d’envoi
+    /// ne fait rien attendre : il est déjà conservé, le suivant prend sa place dans la file (#112).
     private var writesWait: Bool { !recorder.canRecord && !isClosingAfterRecord }
-    /// Cas bref de cette attente, nommé près des appréciations une fois le thème choisi.
-    private var waitsForPreviousSignal: Bool { selected != nil && recorder.isSettlingGesture && !isClosingAfterRecord }
 
     var body: some View {
         GeometryReader { proxy in
@@ -177,10 +176,6 @@ struct SchoolLiveObservationPalette: View {
     private var appraisalBar: some View {
         VStack(spacing: 0) {
             Divider().overlay(DrivyTheme.border)
-            if waitsForPreviousSignal {
-                DrivyLoadingState(title: "Envoi précédent en cours…")
-                    .padding(.horizontal, DrivySpacing.m)
-            }
             appraisals
                 .padding(.horizontal, DrivySpacing.s)
                 .padding(.vertical, DrivySpacing.xs)
