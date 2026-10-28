@@ -133,7 +133,7 @@ struct SchoolReportTripSection: View {
             if editable, model.isAuthor, model.sharing != nil {
                 Toggle("Visible par l’élève", isOn: Binding(get: { model.captureShared },
                     set: { shared in Task { await model.updateSharing(captureHidden: !shared) } }))
-                    .disabled(!model.acceptsInput).drivyControlTint()
+                    .disabled(!model.acceptsOtherRequests).drivyControlTint()
             }
         } header: { Text("Trajet").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -374,7 +374,7 @@ private struct SchoolReportObservationRow: View {
             .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
-        .disabled(!model.acceptsInput)
+        .disabled(!model.acceptsOtherRequests)
         .accessibilityLabel("Actions pour l’observation, \(kept ? "pour moi" : "visible par l’élève")")
     }
 }
@@ -397,7 +397,7 @@ struct SchoolReportTextSection: View {
             if model.sharing != nil {
                 Toggle("Visible par l’élève", isOn: Binding(get: { model.reportShared },
                     set: { shared in Task { await model.updateSharing(reportPrivate: !shared) } }))
-                    .disabled(!model.acceptsInput).drivyControlTint()
+                    .disabled(!model.acceptsOtherRequests).drivyControlTint()
             }
             field("Travail réalisé", text: $model.workedOn, focus: .workedOn)
             field("À retenir", text: $model.observationText, focus: .observation)
@@ -679,7 +679,7 @@ private struct SchoolReportSaveControl: View {
                 DrivyBusyLabel(title: title, isBusy: isSending)
             }
             .buttonStyle(DrivyPrimaryButtonStyle())
-            .disabled(!model.acceptsInput || !model.validTexts || !model.observationsValid)
+            .disabled(!model.acceptsInput || isSending || !model.validTexts || !model.observationsValid)
             .accessibilityIdentifier("lesson-save-report")
         }
         .frame(maxWidth: .infinity, alignment: .leading)

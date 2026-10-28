@@ -69,6 +69,13 @@ import XCTest
         XCTAssertTrue(target(in: app).exists)
         XCTAssertTrue(app.descendants(matching: .any)["messaging.compose.text"].firstMatch.isEnabled)
         capture(app, "Refus de réaction, conversation conservée — synthétique")
+        // #177 : l'appui ouvre la raison et les choix ; masquer est un choix distinct qui ne touche pas au fil.
+        rejection.tap()
+        let hide = app.buttons["Masquer"].firstMatch
+        XCTAssertTrue(hide.waitForExistence(timeout: 3), app.debugDescription)
+        hide.tap()
+        XCTAssertTrue(rejection.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(target(in: app).exists)
     }
 
     private func launch(delay: Int, refused: Bool = false) -> XCUIApplication {

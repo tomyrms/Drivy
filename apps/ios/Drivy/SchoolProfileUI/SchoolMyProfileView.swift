@@ -46,7 +46,7 @@ struct SchoolMyProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Fermer") { if editor.hasEdits { confirmsDiscard = true } else { dismiss() } }
-                        .disabled(editor.isBusy)
+                        .disabled(editor.isBusy || editor.photoIntent != nil)
                         .accessibilityIdentifier("my-profile-close")
                 }
             }
@@ -65,7 +65,13 @@ struct SchoolMyProfileView: View {
             }
         }
         .tint(DrivyTheme.accent)
-        .interactiveDismissDisabled(editor.hasEdits || editor.isBusy)
+        .interactiveDismissDisabled(editor.hasEdits || editor.isBusy || editor.photoIntent != nil)
+        .onChange(of: editor.photoResult) { _, result in
+            if let result { UIAccessibility.post(notification: .announcement, argument: result) }
+        }
+        .onChange(of: editor.photoErrorMessage) { _, error in
+            if let error { UIAccessibility.post(notification: .announcement, argument: error) }
+        }
         .task {
             await editor.load()
             if loadsDossierOnAppear, let dossier { await dossier.load() }
@@ -127,8 +133,10 @@ struct SchoolMyProfileView: View {
         Section {
             HStack(spacing: DrivySpacing.m) {
                 ZStack {
-                    DrivyAvatar(name: previewName, size: 72, photo: workspace.selfPhoto?.data)
-                    if editor.isSavingPhoto { ProgressView().accessibilityLabel("Envoi de la photo…") }
+                    // Le dernier choix s’affiche aussitôt ; les autres membres ne le voient qu’après l’école (#118).
+                    DrivyAvatar(name: previewName, size: 72, photo: editor.displayedPhoto(confirmed: workspace.selfPhoto?.data))
+                        .opacity(editor.photoIntent == nil ? 1 : 0.6)
+                    if editor.photoIntent != nil { ProgressView().accessibilityLabel("Envoi de la photo…") }
                 }
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     // L’aperçu : la photo et le nom affiché, comme les membres de l’école les voient (#157).
@@ -139,22 +147,30 @@ struct SchoolMyProfileView: View {
                         .accessibilityLabel("Aperçu : \(previewName)")
                         .accessibilityIdentifier("self-display-name-preview")
                     PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
-                        Text(workspace.selfPhoto == nil ? "Ajouter une photo" : "Changer la photo")
+                        Text(editor.showsPhoto(confirmedVersion: workspace.selfProfile?.photoVersion) ? "Changer la photo" : "Ajouter une photo")
                     }
                     .accessibilityIdentifier("self-photo-pick")
-                    if workspace.selfProfile?.photoVersion != nil {
+                    if editor.showsPhoto(confirmedVersion: workspace.selfProfile?.photoVersion) {
                         Button("Retirer la photo", role: .destructive) { confirmsPhotoRemoval = true }
                             .accessibilityIdentifier("self-photo-remove")
                     }
                 }
                 .buttonStyle(.borderless)
-                .disabled(editor.isBusy)
             }
             .padding(.vertical, DrivySpacing.xxs)
             // Le résultat de la photo, près d’elle : elle s’enregistre sans le bouton « Enregistrer » (#155).
             if let error = editor.photoErrorMessage {
                 DrivyFormMessage(text: error, tone: .danger)
                     .accessibilityIdentifier("my-profile-photo-error")
+                if editor.failedPhoto != nil {
+                    Button("Réessayer") { editor.retryPhoto() }
+                        .accessibilityHint("Renvoie la dernière photo choisie")
+                        .accessibilityIdentifier("my-profile-photo-retry")
+                }
+            } else if editor.photoIntent != nil {
+                Text(editor.photoIntent == .remove ? "Retrait de la photo en cours" : "Envoi de la photo en cours")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .accessibilityIdentifier("my-profile-photo-pending")
             } else if let result = editor.photoResult {
                 DrivyFormMessage(text: result)
                     .accessibilityIdentifier("my-profile-photo-result")
@@ -329,11 +345,7 @@ struct SchoolMyProfileView: View {
     }
 
     private func upload(_ jpeg: Data?) {
-        Task {
-            if await editor.setPhoto(jpeg) {
-                UIAccessibility.post(notification: .announcement, argument: jpeg == nil ? "Photo retirée" : "Photo enregistrée")
-            }
-        }
+        editor.choosePhoto(jpeg)
     }
 }
 

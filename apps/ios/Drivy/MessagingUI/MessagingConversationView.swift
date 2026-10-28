@@ -628,10 +628,15 @@ struct MessagingConversationView: View {
                     }
                     .accessibilityIdentifier("messaging.mute.off")
                 } else {
-                    Button("Mettre en sourdine une heure", systemImage: "bell.slash") {
-                        Task { await workspace.silence(conversationID: conversationID,
-                            fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(3_600),
-                            fallbackVersion: readStateVersion) }
+                    // Durées validées à l’essai du 28 octobre : toutes datées, aucune sourdine sans fin (règle nouvelle).
+                    Menu("Mettre en sourdine", systemImage: "bell.slash") {
+                        ForEach(MessagingMuteFormat.durations, id: \.seconds) { choice in
+                            Button(choice.label) {
+                                Task { await workspace.silence(conversationID: conversationID,
+                                    fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(choice.seconds),
+                                    fallbackVersion: readStateVersion) }
+                            }
+                        }
                     }
                     .accessibilityIdentifier("messaging.mute.on")
                 }
@@ -1599,6 +1604,12 @@ struct MessagingConversationStatusStrip: View {
 
 /// Fin d’une sourdine : l’heure aujourd’hui, le jour et l’heure au-delà (#168).
 enum MessagingMuteFormat {
+    struct Choice { let label: String; let seconds: TimeInterval }
+
+    static let durations = [Choice(label: "1 heure", seconds: 3_600),
+                            Choice(label: "8 heures", seconds: 8 * 3_600),
+                            Choice(label: "1 jour", seconds: 24 * 3_600)]
+
     static func until(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         calendar.isDate(date, inSameDayAs: now)
             ? date.formatted(date: .omitted, time: .shortened)

@@ -61,7 +61,43 @@ struct SchoolCourseOperationMemory {
     }
 }
 
-/// Fiche d’un cours vue par l’élève : son état personnel et ses commandes.
+/// Demande de l’élève partie vers l’école (#126) : son identifiant est l’`operationId`, conservé pour toute reprise.
+struct SchoolCourseLearnerPending: Equatable {
+    enum State: Equatable {
+        case sending
+        /// Panne ou réponse perdue : peut-être enregistrée ; jamais présentée comme acquise ni comme refusée.
+        case uncertain(String)
+    }
+    let action: SchoolCourseLearnerAction
+    let operation: UUID
+    var state: State = .sending
+
+    /// Ce qui est en cours, sans annoncer le résultat.
+    var title: String {
+        switch action {
+        case .enroll: "Inscription en cours"
+        case .joinWaitlist: "Ajout à la liste d’attente en cours"
+        case .leaveWaitlist: "Retrait de la liste d’attente en cours"
+        case .accept: "Acceptation de la place en cours"
+        case .decline: "Refus de la place en cours"
+        case .cancel: "Annulation de l’inscription en cours"
+        }
+    }
+    var unconfirmedTitle: String {
+        switch action {
+        case .enroll: "Inscription non confirmée"
+        case .joinWaitlist: "Liste d’attente non confirmée"
+        case .leaveWaitlist: "Retrait non confirmé"
+        case .accept: "Acceptation non confirmée"
+        case .decline: "Refus non confirmé"
+        case .cancel: "Annulation non confirmée"
+        }
+    }
+}
+
+/// Fiche d’un cours vue par l’élève : son état personnel et ses commandes. Une demande part sans retenir l’écran :
+/// la fiche et sa confirmation se ferment aussitôt, l’état affiché reste celui de l’école et la demande en cours
+/// est dite à part, jusqu’à la réponse. Fermer la fiche ne la perd pas (#126).
 @MainActor @Observable final class SchoolCourseLearnerWorkspace: Identifiable {
     let id = UUID()
     let schoolID: UUID
@@ -70,17 +106,20 @@ struct SchoolCourseOperationMemory {
     let client: SchoolCourseClient
     private(set) var reply: SchoolCourseLearnerReply?
     private(set) var isLoading = false
-    private(set) var isBusy = false
+    /// Demande en cours ou à reprendre ; une seule à la fois pour un cours (les gestes s’excluent).
+    private(set) var pending: SchoolCourseLearnerPending?
     var errorMessage: String?
     /// Dernière commande confirmée par l’école, annoncée une fois.
     private(set) var confirmation: String?
-    @ObservationIgnored private var memory = SchoolCourseOperationMemory()
     @ObservationIgnored var onChange: (@MainActor () -> Void)?
 
     init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient) {
         self.schoolID = schoolID; self.seriesID = seriesID; self.timeZone = timeZone; self.client = client
     }
 
+    /// Une demande part : les autres gestes attendent sa réponse.
+    var isBusy: Bool { pending != nil }
+    var isSending: Bool { pending?.state == .sending }
     var series: SchoolCourseSeries? { reply?.series }
     var me: SchoolCourseLearnerState? { reply?.me }
     /// Le type de cours est suivi (prochaines sessions, #40) ; `nil` tant que l’école ne l’a pas dit.
@@ -117,7 +156,7 @@ struct SchoolCourseOperationMemory {
     }
 
     func load() async {
-        guard !isLoading, !isBusy else { return }
+        guard !isLoading else { return }
         isLoading = true; defer { isLoading = false }
         do {
             reply = try await client.learnerView(schoolID: schoolID, seriesID: seriesID)
@@ -132,32 +171,51 @@ struct SchoolCourseOperationMemory {
         }
     }
 
-    /// Écrit la commande ; rien n’est annoncé avant la réponse de l’école.
-    @discardableResult func perform(_ action: SchoolCourseLearnerAction) async -> Bool {
-        guard !isBusy else { return false }
-        isBusy = true; errorMessage = nil; confirmation = nil; defer { isBusy = false }
-        let operation = memory.operation(for: action.key)
+    /// Retour immédiat : la demande part, l’écran reste libre. Double appui : une seule demande.
+    func submit(_ action: SchoolCourseLearnerAction) {
+        guard pending == nil else { return }
+        errorMessage = nil; confirmation = nil
+        pending = SchoolCourseLearnerPending(action: action, operation: UUID())
+        Task { await send() }
+    }
+
+    /// Même demande, même opération : l’école ne l’enregistre pas deux fois.
+    func retryPending() {
+        guard let current = pending, case .uncertain = current.state else { return }
+        pending?.state = .sending
+        Task { await send() }
+    }
+
+    /// Elle a peut-être été enregistrée : la fiche est relue pour montrer l’état réel.
+    func abandonPending() async {
+        guard let current = pending, case .uncertain = current.state else { return }
+        pending = nil
+        await load()
+        onChange?()
+    }
+
+    private func send() async {
+        guard let current = pending, current.state == .sending else { return }
         do {
-            let result = try await client.act(action, schoolID: schoolID, seriesID: seriesID, operationID: operation)
-            memory.settle(); reply = result
-            confirmation = Self.done(action)
+            let result = try await client.act(current.action, schoolID: schoolID, seriesID: seriesID, operationID: current.operation)
+            guard pending?.operation == current.operation else { return }
+            pending = nil; reply = result
+            confirmation = Self.done(current.action)
             onChange?()
-            return true
-        } catch is CancellationError { return false }
-        catch {
-            memory.fail(error)
-            errorMessage = Self.message(error)
-            if let failure = error as? SchoolPlanningFailure, [.unauthorized, .forbidden, .notFound].contains(failure) {
-                reply = nil; following = nil
-            }
-            // Un refus motivé dit que l’état a changé : la fiche se relit sans effacer le message.
-            if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
-                let kept = errorMessage
-                isBusy = false
+        } catch {
+            guard pending?.operation == current.operation else { return }
+            let message = Self.message(error)
+            let failure = error as? SchoolPlanningFailure
+            if let failure, [.unauthorized, .forbidden, .notFound].contains(failure) {
+                pending = nil; reply = nil; following = nil; errorMessage = message
+            } else if let failure, failure.definitiveRejection {
+                // Refus motivé : la demande s’arrête et la fiche se relit sans effacer la raison.
+                pending = nil
                 await load()
-                errorMessage = kept
+                errorMessage = message
+            } else {
+                pending?.state = .uncertain(error is CancellationError ? SchoolPlanningFailure.unavailable.localizedDescription : message)
             }
-            return false
         }
     }
 
@@ -206,6 +264,17 @@ struct SchoolCourseOperationMemory {
     var offers: [SchoolCourseOffer] {
         (mine?.offers ?? []).filter { ($0.expiry ?? .distantPast) > Date() }
     }
+
+    /// Fiches ouvertes dans ce contexte : rouvrir un cours retrouve sa demande en cours (#126).
+    @ObservationIgnored private var details: [UUID: SchoolCourseLearnerWorkspace] = [:]
+    func detail(for seriesID: UUID) -> SchoolCourseLearnerWorkspace {
+        if let existing = details[seriesID] { return existing }
+        let course = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: timeZone, client: client)
+        details[seriesID] = course
+        return course
+    }
+    /// Demande en cours sur ce cours, pour la dire dans les listes.
+    func pending(for seriesID: UUID) -> SchoolCourseLearnerPending? { details[seriesID]?.pending }
     func offer(for seriesID: UUID) -> SchoolCourseOffer? { offers.first { $0.seriesId == seriesID } }
     func isEnrolled(_ seriesID: UUID) -> Bool {
         mine?.items.contains { $0.seriesId == seriesID && $0.status == .active } == true

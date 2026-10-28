@@ -83,6 +83,10 @@ import Observation
     /// reconnaît comme point de départ, et une saisie faite pendant l’envoi n’y passe pas pour un conflit (#113).
     @ObservationIgnored private var confirmedPreparation: PreparationContent?
     @ObservationIgnored private var confirmedWish: String?
+    /// Bilan tel qu’il part au premier envoi, puis tel que l’école l’a confirmé alors que la saisie a continué (#114) :
+    /// la relecture le reconnaît comme point de départ, la saisie suivante n’est ni remplacée ni prise pour un conflit.
+    @ObservationIgnored private var sendingReport: DraftContent?
+    @ObservationIgnored private var confirmedReport: DraftContent?
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default,
@@ -101,13 +105,17 @@ import Observation
     private var isSendingTextRevision: Bool {
         isBusy && isFirstSend && (pending?.kind == .savePreparation || pending?.kind == .saveWish)
     }
+    /// Bilan tout juste envoyé (#114) : la rédaction continue ; ce qui est saisi pendant l’envoi reste à enregistrer.
+    var isSendingReport: Bool { isBusy && isFirstSend && pending?.kind == .saveReportDraft }
     /// Saisie possible. Une relecture silencieuse ou l’envoi d’un réglage de partage ne ferment rien à l’écran ;
     /// seul un état qui dure le fait : accès retiré, conflit à relire, stockage fermé, demande à vérifier,
     /// contenu en cours d’enregistrement. L’envoi d’une commande reste gardé par `canMutate`.
     var acceptsInput: Bool {
         guard !invalidated, !needsReload, storageAccessible, !awaitsRereadAfterWrite, !localDraftReadFailed else { return false }
-        return pending == nil ? !isBusy : (isSendingSharing || isSendingTextRevision)
+        return pending == nil ? !isBusy : (isSendingSharing || isSendingTextRevision || isSendingReport)
     }
+    /// Partage et actions sur les observations : pas pendant l’envoi du bilan, qui peut fermer la fiche.
+    var acceptsOtherRequests: Bool { acceptsInput && !isSendingReport }
     /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
     var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
     var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
@@ -378,6 +386,9 @@ import Observation
         waiters.removeAll()
         for waiter in waiting { waiter.resume() }
     }
+    private func editedDraft(id: UUID) -> DraftContent {
+        DraftContent(id: id, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations)
+    }
     private struct DraftContent: Equatable {
         let id: UUID
         let workedOn: String, observationText: String, nextStep: String
@@ -540,10 +551,12 @@ import Observation
             guard request == generation, !invalidated else { return }
             // Une lecture échouée (message présent) ne remplace jamais ce qui est affiché : bilan, saisie et objectifs restent en place.
             let draftUnread = draftsRead.message != nil, preparationUnread = preparationRead.message != nil
-            let draftPolicy = draftUnread ? SchoolLessonRefreshPolicy.keepEdits : SchoolLessonRefreshPolicy.decide(previous: draft.map(DraftContent.init),
-                edited: DraftContent(id: draft?.id ?? UUID(), workedOn: workedOn, observationText: observationText,
-                    nextStep: nextStep, observations: observations), received: draftsRead.value?.first.map(DraftContent.init),
+            let receivedDraft = draftsRead.value?.first.map(DraftContent.init)
+            let draftBase = confirmedReport.flatMap { $0 == receivedDraft ? $0 : nil } ?? draft.map(DraftContent.init)
+            let draftPolicy = draftUnread ? SchoolLessonRefreshPolicy.keepEdits : SchoolLessonRefreshPolicy.decide(previous: draftBase,
+                edited: editedDraft(id: draft?.id ?? UUID()), received: receivedDraft,
                 discardingEdits: discardingEdits || !author)
+            if !draftUnread { confirmedReport = nil }
             // La révision que l’école vient de confirmer, relue telle quelle, sert de point de départ : une saisie
             // poursuivie pendant son envoi est gardée, jamais remplacée par la réponse ni prise pour un conflit.
             let receivedPreparation = preparationRead.value.map(PreparationContent.init)
@@ -725,13 +738,15 @@ import Observation
         // l’école vient de confirmer sur une version déjà dépassée.
         guard let draft, canMutate, !awaitsRereadAfterWrite, isAuthor, validTexts, observationsValid else { return false }
         let operation = UUID()
+        sendingReport = editedDraft(id: draft.id)
+        defer { sendingReport = nil }
         return await prepare(SchoolSaveReport(operationId: operation, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations), id: operation, kind: .saveReportDraft, version: draft.version, resourceID: draft.id)
     }
     /// Garder pour soi le bilan, le trajet ou certaines observations ; tout le reste est vu par l’élève.
     /// Le réglage se lit aussitôt. Demandé pendant une relecture ou un autre envoi, il attend son tour puis part
     /// de l’état confirmé par l’école : aucun interrupteur ne se grise, aucun geste n’est perdu ni envoyé deux fois.
     func updateSharing(reportPrivate: Bool? = nil, captureHidden: Bool? = nil, observation: UUID? = nil, observationPrivate: Bool = false) async {
-        guard let shown = sharing, acceptsInput, isAuthor else { return }
+        guard let shown = sharing, acceptsOtherRequests, isAuthor else { return }
         let operation = UUID()
         optimisticSharing = sharingRequest(operation,
             reportPrivate: reportPrivate ?? optimisticSharing?.reportPrivate ?? shown.reportPrivate,
@@ -818,7 +833,17 @@ import Observation
             default: awaitsRereadAfterWrite = true
             }
             announceConfirmedChange(command)
-            if confirmsThisReport(command) { discardLocalDraft(); reportSaveConfirmed = true; return true }
+            if confirmsThisReport(command) {
+                // Saisie poursuivie pendant l’envoi : la fiche reste ouverte, rien de saisi n’est perdu (#114).
+                if let sent = sendingReport, sent != editedDraft(id: sent.id) {
+                    confirmedReport = sent
+                    confirmation = "Bilan enregistré. Tes dernières modifications restent à enregistrer."
+                    await load()
+                    persistLocalDraft()
+                    return true
+                }
+                discardLocalDraft(); reportSaveConfirmed = true; return true
+            }
             confirmation = Self.confirmationText(for: command.kind)
             // Partage : l’état confirmé suffit. Seul un bilan passé privé ou rendu visible change le brouillon côté école.
             if command.kind == .updateLessonSharing, let confirmedSharing {

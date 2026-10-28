@@ -776,6 +776,45 @@ struct SchoolWorkspaceTests {
         #expect(!workspace.isSearching && workspace.learnersError == nil)
     }
 
+    /// #118 : photo choisie puis retirée aussitôt : seul le dernier choix part, et l'éditeur l'affiche tout de suite.
+    @Test func onlyTheLastPhotoChoiceIsSentAndShownAtOnce() async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let editor = SchoolSelfProfileEditor(workspace: workspace)
+        let jpeg = Data([0xFF, 0xD8, 0xFF])
+        editor.choosePhoto(jpeg)
+        #expect(editor.displayedPhoto(confirmed: nil) == jpeg)
+        editor.choosePhoto(nil)
+        #expect(editor.displayedPhoto(confirmed: jpeg) == nil)
+        #expect(!editor.showsPhoto(confirmedVersion: 3))
+        for _ in 0..<200 where editor.photoIntent != nil { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(editor.photoIntent == nil && editor.photoResult == "Photo retirée.")
+        #expect(api.photoCalls.map(\.jpeg) == [nil])
+    }
+
+    /// #118 : deux photos successives partent l'une après l'autre, la seconde sur la version écrite par la première.
+    @Test func successivePhotosAreSentInOrderWithTheNewVersion() async {
+        let api = WorkspaceAPIStub()
+        let workspace = SchoolWorkspace(api: api)
+        await workspace.loadAccount()
+        let editor = SchoolSelfProfileEditor(workspace: workspace)
+        var release: CheckedContinuation<Void, Never>?
+        api.photoGate = { await withCheckedContinuation { release = $0 } }
+        let first = Data([1]), second = Data([2])
+        editor.choosePhoto(first)
+        for _ in 0..<200 where api.photoCalls.isEmpty { try? await Task.sleep(for: .milliseconds(10)) }
+        editor.choosePhoto(second)
+        #expect(editor.displayedPhoto(confirmed: nil) == second)
+        #expect(api.photoCalls.count == 1)
+        api.photoGate = nil
+        release?.resume()
+        for _ in 0..<200 where editor.photoIntent != nil { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(api.photoCalls.map(\.jpeg) == [first, second])
+        #expect(api.photoCalls.map(\.version) == [1, 2])
+        #expect(editor.photoIntent == nil && workspace.selfPhoto?.data == second)
+    }
+
     @Test func silentLearnerRefreshIsBoundedAndSaysNothingOnFailure() async {
         let api = WorkspaceAPIStub()
         let workspace = SchoolWorkspace(api: api)
@@ -821,9 +860,18 @@ private final class WorkspaceAPIStub: SchoolAPI {
     var schoolReads = 0
     var learnersToCompleteHandler: ((UUID) async throws -> [SchoolLearner])?
     var learnersToCompleteCalls = 0
+    /// Photos reçues, dans l'ordre (`nil` : retrait), avec la version attendue.
+    var photoCalls: [(jpeg: Data?, version: Int)] = []
+    var photoGate: (() async -> Void)?
 
     init(memberships: [SchoolMembership] = [WorkspaceFixture.firstMembership]) {
         person = SchoolPerson(personId: UUID(), version: 1, displayName: "Compte de test", locale: "fr", memberships: memberships)
+    }
+    func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile {
+        photoCalls.append((jpeg, version))
+        await photoGate?()
+        return SchoolSelfProfile(personId: person.personId, displayName: person.displayName,
+                                 photoVersion: jpeg == nil ? nil : version + 1, version: version + 1)
     }
     func me() async throws -> SchoolPerson {
         if let meHandler { return try await meHandler() }

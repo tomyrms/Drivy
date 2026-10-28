@@ -55,6 +55,23 @@ import XCTest
         XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Disponible")
     }
 
+    /// #126 : la confirmation se ferme aussitôt ; la fiche dit la demande à part, jamais « Inscrit » avant l’école.
+    func testEnrollmentAnswersAtOnceWithoutClaimingTheSeat() {
+        let app = launch("course-learner")
+        defer { app.terminate() }
+        let enroll = app.buttons["course-enroll"]
+        XCTAssertTrue(enroll.waitForExistence(timeout: 15), app.debugDescription)
+        enroll.tap()
+        XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForExistence(timeout: 10), app.debugDescription)
+        let confirm = app.buttons["course-confirm-enrollment"]
+        reveal(confirm, in: app)
+        confirm.tap()
+        XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForNonExistence(timeout: 5), app.debugDescription)
+        // Le transport synthétique n’écrit rien : la demande reste à reprendre, l’état de l’école ne change pas.
+        XCTAssertTrue(app.buttons["course-learner-retry"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Disponible")
+    }
+
     func testCancellationNamesTheEnrollmentRatherThanCancellingTheCourse() {
         let app = launch("course-enrolled")
         defer { app.terminate() }
@@ -85,8 +102,13 @@ import XCTest
         try tapAlertAction(in: app, identifier: "Continuer")
         XCTAssertEqual(amount.value as? String, "80")
         app.buttons["course-payment-submit"].tap()
-        XCTAssertTrue(app.navigationBars["Payé sur place"].exists)
-        XCTAssertEqual(amount.value as? String, "80")
+        // #129 : la feuille se ferme aussitôt ; le montant reste sur la ligne, à reprendre, jamais compté comme payé.
+        XCTAssertTrue(app.navigationBars["Payé sur place"].waitForNonExistence(timeout: 5), app.debugDescription)
+        let pending = app.descendants(matching: .any)["course-payment-pending"].firstMatch
+        XCTAssertTrue(pending.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(pending.label.contains("80") && pending.label.hasPrefix("Règlement de"), pending.label)
+        XCTAssertTrue(app.buttons["course-sheet-retry"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Payé :'")).firstMatch.exists)
     }
 
     func testCourseEditorProtectsOnlyAnActualChange() throws {

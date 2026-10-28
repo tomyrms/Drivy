@@ -1,9 +1,21 @@
 import Foundation
 import Observation
 
+/// Dernier choix de photo pas encore confirmé par l’école (#118).
+enum SchoolSelfPhotoIntent: Equatable {
+    case replace(Data)
+    case remove
+
+    var jpeg: Data? { if case .replace(let data) = self { data } else { nil } }
+}
+
 /// La saisie du compte Drivy de la personne connectée (`/v1/me/profile`) : nom affiché, prénom, nom, contact,
 /// naissance et adresse. Cette source appartient à la personne, quel que soit son rôle ou son école ; elle ne touche
 /// jamais un dossier scolaire. La photo suit son propre envoi, tenu par `SchoolWorkspace`.
+///
+/// #118 : la photo choisie s’affiche ici dès son cadrage, marquée « en cours » ; les autres ne la voient qu’après
+/// l’accord de l’école. Compte et photo partagent la version de la personne : leurs envois partent l’un après
+/// l’autre, jamais en parallèle, et seul le dernier choix de photo part.
 @MainActor @Observable
 final class SchoolSelfProfileEditor {
     var edit = SchoolSelfProfileEdit(displayName: "", firstName: "", lastName: "", contactPhone: "")
@@ -20,7 +32,13 @@ final class SchoolSelfProfileEditor {
     private(set) var photoResult: String?
     /// Une photo a été enregistrée ou retirée pendant cette ouverture : fermer sans enregistrer ne l’annule pas.
     private(set) var photoChanged = false
+    /// Choix de photo affiché ici avant la réponse de l’école ; `nil` : la photo enregistrée.
+    private(set) var photoIntent: SchoolSelfPhotoIntent?
+    /// Choix refusé ou non confirmé, à renvoyer tel quel.
+    private(set) var failedPhoto: SchoolSelfPhotoIntent?
     @ObservationIgnored private let workspace: SchoolWorkspace
+    /// File des envois du compte : un envoi attend la fin du précédent (même version de personne).
+    @ObservationIgnored private var chain: Task<Void, Never>?
 
     nonisolated static let emptyAddress = SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
 
@@ -86,6 +104,17 @@ final class SchoolSelfProfileEditor {
         isSaving = true; errorMessage = nil
         defer { isSaving = false }
         let value = trimmed
+        // Dans la file : une photo choisie juste avant ou juste après part avant ou après, jamais en même temps.
+        let previous = chain
+        let work = Task { @MainActor [weak self] () -> Bool in
+            await previous?.value
+            return await self?.send(value) ?? false
+        }
+        chain = Task { @MainActor in _ = await work.value }
+        return await work.value
+    }
+
+    private func send(_ value: SchoolSelfProfileEdit) async -> Bool {
         do {
             try await workspace.saveSelfProfile(value)
             loaded = value
@@ -98,18 +127,57 @@ final class SchoolSelfProfileEditor {
         }
     }
 
-    /// Remplace (`jpeg`) ou retire (`nil`) la photo ; elle n’apparaît qu’après l’accord de l’école.
-    func setPhoto(_ jpeg: Data?) async -> Bool {
-        guard !isSavingPhoto else { return false }
-        isSavingPhoto = true; photoErrorMessage = nil; photoResult = nil
+    /// Photo affichée dans l’éditeur : le dernier choix en cours, sinon la photo enregistrée.
+    func displayedPhoto(confirmed: Data?) -> Data? {
+        guard let photoIntent else { return confirmed }
+        return photoIntent.jpeg
+    }
+    /// Une photo est affichée (enregistrée ou en cours) : elle peut être retirée.
+    func showsPhoto(confirmedVersion: Int?) -> Bool {
+        photoIntent.map { $0 != .remove } ?? (confirmedVersion != nil)
+    }
+
+    /// Remplace (`jpeg`) ou retire (`nil`) la photo. Retour immédiat dans l’éditeur ; un choix plus récent remplace
+    /// celui qui n’est pas encore parti, et l’envoi attend celui du compte.
+    func choosePhoto(_ jpeg: Data?) {
+        let intent: SchoolSelfPhotoIntent = jpeg.map { .replace($0) } ?? .remove
+        photoIntent = intent; failedPhoto = nil; photoErrorMessage = nil; photoResult = nil
+        enqueue { [weak self] in await self?.sendPhoto(intent) }
+    }
+
+    func retryPhoto() {
+        guard let failedPhoto else { return }
+        choosePhoto(failedPhoto.jpeg)
+    }
+
+    private func sendPhoto(_ intent: SchoolSelfPhotoIntent) async {
+        // Dépassé par un choix plus récent : seul le dernier part.
+        guard photoIntent == intent else { return }
+        isSavingPhoto = true
         defer { isSavingPhoto = false }
         do {
-            try await workspace.setSelfPhoto(jpeg)
+            try await workspace.setSelfPhoto(intent.jpeg)
             photoChanged = true
-            photoResult = jpeg == nil ? "Photo retirée." : "Photo enregistrée."
-            return true
+            if photoIntent == intent {
+                photoIntent = nil
+                photoResult = intent == .remove ? "Photo retirée." : "Photo enregistrée."
+            }
+        } catch {
+            // L’éditeur revient à la photo enregistrée ; le choix reste disponible pour « Réessayer ».
+            if photoIntent == intent {
+                photoIntent = nil
+                failedPhoto = intent
+                photoErrorMessage = Self.message(error)
+            }
         }
-        catch { photoErrorMessage = Self.message(error); return false }
+    }
+
+    private func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+        let previous = chain
+        chain = Task { @MainActor in
+            await previous?.value
+            await operation()
+        }
     }
 
     func failPhoto() { photoResult = nil; photoErrorMessage = SchoolSelfProfileFailure.invalidPhoto.localizedDescription }
