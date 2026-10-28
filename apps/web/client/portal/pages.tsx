@@ -8,7 +8,7 @@ import type { SectionKey } from '../console/sections';
 export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<ComponentType>>> = {
   agenda: lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot }))),
   eleves: lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot }))),
-  equipe: lazy(() => import('./access/access-page').then(module => ({ default: () => <module.AccessPilot /> }))),
+  equipe: lazy(() => import('./team/team-page').then(module => ({ default: module.TeamPilot }))),
 };
 
 export const portalSections = Object.keys(portalPages) as SectionKey[];
