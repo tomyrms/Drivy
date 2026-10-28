@@ -4,6 +4,9 @@
 @source "./";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* Base UI exposes data-orientation only; same variants as shadcn/tailwind.css. */
+@custom-variant data-horizontal (&:where([data-orientation="horizontal"]));
+@custom-variant data-vertical (&:where([data-orientation="vertical"]));
 
 @font-face {
   font-family: Manrope;
