@@ -1,80 +1,68 @@
 import { createRoot } from 'react-dom/client';
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { ConsoleContext, type ConsoleContextValue } from '../console/context';
 import { ScopedReadCache } from '../console/load-model';
-import { commandStore, useCommandSnapshot } from '../command-store';
+import { commandStore } from '../command-store';
 import { PortalFrame } from './frame';
 import { AccessPilot } from './access/access-page';
 import { Button } from '../components/ui/button';
-import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert';
-import type { Role } from '../protocol';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
+import { Skeleton } from '../components/ui/skeleton';
+import { PortalSelect } from './components/portal-select';
+import { PortalPendingRequests } from './runtime/pending-requests';
+import { usePreviewNavigation } from './preview/use-preview-navigation';
+import { ids, previewMe, previewMembership, previewSchool } from './preview/fixtures';
+import { memberSchema, readSchool } from '../school-api';
+import { installPreviewTransport, setPreviewScenario, type PreviewScenario } from './preview/transport';
 import './portal.css';
 
 declare const __DRIVY_PREVIEW_SHA__: string;
 z.config({ jitless: true });
-const schoolId = '31100000-0000-4000-8000-000000000001';
-const personId = '31100000-0000-4000-8000-000000000002';
-const adminId = '31100000-0000-4000-8000-000000000003';
-const memberId = '31100000-0000-4000-8000-000000000004';
-const params = new URLSearchParams(location.search);
-let simulateRefusal = params.get('state') === 'error';
-const members = [
-  { id: adminId, schoolId, personId, displayName: 'Luc Martin', version: 1, status: 'ACTIVE', roles: ['ADMIN', 'INSTRUCTOR'] as Role[], grants: [] as string[], accessEpoch: 1 },
-  { id: memberId, schoolId, personId: '31100000-0000-4000-8000-000000000005', displayName: 'Marie Dupont', version: 1, status: 'ACTIVE', roles: ['INSTRUCTOR'] as Role[], grants: ['permit_review', 'TAKE_ATTENDANCE'], accessEpoch: 1 },
+installPreviewTransport();
+commandStore.scopeToPerson(ids.person);
+commandStore.scopeToAccess(ids.school, ids.admin, 1);
+const Agenda = lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot })));
+const Learners = lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot })));
+const scenarios = [
+  { value: 'normal', label: 'Enregistrement normal' }, { value: 'refused', label: 'Refus de la modification' },
+  { value: 'slow', label: 'Enregistrement lent' }, { value: 'lost-reply', label: 'Réponse perdue' }, { value: 'conflict', label: 'Conflit de version' },
 ];
-const school = { id: schoolId, schoolId, version: 1, name: 'École du Léman', timeZone: 'Europe/Zurich', status: 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
-  modules: { gpsEnabled: false, packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } };
-const envelope = (data: unknown) => ({ data, requestId: crypto.randomUUID(), serverTime: new Date().toISOString() });
-const results = new Map<string, unknown>();
-/** This entry never delegates fetch: no real account, API or command can be reached. */
-window.fetch = (async (input: URL | RequestInfo, init?: RequestInit) => {
-  const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-  const reply = (status: number, data: unknown) => {
-    const response = new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-    Object.defineProperty(response, 'url', { value: url.href }); return response;
-  };
-  if (url.origin !== location.origin || !url.pathname.startsWith(`/app/bff/schools/${schoolId}/`)) return reply(403, { code: 'PREVIEW_NETWORK_BLOCKED' });
-  const path = url.pathname.split(`/schools/${schoolId}/`)[1];
-  const method = init?.method ?? 'GET';
-  if (method === 'GET' && path === 'members') return reply(200, envelope({ items: structuredClone(members), nextCursor: null }));
-  const headers = new Headers(init?.headers);
-  const operationId = headers.get('Idempotency-Key');
-  if (operationId && results.has(operationId)) return reply(200, results.get(operationId));
-  if (method === 'PATCH' && path?.startsWith('members/') || method === 'POST' && path?.endsWith('/deactivate')) {
-    await new Promise(resolve => setTimeout(resolve, 1100));
-    if (simulateRefusal) return reply(409, { code: 'LAST_ADMIN' });
-    const member = members.find(item => item.id === path?.split('/')[1]);
-    if (!member || headers.get('If-Match') !== `"${member.version}"`) return reply(412, { code: 'VERSION_CONFLICT' });
-    const body = JSON.parse(String(init?.body ?? '{}'));
-    if (!String(body.reason ?? '').trim()) return reply(400, { code: 'INVALID_REQUEST' });
-    if (method === 'PATCH') { member.roles = body.roles; member.grants = body.grants; } else member.status = 'INACTIVE';
-    member.version++; member.accessEpoch++;
-    const response = envelope(structuredClone(member));
-    if (operationId) results.set(operationId, response);
-    return reply(200, response);
-  }
-  return reply(404, { code: 'NOT_FOUND' });
-}) as typeof fetch;
-commandStore.scopeToPerson(personId);
-commandStore.scopeToAccess(schoolId, adminId, 1);
 
 function Preview() {
-  const [refusal, setRefusal] = useState(simulateRefusal);
-  const [selection, setSelection] = useState(params.get('self') === '1' ? adminId : memberId);
-  const drafts = useRef(new Map<string, unknown>());
-  const cache = useRef(new ScopedReadCache());
-  const snapshot = useCommandSnapshot();
+  const navigation = usePreviewNavigation();
+  const { route } = navigation;
+  const [scenario, setScenario] = useState<PreviewScenario>('normal');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [membership, setMembership] = useState(previewMembership);
+  const drafts = useMemo(() => new Map<string, unknown>(), []);
+  const cache = useMemo(() => new ScopedReadCache(), []);
   const value: ConsoleContextValue = {
-    schoolId, school, me: { personId, displayName: 'Luc Martin', version: 1, memberships: [] },
-    membership: { membershipId: adminId, schoolId, schoolName: school.name, roles: ['ADMIN', 'INSTRUCTOR'], grants: [], accessEpoch: 1 },
-    canConfigureCatalog: true, csrf: () => 'synthetic-preview', refreshCsrf: async () => 'synthetic-preview', reloadSchool: async () => {},
-    navigate: () => {}, login: () => {}, routeQuery: { selection }, setRouteQuery: query => setSelection(query.selection ?? memberId), drafts: drafts.current, readCache: cache.current,
+    schoolId: ids.school, school: previewSchool, me: previewMe, membership, canConfigureCatalog: membership.grants.includes('CONFIGURE_CATALOG'),
+    csrf: () => 'synthetic-preview', refreshCsrf: async () => 'synthetic-preview', reloadSchool: async () => {
+      const current = await readSchool(ids.school, `members/${ids.admin}`, memberSchema);
+      commandStore.scopeToAccess(ids.school, ids.admin, current.accessEpoch);
+      setMembership({ ...membership, roles: current.roles, grants: current.grants, accessEpoch: current.accessEpoch });
+    },
+    navigate: navigation.navigate, setRouteQuery: navigation.setRouteQuery, routeQuery: route.query, drafts, readCache: cache,
+    registerUnsavedChanges: navigation.registerUnsavedChanges, confirmNavigation: navigation.confirmNavigation,
+    setNavigationGuard: navigation.setNavigationGuard, login: () => {}, confirmIdentity: async () => true,
   };
-  return <ConsoleContext.Provider value={value}><PortalFrame active="equipe" onNavigate={() => {}} schoolName={school.name} userName="Luc Martin" build={__DRIVY_PREVIEW_SHA__}>
-    {snapshot.entries.size > 0 && <Alert><AlertTitle id="pending-title" tabIndex={-1}>Confirmation de l’aperçu</AlertTitle><AlertDescription>{[...snapshot.entries.values()].some(entry => entry.phase === 'sending') ? 'Enregistrement simulé en cours…' : 'Résultat non confirmé.'}</AlertDescription></Alert>}
-    <AccessPilot initialEdit={params.get('mode') !== 'read'} />
-    <div className="preview-controls"><span>Aperçu interactif · aucun compte réel</span><Button variant="ghost" onClick={() => { simulateRefusal = !refusal; setRefusal(!refusal); }} aria-pressed={refusal}>{refusal ? 'Refus simulé activé' : 'Simuler un refus'}</Button><Button variant="ghost" onClick={() => location.reload()}>Réinitialiser</Button></div>
+  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} onNavigate={page => navigation.navigate(page)} schoolName={previewSchool.name} userName={previewMe.displayName} build={__DRIVY_PREVIEW_SHA__}>
+    <PortalPendingRequests />
+    <Suspense fallback={<div className="grid gap-5" aria-label="Chargement de la page" role="status"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>}>
+      {route.page === 'agenda' ? <Agenda /> : route.page === 'eleves' ? <Learners /> : <AccessPilot initialEdit={!new URLSearchParams(location.search).has('page') && new URLSearchParams(location.search).get('mode') !== 'read'} />}
+    </Suspense>
+    <div className="preview-controls"><span>Aperçu interactif · aucun compte réel</span><Button variant="ghost" onClick={() => setSettingsOpen(true)}>Scénario d’essai</Button><Button variant="ghost" onClick={() => navigation.confirmNavigation(() => { commandStore.clear(); location.reload(); })}>Réinitialiser</Button></div>
+    <Dialog open={navigation.departure !== null} onOpenChange={open => { if (!open) navigation.cancelDeparture(); }}><DialogContent>
+      <DialogHeader><DialogTitle>Quitter sans enregistrer ?</DialogTitle><DialogDescription>Vos modifications ne sont pas encore enregistrées.</DialogDescription></DialogHeader>
+      <DialogFooter><Button variant="outline" onClick={navigation.cancelDeparture}>Continuer la saisie</Button><Button onClick={navigation.leave}>Quitter la page</Button></DialogFooter>
+    </DialogContent></Dialog>
+    <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}><DialogContent>
+      <DialogHeader><DialogTitle>Scénario d’essai</DialogTitle><DialogDescription>Ces situations concernent uniquement les données fictives de cet aperçu.</DialogDescription></DialogHeader>
+      <PortalSelect id="preview-scenario" label="Prochain enregistrement" options={scenarios} value={scenario} onValueChange={value => { if (value) { setScenario(value as PreviewScenario); setPreviewScenario(value as PreviewScenario); } }} />
+      <DialogFooter><Button onClick={() => setSettingsOpen(false)}>Appliquer au prochain essai</Button></DialogFooter>
+    </DialogContent></Dialog>
   </PortalFrame></ConsoleContext.Provider>;
 }
 createRoot(document.getElementById('root')!).render(<Preview />);

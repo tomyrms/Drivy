@@ -12,7 +12,7 @@ export default defineConfig({
       const modules = [...this.getModuleIds()].map(id => id.replaceAll('\\', '/'));
       const legacy = modules.filter(id => /\/client\/(?:ui\.tsx|styles\.css|console\/[^?]*\.tsx)|(?:-studio|people-workspace|portal-shell)\.css/.test(id));
       if (legacy.length) this.error(`Legacy presentation imported by preview: ${legacy.join(', ')}`);
-      this.emitFile({ type: 'asset', fileName: 'preview-build.json', source: JSON.stringify({ sha, scope: 'access-page-only', syntheticData: true, legacyPresentationImports: legacy.length }) });
+      this.emitFile({ type: 'asset', fileName: 'preview-build.json', source: JSON.stringify({ sha, scope: 'access-agenda-learners-pilots', syntheticData: true, legacyPresentationImports: legacy.length }) });
     },
   }],
   resolve: { alias: { '@': fileURLToPath(new URL('./client', import.meta.url)) } },
