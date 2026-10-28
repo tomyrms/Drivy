@@ -79,6 +79,10 @@ import Observation
     @ObservationIgnored private var localDraftRemovalFailed = false
     @ObservationIgnored private var localDraftDiscardRequested = false
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// Dernière révision des objectifs ou du souhait confirmée par l’école, pas encore relue : sa relecture la
+    /// reconnaît comme point de départ, et une saisie faite pendant l’envoi n’y passe pas pour un conflit (#113).
+    @ObservationIgnored private var confirmedPreparation: PreparationContent?
+    @ObservationIgnored private var confirmedWish: String?
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default,
@@ -93,18 +97,23 @@ import Observation
     var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil && !localDraftReadFailed }
     /// Réglage de partage tout juste demandé, en cours d’envoi : la saisie n’en dépend pas.
     private var isSendingSharing: Bool { isBusy && isFirstSend && pending?.kind == .updateLessonSharing }
+    /// Objectifs ou souhait tout juste envoyés (#113) : la saisie continue, la révision suivante attendra leur résultat.
+    private var isSendingTextRevision: Bool {
+        isBusy && isFirstSend && (pending?.kind == .savePreparation || pending?.kind == .saveWish)
+    }
     /// Saisie possible. Une relecture silencieuse ou l’envoi d’un réglage de partage ne ferment rien à l’écran ;
     /// seul un état qui dure le fait : accès retiré, conflit à relire, stockage fermé, demande à vérifier,
     /// contenu en cours d’enregistrement. L’envoi d’une commande reste gardé par `canMutate`.
     var acceptsInput: Bool {
         guard !invalidated, !needsReload, storageAccessible, !awaitsRereadAfterWrite, !localDraftReadFailed else { return false }
-        return pending == nil ? !isBusy : isSendingSharing
+        return pending == nil ? !isBusy : (isSendingSharing || isSendingTextRevision)
     }
     /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
     var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
     var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
-    /// Envoi qui retient la fiche jusqu’à son résultat ; un réglage de partage, bref, ne la retient pas.
-    var holdsScreen: Bool { isBusy && !isSendingSharing }
+    /// Envoi qui retient la fiche jusqu’à son résultat ; un réglage de partage ou une révision des objectifs, déjà
+    /// conservés dans la file chiffrée, ne la retiennent pas.
+    var holdsScreen: Bool { isBusy && !isSendingSharing && !isSendingTextRevision }
     var validTexts: Bool { [workedOn, observationText, nextStep].allSatisfy { $0.unicodeScalars.count <= 4_000 } }
     var preparationValid: Bool {
         goals.count <= 3 && administrativeNote.unicodeScalars.count <= 4_000 && goals.allSatisfy {
@@ -535,11 +544,19 @@ import Observation
                 edited: DraftContent(id: draft?.id ?? UUID(), workedOn: workedOn, observationText: observationText,
                     nextStep: nextStep, observations: observations), received: draftsRead.value?.first.map(DraftContent.init),
                 discardingEdits: discardingEdits || !author)
-            let preparationPolicy = preparationUnread ? SchoolLessonRefreshPolicy.keepEdits : SchoolLessonRefreshPolicy.decide(previous: preparation.map(PreparationContent.init),
-                edited: PreparationContent(goals: goals, note: administrativeNote), received: preparationRead.value.map(PreparationContent.init),
+            // La révision que l’école vient de confirmer, relue telle quelle, sert de point de départ : une saisie
+            // poursuivie pendant son envoi est gardée, jamais remplacée par la réponse ni prise pour un conflit.
+            let receivedPreparation = preparationRead.value.map(PreparationContent.init)
+            let preparationBase = confirmedPreparation.flatMap { $0 == receivedPreparation ? $0 : nil }
+                ?? preparation.map(PreparationContent.init)
+            let preparationPolicy = preparationUnread ? SchoolLessonRefreshPolicy.keepEdits : SchoolLessonRefreshPolicy.decide(previous: preparationBase,
+                edited: PreparationContent(goals: goals, note: administrativeNote), received: receivedPreparation,
                 discardingEdits: discardingEdits || !author)
-            let wishPolicy = SchoolLessonRefreshPolicy.decide(previous: wish?.text, edited: wishText,
+            let wishBase = confirmedWish.flatMap { $0 == wishRead.value?.text ? $0 : nil } ?? wish?.text
+            let wishPolicy = SchoolLessonRefreshPolicy.decide(previous: wishBase, edited: wishText,
                 received: wishRead.value?.text, discardingEdits: discardingEdits || !isOwn)
+            if !preparationUnread { confirmedPreparation = nil }
+            if wishRead.message == nil { confirmedWish = nil }
             var conflict = draftPolicy == .conflict || preparationPolicy == .conflict || wishPolicy == .conflict
             self.lesson = lesson
             if preparationPolicy != .conflict, !preparationUnread { preparation = preparationRead.value }
@@ -790,7 +807,16 @@ import Observation
             try outbox.remove(command)
             guard request == generation, !invalidated else { return false }
             pending = nil; isBusy = false
-            if command.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
+            // Objectifs et souhait : la saisie continue jusqu’à la relecture, qui reconnaît la révision confirmée.
+            switch command.kind {
+            case .savePreparation:
+                confirmedPreparation = (try? JSONDecoder().decode(SchoolSavePreparation.self, from: command.body))
+                    .map { PreparationContent(goals: $0.goals, note: $0.administrativeCheckNote) }
+            case .saveWish:
+                confirmedWish = (try? JSONDecoder().decode(SchoolSaveWish.self, from: command.body))?.text
+            case .updateLessonSharing: break
+            default: awaitsRereadAfterWrite = true
+            }
             announceConfirmedChange(command)
             if confirmsThisReport(command) { discardLocalDraft(); reportSaveConfirmed = true; return true }
             confirmation = Self.confirmationText(for: command.kind)
