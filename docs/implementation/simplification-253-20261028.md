@@ -1,5 +1,7 @@
 # Épic #253 — parcours simplifié, livraison de qualification
 
+Actualisation après le mandat initial : l’[IPA combinée avec les 15 corrections UX B](preuve-ipa-253-uxb-20261028.md) a compilé. Le porteur a ensuite autorisé le [déploiement web/API et la remise à zéro des données et comptes](deploiement-reset-253-20261028.md), exécutés avec sauvegardes restaurées sur copies de contrôle. Les mentions de déploiement non exécuté ci-dessous décrivent l’état avant cette nouvelle autorisation ; le reçu fait foi pour l’état publié.
+
 Mandat élargi par le porteur aux autres lots de l’épic, puis autorisation de travailler avec plusieurs agents. Branche `codex/simplification-253`, issue de `2c15a061` (premier accueil, PR #278). Le checkout de messagerie de l’autre intervenant n’est pas modifié. Aucun ticket n’est fermé sur la seule existence du code. Les prototypes abandonnés de `s01-premier-usage/` ne font pas partie de cette livraison.
 
 ## Parcours retenu — S01
