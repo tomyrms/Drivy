@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Le montant reste disponible après une erreur et aucune fermeture ne jette la saisie sans choix explicite.
+/// Aucune fermeture ne jette la saisie sans choix explicite. Une fois enregistré, le montant part dans la file de
+/// l’élève et la feuille se ferme : la ligne l’affiche « en cours » (jamais dans le montant payé) jusqu’à la
+/// réponse, puis propose de renvoyer la même opération s’il n’est pas confirmé (#129).
 struct SchoolCoursePaymentSheet: View {
     @Bindable var model: SchoolCourseAttendanceWorkspace
     let row: SchoolCourseSheetRow
@@ -11,35 +13,30 @@ struct SchoolCoursePaymentSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let error = model.errorMessage {
-                    Section { DrivyFormMessage(text: error, tone: .danger) }.drivyFormRows()
-                }
                 Section {
                     Text(row.learnerDisplayName).font(.headline)
-                    TextField("Montant en CHF", text: $amount).keyboardType(.decimalPad).disabled(model.isBusy)
+                    TextField("Montant en CHF", text: $amount).keyboardType(.decimalPad)
                         .accessibilityIdentifier("course-payment-amount")
                     Button("Enregistrer le règlement") {
                         guard let cents = SchoolCatalogFormatting.cents(amount), cents > 0 else { return }
-                        Task {
-                            if await model.perform(.payment(enrollmentID: row.enrollmentId, amountCents: cents), learnerName: row.learnerDisplayName) { dismiss() }
-                        }
+                        model.submit(.payment(enrollmentID: row.enrollmentId, amountCents: cents), learnerName: row.learnerDisplayName)
+                        dismiss()
                     }
-                    .disabled(model.isBusy || (SchoolCatalogFormatting.cents(amount) ?? 0) <= 0)
+                    .disabled((SchoolCatalogFormatting.cents(amount) ?? 0) <= 0)
                     .accessibilityIdentifier("course-payment-submit")
-                    if model.isBusy { ProgressView().accessibilityLabel("Enregistrement en cours") }
                 }.drivyFormRows()
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
             .navigationTitle("Payé sur place").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button("Fermer") { if amount.isEmpty { dismiss() } else { confirmsDiscard = true } }.disabled(model.isBusy)
+                Button("Fermer") { if amount.isEmpty { dismiss() } else { confirmsDiscard = true } }
             } }
             .alert("Quitter sans conserver le montant ?", isPresented: $confirmsDiscard) {
                 Button("Quitter", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) {}
             }
         }
-        .interactiveDismissDisabled(model.isBusy || !amount.isEmpty)
+        .interactiveDismissDisabled(!amount.isEmpty)
         .tint(DrivyTheme.accent)
     }
 }

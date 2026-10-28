@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Appel d’une séance commencée : un élève par ligne, trois gros boutons, l’état affiché vient du serveur.
+/// Appel d’une séance commencée : un élève par ligne, trois gros boutons. Le choix s’affiche aussitôt, chaque
+/// ligne suit son propre envoi (#128-#130) ; « Appel renseigné » ne compte que ce que l’école a enregistré.
 struct SchoolCourseAttendanceView: View {
     @Bindable var model: SchoolCourseAttendanceWorkspace
     @Environment(\.dismiss) private var dismiss
@@ -10,15 +11,13 @@ struct SchoolCourseAttendanceView: View {
     @State private var reversal: SchoolCourseReversal?
     @State private var mode: SchoolCourseParticipantMode = .attendance
     @State private var onlyUnmarked = false
+    @State private var confirmsClose = false
 
     var body: some View {
         NavigationStack {
             Form {
                 if let message = model.errorMessage {
                     Section { DrivyFormMessage(text: message, tone: .danger) }.drivyFormRows()
-                }
-                if let confirmation = model.confirmation {
-                    Section { DrivyFormMessage(text: confirmation, tone: .success) }.drivyFormRows()
                 }
                 if model.sheet != nil {
                     content
@@ -31,7 +30,10 @@ struct SchoolCourseAttendanceView: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .navigationTitle("Participants").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) {
+                Button("Fermer") { if model.hasUnconfirmed { confirmsClose = true } else { dismiss() } }
+                    .disabled(model.isSending)
+            } }
             .task { await model.load() }
             .refreshable { await model.load() }
             .onChange(of: model.rights, initial: true) { _, rights in
@@ -41,15 +43,19 @@ struct SchoolCourseAttendanceView: View {
             .onChange(of: model.errorMessage) { _, message in
                 if let message { UIAccessibility.post(notification: .announcement, argument: message) }
             }
-            .onChange(of: model.confirmation) { _, message in
-                if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+            .onChange(of: model.announcement) { _, announcement in
+                if let announcement { UIAccessibility.post(notification: .announcement, argument: announcement.text) }
+            }
+            .confirmationDialog("Des changements ne sont pas confirmés", isPresented: $confirmsClose, titleVisibility: .visible) {
+                Button("Fermer sans les reprendre", role: .destructive) { dismiss() }
+                Button("Rester", role: .cancel) {}
             }
             .sheet(item: $paying) { row in SchoolCoursePaymentSheet(model: model, row: row) }
             .confirmationDialog(validating.map { "Valider le cours pour \(name($0)) ?" } ?? "",
                                 isPresented: Binding(get: { validating != nil }, set: { if !$0 { validating = nil } }),
                                 titleVisibility: .visible) {
                 if let row = validating {
-                    Button("Valider") { Task { await model.perform(.validate(enrollmentID: row.enrollmentId), learnerName: name(row)) } }
+                    Button("Valider") { model.submit(.validate(enrollmentID: row.enrollmentId), learnerName: name(row)) }
                 }
                 Button("Annuler", role: .cancel) { validating = nil }
             }
@@ -57,7 +63,7 @@ struct SchoolCourseAttendanceView: View {
                 SchoolCourseReversalSheet(model: model, target: target)
             }
         }
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(model.isSending || model.hasUnconfirmed)
         .tint(DrivyTheme.accent)
     }
 
@@ -101,7 +107,6 @@ struct SchoolCourseAttendanceView: View {
                                 .tag(Optional(occurrence.id))
                         }
                     }
-                    .disabled(model.isBusy)
                 }
                 .drivyFormRows()
             }
@@ -126,19 +131,20 @@ struct SchoolCourseAttendanceView: View {
     private func name(_ row: SchoolCourseSheetRow) -> String { row.learnerDisplayName.isEmpty ? "Élève" : row.learnerDisplayName }
 
     @ViewBuilder private func learnerRow(_ row: SchoolCourseSheetRow, occurrence: SchoolCourseOccurrence) -> some View {
-        let mark = row.mark(occurrence.id)
+        let shown = model.displayedStatus(row, occurrenceID: occurrence.id)
         let rights = model.rights
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             learnerHeader(row)
-            if mark?.status == nil { Text("Non renseigné").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
+            if shown == nil { Text("Non renseigné").font(.subheadline).foregroundStyle(DrivyTheme.muted) }
             if rights?.canTakeAttendance == true {
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: DrivySpacing.xs) { statusButtons(row, mark: mark, occurrence: occurrence) }
-                    VStack(spacing: DrivySpacing.xs) { statusButtons(row, mark: mark, occurrence: occurrence) }
+                    HStack(spacing: DrivySpacing.xs) { statusButtons(row, shown: shown, occurrence: occurrence) }
+                    VStack(spacing: DrivySpacing.xs) { statusButtons(row, shown: shown, occurrence: occurrence) }
                 }
-            } else if let status = mark?.status {
+            } else if let status = shown {
                 Text(SchoolCourseSheetFormat.title(status)).font(.subheadline)
             }
+            rowFeedback(row)
         }
         .padding(.vertical, DrivySpacing.xxs)
     }
@@ -147,7 +153,42 @@ struct SchoolCourseAttendanceView: View {
         HStack(spacing: DrivySpacing.xs) {
             Text(name(row)).font(.body.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            if model.busyEnrollment == row.enrollmentId { ProgressView().accessibilityLabel("Envoi en cours") }
+            if model.isSending(row) { ProgressView().accessibilityLabel("Envoi en cours") }
+        }
+    }
+
+    /// Retour propre à la ligne : reprise d’un envoi non confirmé, ou refus de l’école à lire puis masquer.
+    @ViewBuilder private func rowFeedback(_ row: SchoolCourseSheetRow) -> some View {
+        if let pending = model.unconfirmed(row) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                Label(pending.message, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                HStack(spacing: DrivySpacing.xs) {
+                    Button("Réessayer") { model.retry(row.enrollmentId) }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .accessibilityLabel("Réessayer, \(name(row))")
+                        .accessibilityHint("Renvoie la même demande, sans doublon")
+                        .accessibilityIdentifier("course-sheet-retry")
+                    Button("Abandonner", role: .destructive) { model.abandon(row.enrollmentId) }
+                        .buttonStyle(DrivySecondaryButtonStyle())
+                        .accessibilityLabel("Abandonner, \(name(row))")
+                        .accessibilityHint("Elle a peut-être été enregistrée : la liste est relue")
+                        .accessibilityIdentifier("course-sheet-abandon")
+                }
+            }
+        } else if let notice = model.notices[row.enrollmentId] {
+            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
+                DrivyFormMessage(text: notice, tone: .danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("course-sheet-notice")
+                Button("Masquer", systemImage: "xmark") { model.clearNotice(row.enrollmentId) }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
+                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Masquer le refus, \(name(row))")
+            }
         }
     }
 
@@ -155,25 +196,38 @@ struct SchoolCourseAttendanceView: View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             learnerHeader(row)
             if model.rights?.canRecordPayment == true {
+                // Montant payé : règlements enregistrés seulement ; une saisie en cours est listée à part.
                 let paid = row.payments.filter { $0.voidedAt == nil }.reduce(Int64(0)) { $0 + $1.amountCents }
                 if paid > 0 {
                     Text("Payé : \(SchoolCatalogFormatting.price(paid))").font(.subheadline).monospacedDigit()
                 }
+                ForEach(model.pendingPayments(row)) { intent in
+                    if case .payment(_, let cents) = intent.action {
+                        Label("\(SchoolCatalogFormatting.price(cents)) · \(intent.state == .sending || intent.state == .queued ? "envoi en cours" : "non confirmé")",
+                              systemImage: "clock")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+                            .accessibilityIdentifier("course-payment-pending")
+                    }
+                }
                 ForEach(row.payments.filter { $0.voidedAt == nil }) { payment in
-                    Button {
-                        reversal = SchoolCourseReversal(kind: .payment(payment.id, payment.amountCents), enrollmentID: row.enrollmentId, learnerName: name(row))
-                    } label: { Label("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents))", systemImage: "arrow.uturn.backward") }
-                        .buttonStyle(DrivySecondaryButtonStyle())
-                        .disabled(model.isBusy)
-                        .accessibilityLabel("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents)), \(name(row))")
-                        .accessibilityIdentifier("course-payment-void")
+                    if model.isVoiding(payment.id, in: row) {
+                        Label("Annulation du règlement de \(SchoolCatalogFormatting.price(payment.amountCents)) en cours", systemImage: "clock")
+                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    } else {
+                        Button {
+                            reversal = SchoolCourseReversal(kind: .payment(payment.id, payment.amountCents), enrollmentID: row.enrollmentId, learnerName: name(row))
+                        } label: { Label("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents))", systemImage: "arrow.uturn.backward") }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                            .accessibilityLabel("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents)), \(name(row))")
+                            .accessibilityIdentifier("course-payment-void")
+                    }
                 }
                 Button { paying = row } label: { Label("Payé sur place", systemImage: "banknote") }
                     .buttonStyle(DrivySecondaryButtonStyle())
-                    .disabled(model.isBusy)
                     .accessibilityLabel("Payé sur place, \(name(row))")
                     .accessibilityIdentifier("course-payment")
             }
+            rowFeedback(row)
         }
         .padding(.vertical, DrivySpacing.xxs)
     }
@@ -187,36 +241,40 @@ struct SchoolCourseAttendanceView: View {
             }
             if let completion = row.completion, completion.revokedAt == nil {
                 Label("Cours validé", systemImage: "checkmark.seal.fill").font(.subheadline.weight(.semibold))
-                if model.rights?.canValidate == true {
+                if model.isRevoking(row) {
+                    Label("Retrait de la validation en cours", systemImage: "clock").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                } else if model.rights?.canValidate == true {
                     Button {
                         reversal = SchoolCourseReversal(kind: .completion(completion.id), enrollmentID: row.enrollmentId, learnerName: name(row))
                     } label: { Label("Retirer la validation", systemImage: "xmark.seal") }
                         .buttonStyle(DrivySecondaryButtonStyle())
-                        .disabled(model.isBusy)
                         .accessibilityLabel("Retirer la validation, \(name(row))")
                         .accessibilityIdentifier("course-completion-revoke")
                 }
+            } else if model.isValidating(row) {
+                // Jamais « Cours validé » avant la réponse de l’école.
+                Label("Validation en cours", systemImage: "clock").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    .accessibilityIdentifier("course-validate-pending")
             } else if model.rights?.canValidate == true && row.requirements.required > 0 {
                 Button { validating = row } label: { Label("Valider le cours", systemImage: "checkmark.seal") }
                     .buttonStyle(DrivySecondaryButtonStyle())
-                    .disabled(model.isBusy || !model.canValidate(row))
+                    .disabled(!model.canValidate(row))
                     .accessibilityLabel("Valider le cours, \(name(row))")
                     .accessibilityIdentifier("course-validate")
             }
+            rowFeedback(row)
         }
         .padding(.vertical, DrivySpacing.xxs)
     }
 
-    @ViewBuilder private func statusButtons(_ row: SchoolCourseSheetRow, mark: SchoolCourseAttendanceMark?, occurrence: SchoolCourseOccurrence) -> some View {
+    @ViewBuilder private func statusButtons(_ row: SchoolCourseSheetRow, shown: SchoolCourseAttendanceStatus?, occurrence: SchoolCourseOccurrence) -> some View {
         ForEach(SchoolCourseAttendanceStatus.allCases, id: \.self) { status in
-            let selected = mark?.status == status
+            let selected = shown == status
             Button {
-                // Retoucher l’état déjà enregistré n’envoie rien.
+                // Retoucher l’état affiché n’envoie rien ; la version attendue est lue au moment de l’envoi.
                 guard !selected else { return }
-                Task {
-                    await model.perform(.attendance(enrollmentID: row.enrollmentId, occurrenceID: occurrence.id, status: status,
-                        expectedVersion: mark?.version), learnerName: name(row))
-                }
+                model.submit(.attendance(enrollmentID: row.enrollmentId, occurrenceID: occurrence.id, status: status,
+                    expectedVersion: nil), learnerName: name(row))
             } label: {
                 Label(SchoolCourseSheetFormat.title(status), systemImage: selected ? "checkmark.circle.fill" : icon(status))
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -224,7 +282,6 @@ struct SchoolCourseAttendanceView: View {
             .buttonStyle(.bordered)
             .tint(selected ? DrivyTheme.accent : nil)
             .fontWeight(selected ? .semibold : .regular)
-            .disabled(model.isBusy)
             .accessibilityLabel("\(SchoolCourseSheetFormat.title(status)), \(name(row))")
             .accessibilityAddTraits(selected ? .isSelected : [])
             .accessibilityIdentifier("course-attendance-\(status.rawValue.lowercased())")
@@ -268,7 +325,8 @@ struct SchoolCourseReversal: Identifiable {
     }
 }
 
-/// Motif obligatoire puis confirmation ; une nouvelle tentative avec le même motif rejoue la même opération.
+/// Motif obligatoire puis confirmation. La feuille se ferme aussitôt ; la ligne de l’élève suit l’envoi et,
+/// s’il n’est pas confirmé, propose de renvoyer la même opération.
 struct SchoolCourseReversalSheet: View {
     let model: SchoolCourseAttendanceWorkspace
     let target: SchoolCourseReversal
@@ -276,32 +334,21 @@ struct SchoolCourseReversalSheet: View {
     @State private var reason = ""
     @State private var confirming = false
     @State private var confirmsDiscard = false
-    @State private var error: String?
     @FocusState private var focused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
-                if let error {
-                    Section { DrivyFormMessage(text: error, tone: .danger) }.drivyFormRows()
-                }
                 Section {
                     TextField("Motif", text: $reason, axis: .vertical)
                         .lineLimit(2...5)
                         .focused($focused)
-                        .disabled(model.isBusy)
                         .accessibilityIdentifier("course-reversal-reason")
                 } header: { Text(target.learnerName).drivyFormSectionHeader() }
                 .drivyFormRows()
                 Section {
-                    Button(role: .destructive) { confirming = true } label: {
-                        HStack {
-                            Text(target.title)
-                            Spacer(minLength: 0)
-                            if model.isBusy { ProgressView().accessibilityLabel("Envoi en cours") }
-                        }
-                    }
-                    .disabled(model.isBusy || SchoolCourseSheetFormat.reason(reason) == nil)
+                    Button(target.title, role: .destructive) { confirming = true }
+                    .disabled(SchoolCourseSheetFormat.reason(reason) == nil)
                     .accessibilityIdentifier("course-reversal-submit")
                 }
                 .drivyFormRows()
@@ -310,12 +357,12 @@ struct SchoolCourseReversalSheet: View {
             .background(DrivyTheme.canvas)
             .navigationTitle(target.title).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button("Fermer") { if reason.isEmpty { dismiss() } else { confirmsDiscard = true } }.disabled(model.isBusy)
+                Button("Fermer") { if reason.isEmpty { dismiss() } else { confirmsDiscard = true } }
             } }
-            // L’annonce VoiceOver de l’erreur et de la confirmation vient de l’écran d’appel (model.errorMessage / confirmation).
+            // L’annonce VoiceOver de l’erreur et de la confirmation vient de l’écran d’appel (model.announcement).
             .onAppear { focused = true }
             .confirmationDialog(target.question, isPresented: $confirming, titleVisibility: .visible) {
-                Button(target.title, role: .destructive) { Task { await submit() } }
+                Button(target.title, role: .destructive) { submit() }
                 Button("Ne rien changer", role: .cancel) {}
             }
             .alert("Quitter sans conserver le motif ?", isPresented: $confirmsDiscard) {
@@ -323,17 +370,13 @@ struct SchoolCourseReversalSheet: View {
                 Button("Continuer", role: .cancel) {}
             }
         }
-        .interactiveDismissDisabled(model.isBusy || !reason.isEmpty)
+        .interactiveDismissDisabled(!reason.isEmpty)
         .tint(DrivyTheme.accent)
     }
 
-    private func submit() async {
-        guard !model.isBusy, let clean = SchoolCourseSheetFormat.reason(reason) else { return }
-        error = nil
-        if await model.perform(target.action(reason: clean), learnerName: target.learnerName) {
-            dismiss()
-        } else {
-            error = model.errorMessage ?? "Échec de l’envoi. Réessayez."
-        }
+    private func submit() {
+        guard let clean = SchoolCourseSheetFormat.reason(reason) else { return }
+        model.submit(target.action(reason: clean), learnerName: target.learnerName)
+        dismiss()
     }
 }
