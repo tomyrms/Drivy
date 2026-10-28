@@ -1210,3 +1210,9 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - NOT_EXECUTED : recette physique, VoiceOver et réseau dégradé réel.
 - Messages (#142, #168, #177) : fait aussi par le lot 9 (PR #191) ; la version de master est gardée, avec en plus les durées de sourdine 1 h, 8 h, 1 jour et les lignes de sondage à 44 pt.
 - Qualification : essai du porteur validé (IPA `226dee20`) ; 859 tests métier et suites UI Messages, cours, formulaires et bilan réussis sur iPhone et iPad (runs 40686053375, 40686057743, 40694974479). iOS seul, aucun déploiement.
+
+## 28 octobre 2026 : cours collectifs, audit UX B29 à B31 et B34 (#221, #222, #223, #226)
+
+- Branche `claude/cours-audit-b29-b34-20261028`, partie de `master` `e5166404`. iOS seul : aucun contrat, aucune migration, aucun déploiement.
+- Langue du cours dans la fiche et la confirmation d'inscription, seulement si l'école l'a renseignée ; un code hors catalogue garde son nom système (#221). Haut de Leçons : les places proposées sont comptées et le prochain cours reste visible ; en très grand texte, une seule ligne les résume et ouvre la liste (#222). Refuser une place ou quitter la liste d'attente demande une confirmation qui dit la conséquence réelle des fonctions SQL : place passée à la personne suivante, rang perdu, retour en dernier (#223). « Payé sur place » devient « Enregistrer un règlement », feuille « Règlement sur place » (#226).
+- PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier et UI (deux tests métier ajoutés, test UI du règlement adapté au nouveau titre), essai du porteur, VoiceOver physique.
