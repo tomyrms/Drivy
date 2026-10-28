@@ -2,9 +2,17 @@
 
 Le 28 octobre 2026, le porteur réduit le jalon immédiat à **une seule page Modifier les accès**, déployée pour décider de la direction artistique. Ce lot ne prétend pas réaliser toutes les variantes de R03, la navigation complète R05 ou la galerie R06.
 
+## Reprise après le premier retour visuel
+
+Le porteur indique « c'est déjà bien mieux », puis « continue ». La page d'accès reste la référence visuelle ; le socle peut maintenant relier les trois pilotes. `PortalFrame` active `active` et `onNavigate` pour Agenda, Élèves et Équipe. Un seul arbre de navigation devient un rail de 208 px à partir de 1024 px et une barre basse à trois destinations en dessous. Les libellés restent visibles, les cibles mesurent au moins 44 px et la zone de sécurité mobile est respectée. La page et ses formulaires ne sont pas dupliqués selon la largeur.
+
+Le callback demande la navigation au coordinateur, qui conserve les gardes de sortie et la commande en cours. Le shell ne change pas lui-même l'onglet avant cette décision ; un changement effectif de `active` remet le focus au contenu. Retour, liens profonds, accès retirés et périmètres scolaires restent des responsabilités du raccord métier. Aucune destination supplémentaire n'est affichée sans pilote réellement raccordé.
+
+Le Select officiel Base UI est ajouté via le même registre CLI 4.23.0 ; `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem`, `SelectGroup`, `SelectLabel` et `SelectSeparator` conservent leurs API officielles. Valeur et labels sont fournis à `Select` via `value`/`onValueChange`/`items`. Voir [Select officiel](https://ui.shadcn.com/docs/components/base/select). TypeScript client exécuté après le raccord navigation/Select : PASS. La vérification visuelle des trois pilotes attend leur intégration ; cette étape ne ferme pas R03/R05/R06.
+
 ## Frontière neuve
 
-`client/portal/portal.css` est une entrée indépendante, avec son reset Tailwind et les tokens Drivy explicitement conservés. Aucun import de `styles.css`, `ui.tsx`, `console/layout.tsx`, feuille Studio ou ancien shell. `PortalFrame` fournit seulement l'en-tête Drivy, le contexte scolaire, le menu d'apparence fonctionnel et le SHA de l'aperçu. Aucune destination inactive n'est simulée pour remplir une navigation. Les liens vers les autres pilotes attendent la décision visuelle.
+`client/portal/portal.css` est une entrée indépendante, avec son reset Tailwind et les tokens Drivy explicitement conservés. Aucun import de `styles.css`, `ui.tsx`, `console/layout.tsx`, feuille Studio ou ancien shell. Au premier jalon, `PortalFrame` fournit seulement l'en-tête Drivy, le contexte scolaire, le menu d'apparence fonctionnel et le SHA de l'aperçu. La reprise autorisée ajoute ensuite les trois destinations ci-dessus.
 
 La police Manrope locale, sa licence, le symbole Drivy et le contrôleur neutre de thème existant sont conservés. Seule la préférence d'apparence reste persistée. Aucun cache métier, appel tiers, stockage scolaire ou nouvelle dépendance runtime.
 
@@ -18,7 +26,7 @@ Références : [Checkbox](https://ui.shadcn.com/docs/components/base/checkbox), 
 
 ## Contrats pour le coordinateur
 
-- `PortalFrame` conserve le contrat décrit dans `epic-311-coordination.md` ; `active`/`onNavigate` restent disponibles pour la suite mais ne créent aucun lien factice dans cette page unique.
+- `PortalFrame` conserve le contrat décrit dans `epic-311-coordination.md` ; `active`/`onNavigate` pilotent maintenant les trois destinations raccordées par le coordinateur.
 - Checkbox : `checked`, `onCheckedChange`, `disabled`, label externe lié par `id`/`htmlFor`.
 - Tabs : `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`, `value`/`onValueChange` officiels ; `keepMounted` disponible pour garder un brouillon lors d'une commutation.
 - Avatar avec `AvatarFallback`, aucune photo de personne réelle inventée.
