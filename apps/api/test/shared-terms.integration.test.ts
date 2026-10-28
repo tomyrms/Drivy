@@ -64,3 +64,27 @@ it('conserve la fenêtre passée d’un tarif expiré sans bloquer ni réactiver
  const rows=(await pool.query("SELECT version,to_char(valid_from,'YYYY-MM-DD') AS starts,to_char(valid_until,'YYYY-MM-DD') AS ends FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2 ORDER BY version",[id.schoolA,expired.key])).rows;
  expect(rows).toEqual([{version:1,starts:'2020-01-01',ends:'2020-12-31'},{version:2,starts:'2020-01-01',ends:'2020-12-31'}]);
 });
+
+it.each([
+ {label:'futures',starts:'2100-01-01',ends:'2100-12-31',status:'TERMS_NOT_YET',revisedStarts:'2100-01-01'},
+ {label:'expirées',starts:'2020-01-01',ends:'2020-12-31',status:'TERMS_EXPIRED',revisedStarts:'2020-01-01'},
+ {label:'actives avec une fin',starts:'2020-01-01',ends:'2100-12-31',status:'OFFERED',revisedStarts:null},
+])('conserve les bornes des conditions $label même si les tarifs n’ont aucune date de fin',async window=>{
+ const fixture=await sharedProducts();
+ await pool.query('UPDATE drivy.commercial_terms_version SET valid_from=$2,valid_until=$3 WHERE id=$1',[fixture.termsId,window.starts,window.ends]);
+ const sheet=async()=>{
+  const response=await call('GET','/formations/sheet?category=B',undefined,undefined,admin);
+  expect(response.statusCode,response.body).toBe(200);
+  return response.json().data.tariffs as {productKey:string;status:string;head:{validUntil:string|null};terms:{id:string;validFrom:string;validUntil:string|null}}[];
+ };
+ for(const tariff of (await sheet()).filter(item=>fixture.products.some(product=>product.key===item.productKey)))expect(tariff.status).toBe(window.status);
+ const revised=await revise(command(fixture));expect(revised.statusCode,revised.body).toBe(201);
+ const tariffs=await sheet();
+ for(const product of fixture.products){
+  const tariff=tariffs.find(item=>item.productKey===product.key);
+  expect(tariff).toMatchObject({status:window.status,head:{validUntil:null},
+   terms:{id:revised.json().data.id,validFrom:window.revisedStarts??today(),validUntil:window.ends}});
+ }
+ const previous=(await pool.query("SELECT to_char(valid_from,'YYYY-MM-DD') AS starts,to_char(valid_until,'YYYY-MM-DD') AS ends,terms_text AS text FROM drivy.commercial_terms_version WHERE id=$1",[fixture.termsId])).rows[0];
+ expect(previous).toEqual({starts:window.starts,ends:window.ends,text:fixture.termsText});
+});

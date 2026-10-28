@@ -89,10 +89,10 @@ export async function insertOffering(db:PoolClient,schoolId:string,value:Offerin
   SELECT $1,$2,$3,$4,coalesce(max(version),0)+1,$5,$6,$7,$8,$9,$10 FROM drivy.offering_version WHERE school_id=$2 AND offering_key=$3 RETURNING id,version`,
   [randomUUID(),schoolId,value.offeringKey,value.categoryCode,value.enabled,value.curriculumVersionId,value.policyVersionId,value.defaultDurationMinutes,value.defaultPriceCents,value.label])).rows[0]!;
 }
-export async function insertTerms(db:PoolClient,schoolId:string,membershipId:string,value:{label:string;termsText:string;validFrom:string},reason=''){
+export async function insertTerms(db:PoolClient,schoolId:string,membershipId:string,value:{label:string;termsText:string;validFrom:string;validUntil?:string|null},reason=''){
  return (await db.query<{id:string}>(`INSERT INTO drivy.commercial_terms_version(school_id,version,label,terms_text,valid_from,valid_until,approved,approval_reason,approved_by,approved_at,created_by)
-  SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,NULL,true,$5,$6,now(),$6 FROM drivy.commercial_terms_version WHERE school_id=$1 RETURNING id`,
-  [schoolId,value.label.slice(0,200),value.termsText,value.validFrom,reason,membershipId])).rows[0]!.id;
+  SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,$7,true,$5,$6,now(),$6 FROM drivy.commercial_terms_version WHERE school_id=$1 RETURNING id`,
+  [schoolId,value.label.slice(0,200),value.termsText,value.validFrom,reason,membershipId,value.validUntil??null])).rows[0]!.id;
 }
 export const reviseSharedTermsCommand=z.object({operationId:z.uuid(),termsVersionId:z.uuid(),
  expectedProductVersionIds:z.array(z.uuid()).min(1).max(200).refine(ids=>new Set(ids).size===ids.length),
@@ -110,7 +110,9 @@ async function reviseSharedTerms(db:PoolClient,actor:CommandActor,school:SchoolR
   WHERE p.school_id=$1 AND p.category_code=ANY($2::text[])`,[school.id,products.flatMap(item=>item.categoryCode?[item.categoryCode]:[])])).rows;
  for(const rule of cancellations)if(rule.text.trim()&&old.termsText.includes(rule.text)&&!body.termsText.includes(rule.text))throw new ApiError(422,'CANCELLATION_REVIEW_REQUIRED','La règle d’annulation appartient aussi au programme. Modifiez-la depuis sa fiche avant de préparer de nouvelles conditions.');
  const today=await schoolToday(db,school.id);
- const termsId=await insertTerms(db,school.id,actor.membershipId,{label:old.label,termsText:body.termsText,validFrom:today});
+ // Réviser le texte ne prolonge pas les conditions et n'avance pas leur entrée en vigueur.
+ const termsId=await insertTerms(db,school.id,actor.membershipId,{label:old.label,termsText:body.termsText,
+  validFrom:old.validUntil!==null&&old.validUntil<today?old.validFrom:old.validFrom>today?old.validFrom:today,validUntil:old.validUntil});
  for(const product of products){
   await insertProduct(db,school.id,{...product,unitPriceCents:product.unitPriceCents,termsVersionId:termsId,
    validFrom:product.validUntil!==null&&product.validUntil<today?product.validFrom:product.validFrom>today?product.validFrom:today});

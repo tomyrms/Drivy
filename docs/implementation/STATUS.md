@@ -1253,3 +1253,8 @@ Branche `codex/simplification-253`. [État des 24 sujets et recette](simplificat
 ## 28 octobre 2026 — IPA combinée épic #253 et 15 corrections UX B
 
 À la demande du porteur, intégration de `claude/replay-audit-b42-b44-20261028` (`db855a853f9c64b438d521e25fbe2666f50145a5`) dans la branche de travail `codex/simplification-253`. Les 15 issues #221–226, #233–236, #239, #242–245 sont incluses ; aucune n’est fermée. Conflits de replay et de ce suivi résolus en conservant les deux ensembles. La compilation indépendante de la branche UX B a réussi (run 40727684500). Le run IPA 40730352252 de #253 seul a été annulé après l’élargissement ; il ne qualifie pas cette intégration. Nouvelle compilation combinée à relever après exécution. Tests ciblés et essai physique restent NOT_EXECUTED ; aucun merge vers master ni déploiement.
+
+
+## 28 octobre 2026 — preuve IPA combinée et demande de remise à zéro
+
+IPA du commit `77306e9882216688b3250c77f72047619c42ad04` compilée et vérifiée : [preuve](preuve-ipa-253-uxb-20261028.md), run 40731165137 PASS, build 441, accès Messages de qualification inclus. Empreintes du paquet et fichiers annexes vérifiées. Tests et appareil physique NOT_EXECUTED. Le porteur a ensuite explicitement demandé le déploiement web et l’effacement des données et des comptes Drivy, confirmé dans la clarification. Préparation en cours : inventaire, sauvegardes vérifiées, conservation des services techniques et retour arrière ; aucune suppression annoncée avant exécution. Revue supplémentaire : la révision des conditions communes conserve désormais aussi leurs bornes de validité ; typage et compilation API PASS, trois régressions PostgreSQL préparées non exécutées. Aucun changement natif depuis le commit de l’IPA.
