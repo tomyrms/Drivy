@@ -8,10 +8,11 @@ import XCTest
         let app = launch(delay: 15)
         let started = react(in: app)
         let capsule = heart(in: app)
-        XCTAssertTrue(capsule.waitForExistence(timeout: 3), app.debugDescription)
+        XCTAssertTrue(capsule.waitForExistence(timeout: 5), app.debugDescription)
         let visualSeconds = Date().timeIntervalSince(started)
         XCTAssertLessThan(visualSeconds, 10, "Le retour local précède la réponse retardée de 15 secondes")
-        XCTAssertTrue(capsule.label.contains("synchronisation"), capsule.label)
+        XCTAssertTrue(capsule.label.contains("Cœur 1, vous avez réagi, en cours de synchronisation"), capsule.label)
+        assertMenuClosed(app)
         let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         XCTAssertTrue(composer.isEnabled)
         let slow = app.descendants(matching: .any)["messaging.mutation.slow"].firstMatch
@@ -25,7 +26,10 @@ import XCTest
         composer.tap(); composer.typeText("Saisie conservée")
         XCTAssertTrue((composer.value as? String)?.contains("Saisie conservée") == true)
 
-        XCTAssertTrue(wait(heart(in: app), "label == 'Cœur, 1, vous avez réagi'", timeout: 12), app.debugDescription)
+        // Confirmée : plus aucun état provisoire lu avec la réaction.
+        XCTAssertTrue(wait(target(in: app), "label CONTAINS 'Cœur 1, vous avez réagi' AND NOT (label CONTAINS 'synchronisation')"
+                           + " AND NOT (label CONTAINS 'non confirmée') AND NOT (label CONTAINS 'en attente de connexion')",
+                           timeout: 12), app.debugDescription)
         XCTAssertFalse(uncertain.exists)
         XCTAssertTrue((composer.value as? String)?.contains("Saisie conservée") == true)
         record(visualSeconds: visualSeconds, confirmationSeconds: Date().timeIntervalSince(started), injectedDelay: 15)
@@ -36,10 +40,11 @@ import XCTest
         let app = launch(delay: 5)
         let started = react(in: app)
         let capsule = heart(in: app)
-        XCTAssertTrue(capsule.waitForExistence(timeout: 3), app.debugDescription)
+        XCTAssertTrue(capsule.waitForExistence(timeout: 5), app.debugDescription)
         let visualSeconds = Date().timeIntervalSince(started)
-        capsule.tap()
-        XCTAssertTrue(capsule.waitForNonExistence(timeout: 2), "Retrait local immédiat")
+        assertMenuClosed(app)
+        target(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 12)).tap()
+        XCTAssertTrue(heart(in: app).waitForNonExistence(timeout: 2), "Retrait local immédiat")
         // Deux réponses de cinq secondes : l'ajout ancien puis le retrait sérialisé.
         let deadline = Date().addingTimeInterval(12)
         while Date() < deadline {
@@ -56,11 +61,12 @@ import XCTest
     func testOneSecondRefusalRemovesOnlyTheRejectedProjection() {
         let app = launch(delay: 1, refused: true)
         _ = react(in: app)
+        assertMenuClosed(app)
         let rejection = app.buttons["messaging.mutation.rejected"].firstMatch
         XCTAssertTrue(rejection.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(rejection.label.contains("Réaction non enregistrée"))
         XCTAssertFalse(heart(in: app).exists)
-        XCTAssertTrue(app.staticTexts["Rendez-vous à 14 h devant l'auto-école"].exists)
+        XCTAssertTrue(target(in: app).exists)
         XCTAssertTrue(app.descendants(matching: .any)["messaging.compose.text"].firstMatch.isEnabled)
         capture(app, "Refus de réaction, conversation conservée — synthétique")
     }
@@ -77,22 +83,35 @@ import XCTest
         let general = app.buttons["messaging.general.open"].firstMatch
         XCTAssertTrue(wait(general, "exists == true AND hittable == true", timeout: 15), app.debugDescription)
         general.tap()
-        XCTAssertTrue(app.staticTexts["Rendez-vous à 14 h devant l'auto-école"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(target(in: app).waitForExistence(timeout: 10), app.debugDescription)
         return app
     }
 
     private func react(in app: XCUIApplication) -> Date {
-        let target = app.staticTexts["Rendez-vous à 14 h devant l'auto-école"].firstMatch
-        XCTAssertTrue(wait(target, "hittable == true", timeout: 5), app.debugDescription)
-        target.press(forDuration: 1.2)
+        let message = target(in: app)
+        // Même délai que le contrôle du fil : une lecture de la hiérarchie peut prendre 4 s sur un simulateur chargé.
+        XCTAssertTrue(wait(message, "hittable == true", timeout: 15), app.debugDescription)
+        message.press(forDuration: 0.6)
         let action = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
         XCTAssertTrue(action.waitForExistence(timeout: 5), app.debugDescription)
         let start = Date(); action.tap()
-        XCTAssertTrue(app.buttons["Répondre"].firstMatch.waitForNonExistence(timeout: 3), "La palette se ferme sans attendre le réseau")
         return start
     }
+    /// Vérifiée après la mesure : la lecture de l'écran par XCTest ne doit pas entrer dans le chronomètre.
+    private func assertMenuClosed(_ app: XCUIApplication) {
+        XCTAssertTrue(app.staticTexts["Répondre"].firstMatch.waitForNonExistence(timeout: 3),
+                      "La palette se ferme sans attendre le réseau")
+    }
+    /// Bulle du fil Exyte (#182) : un seul élément « auteur, texte, heure, réactions ». Requête typée : parcourir
+    /// toute la hiérarchie coûte plusieurs secondes sur le simulateur iPad et fausse la mesure de latence.
+    private func target(in app: XCUIApplication) -> XCUIElement {
+        app.otherElements.matching(NSPredicate(
+            format: "identifier == 'messaging.message' AND label CONTAINS %@", "Rendez-vous à 14 h devant l'auto-école")).firstMatch
+    }
+    /// Ma réaction Cœur, lue dans l'étiquette de la bulle.
     private func heart(in app: XCUIApplication) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Cœur, 1'")).firstMatch
+        app.otherElements.matching(NSPredicate(
+            format: "identifier == 'messaging.message' AND label CONTAINS %@", "Cœur 1, vous avez réagi")).firstMatch
     }
     private func wait(_ element: XCUIElement, _ predicate: String, timeout: TimeInterval) -> Bool {
         XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: predicate), object: element)], timeout: timeout) == .completed
