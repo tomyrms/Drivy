@@ -191,6 +191,30 @@ struct NativeAccountTests {
         #expect(model.password.isEmpty)
         #expect(model.outcome == SchoolAccessOutcome(input: .code("K7Q4-MX2P"), kind: kind,
             displayName: nil, email: "camille@example.test"))
+        #expect(await transport.codes == ["K7Q4-MX2P", "K7Q4-MX2P"])
+    }
+
+    @Test func editingAnInvitationClearsItsScopeButKeepsAccountFields() async throws {
+        let model = try access(transport: AccessPreviewTransport(kind: .learnerInvitation))
+        model.codeText = "K7Q4-MX2P"
+        await model.inspect()
+        model.firstName = "Camille"; model.email = "camille@example.test"; model.password = "synthetic-password"
+        model.show(.code)
+        #expect(model.input == nil && model.preview == nil && !model.canRegister)
+        #expect(model.password.isEmpty && model.firstName == "Camille" && model.email == "camille@example.test")
+        model.show(.register)
+        #expect(model.step == .code)
+    }
+
+    @Test func recoveryKeepsTheInvitationAndEmailWithoutKeepingThePassword() async throws {
+        let model = try access(transport: AccessPreviewTransport(kind: .learnerInvitation))
+        model.codeText = "K7Q4-MX2P"
+        await model.continueWithExistingAccount()
+        model.email = "camille@example.test"; model.password = "synthetic-password"
+        model.prepareRecovery()
+        #expect(model.step == .signIn && model.input == .code("K7Q4-MX2P"))
+        #expect(model.password.isEmpty && model.email == "camille@example.test")
+        #expect(!model.isFinished && model.outcome == nil)
     }
 
     @Test func anInvalidCodeKeepsTheExistingAccountOnTheCodeStep() async throws {

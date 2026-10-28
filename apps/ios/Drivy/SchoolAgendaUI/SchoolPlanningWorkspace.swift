@@ -164,6 +164,11 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     var selectedProduct: SchoolServiceProduct? { products.first { $0.id == productID } }
     var selectedTerms: SchoolCommercialTerms? { terms.first { $0.id == selectedProduct?.termsVersionId } }
     var selectedPolicy: SchoolCatalogPolicy? { policies.first { $0.id == selectedOffering?.policyVersionId } }
+    /// Seulement une nouvelle réservation : les déplacements ne reprennent pas la procédure actuelle de l'offre.
+    var cancellationDeadline: Date? {
+        guard originalLesson == nil, let policy = selectedPolicy, policy.approved else { return nil }
+        return policy.cancellationRules?.deadline(before: startsAt)
+    }
     var timeZone: String { school?.timeZone ?? originalLesson?.timeZone ?? "Europe/Zurich" }
     /// The instructor's name, followed by a short reference when another instructor has the same one.
     func instructorLabel(_ instructor: SchoolPlanningInstructor) -> String {

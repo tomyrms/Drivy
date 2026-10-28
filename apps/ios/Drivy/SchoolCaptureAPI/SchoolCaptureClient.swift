@@ -472,7 +472,7 @@ enum SchoolCaptureFailure: Error, LocalizedError, Equatable {
         "RECORDING_NOTICE_CHANGED": "Les textes de confidentialité ont changé. Relis-les avant de confirmer le choix GPS.",
         "RECORDING_CHOICE_CHANGED": "Le choix de l’élève a changé. Relis-le avant de démarrer.",
         "CAPTURE_DISABLED": "Le GPS scolaire n’est pas activé. La leçon reste disponible sans GPS.",
-        "CAPTURE_START_WINDOW": "Le GPS peut démarrer à proximité de l’horaire prévu de cette leçon.",
+        "CAPTURE_START_WINDOW": "Déplace le rendez-vous dans l’agenda pour démarrer à l’heure actuelle.",
         "CAPTURE_ALREADY_ACTIVE": "Un trajet est déjà ouvert pour cette leçon, ce moniteur ou cet appareil.",
         "CAPTURE_INCOMPLETE": "La synchronisation est incomplète. Réessaie lorsque la connexion est disponible.",
         "CAPTURE_MANIFEST_MISMATCH": "Les lots et le manifeste ne correspondent pas. Les données locales restent conservées.",

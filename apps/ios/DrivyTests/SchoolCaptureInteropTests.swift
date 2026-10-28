@@ -3,6 +3,32 @@ import Testing
 @testable import Drivy
 
 struct SchoolCaptureInteropTests {
+    @Test func anOldServerNoticeKeepsLegacyPolicyAndQualificationMustBeExplicit() throws {
+        let base: [String: Any] = ["noticeVersionId": UUID().uuidString, "noticeText": "Notice synthétique",
+            "retentionText": "Conservation synthétique", "contactEmail": "test@example.invalid", "approvedAt": "2026-10-28T10:00:00Z"]
+        func decode(_ policy: String?) throws -> SchoolRecordingNotice {
+            var value = base
+            if let policy { value["practicalStartPolicy"] = policy }
+            return try JSONDecoder().decode(SchoolRecordingNotice.self, from: JSONSerialization.data(withJSONObject: value))
+        }
+        #expect(try !decode(nil).requiresGPS)
+        #expect(try !decode("LEGACY").requiresGPS)
+        #expect(try decode("GPS_REQUIRED").requiresGPS)
+    }
+
+    @Test func gpsAcceptanceCarriesTheReviewedVersionAndKeepsItsBytesForRetry() throws {
+        var body = SchoolRecordingChoiceBody(operationId: UUID(), lessonId: nil, status: .allowed,
+            noticeVersionId: UUID(), source: .own)
+        let legacy = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(body)) as? [String: Any])
+        #expect(legacy["expectedChoiceVersion"] == nil)
+        body.expectedChoiceVersion = 7
+        let bytes = try JSONEncoder().encode(body)
+        let decoded = try JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: bytes)
+        #expect(decoded.expectedChoiceVersion == 7)
+        #expect(decoded.operationId == body.operationId && decoded.noticeVersionId == body.noticeVersionId)
+        #expect(decoded.lessonId == nil && decoded.status == .allowed && decoded.source == .own)
+    }
+
     // Vecteur issu de canonicalCaptureJSON côté API : zéro négatif et exposants
     // éprouvent les divergences possibles entre les sérialisations de nombres.
     @Test func chunkHashMatchesServerECMAScriptVector() throws {

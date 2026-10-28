@@ -13,12 +13,13 @@ struct SchoolPrivacyText: Equatable {
 /// automatiquement, et l'écran ne promet pas ce que l'école ne fait pas.
 struct SchoolGPSPromise: View {
     var addressesLearner = true
+    var requiresGPS = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            line("location.fill", "Enregistré pendant la leçon seulement")
+            line("location.fill", "Position de l’appareil du moniteur, pendant la leçon")
             line("eye", addressesLearner ? "Visible par toi et ton école" : "Visible par l’élève et l’école")
-            line("location.slash", "Sans GPS, la leçon a lieu quand même")
+            line("location.slash", requiresGPS ? "Sans accord, pas de départ GPS dans Drivy. Le compte et les rendez-vous restent accessibles." : "Le choix GPS se modifie depuis le compte")
         }
         .font(.subheadline)
         .foregroundStyle(DrivyTheme.muted)

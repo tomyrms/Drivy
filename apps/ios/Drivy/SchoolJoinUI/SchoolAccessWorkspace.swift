@@ -46,6 +46,7 @@ struct SchoolAccessOutcome: Equatable {
             && email.trimmed.contains("@") && password.count >= 8
     }
     var canSignIn: Bool { !isBusy && email.trimmed.contains("@") && !password.isEmpty }
+    var recoveryClient: SchoolAccountRecoveryClient { client.recoveryClient() }
 
     /// Titre de l’étape de création : ce que le code ouvre.
     var registerTitle: String {
@@ -74,6 +75,7 @@ struct SchoolAccessOutcome: Equatable {
             return
         }
         let request = begin()
+        input = nil; preview = nil
         do {
             let value = try await client.preview(parsed)
             guard request == generation else { return }
@@ -101,13 +103,26 @@ struct SchoolAccessOutcome: Equatable {
     func signIn() async {
         guard canSignIn else { return }
         let request = begin()
+        if let input {
+            do {
+                let current = try await client.preview(input)
+                guard request == generation else { return }
+                preview = current
+            } catch { fail(error, request); return }
+        }
         await connect(kind: preview?.kind, displayName: nil, request: request)
     }
 
     func show(_ next: Step) {
         guard !isBusy else { return }
         errorMessage = nil; password = ""
+        if next == .code { input = nil; preview = nil }
         step = next == .register && input == nil ? .code : next
+    }
+
+    func prepareRecovery() {
+        guard !isBusy else { return }
+        password = ""; errorMessage = nil
     }
 
     func invalidate() { generation = UUID(); isBusy = false; password = "" }

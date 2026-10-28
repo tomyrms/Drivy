@@ -63,6 +63,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['formations'], bodyLimit: 1_000_000 },
   { method: 'POST', segments: ['formations', 'programmes'], bodyLimit: 1_000_000 },
   { method: 'POST', segments: ['formations', 'tariffs'], bodyLimit: 100_000 },
+  { method: 'POST', segments: ['formations', 'terms', 'revise'], bodyLimit: 100_000 },
   { method: 'GET', segments: ['profile-field-policies'], query: list },
   { method: 'POST', segments: ['profile-field-policies'], ifMatch: true, bodyLimit: 32_768 },
   { method: 'POST', segments: ['profile-field-policies', ':id', 'publish'], ifMatch: true, bodyLimit: 1_024 },

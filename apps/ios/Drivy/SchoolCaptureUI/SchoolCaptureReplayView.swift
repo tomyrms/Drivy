@@ -405,6 +405,18 @@ struct SchoolCaptureReplayView: View {
 
     private func observationList(_ timeline: SchoolReplayTimeline, closesSheet: Bool) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            // Le serveur lie toute capture scolaire à l’affectation du moniteur et au diagnostic de son appareil.
+            // La fiche relue est nécessaire ; le nom de l’élève dans l’en-tête ne dit jamais qui fournit les positions.
+            if let capture = model.capture, capture.id == model.captureID, capture.schoolId == model.scope.schoolID {
+                DisclosureGroup("Détails du trajet") {
+                    Label("Position de l’appareil du moniteur", systemImage: "location")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, DrivySpacing.xs)
+                }
+                .accessibilityIdentifier("replay-position-source")
+            }
             DrivySectionHeader(title: DrivySeanceText.observations(timeline.items.count))
             if timeline.items.isEmpty {
                 DrivyEmptyState(title: "Aucune observation", symbol: "text.bubble")

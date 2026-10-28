@@ -222,7 +222,7 @@
               "additionalProperties": false
             },
             "formations": {
-              "maxItems": 12,
+              "maxItems": 20,
               "type": "array",
               "items": {
                 "type": "object",
@@ -366,6 +366,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "useCommonTerms": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -387,6 +390,52 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "commonLessonRules": {
+              "type": "object",
+              "properties": {
+                "cancellationHours": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 8760
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lateAction": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "CONTACT",
+                        "NO_FEE"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "paymentText": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "exceptionsText": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "cancellationHours",
+                "lateAction",
+                "paymentText",
+                "exceptionsText"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [
@@ -623,7 +672,7 @@
           "additionalProperties": false
         },
         "formations": {
-          "maxItems": 12,
+          "maxItems": 20,
           "type": "array",
           "items": {
             "type": "object",
@@ -767,6 +816,9 @@
                     "type": "null"
                   }
                 ]
+              },
+              "useCommonTerms": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -788,6 +840,52 @@
             ],
             "additionalProperties": false
           }
+        },
+        "commonLessonRules": {
+          "type": "object",
+          "properties": {
+            "cancellationHours": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 8760
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lateAction": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "CONTACT",
+                    "NO_FEE"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "paymentText": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "exceptionsText": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "cancellationHours",
+            "lateAction",
+            "paymentText",
+            "exceptionsText"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -1000,7 +1098,7 @@
               "additionalProperties": false
             },
             "formations": {
-              "maxItems": 12,
+              "maxItems": 20,
               "type": "array",
               "items": {
                 "type": "object",
@@ -1144,6 +1242,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "useCommonTerms": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1165,6 +1266,52 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "commonLessonRules": {
+              "type": "object",
+              "properties": {
+                "cancellationHours": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 8760
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lateAction": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "CONTACT",
+                        "NO_FEE"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "paymentText": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "exceptionsText": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "cancellationHours",
+                "lateAction",
+                "paymentText",
+                "exceptionsText"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [

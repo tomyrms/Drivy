@@ -7,6 +7,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     let operationId: UUID
     let trainingId: UUID
     let meetingPoint: String?
+    var prepareForGPS: Bool? = nil
 }
 
 /// Une leçon qui commence maintenant, avec un élève : choisir l’élève suffit quand il n’a qu’une formation.
@@ -206,14 +207,14 @@ struct SchoolStartNowBody: Encodable, Sendable {
     }
 
     /// Démarre la leçon ; la leçon renvoyée par l’école est la preuve de son enregistrement.
-    func start() async -> SchoolLesson? {
+    func start(prepareForGPS: Bool = false) async -> SchoolLesson? {
         guard canStart, let trainingID else { return nil }
         let operation = UUID()
         let point = meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines)
         let command: PendingSchoolCommand
         do {
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
-            let body = try encoder.encode(SchoolStartNowBody(operationId: operation, trainingId: trainingID, meetingPoint: point.isEmpty ? nil : point))
+            let body = try encoder.encode(SchoolStartNowBody(operationId: operation, trainingId: trainingID, meetingPoint: point.isEmpty ? nil : point, prepareForGPS: prepareForGPS ? true : nil))
             command = PendingSchoolCommand(id: operation, scope: scope, kind: .startLessonNow, resourceVersion: 0,
                 createdAt: Date(), body: body, routeResourceID: trainingID)
             try outbox.save(command); pending = command
@@ -408,7 +409,12 @@ struct SchoolStartNowView: View {
                 identity
                 if form.learnerID != nil {
                     fields
-                    if let reason = launch.gpsUnavailableReason {
+                    if launch.isReadingPolicy {
+                        DrivySkeletonRow(lines: 1).drivySkeleton("Vérification des conditions de départ…")
+                    } else if let error = launch.policyError {
+                        SchoolErrorNotice(message: error, retry: { Task { await launch.loadStartPolicy() } })
+                            .disabled(launch.isBusy)
+                    } else if let reason = launch.gpsUnavailableReason {
                         SchoolGPSUnavailableNotice(reason: reason, workspace: launch.workspace,
                             managementURL: AppConfiguration.fromBundle()?.gpsManagementURL(schoolID: form.scope.schoolID))
                     } else if let gps = launch.gps, launch.gpsMatchesLearner {
@@ -426,6 +432,7 @@ struct SchoolStartNowView: View {
     }
 
     @ViewBuilder private var notices: some View {
+        if let issue = launch.tripIssue { DrivyInlineMessage(text: issue, tone: .warning) }
         if let pending = form.pending {
             // Toute demande restée en file se résout ici, même partie d’un autre écran : sans cela,
             // rien ne peut démarrer et rien n’explique pourquoi.
@@ -546,7 +553,7 @@ struct SchoolStartNowView: View {
 
     private func gpsUnavailable(_ gps: SchoolStartNowGPS) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            DrivyInlineMessage(text: gps.consent.errorMessage ?? "L’accord GPS n’a pas pu être lu. La leçon peut démarrer sans GPS.",
+            DrivyInlineMessage(text: gps.consent.errorMessage ?? "L’accord GPS n’a pas pu être lu. Réessaie avant le départ.",
                 tone: .warning)
             if !gps.consent.accessRevoked {
                 Button { Task { await gps.load() } } label: { Label("Réessayer", systemImage: "arrow.clockwise") }
@@ -562,8 +569,10 @@ struct SchoolStartNowView: View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
             if gps.answer == .allowed && gps.consentIsClear {
                 switch gps.device {
-                case .denied: deviceNotice("Localisation désactivée pour Drivy. La leçon démarrera sans GPS.")
-                case .approximate: deviceNotice("Position exacte désactivée pour Drivy. La leçon démarrera sans GPS.")
+                case .denied: deviceNotice(launch.requiresGPS ? "Autorise la localisation dans Réglages avant de démarrer."
+                    : "Localisation désactivée pour Drivy. La leçon démarrera sans GPS.")
+                case .approximate: deviceNotice(launch.requiresGPS ? "Active la position exacte dans Réglages avant de démarrer."
+                    : "Position exacte désactivée pour Drivy. La leçon démarrera sans GPS.")
                 case .ready, .needsPermission: EmptyView()
                 }
             }

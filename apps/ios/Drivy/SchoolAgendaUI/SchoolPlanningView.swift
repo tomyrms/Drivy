@@ -417,6 +417,12 @@ struct SchoolPlanningView: View {
     }
 
     @ViewBuilder private var bookingActionContent: some View {
+        if let deadline = model.cancellationDeadline {
+            Text("Annulation : prévenir l’école au plus tard le \(SchoolPlanningFormat.cancellationDeadline(deadline, zone: model.timeZone))")
+                .font(.footnote).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("planning-cancellation-deadline")
+        }
         if model.duration > 0 {
             ViewThatFits(in: .horizontal) {
                 HStack {
@@ -657,6 +663,9 @@ enum SchoolPlanningFormat {
     }
     static func instant(_ date: Date, zone: String) -> String {
         SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "EEE d MMM · HH:mm")
+    }
+    static func cancellationDeadline(_ date: Date, zone: String) -> String {
+        SchoolDateCache.shared.string(from: date, zone: TimeZone(identifier: zone) ?? .current, format: "d MMM yyyy 'à' HH:mm zzz")
     }
     static func interval(_ start: String, _ end: String, zone: String) -> String {
         guard let start = SchoolLesson.date(start), let end = SchoolLesson.date(end) else { return "Horaire indisponible" }

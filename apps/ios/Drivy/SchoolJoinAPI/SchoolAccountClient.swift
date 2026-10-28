@@ -81,6 +81,10 @@ enum SchoolAccountFailure: Error, LocalizedError, Equatable {
         self.configuration = configuration; self.transport = transport
     }
 
+    func recoveryClient() -> SchoolAccountRecoveryClient {
+        SchoolAccountRecoveryClient(configuration: configuration, transport: transport)
+    }
+
     func preview(_ input: SchoolAccessInput) async throws -> SchoolAccessPreview {
         // Une invitation par e-mail ne se lit qu’avec l’adresse invitée : elle se vérifie à la création du compte.
         if case .invitationLink = input {

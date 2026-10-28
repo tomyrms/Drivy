@@ -134,6 +134,7 @@ struct SchoolCaptureStartReview: Identifiable {
     var mayReviewStart: Bool {
         mayDiagnose && collectionIsIntegrated && !isSampling && storageError == nil && store != nil && !hasOldScope
             && pendingAssessments.isEmpty && pendingStarts.isEmpty && choice?.status == .allowed
+            && (notice?.requiresGPS != true || choice?.source == .own)
             && choice?.noticeVersionId == notice?.noticeVersionId && assessment?.status == .qualified
             && snapshot?.permission.permitsLocation == true
             && assessment.flatMap { SchoolLesson.date($0.expiresAt) }.map { $0 > Date() } == true
@@ -145,6 +146,7 @@ struct SchoolCaptureStartReview: Identifiable {
         guard !invalidated, contextIsCurrent, isInstructor, let notice, let choice, storageError == nil,
               pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else { return false }
         return choice.status == .allowed && choice.noticeVersionId == notice.noticeVersionId
+            && (!notice.requiresGPS || choice.source == .own)
     }
 
     func learnerRefused(_ learnerID: UUID, lessonID: UUID?) {
@@ -520,6 +522,7 @@ struct SchoolCaptureStartReview: Identifiable {
             quickBlock = .choice; return false
         }
         guard choice.status == .allowed else { quickBlock = .refused; return false }
+        guard !notice.requiresGPS || choice.source == .own else { quickBlock = .choice; return false }
 
         setQuickStep("Localisation…")
         // L’accord est confirmé : le récepteur GPS se réveille pendant les vérifications qui suivent, pour que la
@@ -719,11 +722,12 @@ struct SchoolCaptureStartReview: Identifiable {
         defer { schoolRead.cancel(); noticeRead.cancel(); choiceRead.cancel() }
         let school = try await schoolRead.value
         guard school.status == "ACTIVE", school.modules.gpsEnabled else {
-            throw SchoolCaptureFailure.rejected("Le GPS scolaire n’est pas activé dans cette école. La leçon peut continuer sans GPS.")
+            throw SchoolCaptureFailure.rejected("Le GPS scolaire n’est pas activé. Contacte l’administration de l’école.")
         }
         let notice = try await noticeRead.value
         guard let choice = try await choiceRead.value,
-              choice.status == .allowed, choice.noticeVersionId == notice.noticeVersionId else {
+              choice.status == .allowed, choice.noticeVersionId == notice.noticeVersionId,
+              !notice.requiresGPS || choice.source == .own else {
             throw SchoolCaptureFailure.rejected("Un accord correspondant à l’information actuelle de l’école est nécessaire pour démarrer le GPS.")
         }
         let deviceID = await store.installationID()
@@ -884,7 +888,7 @@ struct SchoolCaptureStartReview: Identifiable {
             let school = try await reader.school(id: scope.schoolID)
             guard isCurrent(request) else { return nil }
             guard school.status == "ACTIVE", school.modules.gpsEnabled else {
-                throw SchoolCaptureFailure.rejected("Le GPS scolaire n’est pas activé dans cette école. La leçon peut continuer sans GPS.")
+                throw SchoolCaptureFailure.rejected("Le GPS scolaire n’est pas activé. Contacte l’administration de l’école.")
             }
             return .init(lesson: lesson, learnerName: learner.displayName, notice: notice, choice: choice,
                 assessment: assessment, pendingMutation: nil)

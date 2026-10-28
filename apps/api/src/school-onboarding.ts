@@ -11,7 +11,7 @@ import {cataloguePermission} from './lesson-setup.js';
 import {insertCurriculum,insertOffering,insertProcedure,insertProduct,insertTerms} from './formation-catalogue.js';
 import {planningReadiness} from './lessons.js';
 import {missingProfileFieldsLateral} from './profile-completeness.js';
-import {contentIssues,emptySetupContent,schoolSetupTemplates,setupContentSchema,setupSteps,templateVersion,type SetupContent,type SetupFormation,type SetupIssue} from './school-onboarding-model.js';
+import {contentIssues,emptySetupContent,resolvedSetupFormation,schoolSetupTemplates,setupContentSchema,setupSteps,templateVersion,type SetupContent,type SetupFormation,type SetupIssue} from './school-onboarding-model.js';
 
 const empty=z.object({}).strict();
 export const saveSetupDraftCommand=z.object({operationId:z.uuid(),currentStep:z.enum(setupSteps),content:setupContentSchema}).strict();
@@ -65,6 +65,11 @@ async function review(db:PoolClient,school:SchoolRow,current:Draft,activate:bool
         const row=(await db.query<{id:string;category_code:string;ready:boolean}>(`SELECT id,category_code,drivy.catalogue_offering_ready(id) AS ready FROM drivy.offering_version WHERE school_id=$1 AND id=$2`,[school.id,item.existingOfferingId])).rows[0];
         references.push(row??{missing:item.existingOfferingId});
         if(!row||!row.ready||row.category_code!==item.categoryCode)issue(`formations.${content.formations.indexOf(item)}.existingOfferingId`,'OFFERING_NOT_READY','Choisissez une formation active et approuvée de ce permis.');
+      } else {
+        const existing=(await db.query<{id:string}>(`SELECT o.id FROM drivy.offering_version o WHERE o.school_id=$1 AND upper(o.category_code)=upper($2) AND o.enabled
+          AND o.version=(SELECT max(v.version) FROM drivy.offering_version v WHERE v.school_id=o.school_id AND v.offering_key=o.offering_key) ORDER BY o.id`,[school.id,item.categoryCode])).rows;
+        references.push({category:item.categoryCode,existing});
+        if(existing.length)issue(`formations.${content.formations.indexOf(item)}.categoryCode`,'SETUP_CATEGORY_EXISTS','Ce permis existe déjà. Ajoutez un tarif à sa formation ou modifiez sa fiche.');
       }
       const alreadyApplied=(await db.query<{used:boolean}>(`SELECT EXISTS(SELECT 1 FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2)
         OR ($3::boolean AND EXISTS(SELECT 1 FROM drivy.offering_version WHERE school_id=$1 AND offering_key=$2)) AS used`,[school.id,`setup-${item.id}`,item.existingOfferingId===null])).rows[0]!.used;
@@ -83,15 +88,17 @@ async function review(db:PoolClient,school:SchoolRow,current:Draft,activate:bool
 }
 
 /** Versions nouvelles uniquement : les références des engagements précédents restent intactes. Écritures communes à la fiche de formation. */
-async function publishFormation(db:PoolClient,school:SchoolRow,actor:CommandActor,item:SetupFormation,reason:string) {
+async function publishFormation(db:PoolClient,school:SchoolRow,actor:CommandActor,item:SetupFormation,reason:string,commonTermsId?:string,commonRules?:SetupContent['commonLessonRules']) {
   let offeringId=item.existingOfferingId;
   if(offeringId===null) {
-    const curriculumId=await insertCurriculum(db,school.id,actor.membershipId,item.categoryCode,item.competencies,reason);
-    const policyId=await insertProcedure(db,school.id,actor.membershipId,item.categoryCode,item,reason);
+    const curriculumReason=item.templateId?`${reason} · Proposition Drivy ${item.templateId} ${item.templateVersion}`:reason;
+    const curriculumId=await insertCurriculum(db,school.id,actor.membershipId,item.categoryCode,item.competencies,curriculumReason);
+    const cancellationRules=item.useCommonTerms&&commonRules?.lateAction?{cancellationHours:commonRules.lateAction==='CONTACT'?commonRules.cancellationHours:null,lateAction:commonRules.lateAction}:null;
+    const policyId=await insertProcedure(db,school.id,actor.membershipId,item.categoryCode,{...item,cancellationRules},reason);
     offeringId=(await insertOffering(db,school.id,{offeringKey:`setup-${item.id}`,categoryCode:item.categoryCode,enabled:true,curriculumVersionId:curriculumId,policyVersionId:policyId,
       defaultDurationMinutes:item.durationMinutes!,defaultPriceCents:item.priceCents!,label:null})).id;
   }
-  const termsId=await insertTerms(db,school.id,actor.membershipId,{label:`Conditions · ${item.label}`,termsText:item.termsText,validFrom:item.validFrom!},reason);
+  const termsId=commonTermsId??await insertTerms(db,school.id,actor.membershipId,{label:`Conditions · ${item.label}`,termsText:item.termsText,validFrom:item.validFrom!},reason);
   const productId=(await insertProduct(db,school.id,{productKey:`setup-${item.id}`,label:item.label,type:'INDIVIDUAL_LESSON',categoryCode:item.categoryCode,durationMinutes:item.durationMinutes,
     unitLabel:'leçon',unitPriceCents:item.priceCents!,validFrom:item.validFrom!,validUntil:null,termsVersionId:termsId,enabled:true})).id;
   return {offeringId,productId,termsId};
@@ -209,7 +216,14 @@ export function registerSchoolOnboarding(app:FastifyInstance,options:{pool:Pool;
         await db.query("UPDATE drivy.profile_field_policy SET status='PUBLISHED',version=version+1,approved_at=now(),approved_by_membership_id=$2 WHERE id=$1",[profilePolicyId,actor.membershipId]);
       }
       const published=[];
-      for(const formation of formations)published.push(await publishFormation(db,school,actor,formation,reason));
+      const common=formations.filter(item=>item.useCommonTerms);
+      let commonTermsId:string|undefined;
+      if(common.length){
+        const dates=common.map(item=>item.validFrom!).sort();
+        commonTermsId=await insertTerms(db,id,actor.membershipId,{label:'Conditions communes · leçons individuelles',
+          termsText:resolvedSetupFormation(content,common[0]!).termsText,validFrom:dates[0]!},reason);
+      }
+      for(const formation of formations)published.push(await publishFormation(db,school,actor,resolvedSetupFormation(content,formation),reason,formation.useCommonTerms?commonTermsId:undefined,content.commonLessonRules));
       const updated=(await db.query<SchoolRow>(`UPDATE drivy.school SET version=version+1,configuration_version=configuration_version+1 WHERE id=$1 RETURNING ${schoolColumns}`,[id])).rows[0]!;
       await recordSettings(db,updated,actor.membershipId,profilePolicyId??undefined);
       if(body.activate) {

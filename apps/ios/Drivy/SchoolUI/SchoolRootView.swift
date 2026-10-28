@@ -249,11 +249,11 @@ struct SchoolRootView: View {
 
     @ViewBuilder private func profileContent(_ route: ProfileSheet) -> some View {
         if let model = route.model, model.id == onboardingWorkspaceID {
-            SchoolOnboardingView(model: model, trainings: workspace?.trainings ?? [])
+            SchoolOnboardingView(model: model, trainings: workspace?.trainings ?? [], agendaClient: homeAgendaClient)
         } else if let model = route.model, !model.isOwnProfile {
             SchoolProfileView(model: model)
         } else if let workspace {
-            SchoolMyProfileView(workspace: workspace, dossier: route.model)
+            SchoolMyProfileView(workspace: workspace, dossier: route.model, agendaClient: homeAgendaClient)
         }
     }
 

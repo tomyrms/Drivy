@@ -125,10 +125,13 @@ struct SchoolRecordingChoiceView: View {
                 ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
                 : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
             layout {
-                choiceButton(.allowed, title: "Avec GPS", symbol: "location.fill")
-                choiceButton(.refused, title: "Sans GPS", symbol: "location.slash")
+                choiceButton(.allowed, title: "Accepter le GPS", symbol: "location.fill")
+                choiceButton(.refused, title: "Refuser le GPS", symbol: "location.slash")
             }
             if model.isBusy { DrivyLoadingState(title: "Enregistrement du choix…") }
+            if model.notice?.requiresGPS == true && model.source != .own {
+                DrivyInlineMessage(text: "L’élève choisit depuis son compte, dans Profil → Accord GPS.")
+            }
             if model.verbalAgreementIsProtected {
                 DrivyInlineMessage(text: "L’élève a refusé depuis son compte. Lui seul peut modifier ce choix.", tone: .warning)
             }
@@ -169,7 +172,7 @@ struct SchoolRecordingChoiceView: View {
 
     private func documentLinks(_ notice: SchoolRecordingNotice) -> some View {
         VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            SchoolGPSPromise(addressesLearner: model.source == .own)
+            SchoolGPSPromise(addressesLearner: model.source == .own, requiresGPS: notice.requiresGPS)
             SchoolPrivacyLink(text: .init(notice: notice.noticeText, retention: notice.retentionText, contact: notice.contactEmail),
                 addressesLearner: model.source == .own, identifier: "recording-notice-link")
         }

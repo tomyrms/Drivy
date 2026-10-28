@@ -8,6 +8,7 @@ import {checkIdempotency,schoolColumns,schoolCommand,type CommandActor,type Scho
 import {ApiError,notFound} from './errors.js';
 import {recordSettings} from './school-setup.js';
 import {cataloguePermission} from './lesson-setup.js';
+import {swissProgrammeTemplates} from './swiss-programmes.js';
 
 /*
  * Formations et tarifs (14 octobre 2026). Un permis (category_code) organise la fiche ; un parcours est la chaîne
@@ -31,7 +32,7 @@ export const productTypes=['INDIVIDUAL_LESSON','COLLECTIVE_COURSE','EXAM_SUPPORT
 
 export const updateProgrammeCommand=z.object({operationId:z.uuid(),offeringKey:z.string().min(1).max(80),expectedOfferingVersionId:z.uuid(),
  label:programmeLabel.nullable().optional(),enabled:z.boolean().optional(),defaultDurationMinutes:z.number().int().min(1).max(480).optional(),
- competencies:competencies.optional(),procedure:procedureInput.optional()}).strict()
+ competencies:competencies.optional(),procedure:procedureInput.optional(),source:z.object({templateId:z.string().max(100),templateVersion:z.string().max(40)}).strict().optional()}).strict()
  .refine(value=>['label','enabled','defaultDurationMinutes','competencies','procedure'].some(key=>key in value),{message:'Aucune rubrique à enregistrer.'});
 const firstTariff=z.object({label:text(200),durationMinutes:z.number().int().min(1).max(480),priceCents:amount,validFrom:civil,validUntil:civil.nullable(),termsText:longText(20000)}).strict()
  .refine(value=>!value.validUntil||value.validUntil>=value.validFrom,{message:'Validité invalide.',path:['validUntil']});
@@ -50,7 +51,7 @@ export const saveTariffCommand=z.discriminatedUnion('mode',[
 interface CompetencyInput {key:string|null;label:string;description:string}
 interface ProcedureInput {procedureText:string;cancellationPolicyText:string;sourceUrls:string[]}
 interface ProgrammeCommand {operationId:string;offeringKey:string;expectedOfferingVersionId:string;label?:string|null|undefined;enabled?:boolean|undefined;
- defaultDurationMinutes?:number|undefined;competencies?:CompetencyInput[]|undefined;procedure?:ProcedureInput|undefined}
+ defaultDurationMinutes?:number|undefined;competencies?:CompetencyInput[]|undefined;procedure?:ProcedureInput|undefined;source?:{templateId:string;templateVersion:string}|undefined}
 interface FormationCommand {operationId:string;categoryCode:string;intent:'NEW'|'ADDITIONAL_PROGRAMME';programmeLabel:string|null;competencies:CompetencyInput[];procedure:ProcedureInput;
  source?:{templateId:string|null;templateVersion:string|null}|undefined;tariff:{label:string;durationMinutes:number;priceCents:number;validFrom:string;validUntil:string|null;termsText:string}}
 interface TariffFields {operationId:string;type:typeof productTypes[number];label:string;durationMinutes:number|null;unitLabel:string;priceCents:number;validUntil:string|null;enabled:boolean}
@@ -77,10 +78,10 @@ export async function insertCurriculum(db:PoolClient,schoolId:string,membershipI
  for(const c of items)await db.query('INSERT INTO drivy.competency_definition(school_id,curriculum_version_id,stable_key,label,description,sort_order) VALUES($1,$2,$3,$4,$5,$6)',[schoolId,id,c.key,c.label,c.description,c.sortOrder]);
  return id;
 }
-export async function insertProcedure(db:PoolClient,schoolId:string,membershipId:string,category:string,value:{procedureText:string;cancellationPolicyText:string;sourceUrls:readonly string[]},reason=''){
- return (await db.query<{id:string}>(`INSERT INTO drivy.school_policy_version(school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at)
-  SELECT $1,$2,coalesce(max(version),0)+1,$3,$4,$5,true,$6,$7,now() FROM drivy.school_policy_version WHERE school_id=$1 AND category_code=$2 RETURNING id`,
-  [schoolId,category,value.procedureText,value.cancellationPolicyText,[...value.sourceUrls],reason,membershipId])).rows[0]!.id;
+export async function insertProcedure(db:PoolClient,schoolId:string,membershipId:string,category:string,value:{procedureText:string;cancellationPolicyText:string;sourceUrls:readonly string[];cancellationRules?:{cancellationHours:number|null;lateAction:'CONTACT'|'NO_FEE'}|null},reason=''){
+ return (await db.query<{id:string}>(`INSERT INTO drivy.school_policy_version(school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at,cancellation_rules)
+  SELECT $1,$2,coalesce(max(version),0)+1,$3,$4,$5,true,$6,$7,now(),$8 FROM drivy.school_policy_version WHERE school_id=$1 AND category_code=$2 RETURNING id`,
+  [schoolId,category,value.procedureText,value.cancellationPolicyText,[...value.sourceUrls],reason,membershipId,value.cancellationRules?JSON.stringify(value.cancellationRules):null])).rows[0]!.id;
 }
 export interface OfferingValues {offeringKey:string;categoryCode:string;enabled:boolean;curriculumVersionId:string;policyVersionId:string;defaultDurationMinutes:number;defaultPriceCents:number|string;label:string|null}
 export async function insertOffering(db:PoolClient,schoolId:string,value:OfferingValues){
@@ -93,11 +94,37 @@ export async function insertTerms(db:PoolClient,schoolId:string,membershipId:str
   SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,NULL,true,$5,$6,now(),$6 FROM drivy.commercial_terms_version WHERE school_id=$1 RETURNING id`,
   [schoolId,value.label.slice(0,200),value.termsText,value.validFrom,reason,membershipId])).rows[0]!.id;
 }
-export interface ProductValues {productKey:string;label:string;type:typeof productTypes[number];categoryCode:string|null;durationMinutes:number|null;unitLabel:string;unitPriceCents:number|string;validFrom:string;validUntil:string|null;termsVersionId:string;enabled:boolean}
+export const reviseSharedTermsCommand=z.object({operationId:z.uuid(),termsVersionId:z.uuid(),
+ expectedProductVersionIds:z.array(z.uuid()).min(1).max(200).refine(ids=>new Set(ids).size===ids.length),
+ termsText:z.string().trim().min(20).max(20000),reviewAcknowledged:z.literal(true)}).strict();
+async function reviseSharedTerms(db:PoolClient,actor:CommandActor,school:SchoolRow,body:z.infer<typeof reviseSharedTermsCommand>){
+ await cataloguePermission(db,school.id);
+ const old=(await termsById(db,school.id,[body.termsVersionId])).get(body.termsVersionId);
+ if(!old)throw notFound();
+ const products=(await db.query<ProductRow&{siteId:string|null}>(`SELECT ${productColumns},s.site_id AS "siteId" FROM drivy.service_product_version s WHERE s.school_id=$1 AND s.terms_version_id=$2 AND drivy.service_product_current(s.id) ORDER BY s.id`,[school.id,old.id])).rows;
+ if(products.length!==body.expectedProductVersionIds.length||products.some(item=>!body.expectedProductVersionIds.includes(item.id)))throw new ApiError(409,'TERMS_USAGE_CHANGED','Les tarifs concernés ont changé. Relisez leur liste avant de confirmer.');
+ if(old.termsText===body.termsText)throw new ApiError(409,'TERMS_UNCHANGED','Aucune modification à enregistrer.');
+ if(/\[[^\]]*compl[eé]ter[^\]]*\]/iu.test(body.termsText))throw new ApiError(422,'TERMS_INCOMPLETE','Complétez les conditions avant de les adopter.');
+ // Les procédures scolaires restent versionnées séparément. Ne pas changer ici une annulation qui y figure aussi.
+ const cancellations=(await db.query<{text:string}>(`SELECT DISTINCT p.cancellation_policy_text AS text FROM drivy.school_policy_version p
+  WHERE p.school_id=$1 AND p.category_code=ANY($2::text[])`,[school.id,products.flatMap(item=>item.categoryCode?[item.categoryCode]:[])])).rows;
+ for(const rule of cancellations)if(rule.text.trim()&&old.termsText.includes(rule.text)&&!body.termsText.includes(rule.text))throw new ApiError(422,'CANCELLATION_REVIEW_REQUIRED','La règle d’annulation appartient aussi au programme. Modifiez-la depuis sa fiche avant de préparer de nouvelles conditions.');
+ const today=await schoolToday(db,school.id);
+ const termsId=await insertTerms(db,school.id,actor.membershipId,{label:old.label,termsText:body.termsText,validFrom:today});
+ for(const product of products){
+  await insertProduct(db,school.id,{...product,unitPriceCents:product.unitPriceCents,termsVersionId:termsId,
+   validFrom:product.validUntil!==null&&product.validUntil<today?product.validFrom:product.validFrom>today?product.validFrom:today});
+ }
+ const terms=(await termsById(db,school.id,[termsId])).get(termsId)!;
+ await configurationChanged(db,school.id,actor.membershipId);
+ return {data:{id:termsId,schoolId:school.id,version:terms.version,previousTermsVersionId:old.id,updatedTariffs:products.length},
+  action:'SharedTermsRevised',resourceType:'CommercialTermsVersion',resourceId:termsId,changedFields:['termsText','termsVersionId']};
+}
+export interface ProductValues {productKey:string;label:string;type:typeof productTypes[number];categoryCode:string|null;siteId?:string|null;durationMinutes:number|null;unitLabel:string;unitPriceCents:number|string;validFrom:string;validUntil:string|null;termsVersionId:string;enabled:boolean}
 export async function insertProduct(db:PoolClient,schoolId:string,value:ProductValues){
  return (await db.query<{id:string;version:number}>(`INSERT INTO drivy.service_product_version(school_id,version,product_key,label,type,category_code,site_id,duration_minutes,unit_label,unit_price_cents,valid_from,valid_until,terms_version_id,enabled)
-  SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,$5,NULL,$6,$7,$8,$9,$10,$11,$12 FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2 RETURNING id,version`,
-  [schoolId,value.productKey,value.label,value.type,value.categoryCode,value.durationMinutes,value.unitLabel,value.unitPriceCents,value.validFrom,value.validUntil,value.termsVersionId,value.enabled])).rows[0]!;
+  SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,$5,$13,$6,$7,$8,$9,$10,$11,$12 FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2 RETURNING id,version`,
+  [schoolId,value.productKey,value.label,value.type,value.categoryCode,value.durationMinutes,value.unitLabel,value.unitPriceCents,value.validFrom,value.validUntil,value.termsVersionId,value.enabled,value.siteId??null])).rows[0]!;
 }
 /** Même effet que les routes de catalogue historiques : version et instantané de configuration de l'école. */
 export async function configurationChanged(db:PoolClient,schoolId:string,membershipId:string){
@@ -331,12 +358,27 @@ async function updateProgramme(db:PoolClient,actor:CommandActor,school:SchoolRow
   if(!(await db.query('SELECT 1 FROM drivy.offering_version WHERE school_id=$1 AND id=$2 AND offering_key=$3',[school.id,body.expectedOfferingVersionId,body.offeringKey])).rowCount)throw notFound();
   throw new ApiError(409,'FORMATION_CHANGED','Ce parcours a été modifié entre-temps. Vos saisies sont conservées : rechargez la fiche avant d’enregistrer.');
  }
+ if(body.source&&(!body.competencies||['label','enabled','defaultDurationMinutes','procedure'].some(key=>key in body)))throw new ApiError(422,'PROGRAMME_REFERENCE_UPDATE_INVALID','La mise à jour du programme ajoute seulement les compétences proposées.');
  const changed:string[]=[];
  let curriculumVersionId=head.curriculumVersionId,policyVersionId=head.policyVersionId;
  if(body.competencies){
   const current=head.curriculumVersionId?await curriculumContent(db,school.id,head.curriculumVersionId):null;
-  const rows=keyedCompetencies(body.competencies,new Set(current?.competencies.map(item=>item.key)??[]));
-  if(!current||!current.approved||!sameCompetencies(rows,current.competencies)){curriculumVersionId=await insertCurriculum(db,school.id,actor.membershipId,head.categoryCode,rows);changed.push('competencies');}
+  const allowed=new Set(current?.competencies.map(item=>item.key)??[]);
+  let reason='';
+  if(body.source){
+   const template=swissProgrammeTemplates().find(item=>item.id===body.source!.templateId&&item.version===body.source!.templateVersion&&item.categoryCode===head.categoryCode);
+   if(!template)throw new ApiError(409,'PROGRAMME_REFERENCE_CHANGED','Relisez la version actuelle de la proposition.');
+   const existing=current?.competencies??[];
+   if(existing.some((item,index)=>{const proposed=body.competencies![index];return !proposed||proposed.key!==item.key||proposed.label!==item.label||proposed.description!==item.description;}))throw new ApiError(422,'PROGRAMME_CUSTOMIZATION_PROTECTED','La proposition doit conserver vos compétences et leur ordre.');
+   for(const item of body.competencies.slice(existing.length)){
+    const source=template.competencies.find(value=>value.key===item.key);
+    if(!source||allowed.has(source.key)||source.label!==item.label||source.description!==item.description)throw new ApiError(422,'PROGRAMME_REFERENCE_UPDATE_INVALID','Seuls les ajouts exacts de la proposition peuvent être appliqués.');
+    allowed.add(source.key);
+   }
+   reason=`Proposition Drivy ${template.id} ${template.version} · ajouts seuls`;
+  }
+  const rows=keyedCompetencies(body.competencies,allowed);
+  if(!current||!current.approved||!sameCompetencies(rows,current.competencies)){curriculumVersionId=await insertCurriculum(db,school.id,actor.membershipId,head.categoryCode,rows,reason);changed.push('competencies');}
  }
  if(body.procedure){
   const current=head.policyVersionId?await procedureContent(db,school.id,head.policyVersionId):null;
@@ -458,4 +500,5 @@ export function registerFormations(app:FastifyInstance,options:{pool:Pool;verify
  command(`${base}/programmes`,'UPDATE_FORMATION_PROGRAMME',updateProgrammeCommand,updateProgramme,1_000_000);
  command(base,'CREATE_FORMATION',createFormationCommand,createFormation,1_000_000);
  command(`${base}/tariffs`,'SAVE_TARIFF',saveTariffCommand,saveTariff,100_000);
+ command(`${base}/terms/revise`,'REVISE_SHARED_TERMS',reviseSharedTermsCommand,reviseSharedTerms,100_000);
 }

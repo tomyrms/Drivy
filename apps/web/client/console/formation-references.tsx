@@ -1,3 +1,4 @@
+import { SharedTermsEditor } from './shared-terms-editor';
 import { useEffect } from 'react';
 import { formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
@@ -105,6 +106,7 @@ export function ReferenceContent({ reference }: { reference: CatalogueReference 
         {!reference.current && <StatusBadge tone="neutral" symbol="clock">Plus utilisées par un tarif actuel</StatusBadge>}</div>
       <p className="row-meta">Valables {reference.terms.validUntil ? `du ${formatCivilDate(reference.terms.validFrom)} au ${formatCivilDate(reference.terms.validUntil)}` : `à partir du ${formatCivilDate(reference.terms.validFrom)}`}</p>
       <p className="policy-copy">{reference.terms.termsText}</p>
+      {reference.current && <SharedTermsEditor key={reference.id} reference={reference} />}
       <div className="reference-usage"><h3>Tarifs concernés</h3>{reference.usedBy.length === 0 ? <p className="caption">Aucun tarif n’utilise ces conditions.</p>
         : <ul className="plain-list">{reference.usedBy.map(item => <li key={item.id}>{item.label} · v{item.version}{item.categoryCode ? ` · permis ${item.categoryCode}` : ' · sans permis'} · {item.current ? 'version actuelle' : 'version précédente'} ·{' '}
           <ConsoleLink section={item.categoryCode ? 'formations' : 'prestations'} query={item.categoryCode ? { category: item.categoryCode, view: item.current ? 'tarifs' : 'historique', selection: item.id } : { selection: item.id }}>Ouvrir</ConsoleLink></li>)}</ul>}</div>
@@ -122,7 +124,6 @@ export function TermsArchiveSection() {
   return <div className="section-stack formation-studio settings-studio">
     <div className="formation-back"><ConsoleLink section="formations" query={{}} className="button quiet compact"><Symbol kind="back" bare />Formations et tarifs</ConsoleLink></div>
     <SectionHeading title="Conditions commerciales" symbol="file" />
-    <p className="caption">Les conditions se lisent et se modifient depuis le tarif qui les utilise.</p>
     {selection && <section className="settings-section"><LoadState loaded={detail} label="Lecture des conditions…">{value => value && (value.kind === 'TERMS'
       ? <ReferenceContent reference={value} /> : <Notice tone="info" title="Cet élément n’est pas une version de conditions"><p>
         <ConsoleLink section="formations" query={{ selection: value.id }}>Ouvrir l’élément</ConsoleLink></p></Notice>)}</LoadState></section>}

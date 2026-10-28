@@ -74,8 +74,25 @@ struct SchoolReportFold<Value> {
     let hidden: [Value]
 }
 
+struct SchoolReportCompetencyGroups {
+    let relevant: [SchoolCatalogCompetency]
+    let others: [SchoolCatalogCompetency]
+}
+
 /// Règles de la rédaction du bilan : étapes, ordre, repères. Aucune n’écrit ni n’envoie quoi que ce soit.
 enum SchoolReportFlowRules {
+    /// Des liens explicites de cette leçon uniquement : un signalement rend la compétence pertinente à relire,
+    /// mais ne lui attribue jamais de niveau. L’ordre et les objets viennent du programme historique autorisé.
+    static func relevantCompetencyIDs(evaluations: [SchoolReportObservation], observations: [SchoolObservation],
+                                     goals: [SchoolLessonGoal]) -> Set<UUID> {
+        Set(evaluations.map(\.competencyId) + observations.compactMap(\.competencyId) + goals.compactMap(\.competencyId))
+    }
+
+    static func competencyGroups(_ competencies: [SchoolCatalogCompetency], relevantIDs: Set<UUID>) -> SchoolReportCompetencyGroups {
+        .init(relevant: competencies.filter { relevantIDs.contains($0.id) },
+              others: competencies.filter { !relevantIDs.contains($0.id) })
+    }
+
     /// Ordre du parcours. C’est le seul endroit où il se décide : l’inverser se fait ici.
     static let order: [SchoolReportStep] = [.report, .competencies, .review]
 

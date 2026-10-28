@@ -3,6 +3,24 @@ import Testing
 @testable import Drivy
 
 @MainActor struct SchoolStartNowClientTests {
+    @Test func aLostPreparationResponseRestoresThePlannedLessonWithoutStartingGPS() async throws {
+        let server = PreparedStartNowLostResponseServer(), outbox = ConfigurationOutboxStub()
+        let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+            tokenSource: HubToken(), transport: server)
+        let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: outbox)
+        await model.load()
+        try #require(model.canStart)
+        #expect(await model.start(prepareForGPS: true) == nil)
+        let queued = try #require(model.pending)
+        let body = try #require(JSONSerialization.jsonObject(with: queued.body) as? [String: Any])
+        #expect(body["prepareForGPS"] as? Bool == true)
+        #expect(model.started == nil && outbox.value != nil)
+        let lesson = try #require(await model.verify())
+        #expect(lesson.status == "PLANNED" && lesson.actualStart == nil)
+        #expect(model.pending == nil && outbox.value == nil)
+        #expect(await server.posts() == 1)
+    }
+
     @Test func replayedStartStillReturnsItsOriginalLessonAfterMoreThanAnHour() async throws {
         let server = HubServer(); await server.enableStartNow()
         let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
@@ -208,6 +226,38 @@ import Testing
             resourceVersion: 0, createdAt: HubFixture.date("2026-09-28T12:00:00Z"),
             body: try JSONEncoder().encode(SchoolStartNowBody(operationId: operation, trainingId: HubFixture.trainingID, meetingPoint: nil)),
             routeResourceID: HubFixture.trainingID)
+    }
+}
+
+private actor PreparedStartNowLostResponseServer: SchoolHTTPTransport {
+    private let fallback = LessonFinishServer()
+    private var operationID: UUID?
+    private var postCount = 0
+    func posts() -> Int { postCount }
+
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let url = request.url!
+        func ok(_ data: [String: Any]) throws -> SchoolHTTPResponse {
+            let envelope: [String: Any] = ["data": data, "requestId": UUID().uuidString, "serverTime": "2026-10-28T10:00:00Z"]
+            return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: envelope), status: 200,
+                url: url, contentType: "application/json")
+        }
+        if request.httpMethod == "POST" {
+            postCount += 1
+            let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+            operationID = UUID(uuidString: body?["operationId"] as? String ?? "")
+            throw URLError(.networkConnectionLost)
+        }
+        if url.pathComponents.contains("operations"), let operationID {
+            return try ok(["operationId": operationID.uuidString, "commandType": "START_LESSON_NOW", "resourceType": "Lesson",
+                "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": 1, "committedAt": "2026-10-28T10:00:00Z"])
+        }
+        if url.lastPathComponent.lowercased() == HubFixture.lessonID.uuidString.lowercased() {
+            var data = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())) as? [String: Any])
+            data["actualStart"] = NSNull(); data["actualEnd"] = NSNull()
+            return try ok(data)
+        }
+        return try await fallback.send(request)
     }
 }
 

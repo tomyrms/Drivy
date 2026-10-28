@@ -1218,3 +1218,8 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - PASS : compilation API, compilation web et contrôle TypeScript web, Node 24.22.1. Aucun nouveau composant externe ni migration.
 - NOT_EXECUTED : essai du porteur, tests PostgreSQL et tests web ciblés adaptés, recette clavier/petit écran. À faire après retour, puis contrôles requis avant fusion. Aucun workflow complet lancé.
 - Aucun changement natif, IPA, fusion ou déploiement. Le reste de #247/#258 et les autres catégories de #253 ne sont pas réalisés par ce lot.
+
+
+## 28 octobre 2026 — Épic #253, implémentation de qualification
+
+Branche `codex/simplification-253`. [État des 24 sujets et recette](simplification-253-20261028.md). Guide unique, programmes suisses, conditions communes, échéance d’annulation, choix GPS personnel, départ atomique de qualification, bilan et aide intégrés. Typage et compilation API/web : PASS sous Node 24.22.1. Générateurs de contrats exécutés. Tests PostgreSQL/Swift/navigateur/physiques : NOT_EXECUTED, préparés pour après l’essai du porteur. Compilation Apple et IPA à relever après leur exécution. Migration additive d’annulation préparée, non exécutée. Mise en service GPS obligatoire BLOCKED par #266 ; configuration vide par défaut. Qualification des sources et preuves de cours limitée comme détaillé dans [la matrice suisse](regles-suisses-20261028.md). Aucun déploiement ni fusion de cette branche.

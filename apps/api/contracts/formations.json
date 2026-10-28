@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:formations:1",
   "title": "Formations et tarifs : fiche d’un permis et commandes composées",
-  "description": "GET /v1/schools/{schoolId}/formations, /formations/sheet?category=, /formations/uncategorized-tariffs, /formations/terms, /formations/references/{id} (ADMIN courant). POST /formations (CREATE_FORMATION), /formations/programmes (UPDATE_FORMATION_PROGRAMME), /formations/tariffs (SAVE_TARIFF) : Idempotency-Key = operationId, 201, une opération et un reçu AP72 par commande ; têtes attendues comparées sous le verrou scolaire ; CONFIGURE_CATALOG requis pour toute écriture commerciale.",
+  "description": "GET /v1/schools/{schoolId}/formations, /formations/sheet?category=, /formations/uncategorized-tariffs, /formations/terms, /formations/references/{id} (ADMIN courant). POST /formations (CREATE_FORMATION), /formations/programmes (UPDATE_FORMATION_PROGRAMME), /formations/tariffs (SAVE_TARIFF), /formations/terms/revise (REVISE_SHARED_TERMS) : Idempotency-Key = operationId, 201, une opération et un reçu AP72 par commande ; têtes attendues comparées sous le verrou scolaire ; CONFIGURE_CATALOG requis pour toute écriture commerciale.",
   "$defs": {
     "CreateFormationCommand": {
       "type": "object",
@@ -272,6 +272,24 @@
             "sourceUrls"
           ],
           "additionalProperties": false
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "templateId": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "templateVersion": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "templateId",
+            "templateVersion"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -500,6 +518,48 @@
           "additionalProperties": false
         }
       ]
+    },
+    "ReviseSharedTermsCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "termsVersionId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "expectedProductVersionIds": {
+          "minItems": 1,
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "termsText": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 20000
+        },
+        "reviewAcknowledged": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "operationId",
+        "termsVersionId",
+        "expectedProductVersionIds",
+        "termsText",
+        "reviewAcknowledged"
+      ],
+      "additionalProperties": false
     }
   }
 }

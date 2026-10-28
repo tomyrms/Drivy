@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:practical-start:1",
+  "title": "Départ pratique et choix GPS personnel — extension de qualification",
+  "description": "GET recording-notice ajoute practicalStartPolicy LEGACY ou GPS_REQUIRED. Absence sur un ancien serveur = LEGACY ; panne ou valeur inconnue ne vaut jamais LEGACY. GPS_REQUIRED est limité aux écoles synthétiques configurées par GPS_ONLY_QUALIFICATION_SCHOOL_IDS, vide par défaut. POST lessons/start-now avec prepareForGPS=true réserve une leçon PLANNED sans actualStart ; seul POST lessons/{lessonId}/captures peut alors commencer atomiquement la leçon après toutes les validations. POST lessons/{lessonId}/start est refusé en GPS_REQUIRED. Choix SELF requis ; ALLOWED exige expectedChoiceVersion actuel (0 sans choix), REFUSED reste disponible sans ce prérequis. Identités, droits, clés idempotentes, reçus et If-Match existants conservés. Activation réelle bloquée par #266.",
+  "$defs": {
+    "RecordingChoiceCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "lessonId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ALLOWED",
+            "REFUSED",
+            "UNKNOWN"
+          ]
+        },
+        "noticeVersionId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "SELF",
+            "RECORDED_VERBAL"
+          ]
+        },
+        "expectedChoiceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "operationId",
+        "lessonId",
+        "status",
+        "noticeVersionId",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "StartNowCommand": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "trainingId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "meetingPoint": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prepareForGPS": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operationId",
+        "trainingId"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

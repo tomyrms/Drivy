@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createCommand, formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
-import { formationListSchema, readFormationSheet, readReference, textProposalsLite, type FormationSheet, type Programme, type Tariff, type TariffType, type TextProposalsLite } from '../formation-api';
+import { formationListSchema, proposalsSchema, readFormationSheet, readReference, textProposalsLite, type FormationSheet, type Programme, type Tariff, type TariffType, type TextProposalsLite } from '../formation-api';
+import { programmeUpdate } from '../formation-programme-update';
 import { readSchool } from '../school-api';
-import { EmptyState, Notice, SegmentField, SelectField, StatusBadge, Symbol, formatCivilDate, formatDateTime, formatDuration } from '../ui';
+import { ConfirmDialog, EmptyState, Notice, SegmentField, SelectField, StatusBadge, Symbol, formatCivilDate, formatDateTime, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges, type Outcome } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { consolePath, type FormationView, type NavigationQuery } from './route';
@@ -320,10 +321,44 @@ function ProgrammeRubric({ view, sheet, programme, editors, submission, proposal
     <section className="settings-section" aria-labelledby={headingId}>
       <div className="settings-section-heading"><h2 id={headingId} tabIndex={-1} className="section-title">{title}</h2>{action}</div>
       <div className="settings-section-body">{body}</div>
-      {view === 'general' && !state && sheet.canConfigureCatalog && <p className="formation-more">
-        <ConsoleLink section="formations" query={{ view: 'nouvelle', category: sheet.categoryCode }} className="text-link">Ajouter un autre parcours au permis {sheet.categoryCode}</ConsoleLink></p>}
+      {view === 'competences' && !state && <ProgrammeReference key={programme.offeringKey} programme={programme} categoryCode={sheet.categoryCode} canConfigure={sheet.canConfigureCatalog} submission={submission} />}
     </section>
   </>;
+}
+
+/** Mise à jour proposée à la demande : le serveur relit la version et limite l'écriture aux ajouts du référentiel. */
+function ProgrammeReference({programme,categoryCode,canConfigure,submission}:{programme:Programme;categoryCode:string;canConfigure:boolean;submission:ReturnType<typeof useEditorSubmission>}) {
+  const {schoolId}=useConsole();
+  const [open,setOpen]=useState(false);
+  const [review,setReview]=useState<(ReturnType<typeof programmeUpdate>&{baseId:string})|null>(null);
+  const loaded=useLoad(async()=>open?readSchool(schoolId,'setup-draft/templates',proposalsSchema):null,[schoolId,open]);
+  const template=loaded.data?.formations.find(item=>item.categoryCode===categoryCode);
+  const diff=template?programmeUpdate(programme.curriculum?.competencies??[],template):null;
+  const runner=submission.runner;
+  return <details className="disclosure" open={open} onToggle={event=>setOpen(event.currentTarget.open)}>
+    <summary>Référence et mise à jour du programme</summary>
+    {open && <LoadState loaded={loaded} label="Lecture du programme de référence…">{data=>data && (template&&diff?<>
+      <p className="row-meta">Programme actuel : révision {programme.curriculum?.revision??'—'} · Proposition Drivy : {template.version}</p>
+      {template.qualification==='NOT_QUALIFIED'&&<StatusBadge tone="warning" symbol="alert">Couverture réglementaire à qualifier</StatusBadge>}
+      <p>{template.coverageNote}</p>
+      {template.change&&<p>{{EDITORIAL:'Correction rédactionnelle',PEDAGOGICAL:'Amélioration pédagogique',REGULATORY:'Évolution réglementaire'}[template.change.kind]}{template.change.effectiveFrom?` · dès le ${formatCivilDate(template.change.effectiveFrom)}`:''} : {template.change.summary}</p>}
+      <p>{diff.additions.length?`${diff.additions.length} compétence${diff.additions.length>1?'s':''} à ajouter.`:'Aucune compétence à ajouter.'} {diff.differences.length>0?`${diff.differences.length} formulation${diff.differences.length>1?'s':''} différente${diff.differences.length>1?'s':''} conservée${diff.differences.length>1?'s':''}.`:''}</p>
+      {diff.additions.length>0&&<CompetencyList items={diff.additions}/>}
+      {diff.differences.length>0&&<details className="disclosure compact"><summary>Comparer les formulations</summary><ul className="plain-list">{diff.differences.map(({previous,proposed})=><li key={previous.key}>
+        <p><strong>École : {previous.label}</strong> · {previous.description}</p><p>Référence : {proposed.label} · {proposed.description}</p>
+      </li>)}</ul></details>}
+      {diff.collisions.length>0&&<Notice tone="warning" title="Correspondance à vérifier" live={false}><p>Une compétence proposée porte déjà le nom d’une compétence de l’école avec une autre référence. Les ajouts restent suspendus pour éviter un doublon.</p></Notice>}
+      <details className="disclosure compact"><summary>Sources et portée</summary><p>Sources consultées le {template.verifiedOn?formatCivilDate(template.verifiedOn):'jour non renseigné'}. Ces compétences sont une proposition pédagogique, sans certification officielle.</p>
+        <p>{template.change?.application}</p><ul className="plain-list">{template.sourceUrls?.map(url=><li key={url}><a className="text-link" href={url} target="_blank" rel="noreferrer noopener">{url.includes('criteres-devaluation')?'Critères d’examen':'Conditions d’accès'} · {new URL(url).hostname}</a></li>)}</ul>
+      </details>
+      {canConfigure&&diff.canApply&&<button type="button" className="button secondary" disabled={runner.busy||!!runner.pending} onClick={()=>{runner.clearOutcome();setReview({...diff,baseId:programme.head.id});}}>Ajouter les compétences proposées</button>}
+      <ConfirmDialog open={!!review} busy={runner.busy} title="Ajouter ces compétences ?" confirmLabel="Ajouter aux nouvelles inscriptions" onCancel={()=>setReview(null)} onConfirm={()=>{
+        if(!review||!canConfigure||runner.pending||runner.busy)return;
+        void submission.submit(`reference:${programme.offeringKey}`,'rubric-competences',createCommand({schoolId,kind:'saveFormationProgramme',path:'formations/programmes',resourceVersion:0,
+          body:{offeringKey:programme.offeringKey,expectedOfferingVersionId:review.baseId,competencies:review.competencies,source:review.source}}),'Le programme est mis à jour pour les nouvelles inscriptions.').then(()=>setReview(null));
+      }}><p>{review?.additions.map(item=>item.label).join(' · ')}</p><p>Les formulations et compléments de l’école sont conservés. Les élèves déjà inscrits, leurs leçons et leurs évaluations gardent leur programme actuel.</p></ConfirmDialog>
+    </>:<p>Aucun programme de référence n’est disponible pour ce permis.</p>)}</LoadState>}
+  </details>;
 }
 
 export function CompetencyList({ items }: { items: readonly { id?: string; key: string; label: string; description: string }[] }) {

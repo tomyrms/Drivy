@@ -63,6 +63,7 @@ export const curriculumSchema = z.object({
 });
 export const catalogPolicySchema = z.object({
   id, schoolId: id, version, categoryCode: z.string(), procedureText: z.string(), cancellationPolicyText: z.string(),
+  cancellationRules: z.object({ cancellationHours: z.number().int().min(0).max(8760).nullable(), lateAction: z.enum(['CONTACT', 'NO_FEE']) }).strict().nullish(),
   sourceUrls: z.array(z.string()).max(30), approved: z.boolean(), approvedAt: timestamp.nullable(),
 });
 export const termsSchema = z.object({
