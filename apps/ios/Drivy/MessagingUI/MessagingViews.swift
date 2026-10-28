@@ -140,7 +140,7 @@ struct MessagingInboxView: View {
                     MessagingInboxRow(title: item.kind == .schoolGeneral ? "Général" : item.title,
                         preview: workspace.preview(for: item.id),
                         unread: item.unreadCount ?? 0,
-                        muted: (item.mutedUntil ?? .distantPast) > Date(),
+                        muted: (workspace.displayedMutedUntil(item.id, fallback: item.mutedUntil) ?? .distantPast) > Date(),
                         photo: item.peerPersonID.flatMap { workspace.photos[$0] },
                         isGeneral: item.kind == .schoolGeneral)
                 }
