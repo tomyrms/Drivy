@@ -40,7 +40,7 @@ export function PortalFrame({ children, schoolName, userName, build }: PortalFra
             <DropdownMenuGroup>
               <DropdownMenuLabel>Apparence</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={theme.preference} onValueChange={value => theme.setTheme(value as ThemePreference)}>
-                {themes.map(option => <DropdownMenuRadioItem key={option.value} value={option.value}><option.icon aria-hidden="true" />{option.label}</DropdownMenuRadioItem>)}
+                {themes.map(option => <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick><option.icon aria-hidden="true" />{option.label}</DropdownMenuRadioItem>)}
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
           </DropdownMenuContent>
