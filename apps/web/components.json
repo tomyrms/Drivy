@@ -5,7 +5,7 @@
   "tsx": true,
   "tailwind": {
     "config": "",
-    "css": "client/styles.css",
+    "css": "client/portal/portal.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
