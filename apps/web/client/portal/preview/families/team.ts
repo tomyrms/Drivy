@@ -64,8 +64,21 @@ function seedInvitations() {
   );
 }
 
-/** Codes a refusal would plausibly carry for each write of this family. */
+const lastAdmin = (id: string | undefined) => db.members!.some(item => item.id === id && item.roles.includes('ADMIN'))
+  && !db.members!.some(item => item.id !== id && item.status === 'ACTIVE' && item.roles.includes('ADMIN'));
+
+/**
+ * Codes a refusal would carry for each write of this family, following the school's rules: the last administrator is
+ * kept, a role with assignments cannot just be removed, and a second removal of the same access is refused.
+ */
 function refusal(request: PreviewRequest): string | undefined {
+  if (request.collection === 'members' && request.resourceId) {
+    if (request.action === 'deactivate') return lastAdmin(request.resourceId) ? 'LAST_ADMIN' : 'MEMBER_ALREADY_DEACTIVATED';
+    const current = db.members!.find(item => item.id === request.resourceId), next: string[] = Array.isArray(request.body.roles) ? request.body.roles : [];
+    if (current?.roles.includes('ADMIN') && !next.includes('ADMIN') && lastAdmin(current.id)) return 'LAST_ADMIN';
+    if (current?.roles.includes('INSTRUCTOR') && !next.includes('INSTRUCTOR')) return 'MEMBER_RELATIONS_REQUIRE_REVIEW';
+    return 'INVALID_REQUEST';
+  }
   if (request.collection !== 'invitations') return undefined;
   if (!request.resourceId) return request.body.delivery === 'CODE' ? 'INVITATION_TRAINING_INVALID' : 'INVITATION_ALREADY_PENDING';
   return request.action === 'resend' ? 'INVITATION_DELIVERY_UNAVAILABLE' : 'INVITATION_USED';
