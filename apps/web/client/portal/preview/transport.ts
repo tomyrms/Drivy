@@ -1,5 +1,7 @@
 import { commandSpecs, type SchoolCommand } from '../../command-core';
 import { db, ids, previewId, previewSchool, courseCatalogue, progress, reports, stamp, type FixtureRecord } from './fixtures';
+import { previewFamilies } from './families';
+import type { PreviewRequest, PreviewTools } from './family';
 
 export type PreviewScenario = 'normal' | 'refused' | 'slow' | 'lost-reply' | 'conflict';
 let scenario: PreviewScenario = 'normal';
@@ -10,6 +12,7 @@ const nextId = () => previewId(++sequence);
 const envelope = (data: unknown) => ({ data: structuredClone(data), requestId: nextId(), serverTime: new Date().toISOString() });
 const list = (items: unknown[]) => envelope({ items, nextCursor: null });
 export const setPreviewScenario = (value: PreviewScenario) => { scenario = value; };
+for (const family of previewFamilies) family.seed?.(db);
 
 /** Separate synthetic origin, deny by default: no request ever delegates to a real API. */
 export function installPreviewTransport() {
@@ -32,7 +35,23 @@ export function installPreviewTransport() {
     const target = items?.find(item => item.id === resourceId);
     const learner = db.learners!.find(item => item.id === resourceId);
     const training = db.trainings!.find(item => item.id === resourceId);
+    const segments = path ? path.split('/') : [];
+    const request = (body: FixtureRecord): PreviewRequest => ({ method, path, segments, collection, resourceId, action, query, headers, body, scenario });
+    const versionMatches = (record: FixtureRecord | undefined) => !!record && headers.get('If-Match') === `"${record.version}"`;
+    let lost = false;
+    const commit = (kind: SchoolCommand['kind'], record: FixtureRecord) => {
+      const spec = commandSpecs[kind], response = envelope(record);
+      results.set(operationId!, { status: spec.expectedStatus, body: response });
+      receipts.set(operationId!, { operationId, commandType: spec.operationType, resourceType: spec.resourceType, resourceId: record.id,
+        resourceVersion: record.version, committedAt: new Date().toISOString() });
+      if (lost) throw new TypeError('Synthetic response lost');
+      return reply(spec.expectedStatus, response);
+    };
+    const tools: PreviewTools = { reply, envelope, list, commit, versionMatches, nextId };
     if (method === 'GET') {
+      if (collection !== 'operations') for (const family of previewFamilies) {
+        const answer = family.read?.(request({}), tools); if (answer) return answer;
+      }
       if (!path) return reply(200, envelope(previewSchool));
       if (collection === 'operations') return receipts.has(resourceId!) ? reply(200, envelope(receipts.get(resourceId!))) : reply(404, { code: 'NOT_FOUND' });
       if (path === 'course-catalogue') return reply(200, envelope(courseCatalogue));
@@ -58,20 +77,19 @@ export function installPreviewTransport() {
     if (!operationId) return reply(400, { code: 'IDEMPOTENCY_KEY_REQUIRED' });
     const prior = results.get(operationId); if (prior) return reply(prior.status, prior.body);
     const submittedScenario = scenario;
+    lost = submittedScenario === 'lost-reply';
     await new Promise(resolve => setTimeout(resolve, submittedScenario === 'slow' ? 5000 : 650));
-    if (submittedScenario === 'refused') return reply(409, { code: collection === 'members' ? 'LAST_ADMIN' : 'PLANNING_CONFLICT' });
-    if (submittedScenario === 'conflict') return reply(412, { code: 'VERSION_CONFLICT' });
     let body: FixtureRecord;
     try { body = JSON.parse(String(init?.body ?? '{}')); } catch { return reply(400, { code: 'INVALID_REQUEST' }); }
-    const versionMatches = (record: FixtureRecord | undefined) => !!record && headers.get('If-Match') === `"${record.version}"`;
-    const commit = (kind: SchoolCommand['kind'], record: FixtureRecord) => {
-      const spec = commandSpecs[kind], response = envelope(record);
-      results.set(operationId, { status: spec.expectedStatus, body: response });
-      receipts.set(operationId, { operationId, commandType: spec.operationType, resourceType: spec.resourceType, resourceId: record.id,
-        resourceVersion: record.version, committedAt: new Date().toISOString() });
-      if (submittedScenario === 'lost-reply') throw new TypeError('Synthetic response lost');
-      return reply(spec.expectedStatus, response);
-    };
+    const writeRequest = { ...request(body), scenario: submittedScenario };
+    if (submittedScenario === 'refused') {
+      const familyCode = previewFamilies.map(family => family.refusalCode?.(writeRequest)).find(Boolean);
+      return reply(409, { code: familyCode ?? (collection === 'members' ? 'LAST_ADMIN' : 'PLANNING_CONFLICT') });
+    }
+    if (submittedScenario === 'conflict') return reply(412, { code: 'VERSION_CONFLICT' });
+    for (const family of previewFamilies) {
+      const answer = family.write?.(writeRequest, tools); if (answer) return answer;
+    }
     if (collection === 'members' && target && (method === 'PATCH' || action === 'deactivate')) {
       if (!versionMatches(target)) return reply(412, { code: 'VERSION_CONFLICT' });
       if (!String(body.reason ?? '').trim()) return reply(400, { code: 'INVALID_REQUEST' });

@@ -1,37 +1,43 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { Building2, CalendarDays, ChevronDown, GraduationCap, Monitor, Moon, Sun, UsersRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
+import { BookOpen, Building2, CalendarDays, ChevronDown, GraduationCap, Monitor, Moon, Settings, Sun, UsersRound } from 'lucide-react';
 import { BrandSymbol } from '../BrandSymbol';
 import { useTheme, type ThemePreference } from '../theme';
+import type { NavigationQuery } from '../console/route';
+import type { SectionKey } from '../console/sections';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
+import { availableWorkspaces, currentWorkspace, isNavItemCurrent, type PortalWorkspaceKey } from './destinations';
 
-export type PortalDestination = 'agenda' | 'eleves' | 'equipe';
+export type PortalDestination = SectionKey;
 export interface PortalFrameProps {
   children: ReactNode;
-  active: PortalDestination;
-  onNavigate: (destination: PortalDestination) => void;
+  active: SectionKey;
+  activeQuery?: NavigationQuery;
+  /** Sections wired to a rebuilt page; nothing else is offered. */
+  available: readonly SectionKey[];
+  onNavigate: (section: SectionKey, query?: NavigationQuery) => void;
   schoolName: string;
   userName: string;
   build: string;
 }
 
-const destinations = [
-  { value: 'agenda', label: 'Agenda', icon: CalendarDays },
-  { value: 'eleves', label: 'Élèves', icon: GraduationCap },
-  { value: 'equipe', label: 'Équipe', icon: UsersRound },
-] as const;
+const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
 
 /** One navigation tree and one mounted page at every viewport width. */
-export function PortalFrame({ children, active, onNavigate, schoolName, userName, build }: PortalFrameProps) {
+export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, build }: PortalFrameProps) {
   const theme = useTheme();
   const content = useRef<HTMLElement>(null);
-  const previousDestination = useRef(active);
+  const workspaces = useMemo(() => availableWorkspaces(new Set(available)), [available]);
+  const workspace = currentWorkspace(workspaces, active, activeQuery);
+  const currentItem = workspace?.items.find(item => isNavItemCurrent(item, active, activeQuery));
+  const destinationKey = `${active}:${activeQuery.audience ?? ''}`;
+  const previousDestination = useRef(destinationKey);
   useEffect(() => {
-    if (previousDestination.current === active) return;
-    previousDestination.current = active;
+    if (previousDestination.current === destinationKey) return;
+    previousDestination.current = destinationKey;
     content.current?.focus();
-  }, [active]);
+  }, [destinationKey]);
   const initials = userName.trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toLocaleUpperCase('fr');
   const themes = [
     { value: 'light', label: 'Clair', icon: Sun },
@@ -63,19 +69,28 @@ export function PortalFrame({ children, active, onNavigate, schoolName, userName
     </header>
     <div className="portal-workspace">
       <aside className="portal-sidebar">
-        <nav className="portal-navigation" aria-label="Navigation principale">
+        <nav className="portal-navigation" aria-label="Navigation principale" style={{ '--portal-nav-count': workspaces.length } as CSSProperties}>
           <ul>
-            {destinations.map(destination => <li key={destination.value}>
-              <Button variant="ghost" className="portal-nav-item" aria-current={active === destination.value ? 'page' : undefined}
-                onClick={() => { if (active !== destination.value) onNavigate(destination.value); }}>
-                <destination.icon aria-hidden="true" /><span>{destination.label}</span>
-              </Button>
-            </li>)}
+            {workspaces.map(item => {
+              const Icon = workspaceIcons[item.key], target = item.items[0]!, current = item.key === workspace?.key;
+              return <li key={item.key}>
+                <Button variant="ghost" className="portal-nav-item" aria-current={current ? 'page' : undefined}
+                  onClick={() => { if (!current || currentItem !== target) onNavigate(target.section, target.query); }}>
+                  <Icon aria-hidden="true" /><span className="portal-nav-label">{item.label}</span><span className="portal-nav-short" aria-hidden="true">{item.shortLabel}</span>
+                </Button>
+              </li>;
+            })}
           </ul>
         </nav>
       </aside>
       <div className="portal-surface">
-        <main id="portal-content" ref={content} tabIndex={-1} className="portal-content" aria-label={destinations.find(destination => destination.value === active)?.label}>{children}</main>
+        {workspace && workspace.items.length > 1 && <nav className="portal-local-nav" aria-label={workspace.label}>
+          <ul>{workspace.items.map(item => <li key={`${item.section}:${item.query?.audience ?? ''}`}>
+            <Button variant="ghost" className="portal-local-item" aria-current={item === currentItem ? 'page' : undefined}
+              onClick={() => { if (item !== currentItem) onNavigate(item.section, item.query); }}>{item.label}</Button>
+          </li>)}</ul>
+        </nav>}
+        <main id="portal-content" ref={content} tabIndex={-1} className="portal-content" aria-label={currentItem?.label ?? workspace?.label}>{children}</main>
         <footer className="portal-build"><span>Aperçu · Données synthétiques</span><code>{build.slice(0, 12)}</code></footer>
       </div>
     </div>

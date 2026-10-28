@@ -1,11 +1,12 @@
 import { createRoot } from 'react-dom/client';
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { ConsoleContext, type ConsoleContextValue } from '../console/context';
 import { ScopedReadCache } from '../console/load-model';
 import { commandStore } from '../command-store';
 import { PortalFrame } from './frame';
 import { AccessPilot } from './access/access-page';
+import { portalPages, portalSections } from './pages';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
@@ -22,8 +23,8 @@ z.config({ jitless: true });
 installPreviewTransport();
 commandStore.scopeToPerson(ids.person);
 commandStore.scopeToAccess(ids.school, ids.admin, 1);
-const Agenda = lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot })));
-const Learners = lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot })));
+// The first published link (no page parameter) keeps opening the access editor directly.
+const isFirstLink = () => !new URLSearchParams(location.search).has('page') && new URLSearchParams(location.search).get('mode') !== 'read';
 const scenarios = [
   { value: 'normal', label: 'Enregistrement normal' }, { value: 'refused', label: 'Refus de la modification' },
   { value: 'slow', label: 'Enregistrement lent' }, { value: 'lost-reply', label: 'Réponse perdue' }, { value: 'conflict', label: 'Conflit de version' },
@@ -32,6 +33,7 @@ const scenarios = [
 function Preview() {
   const navigation = usePreviewNavigation();
   const { route } = navigation;
+  const Page = portalPages[route.page] ?? portalPages.equipe!;
   const [scenario, setScenario] = useState<PreviewScenario>('normal');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [membership, setMembership] = useState(previewMembership);
@@ -48,10 +50,10 @@ function Preview() {
     registerUnsavedChanges: navigation.registerUnsavedChanges, confirmNavigation: navigation.confirmNavigation,
     setNavigationGuard: navigation.setNavigationGuard, login: () => {}, confirmIdentity: async () => true,
   };
-  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} onNavigate={page => navigation.navigate(page)} schoolName={previewSchool.name} userName={previewMe.displayName} build={__DRIVY_PREVIEW_SHA__}>
+  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} build={__DRIVY_PREVIEW_SHA__}>
     <PortalPendingRequests />
     <Suspense fallback={<div className="grid gap-5" aria-label="Chargement de la page" role="status"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>}>
-      {route.page === 'agenda' ? <Agenda /> : route.page === 'eleves' ? <Learners /> : <AccessPilot initialEdit={!new URLSearchParams(location.search).has('page') && new URLSearchParams(location.search).get('mode') !== 'read'} />}
+      {route.page === 'equipe' && isFirstLink() ? <AccessPilot initialEdit /> : <Page />}
     </Suspense>
     <div className="preview-controls"><span>Aperçu interactif · aucun compte réel</span><Button variant="ghost" onClick={() => setSettingsOpen(true)}>Scénario d’essai</Button><Button variant="ghost" onClick={() => navigation.confirmNavigation(() => { commandStore.clear(); location.reload(); })}>Réinitialiser</Button></div>
     <Dialog open={navigation.departure !== null} onOpenChange={open => { if (!open) navigation.cancelDeparture(); }}><DialogContent>

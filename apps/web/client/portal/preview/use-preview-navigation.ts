@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readNavigationQuery, type NavigationQuery } from '../../console/route';
 import type { SectionKey } from '../../console/sections';
-import type { PortalDestination } from '../frame';
+import { portalSections } from '../pages';
 import { ids } from './fixtures';
 
-type Route = { page: PortalDestination; query: NavigationQuery };
-const destinations: readonly string[] = ['agenda', 'eleves', 'equipe'];
+type Route = { page: SectionKey; query: NavigationQuery };
+const destinations: readonly string[] = portalSections;
 function readRoute(): Route {
   const params = new URLSearchParams(location.search), page = params.get('page');
   const query = readNavigationQuery(location.search);
   // Preserve the one-page link already handed to the owner.
   if (!page && !query.selection) query.selection = ids.instructor;
-  return { page: destinations.includes(page ?? '') ? page as PortalDestination : 'equipe', query };
+  return { page: destinations.includes(page ?? '') ? page as SectionKey : 'equipe', query };
 }
 export function usePreviewNavigation() {
   const [route, setRoute] = useState(readRoute);
@@ -35,9 +35,9 @@ export function usePreviewNavigation() {
   }, []);
   const navigate = useCallback((section: SectionKey, query: NavigationQuery = {}, options?: { replace?: boolean }) => {
     // Only implemented destinations are exposed by the pilot navigation.
-    const page = section === 'apercu' ? 'agenda' : section;
+    const page = section === 'apercu' && !destinations.includes('apercu') ? 'agenda' : section;
     if (!destinations.includes(page)) return;
-    const apply = () => go({ page: page as PortalDestination, query }, options?.replace);
+    const apply = () => go({ page, query }, options?.replace);
     if (options?.replace) apply(); else confirmNavigation(apply);
   }, [go, confirmNavigation]);
   const setRouteQuery = useCallback((query: NavigationQuery, replace = false, keepForms = false) => {
