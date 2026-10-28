@@ -277,6 +277,13 @@ async function main() {
         .getByRole('button',{name:'Modifier',exact:true}).click();
       await page.getByRole('heading',{name,exact:true}).waitFor();
     };
+    const revealField=async(field:ReturnType<Page['locator']>)=>{
+      const ancestors=page.locator('details').filter({has:field});
+      for(let index=0;index<await ancestors.count();index++){
+        const detail=ancestors.nth(index);
+        if(await detail.getAttribute('open')===null)await detail.locator(':scope > summary').click();
+      }
+    };
     await openReview();await editReviewSection('Confidentialité');
     stage='première sauvegarde du guide';
     const notice='Recette synthétique uniquement. Les leçons et observations partagées sont visibles par l’élève ; les notes privées restent privées. Aucun compte réel.';
@@ -329,7 +336,7 @@ async function main() {
     await page.screenshot({path:resolve(artifactDirectory,'01-profil-desktop-synthetic.png'),fullPage:true});
     stage='fermeture du navigateur avec une saisie non enregistrée après le dernier brouillon confirmé';
     const savedPhoneExplanation=await page.getByLabel('Explication · Téléphone',{exact:true}).inputValue();
-    await page.locator('details').filter({has:page.getByLabel('Explication · Téléphone',{exact:true})}).locator('summary').click();
+    await revealField(page.getByLabel('Explication · Téléphone',{exact:true}));
     await page.getByLabel('Explication · Téléphone',{exact:true}).fill('Saisie synthétique non enregistrée avant fermeture.');
     await consumerContext.close();
     stage='reprise depuis un contexte navigateur indépendant, sans cookie ni stockage transmis';
@@ -351,7 +358,7 @@ async function main() {
     stage='sauvegarde depuis le dialogue de sortie avec réponse perdue';
     const exitExplanation=`${savedPhoneExplanation} Complément synthétique enregistré avant la sortie.`;
     const exitPhone=page.getByLabel('Explication · Téléphone',{exact:true});
-    await page.locator('details').filter({has:exitPhone}).locator('summary').click();await exitPhone.fill(exitExplanation);
+    await revealField(exitPhone);await exitPhone.fill(exitExplanation);
     let exitWrites=0,exitOperation='',exitHTTPStatus=0;
     await page.route(draftEndpoint,async route=>{
       if(route.request().method()!=='PUT'){await route.continue();return;}
@@ -382,7 +389,7 @@ async function main() {
     stage='erreur précise dans les informations demandées';
     const phoneExplanation=page.getByLabel('Explication · Téléphone',{exact:true});
     const originalPhoneExplanation=await phoneExplanation.inputValue();
-    await page.locator('details').filter({has:phoneExplanation}).locator('summary').click();await phoneExplanation.fill('');
+    await revealField(phoneExplanation);await phoneExplanation.fill('');
     await openReview();
     await page.getByRole('button',{name:'Expliquez à l’élève pourquoi cette information est demandée.',exact:true}).click();
     await page.waitForFunction(()=>{const active=document.activeElement;return active instanceof HTMLTextAreaElement&&active.name.startsWith('profile.fields.')&&active.value==='';});
@@ -401,7 +408,7 @@ async function main() {
     const secondCompetence=page.locator('[name="formations.0.competencies.1.label"]');
     const thirdDescription=page.locator('[name="formations.0.competencies.2.description"]');
     const originalSecondCompetence=await secondCompetence.inputValue(),originalThirdDescription=await thirdDescription.inputValue();
-    await page.locator('details').filter({has:secondCompetence}).locator('summary').click();
+    await revealField(secondCompetence);
     await secondCompetence.fill('');await thirdDescription.fill('');
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Prix et règles de l’école',exact:true}).waitFor();
     await page.getByLabel('Prix (CHF)',{exact:true}).fill('95');await page.getByLabel('Durée (minutes)',{exact:true}).fill('50');

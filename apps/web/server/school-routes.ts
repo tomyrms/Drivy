@@ -70,6 +70,7 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   // Élèves et formations : l'administration ouvre la formation et affecte le moniteur depuis le web.
   { method: 'GET', segments: ['learners'], query: [...list, 'status'] },
   { method: 'GET', segments: ['learners', ':id'] },
+  { method: 'GET', segments: ['learners', ':id', 'course-facts'] },
   { method: 'GET', segments: ['trainings'], query: [...list, 'learnerId'] },
   { method: 'GET', segments: ['trainings', ':id'] },
   { method: 'POST', segments: ['trainings'], bodyLimit: 2_048 },

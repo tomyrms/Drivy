@@ -2,6 +2,8 @@
 
 État au 28 octobre 2026. Lecture du code issu de `e5166404`, des décisions conservées et des sources officielles ci-dessous ; **aucune lecture de données de production**, aucun audit physique et aucune certification juridique. Le porteur confirme que le homelab est en Suisse. Il n’a pas encore précisé l’identité juridique de l’exploitant, les personnes ayant accès à l’hébergement, les lieux des sauvegardes ni les durées et procédures d’effacement.
 
+Actualisation d'exploitation après cet audit : le [reçu du déploiement autorisé](deploiement-reset-253-20261028.md) atteste la sauvegarde puis la restauration réelle des bases métier et identité sur deux copies temporaires, le 28 octobre. Ce contrôle ponctuel lève l'incertitude sur cette restauration ; il ne documente ni une politique durable de conservation, ni les copies distantes, ni les accès administratifs. Le déploiement et la remise à zéro demandés ont eu lieu ; le GPS obligatoire est resté désactivé. Les mentions « pas de déploiement » ci-dessous sont l'état de l'audit initial, pas l'état actuel du service.
+
 ## Faits, limites et informations manquantes
 
 | Traitement | Faits constatés dans le dépôt | Limite avant mise en service réelle |

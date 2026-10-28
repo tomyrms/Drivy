@@ -54,6 +54,7 @@ it('refuse les anciens départs sans écrire une opération, puis prépare une l
  const prepared=await call('POST','/lessons/start-now',body);expect(prepared.statusCode,prepared.body).toBe(201);
  const lesson=prepared.json().data;expect(lesson).toMatchObject({status:'PLANNED',actualStart:null,actualEnd:null,version:1});
  expect((await call('POST','/lessons/start-now',body)).json().data).toEqual(lesson);
+ expect((await pool.query('SELECT action FROM drivy.audit_event WHERE operation_id=$1',[body.operationId])).rows).toEqual([{action:'LessonPreparedForGPS'}]);
  expect((await call('GET',`/lessons/${lesson.id}`,undefined,null,'demo-alice')).json().data.actualStart).toBeNull();
  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.lesson_event_outbox WHERE lesson_id=$1 AND event_type='LessonStarted'",[lesson.id])).rows[0].n).toBe(0);
  expect((await call('POST',`/lessons/${lesson.id}/start`,{operationId:randomUUID()},lesson.version)).json().code).toBe('GPS_START_REQUIRED');

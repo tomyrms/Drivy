@@ -1,7 +1,7 @@
-/** Aide de lecture uniquement. Ni blocage d'action, ni validation cantonale : les preuves de cours ne sont pas encore structurées dans Drivy. */
-export const prerequisiteRuleVersion='2026-10-28.1';
+/** Aide de lecture uniquement. Les faits internes de cours ne valent ni justificatif officiel ni dispense. */
+export const prerequisiteRuleVersion='2026-10-28.2';
 export type PrerequisiteMoment='APPLICATION'|'THEORY'|'PRACTICAL';
-export type PrerequisiteEvidence={state:'DECLARED'|'DOCUMENT_REVIEWED'|'EXEMPTION_REVIEWED'|'MISSING'|'READ_ERROR';completedOn?:string;reviewedOn?:string};
+export type PrerequisiteEvidence={state:'DECLARED'|'DOCUMENT_REVIEWED'|'EXEMPTION_REVIEWED'|'MISSING'|'READ_ERROR'|'ACCESS_DENIED'|'NOT_FOUND'|'UNKNOWN'|'INTERNAL_VALIDATION'|'ATTENDANCE_ONLY'|'ENROLLED';completedOn?:string;reviewedOn?:string;validatedAt?:string};
 export type PrerequisiteContext={categoryCode:string;today:string;moment:PrerequisiteMoment;applicationSubmittedOn?:string;canton?:string;
   heldCategories?:readonly string[];evidence?:Readonly<Record<string,PrerequisiteEvidence>>};
 export interface PrerequisiteHint {id:string;label:string;conclusion:string;detail:string;sourceUrl:string;version:string;checkedOn:string;blocking:false}
@@ -11,6 +11,12 @@ const isDate=(value:string|undefined):value is string=>!!value&&/^\d{4}-\d{2}-\d
 function conclusion(evidence:PrerequisiteEvidence|undefined,today:string,firstAid=false) {
   if(!evidence)return 'Preuve non renseignée';
   if(evidence.state==='READ_ERROR')return 'Preuve non consultable';
+  if(evidence.state==='ACCESS_DENIED')return 'Faits de cours non consultables avec vos droits';
+  if(evidence.state==='NOT_FOUND')return 'Dossier indisponible pour cette lecture';
+  if(evidence.state==='UNKNOWN')return 'Aucun fait de cours enregistré';
+  if(evidence.state==='INTERNAL_VALIDATION')return 'Accomplissement enregistré dans Drivy';
+  if(evidence.state==='ATTENDANCE_ONLY')return 'Présences enregistrées · accomplissement non validé';
+  if(evidence.state==='ENROLLED')return 'Inscription enregistrée · accomplissement non validé';
   if(evidence.state==='MISSING')return 'Prérequis déclaré manquant';
   if(evidence.state==='EXEMPTION_REVIEWED')return 'Dispense contrôlée par l’école';
   const state=evidence.state==='DOCUMENT_REVIEWED'?'Justificatif contrôlé par l’école':'Cours déclaré suivi';
@@ -38,7 +44,7 @@ export function prerequisiteHints(context:PrerequisiteContext):PrerequisiteHint[
     if(moment==='THEORY') {
       const submitted=context.applicationSubmittedOn;
       if(context.canton==='VD'&&isDate(submitted)&&submitted<'2027-01-01')add('awareness','Sensibilisation / CTC',
-        'Dans le canton de Vaud, la demande déposée avant le 1er janvier 2027 permet de passer la théorie sans avoir encore suivi le CTC. Les connaissances du cours restent interrogées en 2027.',transitionSource,'Transition applicable au dossier déclaré');
+        'Le canton de Vaud annonce une transition pour les demandes déposées avant le 1er janvier 2027. Faire confirmer sa portée sur le dossier et les connaissances de CTC interrogées en 2027 auprès du service cantonal.',transitionSource,'Transition possible — à vérifier auprès du canton');
       else add('awareness','Sensibilisation / CTC',
         'Dès le 1er janvier 2027, le CTC précède la théorie. Vérifier la date de dépôt de la demande et les dispositions transitoires auprès du canton ; la date d’ouverture de la formation Drivy ne les remplace pas.',transitionSource,
         !isDate(submitted)?'Date de demande inconnue — transition à vérifier':exemptionConclusion);

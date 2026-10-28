@@ -34,7 +34,7 @@ describe('aide ciblée aux prérequis suisses',()=>{
   });
   it('distingue le dépôt avant et après la frontière vaudoise',()=>{
     const context={categoryCode:'B',moment:'THEORY' as const,today:'2027-01-01',canton:'VD'};
-    expect(prerequisiteHints({...context,applicationSubmittedOn:'2026-12-31'})[0]?.conclusion).toContain('Transition applicable');
+    expect(prerequisiteHints({...context,applicationSubmittedOn:'2026-12-31'})[0]?.conclusion).toBe('Transition possible — à vérifier auprès du canton');
     expect(prerequisiteHints({...context,applicationSubmittedOn:'2027-01-01'})[0]?.conclusion).toBe('Preuve non renseignée');
   });
   it('utilise le jour local de l’école autour de minuit UTC',()=>{
