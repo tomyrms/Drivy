@@ -231,6 +231,38 @@ import Testing
         #expect(model.draft?.workedOn == "Travail réalisé")
     }
 
+    /// #114 : la rédaction continue pendant l'envoi du bilan ; sa réponse ne remplace pas la suite et ne ferme pas la fiche.
+    @Test func typingDuringTheReportSendIsKeptAndTheSheetStaysOpen() async throws {
+        let server = LessonFinishServer(), outbox = ConfigurationOutboxStub()
+        await server.storeSaves(); await server.holdSave()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        model.workedOn = "Première version"
+        let saving = Task { await model.saveDraft() }
+        try await HubFixture.wait { await server.isHoldingSave() }
+        #expect(model.isBusy && model.acceptsInput && model.holdsScreen && !model.acceptsOtherRequests)
+        model.workedOn = "Deuxième version, tapée pendant l'envoi"
+        await server.releaseSave()
+        #expect(await saving.value)
+        await model.settled()
+        #expect(!model.reportSaveConfirmed)
+        #expect(model.workedOn == "Deuxième version, tapée pendant l'envoi")
+        #expect(model.draft?.workedOn == "Première version" && model.draft?.version == 2)
+        #expect(!model.needsReload && model.draftChanged && model.canMutate && model.errorMessage == nil)
+        #expect(model.confirmation == "Bilan enregistré. Tes dernières modifications restent à enregistrer.")
+    }
+
+    /// Sans saisie pendant l'envoi, rien ne change : le bilan confirmé ferme la fiche.
+    @Test func anUnchangedReportStillClosesAfterItsReceipt() async throws {
+        let server = LessonFinishServer(), outbox = ConfigurationOutboxStub()
+        await server.storeSaves()
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        model.workedOn = "Seule version"
+        #expect(await model.saveDraft())
+        #expect(model.reportSaveConfirmed)
+    }
+
     private func workspace(_ server: LessonFinishServer, outbox: ConfigurationOutboxStub, roles: [String] = ["INSTRUCTOR"]) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: roles, grants: ["permit_review"], accessEpoch: 1)
@@ -263,6 +295,10 @@ actor LessonFinishServer: SchoolHTTPTransport {
     private var sharingOperation: UUID?
     private let draftWorkedOn: String
     private var draftsFailing = false
+    /// #114 : l'écriture du bilan peut être retenue, et le bilan enregistré relu tel quel en version 2.
+    private var storesSaves = false, heldSave = false, holdingSave = false
+    private var saveWaiters: [CheckedContinuation<Void, Never>] = []
+    private var saved: (workedOn: String, observationText: String, nextStep: String)?
     /// `sharing` : l’école expose le réglage de partage de la leçon (absent par défaut, comme un serveur plus ancien).
     init(roles: [String] = ["INSTRUCTOR"], emptyContext: Bool = false, progressLevel: String? = nil, progressStatus: Int = 200,
          sharing: Bool = false, draftWorkedOn: String = "") {
@@ -279,6 +315,10 @@ actor LessonFinishServer: SchoolHTTPTransport {
     func isHoldingSharing() -> Bool { holdingSharing }
     func sharingWrites() -> [URLRequest] { recorded.filter { $0.httpMethod == "PUT" && $0.url?.path.hasSuffix("/sharing") == true } }
     func setReceiptAvailable(_ value: Bool) { receiptAvailable = value }
+    func storeSaves() { storesSaves = true }
+    func holdSave() { heldSave = true }
+    func releaseSave() { heldSave = false; let values = saveWaiters; saveWaiters = []; for item in values { item.resume() } }
+    func isHoldingSave() -> Bool { holdingSave }
     func setDraftsFailing(_ value: Bool) { draftsFailing = value }
     func setRejectSave(_ value: Bool) { rejectSave = value }
     func setConfirmedOperation(_ id: UUID, resourceID: UUID) { operation = id; receiptResourceID = resourceID }
@@ -346,8 +386,8 @@ actor LessonFinishServer: SchoolHTTPTransport {
         if parts.last == "report-drafts", draftsFailing { return problem(503, "UNAVAILABLE") }
         if parts.last == "report-drafts" {
             let draft = SchoolReportDraft(id: draftID, schoolId: HubFixture.schoolID, lessonId: HubFixture.lessonID,
-                authorMembershipId: ConfigurationFixture.membershipID, version: 1, basePublicationVersion: 0,
-                workedOn: draftWorkedOn, observationText: "", nextStep: "",
+                authorMembershipId: ConfigurationFixture.membershipID, version: saved == nil ? 1 : 2, basePublicationVersion: 0,
+                workedOn: saved?.workedOn ?? draftWorkedOn, observationText: saved?.observationText ?? "", nextStep: saved?.nextStep ?? "",
                 observations: emptyContext ? [SchoolReportObservation(competencyId: UUID(), level: "GUIDED", context: "")] : [],
                 attachmentIds: [], geoObservationIds: [])
             let item = try JSONSerialization.jsonObject(with: JSONEncoder().encode(draft))
@@ -357,6 +397,14 @@ actor LessonFinishServer: SchoolHTTPTransport {
             if rejectSave { return problem(409, "VERSION_CONFLICT") }
             let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
             operation = UUID(uuidString: body?["operationId"] as? String ?? "")
+            if heldSave {
+                holdingSave = true
+                await withCheckedContinuation { saveWaiters.append($0) }
+                holdingSave = false
+            }
+            if storesSaves {
+                saved = (body?["workedOn"] as? String ?? "", body?["observationText"] as? String ?? "", body?["nextStep"] as? String ?? "")
+            }
             return try ok([:])
         }
         if parts.dropLast().last == "operations", let operation, parts.last == operation.uuidString.lowercased() {
