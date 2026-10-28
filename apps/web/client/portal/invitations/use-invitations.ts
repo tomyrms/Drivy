@@ -40,7 +40,12 @@ export function useInvitations() {
   /** The school confirmed a code but its answer carried none that could be verified. */
   const [codeMissing, setCodeMissing] = useState(false);
   const inFlight = useRef(false);
-  const runner = useCommandRunner(() => { releaseChanges(); setCreating(null); setEmail(''); setInvitedRoles([]); setRevokeReason(''); });
+  /** A code was requested and its answer has not been seen: if the school confirms it by receipt, the code is unavailable. */
+  const awaitingCode = useRef(false);
+  const runner = useCommandRunner(() => {
+    releaseChanges(); setCreating(null); setEmail(''); setInvitedRoles([]); setRevokeReason('');
+    if (awaitingCode.current) { awaitingCode.current = false; setCodeMissing(true); }
+  });
   const loaded = useLoad(async () => {
     const [invitations, offerings, members, options] = await Promise.all([
       readAll(schoolId, 'invitations', invitationSchema), readAll(schoolId, 'offerings', offeringSchema), readAll(schoolId, 'members', memberSchema),
@@ -118,10 +123,12 @@ export function useInvitations() {
     let result: SubmitResult | undefined;
     try {
       if (dialog === 'create' && creating === 'code' && codeAvailable && !team && !trainingError) {
+        awaitingCode.current = true;
         result = await runner.run(createCommand({ schoolId, kind: 'createInvitation', path: 'invitations', resourceVersion: 0,
           body: { delivery: 'CODE', roles: ['LEARNER'], trainings: offeringIds.map(offeringId => ({ offeringId, instructorMembershipId: instructorId })) } }), 'Le code est créé.');
         if (result.status === 'confirmed') {
           releaseChanges();
+          awaitingCode.current = false;
           // A code learnt by receipt (lost reply) was never seen: the school does not repeat it.
           const created = result.via === 'response' ? showIssued(result.body) : null;
           if (created) select(created); else setCodeMissing(true);
@@ -133,10 +140,12 @@ export function useInvitations() {
         if (result.status === 'confirmed') { releaseChanges(); setCreating(null); setEmail(''); setInvitedRoles([]); }
       } else if (dialog === 'renew' && current && isActionable(current) && (current.delivery === 'CODE' ? codeAvailable : emailAvailable)) {
         const code = current.delivery === 'CODE';
+        awaitingCode.current = code;
         result = await runner.run(createCommand({ schoolId, kind: 'resendInvitation', path: `invitations/${current.id}/resend`, ifMatch: current.version,
           resourceId: current.id, resourceVersion: current.version, body: {} }),
           code ? 'Un nouveau code est créé ; l’ancien n’est plus utilisable.' : 'Un nouveau lien est enregistré pour envoi par e-mail ; l’ancien n’est plus utilisable.');
         if (result.status === 'confirmed' && code) {
+          awaitingCode.current = false;
           if (result.via === 'response') showIssued(result.body, current.id); else { setIssued(null); setCodeMissing(true); }
         }
       } else if (dialog === 'revoke' && current && isActionable(current) && filled(revokeReason, 1000)) {
@@ -145,6 +154,7 @@ export function useInvitations() {
         if (result.status === 'confirmed') { setRevokeReason(''); setIssued(null); setCodeMissing(false); }
       }
       // A refusal stays in the dialog, next to the action it concerns, with the typed reason.
+      if (result?.status === 'rejected') awaitingCode.current = false;
       if (result && result.status !== 'rejected') setDialog(null);
       if (result?.status === 'rejected' && result.code === 'VERSION_CONFLICT') loaded.refresh?.();
     } finally { inFlight.current = false; }

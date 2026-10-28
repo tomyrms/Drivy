@@ -7,7 +7,7 @@ import { Input } from '../../components/ui/input';
 import { roleNames } from '../access/access-controller';
 import { PortalSelect } from '../components/portal-select';
 import { ReadFeedback } from '../team/feedback';
-import { formatDateTime, invitationStatuses, invitationStatusLabels, type InvitationStatusFilter } from './invitations-model';
+import { expiryLead, formatDateTime, invitationStatuses, invitationStatusLabels, type InvitationStatusFilter } from './invitations-model';
 import type { InvitationsState } from './use-invitations';
 
 const statusOptions = [{ value: 'all', label: 'Toutes' }, ...invitationStatuses.map(value => ({ value, label: invitationStatusLabels[value] }))];
@@ -34,7 +34,7 @@ export function InvitationList({ state }: { state: InvitationsState }) {
         return <li key={item.id}><button type="button" className="invitation-row" data-invitation-id={item.id} onClick={() => state.openInvitation(item.id)}>
           <span className="invitation-icon"><Icon aria-hidden="true" /></span>
           <span className="invitation-row-main"><strong>{state.labelOf(item)}</strong>
-            <span>{state.team && <>{roleNames(item.roles)} · </>}Expire le <time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></span></span>
+            <span>{state.team && roleNames(item.roles)}{state.team && expiryLead(item.status) && ' · '}{expiryLead(item.status) && <>{expiryLead(item.status)} <time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></>}</span></span>
           <span className="invitation-row-state">{waiting ? <span className="invitation-waiting"><Clock aria-hidden="true" />{waiting}</span>
             : item.status === 'EXPIRED' || item.status === 'REVOKED' ? <Badge variant="secondary">{invitationStatusLabels[item.status]}</Badge> : <span>{invitationStatusLabels[item.status]}</span>}</span>
           <ChevronRight aria-hidden="true" />

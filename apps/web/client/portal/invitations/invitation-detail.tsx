@@ -64,7 +64,7 @@ export function InvitationDetail({ state }: { state: InvitationsState }) {
     <dl className="invitation-facts">
       <div><dt>Type</dt><dd>{code ? 'Code élève' : 'Invitation par e-mail'}</dd></div>
       {!code && current.maskedEmail && <div><dt>Adresse</dt><dd>{current.maskedEmail}</dd></div>}
-      <div><dt>Rôles</dt><dd>{roleNames(current.roles)}</dd></div>
+      {state.team && <div><dt>Rôles</dt><dd>{roleNames(current.roles)}</dd></div>}
       <div><dt>Expiration</dt><dd><time dateTime={current.expiresAt}>{formatDateTime(current.expiresAt, school.timeZone)}</time></dd></div>
       {state.references.has(current.id) && <div><dt>Référence</dt><dd>{state.references.get(current.id)}</dd></div>}
     </dl>
