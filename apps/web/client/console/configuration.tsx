@@ -56,17 +56,18 @@ export function ConfigurationSection() {
       actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" onClick={() => { loaded.reload(); void reloadSchool(); }}>Recharger les informations</button> : undefined} />
     {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
     <LoadState loaded={loaded} label="Vérification de l’école…">{() => <div className="config-sections">
-      <section className="settings-section" aria-labelledby="identity-title">
+      <section className={`settings-section${editing ? ' is-editing' : ''}`} aria-labelledby="identity-title">
         <div className="settings-section-heading"><h2 id="identity-title" className="section-title">Coordonnées</h2>
           {!editing && <button type="button" className="button secondary" ref={editButton} disabled={!mayEdit}
             onClick={() => { focusOnEdit.current = true; setEditing(true); }}>
-            <Symbol kind="edit" bare />Modifier les coordonnées</button>}
+            <Symbol kind="edit" bare />Modifier</button>}
         </div>
         <div className="settings-section-body">
           {!editing && <dl className="settings-values">
-            <div><dt>Nom de l’école</dt><dd>{value?.name ?? school.name}</dd></div>
+            <div className="school-identity-row"><dt>Nom de l’école</dt><dd><span className="school-identity-mark" aria-hidden="true"><Symbol kind="school" bare /></span><strong>{value?.name ?? school.name}</strong></dd></div>
             <div><dt>E-mail de l’école</dt><dd>{value?.contactEmail ?? school.contactEmail}</dd></div>
             <div><dt>Téléphone</dt><dd>{(value?.contactPhone ?? school.contactPhone) || <span className="secondary-text">Non renseigné</span>}</dd></div>
+            <div><dt>Fuseau horaire</dt><dd>{school.timeZone}</dd></div>
           </dl>}
           {editing && value && errors && <form ref={form} className="form-grid settings-editor" noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
             <TextField id="school-name" label="Nom de l’école" value={value.name} onChange={name => identity.setDraft({ ...value, name })}
@@ -88,9 +89,7 @@ export function ConfigurationSection() {
           </form>}
         </div>
       </section>
-      <section className="settings-section" aria-labelledby="timezone-title"><div className="settings-section-heading"><h2 id="timezone-title" className="section-title">Horaires de référence</h2></div>
-        <div className="settings-section-body"><dl className="settings-values"><div><dt>Fuseau horaire</dt><dd>{school.timeZone}</dd></div></dl></div>
-      </section>
+      {editing && <div className="settings-readonly-context"><span>Fuseau horaire</span><strong>{school.timeZone}</strong></div>}
       {school.status === 'DRAFT' && <section className="settings-section" aria-labelledby="activation-title">
         <div className="settings-section-heading"><h2 id="activation-title" className="section-title">Préparation</h2></div>
         <div className="settings-section-body"><button type="button" className="button secondary" onClick={() => navigate('apercu')}>Continuer la préparation</button></div>

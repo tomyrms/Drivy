@@ -100,22 +100,27 @@ La direction web Bureau du 30 septembre est conservée. À la demande du porteur
 
 Le dossier `Drivy_Conception_v3_17_2026-09-20` reste une livraison conservée. La première passe est consignée dans [web-direction-20260930.md](docs/implementation/web-direction-20260930.md), puis remplacée par [l’architecture des parcours web](docs/implementation/web-architecture-20260930.md) et [la passe esthétique encre et papier](docs/implementation/web-craft-20260930.md). La référence native détaillée reste ci-dessous et dans [la grille iOS](docs/implementation/DESIGN.md).
 
-## Web · Studio, référence Mercury
+## Web · Portail Drivy, composition Untitled UI et composants shadcn/ui
 
-Le 14 octobre 2026, le porteur rejette Registre et choisit explicitement la démo Mercury pour la refonte du portail. **Studio** en reprend la composition, les proportions et le dessin des commandes, adaptés au cobalt Drivy et au sombre anthracite. La trace est conservée ; Manrope auto-hébergée remplace Source Sans 3 pour le web. Cette section prévaut sur les descriptions web historiques du document ; l’en-tête structuré et les règles Apple restent distincts. [Direction et composants](docs/implementation/web-studio-20261014.md) · [Benchmark et couverture réelle](docs/implementation/web-studio-benchmark-20261014.md) · [Provenance de la police](apps/web/client/assets/fonts/README.md).
+Décision du porteur du 28 octobre 2026, EPIC #280. Cette section remplace la direction web Studio/Mercury du 14 octobre. L'historique [Studio](docs/implementation/web-studio-20261014.md) reste consultable ; ses compositions et ses captures ne qualifient pas le nouveau portail. L'en-tête structuré et toute la direction Apple ci-dessous restent inchangés.
+
+Untitled UI est une référence de hiérarchie, de rythme, de listes et de fiches. Aucun fichier payant, police ou image de ce kit n'est copié. Les composants sont le code source officiel **shadcn/ui, variante Base UI**, adapté à Drivy. Base UI 1.9.0 était déjà installé ; aucun deuxième moteur de contrôles n'est ajouté. Provenance, versions et vérifications : [fondation #280](docs/implementation/epic-280-foundation.md).
 
 ### Composition et navigation
 
-- Rail de 220 px, barre supérieure de 56 px : Planning, Élèves, Équipe, Formations et tarifs puis Paramètres de l’école. Les pages de la famille courante apparaissent sous cette destination dans le rail ; la bande horizontale qui répétait la navigation est retirée. Sur petit écran, Menu déplie la navigation dans le flux et Échap la ferme.
-- Les paramètres disposent de leur propre navigation avec Retour à la gestion, réglages de l’école et préférences personnelles. L’école courante reste explicite ; le changement d’école n’est proposé qu’aux comptes concernés. Les droits restent relus au serveur.
-- Les listes séparent recherche, vues et commandes de filtre. Colonnes utiles, contacts pour distinguer les homonymes, compteur réel et pagination locale conservés. Les noms sont lisibles dans l’encre principale ; le focus et le survol annoncent leur action. Aucun export, avatar ou choix multiple sans fonction ou donnée réelle.
-- Les fiches d’élèves et de membres, ainsi que les versions et éditeurs du catalogue, remplacent la liste à toutes les largeurs. `SplitView mode="page"` garde son contexte monté ; le retour explicite restitue le focus. Le nom de la fiche ou de l’éditeur devient son titre principal.
-- Les identifiants, semaine et catégorie autorisés restent dans l’URL. Recherches nominatives, filtres privés et page locale restent en mémoire du contexte personne/école/droits. La recherche de paramètres indexe uniquement les fonctions implémentées et ouvre/focalise le champ correspondant.
-- L’agenda reste l’entrée quotidienne. Préparation et catalogue décrivent les actions et états serveur réels ; aucun indicateur décoratif n’est ajouté depuis la référence bancaire.
+- Desktop : navigation latérale nommée et contexte scolaire explicite, en-tête de page avec une action dominante, contenu limité à une largeur de lecture utile. Surfaces blanches sur fond gris clair, séparations fines, titres plus affirmés. Aucune mosaïque de compteurs sans tâche.
+- Mobile : destinations nommées, recherche immédiate, filtres qui se replient ou se réorganisent, liste prioritaire et fiche sur une colonne. Toutes les actions ont une cible d'au moins 44 CSS px ; aucune fonction indispensable ne disparaît au petit écran. Une table réellement bidimensionnelle dispose de son propre débordement, jamais la page entière.
+- Les listes de personnes rendent une seule structure responsive, avec identité et données utiles. Les contacts distinguent les homonymes. Recherche, tri, page et sélection restent dans la mémoire de la portée autorisée, sauf identifiants de navigation déjà permis dans l'URL. Aucun nom recherché ni dossier dans le stockage navigateur.
+- Les fiches et formulaires longs sont des pages. Les tâches courtes peuvent ouvrir le dialogue partagé ; sa structure reste montée pendant un changement de largeur. Le retour explicite conserve la liste et restitue le focus. Un titre principal par page.
+- Peu de texte : pas de sous-titre décoratif, pas de note systématique sous les sections. Badges réservés aux exceptions. Les explications nécessaires à une erreur, une décision de confidentialité ou une action irréversible restent présentes.
 
 ### Tokens et composants
 
-Les tokens d’exécution sont dans `apps/web/client/styles.css`. Manrope variable 200–800 est servie localement, avec `font-display: swap`. Titre de page 28/36 px, graisse 450 ; titre secondaire 20/28 px, graisse 500 ; section 16/24 px, graisse 550 ; corps 15/24 px ; secondaire 14/21 px ; métadonnées 13/19,5 px. Espacements 4/8/12/16/24/32/48 px. Rayons 8 px champs, 12 px contenus, 14 px panneaux ; actions primaires/secondaires en capsule. Contrôles courants 40 px, déclencheurs de choix 42 px, grandes cibles tactiles 44 px. Les champs de filtre ont une enveloppe plus compacte que les champs de saisie.
+Source d'exécution unique : `apps/web/client/styles.css`. `data-theme` reste l'unique sélecteur ; les variables Tailwind/shadcn pointent sur les rôles Drivy. Aucun `.dark` parallèle. Tailwind charge ses tokens et ses utilitaires **sans preflight**, pour ne pas réinitialiser silencieusement les surfaces existantes. `theme-init.js` applique la préférence avant React, depuis un script local compatible CSP. Seule la préférence de thème est stockée ; son indisponibilité conserve le repli existant.
+
+Manrope variable auto-hébergée est conservée avec sa licence et `font-display: swap` ([provenance](apps/web/client/assets/fonts/README.md)). Titre de page 30/38 px, graisse 600 ; titre secondaire 20/28 px, graisse 600 ; section 16/24 px, graisse 600 ; corps et saisies 16/24 px ; secondaire 14/21 px ; métadonnées 13/19,5 px. Chiffres tabulaires pour heures, quantités et CHF. Les textes longs passent à la ligne ; aucune police diminuée pour faire tenir un champ mobile.
+
+Espacements : 4/8/12/16/24/32/48 px. Rayons : champs et boutons 8 px, contenus 12 px, dialogue 16 px. Boutons rectangulaires arrondis, action primaire cobalt, action secondaire sur surface avec bordure visible. Contrôles ≥44 px, actions dominantes pouvant atteindre 48 px. Ombres discrètes sur contrôles et menus ; aucune vitre ni dégradé décoratif.
 
 | Rôle | Clair | Sombre Soft Charcoal |
 |---|---|---|
@@ -123,39 +128,33 @@ Les tokens d’exécution sont dans `apps/web/client/styles.css`. Manrope variab
 | surface | `#FFFFFF` | `#222428` |
 | surface-muted | `#EBEDF1` | `#303338` |
 | surface-inset | `#F5F6F8` | `#1E2024` |
-| surface-detail | `#FAFBFC` | `#282B30` |
-| text | `#272C36` | `#F2F3F5` |
-| muted | `#626977` | `#B3B7BE` |
-| accent (lien, focus) | `#245BD6` | `#91B5FF` |
-| accent-fill (action) | `#245BD6` | `#3766D3` |
+| text | `#182230` | `#F2F3F5` |
+| muted | `#535F70` | `#B3B7BE` |
+| accent, liens et focus | `#245BD6` | `#91B5FF` |
+| accent-fill, action | `#245BD6` | `#3766D3` |
 | on-accent | `#FFFFFF` | `#FFFFFF` |
-| accent-soft | `#EDF2FE` | `#2E3C56` |
+| accent-soft | `#EAF0FE` | `#2E3C56` |
 | border | `#E5E7EC` | `#3C4047` |
 | control-border | `#858C98` | `#868C95` |
 
-Surfaces opaques et séparations discrètes. Les ombres de superposition servent aux menus ; de petites ombres de contrôle peuvent distinguer le choix sélectionné. Les cartes ne deviennent pas le contenant systématique de chaque section. Les couleurs sémantiques ne prennent jamais la couleur d’une école ; les badges signalent les exceptions.
+Les composants sous `client/components/ui` constituent la base : Button, Input, Textarea, Field, Badge, Alert, Empty, Skeleton, Dialog, ToggleGroup. Les compositions `TextField`, `TextArea`, `SelectField`, `SegmentField`, `CheckField`, `ConfirmDialog`, `LoadState`, `OutcomeNotice`, `RecordSearch`, `FilterTabs`, `ListPagination`, `SplitView` et `DetailPanel` gardent leurs signatures Drivy et leurs contrôleurs. `SelectField` réutilise le même moteur Base UI, ses groupes d'options et ses portails, avec recherche des listes longues. Les radios et cases natives gardent leur comportement de formulaire.
 
-Réutiliser `SectionHeading`, `SplitView`, `DetailPanel`, `TextField`, `TextArea`, `LoadState`, `OutcomeNotice` et `ConfirmDialog`. `SelectField` est une primitive partagée à menu ancré, avec recherche pour les listes longues ; `SegmentField` montre directement les choix courts à l’aide de radios natifs. Le texte recherché dans un menu ne change pas la valeur métier. Les choix restent accessibles au clavier, désactivables et nommés ; le menu d’un dialogue reste dans sa couche modale.
+Les classes `.button` encore utilisées par les contrôleurs et le composant shadcn Button partagent le même dessin ; elles ne constituent pas un deuxième kit. Toute nouvelle composition utilise les primitives sous `components/ui`, sans second routeur ni moteur de mutations.
 
-`RecordSearch`, `FilterTabs` et `ListPagination` composent les outils des listes. `FilterTabs` filtre par boutons pressés et ne simule pas un changement de panneau. `record-table` organise les colonnes comparables ; le traitement compact propre aux personnes est isolé dans `people-table`. Les tables de catalogue conservent les libellés associés à leurs valeurs sur petit écran. `DetailPanel headingLevel={1}` donne un seul titre principal aux fiches.
+### États, formulaires et protections
 
-`CheckField` conserve l’input natif, un libellé via `aria-labelledby` et une aide distincte via `aria-describedby`. `plain` sert aux choix usuels ; `confirmation` aux dialogues métier et à l’entrée par invitation. La revue du guide peut porter elle-même la conséquence et garder `plain`. Aucun état intermédiaire ne crée implicitement une sélection de masse. En couleurs forcées, checkbox et radios retrouvent leur dessin natif.
-
-### Paramètres, thème et enregistrement
-
-Les coordonnées commencent par des lignes de lecture libellé/valeur, de proportion initiale 38/62 ; Modifier ouvre un formulaire borné à 36 rem. La confidentialité sépare textes consultables, date d’adoption, contact et modification. Les informations demandées utilisent des choix directs sans modifier leurs règles. Les aperçus du thème illustrent le rail et le contenu. `settings-studio.css` porte seulement cette composition locale.
-
-`theme-init.js`, script externe compatible CSP exécuté avant React, applique Clair/Sombre/Système. `theme.ts` suit les changements système et d’onglet. Seule la préférence `drivy.web.theme` est en localStorage ; ni compte ni école ni dossier. L’indisponibilité du stockage est signalée. `html[data-theme]` gouverne les composants et le logo ; le repli sans attribut suit le système.
-
-Coordonnées : enregistrement explicite, erreurs associées, état réel et succès seulement après réponse durable. Annuler restaure la dernière valeur confirmée même si la relecture serveur est encore en attente. Confidentialité, consentements, accès et commandes destructives gardent leurs confirmations métier. `useUnsavedChanges` protège les saisies ; les commandes incertaines restent suivies par AP72. Les dialogues du catalogue conservent leurs versions et la relecture avant écriture.
-
-La barre `editor-save-bar` peut rester en bas quand largeur et hauteur dépassent 40 rem ; elle revient dans le flux sur écran étroit ou bas. Les formulaires locaux de paramètres restent dans le flux. Une action persistante ne doit masquer ni champ ni erreur.
+- Première lecture : libellé annoncé une fois et squelette décoratif. Actualisation : conserver les données existantes sans faux vide. Erreur de lecture avec données conservées : préciser qu'elles peuvent être anciennes.
+- Vide : seulement depuis une réponse réellement vide ; titre et prochain geste utile. Aucune valeur zéro inventée.
+- Résultat durable confirmé, commande en attente, refus et absence de réponse restent distincts. Les avis s'appuient sur le moteur de commandes existant, sans projection optimiste ajoutée et sans toast comme seule preuve.
+- Labels permanents, facultatif explicite quand le contrat l'indique, erreur associée au champ et annoncée. Les champs conservent leur valeur et le clavier approprié ; les sélecteurs ne transforment pas une recherche en valeur métier.
+- Confirmation : cible et conséquence dans le contenu métier, Retour n'envoie rien, acquittements sensibles conservés. La fermeture est bloquée pendant une commande en cours ; une fois parti, le traitement n'est jamais présenté comme annulé par la fermeture visuelle. Focus piégé puis restitué par Base UI ; le titre reçoit le focus quand toutes les actions sont désactivées.
+- Identité OIDC, CSRF, CSP, droits serveur, versions/If-Match, idempotence et reçus restent inchangés. Aucun stockage privé ajouté pour le mobile. `useUnsavedChanges` et la portée personne/école/époque restent propriétaires de la continuité.
 
 ### Accessibilité et vérification
 
-Liens de navigation réels, noms accessibles, focus visible, lien d’évitement et dialogues HTML natifs avec restitution de focus. Mouvement réduit, contraste accru et couleurs forcées restent pris en charge. Pas d’action au seul survol. Les routes et cibles de recherche sont conservées ; la préférence personnelle dispose d’un retour interne validé.
+Focus visible 3 px, cibles tactiles ≥44 px, texte 16 px dans les champs mobiles, erreurs textuelles, statut avec symbole et libellé. Dialogues opaques, zones sûres, corps défilant et actions accessibles même en petite hauteur. Mouvement réduit et couleurs forcées restent pris en charge. Les filtres sont des boutons pressés ; ils ne prétendent pas être des panneaux d'onglets.
 
-Les preuves du 13 octobre décrivent les passes précédentes ; la palette claire, la police et les composants ont changé et doivent être requalifiés. Le [document Studio](docs/implementation/web-studio-20261014.md) distingue la provenance des références, les premiers pilotes et la campagne de vérification à compléter. Un reflow géométrique n’atteste pas un zoom natif à 200 %. Calculs et tests automatiques ne constituent ni une certification WCAG ni une validation sur lecteur d’écran physique.
+Les rapports de palette mesurent des paires réellement utilisées. Ils ne certifient pas l'ensemble du portail. Les vérifications minimales et les captures du candidat sont consignées dans `docs/implementation/` ; l'essai utilisateur précède les campagnes complètes #309/#84 conformément au mandat du 28 octobre. Aucun résultat Safari iOS, Chrome Android physique ou lecteur d'écran réel n'est déduit d'une émulation desktop.
 
 ## Apple · Cartographie native conservée
 

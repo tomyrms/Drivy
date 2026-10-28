@@ -3,11 +3,12 @@ import { commandMessage, createCommand, formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { assignmentSchema, catalogPolicySchema, learnerSchema, memberSchema, offeringSchema, readAll, readSchool, termsSchema, trainingSchema } from '../school-api';
 import { applicableProducts, assignmentCovers, canEditPlannedLesson, initialLessonForm, individualCancellationDeadline, lessonCommercial, lessonInterval, lessonLocalInstants, lessonWriteBody, planningLessonSchema, planningProductSchema, planningTrainingLabel, slotAvailabilitySchema, type LessonForm, type PlanningLesson } from '../lesson-planning-model';
-import { CheckField, ConfirmDialog, Facts, Notice, SelectField, TextArea, TextField, formatDateTime } from '../ui';
+import { CheckField, ConfirmDialog, Facts, Notice, SelectField, Symbol, TextArea, TextField, formatDateTime } from '../ui';
 import { readError, useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice } from './layout';
 import { distinctLabel, homonymReferences } from '../person-reference';
 import { RequestFailure } from '../protocol';
+import './planning-workspace.css';
 
 async function readPlanningCatalogue(schoolId: string) {
   const [learners, members, offerings, policies, products, terms] = await Promise.all([
@@ -34,7 +35,7 @@ export function LessonWorkspace({ lessonId, learnerId, onClose, onSaved, onDossi
   const [awaitingVersion, setAwaitingVersion] = useState(0);
   const waitingForRead = !!lessonId && awaitingVersion > 0 && (!loaded.data || loaded.data.version <= awaitingVersion);
   const saved = (previous?: PlanningLesson | null) => { setAwaitingVersion(previous?.version ?? 0); loaded.reload(); onSaved(); };
-  return <section className="panel section-stack" aria-label={lessonId ? 'Fiche de la leçon' : 'Nouvelle leçon'}>
+  return <section className="section-stack lesson-workspace" aria-label={lessonId ? 'Fiche de la leçon' : 'Nouvelle leçon'}>
     {waitingForRead && <Notice tone="success" title="Modification confirmée, actualisation de la fiche…" />}
     <LoadState loaded={loaded} label="Lecture de la leçon…">{lesson => edit
       ? <LessonEditor key={lesson?.id ?? 'new'} original={lesson ?? undefined} learnerId={learnerId} onClose={() => lesson ? setEdit(false) : onClose()}
@@ -65,17 +66,21 @@ function LessonDetail({ lesson, refreshing, onEdit, onClose, onDossier, onSaved 
     }
   };
   return <>
-    <div className="section-head"><h2 tabIndex={-1} ref={heading}>Leçon · {lesson.learnerDisplayName}</h2><button type="button" className="button quiet" onClick={onClose} disabled={locked}>Fermer</button></div>
+    <div className="planning-page-heading"><button type="button" className="button quiet planning-back" onClick={onClose} disabled={locked}><Symbol kind="back" bare />Retour à l’agenda</button>
+      <div className="section-head"><div><p className="eyebrow">Leçon</p><h2 tabIndex={-1} ref={heading}>{lesson.learnerDisplayName}</h2></div>
+        {editable && <button type="button" className="button primary" onClick={onEdit} disabled={locked || refreshing}><Symbol kind="edit" bare />Modifier</button>}</div></div>
+    <div className="planning-detail-card">
     <Facts items={[
       ['État', lesson.status === 'CANCELLED' ? 'Annulée' : lesson.status === 'COMPLETED' ? 'Terminée' : lesson.status === 'NO_SHOW' ? 'Absent' : lesson.actualStart ? 'Commencée' : 'Planifiée'],
       ['Début', formatDateTime(lesson.plannedStart, lesson.timeZone)], ['Fin', formatDateTime(lesson.plannedEnd, lesson.timeZone)],
       ['Moniteur', lesson.instructorDisplayName], ['Rendez-vous', lesson.meetingPoint || 'Non précisé'], ['Prix convenu', formatCents(lesson.priceCentsSnapshot)],
     ]} />
+    </div>
     {lesson.permitWarning && <Notice tone="warning" title="Permis à vérifier" />}
     <OutcomeNotice outcome={runner.outcome} />
     <div className="form-actions">
-      {editable && <><button type="button" className="button primary" onClick={onEdit} disabled={locked || refreshing}>Modifier la leçon</button><button type="button" className="button secondary" onClick={() => setCancel(lesson)} disabled={locked || refreshing}>Annuler la leçon</button></>}
       <button type="button" className="button secondary" onClick={onDossier} disabled={locked}>Ouvrir le dossier élève</button>
+      {editable && <button type="button" className="button quiet danger" onClick={() => setCancel(lesson)} disabled={locked || refreshing}>Annuler la leçon</button>}
     </div>
     <ConfirmDialog open={!!cancel && !discard} title="Annuler cette leçon ?" confirmLabel="Confirmer l’annulation" busy={locked} disabledReason={runner.blockedReason} onCancel={() => dirty ? setDiscard(true) : setCancel(null)} onConfirm={() => void cancelLesson()}>
       <p>{cancel?.learnerDisplayName} · {cancel ? formatDateTime(cancel.plannedStart, cancel.timeZone) : ''}</p>
@@ -179,10 +184,12 @@ function LoadedLessonEditor({ original: loadedOriginal, learnerId, catalogue, on
     finally { if (mounted.current) setChecking(false); }
   };
   return <>
-    <div className="section-head"><h2 tabIndex={-1} ref={heading}>{original ? 'Modifier la leçon' : 'Planifier une leçon'}</h2><button type="button" className="button quiet" disabled={locked} onClick={close}>Fermer</button></div>
+    <div className="planning-page-heading"><button type="button" className="button quiet planning-back" disabled={locked} onClick={close}><Symbol kind="back" bare />{original ? 'Retour à la leçon' : 'Retour à l’agenda'}</button>
+      <h2 tabIndex={-1} ref={heading}>{original ? 'Modifier la leçon' : 'Planifier une leçon'}</h2></div>
     {catalogue.truncated && <Notice tone="warning" title="Catalogue incomplet"><p>La liste dépasse la limite de lecture. La planification est suspendue pour éviter un choix incomplet.</p></Notice>}
-    <form className="section-stack" onSubmit={event => { event.preventDefault(); void verify(); }}>
-      <fieldset disabled={locked} className="form-grid lesson-planning-fields">
+    <form className="section-stack planning-editor" onSubmit={event => { event.preventDefault(); void verify(); }}>
+      <fieldset disabled={locked} className="planning-fieldset planning-form-grid">
+        <legend>Élève et moniteur</legend>
         <SelectField label="Élève" required search value={form.learnerId} disabled={!!original} onChange={value => { change('learnerId', value); setForm(previous => ({ ...previous, trainingId: '', instructorId: '', productId: '' })); }}
           options={[{ value: '', label: 'Choisir un élève' }, ...learners.map(item => ({ value: item.id, label: distinctLabel(item.displayName, learnerReferences.get(item.id)) }))]} />
         <SelectField label="Formation" required value={form.trainingId} disabled={!!original} onChange={value => {
@@ -190,6 +197,9 @@ function LoadedLessonEditor({ original: loadedOriginal, learnerId, catalogue, on
           change('trainingId', value); setForm(previous => ({ ...previous, instructorId: '', productId: '', duration: offer ? String(offer.defaultDurationMinutes) : '' }));
         }} options={[{ value: '', label: 'Choisir une formation' }, ...trainingLabels.map(item => ({ value: item.id, label: distinctLabel(item.label, trainingReferences.get(item.id)) }))]} />
         <SelectField label="Moniteur" required search value={form.instructorId} onChange={value => change('instructorId', value)} options={[{ value: '', label: 'Choisir un moniteur affecté' }, ...instructors.map(item => ({ value: item.id, label: distinctLabel(item.displayName, instructorReferences.get(item.id)) }))]} />
+      </fieldset>
+      <fieldset disabled={locked} className="planning-fieldset planning-form-grid">
+        <legend>Rendez-vous</legend>
         <TextField label={`Début (${school.timeZone})`} type="datetime-local" required value={form.localStart} onChange={value => { change('localStart', value); setForm(previous => ({ ...previous, localChoice: '' })); }} />
         {localInstants.length > 1 && <SelectField label="Heure répétée lors du changement d’heure" required value={form.localChoice} onChange={value => change('localChoice', value)} options={[{ value: '', label: 'Choisir le passage' }, ...localInstants.map((instant, index) => ({ value: instant, label: `${index + 1}ᵉ passage · ${new Intl.DateTimeFormat('fr-CH', { timeZone: school.timeZone, hour: '2-digit', minute: '2-digit', timeZoneName: 'shortOffset' }).format(new Date(instant))}` }))]} />}
         <TextField label="Durée en minutes" type="number" required value={form.duration} disabled={!!original && !form.commercialChange} onChange={value => change('duration', value)} />
@@ -198,6 +208,7 @@ function LoadedLessonEditor({ original: loadedOriginal, learnerId, catalogue, on
       </fieldset>
       <LoadState loaded={trainingRead} label="Lecture des formations…">{data => data.truncated ? <Notice tone="warning" title="Formations partiellement chargées" /> : null}</LoadState>
       <LoadState loaded={assignmentRead} label="Lecture des affectations…">{data => data.truncated ? <Notice tone="warning" title="Affectations partiellement chargées" /> : null}</LoadState>
+      <fieldset disabled={locked} className="planning-fieldset section-stack"><legend>Tarif convenu</legend>
       {original && <CheckField label="Changer explicitement la durée ou le tarif" checked={form.commercialChange} disabled={locked} onChange={value => { change('commercialChange', value); if (!value) setForm(previous => ({ ...previous, duration: String((Date.parse(original.plannedEnd) - Date.parse(original.plannedStart)) / 60_000) })); }} />}
       {usesNewTerms ? <SelectField label="Prestation et tarif" required value={form.productId} disabled={locked} onChange={value => change('productId', value)}
         options={[{ value: '', label: 'Choisir le tarif applicable' }, ...products.map(item => ({ value: item.id, label: `${item.label} · ${formatCents(lessonCommercial(item, Number(form.duration)).agreedPriceCents)}` }))]} />
@@ -205,10 +216,11 @@ function LoadedLessonEditor({ original: loadedOriginal, learnerId, catalogue, on
       {usesNewTerms && form.localStart && form.duration && products.length === 0 && <Notice tone="warning" title="Aucun tarif applicable"><p>Vérifiez la formation, la durée et la date. Un tarif en vigueur et ses conditions approuvées sont nécessaires.</p></Notice>}
       {original && <><TextArea label={form.commercialChange ? 'Motif du changement de tarif' : 'Motif du déplacement'} required={form.commercialChange} maxLength={1000} value={form.reason} disabled={locked} onChange={value => change('reason', value)} />
         <CheckField label="L’élève et le moniteur ont accepté ce déplacement" checked={form.agreement} disabled={locked} onChange={value => change('agreement', value)} /></>}
+      </fieldset>
       {problem && <Notice tone="error" title="Planification à corriger"><p>{problem}</p></Notice>}
       <OutcomeNotice outcome={runner.outcome} actions={original && runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary" disabled={locked} onClick={() => void rereadVersion()}>Relire la version actuelle</button> : undefined} />
       {runner.blockedReason && <Notice tone="warning" title="Résultat en cours de vérification"><p>{runner.blockedReason}</p></Notice>}
-      <div className="form-actions"><button type="submit" className="button primary" disabled={locked} aria-busy={checking}>{checking ? 'Vérification du créneau…' : 'Vérifier la leçon'}</button></div>
+      <div className="planning-form-actions"><button type="submit" className="button primary" disabled={locked} aria-busy={checking}>{checking ? 'Vérification du créneau…' : 'Vérifier la leçon'}</button></div>
     </form>
     <ConfirmDialog open={review !== null} title={original ? 'Vérifier le déplacement' : 'Vérifier la leçon'} confirmLabel={original ? 'Confirmer le déplacement' : 'Planifier la leçon'} busy={locked} disabledReason={runner.blockedReason} onCancel={() => setReview(null)} onConfirm={() => void submit()}>
       <Facts items={[

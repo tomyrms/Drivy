@@ -4,7 +4,7 @@ import { useCommandSnapshot } from '../command-store';
 import { formationListSchema, proposalsSchema, readFormationSheet, readReference, textProposalsLite, type FormationSheet, type Programme, type Tariff, type TariffType, type TextProposalsLite } from '../formation-api';
 import { programmeUpdate } from '../formation-programme-update';
 import { readSchool } from '../school-api';
-import { ConfirmDialog, EmptyState, Notice, SegmentField, SelectField, StatusBadge, Symbol, formatCivilDate, formatDateTime, formatDuration } from '../ui';
+import { ConfirmDialog, EmptyState, Notice, SegmentField, SelectField, StatusBadge, Symbol, TextField, formatCivilDate, formatDateTime, formatDuration } from '../ui';
 import { useCommandRunner, useConsole, useLoad, useUnsavedChanges, type Outcome } from './context';
 import { LoadState, OutcomeNotice, SectionHeading } from './layout';
 import { consolePath, type FormationView, type NavigationQuery } from './route';
@@ -37,6 +37,8 @@ export function FormationList() {
   const { schoolId } = useConsole();
   const { revision } = useCommandSnapshot();
   const loaded = useLoad(() => readSchool(schoolId, 'formations', formationListSchema), [schoolId, revision]);
+  const [search, setSearch] = useState('');
+  const categories = loaded.data?.categories.filter(item => `Permis ${item.categoryCode}`.toLocaleLowerCase('fr-CH').includes(search.trim().toLocaleLowerCase('fr-CH'))) ?? [];
   return <div className="section-stack formation-studio">
     <SectionHeading title="Formations et tarifs" symbol="book" actions={loaded.data && (loaded.data.canConfigureCatalog
       ? <ConsoleLink section="formations" query={{ view: 'nouvelle' }} className="button primary"><Symbol kind="plus" bare />Ajouter une formation</ConsoleLink>
@@ -46,16 +48,20 @@ export function FormationList() {
       {data.categories.length === 0
         ? <EmptyState symbol="book" title="Aucune formation préparée" message="Ajoutez la formation d’un premier permis, avec ses compétences, ses règles et son premier tarif."
           action={data.canConfigureCatalog ? <ConsoleLink section="formations" query={{ view: 'nouvelle' }} className="button secondary">Ajouter une formation</ConsoleLink> : undefined} />
-        : <table className="data-table record-table formation-table">
+        : <section className="catalogue-directory" aria-label="Catalogue des permis">
+          <div className="catalogue-toolbar"><TextField label="Rechercher un permis" placeholder="Rechercher un permis" value={search} onChange={setSearch} />
+            <p className="catalogue-count" role="status">{categories.length} permis{search ? ` sur ${data.categories.length}` : ''}</p>
+          </div>
+          {categories.length === 0 ? <EmptyState symbol="search" title="Aucun permis trouvé" action={<button type="button" className="button secondary" onClick={() => setSearch('')}>Effacer la recherche</button>} /> : <table className="data-table record-table formation-table">
           <caption className="visually-hidden">Permis préparés par l’école</caption>
           <thead><tr><th scope="col">Permis</th><th scope="col">Durée habituelle</th><th scope="col">Prix d’une leçon</th>
             <th scope="col" className="numeric">Compétences</th><th scope="col" className="numeric">Tarifs</th><th scope="col" className="numeric">Élèves en formation</th></tr></thead>
-          <tbody>{data.categories.map(item => {
+          <tbody>{categories.map(item => {
             const badge = categoryBadge(item.state);
             const lessons = item.lessonTariffs.slice(0, 3);
             return <tr key={item.categoryCode}>
               <th scope="row"><div className="formation-row-title">
-                <ConsoleLink section="formations" query={{ category: item.categoryCode }} className="row-link">Permis {item.categoryCode}</ConsoleLink>
+                <ConsoleLink section="formations" query={{ category: item.categoryCode }} className="row-link"><span className="permit-mark" aria-hidden="true">{item.categoryCode}</span><span>Permis {item.categoryCode}</span></ConsoleLink>
                 {item.programmeCount > 1 && <span className="row-meta">{item.programmeCount} parcours</span>}
                 {badge && <StatusBadge tone={badge.tone} symbol={badge.tone === 'warning' ? 'alert' : 'dot'}>{badge.label}</StatusBadge>}
               </div></th>
@@ -70,11 +76,11 @@ export function FormationList() {
               <td className="numeric" data-label="Élèves en formation">{item.activeTrainings}</td>
             </tr>;
           })}</tbody>
-        </table>}
+        </table>}</section>}
       <section className="formation-other-link" aria-labelledby="other-services-title">
         <h2 id="other-services-title" className="section-title">Prestations sans permis</h2>
         <p className="row-meta">{data.uncategorizedTariffCount === 0 ? 'Aucune prestation' : `${data.uncategorizedTariffCount} prestation${data.uncategorizedTariffCount > 1 ? 's' : ''}`}</p>
-        <ConsoleLink section="prestations" query={{}} className="button secondary">Ouvrir les prestations sans permis</ConsoleLink>
+        <ConsoleLink section="prestations" query={{}} className="button secondary">Voir les prestations<Symbol kind="chevron" bare /></ConsoleLink>
       </section>
     </>}</LoadState>
   </div>;
@@ -141,7 +147,9 @@ export function useEditorSubmission(editors: FormationEditors, reload: () => voi
 
 /* ---------------------------------------------------------------- Fiche d'un permis */
 
-const rubrics: readonly { view: FormationView; label: string }[] = [
+type SheetView = Exclude<FormationView, 'nouvelle'>;
+const sheetView = (value: string | undefined): SheetView => value === 'competences' || value === 'deroulement' || value === 'tarifs' || value === 'historique' ? value : 'general';
+const rubrics: readonly { view: SheetView; label: string }[] = [
   { view: 'general', label: 'Général' }, { view: 'competences', label: 'Compétences' }, { view: 'deroulement', label: 'Déroulement et annulation' }, { view: 'tarifs', label: 'Tarifs' },
 ];
 
@@ -153,7 +161,7 @@ export function FormationSheetView({ category }: { category: string }) {
   const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsLite), [schoolId]);
   const editors = useFormationEditors();
   const submission = useEditorSubmission(editors, loaded.reload);
-  const view: FormationView = routeQuery.view && routeQuery.view !== 'nouvelle' ? routeQuery.view : 'general';
+  const view = sheetView(routeQuery.view);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [category]);
   // Après un conflit rechargé, l'édition repart de la version actuelle, signalée comme telle.
@@ -179,8 +187,11 @@ export function FormationSheetView({ category }: { category: string }) {
         <header className="formation-header">
           <div className="formation-title">
             <h1 ref={heading} tabIndex={-1}><span className="formation-kicker">Permis</span> {data.categoryCode}</h1>
-            <p className="row-meta">{[data.programmes.length > 1 ? `${data.programmes.length} parcours` : null, `${data.tariffs.length} tarif${data.tariffs.length > 1 ? 's' : ''}`,
-              `${learners} élève${learners > 1 ? 's' : ''} en formation`].filter(Boolean).join(' · ')}</p>
+            <dl className="formation-summary">
+              {data.programmes.length > 1 && <div><dt>Parcours</dt><dd>{data.programmes.length}</dd></div>}
+              <div><dt>Tarifs</dt><dd>{data.tariffs.length}</dd></div>
+              <div><dt>Élèves en formation</dt><dd>{learners}</dd></div>
+            </dl>
             {badge && <StatusBadge tone={badge.tone} symbol={badge.tone === 'warning' ? 'alert' : 'dot'}>{badge.label}</StatusBadge>}
           </div>
           <div className="section-head-actions">
@@ -188,6 +199,9 @@ export function FormationSheetView({ category }: { category: string }) {
               <Symbol kind="clock" bare />Historique</ConsoleLink>
           </div>
         </header>
+        <div className="formation-mobile-rubrics"><SelectField label="Rubrique du permis" value={view}
+          options={[...rubrics.map(rubric => ({ value: rubric.view, label: `${rubric.label}${editing(rubric.view) ? ' · modifié' : ''}` })), { value: 'historique', label: 'Historique' }]}
+          onChange={next => go({ view: sheetView(next), ...(selected && next !== 'tarifs' && next !== 'historique' ? { programme: selected.offeringKey } : {}) })} /></div>
         <nav className="formation-tabs" aria-label={`Rubriques du permis ${data.categoryCode}`}>
           <ul>{rubrics.map(rubric => <li key={rubric.view}>
             <ConsoleLink section="formations" keepForms current={view === rubric.view}
@@ -224,7 +238,6 @@ function ProgrammeSwitch({ sheet, programme, onChange }: { sheet: FormationSheet
     {options.length <= 4
       ? <SegmentField label="Parcours" value={programme.offeringKey} options={options} onChange={onChange} />
       : <SelectField label="Parcours" value={programme.offeringKey} options={options} onChange={onChange} search />}
-    <p className="caption">Chaque parcours a son propre programme ; les tarifs sont communs au permis.</p>
   </div>;
 }
 
@@ -318,8 +331,8 @@ function ProgrammeRubric({ view, sheet, programme, editors, submission, proposal
   }
   return <>
     <ProgrammeSwitch sheet={sheet} programme={programme} onChange={onProgramme} />
-    <section className="settings-section" aria-labelledby={headingId}>
-      <div className="settings-section-heading"><h2 id={headingId} tabIndex={-1} className="section-title">{title}</h2>{action}</div>
+    <section className={`settings-section${state ? ' is-editing' : ''}`} aria-labelledby={headingId}>
+      <div className="settings-section-heading"><h2 id={headingId} tabIndex={-1} className="section-title">{title}</h2>{sheet.canConfigureCatalog && action}</div>
       <div className="settings-section-body">{body}</div>
       {view === 'competences' && !state && <ProgrammeReference key={programme.offeringKey} programme={programme} categoryCode={sheet.categoryCode} canConfigure={sheet.canConfigureCatalog} submission={submission} />}
     </section>
@@ -413,8 +426,8 @@ export function TariffsPanel({ tariffs, categoryCode, today, canConfigure, edito
       void submission.submit(openKey, headingId, createCommand({ schoolId, kind: 'saveTariff', path: 'formations/tariffs', resourceVersion: 0, body }),
         mode === 'CREATE' ? 'Le tarif est ajouté.' : 'Le tarif est enregistré. Les réservations existantes gardent leur prix et leurs conditions.');
     }}>
-      <h3 id="tariff-editor-title" className="editor-title">{mode === 'CREATE' ? (categoryCode ? `Nouveau tarif · permis ${categoryCode}` : 'Nouvelle prestation sans permis') : `Modifier « ${editingTariff?.head.label ?? ''} »`}</h3>
-      {state.rebased && <Notice tone="warning" title="Ce tarif a changé pendant votre modification" live={false}><p>La version enregistrée entre-temps est affichée dans la liste. Relisez votre saisie avant d’enregistrer.</p></Notice>}
+      <h3 id="tariff-editor-title" className="editor-title" tabIndex={-1}>{mode === 'CREATE' ? (categoryCode ? `Nouveau tarif · permis ${categoryCode}` : 'Nouvelle prestation sans permis') : `Modifier « ${editingTariff?.head.label ?? ''} »`}</h3>
+      {state.rebased && <Notice tone="warning" title="Ce tarif a changé pendant votre modification" live={false}><p>Une autre version a été enregistrée entre-temps. Relisez votre saisie avant d’enregistrer.</p></Notice>}
       <TariffFields draft={state.draft} onChange={value => editors.update<'tariff'>(openKey, value)} disabled={blocked} showErrors={editors.attempted(openKey)} mode={mode}
         today={today} types={types} start={start} {...(editingTariff ? { sharedTerms: editingTariff.termsSharedWith } : {})} />
       <SaveBar busy={runner.busy} dirty={changed} disabled={blocked} saveLabel={mode === 'CREATE' ? 'Ajouter le tarif' : 'Enregistrer le tarif'} onCancel={() => editors.close(openKey)}
@@ -423,14 +436,14 @@ export function TariffsPanel({ tariffs, categoryCode, today, canConfigure, edito
   }
   return <section className="settings-section" aria-labelledby={headingId}>
     <div className="settings-section-heading"><h2 id={headingId} tabIndex={-1} className="section-title">{categoryCode ? 'Tarifs' : 'Prestations'}</h2>
-      {canConfigure && <button type="button" className="button secondary" disabled={blocked || !!lockedBy} title={lockedBy ?? undefined} onClick={() => open(null)}>
+      {canConfigure && !editor && <button type="button" className="button primary" disabled={blocked || !!lockedBy} title={lockedBy ?? undefined} onClick={() => open(null)}>
         <Symbol kind="plus" bare />{categoryCode ? 'Ajouter un tarif' : 'Ajouter une prestation'}</button>}
     </div>
     <div className="settings-section-body">
       {!canConfigure && <p className="caption with-symbol"><Symbol kind="lock" bare />L’autorisation de configurer les tarifs est nécessaire pour les modifier ; certains tarifs non proposés peuvent ne pas être visibles.</p>}
       {programmeCount > 1 && <p className="caption">Ces tarifs sont communs aux {programmeCount} parcours du permis {categoryCode}.</p>}
       {editor}
-      {tariffs.length === 0 ? <p className="empty-inline">{categoryCode ? 'Aucun tarif pour ce permis.' : 'Aucune prestation sans permis.'}</p>
+      {!editor && (tariffs.length === 0 ? <p className="empty-inline">{categoryCode ? 'Aucun tarif pour ce permis.' : 'Aucune prestation sans permis.'}</p>
         : <ul className="tariff-list">{tariffs.map(tariff => {
           const badge = tariffStatusBadge(tariff.status, tariff.head, formatCivilDate);
           const isSelected = selection !== undefined && tariff.history.some(item => item.id === selection);
@@ -449,7 +462,7 @@ export function TariffsPanel({ tariffs, categoryCode, today, canConfigure, edito
               {tariff.terms ? <p className="policy-copy">{tariff.terms.termsText}</p> : <p className="caption">Ces conditions ne sont pas visibles avec vos accès.</p>}
             </details>
           </li>;
-        })}</ul>}
+        })}</ul>)}
     </div>
   </section>;
 }

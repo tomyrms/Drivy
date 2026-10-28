@@ -11,6 +11,7 @@ import {
   previewTiles, resetAll, resetOrder, saveBody, settingsOf, toggleAnnouncement, toggleTheme, type ThemeRow,
 } from './observation-themes-model';
 import { ThemeIcon } from './theme-icons';
+import './observation-themes.css';
 
 type Draft = { version: number; rows: ThemeRow[] };
 type Control = 'handle' | 'up' | 'down';
@@ -24,7 +25,7 @@ export function ObservationThemesSection() {
   const { revision } = useCommandSnapshot();
   const loaded = useLoad(() => readObservationThemes(schoolId), [schoolId, revision]);
   return (
-    <div className="section-stack">
+    <div className="section-stack settings-themes">
       <SectionHeading context="Réglages" title="Signalements" />
       <LoadState loaded={loaded} label="Lecture des signalements…">{data => <ThemesEditor data={data} reload={loaded.reload} />}</LoadState>
     </div>
@@ -35,6 +36,7 @@ function ThemesEditor({ data, reload }: { data: ObservationThemes; reload: () =>
   const { schoolId } = useConsole();
   const uid = useId();
   const [saved, setSaved] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(() => !window.matchMedia('(max-width: 768px)').matches);
   const runner = useCommandRunner(() => setSaved(true));
   const baseline = useMemo(() => data.themes.map(toRow), [data]);
   const [draft, setDraft] = useSectionDraft<Draft>('observation-themes', candidate =>
@@ -187,12 +189,12 @@ function ThemesEditor({ data, reload }: { data: ObservationThemes; reload: () =>
           <h2 id={`${uid}-order`} className="section-title">Ordre et affichage</h2>
           <p className="themes-counter">{counterLabel(rows)}</p>
         </div>
-        {canManage && <div className="themes-resets">
+        {canManage && <details className="themes-resets"><summary>Réinitialiser</summary><div className="themes-reset-actions">
           <button type="button" className="button quiet" disabled={!editable || isDefaultOrder(rows)}
             onClick={() => edit(resetOrder(rows), 'Ordre d’origine rétabli.')}>Réinitialiser l’ordre</button>
           <button type="button" className="button quiet" disabled={!editable || isDefaultConfiguration(rows)}
             onClick={() => edit(resetAll(rows), 'Configuration d’origine rétablie.')}>Rétablir la configuration d’origine</button>
-        </div>}
+        </div></details>}
         {canManage && <p id={`${uid}-help`} className="visually-hidden">Faites glisser la poignée, ou utilisez les flèches haut et bas ; début et fin vont aux extrémités.</p>}
         <ol className={`theme-list${dragging ? ' is-dragging-list' : ''}`} ref={listRef} aria-label="Signalements, dans l’ordre d’affichage">
           {rows.map((row, index) => {
@@ -202,8 +204,8 @@ function ThemesEditor({ data, reload }: { data: ObservationThemes; reload: () =>
               {canManage && <button type="button" className="theme-handle" ref={register(row.key, 'handle')} disabled={!editable}
                 aria-label={`Déplacer ${row.title}, position ${index + 1} sur ${rows.length}`} aria-describedby={`${uid}-help`}
                 onPointerDown={event => startDrag(event, row.key)} onKeyDown={event => onHandleKey(event, row.key)}><Symbol kind="grip" bare /></button>}
-              <ThemeIcon themeKey={row.key} />
-              <span id={title(row.key)} className="theme-title">{row.title}</span>
+              <div className="theme-name"><ThemeIcon themeKey={row.key} />
+                <span id={title(row.key)} className="theme-title">{row.title}</span></div>
               {canManage && <span className="theme-moves">
                 <button type="button" className="button quiet" ref={register(row.key, 'up')} disabled={!editable || index === 0}
                   aria-label={`Monter ${row.title}`} onClick={() => move(row.key, -1, 'up')}><Symbol kind="chevron-up" bare /></button>
@@ -222,12 +224,12 @@ function ThemesEditor({ data, reload }: { data: ObservationThemes; reload: () =>
         {canManage && visibleOnly(rows) && <p id={`${uid}-last`} className="caption with-symbol"><Symbol kind="info" bare />Au moins un signalement reste affiché.</p>}
       </section>
 
-      <section className="theme-preview" aria-labelledby={`${uid}-preview`}>
-        <h2 id={`${uid}-preview`} className="section-title">Aperçu pour le moniteur</h2>
+      <details className="theme-preview" open={previewOpen} onToggle={event => setPreviewOpen(event.currentTarget.open)}>
+        <summary id={`${uid}-preview`}>Aperçu pour le moniteur</summary>
         <ol className="theme-tiles" aria-label="Grille Signaler, dans l’ordre">
           {tiles.map(tile => <li key={tile.key} className="theme-tile"><ThemeIcon themeKey={tile.key} /><span>{tile.title}</span></li>)}
         </ol>
-      </section>
+      </details>
     </div>
 
     {canManage && <div className="themes-savebar">

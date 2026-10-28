@@ -30,6 +30,8 @@ import { ObservationThemesSection } from './observation-themes';
 import { isLocalItemCurrent, localNavigationQuery, parentSection, sectionTitles, workspaceFor, workspaces } from './navigation';
 import { consolePath, parseConsoleRoute, type NavigationQuery } from './route';
 import { ConsoleAccessReader, sameConsoleAccess } from './access-reader';
+import { UiSuspendedContext } from '../ui-suspension';
+import './portal-shell.css';
 
 type State =
   | { status: 'loading' }
@@ -42,6 +44,9 @@ type State =
 export function ManagementConsole() {
   const [route, setRoute] = useState(() => parseConsoleRoute(window.location.pathname, window.location.search));
   const [state, setState] = useState<State>({ status: 'loading' });
+  const stateRef = useRef(state); stateRef.current = state;
+  const [resumeGate, setResumeGate] = useState<'checking' | 'error' | null>(null);
+  const resumeGeneration = useRef(0);
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -72,8 +77,6 @@ export function ManagementConsole() {
     unsaved.current.add(id); return () => { unsaved.current.delete(id); };
   }, []);
   const generation = useRef(0);
-  const readyRef = useRef(false);
-  readyRef.current = state.status === 'ready';
   const accessReader = useRef(new ConsoleAccessReader(() => request('me', meSchema).then(result => result.data), schoolId => readSchool(schoolId, '', schoolSchema)));
   const snapshot = useCommandSnapshot();
   const draftScope = state.status === 'ready'
@@ -92,13 +95,17 @@ export function ManagementConsole() {
     return changed;
   }, []);
 
-  const load = useCallback(async (schoolId: string | null) => {
+  const load = useCallback(async (schoolId: string | null, restored = false) => {
+    resumeGeneration.current++;
+    setResumeGate(null);
     const current = ++generation.current;
     accessReader.current.invalidate();
     setState({ status: 'loading' });
     try {
       const next = await request('session', sessionSchema);
       if (current !== generation.current) return;
+      // This lock tracks logout only, not the durable command store. A fresh session read settles a restored departure.
+      if (restored) { working.current = false; setBusy(false); }
       csrf.current = next.csrfToken; setSession(next);
       if (!next.authenticated) { setState({ status: 'signin' }); return; }
       const me = (await request('me', meSchema)).data;
@@ -126,6 +133,36 @@ export function ManagementConsole() {
     }
   }, [acceptPerson]);
 
+  /** A restored document is not proof of current rights. Keep forms mounted only while the same access is revalidated. */
+  const resumeAccess = useCallback(async () => {
+    const previous = stateRef.current;
+    if (previous.status !== 'ready') { await load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId, true); return; }
+    const attempt = ++resumeGeneration.current;
+    const scope = generation.current;
+    setResumeGate('checking'); setNavigationOpen(false);
+    try {
+      const next = await request('session', sessionSchema);
+      const access = next.authenticated ? await accessReader.current.read(previous.membership.schoolId) : { status: 'signin' as const };
+      if (attempt !== resumeGeneration.current) return;
+      if (scope !== generation.current) { setResumeGate('error'); return; }
+      if (!access || access.status === 'unavailable') { setResumeGate('error'); return; }
+      const retained = sameConsoleAccess(previous, access);
+      csrf.current = next.csrfToken; setSession(next);
+      working.current = false; setBusy(false);
+      if ('me' in access) acceptPerson(access.me);
+      if (access.status === 'ready') commandStore.scopeToAccess(access.membership.schoolId, access.membership.membershipId, access.membership.accessEpoch);
+      if (!retained) {
+        generation.current++;
+        unsaved.current.clear(); navigationGuard.current = null; setDeparture(null); setLogoutWarning(false);
+        identityResult.current?.(false); identityResult.current = null; setIdentityDialog(null);
+      }
+      setState(access); setResumeGate(null);
+    } catch {
+      if (attempt === resumeGeneration.current && scope === generation.current) setResumeGate('error');
+    }
+  }, [load, acceptPerson]);
+  const resumeCurrentAccess = useRef(resumeAccess); resumeCurrentAccess.current = resumeAccess;
+
   useEffect(() => { void load(route.schoolId); }, [route.schoolId]);
   useEffect(() => {
     window.history.replaceState({ drivyIndex: historyIndex.current }, '', window.location.href);
@@ -145,20 +182,12 @@ export function ManagementConsole() {
     const onBeforeUnload = (event: BeforeUnloadEvent) => { if (unsaved.current.size) { event.preventDefault(); event.returnValue = ''; } };
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      // Restored while a console with unsent forms was left idle: reloading would unmount them and lose the typed content.
-      // Only the anti-forgery value is renewed: a lapsed session shows up as a 401 on the next write.
-      if (unsaved.current.size > 0 && !working.current && readyRef.current) {
-        void request('session', sessionSchema).then(next => { csrf.current = next.csrfToken; setSession(next); }).catch(() => undefined);
-        return;
-      }
-      // A restored page rereads the session and rights before exposing its saved school view.
-      working.current = false; setBusy(false);
-      void load(parseConsoleRoute(window.location.pathname, window.location.search).schoolId);
+      void resumeCurrentAccess.current();
     };
     window.addEventListener('popstate', onPopState);
     window.addEventListener('pageshow', onPageShow);
     window.addEventListener('beforeunload', onBeforeUnload);
-    return () => { generation.current++; accessReader.current.invalidate(); window.removeEventListener('popstate', onPopState); window.removeEventListener('pageshow', onPageShow); window.removeEventListener('beforeunload', onBeforeUnload); };
+    return () => { generation.current++; resumeGeneration.current++; accessReader.current.invalidate(); window.removeEventListener('popstate', onPopState); window.removeEventListener('pageshow', onPageShow); window.removeEventListener('beforeunload', onBeforeUnload); };
   }, []);
   // A new section opens at its top, not at the scroll position of the one that was left (selections and filters keep theirs).
   const shownSection = useRef<string | null>(null);
@@ -287,7 +316,11 @@ export function ManagementConsole() {
   const setupMode = context?.school.status === 'DRAFT' && route.section === 'apercu';
 
   return (
-    <div className={`console-shell${setupMode ? ' setup-mode' : ''}`}>
+    <UiSuspendedContext.Provider value={resumeGate !== null}><div className={`console-shell${setupMode ? ' setup-mode' : ''}`}>
+      {resumeGate !== null && <main className="access-resume-gate">
+        {resumeGate === 'checking' ? <Loading label="Vérification de vos accès…" /> : <Notice tone="error" title="Vos accès doivent être vérifiés" actions={<button className="button primary" type="button" onClick={() => void resumeCurrentAccess.current()}>Réessayer</button>}><p>Vérifiez votre connexion. Votre saisie reste conservée tant que vous gardez cette page ouverte.</p></Notice>}
+      </main>}
+      <div className="console-content" hidden={resumeGate !== null} inert={resumeGate !== null}>
       <a className="skip-link" href="#main">Aller au contenu</a>
       <header className="console-bar">
         {context && !setupMode && <button ref={navigationButton} type="button" className="button quiet navigation-toggle" aria-controls="school-navigation" aria-expanded={navigationOpen}
@@ -350,7 +383,8 @@ export function ManagementConsole() {
       </ConfirmDialog>
       {identityDialog && <IdentityConfirmationDialog mode={identityDialog.mode} initialEmail={identityDialog.email}
         onCancel={() => finishIdentity(false)} onConfirmed={confirmedIdentity} />}
-    </div>
+      </div>
+    </div></UiSuspendedContext.Provider>
   );
 }
 
@@ -359,6 +393,43 @@ export function ConsoleNavigation({ schoolId, section, query = {}, open, navigat
   schoolId: string; section: SectionKey; query?: NavigationQuery; open: boolean; navigate: (section: SectionKey, query?: NavigationQuery) => void;
   onEscape: () => void; beforeNavigate?: (proceed: () => void) => void;
 }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const close = useRef(onEscape); close.current = onEscape;
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => setMobile(media.matches);
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useEffect(() => {
+    if (!open || !mobile) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const surfaces = [...document.querySelectorAll<HTMLElement>('.console-main, .console-bar')];
+    const previousInert = surfaces.map(surface => surface.inert);
+    const overflow = document.body.style.overflow;
+    surfaces.forEach(surface => { surface.inert = true; });
+    document.body.style.overflow = 'hidden';
+    panel.current?.querySelector<HTMLButtonElement>('.navigation-close')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      // A nested settings/confirmation dialog owns its own keyboard handling.
+      if (document.querySelector('dialog[open], [data-slot="dialog-content"]')) return;
+      if (event.key === 'Escape') { event.preventDefault(); close.current(); }
+      if (event.key !== 'Tab') return;
+      const items = [...(panel.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),input:not(:disabled),[tabindex="0"]') ?? [])]
+        .filter(item => item.getClientRects().length > 0 && !item.closest('[inert]'));
+      const first = items[0], last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      surfaces.forEach((surface, index) => { surface.inert = previousInert[index] ?? false; });
+      document.body.style.overflow = overflow;
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [open, mobile]);
   const current = workspaceFor(section, query);
   const preferencesPath = `/app/preferences?returnTo=${encodeURIComponent(consolePath(schoolId, section, query))}`;
   const itemLink = (workspace: typeof current, item: typeof current.items[number]) => {
@@ -366,27 +437,24 @@ export function ConsoleNavigation({ schoolId, section, query = {}, open, navigat
     return <a href={consolePath(schoolId, item.section, destinationQuery)} aria-current={isLocalItemCurrent(item, section) ? 'page' : undefined}
       onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(item.section, destinationQuery); }}>{item.label}</a>;
   };
-  return <nav id="school-navigation" className={`console-nav${open ? ' is-open' : ''}`} aria-label="Gestion de l’école"
-    onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); onEscape(); } }}><div className="nav-inner">
+  return <aside id="school-navigation" className={`console-nav${open ? ' is-open' : ''}`} inert={mobile && !open}>
+    {mobile && open && <div className="navigation-backdrop" onClick={onEscape} aria-hidden="true" />}
+    <div ref={panel} className="nav-inner" role={mobile && open ? 'dialog' : undefined} aria-modal={mobile && open ? true : undefined} aria-label={mobile ? 'Navigation de l’école' : undefined}>
+      <div className="mobile-navigation-heading"><strong>Votre école</strong><button className="button quiet navigation-close" type="button" onClick={onEscape}>Fermer</button></div>
       <SettingsSearch schoolId={schoolId} navigate={navigate} beforeNavigate={beforeNavigate} />
-      {current.key === 'settings' ? <div className="settings-navigation">
-        <a className="nav-back" href={consolePath(schoolId, 'agenda')} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate('agenda'); }}><Symbol kind="back" bare />Retour à la gestion</a>
-        <p className="nav-group-label">École</p>
-        <ul>{current.items.map(item => <li key={item.section}>{itemLink(current, item)}</li>)}</ul>
-        <p className="nav-group-label">Compte personnel</p>
-        <a href={preferencesPath} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); beforeNavigate(() => window.location.assign(preferencesPath)); }}><Symbol kind="account" bare />Mes préférences</a>
-      </div> : <ul className="primary-navigation">{workspaces.map(workspace => {
+      <nav aria-label="Gestion de l’école"><p className="nav-group-label">Espace de travail</p><ul className="primary-navigation">{workspaces.map(workspace => {
         const homeQuery = current.key === workspace.key ? localNavigationQuery(workspace, { section: workspace.home, label: workspace.label }, query) : {};
         return <li key={workspace.key} className={workspace.key === 'settings' ? 'nav-settings' : undefined}>
         <a href={consolePath(schoolId, workspace.home, homeQuery)} aria-current={current.key === workspace.key ? (section === workspace.home ? 'page' : 'true') : undefined}
           onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(workspace.home, homeQuery); }}>
-          <Symbol kind={workspace.symbol} bare /><span>{workspace.key === 'settings' ? 'Paramètres de l’école' : workspace.label}</span>
+          <Symbol kind={workspace.symbol} bare /><span>{workspace.key === 'settings' ? 'Réglages de l’école' : workspace.label}</span>
         </a>
         {current.key === workspace.key && workspace.items.length > 1 && <ul className="workspace-navigation" aria-label={`Pages · ${workspace.label}`}>
           {workspace.items.filter(item => item.section !== workspace.home).map(item => <li key={item.section}>{itemLink(workspace, item)}</li>)}
         </ul>}
-      </li>; })}</ul>}
-  </div></nav>;
+      </li>; })}</ul></nav>
+      <div className="navigation-personal"><a href={preferencesPath} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); beforeNavigate(() => window.location.assign(preferencesPath)); }}><Symbol kind="account" bare />Mes préférences</a><a href="/app/" onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); beforeNavigate(() => window.location.assign('/app/')); }}><Symbol kind="school" bare />Mes écoles</a></div>
+  </div></aside>;
 }
 
 /** Deep editors keep their hierarchy and return context; destinations live only in the rail/menu. */

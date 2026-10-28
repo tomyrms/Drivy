@@ -1,7 +1,9 @@
-.profile-fields-preview { display: grid; gap: var(--space-l); margin-block-start: var(--space-m); max-inline-size: 40rem; padding: var(--space-l); border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface-inset); }
-.profile-preview-field { display: grid; gap: var(--space-xs); min-inline-size: 0; }
-.profile-preview-label { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--space-xs) var(--space-m); }
-.profile-preview-field input, .profile-preview-field textarea { inline-size: 100%; min-inline-size: 0; cursor: default; }
-.profile-preview-field .caption { margin: 0; }
-.profile-preview-photo { inline-size: 5rem; block-size: 5rem; border: 1px solid var(--border); border-radius: var(--radius-field); background: var(--surface-inset); }
-@media (max-width: 40rem) { .profile-fields-preview { padding: var(--space-m); } }
+.profile-fields-preview { display: grid; gap: 1.5rem; margin-block-start: 1rem; max-inline-size: 42rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface); }
+.profile-preview-field { display: grid; gap: .5rem; min-inline-size: 0; }
+.profile-preview-label { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .375rem 1rem; }
+.profile-preview-label strong { font-size: .875rem; font-weight: 600; }
+.profile-preview-label .row-meta { font-size: .8125rem; }
+.profile-preview-field input, .profile-preview-field textarea { inline-size: 100%; min-inline-size: 0; min-block-size: 2.75rem; cursor: default; border: 1px solid var(--control-border); border-radius: var(--radius-field); background: var(--surface-detail); padding: .625rem .75rem; font-size: 1rem; }
+.profile-preview-field .caption { margin: 0; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.profile-preview-photo { inline-size: 5rem; block-size: 5rem; border: 1px dashed var(--control-border); border-radius: var(--radius-content); background: var(--surface-inset); }
+@container workspace (max-width: 30rem) { .profile-fields-preview { padding: 1rem; } }

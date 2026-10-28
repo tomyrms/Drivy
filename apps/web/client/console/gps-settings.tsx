@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createCommand } from '../command-core';
-import { ConfirmDialog, Notice } from '../ui';
+import { ConfirmDialog, Notice, Symbol } from '../ui';
 import { request, sessionSchema } from '../protocol';
 import { readError, useCommandRunner, useConsole } from './context';
 import { OutcomeNotice } from './layout';
@@ -46,15 +46,15 @@ export function GPSSettings() {
     actions={runner.outcome?.code === 'VERSION_CONFLICT' ? <button type="button" className="button secondary"
       onClick={() => { setReview(null); runner.clearOutcome(); void reloadSchool(); }}>Recharger le réglage</button> : undefined} />;
 
-  return <section className="settings-section" aria-labelledby="gps-title">
+  return <section className="settings-section settings-gps" aria-labelledby="gps-title">
     <div className="settings-section-heading">
-      <div className="settings-section-title"><h2 id="gps-title" className="section-title">Trajets GPS</h2>
-        <span className="row-meta">{enabled ? 'Activés' : 'Désactivés'}</span></div>
-      <button id="school-gps" type="button" className={`button ${enabled ? 'secondary' : 'primary'}`}
+      <div className="settings-section-title"><h2 id="gps-title" className="section-title">Trajets GPS</h2></div>
+      <button id="school-gps" type="button" className="button secondary"
         disabled={runner.busy || checkingIdentity || !!runner.pending} onClick={() => {
           runner.clearOutcome(); setIdentityError(null); setReview({ enabled: !enabled, version: school.version });
         }}>{action}</button>
     </div>
+    <div className="settings-section-body"><dl className="settings-values"><div><dt>Enregistrement dans l’app</dt><dd className="gps-setting-value"><Symbol kind={enabled ? 'check' : 'ban'} bare />{enabled ? 'Autorisé par l’école' : 'Désactivé par l’école'}</dd></div></dl></div>
     {!review && outcome}
     {runner.blockedReason && <p className="caption">{runner.blockedReason}</p>}
     <ConfirmDialog open={review !== null} busy={runner.busy || checkingIdentity} busyLabel={checkingIdentity && !runner.busy ? 'Vérification…' : 'Confirmation par l’école…'} onCancel={() => setReview(null)} onConfirm={() => void confirm()}

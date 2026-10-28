@@ -3,6 +3,10 @@ import type { ReactNode } from 'react';
 import { Loading, Notice, Symbol, type SymbolKind } from '../ui';
 import { ConsoleContext, useConsole, type Loaded, type Outcome } from './context';
 import { workspaces } from './navigation';
+import { Button } from '../components/ui/button';
+import { Field, FieldLabel } from '../components/ui/field';
+import { Input } from '../components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
 
 /** Section title. Receives focus when the section opens, so screen readers announce the new page. */
 export function SectionHeading({ title, context, actions, symbol }: { title: string; context?: string; actions?: ReactNode; symbol?: SymbolKind }) {
@@ -46,7 +50,7 @@ export function ReadRetry({ loaded }: { loaded: Pick<Loaded<unknown>, 'needsLogi
 /** Loading, error and stale states of one read; `children` renders once data exists. */
 export function LoadState<T>({ loaded, label, children }: { loaded: Loaded<T>; label: string; children: (data: T) => ReactNode }) {
   return <>
-    {loaded.status === 'loading' && <Loading label={label} />}
+    {loaded.status === 'loading' && <Loading label={label} skeleton={loaded.data === undefined} />}
     {loaded.status === 'error' && <Notice tone="error" title="Lecture impossible" actions={<ReadRetry loaded={loaded} />}>
       <p>{loaded.error}{loaded.data !== undefined ? ' Les informations affichées peuvent être anciennes.' : ''}</p>
     </Notice>}
@@ -79,19 +83,22 @@ export function SplitView({ list, detail, mobileDetail = false, onBack, backLabe
 /** List controls use native inputs and buttons. Filtering is not a change of tab panel. */
 export function RecordSearch({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string }) {
   const id = useId();
-  return <div className="record-search field"><label htmlFor={id}>{label}</label><div className="record-search-control">
-    <Symbol kind="search" bare /><input id={id} type="search" value={value} autoComplete="off" placeholder={placeholder}
+  return <Field className="record-search field"><FieldLabel htmlFor={id}>{label}</FieldLabel><div className="record-search-control">
+    <Symbol kind="search" bare /><Input id={id} type="search" value={value} autoComplete="off" placeholder={placeholder}
       onChange={event => onChange(event.target.value)} />
-  </div></div>;
+  </div></Field>;
 }
 
 export function FilterTabs<T extends string>({ label, value, onChange, options }: {
   label: string; value: T; onChange: (value: T) => void; options: readonly { value: T; label: string; count?: number }[];
 }) {
-  return <div className="record-views" role="group" aria-label={label}>{options.map(option =>
-    <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
+  return <ToggleGroup className="record-views" aria-label={label} value={[value]} onValueChange={next => {
+    const selected = options.find(option => option.value === next[0]);
+    if (selected) onChange(selected.value);
+  }}>{options.map(option =>
+    <ToggleGroupItem key={option.value} value={option.value}>
       <span>{option.label}</span>{option.count !== undefined && <span className="view-count">{option.count}</span>}
-    </button>)}</div>;
+    </ToggleGroupItem>)}</ToggleGroup>;
 }
 
 export function ListPagination({ page, pageSize, total, onPageChange, label = 'Pagination' }: {
@@ -101,10 +108,10 @@ export function ListPagination({ page, pageSize, total, onPageChange, label = 'P
   return <nav className="record-footer" aria-label={label}>
     <p className="caption" role="status">{total ? `${(current - 1) * pageSize + 1}–${Math.min(current * pageSize, total)} sur ${total}` : 'Aucun résultat'}</p>
     {/* aria-disabled et non disabled : un bouton désactivé perd le focus, le clavier doit rester sur la pagination. */}
-    {pages > 1 && <div className="pagination-controls"><button type="button" className="button secondary compact" aria-disabled={current === 1}
-      onClick={() => { if (current > 1) onPageChange(current - 1); }}><Symbol kind="back" bare />Précédent</button>
-      <span className="caption">Page {current} sur {pages}</span><button type="button" className="button secondary compact" aria-disabled={current === pages}
-        onClick={() => { if (current < pages) onPageChange(current + 1); }}>Suivant<span className="flip"><Symbol kind="back" bare /></span></button></div>}
+    {pages > 1 && <div className="pagination-controls"><Button variant="outline" size="sm" aria-disabled={current === 1}
+      onClick={() => { if (current > 1) onPageChange(current - 1); }}><Symbol kind="back" bare />Précédent</Button>
+      <span className="caption">Page {current} sur {pages}</span><Button variant="outline" size="sm" aria-disabled={current === pages}
+        onClick={() => { if (current < pages) onPageChange(current + 1); }}>Suivant<span className="flip"><Symbol kind="back" bare /></span></Button></div>}
   </nav>;
 }
 

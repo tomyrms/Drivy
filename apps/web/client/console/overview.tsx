@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useCommandSnapshot } from '../command-store';
 import { readSchool } from '../school-api';
 import { setupDraftSchema } from '../setup-model';
-import { Loading, Notice, Symbol, type Tone } from '../ui';
+import { EmptyState, Loading, Notice, Symbol, type Tone } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 import { consolePath, readNavigationQuery } from './route';
@@ -40,8 +40,8 @@ export function OverviewSection() {
   const catalogueOnly = routeQuery?.from === 'formations' || routeQuery?.from === 'prestations';
   const dailyEntry = school.status === 'ACTIVE' && !catalogueOnly && routeQuery?.from !== 'configuration';
   useEffect(() => {
-    if (dailyEntry) navigate('agenda', { week: routeQuery?.week, instructor: routeQuery?.instructor,
-      lesson: routeQuery?.lesson, learner: routeQuery?.learner, view: routeQuery?.view }, { replace: true });
+    if (dailyEntry) navigate('agenda', { week: routeQuery?.week, day: routeQuery?.day, instructor: routeQuery?.instructor,
+      lesson: routeQuery?.lesson, learner: routeQuery?.learner, course: routeQuery?.course, occurrence: routeQuery?.occurrence, view: routeQuery?.view }, { replace: true });
   }, [dailyEntry, navigate, routeQuery]);
   if (school.status === 'DRAFT') return <SchoolSetupGuide />;
   if (school.status === 'ARCHIVED') return <div className="section-stack"><SectionHeading title="École archivée" />
@@ -61,10 +61,10 @@ function SchoolPreparation() {
     const [next, draft] = await Promise.all([readSchool(schoolId, 'setup-draft/next-actions', nextActionsSchema), readSchool(schoolId, 'setup-draft', setupDraftSchema)]);
     return { next, deferred: draft.content.formations.filter(item => !item.apply) };
   }, [schoolId, school.version, revision]);
-  return <div className="section-stack"><SectionHeading title="Préparation de l’école" />
+  return <div className="section-stack preparation-workspace"><SectionHeading title="Préparation de l’école" />
     <LoadState loaded={loaded} label="Lecture de la préparation…">{({ next, deferred }) => <>
       {next.actions.length ? <ul className="preparation-list">{next.actions.map(action => <li key={action.code}><ActionLink action={action} /></li>)}</ul>
-        : <p className="empty-inline">La préparation de l’école est terminée.</p>}
+        : <EmptyState symbol="check" title="Votre école est prête" />}
       {deferred.length > 0 && <button type="button" className="button secondary" onClick={() => navigate('apercu', { from: 'formations' })}>Reprendre les formations mises de côté ({deferred.length})</button>}
     </>}</LoadState>
     <div className="form-actions"><button type="button" className="button primary" onClick={() => navigate('agenda')}>Ouvrir le planning</button>
@@ -82,10 +82,10 @@ export function FirstLessonActions({ refreshKey = 0 }: { refreshKey?: number }) 
     if (!next.planningReady || !action) return null;
     const reduced = reducedAction === action.code;
     return <section className="first-lesson-actions" aria-label="Premier rendez-vous">
-    <div className="first-lesson-heading"><h2>Votre premier rendez-vous</h2><button type="button" className="button quiet" aria-expanded={!reduced} onClick={() => setReducedAction(reduced ? null : action.code)}>{reduced ? 'Afficher' : 'Réduire'}</button></div>
+    <div className="first-lesson-heading"><span className="first-lesson-icon"><Symbol kind="calendar" bare /></span><h2>Votre premier rendez-vous</h2><button type="button" className="button quiet" aria-expanded={!reduced} onClick={() => setReducedAction(reduced ? null : action.code)}>{reduced ? 'Afficher' : 'Réduire'}</button></div>
     {!reduced && <><ActionLink action={action} />
-      {loaded.readAt !== undefined && <p className="caption">Vérifié à <time dateTime={new Date(loaded.readAt).toISOString()}>{new Intl.DateTimeFormat('fr-CH', { hour: '2-digit', minute: '2-digit', timeZone: school.timeZone }).format(loaded.readAt)}</time></p>}
-      <button type="button" className="button quiet" onClick={() => navigate('apercu', { from: 'configuration' })}>Préparation de l’école</button></>}
+      <div className="first-lesson-footer">{loaded.readAt !== undefined && <span className="caption">Vérifié à <time dateTime={new Date(loaded.readAt).toISOString()}>{new Intl.DateTimeFormat('fr-CH', { hour: '2-digit', minute: '2-digit', timeZone: school.timeZone }).format(loaded.readAt)}</time></span>}
+      <button type="button" className="button quiet" onClick={() => navigate('apercu', { from: 'configuration' })}>Préparation de l’école</button></div></>}
   </section>;
   }}</LoadState>;
 }

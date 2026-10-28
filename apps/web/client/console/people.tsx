@@ -15,6 +15,7 @@ import { useListState } from './list-state';
 import { consolePath } from './route';
 import { PersonAvatar } from '../person-avatar';
 import { distinctLabel, homonymReferences } from '../person-reference';
+import './people-workspace.css';
 
 const roles: readonly { value: Role; explanation: string }[] = [
   { value: 'ADMIN', explanation: 'Gérer l’école, ses membres et les dossiers administratifs.' },
@@ -149,7 +150,7 @@ export function TeamSection() {
           </div>
           {data.truncated && <p className="caption">La recherche porte sur les membres chargés.</p>}
           {visible.length === 0 ? <EmptyState symbol="users" title={members.length ? 'Aucun membre trouvé' : 'Aucun membre'} message="" />
-          : <div className="directory-table-wrap"><table className="data-table record-table people-table"><caption className="visually-hidden">Membres de l’école</caption>
+          : <div className="directory-table-wrap"><table className="data-table people-table"><caption className="visually-hidden">Membres de l’école</caption>
             <thead><tr><th scope="col" aria-sort={sort === 'name-asc' ? 'ascending' : 'descending'}><button type="button" className="table-sort"
               aria-label={`Membre, trier par nom ${sort === 'name-asc' ? 'décroissant' : 'croissant'}`} onClick={() => { setSort(sort === 'name-asc' ? 'name-desc' : 'name-asc'); setPage(1); }}>
               Membre<Symbol kind={sort === 'name-asc' ? 'chevron-up' : 'chevron'} bare /></button></th><th scope="col">Rôles</th><th scope="col">Accès</th></tr></thead><tbody>
@@ -177,7 +178,10 @@ export function TeamSection() {
             {accessConflict && <Notice tone="warning" title="Les accès ont changé" actions={
               <button type="button" className="button secondary" disabled={runner.busy || !!runner.pending || loaded.status !== 'ready'} onClick={resetAccessDraft}>Annuler les modifications</button>
             }><p>Votre saisie est conservée. Annulez les modifications pour repartir des accès actuels.</p></Notice>}
-            <form className="form-grid" onSubmit={event => event.preventDefault()}>
+            <section className="member-access-summary"><h2 className="section-title">Accès à l’école</h2>
+              <Facts items={[["Rôles", rolesText(current.roles)], ["Autorisations particulières", current.grants.length ? current.grants.map(grantLabel).join(', ') : 'Aucune']]} />
+            </section>
+            <details className="disclosure access-editor"><summary>Modifier les accès</summary><form className="form-grid" onSubmit={event => event.preventDefault()}>
               <fieldset className="fieldset">
                 <legend>Rôles dans cette école</legend>
                 {roles.map(role => <CheckField key={role.value} label={roleLabel(role.value)} description={role.explanation} checked={draftRoles.includes(role.value)}
@@ -196,7 +200,7 @@ export function TeamSection() {
                 <button type="button" className="button primary" disabled={!canWrite} onClick={() => { setShowErrors(true); if (!problem) { runner.clearOutcome(); setAcknowledged(false); setDialog('access'); } }}>Relire le changement</button>
                 {!accessConflict && <button type="button" className="button quiet" disabled={runner.busy} onClick={resetAccessDraft}>Annuler les modifications</button>}
               </div>}
-            </form>
+            </form></details>
             {current.status === 'ACTIVE' && !self && <div className="form-actions"><button type="button" className="button quiet danger" disabled={!canWrite}
               onClick={() => { runner.clearOutcome(); setAcknowledged(false); setDialog('deactivate'); }}>Retirer l’accès…</button></div>}
           </DetailPanel>
@@ -411,7 +415,7 @@ export function InvitationsSection() {
       {!dialog && <OutcomeNotice outcome={issuedCode && runner.outcome?.tone === 'success' ? null : runner.outcome} onDismiss={runner.clearOutcome} />}
       {codeMissing && <Notice tone="warning" title="Code non affiché"><p>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</p></Notice>}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
-      <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mobileDetail={!!selected || !!creating} onBack={() => leaveForm(() => { setSelected(null); setCreating(null); setRevokeReason(''); })} backLabel="Toutes les invitations"
+      <LoadState loaded={loaded} label="Lecture des invitations…">{() => <SplitView mode="page" mobileDetail={!!selected || !!creating} onBack={() => leaveForm(() => { setSelected(null); setCreating(null); setRevokeReason(''); })} backLabel="Toutes les invitations"
         list={items.length === 0 ? <EmptyState symbol="mail" title="Aucune invitation" message="" />
           : <>
           <div className="list-toolbar directory-toolbar">

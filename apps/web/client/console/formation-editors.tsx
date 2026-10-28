@@ -130,18 +130,20 @@ export function TariffFields({ draft, onChange, disabled, showErrors, mode, toda
       onChange={label => onChange({ ...draft, label })} error={showErrors ? problems.label : null} />
     {types.length > 1 && <SelectField label="Type" value={draft.type} disabled={disabled} options={types.map(type => ({ value: type, label: tariffTypeLabels[type] }))}
       onChange={type => onChange({ ...draft, type, unitLabel: draft.unitLabel === defaultUnit[draft.type] ? defaultUnit[type] : draft.unitLabel })} />}
-    <div className="field-pair">
+    <div className="field-pair tariff-price-duration">
       <TextField label="Durée (minutes)" inputMode="numeric" value={draft.duration} maxLength={4} disabled={disabled} required={draft.type === 'INDIVIDUAL_LESSON' ? undefined : false}
         onChange={duration => onChange({ ...draft, duration })} error={showErrors ? problems.duration : null} />
-      <TextField label="Unité facturée" value={draft.unitLabel} maxLength={100} disabled={disabled} onChange={unitLabel => onChange({ ...draft, unitLabel })} error={showErrors ? problems.unitLabel : null} />
+      <TextField label="Prix (CHF)" inputMode="decimal" value={draft.price} maxLength={16} disabled={disabled}
+        hint={cents !== null ? `${formatCents(cents)} par ${draft.unitLabel.trim() || 'unité'}${cents === 0 ? ' · offert' : ''}` : undefined}
+        onChange={price => onChange({ ...draft, price })} error={showErrors ? problems.price : null} />
     </div>
-    <TextField label="Prix (CHF)" inputMode="decimal" value={draft.price} maxLength={16} disabled={disabled} placeholder="95.00"
-      hint={cents !== null ? `${formatCents(cents)} par ${draft.unitLabel.trim() || 'unité'}${cents === 0 ? ' : prestation offerte' : ''}` : '0 pour une prestation offerte.'}
-      onChange={price => onChange({ ...draft, price })} error={showErrors ? problems.price : null} />
+    <TextField label="Unité facturée" value={draft.unitLabel} maxLength={100} disabled={disabled} onChange={unitLabel => onChange({ ...draft, unitLabel })} error={showErrors ? problems.unitLabel : null} />
     {mode === 'CREATE'
       ? <div className="field-pair">
           <TextField label="Valable à partir du" type="date" value={draft.validFrom} disabled={disabled} onChange={validFrom => onChange({ ...draft, validFrom })} error={showErrors ? problems.validFrom : null} />
-          <TextField label="Jusqu’au" type="date" required={false} value={draft.validUntil} disabled={disabled} onChange={validUntil => onChange({ ...draft, validUntil })} error={showErrors ? problems.validUntil : null} />
+          <details className="disclosure compact tariff-end-date" open={!!draft.validUntil || (showErrors && !!problems.validUntil) ? true : undefined}><summary>Limiter la période</summary>
+            <TextField label="Jusqu’au (facultatif)" type="date" required={false} value={draft.validUntil} disabled={disabled} onChange={validUntil => onChange({ ...draft, validUntil })} error={showErrors ? problems.validUntil : null} />
+          </details>
         </div>
       : <>
           <TextField label="Valable jusqu’au" type="date" required={false} value={draft.validUntil} disabled={disabled}

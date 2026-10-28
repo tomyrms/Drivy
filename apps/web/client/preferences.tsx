@@ -4,6 +4,7 @@ import { Symbol } from './ui';
 import { type ThemePreference, useTheme } from './theme';
 import { NotificationPreferencesSection } from './notification-preferences';
 import './console/settings-studio.css';
+import './access.css';
 
 const themes: { value: ThemePreference; label: string }[] = [
   { value: 'light', label: 'Clair' }, { value: 'dark', label: 'Sombre' }, { value: 'system', label: 'Système' },
@@ -51,7 +52,6 @@ export function AccountMenu({ name = 'Mon compte', authenticated = false, busy =
     {open && <div id={id} className="account-popover" onBlur={event => { if (event.relatedTarget && !root.current?.contains(event.relatedTarget as Node)) setOpen(false); }}>
       <a href="/app/" onClick={event => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); go('/app/'); }}>Mon compte et mes écoles</a>
       <a href={preferences} onClick={event => { if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); go(preferences); }}>Préférences personnelles</a>
-      <ThemeControl compact />
       {authenticated && onLogout && <button type="button" className="button quiet" disabled={busy} onClick={() => { onLogout(); setOpen(false); }}>Se déconnecter</button>}
     </div>}
   </div>;
@@ -72,6 +72,13 @@ export function PreferencesPage() {
         <div className="settings-section-body"><ThemeControl /></div>
       </section>
       <NotificationPreferencesSection />
+      <section className="settings-section"><div className="settings-section-heading"><h2>Compte et aide</h2></div>
+        <div className="settings-section-body preference-links">
+          <a href="/app/"><Symbol kind="school" bare /><span>Mon compte et mes écoles</span><Symbol kind="chevron" bare /></a>
+          <a href="/app/recover"><Symbol kind="lock" bare /><span>Récupérer mon accès</span><Symbol kind="chevron" bare /></a>
+          <details><summary>Contacter mon école</summary><p>Retrouvez les coordonnées de votre école dans votre invitation ou dans l’app Drivy.</p></details>
+        </div>
+      </section>
     </main>
   </div>;
 }

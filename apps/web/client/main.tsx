@@ -1,12 +1,16 @@
 import { createRoot } from 'react-dom/client';
 import { readInvitationLink } from './invitation-link';
 import { readOpeningLink } from './school-opening-model';
+import { sectionKeys } from './console/sections';
+import { BrandSymbol } from './BrandSymbol';
 import './theme';
 import './styles.css';
 import './school-opening.css';
+import './access.css';
 
 // Remove any token fragment before rendering, fetching or authenticating, whatever the page.
-const isOpening = window.location.pathname === '/app/ouvrir';
+const path = window.location.pathname.replace(/\/+$/, '');
+const isOpening = path === '/app/ouvrir';
 const openingLink = isOpening ? readOpeningLink() : { token: null, error: false };
 const invitationLink = readInvitationLink();
 const element = document.getElementById('root');
@@ -25,16 +29,27 @@ async function loadPage() {
   root.render(<div className="app-shell"><main className="main"><p role="status">Chargement de Drivy…</p></main></div>);
   try {
     // Exclusive surfaces are loaded only when requested. Styles and link sanitization stay shared.
-    if (window.location.pathname === '/app/recover') {
+    const consoleParts = path.split('/');
+    const isConsole = /^\/app\/gestion(\/|$)/.test(path);
+    const knownConsole = isConsole && consoleParts.length <= 5 && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
+    const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
+    if (!knownEntry && !knownConsole) {
+      document.title = 'Page introuvable · Drivy';
+      root.render(<div className="app-shell"><header className="site-header"><a className="brand" href="/app/"><BrandSymbol /><span>Drivy</span></a></header><main className="main"><section className="account-entry">
+        <h1 tabIndex={-1} ref={heading => heading?.focus()}>Page introuvable</h1>
+        <p>Cette adresse ne correspond à aucune page de Drivy.</p>
+        <a className="button primary" href="/app/">Retrouver mes écoles</a>
+      </section></main></div>);
+    } else if (path === '/app/recover') {
       const { AccountRecoveryPage } = await import('./account-recovery');
       root.render(<AccountRecoveryPage />);
-    } else if (window.location.pathname.replace(/\/$/, '') === '/app/preferences') {
+    } else if (path === '/app/preferences') {
       const { PreferencesPage } = await import('./preferences');
       root.render(<PreferencesPage />);
-    } else if (isOpening || window.location.pathname === '/app/operateur') {
+    } else if (isOpening || path === '/app/operateur') {
       const { SchoolOpeningPage } = await import('./school-opening');
       root.render(<SchoolOpeningPage link={openingLink} operator={!isOpening} />);
-    } else if (/^\/app\/gestion(\/|$)/.test(window.location.pathname)) {
+    } else if (knownConsole) {
       const { ManagementConsole } = await import('./console/Console');
       root.render(<ManagementConsole />);
     } else {
@@ -42,11 +57,11 @@ async function loadPage() {
       root.render(<App invitationLink={invitationLink} />);
     }
   } catch {
-    root.render(<div className="app-shell"><main className="main">
+    root.render(<div className="app-shell"><header className="site-header"><a className="brand" href="/app/"><BrandSymbol /><span>Drivy</span></a></header><main className="main"><section className="account-entry">
       <h1 tabIndex={-1} ref={heading => { heading?.focus(); }}>Chargement impossible</h1>
       <p role="alert">Vérifiez votre connexion, puis réessayez de charger cette page.</p>
       <button type="button" className="button primary" onClick={retryLoading}>Réessayer</button>
-    </main></div>);
+    </section></main></div>);
   }
 }
 void loadPage();

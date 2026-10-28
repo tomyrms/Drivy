@@ -22,6 +22,7 @@ import { PrerequisiteHelp } from './prerequisite-help';
 import { ProfileCompletion } from './profile-completion';
 import { GpsConsentLine } from './gps-consent';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
+import './people-workspace.css';
 
 const statusLabels: Record<Training['status'], string> = { ACTIVE: 'En cours', PAUSED: 'En pause', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
 const emptyPermit = (): PermitDraft => ({ physicalSeen: false, validUntil: '', decision: 'APPROVED', reason: '' });
@@ -40,6 +41,7 @@ export function LearnersSection() {
   const { schoolId, school, membership, navigate, routeQuery, setRouteQuery } = useConsole();
   const { revision } = useCommandSnapshot();
   const [selected, selectLearner] = useRouteSelection();
+  const [dossierView, setDossierView] = useListState<'follow-up' | 'management'>(`learners/${selected ?? 'list'}/view`, 'follow-up');
   const setSelected = (selection: string | null) => {
     if (routeQuery?.lesson && setRouteQuery) setRouteQuery({ ...routeQuery, selection: selection ?? undefined, lesson: undefined });
     else selectLearner(selection);
@@ -172,9 +174,9 @@ export function LearnersSection() {
   }
 
   return (
-    <div className="section-stack">
-      {(routeQuery?.from === 'agenda' || routeQuery?.lesson) && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, instructor: routeQuery.instructor, lesson: routeQuery.lesson })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
-      {routeQuery?.from === 'trajets' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: routeQuery.learner, week: routeQuery.week, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour aux trajets</button></div>}
+    <div className="section-stack learners-workspace">
+      {(routeQuery?.from === 'agenda' || routeQuery?.lesson) && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('agenda', { week: routeQuery.week, day: routeQuery.day, instructor: routeQuery.instructor, lesson: routeQuery.lesson })}><Symbol kind="back" bare />Retour à l’agenda</button></div>}
+      {routeQuery?.from === 'trajets' && <div className="button-row"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: routeQuery.learner, week: routeQuery.week, day: routeQuery.day, instructor: routeQuery.instructor })}><Symbol kind="back" bare />Retour aux trajets</button></div>}
       {!current && <SectionHeading title="Élèves" actions={!selected && <button type="button" className="button primary" onClick={() => navigate('invitations', { audience: 'learners' })}><Symbol kind="plus" bare />Inviter un élève</button>} />}
       {!dialog && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       {runner.blockedReason && <p className="caption with-symbol"><Symbol kind="lock" bare />{runner.blockedReason}</p>}
@@ -200,7 +202,7 @@ export function LearnersSection() {
           {visible.length === 0 ? <EmptyState symbol="users" title={learners.length ? 'Aucun élève trouvé' : 'Aucun élève'} message={learners.length
             ? filterContext ? `Critères actifs : ${filterContext}.` : ''
             : 'Créez un code pour inviter un élève.'} />
-            : <div className="directory-table-wrap"><table className="data-table record-table people-table"><caption className="visually-hidden">Dossiers élèves</caption>
+            : <div className="directory-table-wrap"><table className="data-table people-table"><caption className="visually-hidden">Dossiers élèves</caption>
               <thead><tr><th scope="col" aria-sort={sort === 'name-asc' ? 'ascending' : 'descending'}><button type="button" className="table-sort"
                 aria-label={`Élève, trier par nom ${sort === 'name-asc' ? 'décroissant' : 'croissant'}`} onClick={() => { setSort(sort === 'name-asc' ? 'name-desc' : 'name-asc'); setPage(1); }}>
                 Élève<Symbol kind={sort === 'name-asc' ? 'chevron-up' : 'chevron'} bare /></button></th><th scope="col">Contact</th><th scope="col">Formation</th><th scope="col">Dossier</th><th scope="col">Profil</th></tr></thead><tbody>{pageRows.map(learner => {
@@ -233,9 +235,19 @@ export function LearnersSection() {
             onClick={() => ask({ kind: 'restore' })}>Restaurer le dossier</button>
             : canArchive ? <button type="button" className="button quiet danger" disabled={!canEdit} onClick={() => ask({ kind: 'archive' })}>Archiver le dossier…</button> : undefined}>
           {routeQuery?.lesson && <SelectedLessonContext key={`${schoolId}/${current.id}/${routeQuery.lesson}`} schoolId={schoolId} learnerId={current.id} lessonId={routeQuery.lesson} competencies={competencies} instructorName={name} />}
-          {!current.archivedAt && notReady(current) && <ProfileCompletion schoolId={schoolId} learner={current} canEdit={canEdit && membership.roles.includes('ADMIN')} />}
-          <div className="detail-links"><button type="button" className="button quiet" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Voir les trajets</button></div>
-          {!current.archivedAt && <GpsConsentLine learnerId={current.id} />}
+          <div className="dossier-actions">
+            {!current.archivedAt && <button type="button" className="button primary" onClick={() => navigate('agenda', { view: 'nouvelle', learner: current.id })}><Symbol kind="plus" bare />Planifier une leçon</button>}
+            <button type="button" className="button secondary" onClick={() => navigate('trajets', { learner: current.id, from: 'eleves', week: routeQuery?.week, day: routeQuery?.day, instructor: routeQuery?.instructor })}><Symbol kind="route" bare />Trajets</button>
+          </div>
+          <div className="dossier-navigation" role="group" aria-label="Rubrique du dossier">
+            <button type="button" aria-pressed={dossierView === 'follow-up'} onClick={() => setDossierView('follow-up')}>Suivi pédagogique</button>
+            <button type="button" aria-pressed={dossierView === 'management'} onClick={() => setDossierView('management')}>Dossier et formations{!current.archivedAt && notReady(current) && <Symbol kind="alert" bare />}</button>
+          </div>
+          {dossierView === 'follow-up' && !current.archivedAt && notReady(current) && <Notice tone="warning" title="Profil à compléter" live={false} actions={<button type="button" className="button quiet" onClick={() => setDossierView('management')}>Compléter le dossier</button>} />}
+          <div hidden={dossierView !== 'management'} className="dossier-administration">
+            {!current.archivedAt && notReady(current) && <ProfileCompletion schoolId={schoolId} learner={current} canEdit={canEdit && membership.roles.includes('ADMIN')} />}
+            {!current.archivedAt && <GpsConsentLine learnerId={current.id} />}
+          </div>
           {listedCurrent && loaded.status === 'error' && <Notice tone="error" title="Dossier à actualiser" live={false} actions={<ReadRetry loaded={loaded} />}><p>{loaded.error}</p></Notice>}
           {!listedCurrent && selectedLearner.status === 'error' && <Notice tone="error" title="Dossier à actualiser" live={false} actions={<ReadRetry loaded={selectedLearner} />}><p>{selectedLearner.error}</p></Notice>}
           {resources.status === 'loading' && <Loading label="Lecture du catalogue et de l’équipe…" />}
@@ -264,7 +276,8 @@ export function LearnersSection() {
                   {permitInfo.badge && <StatusBadge tone={permitInfo.badge.tone} symbol="alert">{permitInfo.badge.label}</StatusBadge>}</p>}
                 {inProgress && detailReady && detail.permitError && <Notice tone="error" title="Permis non consultable" live={false}
                   actions={<button type="button" className="button retry" onClick={dossier.reload}>Réessayer</button>}><p>{detail.permitError}</p></Notice>}
-                <TrainingFollowUp schoolId={schoolId} training={training} competencies={competencies} timeZone={school.timeZone} />
+                <div hidden={dossierView !== 'follow-up'}><TrainingFollowUp schoolId={schoolId} training={training} competencies={competencies} timeZone={school.timeZone} /></div>
+                <div hidden={dossierView !== 'management'}>
                 {inProgress && <PrerequisiteHelp schoolId={schoolId} learnerId={current.id} categoryCode={category(training)} today={schoolToday()} timeZone={school.timeZone} />}
                 <details className="disclosure"><summary>Gérer cette formation</summary>
                 {assigned.length > 0 && inProgress && <ul className="plain-list">{assigned.map(item => <li key={item.id}>
@@ -284,17 +297,18 @@ export function LearnersSection() {
                     disabled={!canEdit} aria-label={`${transition.label} : ${title(training)}`} onClick={() => ask({ kind: 'transition', training, transition })}>{transition.label}{transition.danger ? '…' : ''}</button>)}
                 </div>}
                 </details>
+                </div>
               </div>
             </li>;
           })}</ul>
-          {!current.archivedAt && availableOfferings.length > 0 && <details className="disclosure"><summary>{trainingsOf(current.id).length ? 'Ouvrir une autre formation' : 'Ouvrir une formation'}</summary><form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>
+          <div hidden={dossierView !== 'management'}>{!current.archivedAt && availableOfferings.length > 0 && <details className="disclosure"><summary>{trainingsOf(current.id).length ? 'Ouvrir une autre formation' : 'Ouvrir une formation'}</summary><form className="form-grid" onSubmit={event => { event.preventDefault(); void openTraining(); }}>
             <div className="form-row">
               <SelectField label="Nouvelle formation" value={offeringId} disabled={!canWrite} placeholder="Choisir une offre" onChange={setOfferingId} search
                 options={availableOfferings.map(item => ({ value: item.id, label: offeringLabel(item, offerings) }))} />
               <TextField label="Début" type="date" value={startedOn} disabled={!canWrite} onChange={setStartedOn} />
             </div>
             <button type="submit" className="button primary" disabled={!canWrite || !availableOfferings.some(offering => offering.id === offeringId) || !isCivilDate(startedOn)}>Ouvrir la formation</button>
-          </form></details>}
+          </form></details>}</div>
         </DetailPanel> : selected ? <LoadState loaded={selectedLearner} label="Lecture du dossier…">{() => null}</LoadState> : <Placeholder>Choisissez un élève.</Placeholder>} />
       <ConfirmDialog open={dialog !== null} busy={runner.busy} onCancel={() => ask(null)} onConfirm={() => void confirm()}
         title={dialog?.kind === 'transition' ? dialog.transition.label : dialog?.kind === 'end' ? 'Retirer le moniteur' : dialog?.kind === 'permit' ? 'Consigner le permis' : dialog?.kind === 'restore' ? 'Restaurer le dossier' : 'Archiver le dossier'}

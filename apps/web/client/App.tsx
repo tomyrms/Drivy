@@ -349,7 +349,7 @@ export function App({ invitationLink }: { invitationLink: InvitationLink }) {
 
           <section className="section" aria-labelledby="schools-title">
             <div className="section-heading">
-              <h2 id="schools-title" className="section-title">{me?.memberships.length === 1 ? 'Une école liée' : `${me?.memberships.length ?? 0} écoles liées`}</h2>
+              <h2 id="schools-title" className="section-title">{me ? me.memberships.length === 1 ? 'Une école liée' : `${me.memberships.length} écoles liées` : 'Vos écoles'}</h2>
               <div className="button-row">
                 {!enteringCode && <button className="button secondary" disabled={isBusy} type="button" onClick={() => setEnteringCode(true)}>J’ai un code</button>}
                 <button className="button quiet" disabled={isBusy} type="button" onClick={() => void perform('Actualisation de vos écoles…', refresh)}>

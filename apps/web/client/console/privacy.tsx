@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { characters, createCommand, filled, isEmail, profilePolicyProblem, type ProfileField } from '../command-core';
 import { useCommandSnapshot, type SubmitResult } from '../command-store';
 import {
@@ -74,11 +74,10 @@ function PolicyTexts({ proposals, fieldsPublished, onAdopted }: { proposals: Tex
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
       <LoadState loaded={loaded} label="Lecture des textes…">{data => <>
         {!showForm && <>
-          <details className="disclosure settings-document">
-            <summary>Lire les textes</summary>
-            <h3>Information</h3><p className="policy-copy">{data.noticeText}</p>
-            <h3>Conservation</h3><p className="policy-copy">{data.retentionText}</p>
-          </details>
+          <div className="settings-documents">
+            <details className="disclosure settings-document"><summary>Utilisation des données</summary><p className="policy-copy">{data.noticeText}</p></details>
+            <details className="disclosure settings-document"><summary>Conservation des données</summary><p className="policy-copy">{data.retentionText}</p></details>
+          </div>
           {data.contactEmail && <dl className="settings-values"><div><dt>Contact pour les données</dt><dd>{data.contactEmail}</dd></div></dl>}
         </>}
         {showForm && !value && <Loading label="Préparation des textes proposés…" />}
@@ -125,7 +124,10 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
   const current = useMemo(() => policies.filter(item => item.status === 'PUBLISHED' && Date.parse(item.effectiveFrom) <= Date.now())
     .sort((a, b) => Date.parse(b.effectiveFrom) - Date.parse(a.effectiveFrom))[0] ?? null, [policies]);
   const [drafts, setDrafts] = useState<Record<ProfileField, FieldDraft> | null>(null);
-  const runner = useCommandRunner(() => setDrafts(null));
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const fieldsForm = useRef<HTMLFormElement>(null);
+  const runner = useCommandRunner(() => { setDrafts(null); setEditing(false); });
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const shown = drafts ?? initialDrafts(current, proposals);
@@ -135,6 +137,11 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
   useUnsavedChanges(drafts !== null && changed);
   const mayEdit = !!noticeVersionId && !runner.pending && !runner.busy;
   const update = (field: ProfileField, change: Partial<FieldDraft>) => setDrafts({ ...shown, [field]: { ...shown[field], ...change } });
+  const showForm = !current || editing || drafts !== null;
+  const fieldSummary = (field: ProfileField) => {
+    const rule = rules.find(item => item.field === field);
+    return !rule ? 'Non demandé' : rule.stage === 'JOIN' ? 'Requis à l’entrée' : rule.stage === 'BEFORE_LESSON' ? 'Requis avant une leçon' : rule.stage === 'BEFORE_COURSE' ? 'Requis avant un cours' : 'Facultatif';
+  };
   const blocksPlanning = rules.some(rule => rule.stage === 'BEFORE_LESSON' && !current?.fields.some(item => item.field === rule.field && item.stage === 'BEFORE_LESSON'));
 
   async function confirm() {
@@ -149,11 +156,18 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
       <h2 id="fields-title" className="section-title">Informations demandées</h2>
       {current ? <span className="row-meta">Depuis le {formatDateTime(current.effectiveFrom, school.timeZone)}</span>
         : <StatusBadge tone="warning" symbol="file">À publier</StatusBadge>}
-    </div></div>
+    </div>{!showForm && <button ref={editButton} type="button" className="button secondary" disabled={!mayEdit} onClick={() => {
+      setEditing(true); requestAnimationFrame(() => fieldsForm.current?.querySelector<HTMLElement>('input,button,textarea')?.focus());
+    }}><Symbol kind="edit" bare />Personnaliser</button>}</div>
     <div className="settings-section-body">
       {!reviewing && <OutcomeNotice outcome={runner.outcome} onDismiss={runner.clearOutcome} />}
-      {!noticeVersionId && <p className="caption">Adoptez d’abord les textes de confidentialité.</p>}
-      <form className="form-grid settings-fields-form" onSubmit={event => { event.preventDefault(); if (!problem && changed && mayEdit) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>
+      {!noticeVersionId && <Notice tone="warning" title="Textes de confidentialité à adopter" live={false} />}
+      {!showForm && <>
+        <dl className="settings-values settings-fields-summary">{(['firstName', 'lastName', ...editableFields, ...(shown.profilePhotoDocumentId.original ? ['profilePhotoDocumentId' as const] : [])] as ProfileField[]).map(field =>
+          <div key={field}><dt>{fieldLabels[field]}</dt><dd>{fieldSummary(field)}</dd></div>)}</dl>
+        <details className="disclosure settings-document"><summary>Aperçu pour l’élève</summary><ProfileFieldsPreview fields={rules} /></details>
+      </>}
+      {showForm && <form ref={fieldsForm} className="form-grid settings-fields-form" onSubmit={event => { event.preventDefault(); if (!problem && changed && mayEdit) { runner.clearOutcome(); setAcknowledged(false); setReviewing(true); } }}>
         <dl className="settings-values settings-profile-fixed">
           {(['firstName', 'lastName'] as const).map(field => <div key={field}><dt>{fieldLabels[field]}</dt><dd>Requis à l’entrée</dd></div>)}
         </dl>
@@ -176,10 +190,10 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
           <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : drafts && changed ? 'Modifications non enregistrées' : ''}</p>
           <div className="button-row compact">
             <button type="submit" className="button primary" disabled={!mayEdit || !!problem || !changed}>{current ? 'Enregistrer' : 'Publier'}</button>
-            {drafts && <button type="button" className="button quiet" onClick={() => setDrafts(null)}>Annuler</button>}
+            {current && <button type="button" className="button quiet" disabled={runner.busy} onClick={() => { setDrafts(null); setEditing(false); requestAnimationFrame(() => editButton.current?.focus()); }}>Annuler</button>}
           </div>
         </div>
-      </form>
+      </form>}
     </div>
     <ConfirmDialog open={reviewing} busy={runner.busy} onCancel={() => setReviewing(false)} onConfirm={() => void confirm()}
       title="Informations demandées" confirmLabel="Enregistrer" acknowledgement="J’ai relu ces informations et leur raison." acknowledged={acknowledged} onAcknowledge={setAcknowledged}>

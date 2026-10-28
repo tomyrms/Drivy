@@ -1,5 +1,14 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
+import { Badge } from './components/ui/badge';
+import { Button } from './components/ui/button';
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './components/ui/dialog';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from './components/ui/empty';
+import { Field, FieldLabel, FieldDescription, FieldError } from './components/ui/field';
+import { Input } from './components/ui/input';
+import { Skeleton } from './components/ui/skeleton';
+import { Textarea } from './components/ui/textarea';
 
 export type SymbolKind = 'account' | 'school' | 'alert' | 'check' | 'refresh' | 'lock' | 'mail' | 'shield' | 'clock'
   | 'home' | 'settings' | 'list' | 'layers' | 'book' | 'file' | 'tag' | 'receipt' | 'users' | 'plus' | 'edit' | 'send'
@@ -49,7 +58,7 @@ export function Symbol({ kind, tile = false, bare = false }: { kind: SymbolKind;
 export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 /** Exceptional status: symbol + text + tone, never color alone. */
 export function StatusBadge({ tone, symbol, children }: { tone: Tone; symbol: SymbolKind; children: ReactNode }) {
-  return <span className={`badge ${tone}`}><Symbol kind={symbol} bare />{children}</span>;
+  return <Badge variant="outline" className={`badge ${tone}`}><Symbol kind={symbol} bare />{children}</Badge>;
 }
 
 export function Notice({ tone, title, children, actions, live }: {
@@ -58,44 +67,47 @@ export function Notice({ tone, title, children, actions, live }: {
   const symbol: SymbolKind = tone === 'success' ? 'check' : tone === 'info' ? 'info' : 'alert';
   const role = live === false ? undefined : tone === 'error' ? 'alert' : 'status';
   return (
-    <div className={`notice ${tone}`} role={role}>
+    <Alert className={`notice ${tone}`} role={role}>
       <Symbol kind={symbol} />
       <div className="notice-body">
-        <strong>{title}</strong>
-        {children}
+        <AlertTitle>{title}</AlertTitle>
+        {children && <AlertDescription>{children}</AlertDescription>}
         {actions && <div className="notice-actions">{actions}</div>}
       </div>
-    </div>
+    </Alert>
   );
 }
 
-export function Loading({ label }: { label: string }) {
-  return <p className="loading" role="status"><span className="spinner" aria-hidden="true" />{label}</p>;
+export function Loading({ label, skeleton = false }: { label: string; skeleton?: boolean }) {
+  return <div className="load-state" aria-busy="true">
+    <p className="loading" role="status"><span className="spinner" aria-hidden="true" />{label}</p>
+    {skeleton && <div className="load-skeleton" aria-hidden="true"><Skeleton /><Skeleton /><Skeleton /></div>}
+  </div>;
 }
 
 export function EmptyState({ symbol, title, message, action }: { symbol: SymbolKind; title: string; message?: string; action?: ReactNode }) {
   return (
-    <div className="empty-state">
-      <Symbol kind={symbol} />
-      <div className="row-text">
-        <h3 className="row-title">{title}</h3>
-        {message && <p className="row-meta">{message}</p>}
-        {action}
-      </div>
-    </div>
+    <Empty className="empty-state">
+      <EmptyHeader>
+        <EmptyMedia variant="icon"><Symbol kind={symbol} bare /></EmptyMedia>
+        <EmptyTitle><h3>{title}</h3></EmptyTitle>
+        {message && <EmptyDescription>{message}</EmptyDescription>}
+      </EmptyHeader>
+      {action && <EmptyContent>{action}</EmptyContent>}
+    </Empty>
   );
 }
 
 type FieldProps = { id?: string; label: string; hint?: string | undefined; error?: string | null | undefined; disabled?: boolean | undefined; required?: boolean | undefined };
 
-function FieldFrame({ id, label, hint, error, required, children, counter }: FieldProps & { id: string; children: ReactNode; counter?: ReactNode }) {
+function FieldFrame({ id, label, hint, error, required, disabled, children, counter }: FieldProps & { id: string; children: ReactNode; counter?: ReactNode }) {
   return (
-    <div className={error ? 'field invalid' : 'field'}>
-      <label htmlFor={id}>{label}{required === false && <span className="optional">Facultatif</span>}</label>
+    <Field className={error ? 'field invalid' : 'field'} data-invalid={!!error} data-disabled={!!disabled}>
+      <FieldLabel htmlFor={id}>{label}{required === false && <span className="optional">Facultatif</span>}</FieldLabel>
       {children}
-      {(hint || counter) && <p className="caption field-hint" id={`${id}-hint`}>{hint}{counter}</p>}
-      {error && <p className="field-error" id={`${id}-error`}><Symbol kind="alert" bare />{error}</p>}
-    </div>
+      {(hint || counter) && <FieldDescription className="caption field-hint" id={`${id}-hint`}>{hint}{counter}</FieldDescription>}
+      {error && <FieldError className="field-error" id={`${id}-error`}><Symbol kind="alert" bare />{error}</FieldError>}
+    </Field>
   );
 }
 
@@ -108,8 +120,8 @@ export function TextField({ id: suppliedId, label, value, onChange, hint, error,
 }) {
   const generatedId = useId(), id = suppliedId ?? generatedId;
   return (
-    <FieldFrame id={id} label={label} hint={hint} error={error} required={required}>
-      <input id={id} name={name} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
+    <FieldFrame id={id} label={label} hint={hint} error={error} required={required} disabled={disabled}>
+      <Input id={id} name={name} type={type} value={value} disabled={disabled} readOnly={readOnly} required={required} placeholder={placeholder}
         autoComplete={autoComplete ?? 'off'} inputMode={inputMode} maxLength={maxLength}
         aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error)}
         onChange={event => onChange(event.target.value)} />
@@ -125,8 +137,8 @@ export function TextArea({ id: suppliedId, label, value, onChange, hint, error, 
   const counter = maxLength && length > maxLength * .8
     ? <span className={length > maxLength ? 'counter over' : 'counter'}> {length.toLocaleString('fr-CH')} / {maxLength.toLocaleString('fr-CH')} caractères</span> : null;
   return (
-    <FieldFrame id={id} label={label} hint={hint} error={error} required={required} counter={counter}>
-      <textarea id={id} name={name} value={value} disabled={disabled} required={required} rows={rows}
+    <FieldFrame id={id} label={label} hint={hint} error={error} required={required} disabled={disabled} counter={counter}>
+      <Textarea id={id} name={name} value={value} disabled={disabled} required={required} rows={rows}
         aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error, counter !== null)}
         onChange={event => onChange(event.target.value)} />
     </FieldFrame>
@@ -159,80 +171,44 @@ export function CheckField({ label, description, checked, onChange, disabled, in
   );
 }
 
-/**
- * Review before a durable write. Native modal dialog: focus stays inside, Échap cancels,
- * focus returns to the control that opened it. The confirm button waits for the school.
- */
+/** Review a durable write with one Base UI modal, at every viewport size. */
 export function ConfirmDialog({ open, title, confirmLabel, onConfirm, onCancel, busy, acknowledgement, acknowledged, onAcknowledge, children, disabledReason, disabled = false, busyLabel = 'Confirmation par l’école…' }: {
   open: boolean; title: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void; busy: boolean;
   acknowledgement?: string; acknowledged?: boolean; onAcknowledge?: (value: boolean) => void; children: ReactNode; disabledReason?: string | null; disabled?: boolean; busyLabel?: string;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const titleHeading = useRef<HTMLHeadingElement>(null);
-  const opener = useRef<Element | null>(null);
-  const titleId = useId();
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (open && !element.open) { opener.current = document.activeElement; element.showModal(); }
-    if (!open && element.open) {
-      element.close();
-      if (opener.current instanceof HTMLElement && opener.current.isConnected && !opener.current.matches(':disabled')) opener.current.focus();
-    }
-  }, [open]);
-  useEffect(() => {
-    // Disabling every action can otherwise move focus to the document while the write is pending.
-    if (open && busy && dialog.current?.open) titleHeading.current?.focus({ preventScroll: true });
+    // A pending command can disable all controls; keep the focus inside its review.
+    if (open && busy) titleHeading.current?.focus({ preventScroll: true });
   }, [open, busy]);
-  useEffect(() => {
-    const element = dialog.current;
-    // A confirmed write can remove the form that opened the dialog together with the dialog itself:
-    // focus then goes back to the opener if it survives, otherwise to the page title instead of the void.
-    return () => {
-      if (!element?.open) return;
-      element.close();
-      if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus();
-      else document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
-    };
-  }, []);
+  const restoreFocus = () => opener.current?.isConnected && !opener.current.matches(':disabled')
+    ? opener.current : document.querySelector<HTMLElement>('main h1');
   const blocked = busy || disabled || (acknowledgement !== undefined && !acknowledged) || !!disabledReason;
-  return (
-    <dialog ref={dialog} className="confirm-dialog" aria-labelledby={titleId}
-      onKeyDown={event => {
-        if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
-        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex],[contenteditable="true"]')]
-          .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[hidden],[inert],[aria-hidden="true"]')
-            && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
-        const first = controls[0], last = controls.at(-1);
-        if (!first || !last) {
-          event.preventDefault();
-          titleHeading.current?.focus({ preventScroll: true });
-          return;
-        }
-        const active = document.activeElement;
-        if (!controls.some(element => element === active) || (event.shiftKey ? active === first : active === last)) {
-          event.preventDefault();
-          (event.shiftKey ? last : first).focus();
-        }
-      }}
-      onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
-      <div className="dialog-header">
-        <h2 id={titleId} ref={titleHeading} tabIndex={-1}>{title}</h2>
-      </div>
+  return <Dialog open={open} disablePointerDismissal onOpenChange={(next, details) => {
+    if (busy) { details.cancel(); return; }
+    if (!next) onCancel();
+  }}>
+    <DialogContent className="confirm-dialog" showCloseButton={false} initialFocus={() => {
+      // Capture before the popup moves focus, including imperatively opened reviews.
+      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      return titleHeading.current;
+    }} finalFocus={restoreFocus}>
+      <DialogHeader><DialogTitle ref={titleHeading} tabIndex={-1}>{title}</DialogTitle></DialogHeader>
       <div className="dialog-body">
         {children}
         {acknowledgement !== undefined && onAcknowledge &&
           <CheckField variant="confirmation" label={acknowledgement} checked={!!acknowledged} onChange={onAcknowledge} disabled={busy} />}
         {disabledReason && <p className="caption">{disabledReason}</p>}
       </div>
-      <div className="dialog-actions">
-        <button type="button" className="button secondary" onClick={onCancel} disabled={busy}>Retour</button>
-        <button type="button" className="button primary" onClick={onConfirm} disabled={blocked} aria-busy={busy}>
+      <DialogFooter>
+        <DialogClose disabled={busy} render={<Button variant="outline" />}>Retour</DialogClose>
+        <Button onClick={onConfirm} disabled={blocked} aria-busy={busy}>
           {busy && <span className="spinner on-accent" aria-hidden="true" />}{busy ? busyLabel : confirmLabel}
-        </button>
-      </div>
-    </dialog>
-  );
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 export function Facts({ items }: { items: readonly (readonly [string, ReactNode])[] }) {

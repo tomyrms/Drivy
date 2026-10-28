@@ -59,6 +59,7 @@ export function parentSection(section: SectionKey): SectionKey | null {
 export function localNavigationQuery(workspace: Workspace, item: NavigationItem, query: NavigationQuery): NavigationQuery {
   if (workspace.key === 'planning') return {
     ...(query.instructor ? { instructor: query.instructor } : {}), ...(query.week ? { week: query.week } : {}),
+    ...(query.day ? { day: query.day } : {}),
     ...(query.from === 'equipe' && item.section !== 'agenda' ? { from: 'equipe' as const } : {}), ...item.query,
   };
   return { ...item.query };

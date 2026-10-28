@@ -237,7 +237,8 @@ export function SchoolSetupGuide({ catalogueOnly = false, initialCategory, onClo
     {readFailure && <Notice tone="error" title="Vérification impossible" actions={<button className="button secondary" type="button" onClick={() => needsAdoption.current ? loaded.reload() : document && void refreshReview(document)}>Réessayer</button>}><p>{readFailure}</p></Notice>}
     {runner.blockedReason && <Notice tone="warning" title="Demande à vérifier"><p>{runner.blockedReason}</p></Notice>}
     <LoadState loaded={loaded} label="Lecture de votre préparation…">{data => content && document && <>
-      <div className="setup-progress-mobile"><button type="button" className="button quiet" aria-expanded={stepsOpen} aria-controls="setup-progress" onClick={() => setStepsOpen(!stepsOpen)}>{steps.includes(step) ? `Étape ${steps.indexOf(step) + 1} sur ${steps.length}` : 'Modifier le résumé'}<Symbol kind="chevron" bare /></button></div>
+      <div className="setup-progress-mobile"><button type="button" className="button secondary" aria-expanded={stepsOpen} aria-controls="setup-progress" onClick={() => setStepsOpen(!stepsOpen)}>{steps.includes(step) ? `Étape ${steps.indexOf(step) + 1} sur ${steps.length}` : 'Modifier le résumé'}<Symbol kind="chevron" bare /></button>
+        <div className="setup-progress-track" aria-hidden="true">{steps.map((item, index) => <span key={item} data-passed={index <= steps.indexOf(step)} />)}</div></div>
       <div className="setup-layout">
         <nav id="setup-progress" className={`setup-progress${stepsOpen ? ' is-open' : ''}`} aria-label="Étapes de préparation"><ol>{steps.map((item, index) => {
           const state = setupStepState(item, content, document.currentStep, reviewIssues);
@@ -263,8 +264,8 @@ export function SchoolSetupGuide({ catalogueOnly = false, initialCategory, onClo
               <div className="button-row">
                 {steps.indexOf(step) > 0 && <button type="button" className="button quiet" disabled={blocked} onClick={() => jump(steps[steps.indexOf(step) - 1]!)}>Retour</button>}
                 {(['PROFILE', 'FORMATIONS', 'PRICING'] as SetupStep[]).includes(step) && !catalogueOnly && <button type="button" className="button quiet" disabled={blocked} onClick={skip}>Plus tard</button>}
-                <button type="button" className="button secondary" disabled={blocked} onClick={() => void save(step, content, true)}>Enregistrer et quitter</button>
-                <button type="submit" className="button primary" disabled={blocked || (step === 'REVIEW' && (!preview?.ready || !acknowledged || dirty))}>
+                <button type="button" className="button secondary setup-save-exit" disabled={blocked} onClick={() => void save(step, content, true)}>Enregistrer et quitter</button>
+                <button type="submit" className="button primary setup-continue" disabled={blocked || (step === 'REVIEW' && (!preview?.ready || !acknowledged || dirty))}>
                   {step === 'REVIEW' ? preview?.activate ? 'Adopter les textes et activer l’école' : 'Confirmer la préparation' : 'Enregistrer et continuer'}
                 </button>
               </div>
@@ -339,7 +340,7 @@ function FormationStep({ content, templates, offerings, initialOfferingId, today
       <button type="button" className="button secondary" disabled={!chosen || content.formations.length >= 20} onClick={() => { const offer = offerings.find(item => item.id === chosen); if (!offer) return; add({ ...setupFormation(null, today), existingOfferingId: offer.id, useCommonTerms: false, categoryCode: offer.categoryCode, label: `Leçon ${offer.categoryCode}`, durationMinutes: offer.defaultDurationMinutes, competencies: [] }); setChosen(''); }}>Préparer ce tarif</button></details>}
     {content.formations.map((formation, index) => <section className="setup-formation" key={formation.id}>
       <div className="setup-formation-heading"><h3>{formation.label || `Formation ${index + 1}`}</h3><button type="button" className="button quiet" aria-label={`Retirer du brouillon · ${formation.label || `Formation ${index + 1}`}`} onClick={() => onChange({ ...content, formations: content.formations.filter(item => item.id !== formation.id) })}>Retirer du brouillon</button></div>
-      <details className="disclosure"><summary>Nom et catégorie</summary><div className="form-grid"><TextField name={`formations.${index}.categoryCode`} error={errorFor(`formations.${index}.categoryCode`)} label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
+      <details className="disclosure" open={!formation.templateId && !formation.existingOfferingId}><summary>Nom et catégorie</summary><div className="form-grid"><TextField name={`formations.${index}.categoryCode`} error={errorFor(`formations.${index}.categoryCode`)} label="Permis" value={formation.categoryCode} maxLength={30} disabled={!!formation.existingOfferingId} onChange={categoryCode => update({ ...formation, categoryCode, templateId: null, templateVersion: null })} />
         <TextField name={`formations.${index}.label`} error={errorFor(`formations.${index}.label`)} label="Nom de la formation ou du tarif" value={formation.label} maxLength={200} onChange={label => update({ ...formation, label })} /></div></details>
       {!formation.existingOfferingId && <>
         {formation.templateId && <details className="disclosure"><summary>Référence du programme</summary><p>Proposition Drivy · {formation.templateVersion}</p><p>{templates.formations.find(item => item.id === formation.templateId)?.coverageNote}</p><p>À relire par l’école ; ce programme ne certifie pas les prérequis de l’élève.</p><ul>{formation.sourceUrls.map(url => <li key={url}><a href={url} target="_blank" rel="noreferrer">{new URL(url).hostname}</a></li>)}</ul></details>}
@@ -399,7 +400,7 @@ function PriceField({ formation, onChange, name, error }: { formation: SetupForm
 }
 export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit: (step: SetupStep, field?: string) => void }) {
   const { content } = preview;
-  return <div className="section-stack">
+  return <div className="section-stack setup-review">
     {preview.effects.map(effect => <Notice key={effect} tone="warning" title="Conséquence de la modification"><p>{effect}</p></Notice>)}
     {preview.issues.length > 0 && <Notice tone="warning" title="À compléter"><ul className="setup-issues">{preview.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><button type="button" className="text-link" onClick={() => onEdit(issueStep(issue.field), issue.field)}>{issue.message}</button></li>)}</ul></Notice>}
     {content.selectedSections.includes('IDENTITY') && <section><h3>École</h3><Facts items={[["Nom", content.identity.name], ['E-mail', content.identity.contactEmail], ['Téléphone', content.identity.contactPhone ?? 'Non renseigné'], ['Fuseau', content.identity.timeZone]]} /><button type="button" className="button quiet" onClick={() => onEdit('IDENTITY')}>Modifier</button></section>}
@@ -412,7 +413,7 @@ export function SetupReview({ preview, onEdit }: { preview: SetupPreview; onEdit
       {!formation.apply || !content.selectedSections.includes('CATALOGUE') ? <p>Conservée en brouillon · à terminer plus tard</p> : <>
         <Facts items={[["Permis", formation.categoryCode], ['Durée', `${formation.durationMinutes ?? '—'} min`], ['Prix', formation.priceCents === null ? 'À compléter' : formatCents(formation.priceCents)], ['Disponible dès le', formation.validFrom ? formatCivilDate(formation.validFrom) : 'À compléter']]} />
         {!formation.existingOfferingId && <details className="disclosure"><summary>Programme et déroulement</summary><ul>{formation.competencies.map(item => <li key={item.key}><strong>{item.label}</strong><p>{item.description}</p></li>)}</ul><p className="policy-copy">{formation.procedureText}</p></details>}
-        <h4>Annulation</h4><p className="policy-copy">{formation.existingOfferingId ? 'Le déroulement et les conditions d’annulation de la formation sont conservés.' : formation.cancellationPolicyText}</p><h4>Conditions du tarif</h4><p className="policy-copy">{formation.termsText}</p>
+        <details className="disclosure"><summary>Annulation et conditions du tarif</summary><h4>Annulation</h4><p className="policy-copy">{formation.existingOfferingId ? 'Le déroulement et les conditions d’annulation de la formation sont conservés.' : formation.cancellationPolicyText}</p><h4>Conditions du tarif</h4><p className="policy-copy">{formation.termsText}</p></details>
       </>}<button type="button" className="button quiet" onClick={() => onEdit('PRICING')}>Modifier</button>
     </section>; })}
   </div>;

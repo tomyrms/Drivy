@@ -2,6 +2,8 @@
 
 Client React/TypeScript distinct du client Swift ; serveur Fastify avec session de même origine. Il sert la connexion, la liste des écoles du compte, la lecture/acceptation d’une invitation et le **web de gestion** de l’administration (`/app/gestion/{schoolId}/…`).
 
+La refonte #280 compose le portail responsive avec shadcn/ui Base UI et les tokens Drivy, selon la hiérarchie Untitled UI. [Réalisation W01–W31 et limites avant essai](../../docs/implementation/epic-280-implementation.md), [inventaire des sous-vues](../../docs/implementation/epic-280-inventory.json), [configuration et rollback homelab](../../docs/implementation/epic-280-delivery.md). Les fixtures `test/visual.html` sont locales au développement ; elles ne sont pas une entrée du build de production.
+
 ## Développement local
 
 Depuis la racine, après le provisionnement de l’identité décrit dans `docs/implementation/dev-identity.md` :

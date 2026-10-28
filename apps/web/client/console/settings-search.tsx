@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Symbol } from '../ui';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '../components/ui/dialog';
 import { consolePath, type NavigationQuery } from './route';
 import { searchSettings } from './settings-search-model';
 import type { SectionKey } from './sections';
@@ -8,22 +11,18 @@ export function SettingsSearch({ schoolId, navigate, beforeNavigate }: {
   schoolId: string; navigate: (section: SectionKey, query?: NavigationQuery) => void; beforeNavigate: (proceed: () => void) => void;
 }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState('');
-  const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null), input = useRef<HTMLInputElement>(null);
-  const titleId = useId(), fieldId = useId();
+  const trigger = useRef<HTMLButtonElement>(null), input = useRef<HTMLInputElement>(null);
+  const navigated = useRef(false);
+  const fieldId = useId();
   const results = searchSettings(query);
-  useEffect(() => {
-    if (open) { dialog.current?.showModal(); input.current?.focus(); }
-    else if (dialog.current?.open) { dialog.current.close(); trigger.current?.focus(); }
-  }, [open]);
   const close = () => { setOpen(false); setQuery(''); };
   return <>
-    <button type="button" ref={trigger} className="settings-search-trigger" onClick={() => setOpen(true)}><Symbol kind="search" bare /><span>Rechercher un réglage</span></button>
-    <dialog className="settings-search confirm-dialog" ref={dialog} aria-labelledby={titleId}
-      onKeyDown={event => { if (event.key === 'Escape') event.stopPropagation(); }}
-      onCancel={event => { event.preventDefault(); close(); }}>
-      <div className="dialog-header"><h2 id={titleId}>Rechercher un réglage</h2><button type="button" className="button quiet" onClick={close}>Fermer</button></div>
+    <button type="button" ref={trigger} className="settings-search-trigger" onClick={() => { navigated.current = false; setOpen(true); }}><Symbol kind="search" bare /><span>Rechercher un réglage</span></button>
+    <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
+    <DialogContent className="settings-search" showCloseButton={false} initialFocus={input} finalFocus={() => navigated.current ? false : trigger.current}>
+      <DialogHeader><DialogTitle>Rechercher un réglage</DialogTitle><DialogClose render={<Button variant="ghost" />}>Fermer</DialogClose></DialogHeader>
       <div className="dialog-body"><label className="visually-hidden" htmlFor={fieldId}>Rechercher dans les paramètres</label>
-        <input ref={input} id={fieldId} type="search" placeholder="Téléphone, horaires, confidentialité…" autoComplete="off" value={query} onChange={event => setQuery(event.target.value)} />
+        <Input ref={input} id={fieldId} type="search" placeholder="Téléphone, horaires, confidentialité…" autoComplete="off" value={query} onChange={event => setQuery(event.target.value)} />
         <p className="visually-hidden" role="status">{results.length} résultat{results.length > 1 ? 's' : ''}</p>
         <ul className="search-results">{results.map(result => {
           const query: NavigationQuery = result.target ? { focus: result.target } : {};
@@ -31,13 +30,14 @@ export function SettingsSearch({ schoolId, navigate, beforeNavigate }: {
           const href = result.section ? consolePath(schoolId, result.section, query) : `/app/preferences?returnTo=${encodeURIComponent(window.location.pathname)}`;
           return <li key={result.id}><a className="settings-result" href={href} onClick={event => {
             if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return;
-            event.preventDefault(); close();
+            event.preventDefault(); navigated.current = true; close();
             if (result.section) navigate(result.section, query); else beforeNavigate(() => window.location.assign(href));
           }}><span className="result-label">{result.label}</span><span className="result-path">{result.group}</span></a></li>;
         })}</ul>
         {!results.length && <div className="settings-search-empty"><h3>Aucun réglage trouvé</h3><p>Essayez un autre mot, par exemple « horaires » ou « données ».</p><button type="button" className="button secondary" onClick={() => { setQuery(''); input.current?.focus(); }}>Effacer la recherche</button></div>}
       </div>
-    </dialog>
+    </DialogContent>
+    </Dialog>
   </>;
 }
 

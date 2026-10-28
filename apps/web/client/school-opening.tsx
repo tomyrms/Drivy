@@ -4,7 +4,7 @@ import { BrandSymbol } from './BrandSymbol';
 import { AccountMenu } from './preferences';
 import { endSession, request, sessionSchema, okSchema, type Session, RequestFailure } from './protocol';
 import { AccountEntry } from './account-entry';
-import { CheckField, Loading, Notice, TextField, formatDateTime } from './ui';
+import { CheckField, ConfirmDialog, Loading, Notice, TextField, formatDateTime } from './ui';
 import { openingState, openingPreview, openingReceipt, openingLinks, createdOpeningLink, openingLinkSchema,
   openingFailure, openingFieldErrors, schoolOpeningDestination, type OpeningFieldErrors, type OpeningLink, type OpeningFields, type OpeningReceipt } from './school-opening-model';
 
@@ -14,6 +14,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
   const [fields,setFields]=useState<OpeningFields>({schoolName:'',displayName:'',contactEmail:'',contactPhone:null,timeZone:'Europe/Zurich',instructs:false});
   const [fieldErrors,setFieldErrors]=useState<OpeningFieldErrors>({}),[invalidField,setInvalidField]=useState<keyof OpeningFields|null>(null);
   const [items,setItems]=useState<z.infer<typeof openingLinkSchema>[]>([]),[generated,setGenerated]=useState<string|null>(null),[generatedCode,setGeneratedCode]=useState<string|null>(null),[copied,setCopied]=useState(false);
+  const [revoking,setRevoking]=useState<z.infer<typeof openingLinkSchema>|null>(null);
   const operatorOperation=useRef<string|null>(null),started=useRef(false),heading=useRef<HTMLHeadingElement>(null),form=useRef<HTMLFormElement>(null);
   async function list() {
     const response=await request('operator/school-opening-links',openingLinks);setItems(response.data.items);
@@ -73,7 +74,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
   }
   async function revoke(id:string) {
     if(!session)return;setBusy(true);setError(null);
-    try{await request(`operator/school-opening-links/${id}/revoke`,z.object({data:openingLinkSchema}),{csrf:session.csrfToken,body:{operationId:crypto.randomUUID()}});await list();}
+    try{await request(`operator/school-opening-links/${id}/revoke`,z.object({data:openingLinkSchema}),{csrf:session.csrfToken,body:{operationId:crypto.randomUUID()}});await list();setRevoking(null);}
     catch(reason){setError(openingFailure(reason));}finally{setBusy(false);}
   }
   async function copy() {
@@ -101,7 +102,7 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
             </section>
             <section className="section" aria-labelledby="opening-links"><h2 id="opening-links">Liens créés</h2>
               {items.length===0?<p>Aucun lien créé.</p>:<ul className="opening-links">{items.map(item=><li key={item.id}><div className="row-text"><strong>{statuses[item.status]}</strong><span className="row-meta">Créé le {formatDateTime(item.createdAt)} · Expire le {formatDateTime(item.expiresAt)}</span></div>
-                {item.status==='AVAILABLE' && <button type="button" className="button quiet" disabled={busy} onClick={()=>void revoke(item.id)} aria-label={`Révoquer le lien créé le ${formatDateTime(item.createdAt)}`}>Révoquer</button>}</li>)}</ul>}
+                {item.status==='AVAILABLE' && <button type="button" className="button quiet" disabled={busy} onClick={()=>setRevoking(item)} aria-label={`Révoquer le lien créé le ${formatDateTime(item.createdAt)}`}>Révoquer</button>}</li>)}</ul>}
             </section>
           </> : !operator && ready && <form ref={form} noValidate className="panel form-grid" onSubmit={event=>{event.preventDefault();void createSchool();}}>
             <h2>Votre école</h2><fieldset disabled={busy || uncertain} className="opening-fields"><legend className="visually-hidden">Coordonnées de l’école et du responsable</legend>
@@ -117,5 +118,9 @@ export function SchoolOpeningPage({link,operator=false}:{link:OpeningLink;operat
           </form>}
       </>}
     </main><footer className="site-footer"><span>Drivy</span></footer>
+    <ConfirmDialog open={revoking !== null} title="Révoquer ce lien d’ouverture ?" confirmLabel="Révoquer le lien" busy={busy} onCancel={()=>setRevoking(null)} onConfirm={()=>{if(revoking)void revoke(revoking.id);}}>
+      <p>Le lien créé le {revoking ? formatDateTime(revoking.createdAt) : ''} ne permettra plus de créer une école.</p>
+      {error && <Notice tone="error" title={error} />}
+    </ConfirmDialog>
   </div>;
 }

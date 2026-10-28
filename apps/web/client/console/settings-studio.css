@@ -1,93 +1,84 @@
-/* Mercury's settings rhythm, using the shared Drivy palette and controls. */
-.settings-studio { --settings-label-width: 38%; }
-.settings-studio .config-sections { display: grid; gap: 2.5rem; }
-.settings-studio .settings-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; padding: 0; border: 0; }
-.settings-studio .settings-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; min-width: 0; }
-.settings-studio .settings-section-heading .section-title,
-.settings-studio .settings-section-heading h2 { font: 500 1.1875rem / 1.5 var(--font); flex: initial; }
-.settings-studio .settings-section-title { display: grid; gap: .25rem; justify-items: start; }
-.settings-studio .settings-section-heading .row-meta { font: var(--type-footnote); }
-.settings-studio .settings-section-body { max-inline-size: none; gap: 1.25rem; }
-.settings-studio .settings-values { display: grid; border-block-start: 1px solid var(--border); }
-.settings-studio .settings-values > div { display: grid; grid-template-columns: var(--settings-label-width) minmax(0, 1fr); gap: 1.5rem; padding-block: 1.375rem; border-block-end: 1px solid var(--border); align-items: baseline; }
-.settings-studio .settings-values dt { font-weight: 400; color: var(--text); }
-.settings-studio .settings-values dd { min-width: 0; }
-.settings-studio .settings-editor { max-inline-size: 36rem; gap: 1.5rem; padding-block-start: .25rem; }
-.settings-studio .settings-policy-editor { max-inline-size: 46rem; }
-.settings-studio .settings-editor .form-save-bar { margin-block-start: .25rem; }
-.settings-studio .settings-editor .form-save-bar,
-.settings-studio .settings-fields-form .form-save-bar { position: static; padding: 1rem 0 0; background: transparent; }
-.settings-studio .settings-document { border: 1px solid var(--border); border-radius: .625rem; padding: 1rem 1.25rem; }
-.settings-studio .settings-document > summary { min-height: 1.5rem; font-weight: 500; }
-.settings-studio .settings-document[open] > summary { margin-block-end: 1.5rem; }
-.settings-studio .settings-document h3 { margin-block: 1.5rem .5rem; font: 500 1rem / 1.5 var(--font); }
-.settings-studio .settings-document .policy-copy { max-inline-size: 72ch; }
-.settings-studio .settings-fields-form { gap: 0; }
-.settings-studio .settings-profile-fixed { border-block-end: 0; }
-.settings-studio .settings-profile-fields { display: grid; }
-.settings-studio .settings-profile-row { display: grid; grid-template-columns: var(--settings-label-width) minmax(0, 1fr); align-items: start; gap: 1.5rem; padding-block: 1.5rem; border-block-end: 1px solid var(--border); }
-.settings-studio .settings-profile-row h3 { padding-block-start: .625rem; font: var(--type-body); }
-.settings-studio .settings-profile-control { min-width: 0; display: grid; gap: 1rem; max-inline-size: 36rem; }
+/* EPIC 280 — réglages de l’école et compte. Tokens partagés Drivy. */
+.settings-studio { --settings-label-width: 36%; min-inline-size: 0; }
+.settings-studio .config-sections { display: grid; gap: 1.5rem; }
+.settings-studio .settings-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.settings-studio .settings-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 1rem; min-inline-size: 0; padding: 1.25rem 1.5rem; border-block-end: 1px solid var(--border); }
+.settings-studio .settings-section-heading .section-title, .settings-studio .settings-section-heading h2 { font: 600 1rem / 1.5 var(--font); flex: initial; }
+.settings-studio .settings-section-title { display: grid; gap: .375rem; justify-items: start; }
+.settings-studio .settings-section-heading .row-meta { font-size: .8125rem; }
+.settings-studio .settings-section-body { max-inline-size: none; display: grid; gap: 1.25rem; padding: 1.5rem; }
+.settings-studio .settings-values { display: grid; margin: 0; }
+.settings-studio .settings-values > div { display: grid; grid-template-columns: var(--settings-label-width) minmax(0, 1fr); gap: 1.25rem; padding-block: 1rem; align-items: center; }
+.settings-studio .settings-values > div + div { border-block-start: 1px solid var(--border); }
+.settings-studio .settings-values > div:first-child { padding-block-start: 0; }
+.settings-studio .settings-values > div:last-child { padding-block-end: 0; }
+.settings-studio .settings-values dt { font-size: .875rem; font-weight: 500; color: var(--muted); }
+.settings-studio .settings-values dd { min-inline-size: 0; margin: 0; font-size: .9375rem; overflow-wrap: anywhere; }
+.settings-studio .school-identity-row dd { display: flex; align-items: center; gap: .75rem; }
+.settings-studio .school-identity-mark { display: inline-grid; place-items: center; flex: none; inline-size: 2.75rem; block-size: 2.75rem; color: var(--accent); border: 1px solid var(--border); border-radius: .75rem; background: var(--accent-soft); }
+.settings-studio .settings-editor { max-inline-size: 42rem; gap: 1.5rem; }
+.settings-studio .settings-policy-editor { max-inline-size: 48rem; }
+.settings-studio .settings-editor .form-save-bar, .settings-studio .settings-fields-form .form-save-bar { position: static; padding: 1.25rem 0 0; border-block-start: 1px solid var(--border); background: transparent; }
+.settings-studio .settings-documents { display: grid; gap: .75rem; }
+.settings-studio .settings-document { border: 1px solid var(--border); border-radius: var(--radius-content); padding: .25rem 1rem; background: var(--surface-detail); }
+.settings-studio .settings-document > summary { min-block-size: 2.75rem; align-content: center; font-weight: 500; }
+.settings-studio .settings-document[open] { padding-block-end: 1.25rem; }
+.settings-studio .settings-document[open] > summary { margin-block-end: .75rem; }
+.settings-studio .settings-document h3 { margin-block: 1.5rem .5rem; font: 600 1rem / 1.5 var(--font); }
+.settings-studio .settings-document .policy-copy { max-inline-size: 72ch; white-space: pre-line; line-height: 1.75; overflow-wrap: anywhere; }
+.settings-studio .settings-readonly-context { display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: var(--muted); font-size: .875rem; padding-inline: 1.5rem; }
+.settings-studio .settings-readonly-context strong { font-weight: 500; color: var(--text); }
+.settings-studio .gps-setting-value { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.settings-studio .settings-gps > :is(.notice, .caption) { margin: 1rem 1.5rem; }
+.settings-studio .settings-fields-form { gap: 1.5rem; }
+.settings-studio .settings-profile-fixed { padding-block-end: .5rem; }
+.settings-studio .settings-profile-fields { display: grid; gap: 1rem; }
+.settings-studio .settings-profile-row { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: .75rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius-content); background: var(--surface-detail); }
+.settings-studio .settings-profile-row h3 { padding: 0; margin: 0; font: 600 .9375rem / 1.5 var(--font); }
+.settings-studio .settings-profile-control { min-inline-size: 0; display: grid; gap: 1rem; max-inline-size: 42rem; }
 .settings-studio .settings-profile-control .segment-field > legend { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .settings-studio .settings-profile-control .segment-options { flex-wrap: wrap; }
 .settings-studio .settings-profile-control .segment-option { flex: 1 1 auto; }
 .settings-studio .settings-profile-control .segment-option > span { white-space: normal; text-align: center; }
-.settings-studio .settings-fields-form > .disclosure { margin-block: 1.5rem; }
-.settings-studio .settings-fields-form > .field-error { margin-block: 0 1rem; }
-.settings-studio .settings-related > li { display: grid; grid-template-columns: var(--settings-label-width) minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding-block: 1.25rem; }
-.settings-studio .settings-related .row-title { font: var(--type-body); }
-.settings-studio .settings-related .row-meta { font: var(--type-subheadline); }
-
-.personal-preferences.settings-studio .site-header { width: min(100%, 68rem); }
-.personal-preferences.settings-studio .main { width: min(100%, 64rem); max-inline-size: none; gap: 2rem; padding-block-start: 2rem; }
-.personal-preferences.settings-studio .preferences-heading { display: flex; gap: 1rem; align-items: center; }
+.settings-studio .settings-related > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem 1rem; align-items: center; padding-block: 1rem; }
+.settings-studio .settings-related > li + li { border-block-start: 1px solid var(--border); }
+.settings-studio .settings-related .row-title { font-weight: 600; }
+.settings-studio .settings-related .row-meta { grid-column: 1; font-size: .875rem; }
+.settings-studio .settings-related .button { grid-column: 2; grid-row: 1 / span 2; }
+.settings-studio .settings-section > .disclosure { margin: 0 1.5rem 1.5rem; }
+.personal-preferences.settings-studio .preferences-heading { display: flex; gap: .75rem; align-items: center; }
 .personal-preferences.settings-studio .preferences-heading > .symbol { inline-size: 1.75rem; block-size: 1.75rem; }
-.personal-preferences.settings-studio .preferences-heading > .symbol svg { inline-size: 100%; block-size: 100%; }
-.personal-preferences.settings-studio .settings-section { padding-block-start: 1.5rem; border-block-start: 1px solid var(--border); }
-.personal-preferences.settings-studio .settings-section-body { max-inline-size: 44rem; }
-.personal-preferences.settings-studio .theme-control:not(.compact) > legend { color: var(--muted); font-weight: 400; }
+.personal-preferences.settings-studio .settings-section-body { max-inline-size: none; }
+.personal-preferences.settings-studio .theme-control:not(.compact) > legend { color: var(--muted); font-weight: 500; }
 .personal-preferences.settings-studio .theme-control:not(.compact) .theme-options { gap: 1rem; }
-.personal-preferences.settings-studio .theme-control:not(.compact) .theme-option { border-color: var(--border); border-radius: .75rem; padding: .75rem; gap: .75rem; background: var(--surface); font-size: .9375rem; }
-.personal-preferences.settings-studio .theme-control:not(.compact) .theme-option:has(input:checked) { border-color: var(--accent); background: var(--surface); font-weight: 500; }
-.personal-preferences.settings-studio .theme-control .theme-preview {
-  --preview-canvas: var(--preview-light-canvas); --preview-surface: var(--preview-light-surface); --preview-line: var(--preview-light-line);
-  display: grid; grid-template-columns: 27% minmax(0, 1fr); align-content: stretch; gap: 0; block-size: 7.25rem; padding: 0; border: 1px solid var(--preview-line); border-radius: .375rem; background: var(--preview-canvas);
-}
+.personal-preferences.settings-studio .theme-control:not(.compact) .theme-option { border-color: var(--border); border-radius: var(--radius-content); padding: .75rem; gap: .75rem; background: var(--surface); font-size: .875rem; }
+.personal-preferences.settings-studio .theme-control:not(.compact) .theme-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); font-weight: 600; }
+.personal-preferences.settings-studio .theme-control .theme-preview { --preview-canvas: var(--preview-light-canvas); --preview-surface: var(--preview-light-surface); --preview-line: var(--preview-light-line); display: grid; grid-template-columns: 27% minmax(0, 1fr); align-content: stretch; gap: 0; block-size: 7rem; padding: 0; border: 1px solid var(--preview-line); border-radius: .375rem; background: var(--preview-canvas); }
 .personal-preferences.settings-studio .theme-control .preview-dark { --preview-canvas: var(--preview-dark-canvas); --preview-surface: var(--preview-dark-surface); --preview-line: var(--preview-dark-line); }
 .personal-preferences.settings-studio .theme-preview-rail { display: flex; flex-direction: column; gap: .375rem; padding: .75rem .375rem; background: var(--preview-surface); border-inline-end: 1px solid var(--preview-line); }
-.personal-preferences.settings-studio .theme-preview-rail > i { display: block; height: .25rem; border-radius: 2px; background: var(--preview-line); opacity: .65; }
-.personal-preferences.settings-studio .theme-preview-rail > i:first-child { height: .375rem; margin-block-end: .5rem; background: var(--accent-fill); opacity: 1; }
+.personal-preferences.settings-studio .theme-preview-rail > i { display: block; block-size: .25rem; border-radius: 2px; background: var(--preview-line); }
+.personal-preferences.settings-studio .theme-preview-rail > i:first-child { block-size: .375rem; margin-block-end: .5rem; background: var(--accent-fill); }
 .personal-preferences.settings-studio .theme-preview-content { display: flex; flex-direction: column; align-items: stretch; gap: .625rem; padding: 1rem .625rem; }
-.personal-preferences.settings-studio .theme-preview-content > i { display: block; height: .3125rem; background: var(--preview-line); border-radius: 2px; opacity: .55; }
-.personal-preferences.settings-studio .theme-preview-content > i:first-child { width: 56%; height: .5rem; margin-block-end: .125rem; opacity: .9; }
-.personal-preferences.settings-studio .theme-control .preview-system { background: linear-gradient(115deg, var(--preview-light-canvas) 50%, var(--preview-dark-canvas) 50%); }
-
-@media (max-width: 900px) {
-  .settings-studio { --settings-label-width: 32%; }
-  .settings-studio .settings-profile-row { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-  .settings-studio .settings-profile-row h3 { padding: 0; }
-  .settings-studio .settings-profile-control { max-inline-size: none; }
+.personal-preferences.settings-studio .theme-preview-content > i { display: block; block-size: .3125rem; background: var(--preview-line); border-radius: 2px; }
+.personal-preferences.settings-studio .theme-preview-content > i:first-child { inline-size: 56%; block-size: .5rem; margin-block-end: .125rem; }
+.personal-preferences.settings-studio .theme-control .preview-system { background: var(--preview-light-canvas); box-shadow: inset -3rem 0 var(--preview-dark-canvas); }
+@container workspace (max-width: 40rem) {
+  .settings-studio .settings-section-heading, .settings-studio .settings-section-body { padding: 1rem; }
+  .settings-studio .settings-values > div { grid-template-columns: minmax(0, 1fr); gap: .375rem; }
+  .settings-studio .settings-values dd { font-size: 1rem; }
+  .settings-studio .settings-profile-row { padding: 1rem; }
+  .settings-studio .settings-section > .disclosure { margin: 0 1rem 1rem; }
+  .settings-studio .form-save-bar .button-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .settings-studio .form-save-bar .button-row > .button { flex: 1 1 auto; }
 }
 @media (max-width: 600px) {
-  .settings-studio .config-sections { gap: 2rem; }
-  .settings-studio .settings-section { gap: 1rem; }
-  .settings-studio .settings-values > div { grid-template-columns: minmax(0, 1fr); gap: .375rem; padding-block: 1.125rem; }
-  .settings-studio .settings-values dt { color: var(--muted); font-size: .875rem; }
-  .settings-studio .settings-values dd { font-size: 1rem; }
-  .settings-studio .form-save-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-  .settings-studio .form-save-bar .button-row { display: flex; flex-direction: row; justify-content: flex-end; flex-wrap: wrap; }
-  .settings-studio .form-save-bar .button-row > .button { inline-size: auto; flex: 0 1 auto; }
-  .settings-studio .settings-related > li { grid-template-columns: minmax(0, 1fr) auto; gap: .375rem .75rem; }
-  .settings-studio .settings-related .row-meta { grid-column: 1; }
-  .settings-studio .settings-related .button { grid-column: 2; grid-row: 1 / 3; }
-  .personal-preferences.settings-studio .main { padding-block-start: 1rem; }
   .personal-preferences.settings-studio .theme-control:not(.compact) .theme-options { gap: .5rem; }
-  .personal-preferences.settings-studio .theme-control:not(.compact) .theme-option { padding: .5rem; gap: .5rem; }
-  .personal-preferences.settings-studio .theme-control .theme-preview { block-size: 5rem; grid-template-columns: 25% minmax(0, 1fr); }
+  .personal-preferences.settings-studio .theme-control:not(.compact) .theme-option { padding: .5rem; }
+  .personal-preferences.settings-studio .theme-control .theme-preview { block-size: 5rem; }
   .personal-preferences.settings-studio .theme-preview-content { padding: .75rem .375rem; gap: .375rem; }
   .personal-preferences.settings-studio .theme-preview-rail { padding: .75rem .25rem; }
 }
 @media (forced-colors: active) {
-  .personal-preferences.settings-studio .theme-control:not(.compact) .theme-option { border-color: CanvasText; }
+  .settings-studio .settings-document, .personal-preferences.settings-studio .theme-control:not(.compact) .theme-option { border-color: CanvasText; }
   .personal-preferences.settings-studio .theme-control:not(.compact) .theme-option:has(input:checked) { outline: 2px solid Highlight; }
 }

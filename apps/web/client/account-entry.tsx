@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { z } from 'zod';
 import { errorMessage, okSchema, request, RequestFailure, sessionSchema } from './protocol';
-import { Notice, TextField } from './ui';
+import { Notice, Symbol, TextField } from './ui';
 import type { AccessKind } from './account-entry-route';
 
 /** What a code opens, as the server read it. */
@@ -48,6 +48,7 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
   const [firstName, setFirstName] = useState(''), [lastName, setLastName] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null), started = useRef(false);
+  const inFlight = useRef(false);
 
   useEffect(() => { if (started.current) heading.current?.focus({ preventScroll: true }); started.current = true; }, [step]);
   useEffect(() => {
@@ -56,10 +57,12 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
   }, []);
 
   async function run(action: (csrf: string) => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true); setError(null);
     try { await action((await request('session', sessionSchema)).csrfToken); }
     catch (cause) { setError(failure(cause)); }
-    finally { setBusy(false); }
+    finally { inFlight.current = false; setBusy(false); }
   }
   async function inspect(value: string, csrf: string) {
     const result = await request('access-code', codeSchema, { csrf, body: { code: codeFromInput(value) } });
@@ -96,6 +99,7 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
     : 'Créer votre compte';
 
   return <section className="sign-in account-entry" aria-labelledby="account-entry-title">
+    <div className="entry-icon"><Symbol kind={step === 'code' ? 'mail' : step === 'register' ? 'account' : 'lock'} bare /></div>
     {step === 'register' && schoolName && <p className="context">{schoolName}</p>}
     {signedIn
       ? <h2 id="account-entry-title" className="section-title" ref={heading} tabIndex={-1}>{title}</h2>
@@ -106,8 +110,8 @@ export function AccountEntry({ initialCode, invitation = false, signedIn = false
       <TextField name="email" label="E-mail" type="email" value={email} onChange={setEmail} autoComplete="username" inputMode="email" maxLength={254} required disabled={busy} />
       <TextField name="password" label="Mot de passe" type="password" value={password} onChange={setPassword} autoComplete="current-password" maxLength={128} required disabled={busy} />
       <button className="button primary" type="submit" disabled={busy || !email.trim() || !password}>{busy ? 'Connexion…' : 'Se connecter'}</button>
-      <a className="button quiet" href="/app/recover" target="_blank" rel="noopener noreferrer" onClick={() => setPassword('')}>Mot de passe oublié</a>
-      {kind === null && <button className="button secondary" type="button" disabled={busy} onClick={() => go('code')}>J’ai un code</button>}
+      <a className="entry-recovery" href="/app/recover" target="_blank" rel="noopener noreferrer" onClick={() => setPassword('')}>Mot de passe oublié<span className="visually-hidden"> (nouvel onglet)</span></a>
+      {kind === null && <div className="entry-secondary"><button className="button secondary" type="button" disabled={busy} onClick={() => go('code')}>J’ai un code</button></div>}
       {kind !== null && <button className="button quiet" type="button" disabled={busy} onClick={() => go('register')}>Créer un compte</button>}
     </form>}
 

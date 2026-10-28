@@ -6,7 +6,7 @@ import { useConsole, useLoad } from './context';
 import { LoadState, RecordSearch, SectionHeading } from './layout';
 import { useListState } from './list-state';
 import { PersonAvatar } from '../person-avatar';
-import './operations-studio.css';
+import './trips-workspace.css';
 
 function TripTime({ value, timeZone }: { value: string; timeZone: string }) {
   const instant = new Date(value);
@@ -30,7 +30,7 @@ export function TripsSection() {
     }
     return { ...await readPage(schoolId, 'captures', tripSchema, cursor), truncated: false };
   }, [schoolId, cursor, learner], `${schoolId}/${learner ?? ''}/${cursor ?? ''}`);
-  const dossier = (id: string, returning = false) => navigate('eleves', { selection: id, week: routeQuery?.week, instructor: routeQuery?.instructor,
+  const dossier = (id: string, returning = false) => navigate('eleves', { selection: id, week: routeQuery?.week, day: routeQuery?.day, instructor: routeQuery?.instructor,
     from: returning && routeQuery?.from === 'eleves' ? routeQuery.week ? 'agenda' : undefined : 'trajets',
     ...(!returning && learner ? { learner } : {}) });
   return <div className="section-stack trips-studio">
@@ -49,13 +49,14 @@ export function TripsSection() {
       <p className="list-summary" role="status">{visible.length} {visible.length === 1 ? 'trajet' : 'trajets'}{query ? visible.length === 1 ? ' trouvé' : ' trouvés' : ''}{!learner ? ` · page ${cursors.length}` : ''}</p>
       {visible.length === 0 ? <EmptyState symbol="route" title={page.items.length ? 'Aucun trajet trouvé' : page.truncated ? 'Aucun trajet dans cette partie de l’historique' : 'Aucun trajet'} message="" />
         : <table className="data-table record-table trip-table"><caption className="visually-hidden">{learner ? 'Trajets de l’élève' : 'Trajets de l’école'}</caption>
-          <thead><tr><th scope="col">Élève et moniteur</th><th scope="col">Trajet</th></tr></thead>
+          <thead><tr><th scope="col">Élève</th><th scope="col">Moniteur</th><th scope="col">Date</th><th scope="col">Durée</th></tr></thead>
           <tbody>{visible.map(trip => <tr key={trip.id}>
             <th scope="row"><div className="trip-person"><PersonAvatar name={trip.learnerName} />
-              <span className="trip-person-copy"><button type="button" className="row-button person-name" onClick={() => dossier(trip.learnerId)}>{trip.learnerName}</button><span className="row-meta">{trip.instructorName}</span></span>
+              <span className="trip-person-copy"><button type="button" className="row-button person-name" onClick={() => dossier(trip.learnerId)}>{trip.learnerName}</button></span>
             </div></th>
-            <td data-label="Trajet"><TripTime value={trip.authorizedAt} timeZone={trip.lessonTimeZone} />
-              <span className="trip-duration row-meta block">Durée : {tripDuration(trip)}</span></td>
+            <td data-label="Moniteur">{trip.instructorName}</td>
+            <td data-label="Date"><TripTime value={trip.authorizedAt} timeZone={trip.lessonTimeZone} /></td>
+            <td data-label="Durée"><span className="trip-duration">{tripDuration(trip)}</span></td>
           </tr>)}</tbody>
         </table>}
       {(cursors.length > 1 || page.nextCursor) && <nav className="record-footer" aria-label="Pages des trajets"><div className="button-row">

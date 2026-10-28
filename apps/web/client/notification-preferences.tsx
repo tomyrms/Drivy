@@ -64,6 +64,7 @@ export function NotificationPreferencesSection() {
         <button type="button" className="button quiet" onClick={() => store.useConfirmed()}>Garder les choix actuels</button>
       </div>}
       {(state.phase === 'unavailable' || state.phase === 'rejected') && <button type="button" className="button quiet" onClick={() => void store.refresh()}>Réessayer</button>}
+      <details className="notification-scope"><summary>Où sont reçues ces notifications ?</summary><p>Ces choix s’appliquent à votre compte Drivy. La réception dans l’app dépend aussi de l’autorisation donnée sur votre appareil. Ce portail web ne reçoit pas de notifications push.</p></details>
       {slow && <p role="status">Synchronisation en cours…</p>}
       <p className="visually-hidden" role="status">{state.phase === 'loading' ? 'Chargement des préférences.'
         : state.phase === 'saving' ? 'Choix en cours de synchronisation.' : state.phase === 'ready' ? 'Préférences synchronisées.' : ''}</p>

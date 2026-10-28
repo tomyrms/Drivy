@@ -1,10 +1,10 @@
 import { SharedTermsEditor } from './shared-terms-editor';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { readReference, termsListSchema, textProposalsLite, uncategorizedTariffsSchema, type CatalogueReference } from '../formation-api';
 import { readSchool } from '../school-api';
-import { EmptyState, Notice, StatusBadge, Symbol, formatCivilDate, formatDateTime, formatDuration } from '../ui';
+import { EmptyState, Notice, StatusBadge, Symbol, SelectField, TextField, formatCivilDate, formatDateTime, formatDuration } from '../ui';
 import { useConsole, useLoad } from './context';
 import { LoadState, SectionHeading } from './layout';
 import type { FormationView, NavigationQuery } from './route';
@@ -62,6 +62,7 @@ export function LegacyReferenceRoute({ section }: { section: SectionKey }) {
 
 /** Contenu exact d'une version, avec ses usages réels. */
 export function ReferenceContent({ reference }: { reference: CatalogueReference }) {
+  const { school } = useConsole();
   const status = <StatusBadge tone="neutral" symbol={reference.current ? 'check' : 'clock'}>{reference.current ? 'Version actuelle' : 'Version précédente'}</StatusBadge>;
   const usage = reference.programmes.length > 0 && <div className="reference-usage"><h3>Utilisé par</h3><ul className="plain-list">{reference.programmes.map(item =>
     <li key={item.offeringKey}>{item.label ?? 'Parcours'} du permis {item.categoryCode} · {item.current ? 'version actuelle' : 'version précédente'} ·{' '}
@@ -69,19 +70,19 @@ export function ReferenceContent({ reference }: { reference: CatalogueReference 
   switch (reference.kind) {
     case 'OFFERING': return <article className="reference-content" aria-labelledby="reference-title">
       <div className="settings-section-heading"><h2 id="reference-title" tabIndex={-1} className="section-title">Programme · version {reference.offering.version}</h2>{status}</div>
-      <p className="row-meta">Enregistrée le {formatDateTime(reference.offering.createdAt)}{reference.offering.label ? ` · ${reference.offering.label}` : ''}{!reference.offering.enabled ? ' · non proposée' : ''}</p>
+      <p className="row-meta">Enregistrée le {formatDateTime(reference.offering.createdAt, school.timeZone)}{reference.offering.label ? ` · ${reference.offering.label}` : ''}{!reference.offering.enabled ? ' · non proposée' : ''}</p>
       {reference.curriculum ? <><h3>Compétences</h3><CompetencyList items={reference.curriculum.competencies} /></> : <p className="empty-inline">Sans compétences enregistrées.</p>}
       {reference.procedure ? <RulesText procedure={reference.procedure} /> : <p className="empty-inline">Sans règles enregistrées.</p>}
     </article>;
     case 'CURRICULUM': return <article className="reference-content" aria-labelledby="reference-title">
       <div className="settings-section-heading"><h2 id="reference-title" tabIndex={-1} className="section-title">Compétences · révision {reference.curriculum.revision}</h2>{status}</div>
-      <p className="row-meta">Enregistrées le {formatDateTime(reference.curriculum.createdAt)}{!reference.curriculum.approved ? ' · jamais appliquées' : ''}</p>
+      <p className="row-meta">Enregistrées le {formatDateTime(reference.curriculum.createdAt, school.timeZone)}{!reference.curriculum.approved ? ' · jamais appliquées' : ''}</p>
       {reference.programmes.length === 0 && <p className="caption">Élément non rattaché à un parcours.</p>}
       <CompetencyList items={reference.curriculum.competencies} />{usage}
     </article>;
     case 'PROCEDURE': return <article className="reference-content" aria-labelledby="reference-title">
       <div className="settings-section-heading"><h2 id="reference-title" tabIndex={-1} className="section-title">Déroulement et annulation · version {reference.procedure.version}</h2>{status}</div>
-      <p className="row-meta">Enregistrés le {formatDateTime(reference.procedure.createdAt)}{!reference.procedure.approved ? ' · jamais appliqués' : ''}</p>
+      <p className="row-meta">Enregistrés le {formatDateTime(reference.procedure.createdAt, school.timeZone)}{!reference.procedure.approved ? ' · jamais appliqués' : ''}</p>
       {reference.programmes.length === 0 && <p className="caption">Élément non rattaché à un parcours.</p>}
       <RulesText procedure={reference.procedure} />{usage}
     </article>;
@@ -94,7 +95,7 @@ export function ReferenceContent({ reference }: { reference: CatalogueReference 
           <div><dt>Prix</dt><dd>{formatCents(reference.tariff.unitPriceCents)} par {reference.tariff.unitLabel}</dd></div>
           {reference.tariff.durationMinutes && <div><dt>Durée</dt><dd>{formatDuration(reference.tariff.durationMinutes)}</dd></div>}
           <div><dt>Validité</dt><dd>{reference.tariff.validUntil ? `Du ${formatCivilDate(reference.tariff.validFrom)} au ${formatCivilDate(reference.tariff.validUntil)}` : `À partir du ${formatCivilDate(reference.tariff.validFrom)}`}</dd></div>
-          <div><dt>Enregistré le</dt><dd>{formatDateTime(reference.tariff.createdAt)}</dd></div>
+          <div><dt>Enregistré le</dt><dd>{formatDateTime(reference.tariff.createdAt, school.timeZone)}</dd></div>
           {reference.current && badge && <div><dt>État</dt><dd><StatusBadge tone={badge.tone} symbol="dot">{badge.label}</StatusBadge></dd></div>}
         </dl>
         <h3>Conditions commerciales</h3>{reference.terms ? <p className="policy-copy">{reference.terms.termsText}</p> : <p className="caption">Non visibles avec vos accès.</p>}
@@ -119,24 +120,35 @@ export function TermsArchiveSection() {
   const { schoolId, routeQuery = {} } = useConsole();
   const { revision } = useCommandSnapshot();
   const selection = routeQuery.selection;
+  const [search, setSearch] = useState('');
+  const [usage, setUsage] = useState('all');
   const list = useLoad(() => readSchool(schoolId, 'formations/terms', termsListSchema), [schoolId, revision]);
   const detail = useLoad(async () => selection ? readReference(schoolId, selection) : null, [schoolId, selection, revision], `${schoolId}/${selection ?? ''}`);
   return <div className="section-stack formation-studio settings-studio">
     <div className="formation-back"><ConsoleLink section="formations" query={{}} className="button quiet compact"><Symbol kind="back" bare />Formations et tarifs</ConsoleLink></div>
-    <SectionHeading title="Conditions commerciales" symbol="file" />
+    <SectionHeading title="Conditions commerciales" symbol="file" actions={selection ? <ConsoleLink section="conditions" query={{}} className="button secondary"><Symbol kind="back" bare />Toutes les conditions</ConsoleLink> : undefined} />
     {selection && <section className="settings-section"><LoadState loaded={detail} label="Lecture des conditions…">{value => value && (value.kind === 'TERMS'
       ? <ReferenceContent reference={value} /> : <Notice tone="info" title="Cet élément n’est pas une version de conditions"><p>
         <ConsoleLink section="formations" query={{ selection: value.id }}>Ouvrir l’élément</ConsoleLink></p></Notice>)}</LoadState></section>}
-    <LoadState loaded={list} label="Lecture des conditions…">{data => data.items.length === 0 ? <EmptyState symbol="file" title="Aucune condition commerciale" />
-      : <table className="data-table record-table">
-        <caption className="visually-hidden">Conditions commerciales enregistrées{data.truncated ? ' (500 plus récentes)' : ''}</caption>
-        <thead><tr><th scope="col">Conditions</th><th scope="col">Validité</th><th scope="col" className="numeric">Tarifs actuels</th></tr></thead>
-        <tbody>{data.items.map(item => <tr key={item.id} className={item.id === selection ? 'selected' : undefined}>
-          <th scope="row"><ConsoleLink section="conditions" query={{ selection: item.id }} className="row-link">{item.label} · v{item.version}</ConsoleLink></th>
-          <td data-label="Validité">{item.validUntil ? `${formatCivilDate(item.validFrom)} – ${formatCivilDate(item.validUntil)}` : `dès le ${formatCivilDate(item.validFrom)}`}</td>
-          <td className="numeric" data-label="Tarifs actuels">{item.currentTariffs}</td>
-        </tr>)}</tbody>
-      </table>}</LoadState>
+    {!selection && <LoadState loaded={list} label="Lecture des conditions…">{data => {
+      const items = data.items.filter(item => item.label.toLocaleLowerCase('fr-CH').includes(search.trim().toLocaleLowerCase('fr-CH'))
+        && (usage === 'all' || (usage === 'used' ? item.currentTariffs > 0 : item.currentTariffs === 0)));
+      return data.items.length === 0 ? <EmptyState symbol="file" title="Aucune condition commerciale" /> : <section className="catalogue-directory" aria-label="Versions des conditions">
+        <div className="catalogue-toolbar"><TextField label="Rechercher des conditions" placeholder="Rechercher des conditions" value={search} onChange={setSearch} />
+          <SelectField label="Utilisation" value={usage} onChange={setUsage} appearance="filter" options={[{ value: 'all', label: 'Toutes les versions' }, { value: 'used', label: 'Utilisées' }, { value: 'unused', label: 'Sans tarif actuel' }]} />
+        </div>
+        {data.truncated && <Notice tone="warning" title="Historique partiel" live={false}><p>Les 500 versions les plus récentes sont chargées.</p></Notice>}
+        {items.length === 0 ? <EmptyState symbol="search" title="Aucune condition trouvée" action={<button className="button secondary" type="button" onClick={() => { setSearch(''); setUsage('all'); }}>Réinitialiser les filtres</button>} /> : <table className="data-table record-table terms-table">
+          <caption className="visually-hidden">Conditions commerciales enregistrées</caption>
+          <thead><tr><th scope="col">Conditions</th><th scope="col">Validité</th><th scope="col" className="numeric">Tarifs actuels</th></tr></thead>
+          <tbody>{items.map(item => <tr key={item.id}>
+            <th scope="row"><ConsoleLink section="conditions" query={{ selection: item.id }} className="row-link">{item.label}<span className="row-meta">v{item.version}</span></ConsoleLink></th>
+            <td data-label="Validité">{item.validUntil ? `${formatCivilDate(item.validFrom)} – ${formatCivilDate(item.validUntil)}` : `dès le ${formatCivilDate(item.validFrom)}`}</td>
+            <td className="numeric" data-label="Tarifs actuels">{item.currentTariffs}</td>
+          </tr>)}</tbody>
+        </table>}
+      </section>;
+    }}</LoadState>}
   </div>;
 }
 

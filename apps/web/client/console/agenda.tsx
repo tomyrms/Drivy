@@ -49,11 +49,24 @@ export function AgendaSection() {
   const [localMonday, setLocalMonday] = useState(() => weekStart(civilDateIn(school.timeZone)));
   const [localInstructor, setLocalInstructor] = useState('');
   const [search, setSearch] = useListState('agenda/search', '');
-  const monday = routeQuery ? weekStart(routeQuery.week ?? civilDateIn(school.timeZone)) : localMonday;
+  const [view, setView] = useListState<'day' | 'week'>('agenda/view', () => window.matchMedia('(max-width: 767px)').matches ? 'day' : 'week');
+  const [filtersOpen, setFiltersOpen] = useListState('agenda/filters-open', false);
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const change = () => setCompact(media.matches);
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
+  const [selectedDay, setSelectedDay] = useListState('agenda/day', () => civilDateIn(school.timeZone));
+  const monday = routeQuery ? weekStart(routeQuery.week ?? routeQuery.day ?? civilDateIn(school.timeZone)) : localMonday;
+  const chosenDay = routeQuery?.day ?? selectedDay;
+  const activeDay = weekStart(chosenDay) === monday ? chosenDay : monday;
   const [jumpDate, setJumpDate] = useState(monday);
   useEffect(() => setJumpDate(monday), [monday]);
   const instructor = routeQuery ? routeQuery.instructor ?? '' : localInstructor;
   const setMonday = (week: string) => { setLocalMonday(week); setRouteQuery?.({ ...routeQuery, week }); };
+  const chooseDay = (day: string) => { setSelectedDay(day); setLocalMonday(weekStart(day)); setRouteQuery?.({ ...routeQuery, week: weekStart(day), day }); };
   const setInstructor = (id: string) => { setLocalInstructor(id); setRouteQuery?.({ ...routeQuery, instructor: id || undefined }); };
   const bounds = weekWindow(monday, school.timeZone);
   const directory = useLoad(async () => {
@@ -90,12 +103,24 @@ export function AgendaSection() {
     document.addEventListener('visibilitychange', refreshIfStale);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfStale); };
   }, [refreshLessons, refreshDirectory, refreshCourses]);
-  const [course, setCourse] = useState<{ id: string | null; occurrenceId?: string } | null>(null);
-  const [lesson, setLesson] = useState<{ id: string | null } | null>(() => routeQuery?.view === 'nouvelle' ? { id: null } : null);
-  useEffect(() => { if (routeQuery?.view === 'nouvelle') setLesson({ id: null }); }, [routeQuery?.view, routeQuery?.learner]);
+  const [localCourse, setCourse] = useState<{ id: string | null; occurrenceId?: string | undefined } | null>(null);
+  const [localLesson, setLesson] = useState<{ id: string | null } | null>(null);
+  const course = routeQuery ? routeQuery.course ? { id: routeQuery.course, occurrenceId: routeQuery.occurrence } : routeQuery.view === 'nouveau-cours' ? { id: null } : null : localCourse;
+  const lesson = routeQuery ? routeQuery.lesson ? { id: routeQuery.lesson } : routeQuery.view === 'nouvelle' ? { id: null } : null : localLesson;
+  const returnScroll = useRef(0);
   const changeWorkspace = (action: () => void) => confirmNavigation ? confirmNavigation(action) : action();
-  const openLesson = (id: string | null) => changeWorkspace(() => { setCourse(null); setLesson({ id }); if (id) setRouteQuery?.({ ...routeQuery, lesson: id, view: undefined }, true, true); });
-  const openCourse = (selection: { id: string | null; occurrenceId?: string }) => changeWorkspace(() => { setLesson(null); setCourse(selection); });
+  const openLesson = (id: string | null) => changeWorkspace(() => {
+    returnScroll.current = window.scrollY; setCourse(null); setLesson({ id });
+    setRouteQuery?.({ ...routeQuery, week: monday, day: activeDay, lesson: id ?? undefined, course: undefined, occurrence: undefined, view: id ? undefined : 'nouvelle' }, false, true);
+  });
+  const openCourse = (selection: { id: string | null; occurrenceId?: string }) => changeWorkspace(() => {
+    returnScroll.current = window.scrollY; setLesson(null); setCourse(selection);
+    setRouteQuery?.({ ...routeQuery, week: monday, day: activeDay, lesson: undefined, course: selection.id ?? undefined, occurrence: selection.occurrenceId, view: selection.id ? undefined : 'nouveau-cours' }, false, true);
+  });
+  const closeWorkspace = (focusId?: string) => {
+    setLesson(null); setCourse(null); setRouteQuery?.({ ...routeQuery, lesson: undefined, course: undefined, occurrence: undefined, view: undefined }, false, true);
+    window.requestAnimationFrame(() => { document.getElementById(focusId ?? '')?.focus({ preventScroll: true }); window.scrollTo({ top: returnScroll.current }); });
+  };
   const [coursePolicy, setCoursePolicy] = useState(false);
   const reloadCourses = courses.refresh ?? courses.reload;
   const instructors = useMemo(() => activeInstructors(directory.data?.members ?? []), [directory.data]);
@@ -105,7 +130,8 @@ export function AgendaSection() {
   const days = useMemo(() => bounds ? agendaDays(lessonsOfLearners(data?.lessons ?? [], directory.data?.learners ?? [], searchQuery), courses.data ?? [], {
     ...bounds, timeZone: school.timeZone, instructor, includeCourses: !searchingLearner,
   }) : [], [data, directory.data, courses.data, searchQuery, searchingLearner, instructor, bounds?.from, bounds?.to, school.timeZone]);
-  const counts = agendaCounts(days.flatMap(day => day.items));
+  const displayedDays = view === 'day' ? days.filter(day => day.day === activeDay) : days;
+  const displayedCounts = agendaCounts(displayedDays.flatMap(day => day.items));
   // The current API caps course-series at 200 without a cursor: reaching the cap cannot prove completeness.
   const courseLimitReached = (courses.data?.length ?? 0) >= 200;
   const partial = data?.truncated === true || directory.data?.truncated === true || courseLimitReached;
@@ -116,55 +142,80 @@ export function AgendaSection() {
   const initialLoading = [loaded, directory, courses].some(source => source.status === 'loading');
   const learnerName = (id: string) => directory.data?.learners.find(item => item.id === id)?.displayName ?? 'Élève';
   const memberName = (id: string) => directory.data?.members.find(item => item.id === id)?.displayName ?? 'Moniteur';
-  const thisWeek = weekStart(civilDateIn(school.timeZone));
   const weekLabel = useRef<HTMLSpanElement>(null);
   const restoredFocus = useRef<string | null>(null);
   const selectedLessonVisible = days.some(day => day.items.some(event => event.kind === 'lesson' && event.lesson.id === routeQuery?.lesson));
   useEffect(() => {
     const key = routeQuery?.lesson ? `${monday}/${instructor}/${routeQuery.lesson}` : null;
     if (!key) { restoredFocus.current = null; return; }
-    if (loaded.status !== 'ready' || restoredFocus.current === key) return;
+    if (lesson || course || loaded.status !== 'ready' || restoredFocus.current === key) return;
     const target = document.getElementById(`agenda-lesson-${routeQuery?.lesson}`) ?? weekLabel.current;
     target?.focus(); restoredFocus.current = key;
   }, [routeQuery?.lesson, monday, instructor, loaded.status, selectedLessonVisible]);
 
   return (
-    <div className="section-stack agenda-studio">
-      <SectionHeading context="Planning" title="Agenda" actions={<div className="agenda-freshness">
-        <AgendaAddMenu canCreateCourse={catalogue.data?.canManage === true} onLesson={() => openLesson(null)} onCourse={() => openCourse({ id: null })} />
-        {catalogue.data?.canManage === true && <button type="button" className="button quiet" onClick={() => setCoursePolicy(true)}>Réglages des cours</button>}
-        {freshness.readAt !== undefined && <span className="caption">{freshness.complete ? 'À jour à ' : 'Lecture partielle à '}<time dateTime={new Date(freshness.readAt).toISOString()}>{formatClock(freshness.readAt, school.timeZone)}</time></span>}
-        <button type="button" className="button quiet" onClick={refreshNow} disabled={initialLoading} aria-busy={initialLoading}>
-          <Symbol kind="refresh" bare />Actualiser</button>
-      </div>} />
+    <div className="section-stack agenda-workspace">
       {lesson && <LessonWorkspace key={lesson.id ?? `new/${routeQuery?.learner ?? ''}`} lessonId={lesson.id} learnerId={routeQuery?.learner}
-        onClose={() => { setLesson(null); if (routeQuery?.view === 'nouvelle') setRouteQuery?.({ ...routeQuery, view: undefined }, true, true); window.requestAnimationFrame(() => document.getElementById(`agenda-lesson-${lesson.id}`)?.focus()); }}
-        onSaved={refreshNow} onDossier={(learnerId, lessonId) => navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: monday, instructor: instructor || undefined })} />}
+        onClose={() => closeWorkspace(`agenda-lesson-${lesson.id}`)}
+        onSaved={refreshNow} onDossier={(learnerId, lessonId) => navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: monday, day: activeDay, instructor: instructor || undefined })} />}
       {catalogue.data?.canManage === true && <CoursePolicyDialog open={coursePolicy} catalogue={catalogue.data} onClose={() => setCoursePolicy(false)} onSaved={catalogue.reload} />}
       {course && catalogue.data && <CourseWorkspace key={`${course.id ?? 'new'}/${course.occurrenceId ?? ''}`} seriesId={course.id} selectedOccurrenceId={course.occurrenceId} catalogue={catalogue.data}
-        onClose={() => { setCourse(null); window.requestAnimationFrame(() => document.getElementById(`agenda-course-${course.id}-${course.occurrenceId}`)?.focus()); }}
-        onSaved={saved => { reloadCourses(); setCourse(saved ? { id: saved.id, ...(course.id === saved.id && course.occurrenceId ? { occurrenceId: course.occurrenceId } : {}) } : null); }} />}
+        onClose={() => closeWorkspace(`agenda-course-${course.id}-${course.occurrenceId}`)}
+        onSaved={saved => {
+          reloadCourses();
+          const occurrenceId = saved && course.id === saved.id ? course.occurrenceId : undefined;
+          setCourse(saved ? { id: saved.id, occurrenceId } : null);
+          setRouteQuery?.({ ...routeQuery, course: saved?.id, occurrence: occurrenceId, view: undefined }, true, true);
+        }} />}
+      {course && !catalogue.data && <><AgendaSourceState loaded={catalogue} name="Cours" /><button type="button" className="button secondary" onClick={() => closeWorkspace()}>Retour à l’agenda</button></>}
+      <div className="section-stack agenda-browser" hidden={Boolean(lesson || course)}>
+      <SectionHeading context="Planning" title="Agenda" actions={<AgendaAddMenu canCreateCourse={catalogue.data?.canManage === true} onLesson={() => openLesson(null)} onCourse={() => openCourse({ id: null })} />} />
       <PlanningReadinessBanner refreshKey={preparationRefresh} />
       {school.status === 'ACTIVE' && <FirstLessonActions refreshKey={preparationRefresh} />}
-      <div className="agenda-studio-toolbar">
+      <div className="agenda-toolbar">
         <div className="agenda-period" role="group" aria-label="Semaine affichée">
           <span className="agenda-period-label" aria-live="polite" ref={weekLabel} tabIndex={-1}>{formatWeek(monday)}</span>
           <div className="agenda-period-controls">
             <button type="button" className="button secondary" aria-label="Semaine précédente" onClick={() => setMonday(addDays(monday, -7))}><Symbol kind="back" bare /></button>
+            <button type="button" className="button secondary agenda-today" aria-label="Aujourd’hui" onClick={() => { chooseDay(civilDateIn(school.timeZone)); window.requestAnimationFrame(() => weekLabel.current?.focus()); }}><span className="agenda-today-full">Aujourd’hui</span><span className="agenda-today-short" aria-hidden="true">Auj.</span></button>
             <button type="button" className="button secondary" aria-label="Semaine suivante" onClick={() => setMonday(addDays(monday, 7))}><span className="flip"><Symbol kind="back" bare /></span></button>
           </div>
-          {monday !== thisWeek && <button type="button" className="button quiet" onClick={() => { setMonday(thisWeek); window.requestAnimationFrame(() => weekLabel.current?.focus()); }}>Aujourd’hui</button>}
         </div>
-        <form className="agenda-date-jump" onSubmit={event => {
+        <div className="agenda-view-switch" role="group" aria-label="Présentation du planning">
+          <button type="button" className="button quiet" aria-pressed={view === 'day'} onClick={() => setView('day')}>Jour</button>
+          <button type="button" className="button quiet" aria-pressed={view === 'week'} onClick={() => setView('week')}>Semaine</button>
+        </div>
+      </div>
+      <div className="agenda-day-picker" role="group" aria-label="Choisir un jour">{Array.from({ length: 7 }, (_, index) => addDays(monday, index)).map(date => {
+        const [weekday] = formatDayHeading(date).split(' ');
+        return <button key={date} type="button" className="agenda-date-button" aria-pressed={view === 'day' && activeDay === date}
+          aria-label={formatDayHeading(date)} aria-current={date === civilDateIn(school.timeZone) ? 'date' : undefined} onClick={() => { chooseDay(date); setView('day'); }}>
+          <span>{weekday?.slice(0, 3)}</span><time dateTime={date}>{Number(date.slice(-2))}</time>
+        </button>;
+      })}</div>
+      <div className="agenda-readline">
+        <button type="button" className="button secondary agenda-filter-toggle" aria-expanded={filtersOpen} aria-controls="agenda-filters" onClick={() => setFiltersOpen(!filtersOpen)}>
+          <Symbol kind="list" bare />Filtres{Boolean(instructor || search.trim()) && <span> · {Number(Boolean(instructor)) + Number(Boolean(search.trim()))}</span>}
+        </button>
+        <p className="list-summary" role="status">{search.trim() && !directory.data
+          ? 'Recherche suspendue : répertoire indisponible.'
+          : `${agendaCountLabel(displayedCounts, searchingLearner)}${!emptyIsConfirmed ? ' · lecture partielle' : searchingLearner ? ' · parmi les leçons' : ''}`}</p>
+        <div className="agenda-freshness">
+          {freshness.readAt !== undefined && <span className="caption">{freshness.complete ? 'À jour à ' : 'Lecture partielle à '}<time dateTime={new Date(freshness.readAt).toISOString()}>{formatClock(freshness.readAt, school.timeZone)}</time></span>}
+          <button type="button" className="button quiet" onClick={refreshNow} disabled={initialLoading} aria-busy={initialLoading}><Symbol kind="refresh" bare /><span className="visually-hidden">Actualiser</span></button>
+        </div>
+      </div>
+      <div className="agenda-tools" id="agenda-filters" hidden={compact && !filtersOpen}>
+        <details className="agenda-date-disclosure"><summary><Symbol kind="calendar" bare />Choisir une date</summary><form className="agenda-date-jump" onSubmit={event => {
           event.preventDefault();
           if (!isCivilDate(jumpDate)) return;
-          setMonday(weekStart(jumpDate));
+          chooseDay(jumpDate);
           window.requestAnimationFrame(() => weekLabel.current?.focus());
         }}>
           <TextField label="Aller à une date" type="date" required value={jumpDate} onChange={setJumpDate} />
-          <button type="submit" className="button secondary">Afficher la semaine</button>
-        </form>
-        <div className="agenda-studio-filters">
+          <button type="submit" className="button secondary">Afficher</button>
+        </form></details>
+        <div className="agenda-filters">
           {(instructors.length > 1 || instructor) && <SelectField label="Moniteur" value={instructor} onChange={setInstructor} search appearance="filter"
             options={[{ value: '', label: 'Tous les moniteurs' }, ...instructors.map(item => ({ value: item.id, label: distinctLabel(item.displayName, instructorReferences.get(item.id)) })),
               ...(instructor && !instructors.some(item => item.id === instructor) ? [{ value: instructor, label: memberName(instructor) }] : [])]} />}
@@ -179,11 +230,8 @@ export function AgendaSection() {
         {data?.truncated && <Notice tone="warning" title="Leçons partiellement chargées" live={false}><p>Trop de leçons pour cette semaine : choisissez un moniteur.</p></Notice>}
         {directory.data?.truncated && <Notice tone="warning" title="Répertoire partiellement chargé" live={false}><p>Les noms, filtres et résultats de recherche peuvent être incomplets.</p></Notice>}
         {courseLimitReached && <Notice tone="warning" title="Cours potentiellement incomplets" live={false}><p>Certains cours de cette semaine peuvent manquer.</p></Notice>}
-        <p className="list-summary" role="status">{search.trim() && !directory.data
-          ? 'Recherche suspendue : le répertoire des élèves est en cours de lecture ou indisponible.'
-          : `${agendaCountLabel(counts, searchingLearner)}${!emptyIsConfirmed ? ' · lecture partielle' : searchingLearner ? ' · recherche parmi les leçons' : ' cette semaine'}`}</p>
-        {days.length === 0 ? emptyIsConfirmed && <EmptyState symbol="clock" title={searchingLearner ? 'Aucune leçon trouvée' : 'Aucun rendez-vous cette semaine'} message="" />
-          : <div className="agenda-week-list">{days.map(day => {
+        {displayedDays.length === 0 ? emptyIsConfirmed && <EmptyState symbol="clock" title={searchingLearner ? 'Aucune leçon trouvée' : view === 'day' ? 'Aucun rendez-vous ce jour' : 'Aucun rendez-vous cette semaine'} message="" />
+          : <div className={`agenda-week-list agenda-view-${view}`}>{displayedDays.map(day => {
             const [weekday, ...date] = formatDayHeading(day.day).split(' ');
             return <section key={day.day} className="agenda-day" aria-labelledby={`day-${day.day}`}>
             <div className="agenda-day-heading">
@@ -232,6 +280,8 @@ export function AgendaSection() {
               </li>;
             })}</ul>
           </section>; })}</div>}
+      {catalogue.data?.canManage === true && <div className="agenda-footer"><button type="button" className="button quiet" onClick={() => setCoursePolicy(true)}><Symbol kind="settings" bare />Réglages des cours</button></div>}
+      </div>
     </div>
   );
 }

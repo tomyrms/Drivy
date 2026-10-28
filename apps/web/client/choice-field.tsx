@@ -1,6 +1,8 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Select } from '@base-ui/react/select';
 import { Combobox } from '@base-ui/react/combobox';
+import { Field, FieldLabel, FieldDescription, FieldError } from './components/ui/field';
+import { UiSuspendedContext } from './ui-suspension';
 import './choice-field.css';
 
 export type ChoiceOption<T extends string> = { value: T; label: string; disabled?: boolean };
@@ -28,21 +30,22 @@ function Check() {
   return <svg className="choice-check" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m4.5 10 3.5 3.5 7.5-7.5" /></svg>;
 }
 function FieldCopy({ id, hint, error }: { id: string; hint?: string | undefined; error?: string | null | undefined }) {
-  return <>{hint && <p className="caption field-hint" id={`${id}-hint`}>{hint}</p>}
-    {error && <p className="field-error" id={`${id}-error`}>{error}</p>}</>;
+  return <>{hint && <FieldDescription className="caption field-hint" id={`${id}-hint`}>{hint}</FieldDescription>}
+    {error && <FieldError className="field-error" id={`${id}-error`}>{error}</FieldError>}</>;
 }
 const descriptions = (id: string, hint?: string, error?: string | null) =>
   [hint ? `${id}-hint` : '', error ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined;
 
 /** Portals escape clipping, but remain inside a native dialog's modal top layer. */
 function useChoiceEnvironment(disabled: boolean | undefined) {
+  const suspended = useContext(UiSuspendedContext);
   const frame = useRef<HTMLDivElement>(null);
   const [inheritedDisabled, setInheritedDisabled] = useState(false);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | undefined>(undefined);
   useLayoutEffect(() => {
     const element = frame.current;
     if (!element) return;
-    setPortalContainer(element.closest('dialog') ?? undefined);
+    setPortalContainer(element.closest<HTMLElement>('dialog, [data-slot="dialog-content"]') ?? undefined);
     const fieldsets: HTMLFieldSetElement[] = [];
     for (let parent = element.parentElement; parent; parent = parent.parentElement) {
       if (parent instanceof HTMLFieldSetElement) fieldsets.push(parent);
@@ -56,14 +59,14 @@ function useChoiceEnvironment(disabled: boolean | undefined) {
     fieldsets.forEach(fieldset => observer.observe(fieldset, { attributes: true, attributeFilter: ['disabled'] }));
     return () => observer.disconnect();
   }, []);
-  return { frame, portalContainer, unavailable: !!disabled || inheritedDisabled };
+  return { frame, portalContainer, suspended, unavailable: suspended || !!disabled || inheritedDisabled };
 }
 
 /** Single choice. The search string is temporary UI state and is never emitted as a value. */
 export function SelectField<T extends string>({ id: suppliedId, name, label, value, onChange, options, hint, error, disabled, required,
   placeholder = 'Choisir', appearance = 'default', search = options.length > 7 }: ChoiceFieldProps<T>) {
   const generatedId = useId(), id = suppliedId ?? generatedId;
-  const { frame, portalContainer, unavailable } = useChoiceEnvironment(disabled);
+  const { frame, portalContainer, unavailable, suspended } = useChoiceEnvironment(disabled);
   const [open, setOpen] = useState(false), [query, setQuery] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const selected = options.find(option => option.value === value) ?? null;
@@ -90,7 +93,7 @@ export function SelectField<T extends string>({ id: suppliedId, name, label, val
       itemToStringLabel={option => option.label} itemToStringValue={option => option.value} isItemEqualToValue={(a, b) => a.value === b.value}>
       <Combobox.Trigger {...triggerProps}>{triggerCopy}</Combobox.Trigger>
       <Combobox.Portal container={portalContainer}>
-        <Combobox.Positioner className="choice-positioner" sideOffset={6} align="start" positionMethod="fixed">
+        <Combobox.Positioner className="choice-positioner" {...(suspended ? { hidden: true } : {})} sideOffset={6} align="start" positionMethod="fixed">
           <Combobox.Popup className="choice-popup" initialFocus={input}>
             <div className="choice-search-wrap"><Combobox.Input ref={input} className="choice-search" aria-label={`Rechercher : ${label}`} placeholder="Rechercher…" /></div>
             <Combobox.Empty className="choice-empty">Aucun résultat</Combobox.Empty>
@@ -107,21 +110,21 @@ export function SelectField<T extends string>({ id: suppliedId, name, label, val
       onValueChange={next => choose(options.find(option => option.value === next) ?? null)}>
       <Select.Trigger {...triggerProps}>{triggerCopy}</Select.Trigger>
       <Select.Portal container={portalContainer}>
-        <Select.Positioner className="choice-positioner" sideOffset={6} align="start" positionMethod="fixed" alignItemWithTrigger={false}>
-          <Select.Popup className="choice-popup"><Select.List className="choice-list">
+        <Select.Positioner className="choice-positioner" {...(suspended ? { hidden: true } : {})} sideOffset={6} align="start" positionMethod="fixed" alignItemWithTrigger={false}>
+          <Select.Popup className="choice-popup"><Select.List className="choice-list"><Select.Group>
             {options.map(option => <Select.Item key={option.value} value={option.value} disabled={option.disabled} className="choice-option">
               <Select.ItemText>{option.label}</Select.ItemText><Select.ItemIndicator className="choice-indicator"><Check /></Select.ItemIndicator>
             </Select.Item>)}
             {options.length === 0 && <p className="choice-empty">Aucun choix disponible</p>}
-          </Select.List></Select.Popup>
+          </Select.Group></Select.List></Select.Popup>
         </Select.Positioner>
       </Select.Portal>
     </Select.Root>;
   }
-  return <div ref={frame} className={`field choice-field${error ? ' invalid' : ''}${appearance === 'filter' ? ' choice-filter' : ''}`}>
-    <label id={labelId} htmlFor={id}>{label}{required === false && <span className="optional">Facultatif</span>}</label>
+  return <Field ref={frame} data-invalid={!!error} data-disabled={unavailable} className={`field choice-field${error ? ' invalid' : ''}${appearance === 'filter' ? ' choice-filter' : ''}`}>
+    <FieldLabel id={labelId} htmlFor={id}>{label}{required === false && <span className="optional">Facultatif</span>}</FieldLabel>
     {control}<FieldCopy id={id} hint={hint} error={error} />
-  </div>;
+  </Field>;
 }
 
 /** Two to four short alternatives: real radio inputs keep native keyboard and form behavior. */

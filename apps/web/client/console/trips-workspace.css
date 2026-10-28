@@ -1,0 +1,22 @@
+/* W23 — authorized trip inventory; no browser replay is advertised. */
+.trips-studio .trips-toolbar { display: flex; align-items: end; gap: 16px; }
+.trips-toolbar .record-search { width: min(400px, 100%); }
+.trip-table { width: 100%; border: 1px solid var(--border); border-radius: 12px; border-collapse: separate; border-spacing: 0; overflow: clip; background: var(--surface); }
+.trip-table :is(th, td) { padding: 20px; text-align: left; border-bottom: 1px solid var(--border); }
+.trip-table thead th { background: var(--canvas); color: var(--muted); font-size: 12px; font-weight: 600; }
+.trip-table tbody tr:last-child :is(th, td) { border-bottom: 0; }
+.trip-person { display: flex; align-items: center; gap: 12px; }
+.trip-person-copy { min-width: 0; }
+.trip-person .row-button { text-align: left; }
+.trip-time { display: grid; gap: 4px; font-size: 14px; }
+.trip-duration { font-size: 14px; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .trip-table, .trip-table tbody, .trip-table tr { display: block; }
+  .trip-table thead { display: none; }
+  .trip-table tr { padding: 20px; }
+  .trip-table tr + tr { border-top: 1px solid var(--border); }
+  .trip-table :is(th, td) { display: block; border: 0; padding: 0; }
+  .trip-table td { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; margin-top: 12px; font-size: 14px; overflow-wrap: anywhere; }
+  .trip-table td::before { content: attr(data-label); color: var(--muted); font-size: 13px; }
+  .trips-toolbar { flex-wrap: wrap; }
+}

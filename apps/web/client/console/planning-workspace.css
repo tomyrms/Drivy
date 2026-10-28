@@ -1,0 +1,97 @@
+/* W13/W14/W21/W22: shared planning surfaces, one editor per task. */
+.lesson-workspace, .planning-editor, .availability-workspace { min-inline-size: 0; }
+.lesson-workspace, .course-editor { max-inline-size: 72rem; }
+.planning-page-heading { display: grid; gap: 1rem; }
+.planning-back { justify-self: start; }
+.planning-page-heading h2, .planning-title { margin: 0; font: 600 clamp(1.375rem, 2.4vw, 1.75rem)/1.25 var(--font); letter-spacing: -.025em; overflow-wrap: anywhere; }
+.planning-page-heading .eyebrow { margin-block-end: .375rem; }
+.planning-detail-card, .planning-fieldset, .schedule-editor { padding: clamp(1rem, 2.5vw, 1.5rem); border: 1px solid var(--border); border-radius: .75rem; background: var(--surface); min-inline-size: 0; }
+.planning-fieldset { margin: 0; }
+.planning-fieldset > legend { padding-inline: .25rem; font-size: 1rem; font-weight: 600; color: var(--text); }
+.planning-form-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+.planning-form-grid .field { min-inline-size: 0; margin: 0; }
+.planning-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .75rem; padding: 1rem 0 max(1rem, env(safe-area-inset-bottom)); border-block-start: 1px solid var(--border); }
+.planning-tabs { display: flex; flex-wrap: wrap; gap: .25rem; border-block-end: 1px solid var(--border); padding-block-end: .5rem; }
+.planning-tabs .button { min-block-size: 44px; }
+.planning-tabs [aria-pressed='true'] { background: var(--accent-soft, #eef3ff); color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
+.availability-toolbar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 1rem; }
+.availability-toolbar > .field { flex: 0 1 20rem; margin: 0; }
+.availability-workspace .schedule-section { display: grid; gap: 1.25rem; padding: 0; border: 0; max-inline-size: none; }
+.schedule-list { display: grid; gap: .75rem; list-style: none; margin: 0; padding: 0; }
+.schedule-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--surface); }
+.schedule-card-main { flex: 1 1 16rem; display: grid; gap: .75rem; min-inline-size: 0; }
+.schedule-card-main p, .schedule-card-main h3 { margin: 0; }
+.schedule-days { display: flex; flex-wrap: wrap; gap: .375rem; }
+.schedule-days > span { padding: .375rem .5rem; border-radius: .375rem; font-size: .75rem; color: var(--muted); background: var(--canvas); }
+.schedule-days > [data-active='true'] { color: var(--accent); background: var(--accent-soft, #eef3ff); font-weight: 600; }
+.schedule-hours { font: 600 1.25rem/1.4 var(--font); font-variant-numeric: tabular-nums; }
+.schedule-card-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.schedule-reason { overflow-wrap: anywhere; }
+.availability-workspace .day-picker { display: flex; flex-wrap: wrap; gap: .625rem; }
+.availability-workspace .day-picker .check-field { min-block-size: 44px; }
+.course-add { position: relative; }
+.course-add-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 20; display: grid; min-inline-size: 13rem; padding: .375rem; border: 1px solid var(--border); border-radius: .625rem; background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
+.course-add-menu .button { justify-content: flex-start; }
+.course-editor-heading { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.course-editor-heading h2 { flex: 1 1 16rem; }
+.course-editor-heading > .button { margin-inline-start: auto; }
+.course-editor [hidden] { display: none; }
+.course-form { display: grid; gap: 1.5rem; min-inline-size: 0; }
+.course-fieldset { display: grid; gap: 1.25rem; }
+.course-fieldset .field { margin: 0; }
+.course-type-row, .course-capacity { display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; min-inline-size: 0; }
+.course-type-row > .field, .course-capacity > .field { flex: 1 1 16rem; min-inline-size: 0; }
+.course-new-type { display: grid; gap: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: .5rem; }
+.course-numbers { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.course-sessions { list-style: none; padding: 0; margin: 0; display: grid; gap: .75rem; }
+.course-session { min-inline-size: 0; padding: 0 1rem; border: 1px solid var(--border); border-radius: .625rem; background: var(--surface); }
+.course-session.invalid { border-color: var(--danger, #b42318); }
+.course-session summary { cursor: pointer; min-block-size: 48px; align-content: center; padding-block: .75rem; font-weight: 600; overflow-wrap: anywhere; }
+.course-session-fields { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); align-items: end; padding-block: .75rem 1rem; }
+.course-preview-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .625rem; }
+.course-preview-list > li { padding: 1rem; border: 1px solid var(--border); border-radius: .625rem; background: var(--surface); line-height: 1.6; }
+.course-preview-list > [aria-current='true'], .course-sessions > [aria-current='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.course-management { border-block-start: 1px solid var(--border); padding-block-start: .5rem; }
+.course-management > summary { min-block-size: 44px; align-content: center; cursor: pointer; font-weight: 500; }
+.course-management .course-capacity { padding-block: 1rem; }
+.course-facts-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.course-sheet-scroll { max-inline-size: 100%; border: 1px solid var(--border); border-radius: .75rem; overflow: hidden; background: var(--surface); }
+.course-sheet { border-collapse: collapse; inline-size: 100%; table-layout: fixed; }
+.course-sheet th, .course-sheet td { padding: 1rem; text-align: start; vertical-align: top; border-block-end: 1px solid var(--border); overflow-wrap: anywhere; }
+.course-sheet thead th { font-size: .8125rem; color: var(--muted); font-weight: 500; background: var(--canvas); }
+.course-sheet th:first-child { inline-size: 35%; }
+.course-sheet tbody tr:last-child > * { border-block-end: 0; }
+.course-sheet-choices { display: flex; gap: .375rem; flex-wrap: wrap; margin-block-start: .5rem; }
+.course-sheet-choices .button { min-block-size: 44px; }
+.course-attendance-state { font-size: .8125rem; color: var(--muted); }
+.course-row-feedback { display: block; font-size: .8125rem; font-weight: 400; margin-block-start: .5rem; }
+.course-row-feedback.pending { color: var(--muted); }
+.course-row-feedback.error { color: var(--danger, #b42318); }
+.course-row-feedback.success { color: var(--success, #067647); }
+.course-enrollment-actions { margin-block-start: .5rem; }
+.course-enrollment-actions summary { cursor: pointer; color: var(--muted); font-size: .875rem; min-block-size: 44px; align-content: center; }
+.preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (min-width: 768px) {
+  .planning-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .course-facts-toolbar { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .planning-form-actions .button { flex: 1 1 100%; }
+  .course-editor-heading { align-items: start; }
+  .course-editor-heading > .button { order: -1; margin-inline-start: 0; }
+  .course-editor-heading h2 { flex-basis: 100%; }
+  .course-sheet, .course-sheet tbody, .course-sheet tr, .course-sheet th, .course-sheet td { display: block; inline-size: 100%; }
+  .course-sheet thead { display: none; }
+  .course-sheet th:first-child { inline-size: 100%; padding-block-end: .5rem; }
+  .course-sheet tbody tr { padding: .5rem 0; border-block-end: 1px solid var(--border); }
+  .course-sheet tbody tr:last-child { border-block-end: 0; }
+  .course-sheet tbody tr > * { border: 0; }
+  .course-sheet td { padding-block-start: .5rem; }
+  .course-sheet-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .course-sheet-choices .button { min-inline-size: 0; padding-inline: .375rem; }
+  .course-editor .course-session { padding-inline: .75rem; }
+  .course-session-fields { grid-template-columns: minmax(0, 1fr); }
+  .schedule-card { padding: 1rem; }
+  .availability-toolbar > .field { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .planning-editor *, .agenda-workspace * { scroll-behavior: auto; } }
