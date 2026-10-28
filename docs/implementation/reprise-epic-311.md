@@ -45,6 +45,8 @@ Restes par agent (à reprendre par SendMessage après la limite, annoncée levé
 - Planning : `agenda/lesson-workspace.tsx` modifié non commité ; note #323 en cours ; #328 cours collectifs non commencé.
 - Catalogue : finir #326/#327 et les notes ; finitions vues sur captures : contenu décalé de 8 px par rapport à la rangée d’onglets, page Prestations avec retour « Formations » et titre « Prestations » redondants avec l’onglet, carte « Prestations sans permis » en bas de Formations redondante avec l’onglet.
 
+Relève à 23 h 05 (agents Opus neufs, mêmes worktrees, deux à la fois) : Planning → #328 cours collectifs ; Catalogue → fin de #326/#327 et trois finitions. Le reste d’Équipe (`9f903ea6`, codes de refus fictifs conformes aux règles) a été commité par le coordinateur et intégré (`b1dcb0d2`) ; il manque seulement la note `epic-311-team.md`. Ne pas relancer les agents d’origine sur ces mêmes lots.
+
 Les agents reprennent sur leur branche `claude/311-*` ; le coordinateur réintègre ensuite seulement les nouveaux commits (`git cherry-pick <dernier intégré>..claude/311-*`).
 
 ## Vagues suivantes prévues
