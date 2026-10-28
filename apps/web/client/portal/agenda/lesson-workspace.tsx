@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, MapPin, Pencil, UserRound } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
@@ -15,6 +15,7 @@ import { PortalSelect } from '../components/portal-select';
 import { CommandFeedback, dateTime, money, phaseLabels, ReadFeedback } from './presentation';
 import { readPlanningCatalogue, useLesson, useLessonEditor, type PlanningCatalogue } from './use-lesson';
 import { cancellationReasons, useCancellation } from './use-cancellation';
+import { useHeadingFocus } from './use-heading-focus';
 
 export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier }: { lessonId: string | null; onClose: () => void; onSaved: () => void; onDossier: (learnerId: string, lessonId: string) => void }) {
   const context = useConsole();
@@ -32,7 +33,7 @@ export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier }: { les
 function LessonDetail({ lesson, refreshing, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; refreshing: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
   const state = useCancellation(lesson, onSaved);
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { heading.current?.focus(); }, []);
+  useHeadingFocus(heading);
   const phase = lessonPhase(lesson);
   return <>
     <Button className="agenda-back" variant="ghost" onClick={onClose} disabled={state.locked}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
@@ -64,7 +65,7 @@ function LessonEditor({ original: loadedOriginal, learnerId, catalogue, onClose,
   const original = state.original;
   const [discard, setDiscard] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [state.step]);
+  useHeadingFocus(heading, state.step, { preventScroll: true });
   const close = () => { if (state.locked) return; if (state.dirty) setDiscard(true); else { state.release(); onClose(); } };
   const name = catalogue.learners.find(item => item.id === state.form.learnerId)?.displayName ?? original?.learnerDisplayName ?? 'Nouvelle leçon';
   const instructorName = catalogue.members.find(item => item.id === state.form.instructorId)?.displayName ?? original?.instructorDisplayName ?? 'À choisir';
