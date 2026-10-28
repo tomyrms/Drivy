@@ -113,16 +113,16 @@ export function useLearnerController() {
   const canArchive = membership.roles.includes('ADMIN');
 
   function ask(next: LearnerDialog) { runner.clearOutcome(); setReason(''); setPermit(emptyPermit()); setAcknowledged(false); setDialog(next); }
-  async function openTraining() {
-    if (!canEdit || !current || !availableOfferings.some(offering => offering.id === offeringId) || !isCivilDate(startedOn)) return;
-    await runner.run(createCommand({ schoolId, kind: 'createTraining', path: 'trainings', resourceVersion: 0,
+  async function openTraining(): Promise<SubmitResult | undefined> {
+    if (!canEdit || !current || !availableOfferings.some(offering => offering.id === offeringId) || !isCivilDate(startedOn)) return undefined;
+    return runner.run(createCommand({ schoolId, kind: 'createTraining', path: 'trainings', resourceVersion: 0,
       body: { learnerId: current.id, offeringId, startedOn } }), 'La formation est ouverte.');
   }
-  async function assign(training: Training) {
+  async function assign(training: Training): Promise<SubmitResult | undefined> {
     const instructorMembershipId = instructorFor[training.id];
     if (!canEdit || training.status !== 'ACTIVE' || dossier.status !== 'ready' || !dossier.data?.[training.id] || !instructors.some(member => member.id === instructorMembershipId)
-      || dossier.data[training.id]!.assignments.some(assignment => assignment.instructorMembershipId === instructorMembershipId && assignmentIsOpen(assignment))) return;
-    await runner.run(createCommand({ schoolId, kind: 'createAssignment', path: `trainings/${training.id}/assignments`, resourceVersion: 0,
+      || dossier.data[training.id]!.assignments.some(assignment => assignment.instructorMembershipId === instructorMembershipId && assignmentIsOpen(assignment))) return undefined;
+    return runner.run(createCommand({ schoolId, kind: 'createAssignment', path: `trainings/${training.id}/assignments`, resourceVersion: 0,
       body: { instructorMembershipId, validFrom: new Date().toISOString(), validUntil: null } }), 'Le moniteur est affecté.');
   }
   const permitError = dialog?.kind === 'permit' ? permitProblem(permit, schoolToday()) : null;
