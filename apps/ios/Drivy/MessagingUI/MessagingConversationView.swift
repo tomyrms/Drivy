@@ -153,7 +153,7 @@ private enum ExyteBubbleMetrics {
             if let text = content.text { return MessagingMentionToken.styled(text, names: workspace.knownDisplayNames) }
             return AttributedString(content.summary)
         }
-        if let code = workspace.decryptionCodes[wire.id] { return Self.notice("Illisible sur cet appareil · \(code)") }
+        if let code = workspace.decryptionCodes[wire.id] { return Self.unreadable(code) }
         return Self.notice(attempted.contains(wire.id) ? "Message protégé indisponible" : "Déchiffrement…")
     }
 
@@ -162,6 +162,14 @@ private enum ExyteBubbleMetrics {
         value.inlinePresentationIntent = .emphasized
         value.foregroundColor = DrivyTheme.muted
         return value
+    }
+
+    /// Message illisible (#239) : l’explication d’abord ; le code, sans donnée personnelle, en petit pour le diagnostic.
+    private static func unreadable(_ code: String) -> AttributedString {
+        var detail = AttributedString("\nCode \(code)")
+        detail.font = Font.caption
+        detail.foregroundColor = DrivyTheme.muted
+        return notice(MessagingDecryptionFailure.explanation(for: code)) + detail
     }
 
     /// Une réaction Exyte par personne : la bulle et l'aperçu du menu montrent qui a réagi.

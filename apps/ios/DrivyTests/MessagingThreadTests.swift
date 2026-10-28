@@ -32,6 +32,33 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertEqual(poll?.options.map(\.id), ["o1", "o2"])
     }
 
+    /// #242 : chaque refus de `validated` a son explication, et seulement ceux-là.
+    func testPollProblemsExplainExactlyWhatValidationRefuses() {
+        let long = String(repeating: "a", count: MessagingPollRules.maxLength + 1)
+        let cases: [(String, [String])] = [(" ", ["A", "B"]), ("Q", ["A", ""]), ("Q", ["Oui", " oui "]), (long, ["A", "B"]),
+                                           ("Q", ["A", long]), ("Quand ?", ["Lundi", " ", "Mardi"]), ("", ["", ""])]
+        for (question, options) in cases {
+            let problems = MessagingPollRules.problems(question: question, options: options)
+            XCTAssertEqual(problems.isEmpty, MessagingPollRules.validated(question: question, options: options) != nil, "\(question) \(options)")
+        }
+        XCTAssertTrue(MessagingPollRules.problems(question: " ", options: ["A", "B"]).questionMissing)
+        XCTAssertTrue(MessagingPollRules.problems(question: "Q", options: ["A", ""]).tooFewOptions)
+        XCTAssertEqual(MessagingPollRules.problems(question: "Q", options: ["Oui", " oui "]).duplicates, [1])
+        XCTAssertEqual(MessagingPollRules.problems(question: long, options: ["A", "B"]).questionLength, MessagingPollRules.maxLength + 1)
+        XCTAssertEqual(MessagingPollRules.problems(question: "Q", options: ["A", long]).optionLengths, [1: MessagingPollRules.maxLength + 1])
+    }
+
+    /// #239 : l'explication vient de la cause connue ; la restauration n'est proposée que pour une clé absente.
+    func testUnreadableMessageExplainsOnlyTheKnownCause() {
+        XCTAssertTrue(MessagingDecryptionFailure.explanation(for: "D-NOKEY").contains("restaure tes clés"))
+        for code in ["D-WITHHELD", "D-WH-MUNVERIFIED", "D-STORE", "D-MEGOLM", "D-X"] {
+            let text = MessagingDecryptionFailure.explanation(for: code)
+            XCTAssertFalse(text.contains("restaure"), code)
+            XCTAssertFalse(text.contains(code), code)
+        }
+        XCTAssertEqual(MessagingDecryptionFailure.explanation(for: "D-WH-MUNVERIFIED"), "Ce message n’a pas été partagé avec cet appareil.")
+    }
+
     func testSingleChoiceReplacesAndSecondTapWithdraws() {
         XCTAssertEqual(MessagingPollRules.toggled([], option: "o1", allowsMultiple: false), ["o1"])
         XCTAssertEqual(MessagingPollRules.toggled(["o1"], option: "o2", allowsMultiple: false), ["o2"])

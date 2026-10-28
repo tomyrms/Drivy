@@ -331,44 +331,80 @@ struct MessagingPollComposer: View {
     @State private var options = ["", ""]
     @State private var multiple = false
     @State private var sending = false
-    @FocusState private var focused: Int?
+    /// La mise en file a échoué : rien n’est parti et la saisie reste (#243).
+    @State private var failed = false
+    @State private var confirmsDiscard = false
+    /// Champs déjà quittés : un manque n’y est signalé qu’après, jamais dès la première lettre (#242).
+    @State private var visited: Set<Field> = []
+    @FocusState private var focused: Field?
+
+    private enum Field: Hashable {
+        case question, option(Int)
+        var isOption: Bool { if case .option = self { true } else { false } }
+    }
 
     private var poll: MessagingPlainContent.Poll? { MessagingPollRules.validated(question: question, options: options) }
+    private var problems: MessagingPollRules.Problems { MessagingPollRules.problems(question: question, options: options) }
+    /// Une saisie existe : ni le geste ni Annuler ne la perdent sans confirmation (#243).
+    private var hasInput: Bool {
+        multiple || ([question] + options).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Question") {
-                    TextField("Question", text: $question, axis: .vertical)
-                        .accessibilityIdentifier("messaging.poll.question")
+                if failed {
+                    Section {
+                        DrivyFormMessage(text: "Le sondage n’a pas pu être envoyé. Ta saisie est conservée.", tone: .danger)
+                    }
                 }
-                Section("Options") {
+                Section("Question") {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        TextField("Question", text: $question, axis: .vertical)
+                            .focused($focused, equals: .question)
+                            .accessibilityIdentifier("messaging.poll.question")
+                            .accessibilityHint(questionHint ?? "")
+                        if let questionHint { hint(questionHint) }
+                    }
+                }
+                Section {
                     ForEach(options.indices, id: \.self) { index in
-                        TextField("Option \(index + 1)", text: $options[index])
-                            .focused($focused, equals: index)
-                            .accessibilityIdentifier("messaging.poll.option.\(index)")
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            TextField("Option \(index + 1)", text: $options[index])
+                                .focused($focused, equals: .option(index))
+                                .accessibilityIdentifier("messaging.poll.option.\(index)")
+                                .accessibilityHint(optionHint(index) ?? "")
+                            if let message = optionHint(index) { hint(message) }
+                        }
                     }
                     .onDelete { set in if options.count - set.count >= 2 { options.remove(atOffsets: set) } }
                     if options.count < MessagingPollRules.maxOptions {
                         Button("Ajouter une option", systemImage: "plus") {
-                            options.append(""); focused = options.count - 1
+                            options.append(""); focused = .option(options.count - 1)
                         }
                     }
+                } header: { Text("Options") } footer: {
+                    // Rattaché à aucun champ : VoiceOver le lit tel quel.
+                    if let optionsHint { DrivyFormMessage(text: optionsHint, tone: .warning) }
                 }
                 Section {
                     Toggle("Plusieurs choix", isOn: $multiple).accessibilityIdentifier("messaging.poll.multiple")
                 }
             }
+            .onChange(of: focused) { previous, _ in if let previous { visited.insert(previous) } }
             .navigationTitle("Sondage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { if hasInput { confirmsDiscard = true } else { dismiss() } }
+                        .disabled(sending)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Envoyer") {
                         guard let poll else { return }
-                        sending = true
+                        sending = true; failed = false
                         Task {
-                            if await onCreate(poll, multiple) { dismiss() }
+                            if await onCreate(poll, multiple) { dismiss() } else { failed = true }
                             sending = false
                         }
                     }
@@ -376,7 +412,41 @@ struct MessagingPollComposer: View {
                     .accessibilityIdentifier("messaging.poll.send")
                 }
             }
+            .confirmationDialog("Abandonner ce sondage ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                Button("Abandonner", role: .destructive) { dismiss() }
+                Button("Continuer la saisie", role: .cancel) {}
+            } message: { Text("La question et les options saisies seront perdues.") }
+            .onChange(of: failed) { _, value in
+                if value { UIAccessibility.post(notification: .announcement, argument: "Le sondage n’a pas pu être envoyé. Ta saisie est conservée.") }
+            }
         }
+        .interactiveDismissDisabled(hasInput || sending)
+    }
+
+    // MARK: Explications (#242)
+
+    private var questionHint: String? {
+        if let length = problems.questionLength { return Self.tooLong(length) }
+        return problems.questionMissing && visited.contains(.question) ? "Écris la question." : nil
+    }
+
+    private func optionHint(_ index: Int) -> String? {
+        if let length = problems.optionLengths[index] { return Self.tooLong(length) }
+        return problems.duplicates.contains(index) ? "Cette option est déjà proposée." : nil
+    }
+
+    private var optionsHint: String? {
+        guard problems.tooFewOptions, visited.contains(where: \.isOption) else { return nil }
+        return "Il faut au moins deux options."
+    }
+
+    private static func tooLong(_ length: Int) -> String {
+        "\(length) caractères : \(MessagingPollRules.maxLength) au maximum."
+    }
+
+    /// Sous un champ : VoiceOver l’entend comme indice du champ, pas une seconde fois.
+    private func hint(_ text: String) -> some View {
+        DrivyFormMessage(text: text, tone: .warning).accessibilityHidden(true)
     }
 }
 
