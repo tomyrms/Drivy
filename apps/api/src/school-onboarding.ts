@@ -133,8 +133,9 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
   const actions:NextAction[]=planning.blockers.filter(item=>{if(seen.has(item.code))return false;seen.add(item.code);return true;})
     .sort((a,b)=>(mapping[a.code]?.order??99)-(mapping[b.code]?.order??99))
     .map(item=>({code:item.code,label:mapping[item.code]?.label??item.message,section:mapping[item.code]?.section??'apercu'}));
-  // Une école déjà utilisée ne revient jamais à « votre premier élève ». Les blocages courants restent utiles.
-  const used=(await db.query('SELECT id FROM drivy.lesson WHERE school_id=$1 LIMIT 1',[school.id])).rowCount!==0;
+  // Une réservation confirmée ou une leçon réalisée suffit pour laisser place au planning.
+  // Une annulation ou une absence seule ne prouve pas ce premier rendez-vous ; les blocages restent utiles.
+  const used=(await db.query("SELECT id FROM drivy.lesson WHERE school_id=$1 AND status IN ('PLANNED','COMPLETED') LIMIT 1",[school.id])).rowCount!==0;
   if(planning.ready&&!used) {
     const learner=(await db.query<{id:string;missing:string[]}>(`SELECT l.id,mp.fields AS missing FROM drivy.learner_profile l
       JOIN drivy.membership m ON m.school_id=l.school_id AND m.person_id=l.person_id AND m.status='ACTIVE' AND 'LEARNER'=ANY(m.roles)
@@ -154,7 +155,7 @@ async function nextActions(db:PoolClient,school:SchoolRow) {
         if(blocker.code==='AVAILABILITY_REQUIRED')actions.push({code:blocker.code,label:'Définir les disponibilités du moniteur affecté',section:'disponibilites',...(target?{query:{instructor:target.instructor_membership_id}}:{})});
         else actions.push({code:blocker.code,label:'Ajouter un tarif pour la formation de l’élève',section:'formations',...(target?{query:{selection:target.offering_id,view:'tarifs' as const}}:{})});
       } else if(blocker)actions.push({code:blocker.code,label:blocker.code==='TRAINING_NOT_ACTIVE'?'Ouvrir la formation de l’élève':blocker.code==='INSTRUCTOR_NOT_ASSIGNED'?'Affecter un moniteur à la formation':'Préparer la formation de l’élève',section:'eleves',query:{selection:learner.id}});
-      else actions.push({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:learner.id}});
+      else actions.push({code:'PLAN_FIRST_LESSON',label:'Planifier une leçon',section:'eleves',query:{selection:learner.id}});
     }
   }
   return {schoolId:school.id,actions,planningReady:planning.ready};

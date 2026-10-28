@@ -199,7 +199,7 @@ it('annonce les accords GPS rendus caducs et réexige la revue quand cet impact 
   expect((await pool.query('SELECT count(*)::int n FROM drivy.recording_choice WHERE school_id=$1',[id.schoolA])).rows[0].n).toBe(1);
 });
 
-it('les prochaines actions séparent configuration, dossier et première leçon puis disparaissent après usage',async()=>{
+it('les prochaines actions persistent après annulation ou absence et cèdent la place à une réservation confirmée',async()=>{
   const initial=await call('GET',`${base}/next-actions`);expect(initial.statusCode,initial.body).toBe(200);
   expect(initial.json().data.planningReady).toBe(false);expect(initial.json().data.actions.map((a:{code:string})=>a.code)).toContain('POLICY_REVIEW_REQUIRED');
   await prepared(true);const command=await completion();const result=(await call('POST',`${base}/complete`,command.body,command.version)).json().data;
@@ -209,10 +209,16 @@ it('les prochaines actions séparent configuration, dossier et première leçon 
   const trainingId=randomUUID();await pool.query("INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE','2026-01-01')",[trainingId,id.schoolA,id.aliceLearner,result.applied.offeringIds[0],`setup-${(await getDraft()).content.formations[0]!.id}`]);
   expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('INSTRUCTOR_NOT_ASSIGNED');
   await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,'2020-01-01')",[randomUUID(),id.schoolA,trainingId,id.instructorMember]);
-  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0]).toMatchObject({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:id.aliceLearner}});
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0]).toMatchObject({code:'PLAN_FIRST_LESSON',label:'Planifier une leçon',section:'eleves',query:{selection:id.aliceLearner}});
   const policyId=(await pool.query('SELECT policy_version_id FROM drivy.offering_version WHERE id=$1',[result.applied.offeringIds[0]])).rows[0].policy_version_id;
   await pool.query(`INSERT INTO drivy.lesson(school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,status,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
     VALUES($1,$2,$3,$4,$5,'2026-01-01T09:00:00Z','2026-01-01T09:50:00Z','Europe/Zurich','Lieu synthétique','CANCELLED',9300,0,$6,'{}')`,[id.schoolA,trainingId,id.aliceLearner,id.alice,id.instructorMember,policyId]);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('PLAN_FIRST_LESSON');
+  await pool.query("UPDATE drivy.lesson SET status='NO_SHOW' WHERE school_id=$1",[id.schoolA]);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('PLAN_FIRST_LESSON');
+  await pool.query("UPDATE drivy.lesson SET status='PLANNED' WHERE school_id=$1",[id.schoolA]);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions).toEqual([]);
+  await pool.query("UPDATE drivy.lesson SET status='COMPLETED',actual_start=planned_start,actual_end=planned_end WHERE school_id=$1",[id.schoolA]);
   expect((await call('GET',`${base}/next-actions`)).json().data.actions).toEqual([]);
   await pool.query('DELETE FROM drivy.availability_rule WHERE school_id=$1',[id.schoolA]);
   const changed=(await call('GET',`${base}/next-actions`)).json().data;expect(changed.planningReady).toBe(false);expect(changed.actions.map((a:{code:string})=>a.code)).toEqual(['AVAILABILITY_REQUIRED']);

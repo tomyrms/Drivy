@@ -1210,3 +1210,11 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - NOT_EXECUTED : recette physique, VoiceOver et réseau dégradé réel.
 - Messages (#142, #168, #177) : fait aussi par le lot 9 (PR #191) ; la version de master est gardée, avec en plus les durées de sourdine 1 h, 8 h, 1 jour et les lignes de sondage à 44 pt.
 - Qualification : essai du porteur validé (IPA `226dee20`) ; 859 tests métier et suites UI Messages, cours, formulaires et bilan réussis sur iPhone et iPad (runs 40686053375, 40686057743, 40694974479). iOS seul, aucun déploiement.
+
+
+## 28 octobre 2026 : accueil web et premier rendez-vous (#247 / #258, lot partiel)
+
+- Branche `codex/accueil-premier-rendezvous`, base `e5166404`. L’aperçu d’une école active rejoint le planning existant ; préparation dans Réglages et recherche, école archivée explicite. La prochaine action est relue avec le planning et ne disparaît plus pour une première leçon annulée ou une absence seule. [Périmètre et procédure d’essai](accueil-premier-rendezvous-20261028.md).
+- PASS : compilation API, compilation web et contrôle TypeScript web, Node 24.22.1. Aucun nouveau composant externe ni migration.
+- NOT_EXECUTED : essai du porteur, tests PostgreSQL et tests web ciblés adaptés, recette clavier/petit écran. À faire après retour, puis contrôles requis avant fusion. Aucun workflow complet lancé.
+- Aucun changement natif, IPA, fusion ou déploiement. Le reste de #247/#258 et les autres catégories de #253 ne sont pas réalisés par ce lot.

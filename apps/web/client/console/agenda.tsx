@@ -43,6 +43,7 @@ const lessonState: Partial<Record<ReturnType<typeof lessonPhase>, { label: strin
 export function AgendaSection() {
   const { schoolId, school, navigate, routeQuery, setRouteQuery, confirmNavigation } = useConsole();
   const { revision } = useCommandSnapshot();
+  const [preparationRefresh, setPreparationRefresh] = useState(0);
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   const [localMonday, setLocalMonday] = useState(() => weekStart(civilDateIn(school.timeZone)));
@@ -76,12 +77,14 @@ export function AgendaSection() {
   const lastRefresh = useRef(Date.now());
   const refreshNow = () => {
     lastRefresh.current = Date.now(); refreshLessons?.(); refreshDirectory?.(); refreshCourses?.();
+    setPreparationRefresh(value => value + 1);
   };
   useEffect(() => {
     lastRefresh.current = Date.now();
     const refreshIfStale = () => {
       if (document.visibilityState !== 'visible' || Date.now() - lastRefresh.current < agendaRefreshMs) return;
       lastRefresh.current = Date.now(); refreshLessons?.(); refreshDirectory?.(); refreshCourses?.();
+      setPreparationRefresh(value => value + 1);
     };
     const timer = window.setInterval(refreshIfStale, 15_000);
     document.addEventListener('visibilitychange', refreshIfStale);
@@ -141,8 +144,8 @@ export function AgendaSection() {
       {course && catalogue.data && <CourseWorkspace key={`${course.id ?? 'new'}/${course.occurrenceId ?? ''}`} seriesId={course.id} selectedOccurrenceId={course.occurrenceId} catalogue={catalogue.data}
         onClose={() => { setCourse(null); window.requestAnimationFrame(() => document.getElementById(`agenda-course-${course.id}-${course.occurrenceId}`)?.focus()); }}
         onSaved={saved => { reloadCourses(); setCourse(saved ? { id: saved.id, ...(course.id === saved.id && course.occurrenceId ? { occurrenceId: course.occurrenceId } : {}) } : null); }} />}
-      <PlanningReadinessBanner />
-      <FirstLessonActions />
+      <PlanningReadinessBanner refreshKey={preparationRefresh} />
+      {school.status === 'ACTIVE' && <FirstLessonActions refreshKey={preparationRefresh} />}
       <div className="agenda-studio-toolbar">
         <div className="agenda-period" role="group" aria-label="Semaine affichée">
           <span className="agenda-period-label" aria-live="polite" ref={weekLabel} tabIndex={-1}>{formatWeek(monday)}</span>
