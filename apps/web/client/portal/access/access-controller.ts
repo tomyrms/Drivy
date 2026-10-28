@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createCommand, filled, matchesSearch } from '../../command-core';
+import { useEffect, useRef, useState } from 'react';
+import { createCommand, filled } from '../../command-core';
 import { useCommandSnapshot } from '../../command-store';
 import { roleLabel, type Role } from '../../protocol';
-import { memberSchema, readAll } from '../../school-api';
-import { distinctLabel, homonymReferences } from '../../person-reference';
-import { useCommandRunner, useConsole, useLoad, usePendingResources, useRouteSelection, useUnsavedChanges } from '../../console/context';
-import { useListState } from '../../console/list-state';
+import { useCommandRunner, useConsole, usePendingResources, useRouteSelection, useUnsavedChanges } from '../../console/context';
+import { useMembers } from './members';
 
 export const accessRoles: readonly { value: Role; description: string }[] = [
   { value: 'ADMIN', description: 'Administration de l’école et de ses dossiers.' },
@@ -40,20 +38,19 @@ export const grantName = (value: string) => grants.find(grant => grant.value ===
 export const roleNames = (values: readonly Role[]) => values.map(roleLabel).join(' · ') || 'Aucun rôle';
 const sameSet = (left: readonly string[], right: readonly string[]) => left.length === right.length && left.every(value => right.includes(value));
 
-/** Existing member commands and draft/version rules, independent from presentation. */
-export function useAccessController() {
+/**
+ * Existing member commands and draft/version rules, independent from presentation.
+ * Editing state is local; only the selected member lives in the URL. Removing an access is a separate intention (team/).
+ * `onClose` is called when the person leaves the editor: with a message once the school confirmed the change.
+ */
+export function useAccessController({ onClose }: { onClose?: (confirmed?: string) => void } = {}) {
   const context = useConsole();
   const { schoolId, school, membership } = context;
-  const { revision, confirmed } = useCommandSnapshot();
+  const { confirmed } = useCommandSnapshot();
   const runner = useCommandRunner();
   const pendingResources = usePendingResources(schoolId);
-  const loaded = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId, revision]);
+  const { loaded, members, references, nameOf } = useMembers();
   const [selected, select] = useRouteSelection();
-  const [search, setSearch] = useListState('team/search', '');
-  const [filter, setFilter] = useListState<'all' | 'active' | 'inactive'>('team/status', 'all');
-  const [showLearners, setShowLearners] = useListState('team/learners', false);
-  const [page, setPage] = useListState('team/page', 1);
-  const [sort, setSort] = useListState<'name-asc' | 'name-desc'>('team/sort', 'name-asc');
   const [mode, setMode] = useState<'read' | 'edit'>('read');
   const [step, setStep] = useState(0);
   const [domain, setDomain] = useState<string>('learners');
@@ -61,24 +58,16 @@ export function useAccessController() {
   const [draftGrants, setDraftGrants] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [showErrors, setShowErrors] = useState(false);
-  const [confirmation, setConfirmation] = useState<'access' | 'deactivate' | null>(null);
-  const [deactivateReason, setDeactivateReason] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [conflict, setConflict] = useState(false);
   const draftBase = useRef<{ id: string; version: number; roles: Role[]; grants: string[] } | null>(null);
   const operation = useRef<string | null>(null);
+  const successMessage = useRef<string | undefined>(undefined);
   const inFlight = useRef(false);
-  const members = useMemo(() => [...(loaded.data?.items ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)), [loaded.data]);
-  const references = useMemo(() => homonymReferences(members.map(item => ({ id: item.id, label: item.displayName }))), [members]);
-  const nameOf = (member: { id: string; displayName: string }) => distinctLabel(member.displayName, references.get(member.id));
-  const audience = members.filter(member => showLearners || member.roles.includes('ADMIN') || member.roles.includes('INSTRUCTOR'));
-  const visible = audience.filter(member => (filter === 'all' || (filter === 'active') === (member.status === 'ACTIVE')) && matchesSearch([member.displayName, references.get(member.id)], search))
-    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * (a.displayName.localeCompare(b.displayName, 'fr') || a.id.localeCompare(b.id)));
-  const pageSize = 25;
-  const currentPage = Math.max(1, Math.min(page, Math.ceil(visible.length / pageSize) || 1));
   const current = members.find(member => member.id === selected) ?? null;
   const changed = !!current && (!sameSet(current.roles, draftRoles) || !sameSet(current.grants, draftGrants));
-  const dirty = !!current && (changed || !!reason || !!deactivateReason);
+  const dirty = !!current && (changed || !!reason);
   useUnsavedChanges(dirty && !runner.busy && !runner.pending);
   const self = current?.id === membership.membershipId;
   const loseAdmin = !!(self && current?.roles.includes('ADMIN') && !draftRoles.includes('ADMIN'));
@@ -92,57 +81,55 @@ export function useAccessController() {
     draftBase.current = { id: current.id, version: current.version, roles: [...current.roles], grants: [...current.grants] };
     operation.current = null;
     setDraftRoles([...current.roles]); setDraftGrants([...current.grants]);
-    setReason(''); setDeactivateReason(''); setShowErrors(false); setConfirmation(null); setConflict(false); setAcknowledged(false);
+    setReason(''); setShowErrors(false); setConfirming(false); setConflict(false); setAcknowledged(false);
   }
-  useEffect(() => {
-    if (loaded.status === 'ready' && page !== currentPage) setPage(currentPage);
-  }, [loaded.status, page, currentPage, setPage]);
   useEffect(() => {
     if (!selected) { draftBase.current = null; operation.current = null; setConflict(false); setMode('read'); return; }
     if (!current) return;
     const base = draftBase.current;
     const ownWrite = operation.current !== null && confirmed?.operationId === operation.current;
-    const edited = base && (!sameSet(base.roles, draftRoles) || !sameSet(base.grants, draftGrants) || !!reason || !!deactivateReason);
+    const edited = base && (!sameSet(base.roles, draftRoles) || !sameSet(base.grants, draftGrants) || !!reason);
+    // A newer version written elsewhere never replaces a draft silently: the person relies on it.
     if (base?.id === current.id && base.version !== current.version && edited && !ownWrite) {
-      setConflict(true); setConfirmation(null); return;
+      setConflict(true); setConfirming(false); return;
     }
     reset();
     if (base?.id !== current.id || ownWrite) { setMode('read'); setStep(0); }
+    // The school confirmed this very change, possibly learned from its receipt after a lost reply.
+    if (ownWrite && onClose) onClose(successMessage.current);
   }, [selected, current?.id, current?.version]);
 
   function startEditing() { if (canWrite) { reset(); setStep(0); setMode('edit'); runner.clearOutcome(); } }
-  function cancelEditing() { if (!runner.busy && !runner.pending) { reset(); setMode('read'); } }
+  function cancelEditing() { if (!runner.busy && !runner.pending) { reset(); setMode('read'); onClose?.(); } }
+  /** Back to the school's current accesses without leaving the editor. */
+  function restart() { if (!runner.busy && !runner.pending) { reset(); setStep(0); } }
   function next() { setShowErrors(true); if (rolesProblem) return; setShowErrors(false); setStep(Math.min(step + 1, 2)); }
   function review() {
     setShowErrors(true);
-    if (canWrite && changed && !rolesProblem && !reasonProblem) { setAcknowledged(false); runner.clearOutcome(); setConfirmation('access'); }
+    if (canWrite && changed && !rolesProblem && !reasonProblem) { setAcknowledged(false); runner.clearOutcome(); setConfirming(true); }
   }
-  function removeAccess() { if (canWrite && !self) { setDeactivateReason(''); setAcknowledged(false); runner.clearOutcome(); setConfirmation('deactivate'); } }
-  function closeConfirmation() { if (!runner.busy && !runner.pending) { setConfirmation(null); setDeactivateReason(''); } }
+  function closeConfirmation() { if (!runner.busy && !runner.pending) setConfirming(false); }
   async function confirm() {
-    if (!current || !canWrite || inFlight.current) return;
-    if (confirmation === 'access' && (!changed || rolesProblem || reasonProblem || (loseAdmin && !acknowledged))) return;
-    if (confirmation === 'deactivate' && (!filled(deactivateReason, 1000) || !acknowledged || self)) return;
-    if (!confirmation) return;
-    const command = confirmation === 'access'
-      ? createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id, resourceVersion: current.version,
-        body: { roles: accessRoles.map(role => role.value).filter(value => draftRoles.includes(value)), grants: draftGrants, reason: reason.trim() } })
-      : createCommand({ schoolId, kind: 'deactivateMember', path: `members/${current.id}/deactivate`, ifMatch: current.version, resourceId: current.id, resourceVersion: current.version,
-        body: { reason: deactivateReason.trim() } });
-    operation.current = command.operationId; inFlight.current = true;
+    if (!current || !canWrite || inFlight.current || !confirming) return;
+    if (!changed || rolesProblem || reasonProblem || (loseAdmin && !acknowledged)) return;
+    const success = `Les accès de ${nameOf(current)} sont modifiés.`;
+    const command = createCommand({ schoolId, kind: 'updateMember', path: `members/${current.id}`, ifMatch: current.version, resourceId: current.id, resourceVersion: current.version,
+      body: { roles: accessRoles.map(role => role.value).filter(value => draftRoles.includes(value)), grants: draftGrants, reason: reason.trim() } });
+    operation.current = command.operationId; successMessage.current = success; inFlight.current = true;
     try {
-      const result = await runner.run(command, confirmation === 'access' ? `Les accès de ${nameOf(current)} sont modifiés.` : `${nameOf(current)} n’a plus accès à l’école.`);
-      if (result.status !== 'rejected') setConfirmation(null);
-      if (result.status === 'confirmed') { setMode('read'); setReason(''); setDeactivateReason(''); }
+      const result = await runner.run(command, success);
+      if (result.status !== 'rejected') setConfirming(false);
+      if (result.status === 'confirmed') { setMode('read'); setReason(''); onClose?.(success); }
+      // A refusal on the version means the school changed: read it again, the draft stays.
+      if (result.status === 'rejected' && result.code === 'VERSION_CONFLICT') loaded.refresh?.();
     } finally { inFlight.current = false; }
   }
   const changes = current ? {
     rolesAdded: draftRoles.filter(role => !current.roles.includes(role)), rolesRemoved: current.roles.filter(role => !draftRoles.includes(role)),
     grantsAdded: draftGrants.filter(grant => !current.grants.includes(grant)), grantsRemoved: current.grants.filter(grant => !draftGrants.includes(grant)),
   } : { rolesAdded: [], rolesRemoved: [], grantsAdded: [], grantsRemoved: [] };
-  return { context, loaded, members, audience, visible, pageRows: visible.slice((currentPage - 1) * pageSize, currentPage * pageSize), pageSize, currentPage, setPage,
-    references, nameOf, search, setSearch, filter, setFilter, showLearners, setShowLearners, sort, setSort, selected, select, current, mode, step, setStep, domain, setDomain,
-    draftRoles, setDraftRoles, draftGrants, setDraftGrants, reason, setReason, showErrors, confirmation, deactivateReason, setDeactivateReason, acknowledged, setAcknowledged,
-    conflict, canWrite, self, loseAdmin, rolesProblem, reasonProblem, changed, dirty, changes, pendingResources, runner,
-    reset, startEditing, cancelEditing, next, review, removeAccess, closeConfirmation, confirm };
+  return { context, loaded, members, nameOf, selected, select, current, mode, step, setStep, domain, setDomain,
+    draftRoles, setDraftRoles, draftGrants, setDraftGrants, reason, setReason, showErrors, confirming, acknowledged, setAcknowledged,
+    conflict, canWrite, self, loseAdmin, rolesProblem, reasonProblem, changed, dirty, changes, pendingResources, references, runner,
+    reset, restart, startEditing, cancelEditing, next, review, closeConfirmation, confirm };
 }
