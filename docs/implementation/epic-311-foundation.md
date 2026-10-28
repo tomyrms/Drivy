@@ -10,6 +10,18 @@ Le callback demande la navigation au coordinateur, qui conserve les gardes de so
 
 Le Select officiel Base UI est ajouté via le même registre CLI 4.23.0 ; `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectItem`, `SelectGroup`, `SelectLabel` et `SelectSeparator` conservent leurs API officielles. Valeur et labels sont fournis à `Select` via `value`/`onValueChange`/`items`. Voir [Select officiel](https://ui.shadcn.com/docs/components/base/select). TypeScript client exécuté après le raccord navigation/Select : PASS. La vérification visuelle des trois pilotes attend leur intégration ; cette étape ne ferme pas R03/R05/R06.
 
+### Sélection partagée des pilotes
+
+Les besoins explicites des agents Agenda/Élèves ajoutent [Combobox](https://ui.shadcn.com/docs/components/base/combobox), [InputGroup](https://ui.shadcn.com/docs/components/base/input-group) et [Table](https://ui.shadcn.com/docs/components/base/table), distribués par `shadcn@4.23.0 add combobox table`. Les Button/Input/Textarea existants ne sont pas écrasés. Adaptations locales : `cn` utilise l'utilitaire déjà présent, directive RSC inutile retirée, commandes iconiques de Combobox nommées en français et cibles de 44 px. Le paquet `cn` transitoire du registre est retiré ; aucun nouveau paquet runtime final.
+
+`portal/components/portal-select.tsx` compose Field/Label/Description/Error et Select ou Combobox. Ce composant ne crée ni option libre ni commande, et ne déduit aucun droit. Il préserve une valeur retirée des options en l'affichant désactivée comme « Sélection indisponible », sans écrire `null` automatiquement. Les listes longues se recherchent localement parmi les seules options fournies par le contrôleur ; les options désactivées restent non sélectionnables.
+
+Contrat : `id`, `label`, `options: readonly { value: string; label: string; disabled?: boolean }[]`, `value: string | null`, `onValueChange(value: string | null)`. Options de présentation : `searchable`, `disabled`, `error`, `description`, `placeholder`, `emptyText`, `name`, `className`. Label permanent, erreur et description reliées par `aria-describedby`. Ne pas imbriquer ce pattern dans un second Field. Les erreurs métier et la couverture des résultats restent fournies par chaque contrôleur.
+
+Usages destinataires : filtre d'annuaire et choix de formation/pays (Élèves), choix élève/moniteur (Agenda), choix courts (Équipe). Les détails command-store, la confirmation de départ et le panneau de commandes en attente appartiennent à `portal/runtime` du coordinateur ; aucun doublon n'est créé ici. Les autres compositions continuent d'utiliser directement Field/Dialog/Alert/Skeleton/Empty, déjà partagés, sans imposer une nouvelle enveloppe à la page Accès validée.
+
+Contrôle après ces ajouts : TypeScript client PASS, audit npm 0 vulnérabilité. Les dimensions sont définies pour les petites largeurs (contrôles 44 px, input 16 px, listes limitées au viewport, textes longs à la ligne) ; recette de clavier et rendu des champs dans les pilotes à faire après intégration.
+
 ## Frontière neuve
 
 `client/portal/portal.css` est une entrée indépendante, avec son reset Tailwind et les tokens Drivy explicitement conservés. Aucun import de `styles.css`, `ui.tsx`, `console/layout.tsx`, feuille Studio ou ancien shell. Au premier jalon, `PortalFrame` fournit seulement l'en-tête Drivy, le contexte scolaire, le menu d'apparence fonctionnel et le SHA de l'aperçu. La reprise autorisée ajoute ensuite les trois destinations ci-dessus.

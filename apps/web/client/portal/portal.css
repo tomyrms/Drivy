@@ -142,7 +142,7 @@
 }
 
 /* Primitive adaptations are shared across all new pages, never per-page overrides. */
-[data-slot="input"], [data-slot="select-trigger"], [data-slot="combobox-input-group"] { min-height: 44px; font-size: 16px; }
+[data-slot="input"], [data-slot="select-trigger"], [data-slot="input-group"], [data-slot="input-group-control"] { min-height: 44px; font-size: 16px; }
 [data-slot="textarea"] { min-height: 112px; font-size: 16px; }
 [data-slot="field-label"] { font-weight: 550; line-height: 1.5; }
 [data-slot="select-item"], [data-slot="combobox-item"], [data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"] { min-height: 44px; }
@@ -155,6 +155,13 @@
 [data-slot="table-head"] { font-weight: 550; color: var(--muted-foreground); }
 [data-slot="table-cell"], [data-slot="table-head"] { padding: 14px 20px; }
 [data-slot="table-row"]:last-child { border-bottom: 0; }
+.portal-select { min-width: 0; }
+.portal-select [data-slot="select-trigger"], .portal-select [data-slot="input-group"] { width: 100%; }
+.portal-select [data-slot="input-group-addon"] { padding-block: 0; padding-right: 2px; }
+.portal-select-option-label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+[data-slot="combobox-content"], [data-slot="select-content"] { max-width: min(var(--available-width, 100vw), calc(100vw - 24px)); }
+[data-slot="combobox-list"] { max-height: min(320px, var(--available-height, 320px)); }
+[data-slot="combobox-empty"], .portal-select-empty { padding: 16px; color: var(--muted-foreground); font-size: 14px; }
 
 /* Button and Dialog are the retained official Base UI adapters, independently styled here. */
 .ui-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0; padding: 10px 16px; border: 1px solid transparent; border-radius: 8px; font-size: 14px; font-weight: 600; line-height: 1.4; text-decoration: none; transition: background-color 140ms, border-color 140ms; }
