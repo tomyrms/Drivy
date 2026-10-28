@@ -266,12 +266,13 @@ async function main() {
       &&await page.getByRole('link',{name:'Continuer la préparation',exact:true}).count()===0,
       'La création confirmée enchaîne sur les permis enseignés sans écran intermédiaire ni formulaire d’identité répété');
     const openReview=async()=>{
+      stage='navigation vers le résumé de préparation';
       await page.getByRole('navigation',{name:'Étapes de préparation',exact:true}).getByRole('button',{name:/Résumé et confirmation/}).click();
       await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
     };
     const editReviewSection=async(name:string)=>{
-      const review=page.getByRole('button',{name:'Vérifier la préparation',exact:true});
-      if(await review.isVisible())await review.click();
+      stage=`personnalisation depuis le résumé : ${name}`;
+      // Le résumé est déjà en lecture : attendre sa section, sans cliquer le bouton transitoire qui disparaît à la réponse.
       await page.locator('.setup-workspace section').filter({has:page.getByRole('heading',{name,exact:true})})
         .getByRole('button',{name:'Modifier',exact:true}).click();
       await page.getByRole('heading',{name,exact:true}).waitFor();
@@ -317,6 +318,7 @@ async function main() {
     const draft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await draftResponse.json());
     assert(draftResponse.ok()&&draft.data.version===savedReceipt.resourceVersion&&draft.data.currentStep==='REVIEW'&&draft.data.content.privacy.noticeText===notice&&draft.data.content.privacy.retentionText===retention,
       'Le guide reprend le résumé et les textes réellement enregistrés après la réponse perdue');
+    await page.getByRole('button',{name:'Vérifier la préparation',exact:true}).click();
     await editReviewSection('Confidentialité');
     assert(await page.getByLabel('Information des personnes',{exact:true}).inputValue()===notice&&await page.getByLabel('Conservation des données',{exact:true}).inputValue()===retention,
       'Les champs du guide retrouvent les textes du serveur après vérification du reçu');
@@ -336,7 +338,8 @@ async function main() {
     page=await consumerContext.newPage();await page.goto(`${origin}/app`);
     await signIn(page,'school@example.invalid',consumerPassword);
     await page.getByRole('link',{name:'Ouvrir l’école Auto-école Recette · synthétique',exact:true}).click();
-    await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();await editReviewSection('Informations des élèves');
+    await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Vérifier la préparation',exact:true}).click();await editReviewSection('Informations des élèves');
     assert(await page.getByLabel('Explication · Téléphone',{exact:true}).inputValue()===savedPhoneExplanation,
       'Un navigateur indépendant reprend l’étape confirmée et le contenu serveur, sans annoncer la frappe non enregistrée comme sauvegardée');
     const resumedDraft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await (await consumerContext.request.get(draftEndpoint)).json()).data;
