@@ -44,6 +44,25 @@
 .agenda-event-instructor, .agenda-event-place { font-size: 11px; line-height: 1.35; color: var(--muted-foreground); display: flex; align-items: center; gap: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda-event-place svg, .agenda-event-instructor svg { width: 12px; height: 12px; flex: 0 0 12px; }
 .agenda-positioned-event .agenda-event-place { display: none; }
+/* Week grid block: a fixed-height grid, not a column that flexbox can crush. Row 1: time and permit warning. Row 2: the name, never
+   shortened by its neighbours. Row 3: the instructor (ellipsis) and the state, whose label stays whole. On a narrow block the
+   instructor yields to the state; both stay in the accessible name and in the appointment sheet. */
+.agenda-positioned { container: agenda-event / inline-size; }
+.agenda-positioned-event .agenda-event { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); align-content: start; row-gap: 3px; padding: 6px 7px; }
+.agenda-positioned-event .agenda-event-clock { grid-area: 1 / 1; }
+.agenda-positioned-event .agenda-event-warning { grid-area: 1 / 2; display: inline-flex; margin-left: 6px; }
+.agenda-positioned-event .agenda-event-warning > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.agenda-positioned-event .agenda-event > strong { grid-area: 2 / 1 / 3 / -1; line-height: 1.4; }
+.agenda-positioned-event .agenda-event-instructor { grid-area: 3 / 1; display: block; align-self: start; overflow: hidden; text-overflow: ellipsis; }
+.agenda-positioned-event .agenda-event-instructor > svg { display: inline; vertical-align: -2px; margin-right: 5px; }
+.agenda-positioned-event .agenda-event-state { grid-area: 3 / 2; align-self: start; margin-left: 6px; white-space: nowrap; color: var(--accent-foreground); }
+.agenda-positioned-event .agenda-event[data-phase=cancelled] .agenda-event-state, .agenda-positioned-event .agenda-event[data-kind=course] .agenda-event-state { color: var(--muted-foreground); }
+@container agenda-event (max-width: 140px) {
+  .agenda-event[data-has-state] .agenda-event-instructor { display: none; }
+  .agenda-event[data-has-state] .agenda-event-state { grid-column: 1 / -1; margin-left: 0; }
+}
+.agenda-event-warning > svg { width: 12px; height: 12px; flex: 0 0 12px; }
+.agenda-day-list .agenda-event-warning { display: flex; align-items: center; gap: 5px; }
 .agenda-event-state, .agenda-event-warning { font-size: 10px; line-height: 1.35; font-weight: 550; }
 .agenda-event-warning { color: var(--portal-warning); }
 .agenda-week-empty { border-top: 1px solid var(--border); padding: 16px 20px; margin: 0; color: var(--muted-foreground); font-size: 14px; }

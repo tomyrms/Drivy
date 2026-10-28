@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, Users } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, TriangleAlert, Users } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
@@ -58,7 +58,7 @@ export function AgendaPilot() {
       <div className="agenda-day-list">{events.map(event => <EventEntry key={event.key} event={event} state={state} />)}{events.length === 0 && state.emptyConfirmed && <div className="agenda-empty"><CalendarDays aria-hidden="true" /><h3>{state.searching ? 'Aucune leçon pour cet élève' : 'Aucun rendez-vous ce jour'}</h3>{canPlan && !state.searching && <Button variant="outline" onClick={() => state.openLesson(null)}>Planifier une leçon</Button>}</div>}</div>
     </> : <div className="agenda-week"><div className="agenda-week-head"><span className="agenda-time-zone">{school.timeZone.split('/').at(-1)}</span>{state.days.map(day => <Button key={day.day} variant="ghost" onClick={() => { state.chooseDay(day.day); state.setPresentation('day'); }} data-today={day.day === today}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong></Button>)}</div>
       <div className="agenda-grid-scroll" id="agenda-grid-scroll"><div className="agenda-time-grid" style={{ height: `${(endHour - startHour) * 60}px` }}><div className="agenda-hour-rail">{Array.from({ length: endHour - startHour }, (_, index) => <span key={index} style={{ top: index * 60 }}>{String((startHour + index) % 24).padStart(2, '0')}:00</span>)}</div>
-        {state.days.map(day => <div className="agenda-day-column" key={day.day} aria-label={formatDayHeading(day.day)} data-today={day.day === today}>{calendarLanes(day.items, school.timeZone).map(item => <div key={item.event.key} className="agenda-positioned-event" style={{ top: item.start - startHour * 60, height: item.end - item.start - 4, left: `calc(${item.lane / item.lanes * 100}% + 3px)`, width: `calc(${100 / item.lanes}% - 6px)` } as CSSProperties}><EventEntry event={item.event} state={state} /></div>)}</div>)}
+        {state.days.map(day => <div className="agenda-day-column" key={day.day} aria-label={formatDayHeading(day.day)} data-today={day.day === today}>{calendarLanes(day.items, school.timeZone).map(item => <div key={item.event.key} className="agenda-positioned-event agenda-positioned" style={{ top: item.start - startHour * 60, height: item.end - item.start - 4, left: `calc(${item.lane / item.lanes * 100}% + 3px)`, width: `calc(${100 / item.lanes}% - 6px)` } as CSSProperties}><EventEntry event={item.event} state={state} /></div>)}</div>)}
       </div></div>{events.length === 0 && state.emptyConfirmed && <p className="agenda-week-empty">{state.searching ? 'Aucune leçon pour cet élève cette semaine.' : 'Aucun rendez-vous cette semaine.'}</p>}
     </div>}
     <footer className="agenda-read-time">{state.freshness.complete && state.freshness.readAt ? `Actualisé à ${new Intl.DateTimeFormat('fr-CH', { timeZone: school.timeZone, timeStyle: 'short' }).format(state.freshness.readAt)}` : 'La lecture complète de l’agenda n’est pas confirmée.'}<span>{school.timeZone}</span></footer>
@@ -73,9 +73,13 @@ function EventEntry({ event, state }: { event: AgendaEvent; state: AgendaState }
   const instructor = isLesson ? state.memberName(event.lesson.instructorMembershipId) : event.occurrence.instructorDisplayName;
   const place = isLesson ? event.lesson.meetingPoint : event.series.location;
   const id = isLesson ? `portal-lesson-${event.lesson.id}` : `portal-course-${event.series.id}-${event.occurrence.id}`;
-  return <button type="button" id={id} className="agenda-event" data-kind={event.kind} data-phase={phase} onClick={() => isLesson ? state.openLesson(event.lesson.id) : state.openCourse(event.series.id, event.occurrence.id)} aria-label={`${title}, ${formatTimeRange(event.startsAt, end, state.context.school.timeZone)}, ${instructor}`}>
+  // One state label per appointment: a lesson's phase, or a course that is not simply published. The phase is also read aloud.
+  const stateLabel = isLesson ? phase && phase !== 'planned' ? phaseLabels[phase] : null
+    : event.series.status === 'CANCELLED' ? 'Annulé' : event.series.status === 'DRAFT' ? 'Brouillon' : event.series.status === 'CLOSED' ? 'Clos' : null;
+  const warning = isLesson && event.lesson.permitWarning === true;
+  return <button type="button" id={id} className="agenda-event" data-kind={event.kind} data-phase={phase} data-has-state={stateLabel ? true : undefined} onClick={() => isLesson ? state.openLesson(event.lesson.id) : state.openCourse(event.series.id, event.occurrence.id)} aria-label={[title, formatTimeRange(event.startsAt, end, state.context.school.timeZone), instructor, stateLabel, warning ? 'Permis à vérifier' : null].filter(Boolean).join(', ')}>
     <span className="agenda-event-clock"><Clock3 aria-hidden="true" />{formatTimeRange(event.startsAt, end, state.context.school.timeZone)}</span><strong>{title}</strong><span className="agenda-event-instructor">{!isLesson && <Users aria-hidden="true" />}{instructor}</span>{place && <span className="agenda-event-place"><MapPin aria-hidden="true" />{place}</span>}
-    {phase && phase !== 'planned' && <span className="agenda-event-state">{phaseLabels[phase]}</span>}{isLesson && event.lesson.permitWarning && <span className="agenda-event-warning">Permis à vérifier</span>}{!isLesson && event.series.status !== 'PUBLISHED' && <span className="agenda-event-state">{event.series.status === 'CANCELLED' ? 'Annulé' : event.series.status === 'DRAFT' ? 'Brouillon' : 'Clos'}</span>}
+    {stateLabel && <span className="agenda-event-state">{stateLabel}</span>}{warning && <span className="agenda-event-warning"><TriangleAlert aria-hidden="true" /><span>Permis à vérifier</span></span>}
   </button>;
 }
 
