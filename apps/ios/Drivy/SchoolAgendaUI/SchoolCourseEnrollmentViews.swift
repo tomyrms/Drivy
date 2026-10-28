@@ -6,6 +6,7 @@ struct SchoolCourseLearnerView: View {
     @Bindable var model: SchoolCourseLearnerWorkspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var review: SchoolCourseEnrollmentReview?
     @State private var confirmsCancel = false
     /// Refus ou sortie d’attente à confirmer (#223) : rien ne part avant le second appui.
@@ -36,6 +37,15 @@ struct SchoolCourseLearnerView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
             .task { await model.load() }
             .refreshable { await model.load() }
+            // Place proposée : une relecture à son échéance et au retour dans l’app, sans interrogation répétée (#224).
+            .task(id: model.me?.offer?.expiry) {
+                guard let delay = model.me?.offer?.expiry?.timeIntervalSinceNow, delay > 0 else { return }
+                do { try await Task.sleep(for: .seconds(delay + 1)) } catch { return }
+                await model.load()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active, model.me?.state == .offered { Task { await model.load() } }
+            }
             .onChange(of: model.errorMessage) { _, message in
                 if let message { UIAccessibility.post(notification: .announcement, argument: message) }
             }
@@ -157,9 +167,14 @@ struct SchoolCourseLearnerView: View {
                 secondary("Quitter la liste d’attente", id: "course-leave-waitlist") { release = .leaveWaitlist(rank: me.waitlistPosition) }
             case .offered:
                 if let offer = me.offer {
-                    if model.cancellationClosed() { DrivyActionNote(text: "Le délai d’annulation est passé.") }
-                    primary("Accepter la place", id: "course-accept-offer") { review = SchoolCourseEnrollmentReview(action: .accept(offerID: offer.id)) }
-                    secondary("Refuser la place", id: "course-decline-offer") { release = .decline(offerID: offer.id) }
+                    // Échéance passée sur cet appareil : plus d’acceptation présentée comme disponible ; rien n’est envoyé.
+                    if (offer.expiry ?? .distantPast) <= Date() {
+                        DrivyActionNote(text: "Le délai pour répondre est passé.")
+                    } else {
+                        if model.cancellationClosed() { DrivyActionNote(text: "Le délai d’annulation est passé.") }
+                        primary("Accepter la place", id: "course-accept-offer") { review = SchoolCourseEnrollmentReview(action: .accept(offerID: offer.id)) }
+                        secondary("Refuser la place", id: "course-decline-offer") { release = .decline(offerID: offer.id) }
+                    }
                 }
             case .enrolled:
                 if let enrollment = me.enrollment {

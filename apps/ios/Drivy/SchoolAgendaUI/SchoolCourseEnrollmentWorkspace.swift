@@ -11,6 +11,8 @@ import Observation
         case .waiting: return me.waitlistPosition.map { "En attente (rang \($0))" } ?? "En attente"
         case .offered:
             guard let expiry = me.offer?.expiry else { return "Place proposée" }
+            // Échéance passée sur cet appareil : la fiche se relit, l’école dit la suite (#224).
+            if expiry <= now { return "Délai de réponse passé" }
             return "Place proposée jusqu’à \(moment(expiry, zone: zone, now: now))"
         case .completed: return "Déjà effectué"
         case .cancelled: return "Annulé"

@@ -23,6 +23,7 @@ struct SchoolCaptureReplayView: View {
     /// Filtre des observations, commun au rail, à la liste, à la chronologie et à la carte (#236).
     @State private var filter = SchoolReplayObservationFilter()
     @FocusState private var searching: Bool
+    @State private var showsTraceHelp = false
     /// Des pastilles sont cachées au-delà de ce bord du rail : lui seul s’estompe.
     @State private var railHidesLeading = false
     @State private var railHidesTrailing = false
@@ -109,7 +110,7 @@ struct SchoolCaptureReplayView: View {
         let day = SchoolReplayFormatting.startLabel(model.startsAt, lessonTimeZone: lessonTimeZone)
         let suffix = day.map { " · \($0)" } ?? ""
         switch model.quality ?? "" {
-        case "PARTIAL": return DrivyMapStatus(title: "Partiel\(suffix)", symbol: "exclamationmark.circle", tone: .warning)
+        case "PARTIAL": return DrivyMapStatus(title: "Incomplet\(suffix)", symbol: "exclamationmark.circle", tone: .warning)
         default: return DrivyMapStatus(title: day ?? "Trajet", symbol: "point.topleft.down.to.point.bottomright.curvepath")
         }
     }
@@ -219,28 +220,55 @@ struct SchoolCaptureReplayView: View {
         case .waitingForSync:
             DrivyLoadingState(title: "Synchronisation du trajet…")
         case .processing:
-            DrivyLoadingState(title: "Recalage en cours…")
+            DrivyLoadingState(title: "Ajustement à la route…")
         case .retrying:
-            DrivyLoadingState(title: "Reprise du recalage…")
+            DrivyLoadingState(title: "Nouvel essai d’ajustement à la route…")
         case .matched, .noReliableMatch:
-            Text(matchingCoverageLabel).font(.caption).foregroundStyle(DrivyTheme.muted)
+            HStack(spacing: 0) {
+                Text(matchingCoverageLabel).font(.caption).foregroundStyle(DrivyTheme.muted)
+                traceHelpButton
+            }
         case .unavailable:
-            SchoolErrorNotice(message: "Recalage indisponible. Le tracé mesuré reste lisible.", retry: nil)
+            SchoolErrorNotice(message: "Ajustement à la route indisponible. Le tracé GPS mesuré reste lisible.", retry: nil)
         case .deferred(let reason):
             SchoolErrorNotice(message: reason == "WAITING_FOR_SYNC"
                 ? "Synchronisation encore en attente. Réessaie plus tard."
-                : "Recalage différé. Le tracé mesuré reste lisible.", retry: { Task { await model.load() } })
+                : "Ajustement à la route différé. Le tracé GPS mesuré reste lisible.", retry: { Task { await model.load() } })
         case .failed:
-            SchoolErrorNotice(message: "Le recalage n’a pas pu être chargé. Le tracé mesuré reste lisible.",
+            SchoolErrorNotice(message: "L’ajustement à la route n’a pas pu être chargé. Le tracé GPS mesuré reste lisible.",
                 retry: { Task { await model.load() } })
         }
     }
 
     private var matchingCoverageLabel: String {
         switch timeline?.matchingCoverage.state ?? .none {
-        case .full: "Tracé recalé"
-        case .partial: "Recalage partiel"
-        case .none: "Aucune correspondance fiable"
+        case .full: "Tracé ajusté à la route"
+        case .partial: "Tracé ajusté à la route en partie"
+        case .none: "Tracé GPS mesuré, sans ajustement"
+        }
+    }
+
+    /// Aide à la demande (#233) : ce que montre le tracé, sans encombrer la carte ni promettre une précision.
+    private var traceHelpButton: some View {
+        Button { showsTraceHelp = true } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(DrivyTheme.accent)
+                .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .padding(.vertical, -DrivySpacing.s)
+        .accessibilityLabel("À propos du tracé")
+        .accessibilityIdentifier("school-replay-trace-help")
+        .popover(isPresented: $showsTraceHelp) {
+            Text(SchoolReplayTraceHelp.text(incomplete: model.quality == "PARTIAL"))
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(idealWidth: 300, alignment: .leading)
+                .padding(DrivySpacing.m)
+                .presentationCompactAdaptation(.popover)
         }
     }
 

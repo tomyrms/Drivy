@@ -59,6 +59,22 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertEqual(MessagingDecryptionFailure.explanation(for: "D-WH-MUNVERIFIED"), "Ce message n’a pas été partagé avec cet appareil.")
     }
 
+    /// #245 : l'extrait montre le passage trouvé, avec les règles de la recherche, sans couper un caractère.
+    func testSearchExcerptShowsTheMatchedPassage() {
+        let long = String(repeating: "Bonjour à tous. ", count: 10) + "Pensez au café 👩‍👩‍👧 de l’école\net au permis."
+        let excerpt = MessagingSearchExcerpt.make(MessagingPlainContent(text: long), query: "CAFE")
+        let plain = String(excerpt.characters)
+        XCTAssertTrue(plain.hasPrefix("…"))
+        XCTAssertTrue(plain.contains("café 👩‍👩‍👧 de l’école et au permis"))
+        XCTAssertFalse(plain.contains("\n"))
+        let bold = excerpt.runs.filter { $0.inlinePresentationIntent == .stronglyEmphasized }.map { String(excerpt[$0.range].characters) }
+        XCTAssertEqual(bold, ["café"])
+        let twice = MessagingSearchExcerpt.make(MessagingPlainContent(text: "Lundi ou lundi ?"), query: "lundi")
+        XCTAssertEqual(twice.runs.filter { $0.inlinePresentationIntent == .stronglyEmphasized }.count, 2)
+        let poll = MessagingPlainContent(poll: .init(question: "Quand ?", options: [.init(id: "o1", label: "Mardi")]))
+        XCTAssertTrue(String(MessagingSearchExcerpt.make(poll, query: "mardi").characters).contains("Mardi"))
+    }
+
     func testSingleChoiceReplacesAndSecondTapWithdraws() {
         XCTAssertEqual(MessagingPollRules.toggled([], option: "o1", allowsMultiple: false), ["o1"])
         XCTAssertEqual(MessagingPollRules.toggled(["o1"], option: "o2", allowsMultiple: false), ["o2"])

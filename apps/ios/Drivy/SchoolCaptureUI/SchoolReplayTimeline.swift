@@ -429,6 +429,16 @@ struct SchoolReplayTimeline {
     }
 }
 
+/// Aide du tracé (#233) : les mots de l’écran, sans faire passer l’ajustement pour une position mesurée certaine.
+enum SchoolReplayTraceHelp {
+    static func text(incomplete: Bool) -> String {
+        var parts = ["Le trait suit les positions GPS mesurées pendant la leçon, ajustées à la route quand la correspondance est fiable.",
+                     "Les pointillés relient des moments sans mesure : aucune position n’y est inventée."]
+        if incomplete { parts.append("Une partie des positions n’a pas été reçue par l’école.") }
+        return parts.joined(separator: " ")
+    }
+}
+
 /// Type d’une observation du replay, pour le filtre (#236).
 enum SchoolReplayObservationKind: CaseIterable, Hashable {
     case attention, toWorkOn, positive, moment, note

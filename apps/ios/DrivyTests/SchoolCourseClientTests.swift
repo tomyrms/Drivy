@@ -251,6 +251,9 @@ import Testing
         // 17:30 UTC = 18:30 à Zurich en hiver : l’heure suit le fuseau de l’école.
         let sameDay = try #require(SchoolLesson.date("2030-03-01T08:00:00Z"))
         #expect(SchoolCourseEnrollmentFormat.status(offered.me, zone: "Europe/Zurich", now: sameDay) == "Place proposée jusqu’à 18:30")
+        // #224 : l’échéance passée sur l’appareil n’est plus dite comme une place encore ouverte.
+        let afterExpiry = try #require(SchoolLesson.date("2030-03-01T17:31:00Z"))
+        #expect(SchoolCourseEnrollmentFormat.status(offered.me, zone: "Europe/Zurich", now: afterExpiry) == "Délai de réponse passé")
 
         let words: [(SchoolCourseLearnerState.State, String)] = [(.available, "Disponible"), (.full, "Complet"), (.enrolled, "Inscrit"),
             (.completed, "Déjà effectué"), (.cancelled, "Annulé")]

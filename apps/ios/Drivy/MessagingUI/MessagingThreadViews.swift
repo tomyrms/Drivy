@@ -461,12 +461,31 @@ struct MessagingSearchView: View {
     @State private var results: [MessagingHistoryEntry] = []
     /// La recherche dont `results` est la réponse : « Aucun résultat » n’est dit qu’une fois elle terminée.
     @State private var searchedQuery: String?
+    /// L’historique protégé de l’appareil a pu être lu pour cette réponse (#244).
+    @State private var historyAvailable = true
+
+    private var hasQuery: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Une frappe plus récente que la réponse : les résultats d’avant ne sont plus montrés comme les siens.
+    private var isSearching: Bool { hasQuery && searchedQuery != query }
 
     var body: some View {
         NavigationStack {
             List {
+                if hasQuery && !isSearching && !historyAvailable {
+                    Section {
+                        DrivyFormMessage(text: "Historique de cet appareil illisible : seuls les messages affichés ont été cherchés.",
+                                         tone: .warning)
+                    }
+                }
                 Section {
-                    ForEach(results) { entry in
+                    if isSearching {
+                        HStack(spacing: DrivySpacing.s) {
+                            ProgressView().accessibilityHidden(true)
+                            Text("Recherche…").foregroundStyle(DrivyTheme.muted)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    ForEach(isSearching ? [] : results) { entry in
                         Button { onSelect(entry.messageID); dismiss() } label: {
                             HStack(alignment: .top, spacing: DrivySpacing.s) {
                                 DrivyAvatar(name: workspace.displayName(entry.senderID), size: 32, photo: workspace.photos[entry.senderID])
@@ -478,7 +497,9 @@ struct MessagingSearchView: View {
                                         Text(entry.acceptedAt, format: .dateTime.day().month().hour().minute())
                                             .font(.caption).foregroundStyle(DrivyTheme.muted)
                                     }
-                                    Text(entry.content.summary).font(.subheadline).lineLimit(3).foregroundStyle(DrivyTheme.text)
+                                    // Le passage trouvé, pas le début du message (#245).
+                                    Text(MessagingSearchExcerpt.make(entry.content, query: query))
+                                        .font(.subheadline).lineLimit(3).foregroundStyle(DrivyTheme.text)
                                 }
                             }
                             .padding(.vertical, DrivySpacing.xxs)
@@ -486,9 +507,10 @@ struct MessagingSearchView: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("messaging.search.result")
                     }
-                    if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty && searchedQuery == query {
-                        DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
-                            actionTitle: "Effacer la recherche", action: { query = "" })
+                    if hasQuery && !isSearching && results.isEmpty {
+                        // La portée réelle : un message jamais ouvert ici n’est pas « inexistant » (#244).
+                        DrivyEmptyState(title: "Aucun résultat", message: "Seuls les messages déjà ouverts sur cet appareil sont cherchés.",
+                            symbol: "magnifyingglass", actionTitle: "Effacer la recherche", action: { query = "" })
                             .buttonStyle(.borderless)
                     }
                 } header: {
@@ -504,7 +526,8 @@ struct MessagingSearchView: View {
                 guard !Task.isCancelled else { return }
                 let found = await workspace.search(query, conversationID: conversationID)
                 guard !Task.isCancelled else { return }
-                results = found
+                results = found.entries
+                historyAvailable = found.historyAvailable
                 searchedQuery = query
             }
             .navigationTitle("Rechercher")
