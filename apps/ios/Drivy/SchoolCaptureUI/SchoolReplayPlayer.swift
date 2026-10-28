@@ -62,7 +62,7 @@ final class SchoolReplayPlayer: DrivyRouteMapMotion {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(80)) } catch { return }
                 guard let self, self.isPlaying else { return }
-                self.publish()
+                self.publish(at: CACurrentMediaTime())
             }
         }
         wake?()
@@ -78,6 +78,13 @@ final class SchoolReplayPlayer: DrivyRouteMapMotion {
     }
 
     func toggle() { if isPlaying { pause() } else { play() } }
+
+    /// Geste de lecture d'une observation : l'instant et sa note restent stables jusqu'à « Lecture ».
+    @discardableResult func selectObservation(_ item: SchoolReplayTimeline.Item) -> UUID {
+        pause()
+        if let value = item.offset { seek(to: value) }
+        return item.id
+    }
 
     /// The map shows the new instant on its very next frame, playing or not.
     func seek(to value: TimeInterval) {
@@ -96,10 +103,10 @@ final class SchoolReplayPlayer: DrivyRouteMapMotion {
         speed = Self.speeds[(index + 1) % Self.speeds.count]
     }
 
-    private func publish() {
-        guard let timeline else { return }
+    func publish(at now: TimeInterval) {
+        guard isPlaying, let timeline else { return }
         let before = offset
-        let after = time(at: CACurrentMediaTime())
+        let after = time(at: now)
         offset = after
         if after > before, let crossed = timeline.lastTimedItem(after: before, upTo: after) { onCross?(crossed.id) }
         if after >= timeline.duration { pause() }

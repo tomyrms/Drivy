@@ -590,8 +590,7 @@ struct SchoolCaptureReplayView: View {
     /// Choisir une observation (pastille, carte, liste, repère) la donne à lire : la lecture s’arrête sur elle, sans
     /// la remplacer à la suivante ; « Lecture » reprend le suivi (#235).
     private func select(_ item: SchoolReplayTimeline.Item) {
-        player.pause()
-        step(item)
+        selectedID = player.selectObservation(item)
     }
 
     /// Précédente et suivante parcourent la chronologie sans arrêter la lecture.

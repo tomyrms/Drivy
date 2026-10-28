@@ -39,9 +39,7 @@ struct SchoolCourseLearnerView: View {
             .refreshable { await model.load() }
             // Place proposée : une relecture à son échéance et au retour dans l’app, sans interrogation répétée (#224).
             .task(id: model.me?.offer?.expiry) {
-                guard let delay = model.me?.offer?.expiry?.timeIntervalSinceNow, delay > 0 else { return }
-                do { try await Task.sleep(for: .seconds(delay + 1)) } catch { return }
-                await model.load()
+                await model.waitForOfferExpiry()
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active, model.me?.state == .offered { Task { await model.load() } }
@@ -77,10 +75,10 @@ struct SchoolCourseLearnerView: View {
 
     @ViewBuilder private func content(_ series: SchoolCourseSeries, _ me: SchoolCourseLearnerState) -> some View {
         Section {
-            Text(SchoolCourseEnrollmentFormat.status(me, zone: zone)).font(.headline)
+            Text(SchoolCourseEnrollmentFormat.status(me, zone: zone, now: model.serverNow)).font(.headline)
             .accessibilityIdentifier("course-learner-status")
             pendingLine
-            if let next = SchoolCoursePresentation.nextOccurrence(series, now: Date()) {
+            if let next = SchoolCoursePresentation.nextOccurrence(series, now: model.serverNow) {
                 Label(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: zone), systemImage: "calendar")
                     .monospacedDigit().fixedSize(horizontal: false, vertical: true)
             }
@@ -168,7 +166,7 @@ struct SchoolCourseLearnerView: View {
             case .offered:
                 if let offer = me.offer {
                     // Échéance passée sur cet appareil : plus d’acceptation présentée comme disponible ; rien n’est envoyé.
-                    if (offer.expiry ?? .distantPast) <= Date() {
+                    if !model.offerAvailable {
                         DrivyActionNote(text: "Le délai pour répondre est passé.")
                     } else {
                         if model.cancellationClosed() { DrivyActionNote(text: "Le délai d’annulation est passé.") }
@@ -326,6 +324,7 @@ struct SchoolLearnerCoursesView: View {
             .navigationTitle("Cours collectifs").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
             .task { await model.load() }
+            .task(id: model.offers.first?.expiry) { await model.waitForNextOfferExpiry() }
             .refreshable { await model.load() }
             .sheet(item: $opened, onDismiss: { Task { await model.load() } }) { course in
                 SchoolCourseLearnerView(model: course)
@@ -496,6 +495,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
                 }
             }
             .task(id: schoolID) { await prepare(); openPendingSeries() }
+            .task(id: model?.offers.first?.expiry) { await model?.waitForNextOfferExpiry() }
             // Toucher une notification de cours : sa fiche s’ouvre, relue auprès de l’école (aucun droit déduit de la charge utile).
             .onChange(of: SchoolPushCenter.shared.pendingSeriesID) { _, _ in openPendingSeries() }
             .onChange(of: scenePhase) { _, phase in

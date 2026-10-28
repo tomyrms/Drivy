@@ -173,6 +173,16 @@ struct SchoolCourseLearnerPending: Equatable {
     var isSending: Bool { pending?.state == .sending }
     var series: SchoolCourseSeries? { reply?.series }
     var me: SchoolCourseLearnerState? { reply?.me }
+    var serverNow: Date { client.serverClock.now ?? .distantFuture }
+    var offerAvailable: Bool {
+        me?.state == .offered && (me?.offer?.expiry ?? .distantPast) > serverNow
+    }
+
+    func waitForOfferExpiry() async {
+        guard let expiry = me?.offer?.expiry else { return }
+        do { try await client.serverClock.wait(until: expiry) } catch { return }
+        await load()
+    }
     /// Le type de cours est suivi (prochaines sessions, #40) ; `nil` tant que l’école ne l’a pas dit.
     private(set) var following: Bool?
     private(set) var isUpdatingFollow = false
@@ -225,6 +235,14 @@ struct SchoolCourseLearnerPending: Equatable {
     /// Retour immédiat : la demande part, l’écran reste libre. Double appui : une seule demande.
     func submit(_ action: SchoolCourseLearnerAction) {
         guard pending == nil else { return }
+        switch action {
+        case .accept(let offerID), .decline(let offerID):
+            guard offerAvailable, me?.offer?.id == offerID else {
+                errorMessage = "Le délai pour répondre est passé."
+                return
+            }
+        default: break
+        }
         errorMessage = nil; confirmation = nil
         pending = SchoolCourseLearnerPending(action: action, operation: UUID())
         Task { await send() }
@@ -271,9 +289,9 @@ struct SchoolCourseLearnerPending: Equatable {
     }
 
     /// L’échéance d’annulation de la série est passée (accepter une place ne permettra plus d’annuler soi-même).
-    func cancellationClosed(now: Date = Date()) -> Bool {
+    func cancellationClosed(now: Date? = nil) -> Bool {
         guard let deadline = series.flatMap({ SchoolLesson.date($0.selfCancellationDeadline) }) else { return false }
-        return deadline < now
+        return deadline < (now ?? serverNow)
     }
 
     private static func done(_ action: SchoolCourseLearnerAction) -> String {
@@ -314,8 +332,13 @@ struct SchoolCourseLearnerPending: Equatable {
 
     /// Propositions encore ouvertes, la plus proche échéance d’abord.
     var offers: [SchoolCourseOffer] {
-        (mine?.offers ?? []).filter { ($0.expiry ?? .distantPast) > Date() }
+        (mine?.offers ?? []).filter { ($0.expiry ?? .distantPast) > (client.serverClock.now ?? .distantFuture) }
             .sorted { ($0.expiry ?? .distantFuture) < ($1.expiry ?? .distantFuture) }
+    }
+
+    func waitForNextOfferExpiry() async {
+        guard let expiry = offers.first?.expiry else { return }
+        try? await client.serverClock.wait(until: expiry)
     }
 
     /// Fiches ouvertes dans ce contexte : rouvrir un cours retrouve sa demande en cours (#126).
