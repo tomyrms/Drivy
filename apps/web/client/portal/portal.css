@@ -204,12 +204,12 @@
 .portal-school-switch > svg:last-child { width: 15px; height: 15px; }
 .portal-account-trigger { width: 44px; height: 44px; border-radius: 999px; padding: 0; }
 .portal-topbar-end { margin-left: auto; display: flex; align-items: center; gap: 20px; flex-shrink: 0; }
-.portal-workspace { display: grid; grid-template-columns: 208px minmax(0, 1fr); flex: 1; }
+.portal-workspace { display: grid; grid-template-columns: 236px minmax(0, 1fr); flex: 1; }
 .portal-sidebar { background: var(--sidebar); border-right: 1px solid var(--sidebar-border); padding: 24px 12px; }
 .portal-navigation { position: sticky; top: 24px; }
 .portal-navigation ul { display: grid; gap: 6px; list-style: none; padding: 0; margin: 0; }
 .portal-navigation li { min-width: 0; }
-.portal-nav-item { width: 100%; justify-content: flex-start; gap: 12px; padding: 12px; color: var(--sidebar-foreground); font-weight: 500; }
+.portal-nav-item { width: 100%; justify-content: flex-start; gap: 12px; padding: 12px; color: var(--sidebar-foreground); font-weight: 500; text-align: left; white-space: nowrap; }
 .portal-nav-item svg { width: 20px; height: 20px; }
 .portal-nav-item[aria-current="page"] { color: var(--sidebar-accent-foreground); background: var(--sidebar-accent); font-weight: 650; }
 .portal-nav-short { display: none; }
