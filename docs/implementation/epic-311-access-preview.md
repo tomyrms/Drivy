@@ -13,7 +13,18 @@ Le contrôleur extrait les commandes existantes (version, idempotence, motif, at
 - Typage client exécuté et réussi.
 - Essai navigateur réel Chromium/Edge : rôles Administration + Moniteur cumulés, ajout d’une autorisation, motif, confirmation, lecture actualisée, refus conservant le brouillon, changement clair/sombre, largeur mobile 390 sans débordement ; aucune erreur JavaScript.
 - Captures desktop 1440 et mobile 390, lecture/édition. La capture Atrium du viewport émulé présentait des tuiles répétées : captures produites avec le navigateur Playwright déjà présent dans l’environnement, sans modifier les tests du produit.
-- Compilation et publication : reçu de livraison ajouté après exécution. Pas de grande campagne #309/#84, pas d’IPA, aucune issue close sur la base de cet aperçu.
+- Compilation Vite réussie, graphe de 2 424 modules sans ancien rendu. Avertissements non bloquants : initialiseur de thème statique volontairement non bundlé, bundle JS de 594 Ko (186 Ko gzip) à fractionner lors de la généralisation. Pas de grande campagne #309/#84, pas d’IPA, aucune issue close sur la base de cet aperçu.
+
+## Publication exécutée
+
+- Aperçu : <https://shulker.ch/drivy-preview/>.
+- SHA produit : `1812bd6056a970d94dd661443f2bcbbf3ac0a872` (branche `codex/epic-311-rebuild`). Manifeste public `preview-build.json` et pied de page cohérents.
+- Publication statique isolée sur Caddy uniquement, 13 fichiers. Aucun changement de services produit, de base, de migrations ou de données. Origine différente du portail authentifié, pour isoler également le stockage navigateur des commandes.
+- Sauvegarde exacte de Caddy avant ajout de route ; validation du candidat, comparaison des autres hôtes, rechargement et service actif réussis. En-têtes CSP/noindex/HSTS/nosniff vérifiés ; HTML servi identique à l’artefact.
+- Contre-vérification après publication par le coordinateur : HTTPS 200 et parcours navigateur complet de cet aperçu (rôles cumulés, confirmation, lecture actualisée, refus conservant le motif, thèmes et mobile 390 sans débordement) réussis, aucune erreur JavaScript.
+- Reçu et point de retour arrière : `20261028T202042Z-1812bd6056a9`. Le script de publication contient le rollback avec contrôle des empreintes avant restauration. Pas de retrait de l’aperçu effectué : il reste disponible pour l’essai du porteur.
+
+Le porteur a indiqué « c’est déjà bien mieux » avant la publication ; son essai de l’URL reste attendu. La reconstruction complète et le raccord authentifié ne sont pas déclarés validés.
 
 ## Essai du porteur
 
