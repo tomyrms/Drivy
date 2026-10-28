@@ -27,17 +27,14 @@ Branche : `claude/suite-issues-20261028`, partie de `claude/audit-ux-lots-5-8` (
 
 | Vérification | Résultat |
 | --- | --- |
-| Compilation de l'app (IPA, runner Apple) | à joindre (runs 40677790292 lots 1-3, 40678584493 lots 1-5) |
-| Tests ajoutés, non exécutés | `MessagingMuteMenuTests`, `SchoolCourseSheetQueueTests` (5 tests), `SchoolWorkspaceTests` (2 tests photo), `SchoolLessonFinishTests` (2 tests bilan N+1) ; tests UI adaptés : `MessagingLatencyUITests.testOneSecondRefusalRemovesOnlyTheRejectedProjection`, `SchoolCourseJourneyUITests` (règlement, inscription) |
+| Essai du porteur sur l'IPA `226dee20` (build 427, avec Messages) | Validé (« tout est bon »), lots 1 à 5 |
+| Tests métier, suite complète (runner Apple) | PASS sur `c1ce2dca` : 859 tests Swift Testing en 78 suites et suites XCTest, dont `MessagingMuteMenuTests`, `SchoolCourseSheetQueueTests`, les tests photo de `SchoolWorkspaceTests` et bilan N+1 de `SchoolLessonFinishTests` (run 40686053375) |
+| Tests UI iPhone et iPad | PASS : `MessagingLatencyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests`, `SchoolFormProtectionUITests`, `SchoolReportFlowUITests` (run 40686057743) ; `SchoolCourseJourneyUITests` 7/7 après correction sur `67f20dbc` (run 40694974479) |
+| Défauts trouvés par la campagne | `try` imbriqué dans un `#expect` composé (compilation des tests) ; identifiant d'accessibilité propagé d'un `Label` ou d'un bloc à ses enfants (règlement en cours lu « Horloge », « Réessayer » de l'inscription introuvable). Corrigés. |
 | Recette physique, VoiceOver, réseau dégradé réel | NOT_EXECUTED |
 
-## Après l'essai du porteur
-
-1. `gh workflow run "Refonte · iOS" --ref claude/suite-issues-20261028 -f unit_only=true` (tests métier, la compilation de la cible de tests est la vraie vérification).
-2. Tests UI ciblés : `MessagingLatencyUITests`, `MessagingThreadUITests`, `SchoolCourseJourneyUITests`.
-3. PR vers master après la fusion de #186, #187 et #188 (autre session) ; sinon la PR embarque leurs commits.
-4. iOS seulement : aucun déploiement homelab.
+Fusion : PR vers master (iOS seul, aucun déploiement homelab).
 
 ## Pour Codex
 
-« Lis docs/implementation/reprise-suite-issues-20261028.md, puis reprends à l'étape « Après l'essai du porteur ». »
+« Lis docs/implementation/reprise-suite-issues-20261028.md, puis reprends au lot 6 (planification) s'il a été cadré avec le porteur. »

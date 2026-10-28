@@ -1202,4 +1202,5 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Branche `claude/suite-issues-20261028`, partie des lots 5 à 8 de l'audit UX (#188). [Reprise](reprise-suite-issues-20261028.md).
 - Messages : sourdine selon l'état réel (#168), refus à consulter puis masquer (#177), zones tactiles à 44 pt sans chevauchement (#142). Cours : appel, règlements et validation par élève, sans verrou global (#128-#130) ; inscription de l'élève sans écran retenu (#126). Profil : photo affichée dès le cadrage, envois en file (#118). Bilan : rédaction continue pendant l'envoi (#114).
 - Non fait : planification optimiste (#108-#110), qui demande une file de commandes reprise hors de l'écran et une projection dans l'agenda.
-- NOT_EXECUTED : tests Swift ajoutés (à lancer sur runner Apple), recette physique et VoiceOver.
+- NOT_EXECUTED : recette physique, VoiceOver et réseau dégradé réel.
+- Qualification : essai du porteur validé (IPA `226dee20`) ; 859 tests métier et suites UI Messages, cours, formulaires et bilan réussis sur iPhone et iPad (runs 40686053375, 40686057743, 40694974479). iOS seul, aucun déploiement.
