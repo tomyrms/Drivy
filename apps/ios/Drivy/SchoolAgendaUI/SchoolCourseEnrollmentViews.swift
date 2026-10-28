@@ -31,7 +31,7 @@ struct SchoolCourseLearnerView: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .navigationTitle(model.series?.title ?? "Cours collectif").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
             .task { await model.load() }
             .refreshable { await model.load() }
             .onChange(of: model.errorMessage) { _, message in
@@ -46,13 +46,12 @@ struct SchoolCourseLearnerView: View {
             .confirmationDialog("Annuler l’inscription ?", isPresented: $confirmsCancel, titleVisibility: .visible) {
                 if let enrollment = model.me?.enrollment {
                     Button("Annuler l’inscription", role: .destructive) {
-                        Task { await model.perform(.cancel(enrollmentID: enrollment.id, version: enrollment.version)) }
+                        model.submit(.cancel(enrollmentID: enrollment.id, version: enrollment.version))
                     }
                 }
                 Button("Garder", role: .cancel) {}
             } message: { Text(SchoolCourseEnrollmentFormat.cancellationMessage(model.series?.occurrences.count ?? 1)) }
         }
-        .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
     }
 
@@ -60,6 +59,7 @@ struct SchoolCourseLearnerView: View {
         Section {
             Text(SchoolCourseEnrollmentFormat.status(me, zone: zone)).font(.headline)
             .accessibilityIdentifier("course-learner-status")
+            pendingLine
             if let next = SchoolCoursePresentation.nextOccurrence(series, now: Date()) {
                 Label(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: zone), systemImage: "calendar")
                     .monospacedDigit().fixedSize(horizontal: false, vertical: true)
@@ -98,6 +98,38 @@ struct SchoolCourseLearnerView: View {
             .drivyFormRows()
     }
 
+    /// Demande en cours, dite à part de l’état de l’école : jamais « Inscrit » avant sa réponse.
+    @ViewBuilder private var pendingLine: some View {
+        if let pending = model.pending {
+            switch pending.state {
+            case .sending:
+                HStack(spacing: DrivySpacing.xs) {
+                    ProgressView().accessibilityHidden(true)
+                    Text(pending.title).foregroundStyle(DrivyTheme.muted)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("course-learner-pending")
+            case .uncertain(let message):
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Label(pending.unconfirmedTitle, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                        .font(.subheadline.weight(.semibold))
+                    Text(message).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    HStack(spacing: DrivySpacing.xs) {
+                        Button("Réessayer") { model.retryPending() }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                            .accessibilityHint("Renvoie la même demande, sans doublon")
+                            .accessibilityIdentifier("course-learner-retry")
+                        Button("Abandonner", role: .destructive) { Task { await model.abandonPending() } }
+                            .buttonStyle(DrivySecondaryButtonStyle())
+                            .accessibilityHint("Elle a peut-être été enregistrée : la fiche est relue")
+                            .accessibilityIdentifier("course-learner-abandon")
+                    }
+                }
+                .accessibilityIdentifier("course-learner-unconfirmed")
+            }
+        }
+    }
+
     @ViewBuilder private func actions(_ series: SchoolCourseSeries, _ me: SchoolCourseLearnerState) -> some View {
         Section {
             switch me.state {
@@ -105,15 +137,15 @@ struct SchoolCourseLearnerView: View {
                 primary("S’inscrire", id: "course-enroll") { review = SchoolCourseEnrollmentReview(action: .enroll) }
             case .full:
                 if me.waitlistEnabled {
-                    primary("Rejoindre la liste d’attente", id: "course-join-waitlist") { Task { await model.perform(.joinWaitlist) } }
+                    primary("Rejoindre la liste d’attente", id: "course-join-waitlist") { model.submit(.joinWaitlist) }
                 }
             case .waiting:
-                secondary("Quitter la liste d’attente", id: "course-leave-waitlist") { Task { await model.perform(.leaveWaitlist) } }
+                secondary("Quitter la liste d’attente", id: "course-leave-waitlist") { model.submit(.leaveWaitlist) }
             case .offered:
                 if let offer = me.offer {
                     if model.cancellationClosed() { DrivyActionNote(text: "Le délai d’annulation est passé.") }
                     primary("Accepter la place", id: "course-accept-offer") { review = SchoolCourseEnrollmentReview(action: .accept(offerID: offer.id)) }
-                    secondary("Refuser", id: "course-decline-offer") { Task { await model.perform(.decline(offerID: offer.id)) } }
+                    secondary("Refuser", id: "course-decline-offer") { model.submit(.decline(offerID: offer.id)) }
                 }
             case .enrolled:
                 if let enrollment = me.enrollment {
@@ -173,13 +205,13 @@ struct SchoolCourseLearnerView: View {
     private func primary(_ title: String, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DrivySpacing.xs) {
-                if model.isBusy { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
+                if model.isSending { ProgressView().tint(DrivyTheme.disabledText).accessibilityHidden(true) }
                 Text(title)
             }
         }
         .buttonStyle(DrivyPrimaryButtonStyle())
         .disabled(model.isBusy)
-        .accessibilityValue(model.isBusy ? "Envoi en cours" : "")
+        .accessibilityValue(model.isSending ? "Envoi en cours" : "")
         .accessibilityIdentifier(id)
     }
     private func secondary(_ title: String, id: String, role: ButtonRole? = nil, action: @escaping () -> Void) -> some View {
@@ -291,8 +323,8 @@ struct SchoolLearnerCoursesView: View {
 
     private func row(_ course: SchoolCourseSeries) -> some View {
         let first = SchoolLesson.date(course.firstStartsAt)
-        let note: String? = model.offer(for: course.id) != nil ? "Place proposée"
-            : model.isEnrolled(course.id) ? "Inscrit" : course.remainingSeats == 0 ? "Complet" : nil
+        let note: String? = model.pending(for: course.id).map(\.title) ?? (model.offer(for: course.id) != nil ? "Place proposée"
+            : model.isEnrolled(course.id) ? "Inscrit" : course.remainingSeats == 0 ? "Complet" : nil)
         return VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
             Text(course.title).font(.body.weight(.semibold)).foregroundStyle(DrivyTheme.text)
             if let first {
@@ -308,8 +340,7 @@ struct SchoolLearnerCoursesView: View {
     }
 
     private func open(_ seriesID: UUID) {
-        let course = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: seriesID, timeZone: model.timeZone, client: model.client)
-        opened = course
+        opened = model.detail(for: seriesID)
     }
 }
 
@@ -417,8 +448,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
                 if let model {
                   if let offer = model.offers.first {
                     Button {
-                        offered = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: offer.seriesId,
-                            timeZone: model.timeZone, client: model.client)
+                        offered = model.detail(for: offer.seriesId)
                     } label: {
                         SchoolCourseOfferBanner(offer: offer, title: model.title(for: offer.seriesId), zone: model.timeZone)
                             .padding(DrivySpacing.s)
@@ -429,8 +459,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
                     .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
                   } else if let enrollment = model.nextEnrollment(), let next = model.nextOccurrence(for: enrollment.seriesId) {
                     Button {
-                        offered = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: enrollment.seriesId,
-                            timeZone: model.timeZone, client: model.client)
+                        offered = model.detail(for: enrollment.seriesId)
                     } label: {
                         DrivyEntityRow(title: model.title(for: enrollment.seriesId) ?? "Cours collectif",
                             meta: SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: model.timeZone),
@@ -469,7 +498,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
     private func openPendingSeries() {
         guard let model, SchoolPushCenter.shared.pendingSeriesID != nil, presented == nil,
               let seriesID = SchoolPushCenter.shared.consumePendingSeries() else { return }
-        offered = SchoolCourseLearnerWorkspace(schoolID: model.schoolID, seriesID: seriesID, timeZone: model.timeZone, client: model.client)
+        offered = model.detail(for: seriesID)
     }
 
     private func prepare() async {

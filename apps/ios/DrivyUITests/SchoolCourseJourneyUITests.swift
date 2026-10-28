@@ -55,6 +55,23 @@ import XCTest
         XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Disponible")
     }
 
+    /// #126 : la confirmation se ferme aussitôt ; la fiche dit la demande à part, jamais « Inscrit » avant l’école.
+    func testEnrollmentAnswersAtOnceWithoutClaimingTheSeat() {
+        let app = launch("course-learner")
+        defer { app.terminate() }
+        let enroll = app.buttons["course-enroll"]
+        XCTAssertTrue(enroll.waitForExistence(timeout: 15), app.debugDescription)
+        enroll.tap()
+        let confirm = app.buttons["course-confirm-enrollment"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), app.debugDescription)
+        reveal(confirm, in: app)
+        confirm.tap()
+        XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForNonExistence(timeout: 5), app.debugDescription)
+        // Le transport synthétique n’écrit rien : la demande reste à reprendre, l’état de l’école ne change pas.
+        XCTAssertTrue(app.buttons["course-learner-retry"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["course-learner-status"].label, "Disponible")
+    }
+
     func testCancellationNamesTheEnrollmentRatherThanCancellingTheCourse() {
         let app = launch("course-enrolled")
         defer { app.terminate() }

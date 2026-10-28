@@ -94,22 +94,22 @@ struct SchoolCourseEnrollmentReviewView: View {
                     } header: { Text("Conditions").drivyFormSectionHeader() }
                     .drivyFormRows()
                     Section {
+                        // La demande part et la fiche du cours la suit : retour immédiat, sans faux « Inscrit ».
                         Button(review.title) {
-                            Task { if await model.perform(review.action) { dismiss() } }
+                            model.submit(review.action)
+                            dismiss()
                         }
                         .buttonStyle(DrivyPrimaryButtonStyle())
                         .disabled(model.isBusy || !review.isAvailable(in: model.me))
                         .accessibilityIdentifier("course-confirm-enrollment")
-                        if model.isBusy { ProgressView().accessibilityLabel("Confirmation en cours") }
                     }.drivyFormRows()
                 }
             }
             .scrollContentBackground(.hidden)
             .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity).background(DrivyTheme.canvas)
             .navigationTitle("Vérifier l’inscription").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() }.disabled(model.isBusy) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Retour") { dismiss() } } }
         }
-        .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
     }
 }
