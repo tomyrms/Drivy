@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { audienceInvitations, emailProblem, filterInvitations, isActionable, proposableRoles, rolesProblem, trainingProblem } from './invitations-model';
+import { audienceInvitations, emailProblem, expiryLead, filterInvitations, isActionable, proposableRoles, rolesProblem, trainingProblem } from './invitations-model';
 
 const invitation = (id: string, roles: ('ADMIN' | 'INSTRUCTOR' | 'LEARNER')[], status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'REVOKED' = 'PENDING') => ({ id, roles, status });
 
@@ -11,6 +11,9 @@ describe('invitation audiences', () => {
   });
   it('only lets a waiting or expired invitation be renewed or revoked', () => {
     expect(['PENDING', 'EXPIRED', 'ACCEPTED', 'REVOKED'].map(status => isActionable({ status: status as 'PENDING' }))).toEqual([true, true, false, false]);
+  });
+  it('words the expiry by state and omits it once an invitation is accepted or revoked', () => {
+    expect(['PENDING', 'EXPIRED', 'ACCEPTED', 'REVOKED'].map(status => expiryLead(status as 'PENDING'))).toEqual(['Expire le', 'Expirée le', null, null]);
   });
   it('filters by state and by accent-insensitive search', () => {
     const items = [invitation('a', ['LEARNER'], 'PENDING'), invitation('b', ['LEARNER'], 'REVOKED')];

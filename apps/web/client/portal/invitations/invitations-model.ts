@@ -40,6 +40,11 @@ export function trainingProblem(offeringIds: readonly string[], instructorId: st
   return valid ? null : commandMessage('INVITATION_TRAINING_INVALID');
 }
 
+/** « Expire le … » while waiting, « Expirée le … » once past; the expiry of an accepted or revoked invitation says nothing. */
+export function expiryLead(status: InvitationStatus): string | null {
+  return status === 'PENDING' ? 'Expire le' : status === 'EXPIRED' ? 'Expirée le' : null;
+}
+
 /** Date and time in the school's time zone. */
 export function formatDateTime(value: string, timeZone: string): string {
   return new Intl.DateTimeFormat('fr-CH', { dateStyle: 'long', timeStyle: 'short', timeZone }).format(new Date(value));

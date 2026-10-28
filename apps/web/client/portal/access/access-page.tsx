@@ -58,7 +58,7 @@ export function AccessPilot({ initialEdit = false, onClose }: { initialEdit?: bo
       {state.mode === 'read' && <Button disabled={!state.canWrite} onClick={state.startEditing}>Modifier les accès<ArrowRight data-icon="inline-end" /></Button>}
     </header>
 
-    {state.runner.outcome && <Alert variant={state.runner.outcome.tone === 'error' ? 'destructive' : 'default'}>
+    {state.runner.outcome && !state.confirming && <Alert variant={state.runner.outcome.tone === 'error' ? 'destructive' : 'default'}>
       <AlertTitle>{state.runner.outcome.title}</AlertTitle><AlertDescription>{state.runner.outcome.message}</AlertDescription>
       {state.runner.outcome.needsLogin && <Button variant="outline" onClick={() => state.context.login({ reauthenticate: state.runner.outcome?.code === 'REAUTH_REQUIRED' })}>Se reconnecter</Button>}
     </Alert>}

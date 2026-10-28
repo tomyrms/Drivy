@@ -41,8 +41,8 @@ function seedInvitations() {
   const code = (n: number, status: string, instructor: string, days: number) => ({ ...base, id: invitationId(n), delivery: 'CODE', maskedEmail: null, roles: ['LEARNER'], status,
     expiresAt: new Date(now + days * day).toISOString(), trainings: [{ offeringId: ids.offering, instructorMembershipId: instructor }] });
   const mail = (n: number, address: string, roles: string[], status: string, days: number) => {
-    addresses.set(invitationId(n), address);
-    return { ...base, id: invitationId(n), delivery: 'EMAIL', maskedEmail: mask(address), roles, status, expiresAt: new Date(now + days * day).toISOString() };
+    addresses.set(invitationId(200 + n), address);
+    return { ...base, id: invitationId(200 + n), delivery: 'EMAIL', maskedEmail: mask(address), roles, status, expiresAt: new Date(now + days * day).toISOString() };
   };
   // Oldest first, as the school lists them; the page shows the most recent first.
   const history = Array.from({ length: 22 }, (_, index) => mail(100 + index, `${'abcdefghijklmnopqrstuv'[index]}.archive${index}@example.test`, ['LEARNER'], index % 3 ? 'ACCEPTED' : 'EXPIRED', -30 - index));
