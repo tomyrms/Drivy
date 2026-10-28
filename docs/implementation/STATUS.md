@@ -1195,3 +1195,11 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Fil Exyte par défaut, ancien fil et réglage d’essai retirés : bulles, heure, coches, réactions, avatars, menu d’Exyte 3.3.0 aux couleurs Drivy ; composeur, citations intégrées aux réponses, sondages, droits, E2EE et file protégée Drivy ; glisser à gauche pour répondre, appui long de 0,25 s, réaction retirée d’un appui. [Décisions et reprise](reprise-exyte-chat-182-20261027.md), PR #184.
 - Qualification Apple : tests UI messagerie adaptés et réussis sur iPhone et iPad (FeatureCheck 17, Thread 8, Latency 3), 71 tests métier `messaging`, IPA avec Messages sur le commit fusionné avec `master` ([run 40668797322](https://github.com/tomyrms/Drivy/actions/runs/40668797322)).
 - Reste : décision Giphy (binaire MPL 2.0 embarqué d’office par Exyte) avant diffusion publique ; VoiceOver physique, réseau et GPS en leçon non qualifiés. Aucun déploiement nécessaire (iOS seul).
+
+
+## 28 octobre 2026 : suite des issues non commencées (#114, #118, #126, #128-#130, #142, #168, #177)
+
+- Branche `claude/suite-issues-20261028`, partie des lots 5 à 8 de l'audit UX (#188). [Reprise](reprise-suite-issues-20261028.md).
+- Messages : sourdine selon l'état réel (#168), refus à consulter puis masquer (#177), zones tactiles à 44 pt sans chevauchement (#142). Cours : appel, règlements et validation par élève, sans verrou global (#128-#130) ; inscription de l'élève sans écran retenu (#126). Profil : photo affichée dès le cadrage, envois en file (#118). Bilan : rédaction continue pendant l'envoi (#114).
+- Non fait : planification optimiste (#108-#110), qui demande une file de commandes reprise hors de l'écran et une projection dans l'agenda.
+- NOT_EXECUTED : tests Swift ajoutés (à lancer sur runner Apple), recette physique et VoiceOver.
