@@ -10,6 +10,8 @@ import { Textarea } from '../../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Skeleton } from '../../components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
+import { Input } from '../../components/ui/input';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../components/ui/select';
 import { roleLabel } from '../../protocol';
 import { filled } from '../../command-core';
 import { accessDomains, accessRoles, grantName, useAccessController } from './access-controller';
@@ -26,13 +28,25 @@ export function AccessPilot({ initialEdit = false }: { initialEdit?: boolean }) 
   useEffect(() => {
     if (initialEdit && state.canWrite && !entered.current) { entered.current = true; state.startEditing(); }
   }, [initialEdit, state.canWrite]);
-  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [state.mode, state.step]);
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [state.mode, state.step, state.selected]);
   const current = state.current;
   if (!current) return <section className="access-page">
-    <h1>Équipe et accès</h1>
+    <header className="access-heading"><h1 ref={heading} tabIndex={-1}>Équipe</h1><span className="text-sm text-muted-foreground">{state.loaded.status === 'ready' ? `${state.audience.length} membres` : ''}</span></header>
+    <div className="access-directory-toolbar"><Input aria-label="Rechercher un membre" placeholder="Rechercher un membre…" value={state.search} onChange={event => { state.setSearch(event.target.value); state.setPage(1); }} />
+      <Select value={state.sort} onValueChange={value => { if (value) state.setSort(value as 'name-asc' | 'name-desc'); }} items={[{ value: 'name-asc', label: 'Nom : A à Z' }, { value: 'name-desc', label: 'Nom : Z à A' }]}><SelectTrigger aria-label="Trier les membres"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="name-asc">Nom : A à Z</SelectItem><SelectItem value="name-desc">Nom : Z à A</SelectItem></SelectContent></Select>
+    </div>
+    <div className="access-directory-filters"><Tabs value={state.filter} onValueChange={value => { state.setFilter(String(value) as 'all' | 'active' | 'inactive'); state.setPage(1); }}><TabsList><TabsTrigger value="all">Tous</TabsTrigger><TabsTrigger value="active">Actifs</TabsTrigger><TabsTrigger value="inactive">Inactifs</TabsTrigger></TabsList></Tabs>
+      <Field orientation="horizontal"><Checkbox id="access-show-learners" checked={state.showLearners} onCheckedChange={checked => state.setShowLearners(checked === true)} /><FieldLabel htmlFor="access-show-learners">Inclure les élèves</FieldLabel></Field>
+    </div>
     {state.loaded.status === 'loading' ? <div className="access-loading"><Skeleton className="h-12 w-64" /><Skeleton className="h-40 w-full" /></div>
       : state.loaded.status === 'error' ? <Alert variant="destructive"><AlertTitle>Lecture impossible</AlertTitle><AlertDescription>{state.loaded.error}</AlertDescription><Button variant="outline" onClick={state.loaded.reload}>Réessayer</Button></Alert>
-      : <div className="access-members">{state.members.map(member => <Button key={member.id} variant="outline" onClick={() => state.select(member.id)}>{state.nameOf(member)}</Button>)}</div>}
+      : state.pageRows.length ? <div className="access-directory"><div className="access-directory-labels" aria-hidden="true"><span>Membre</span><span>Rôles dans l’école</span><span /></div>
+        {state.pageRows.map(member => <button className="access-member-row" key={member.id} type="button" onClick={() => state.select(member.id)}>
+          <span className="access-member-identity"><Avatar><AvatarFallback>{initials(member.displayName)}</AvatarFallback></Avatar><strong>{state.nameOf(member)}</strong></span>
+          <span className="access-member-roles">{member.roles.map(roleLabel).join(' · ')}{member.status !== 'ACTIVE' && <Badge variant="secondary">Accès inactif</Badge>}</span><ChevronRight aria-hidden="true" />
+        </button>)}
+      </div> : <div className="access-directory-empty"><UsersRound aria-hidden="true" /><h2>Aucun membre trouvé</h2><Button variant="outline" onClick={() => { state.setSearch(''); state.setFilter('all'); }}>Effacer les filtres</Button></div>}
+    {state.visible.length > state.pageSize && <nav className="access-directory-pagination" aria-label="Pages de l’équipe"><Button variant="outline" disabled={state.currentPage === 1} onClick={() => state.setPage(state.currentPage - 1)}>Précédent</Button><span>Page {state.currentPage} sur {Math.ceil(state.visible.length / state.pageSize)}</span><Button variant="outline" disabled={state.currentPage * state.pageSize >= state.visible.length} onClick={() => state.setPage(state.currentPage + 1)}>Suivant</Button></nav>}
   </section>;
   const busy = state.runner.busy || !!state.runner.pending;
   const changedCount = state.changes.rolesAdded.length + state.changes.rolesRemoved.length + state.changes.grantsAdded.length + state.changes.grantsRemoved.length;
@@ -44,7 +58,7 @@ export function AccessPilot({ initialEdit = false }: { initialEdit?: boolean }) 
   </dl>;
 
   return <section className="access-page">
-    <nav className="access-breadcrumb" aria-label="Fil d’Ariane"><span>Équipe</span><ChevronRight aria-hidden="true" /><span>{state.nameOf(current)}</span></nav>
+    <nav className="access-breadcrumb" aria-label="Fil d’Ariane"><button type="button" onClick={() => state.select(null)}>Équipe</button><ChevronRight aria-hidden="true" /><span>{state.nameOf(current)}</span></nav>
     <header className="access-heading">
       <div><h1 ref={heading} tabIndex={-1}>{state.mode === 'edit' ? 'Modifier les accès' : 'Accès du membre'}</h1>
         <div className="access-person-line"><Avatar><AvatarFallback>{initials(current.displayName)}</AvatarFallback></Avatar><span>{state.nameOf(current)}</span>{state.self && <Badge variant="secondary">Vous</Badge>}</div>

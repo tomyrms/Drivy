@@ -2,6 +2,7 @@
 .access-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-foreground); }
 .access-breadcrumb svg { width: 14px; height: 14px; }
 .access-breadcrumb > :last-child { color: var(--foreground); }
+.access-breadcrumb > button { min-height: 44px; padding-right: 4px; text-decoration: underline; text-underline-offset: 4px; }
 .access-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .access-heading h1 { margin: 0; font-size: clamp(26px, 3vw, 32px); line-height: 1.25; font-weight: 650; letter-spacing: -.035em; }
 .access-person-line { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; color: var(--muted-foreground); }
@@ -68,7 +69,31 @@
 .access-context dd { margin: 6px 0 0; }
 .access-loading, .access-members { display: grid; gap: 16px; }
 .preview-controls { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; padding: 40px 0 8px; color: var(--muted-foreground); font-size: 12px; }
+.access-directory-toolbar { display: flex; gap: 16px; justify-content: space-between; }
+.access-directory-toolbar > input { max-width: 360px; }
+.access-directory-toolbar > [data-slot=select-trigger] { width: 170px; }
+.access-directory-filters { display: flex; justify-content: space-between; gap: 20px; align-items: center; flex-wrap: wrap; }
+.access-directory-filters > [data-slot=field] { width: auto; }
+.access-directory { border: 1px solid var(--border); border-radius: 12px; overflow: clip; background: var(--card); }
+.access-directory-labels, .access-member-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 20px; gap: 24px; align-items: center; }
+.access-directory-labels { padding: 12px 24px; font-size: 12px; color: var(--muted-foreground); background: var(--muted); }
+.access-member-row { width: 100%; text-align: left; padding: 20px 24px; border-top: 1px solid var(--border); }
+.access-member-row:hover { background: var(--muted); }
+.access-member-row > svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.access-member-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.access-member-identity strong { font-size: 14px; font-weight: 550; overflow-wrap: anywhere; }
+.access-member-roles { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted-foreground); }
+.access-directory-empty { padding: 56px 24px; display: grid; justify-items: center; gap: 16px; border: 1px dashed var(--border); border-radius: 12px; }
+.access-directory-empty > svg { width: 28px; color: var(--muted-foreground); }
+.access-directory-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px; }
 @media (max-width: 760px) {
+  .access-directory-toolbar { flex-direction: column; gap: 12px; }
+  .access-directory-toolbar > input { max-width: none; }
+  .access-directory-labels { display: none; }
+  .access-member-row { grid-template-columns: minmax(0, 1fr) 20px; gap: 8px 16px; padding: 20px 16px; }
+  .access-member-row:first-child { border-top: 0; }
+  .access-member-roles { grid-row: 2; padding-left: 46px; }
+  .access-member-row > svg { grid-column: 2; grid-row: 1 / 3; }
   .access-page { gap: 24px; }
   .access-heading { align-items: start; flex-direction: column; gap: 16px; }
   .access-editor-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
