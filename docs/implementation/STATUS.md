@@ -1275,3 +1275,10 @@ Le porteur a accepté l’essai puis demandé tests, corrections et clôtures. L
 - IPA corrigée : version0.7.0 build442, SHA `94348f6f4b32c9e92c6e91843e40cf28aebd454a`, run40742302908, artefact12841010670. Archive téléchargée, trois empreintes concordantes, Messages de qualification inclus. Les sources natives sont identiques dans les commits ultérieurs ; API/web identiques au SHA qualifié, dernières recettes identiques à `83aadc37`.
 - Exploitation : version publiée toujours `a41cf64d`. Aucun nouveau déploiement ni effacement après l’essai. Le responsable de l’épic #280 a reçu les commits à intégrer et les contraintes de déploiement ; son worktree reste indépendant. Un prochain déploiement devra inclure la migration d’audit nouvelle après sauvegarde et accord distinct du porteur.
 - Limites conservées : S14/#266 est un audit terminé avec décision BLOCKED pour le GPS obligatoire réel ; configuration de qualification vide en exploitation. Lacunes S07 explicites. GPS/batterie/provenance réelle/délai de retrait distant/VoiceOver physique et qualification générale Messages non revendiqués. Le parent #192 n’entre pas dans les clôtures de cette livraison.
+
+## 28 octobre 2026 : qualification de l'audit UX B (PR #310, 15 issues)
+
+- Essai du porteur validé sur l'IPA `db855a85` (run 40727684500).
+- PASS : tests métier `db855a85` (run 40738918926), 864 tests Swift Testing en 79 suites, 202 XCTest, scénario réel du relais exécuté. Les deux premières tentatives ont échoué sur le seul `MatrixMessagingRelayIntegrationTests`, aux étapes READINESS puis CONVERSATION (relais jetable injoignable) ; la troisième est passée sans changement de code.
+- PASS : UI iPhone et iPad (run 40738923088), `SchoolCourseJourneyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests/testSearchInsideConversationFindsMessage`, 16 tests par appareil.
+- NOT_EXECUTED : VoiceOver physique, réseau dégradé réel. iOS seul, aucun déploiement.
