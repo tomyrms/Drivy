@@ -90,19 +90,20 @@ import XCTest
         message.press(forDuration: 0.6)
         let action = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
         XCTAssertTrue(action.waitForExistence(timeout: 5), app.debugDescription)
-        let menu = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Répondre'")).firstMatch
+        let menu = app.staticTexts["Répondre"].firstMatch
         let start = Date(); action.tap()
         XCTAssertTrue(menu.waitForNonExistence(timeout: 3), "La palette se ferme sans attendre le réseau")
         return start
     }
-    /// Bulle du fil Exyte (#182) : un seul élément « auteur, texte, heure, réactions ».
+    /// Bulle du fil Exyte (#182) : un seul élément « auteur, texte, heure, réactions ». Requête typée : parcourir
+    /// toute la hiérarchie coûte plusieurs secondes sur le simulateur iPad et fausse la mesure de latence.
     private func target(in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(
+        app.otherElements.matching(NSPredicate(
             format: "identifier == 'messaging.message' AND label CONTAINS %@", "Rendez-vous à 14 h devant l'auto-école")).firstMatch
     }
     /// Ma réaction Cœur, lue dans l'étiquette de la bulle.
     private func heart(in app: XCUIApplication) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(
+        app.otherElements.matching(NSPredicate(
             format: "identifier == 'messaging.message' AND label CONTAINS %@", "Cœur 1, vous avez réagi")).firstMatch
     }
     private func wait(_ element: XCUIElement, _ predicate: String, timeout: TimeInterval) -> Bool {
