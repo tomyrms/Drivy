@@ -263,6 +263,9 @@ struct MessagingPollCard: View {
                             .tint(chosen ? DrivyTheme.accent : DrivyTheme.rail)
                             .accessibilityHidden(true)
                     }
+                    // #142 : toute la ligne est touchable, sur au moins 44 pt.
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!MessagingPermissions.canVote(state, access: access))
@@ -274,12 +277,14 @@ struct MessagingPollCard: View {
             }
             HStack {
                 Button("Voir les votes", action: onShowVoters).font(.subheadline)
+                    .frame(minHeight: DrivyLayout.tapTarget)
                 Spacer()
                 if workspace.isInProgress(MessagingWorkspace.pollCloseOperation(message.id)) {
                     Text("Clôture en cours").font(.subheadline).foregroundStyle(DrivyTheme.muted)
                         .accessibilityIdentifier("messaging.poll.closing")
                 } else if MessagingPermissions.canClosePoll(state, account: workspace.scope.accountID, access: access) {
                     Button("Clore", role: .destructive, action: onClose).font(.subheadline)
+                        .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
                 }
             }
         }

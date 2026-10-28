@@ -395,6 +395,13 @@ struct MessagingInboxPreview: Equatable, Sendable {
         return readStates[conversationID].map(\.mutedUntil) ?? fallback
     }
 
+    /// Vrai quand la sourdine de cette conversation a été lue ou demandée ici : sinon elle reste inconnue.
+    func muteKnown(_ conversationID: UUID) -> Bool {
+        let key = MessagingMutationKey(conversationID: conversationID, messageID: conversationID, kind: .mute)
+        return pendingMutations[key] != nil || readStates[conversationID] != nil
+            || conversations.contains { $0.id == conversationID }
+    }
+
     func loadDraft(_ conversationID: UUID) async throws -> String {
         guard currentScope() == scope else { throw MessagingFailure.contextChanged }
         let text = try await drafts.loadDraft(conversationID: conversationID, scope: scope)
