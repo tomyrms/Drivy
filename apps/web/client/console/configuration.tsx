@@ -29,6 +29,8 @@ export function ConfigurationSection() {
   }, [editing]);
   useEffect(() => { if (routeQuery?.focus?.startsWith('school-')) setEditing(true); }, [routeQuery?.focus]);
   const mayEdit = loaded.data !== undefined && !runner.pending && !runner.busy;
+  // #123 : pendant l’envoi, la saisie continue ; seule une demande à vérifier ferme les champs.
+  const fieldsOpen = loaded.data !== undefined && (!runner.pending || runner.pending.phase === 'sending');
   const value = identity.draft;
   const errors = value ? {
     name: filled(value.name, 150) ? null : 'Indiquez le nom de l’école (150 caractères au plus).',
@@ -42,9 +44,10 @@ export function ConfigurationSection() {
     if (!valid || !value) { requestAnimationFrame(() => form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()); return; }
     if (!mayEdit || !identity.edited) return;
     const normalized = { name: value.name.trim(), contactEmail: value.contactEmail.trim(), contactPhone: value.contactPhone.trim() };
+    const sent = value;
     const result = await runner.run(createCommand({ schoolId, kind: 'updateSchool', path: '', ifMatch: school.version, resourceVersion: school.version,
       body: { ...normalized, contactPhone: normalized.contactPhone || null, timeZone: school.timeZone, impactConfirmed: true } }), 'Les coordonnées de l’école sont enregistrées.');
-    if (result.status === 'confirmed') { identity.markSaved(normalized); setAttempted(false); }
+    if (result.status === 'confirmed') { identity.markSaved(normalized, sent); setAttempted(false); }
   }
   return <div className="section-stack settings-studio settings-school">
     <SectionHeading title="École" symbol="school"
@@ -67,11 +70,11 @@ export function ConfigurationSection() {
           </dl>}
           {editing && value && errors && <form ref={form} className="form-grid settings-editor" noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
             <TextField id="school-name" label="Nom de l’école" value={value.name} onChange={name => identity.setDraft({ ...value, name })}
-              disabled={!mayEdit} autoComplete="organization" maxLength={150} error={attempted ? errors.name : null} />
+              disabled={!fieldsOpen} autoComplete="organization" maxLength={150} error={attempted ? errors.name : null} />
             <TextField id="school-email" label="E-mail de l’école" type="email" value={value.contactEmail} onChange={contactEmail => identity.setDraft({ ...value, contactEmail })}
-              disabled={!mayEdit} autoComplete="email" error={attempted ? errors.contactEmail : null} />
+              disabled={!fieldsOpen} autoComplete="email" error={attempted ? errors.contactEmail : null} />
             <TextField id="school-phone" label="Téléphone" type="tel" required={false} value={value.contactPhone} onChange={contactPhone => identity.setDraft({ ...value, contactPhone })}
-              disabled={!mayEdit} autoComplete="tel" maxLength={32} error={attempted ? errors.contactPhone : null} />
+              disabled={!fieldsOpen} autoComplete="tel" maxLength={32} error={attempted ? errors.contactPhone : null} />
             <div className="form-save-bar">
               <p className="save-state" role="status">{runner.busy ? 'Enregistrement…' : identity.edited ? 'Modifications non enregistrées' : 'À jour'}</p>
               <div className="button-row compact"><button type="submit" className="button primary" disabled={!mayEdit || !identity.edited} aria-busy={runner.busy}>
