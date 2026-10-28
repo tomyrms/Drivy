@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
-import { BookOpen, Building2, CalendarDays, ChevronDown, GraduationCap, Monitor, Moon, Settings, Sun, UsersRound } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, Check, ChevronDown, GraduationCap, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun, UsersRound } from 'lucide-react';
 import { BrandSymbol } from '../BrandSymbol';
 import { useTheme, type ThemePreference } from '../theme';
 import type { NavigationQuery } from '../console/route';
 import type { SectionKey } from '../console/sections';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Button } from '../components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { availableWorkspaces, currentWorkspace, isNavItemCurrent, type PortalWorkspaceKey } from './destinations';
 
 export type PortalDestination = SectionKey;
@@ -19,13 +19,19 @@ export interface PortalFrameProps {
   onNavigate: (section: SectionKey, query?: NavigationQuery) => void;
   schoolName: string;
   userName: string;
-  build: string;
+  /** Synthetic preview only: shows the data notice and the build. */
+  preview?: { build: string };
+  /** Schools the person administers; a choice is offered when there are several. */
+  schools?: readonly { id: string; name: string }[];
+  currentSchoolId?: string;
+  onSchoolChange?: (schoolId: string) => void;
+  account?: { onPreferences: () => void; onLogout: () => void; busy?: boolean };
 }
 
 const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
 
 /** One navigation tree and one mounted page at every viewport width. */
-export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, build }: PortalFrameProps) {
+export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, preview, schools = [], currentSchoolId, onSchoolChange, account }: PortalFrameProps) {
   const theme = useTheme();
   const content = useRef<HTMLElement>(null);
   const workspaces = useMemo(() => availableWorkspaces(new Set(available)), [available]);
@@ -49,7 +55,21 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
     <a className="portal-skip-link" href="#portal-content">Aller au contenu</a>
     <header className="portal-topbar">
       <div className="portal-brand" aria-label="Drivy"><BrandSymbol /><span>Drivy</span></div>
-      <div className="portal-school"><Building2 aria-hidden="true" /><span>{schoolName}</span></div>
+      {schools.length > 1 && onSchoolChange
+        ? <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" className="portal-school portal-school-switch" aria-label={`École gérée : ${schoolName}`} />}>
+              <Building2 aria-hidden="true" /><span>{schoolName}</span><ChevronDown aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-56">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>École gérée</DropdownMenuLabel>
+                {schools.map(school => <DropdownMenuItem key={school.id} onClick={() => { if (school.id !== currentSchoolId) onSchoolChange(school.id); }}>
+                  <Check aria-hidden="true" className={school.id === currentSchoolId ? undefined : 'invisible'} />{school.name}
+                </DropdownMenuItem>)}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        : <div className="portal-school"><Building2 aria-hidden="true" /><span>{schoolName}</span></div>}
       <div className="portal-topbar-end">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" className="portal-theme-trigger" aria-label="Choisir l’apparence" />}>
@@ -64,7 +84,21 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Avatar aria-label={userName}><AvatarFallback>{initials || 'D'}</AvatarFallback></Avatar>
+        {account
+          ? <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="portal-account-trigger" aria-label={`Compte de ${userName}`} disabled={account.busy} />}>
+                <Avatar aria-hidden="true"><AvatarFallback>{initials || 'D'}</AvatarFallback></Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>{userName}</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={account.onPreferences}><SlidersHorizontal aria-hidden="true" />Préférences</DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={account.onLogout}><LogOut aria-hidden="true" />Se déconnecter</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          : <Avatar aria-label={userName}><AvatarFallback>{initials || 'D'}</AvatarFallback></Avatar>}
       </div>
     </header>
     <div className="portal-workspace">
@@ -74,9 +108,9 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
             {workspaces.map(item => {
               const Icon = workspaceIcons[item.key], target = item.items[0]!, current = item.key === workspace?.key;
               return <li key={item.key}>
-                <Button variant="ghost" className="portal-nav-item" aria-current={current ? 'page' : undefined}
+                <Button variant="ghost" className="portal-nav-item" aria-current={current ? 'page' : undefined} aria-label={item.label}
                   onClick={() => { if (!current || currentItem !== target) onNavigate(target.section, target.query); }}>
-                  <Icon aria-hidden="true" /><span className="portal-nav-label">{item.label}</span><span className="portal-nav-short" aria-hidden="true">{item.shortLabel}</span>
+                  <Icon aria-hidden="true" /><span className="portal-nav-label" aria-hidden="true">{item.label}</span><span className="portal-nav-short" aria-hidden="true">{item.shortLabel}</span>
                 </Button>
               </li>;
             })}
@@ -91,7 +125,7 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
           </li>)}</ul>
         </nav>}
         <main id="portal-content" ref={content} tabIndex={-1} className="portal-content" aria-label={currentItem?.label ?? workspace?.label}>{children}</main>
-        <footer className="portal-build"><span>Aperçu · Données synthétiques</span><code>{build.slice(0, 12)}</code></footer>
+        {preview && <footer className="portal-build"><span>Aperçu · Données synthétiques</span><code>{preview.build.slice(0, 12)}</code></footer>}
       </div>
     </div>
   </div>;

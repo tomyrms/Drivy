@@ -50,7 +50,7 @@ function Preview() {
     registerUnsavedChanges: navigation.registerUnsavedChanges, confirmNavigation: navigation.confirmNavigation,
     setNavigationGuard: navigation.setNavigationGuard, login: () => {}, confirmIdentity: async () => true,
   };
-  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} build={__DRIVY_PREVIEW_SHA__}>
+  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} preview={{ build: __DRIVY_PREVIEW_SHA__ }}>
     <PortalPendingRequests />
     <Suspense fallback={<div className="grid gap-5" aria-label="Chargement de la page" role="status"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>}>
       {route.page === 'equipe' && isFirstLink() ? <AccessPilot initialEdit /> : <Page />}

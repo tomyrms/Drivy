@@ -3,10 +3,8 @@ import { readInvitationLink } from './invitation-link';
 import { readOpeningLink } from './school-opening-model';
 import { sectionKeys } from './console/sections';
 import { BrandSymbol } from './BrandSymbol';
+import { readPresentation } from './presentation';
 import './theme';
-import './styles.css';
-import './school-opening.css';
-import './access.css';
 
 // Remove any token fragment before rendering, fetching or authenticating, whatever the page.
 const path = window.location.pathname.replace(/\/+$/, '');
@@ -26,13 +24,22 @@ function retryLoading() {
 }
 
 async function loadPage() {
-  root.render(<div className="app-shell"><main className="main"><p role="status">Chargement de Drivy…</p></main></div>);
+  // Exclusive surfaces are loaded only when requested. Link sanitization stays shared.
+  const consoleParts = path.split('/');
+  const isConsole = /^\/app\/gestion(\/|$)/.test(path);
+  const knownConsole = isConsole && consoleParts.length <= 5 && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
+  const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
+  // The rebuilt console (#311) is opt-in per browser and never loads the historical stylesheets.
+  const portalConsole = knownConsole && readPresentation() === 'portal';
   try {
-    // Exclusive surfaces are loaded only when requested. Styles and link sanitization stay shared.
-    const consoleParts = path.split('/');
-    const isConsole = /^\/app\/gestion(\/|$)/.test(path);
-    const knownConsole = isConsole && consoleParts.length <= 5 && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
-    const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
+    if (portalConsole) {
+      root.render(<p role="status">Chargement de Drivy…</p>);
+      const { PortalConsole } = await import('./portal/portal-console');
+      root.render(<PortalConsole />);
+      return;
+    }
+    await import('./legacy-styles');
+    root.render(<div className="app-shell"><main className="main"><p role="status">Chargement de Drivy…</p></main></div>);
     if (!knownEntry && !knownConsole) {
       document.title = 'Page introuvable · Drivy';
       root.render(<div className="app-shell"><header className="site-header"><a className="brand" href="/app/"><BrandSymbol /><span>Drivy</span></a></header><main className="main"><section className="account-entry">
