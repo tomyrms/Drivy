@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 28 octobre 2026 — #311, aperçu des trois pilotes publié
+
+- À la demande du porteur, Agenda et Élèves intégrés à l’aperçu à côté de « Modifier les accès », navigation commune protégée par la saisie, choix du scénario d’essai. Publié sur l’aperçu isolé au SHA `0688868d`, données fictives. [Publication et retour arrière](epic-311-preview-publication.md#publication-des-trois-pilotes).
+- **Exécuté** : typage client et serveur/tests, build d’aperçu (garde des imports hérités à 0), contrôle navigateur local de l’artefact sur les trois pages en largeur mobile et sombre, puis chargement public d’Élèves et d’Agenda au bon SHA. Corrigé à l’intégration : les onglets Base UI (variantes `data-horizontal`/`data-vertical` absentes du socle) plaçaient la liste et le contenu du dossier élève côte à côte.
+- **Non exécuté** : bureau, thème clair, édition/refus/lenteur/réponse perdue sur Agenda et Élèves, tests du calendrier après intégration. **Connu, non corrigé** : les dialogues de formation et d’affectation se ferment après un refus (saisie conservée, erreur affichée). Inventaire de 125 sous-vues toujours non relu. Aucune sous-issue clôturée ; suite en attente du retour du porteur.
+
 ## 28 octobre 2026 — #311, premier aperçu limité à une page
 
 - À la demande du porteur, priorité à « Modifier les accès » pour juger la DA. Nouveau rendu shadcn/Base UI, rôles cumulés, autorisations, relecture/confirmation, lecture, erreur conservant le brouillon, clair/sombre et mobile.

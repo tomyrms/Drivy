@@ -51,3 +51,21 @@ python scripts/homelab/deploy-preview-311.py --rollback 20261028T202042Z-1812bd6
 Le même appel avec `--execute` restaure exactement le Caddyfile sauvegardé et retire le lien `current` puisqu’aucun aperçu précédent n’existait. Les fichiers et preuves restent conservés sous `/srv/drivy-preview` ; aucun effacement récursif n’est nécessaire. Le script refuse le rollback si Caddy ou la version active a changé depuis cette publication, pour préserver une intervention ultérieure. Il valide la sauvegarde avant rechargement. Le reste du homelab n’est pas concerné.
 
 Références de configuration : [Caddy handle_path](https://caddyserver.com/docs/caddyfile/directives/handle_path), [file_server](https://caddyserver.com/docs/caddyfile/directives/file_server), [validate et reload](https://caddyserver.com/docs/command-line).
+
+## Publication des trois pilotes
+
+Le 28 octobre 2026, à la demande du porteur de voir l’état courant, l’aperçu remplace la page seule par les trois pilotes : Accès, Agenda, Élèves. Même adresse, même bloc Caddy, mêmes en-têtes ; seule la version servie change.
+
+| Élément | Valeur |
+| --- | --- |
+| Identifiant | `20261028T205927Z-0688868ddabb` |
+| Horodatage UTC | `2026-10-28T20:59:27.463546+00:00` |
+| SHA du rendu | `0688868ddabbd6aa4c9e6000a2f25486e1d0e9e1` |
+| SHA-256 archive | `e5785e356880522a35d4d371568414df31097bfd68c375461d71077217aa50b1` |
+| Fichiers | 20 |
+| Caddyfile avant et après | `bf3bb46771f37b2ad392bf0ddceb8889b547e95d4bab1c19ed73e14604e865ce` (inchangé) |
+| Version précédente | `/srv/drivy-preview/releases/1812bd6056a970d94dd661443f2bcbbf3ac0a872` |
+
+Exécuté : plan sans mutation puis publication ; contrôle du script sur le serveur (HTML servi identique, en-têtes de sécurité) ; manifeste public au bon SHA, CSP/HSTS/noindex présents, racine `shulker.ch` en 200 ; Élèves et Agenda chargés depuis l’adresse publique avec leurs morceaux lazy sous la CSP réelle.
+
+Retour à la page seule : `python scripts/homelab/deploy-preview-311.py --rollback 20261028T205927Z-0688868ddabb`, puis `--execute`. Il remet le lien `current` sur `1812bd60` sans toucher Caddy. Le retrait complet de l’aperçu passe ensuite par `--rollback 20261028T202042Z-1812bd6056a9`, qui n’est accepté qu’une fois `1812bd60` redevenu actif.
