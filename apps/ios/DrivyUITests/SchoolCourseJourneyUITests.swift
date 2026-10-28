@@ -62,8 +62,8 @@ import XCTest
         let enroll = app.buttons["course-enroll"]
         XCTAssertTrue(enroll.waitForExistence(timeout: 15), app.debugDescription)
         enroll.tap()
+        XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForExistence(timeout: 10), app.debugDescription)
         let confirm = app.buttons["course-confirm-enrollment"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 10), app.debugDescription)
         reveal(confirm, in: app)
         confirm.tap()
         XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForNonExistence(timeout: 5), app.debugDescription)
@@ -106,7 +106,7 @@ import XCTest
         XCTAssertTrue(app.navigationBars["Payé sur place"].waitForNonExistence(timeout: 5), app.debugDescription)
         let pending = app.descendants(matching: .any)["course-payment-pending"].firstMatch
         XCTAssertTrue(pending.waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(pending.label.contains("80"), pending.label)
+        XCTAssertTrue(pending.label.contains("80") && pending.label.hasPrefix("Règlement de"), pending.label)
         XCTAssertTrue(app.buttons["course-sheet-retry"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Payé :'")).firstMatch.exists)
     }

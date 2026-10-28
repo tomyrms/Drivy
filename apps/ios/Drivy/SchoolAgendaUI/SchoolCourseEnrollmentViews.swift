@@ -113,6 +113,8 @@ struct SchoolCourseLearnerView: View {
                 VStack(alignment: .leading, spacing: DrivySpacing.xs) {
                     Label(pending.unconfirmedTitle, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
                         .font(.subheadline.weight(.semibold))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("course-learner-unconfirmed")
                     Text(message).font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     HStack(spacing: DrivySpacing.xs) {
                         Button("Réessayer") { model.retryPending() }
@@ -125,7 +127,6 @@ struct SchoolCourseLearnerView: View {
                             .accessibilityIdentifier("course-learner-abandon")
                     }
                 }
-                .accessibilityIdentifier("course-learner-unconfirmed")
             }
         }
     }

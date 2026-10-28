@@ -203,9 +203,12 @@ struct SchoolCourseAttendanceView: View {
                 }
                 ForEach(model.pendingPayments(row)) { intent in
                     if case .payment(_, let cents) = intent.action {
-                        Label("\(SchoolCatalogFormatting.price(cents)) · \(intent.state == .sending || intent.state == .queued ? "envoi en cours" : "non confirmé")",
-                              systemImage: "clock")
+                        let state = intent.state == .sending || intent.state == .queued ? "envoi en cours" : "non confirmé"
+                        Label("\(SchoolCatalogFormatting.price(cents)) · \(state)", systemImage: "clock")
                             .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+                            // Un seul élément : l’icône ne porte ni l’identifiant ni l’annonce.
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Règlement de \(SchoolCatalogFormatting.price(cents)), \(state)")
                             .accessibilityIdentifier("course-payment-pending")
                     }
                 }
