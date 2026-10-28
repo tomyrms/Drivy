@@ -66,8 +66,9 @@ import Testing
             try store.save(first)
             try store.save(second)
             #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(observation(UUID())) }
-            let completion = PendingSchoolCommand(id: UUID(), scope: scope, kind: .completeLesson, resourceVersion: 1,
-                createdAt: Date(), body: try JSONSerialization.data(withJSONObject: ["operationId": UUID().uuidString]),
+            let completionID = UUID()
+            let completion = PendingSchoolCommand(id: completionID, scope: scope, kind: .completeLesson, resourceVersion: 1,
+                createdAt: Date(), body: try JSONSerialization.data(withJSONObject: ["operationId": completionID.uuidString]),
                 resourceID: lesson)
             #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(completion) }
             let newScope = SchoolCommandScope(personID: scope.personID, schoolID: scope.schoolID,

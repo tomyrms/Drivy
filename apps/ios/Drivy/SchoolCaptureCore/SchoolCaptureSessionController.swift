@@ -148,6 +148,8 @@ final class SchoolCaptureSessionController {
     @ObservationIgnored private var deferredScope: SchoolCommandScope?
     @ObservationIgnored private var context: Context?
     @ObservationIgnored private var generation = UUID()
+    /// Ouverture locale du segment d’une reprise (#111) : brève, sans réseau. Une fin de leçon l’attend avant de sceller.
+    @ObservationIgnored private var resumeOpening: Task<Void, any Error>?
     @ObservationIgnored private var liveAccessCheck: Task<Void, Never>?
     @ObservationIgnored private var liveAccessCheckID: UUID?
     @ObservationIgnored private var scopeGeneration = UUID()
@@ -610,11 +612,14 @@ final class SchoolCaptureSessionController {
         let request = generation
         state = .preparing; transition = .resuming; errorMessage = nil
         defer { endTransition(.resuming, request: request) }
+        // #111 : le bail local encore valable (`canResume`) rouvre le segment sans attendre le réseau, comme après
+        // une perte de signal. L’école est relue ensuite : un trajet clos pendant la pause s’arrête alors et se
+        // scelle (elle refuse de toute façon les lots au-delà de sa borne). Un refus (401, 403, 404) reste un refus.
+        let opening = Task { try await self.openSegment(active, request: request, reason: .resume) }
+        resumeOpening = opening
+        defer { if resumeOpening == opening { resumeOpening = nil } }
         do {
-            // #111 : le bail local encore valable (`canResume`) rouvre le segment sans attendre le réseau, comme après
-            // une perte de signal. L’école est relue ensuite : un trajet clos pendant la pause s’arrête alors et se
-            // scelle (elle refuse de toute façon les lots au-delà de sa borne). Un refus (401, 403, 404) reste un refus.
-            try await openSegment(active, request: request, reason: .resume)
+            try await opening.value
         } catch {
             guard generation == request, state == .preparing, !active.terminalRequested else { return }
             let boundary = active.stopBoundary()
@@ -649,6 +654,7 @@ final class SchoolCaptureSessionController {
     }
 
     func stop(reason: SchoolCaptureLocalStopReason = .userStop) async {
+        await settleResumeOpening()
         guard let active = context, canStop else { return }
         let request = generation, boundary = active.stopBoundary()
         active.terminalRequested = true
@@ -658,8 +664,16 @@ final class SchoolCaptureSessionController {
 
     /// La fin de leçon attend seulement le scellement durable local. Le transfert
     /// continue au niveau de l'app, même si le trajet ou la feuille sont fermés.
+    /// Une reprise ouvre son segment dans le journal local : la fin attend cette écriture, puis scelle un segment
+    /// complet. Sans elle, le scellement croisait un segment à moitié ouvert et échouait.
+    private func settleResumeOpening() async {
+        guard let opening = resumeOpening else { return }
+        _ = try? await opening.value
+    }
+
     @discardableResult
     func stopAndSynchronize() async -> Bool {
+        await settleResumeOpening()
         guard let active = context, active.scope == permittedScope else { return captureID == nil }
         let request = generation
         if state != .saved {

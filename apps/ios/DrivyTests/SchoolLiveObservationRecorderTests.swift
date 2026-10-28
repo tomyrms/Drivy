@@ -411,7 +411,7 @@ private actor QueuedObservationServer: SchoolHTTPTransport {
             lessonId: HubFixture.lessonID, trainingId: HubFixture.trainingID, draftId: nil,
             captureId: nil, segmentId: nil, pointSequence: nil, competencyId: nil,
             text: body.text, origin: body.origin, observedAt: body.observedAt, eventKind: body.eventKind,
-            eventStatus: body.eventStatus, authorMembershipId: ConfigurationFixture.membershipID)
+            eventStatus: body.eventStatus, authorMembershipId: ConfigurationFixture.membershipID, themeKey: body.themeKey)
         let data = try JSONSerialization.jsonObject(with: JSONEncoder().encode(observation))
         return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": data,
             "requestId": UUID().uuidString, "serverTime": "2026-09-28T12:15:00Z"]), status: 201, url: url, contentType: "application/json")
