@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 28 octobre 2026 — audit UX, lot 9 : fil de discussion (#142, #168, #177)
+
+- Branche `claude/audit-ux-lot9-fil`, sur master avec le fil Exyte. Zones d'appui des réactions et des reprises, menu de sourdine selon l'état réel avec l'heure de fin, erreurs qui s'expliquent avant de se masquer et sans renvoi aveugle. [Détail](audit-ux-lot9-fil-20261028.md).
+- Validé à l'essai par le porteur (IPA build 431). Tests UI `MessagingLatencyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests` : iPad réussis sauf deux lancements d'app ratés par le simulateur ; iPhone réussis sauf un retrait rapide de réaction, réussi à la relance ciblée sur cette branche et sur master (runs 40684982359, 40693720605, 40693724801). iOS seulement, rien à déployer.
+
 ## 28 octobre 2026 — audit UX, lots 5 à 8 (#148-#150, #159-#161, #164-#165, #166/#167/#171/#176)
 
 - Branche `claude/audit-ux-lots-5-8`, sur les lots 2 à 4. Agenda : aller à une date, choisir soi-même l'horaire, sorties des blocages. Cours : langue, type avec description, suivi toujours visible. Bilan : trajets nommés par leur horaire, « Ce que verra l'élève ». Messages : état vide avec le général, recherche au-delà de la page, recherche des membres, école en sous-titre. [Détail](audit-ux-lots5-8-20261028.md).
@@ -1203,4 +1208,5 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Messages : sourdine selon l'état réel (#168), refus à consulter puis masquer (#177), zones tactiles à 44 pt sans chevauchement (#142). Cours : appel, règlements et validation par élève, sans verrou global (#128-#130) ; inscription de l'élève sans écran retenu (#126). Profil : photo affichée dès le cadrage, envois en file (#118). Bilan : rédaction continue pendant l'envoi (#114).
 - Non fait : planification optimiste (#108-#110), qui demande une file de commandes reprise hors de l'écran et une projection dans l'agenda.
 - NOT_EXECUTED : recette physique, VoiceOver et réseau dégradé réel.
+- Messages (#142, #168, #177) : fait aussi par le lot 9 (PR #191) ; la version de master est gardée, avec en plus les durées de sourdine 1 h, 8 h, 1 jour et les lignes de sondage à 44 pt.
 - Qualification : essai du porteur validé (IPA `226dee20`) ; 859 tests métier et suites UI Messages, cours, formulaires et bilan réussis sur iPhone et iPad (runs 40686053375, 40686057743, 40694974479). iOS seul, aucun déploiement.

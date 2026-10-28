@@ -446,8 +446,6 @@ struct MessagingConversationView: View {
     @State private var showSearch = false
     @State private var showMembers = false
     @State private var reportSent = false
-    /// Horloge de la sourdine : relue à l'échéance pour que menu et bandeau ne restent pas « en sourdine ».
-    @State private var muteClock = Date()
 
     init(workspace: MessagingWorkspace, conversationID: UUID, title: String, detail: String?, lastSequence: Int,
          lastReadSequence: Int, mutedUntil: Date?, readStateVersion: Int, isGeneral: Bool) {
@@ -470,7 +468,7 @@ struct MessagingConversationView: View {
     var body: some View {
         VStack(spacing: 0) {
             MessagingConversationStatusStrip(workspace: workspace, conversationID: conversationID,
-                                             detail: detail, mutedUntil: mutedUntil, now: muteClock)
+                                             detail: detail, mutedUntil: mutedUntil)
             chat
                 .overlay(alignment: .top) {
                     VStack(spacing: 0) {
@@ -487,12 +485,6 @@ struct MessagingConversationView: View {
         .navigationTitle(thread.reporting ? "Signaler" : title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
-        .task(id: workspace.displayedMutedUntil(conversationID, fallback: mutedUntil)) {
-            muteClock = Date()
-            guard let until = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil), until > muteClock else { return }
-            try? await Task.sleep(for: .seconds(until.timeIntervalSince(muteClock) + 1))
-            if !Task.isCancelled { muteClock = Date() }
-        }
         .modifier(lifecycle)
         .sheet(isPresented: $thread.showPollComposer) {
             MessagingPollComposer { poll, multiple in
@@ -624,59 +616,33 @@ struct MessagingConversationView: View {
                 if isGeneral { Button("Membres", systemImage: "person.3") { showMembers = true } }
                 Button("Signaler des messages", systemImage: "exclamationmark.bubble") { thread.reporting = true }
                 Divider()
-                muteMenu
+                // Une seule action, celle de l’état affiché (#168) : la demande en cours prime sur l’état serveur connu,
+                // une sourdine échue se lit comme active. Le menu se recalcule à chaque ouverture.
+                if let until = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil), until > Date() {
+                    Button {
+                        Task { await workspace.unsilence(conversationID: conversationID,
+                            fallbackSequence: lastReadSequence, fallbackVersion: readStateVersion) }
+                    } label: {
+                        Label("Réactiver les notifications", systemImage: "bell")
+                        Text("En sourdine jusqu’à \(MessagingMuteFormat.until(until))")
+                    }
+                    .accessibilityIdentifier("messaging.mute.off")
+                } else {
+                    // Durées validées à l’essai du 28 octobre : toutes datées, aucune sourdine sans fin (règle nouvelle).
+                    Menu("Mettre en sourdine", systemImage: "bell.slash") {
+                        ForEach(MessagingMuteFormat.durations, id: \.seconds) { choice in
+                            Button(choice.label) {
+                                Task { await workspace.silence(conversationID: conversationID,
+                                    fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(choice.seconds),
+                                    fallbackVersion: readStateVersion) }
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("messaging.mute.on")
+                }
             }
             .accessibilityIdentifier("messaging.options")
         }
-    }
-
-    /// #168 : une seule action selon l'état affiché (demande locale en cours comprise). Une sourdine
-    /// jamais lue n'est pas devinée : les deux choix restent alors proposés.
-    @ViewBuilder private var muteMenu: some View {
-        let until = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil)
-        let known = workspace.muteKnown(conversationID) || mutedUntil != nil
-        if let until, until > muteClock {
-            Section(MessagingMuteFormat.until(until, now: muteClock)) { unmuteButton }
-        } else {
-            Menu("Mettre en sourdine", systemImage: "bell.slash") {
-                ForEach(MessagingMuteFormat.durations, id: \.seconds) { choice in
-                    Button(choice.label) {
-                        Task { await workspace.silence(conversationID: conversationID,
-                            fallbackSequence: lastReadSequence, until: Date().addingTimeInterval(choice.seconds),
-                            fallbackVersion: readStateVersion) }
-                    }
-                }
-            }
-            .accessibilityIdentifier("messaging.mute.menu")
-            if !known { unmuteButton }
-        }
-    }
-
-    private var unmuteButton: some View {
-        Button("Réactiver les notifications", systemImage: "bell") {
-            Task { await workspace.unsilence(conversationID: conversationID,
-                fallbackSequence: lastReadSequence, fallbackVersion: readStateVersion) }
-        }
-        .accessibilityIdentifier("messaging.mute.off")
-    }
-}
-
-/// Durées de sourdine proposées et libellé de l'échéance. Le serveur accepte toute échéance datée :
-/// aucune sourdine « illimitée », qui serait une règle nouvelle.
-enum MessagingMuteFormat {
-    struct Choice { let label: String; let seconds: TimeInterval }
-
-    static let durations = [Choice(label: "1 heure", seconds: 3_600),
-                            Choice(label: "8 heures", seconds: 8 * 3_600),
-                            Choice(label: "1 jour", seconds: 24 * 3_600)]
-
-    static func until(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
-        let time = date.formatted(.dateTime.hour().minute())
-        if calendar.isDate(date, inSameDayAs: now) { return "En sourdine jusqu'à \(time)" }
-        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) {
-            return "En sourdine jusqu'à demain \(time)"
-        }
-        return "En sourdine jusqu'au \(date.formatted(.dateTime.day().month(.wide))) \(time)"
     }
 }
 
@@ -1050,10 +1016,12 @@ private struct MessagingReplyBubble<Actions: View>: View {
         case .delivered?: statusImage(images.delivered, DrivyTheme.muted)
         case .readBy?: statusImage(images.read, DrivyTheme.accent)
         case .error?:
-            Button { thread.retrySend(displayID: item.id) } label: { statusImage(images.error, DrivyTheme.danger) }
-                .buttonStyle(.plain)
-                .contentShape(MessagingHitArea(dx: 0, minHeight: DrivyLayout.tapTarget))
-                .accessibilityLabel("Échec de l'envoi, réessayer")
+            Button { thread.retrySend(displayID: item.id) } label: {
+                statusImage(images.error, DrivyTheme.danger)
+                    .contentShape(Rectangle().inset(by: -17))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Réessayer l’envoi")
         case nil: Color.clear
         }
     }
@@ -1073,23 +1041,22 @@ private struct MessagingReactionChips: View {
     let onTap: (String) -> Void
 
     private static let limit = 5
-    private static let gap: CGFloat = 2
 
     var body: some View {
         let sorted = reactions.sorted { $0.createdAt > $1.createdAt }
         let overflow = sorted.count > Self.limit
         let shown = overflow ? Array(sorted.prefix(Self.limit - 1)) : sorted
-        // #142 : pastilles côte à côte (plus de chevauchement), chacune touchable sur 44 pt de haut sans grossir
-        // la bulle ; leurs zones ne se recouvrent pas, un appui n'active jamais la voisine.
-        HStack(spacing: Self.gap) {
+        // Pastilles côte à côte (#142) : en se chevauchant, l’appui au bord de l’une pouvait viser sa voisine. Chacune
+        // reçoit l’appui sur 44 pt de haut, sans agrandir la bande ni déplacer la bulle.
+        HStack(spacing: 2) {
             if !mine && overflow { chip("+\(sorted.count - Self.limit + 1)", own: false, sending: false) }
             ForEach(mine ? shown : Array(shown.reversed()), id: \.id) { reaction in
                 if case .emoji(let emoji) = reaction.type {
                     Button { onTap(emoji) } label: {
                         chip(emoji, own: reaction.user.isCurrentUser, sending: reaction.status == .sending)
+                            .contentShape(MessagingTallHitShape(height: DrivyLayout.tapTarget))
                     }
                     .buttonStyle(.plain)
-                    .contentShape(MessagingHitArea(dx: Self.gap / 2, minHeight: DrivyLayout.tapTarget))
                 }
             }
             if mine && overflow { chip("+\(sorted.count - Self.limit + 1)", own: false, sending: false) }
@@ -1104,18 +1071,6 @@ private struct MessagingReactionChips: View {
             .padding(6)
             .background(Circle().fill(own ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted))
             .overlay(Circle().stroke(DrivyTheme.canvas, style: StrokeStyle(lineWidth: 2, dash: sending ? [4, 3] : [])))
-    }
-}
-
-/// Zone de toucher élargie autour d'un petit contrôle, sans changer sa mise en page : au moins `minHeight` de haut,
-/// `dx` de chaque côté. Garder `dx` sous la moitié de l'écart entre voisins pour que les zones ne se recouvrent pas.
-struct MessagingHitArea: Shape {
-    var dx: CGFloat
-    var minHeight: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let dy = max(0, (minHeight - rect.height) / 2)
-        return Path(rect.insetBy(dx: -dx, dy: -dy))
     }
 }
 
@@ -1229,28 +1184,29 @@ private struct MessagingThreadStateLine: View {
     /// Rien sous 5 s, puis lenteur, puis reprise proposée.
     @ViewBuilder private func mutationStatus(_ message: MessagingWireMessage) -> some View {
         if let rejection = workspace.rejection(for: message.id) {
-            // #177 : un refus n'est jamais renvoyé à l'aveugle. L'appui ouvre la raison ; actualiser (conflit) et
-            // masquer sont deux choix distincts, et masquer ne touche ni au fil ni à une demande en attente.
+            // Refus de l’école (#177) : l’intention est déjà retirée, il n’y a rien à renvoyer. L’appui ouvre
+            // l’explication ; un conflit propose d’actualiser, et masquer est un geste à part.
             Menu {
                 Section(rejection.failure.localizedDescription) {
                     if rejection.failure == .stateConflict {
-                        Button("Actualiser", systemImage: "arrow.clockwise") {
-                            workspace.clearRejection(message.id)
-                            Task { await workspace.loadMessages(message.conversationID, marksVisible: false) }
+                        Button("Actualiser la conversation", systemImage: "arrow.clockwise") {
+                            Task {
+                                await workspace.refreshVisible(conversationID: message.conversationID)
+                                workspace.clearRejection(message.id)
+                            }
                         }
                     }
                     Button("Masquer", systemImage: "eye.slash") { workspace.clearRejection(message.id) }
-                        .accessibilityIdentifier("messaging.mutation.rejected.hide")
+                        .accessibilityIdentifier("messaging.mutation.rejected.dismiss")
                 }
             } label: {
                 Label(rejection.summary, systemImage: "exclamationmark.triangle")
                     .font(.caption2).foregroundStyle(DrivyTheme.danger)
-                    .frame(minHeight: DrivyLayout.tapTarget)
-                    .contentShape(Rectangle())
+                    .contentShape(Rectangle().inset(by: -14))
             }
-            .buttonStyle(.plain)
             .accessibilityLabel(rejection.summary)
-            .accessibilityHint("Affiche la raison et les choix")
+            .accessibilityValue(rejection.failure.localizedDescription)
+            .accessibilityHint("Ouvre l’explication")
             .accessibilityIdentifier("messaging.mutation.rejected")
         } else if let status = workspace.mutationAttention(for: message) {
             switch status {
@@ -1264,25 +1220,23 @@ private struct MessagingThreadStateLine: View {
                     .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
                     .accessibilityIdentifier("messaging.mutation.offline")
             case .unconfirmed, .uncertain:
+                // Sans confirmation, ce n’est pas un refus : « Réessayer » renvoie la même intention (#104, #177).
                 Button { workspace.retryMutations(for: message) } label: {
                     Label("Modification non confirmée · Réessayer", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
                         .font(.caption2).foregroundStyle(DrivyTheme.muted)
-                        .frame(minHeight: DrivyLayout.tapTarget)
-                        .contentShape(Rectangle())
+                        .contentShape(Rectangle().inset(by: -14))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Modification non confirmée, réessayer")
-                .accessibilityHint("Elle a peut-être été enregistrée : renvoie la même modification, sans doublon")
+                .accessibilityLabel("Modification non confirmée")
+                .accessibilityHint("Renvoie la même modification")
                 .accessibilityIdentifier("messaging.mutation.retry")
             case .storageFailed:
                 Button { workspace.retryMutations(for: message) } label: {
                     Label("Modification non conservée · Réessayer", systemImage: "exclamationmark.triangle")
                         .font(.caption2).foregroundStyle(DrivyTheme.danger)
-                        .frame(minHeight: DrivyLayout.tapTarget)
-                        .contentShape(Rectangle())
+                        .contentShape(Rectangle().inset(by: -14))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Modification non conservée, réessayer")
                 .accessibilityHint("Réessaie de conserver la modification sur cet appareil avant de la synchroniser")
                 .accessibilityIdentifier("messaging.mutation.storageFailed")
             default:
@@ -1295,10 +1249,24 @@ private struct MessagingThreadStateLine: View {
     @ViewBuilder private func pendingStatus(_ entry: MessagingPending) -> some View {
         switch workspace.sendStatus(entry.clientMessageID) {
         case .failed(let failure)?:
+            // L’appui sur « Échec » ouvre l’explication (#177). Un refus qui demande d’abord une correction (accès,
+            // appareils, protection) ne propose pas de renvoi aveugle ; le message reste conservé sur l’appareil.
+            let description = MessagingDiagnostics.shared.describe(failure)
             HStack(spacing: DrivySpacing.xs) {
-                Label("Échec", systemImage: "exclamationmark.circle").foregroundStyle(DrivyTheme.danger)
-                    .accessibilityLabel("Échec : \(MessagingDiagnostics.shared.describe(failure))")
-                retryButton
+                Menu {
+                    Section(description) {
+                        if failure.allowsSameSendRetry {
+                            Button("Réessayer", systemImage: "arrow.clockwise") { thread.retrySend(displayID: item.id) }
+                        }
+                    }
+                } label: {
+                    Label("Échec", systemImage: "exclamationmark.circle").foregroundStyle(DrivyTheme.danger)
+                        .contentShape(Rectangle().inset(by: -14))
+                }
+                .accessibilityLabel("Échec : \(description)")
+                .accessibilityHint("Ouvre l’explication")
+                .accessibilityIdentifier("messaging.pending.failure")
+                if failure.allowsSameSendRetry { retryButton }
             }
             .font(.caption2)
         case .unconfirmed?, .uncertain?:
@@ -1576,11 +1544,9 @@ struct MessagingConversationStatusStrip: View {
     let conversationID: UUID
     let detail: String?
     let mutedUntil: Date?
-    var now = Date()
 
     var body: some View {
-        let mutedTo = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil).flatMap { $0 > now ? $0 : nil }
-        let muted = mutedTo != nil
+        let muted = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil).map { $0 > Date() } ?? false
         let muteStatus = workspace.muteAttention(conversationID)
         if workspace.error != nil || workspace.actionError != nil || detail != nil || muted || muteStatus != nil {
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
@@ -1588,19 +1554,20 @@ struct MessagingConversationStatusStrip: View {
                     Text(error.localizedDescription).font(.footnote).foregroundStyle(DrivyTheme.muted)
                 }
                 if let failure = workspace.actionError {
-                    // #177 : lire l'erreur ne la masque plus ; « Masquer » est un bouton à part.
+                    // Lire l’erreur et la masquer sont deux choses (#177) : le texte se lit, la croix masque.
                     HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
                         Label(failure.localizedDescription, systemImage: "exclamationmark.triangle")
                             .font(.footnote).foregroundStyle(DrivyTheme.danger)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityIdentifier("messaging.action.error")
-                        Button("Masquer", systemImage: "xmark") { workspace.clearActionError() }
-                            .labelStyle(.iconOnly)
-                            .font(.footnote.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
-                            .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
-                            .contentShape(Rectangle())
-                            .accessibilityLabel("Masquer l'erreur")
-                            .accessibilityIdentifier("messaging.action.error.hide")
+                        Button { workspace.clearActionError() } label: {
+                            Image(systemName: "xmark")
+                                .font(.footnote.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                                .contentShape(Rectangle().inset(by: -14))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Masquer l’erreur")
+                        .accessibilityIdentifier("messaging.action.error.dismiss")
                     }
                 }
                 HStack(spacing: DrivySpacing.xs) {
@@ -1611,8 +1578,7 @@ struct MessagingConversationStatusStrip: View {
                                 Label(muteStatus == .storageFailed ? "Sourdine non conservée · Réessayer" : "Sourdine non confirmée · Réessayer",
                                       systemImage: "exclamationmark.arrow.triangle.2.circlepath")
                                     .font(.caption).foregroundStyle(DrivyTheme.muted)
-                                    .frame(minHeight: DrivyLayout.tapTarget)
-                                    .contentShape(Rectangle())
+                                    .contentShape(Rectangle().inset(by: -14))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("messaging.mute.retry")
@@ -1621,16 +1587,55 @@ struct MessagingConversationStatusStrip: View {
                                   systemImage: muteStatus == .offline ? "wifi.slash" : "clock")
                                 .font(.caption).foregroundStyle(DrivyTheme.muted)
                         }
-                    } else if let mutedTo {
-                        Label(MessagingMuteFormat.until(mutedTo, now: now), systemImage: "bell.slash")
+                    } else if muted, let until = workspace.displayedMutedUntil(conversationID, fallback: mutedUntil) {
+                        // La durée restante, comme dans le menu (#168).
+                        Label("En sourdine jusqu’à \(MessagingMuteFormat.until(until))", systemImage: "bell.slash")
                             .font(.caption).foregroundStyle(DrivyTheme.muted)
-                            .accessibilityIdentifier("messaging.mute.state")
+                            .accessibilityIdentifier("messaging.mute.until")
                     }
                 }
             }
             .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(DrivyTheme.surface)
+        }
+    }
+}
+
+/// Fin d’une sourdine : l’heure aujourd’hui, le jour et l’heure au-delà (#168).
+enum MessagingMuteFormat {
+    struct Choice { let label: String; let seconds: TimeInterval }
+
+    static let durations = [Choice(label: "1 heure", seconds: 3_600),
+                            Choice(label: "8 heures", seconds: 8 * 3_600),
+                            Choice(label: "1 jour", seconds: 24 * 3_600)]
+
+    static func until(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        calendar.isDate(date, inSameDayAs: now)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(.dateTime.weekday(.wide).hour().minute())
+    }
+}
+
+/// Zone d’appui haute de `height`, centrée sur la vue, sans largeur ajoutée : deux pastilles voisines ne se
+/// disputent jamais un appui (#142).
+private struct MessagingTallHitShape: Shape {
+    let height: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let extra = max(0, (height - rect.height) / 2)
+        return Path(rect.insetBy(dx: 0, dy: -extra))
+    }
+}
+
+extension MessagingFailure {
+    /// Le même envoi peut aboutir en le renvoyant : panne, réponse illisible, participants changés (le message est
+    /// rechiffré), conflit. Accès retiré, conversation fermée, appareils en trop ou protection absente demandent d’abord
+    /// autre chose : aucun renvoi aveugle n’est proposé (#177).
+    var allowsSameSendRetry: Bool {
+        switch self {
+        case .unavailable, .invalidResponse, .membersChanged, .stateConflict, .mutationReceiptUnavailable: true
+        default: false
         }
     }
 }
