@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 28 octobre 2026, soir — #311, trois familles intégrées et publiées en aperçu
+
+- Intégrés : Équipe (#325 annuaire, fiche membre, retrait d’accès, invitations), Disponibilités et Absences (#323), Formations et tarifs (#326/#327, partiels). Publiés sur l’aperçu isolé au SHA `e2a0d5e6`, données fictives. [Publication](epic-311-preview-publication.md#publication-avec-équipe-disponibilitésabsences-formations-et-tarifs).
+- **Exécuté** : typage client et serveur, 465 tests web, deux builds, captures 1440/1024/390 clair/sombre, chargement public. **Non exécuté** : édition, refus et réponse perdue sur ces nouvelles pages par le coordinateur (les agents les ont exercés dans leurs worktrees selon leurs commits), console authentifiée contre une vraie BFF. **Reste** : #328 cours collectifs, fin de #326/#327, vague 2. Aucune sous-issue clôturée.
+
 ## 28 octobre 2026 — #311, généralisation lancée et console authentifiée raccordée
 
 - Après « continue » du porteur sur les trois pilotes : shell à cinq espaces (seules les sections reconstruites sont proposées), registre des pages, données fictives par famille, primitives shadcn complémentaires. Correctif dossier élève : formation et affectation restent ouvertes après un refus.

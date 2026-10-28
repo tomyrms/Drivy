@@ -36,6 +36,17 @@ Les trois agents ont été arrêtés par la limite d’usage (reprise possible a
 
 À reprendre dans le même worktree par le même propriétaire, sans recommencer. Défaut relevé pour Planning : dans la vue semaine, le nom de l’élève est illisible (texte écrasé) dans les leçons du jour et dans la leçon terminée ; les autres jours s’affichent bien.
 
+### Intégration du 28 octobre, 23 h
+
+Intégrés dans `codex/epic-311-rebuild` puis publiés (`e2a0d5e6`) : Équipe `ecfa33bf..83eaa7f8` (annuaire, fiche membre, retrait d’accès, invitations, données fictives) ; Planning `ff5cd95b..b4dee986` (focus de retour, nom lisible dans la semaine, #323 horaires et absences) ; Catalogue `6deb1c44..983b592e` (logique, contrôleurs, fiches permis/historique/tarifs, données fictives). Seuls conflits : `pages.tsx` et `preview/families.ts`, résolus par union.
+
+Restes par agent (à reprendre par SendMessage après la limite, annoncée levée à 3 h 20) :
+- Équipe : `preview/families/team.ts` modifié non commité ; note `epic-311-team.md` et rapport final à produire.
+- Planning : `agenda/lesson-workspace.tsx` modifié non commité ; note #323 en cours ; #328 cours collectifs non commencé.
+- Catalogue : finir #326/#327 et les notes ; finitions vues sur captures : contenu décalé de 8 px par rapport à la rangée d’onglets, page Prestations avec retour « Formations » et titre « Prestations » redondants avec l’onglet, carte « Prestations sans permis » en bas de Formations redondante avec l’onglet.
+
+Les agents reprennent sur leur branche `claude/311-*` ; le coordinateur réintègre ensuite seulement les nouveaux commits (`git cherry-pick <dernier intégré>..claude/311-*`).
+
 ## Vagues suivantes prévues
 
 - Vague 2 : école (#320 ouverture/guide, #321 accueil, #330 réglages/confidentialité/GPS, #331 signalements), trajets (#332), participants et appel des cours (#329, même propriétaire que #328), entrée et compte (#319, #333).

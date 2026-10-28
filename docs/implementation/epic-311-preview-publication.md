@@ -69,3 +69,20 @@ Le 28 octobre 2026, à la demande du porteur de voir l’état courant, l’aper
 Exécuté : plan sans mutation puis publication ; contrôle du script sur le serveur (HTML servi identique, en-têtes de sécurité) ; manifeste public au bon SHA, CSP/HSTS/noindex présents, racine `shulker.ch` en 200 ; Élèves et Agenda chargés depuis l’adresse publique avec leurs morceaux lazy sous la CSP réelle.
 
 Retour à la page seule : `python scripts/homelab/deploy-preview-311.py --rollback 20261028T205927Z-0688868ddabb`, puis `--execute`. Il remet le lien `current` sur `1812bd60` sans toucher Caddy. Le retrait complet de l’aperçu passe ensuite par `--rollback 20261028T202042Z-1812bd6056a9`, qui n’est accepté qu’une fois `1812bd60` redevenu actif.
+
+## Publication avec Équipe, Disponibilités/Absences, Formations et tarifs
+
+Le 28 octobre 2026 au soir, après intégration des premiers lots des agents (#325, #323, #326/#327 partiels) et de la console reconstruite. Même adresse, même bloc Caddy.
+
+| Élément | Valeur |
+| --- | --- |
+| Identifiant | `20261028T215739Z-e2a0d5e65908` |
+| SHA du rendu | `e2a0d5e65908cff3c7ca60e42ca97cadf194ea12` |
+| SHA-256 archive | `45326711984190c4c166ca386ae2eeb2ae9e6d6b155c17f6fc72dff4450a57f9` |
+| Fichiers | 53 |
+| Caddyfile | `bf3bb467…865ce`, inchangé |
+| Version précédente | `0688868ddabbd6aa4c9e6000a2f25486e1d0e9e1` |
+
+Exécuté avant publication : typage client et serveur, 465 tests web, build de production, build d’aperçu (aucun import hérité), captures locales 1440/1024/390 en clair et sombre des nouvelles pages. Après publication : manifeste public au bon SHA, CSP présente, racine `shulker.ch` en 200, Équipe, Disponibilités, Formations et Invitations élèves chargées depuis l’adresse publique sans erreur ni débordement. Le champ `scope` du manifeste garde son ancien libellé.
+
+Retour à la version précédente : `--rollback 20261028T215739Z-e2a0d5e65908` puis `--execute` ; ensuite, si besoin, la chaîne décrite plus haut.
