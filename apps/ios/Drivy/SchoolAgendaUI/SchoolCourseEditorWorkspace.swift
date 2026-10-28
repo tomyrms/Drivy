@@ -432,4 +432,15 @@ struct SchoolCourseLanguage: Identifiable {
 
     static let all = [SchoolCourseLanguage(id: "fr", label: "Français"), SchoolCourseLanguage(id: "de", label: "Allemand"),
                       SchoolCourseLanguage(id: "it", label: "Italien"), SchoolCourseLanguage(id: "en", label: "Anglais")]
+
+    /// Langue enregistrée dite à l’élève (#221) : « Cours en allemand ». Rien si l’école ne l’a pas précisée, jamais
+    /// une langue par défaut ; un code hors catalogue garde son nom système, ou son code.
+    static func phrase(for code: String?) -> String? {
+        guard let code = code?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty else { return nil }
+        if let known = all.first(where: { $0.id == code }) { return "Cours en \(known.label.lowercased())" }
+        if let name = Locale(identifier: "fr_CH").localizedString(forLanguageCode: code), name.lowercased() != code.lowercased() {
+            return "Cours en \(name.lowercased())"
+        }
+        return "Langue : \(code.uppercased())"
+    }
 }

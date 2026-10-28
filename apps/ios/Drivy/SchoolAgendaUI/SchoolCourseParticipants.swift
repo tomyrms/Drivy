@@ -27,7 +27,7 @@ struct SchoolCoursePaymentSheet: View {
                 }.drivyFormRows()
             }
             .scrollContentBackground(.hidden).background(DrivyTheme.canvas)
-            .navigationTitle("Payé sur place").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Règlement sur place").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
                 Button("Fermer") { if amount.isEmpty { dismiss() } else { confirmsDiscard = true } }
             } }

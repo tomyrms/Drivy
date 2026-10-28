@@ -8,6 +8,8 @@ struct SchoolCourseLearnerView: View {
     @Environment(\.openURL) private var openURL
     @State private var review: SchoolCourseEnrollmentReview?
     @State private var confirmsCancel = false
+    /// Refus ou sortie d’attente à confirmer (#223) : rien ne part avant le second appui.
+    @State private var release: SchoolCourseRelease?
 
     private var zone: String { model.timeZone }
 
@@ -51,6 +53,14 @@ struct SchoolCourseLearnerView: View {
                 }
                 Button("Garder", role: .cancel) {}
             } message: { Text(SchoolCourseEnrollmentFormat.cancellationMessage(model.series?.occurrences.count ?? 1)) }
+            .confirmationDialog(release?.title ?? "", isPresented: Binding(get: { release != nil }, set: { if !$0 { release = nil } }),
+                                titleVisibility: .visible, presenting: release) { release in
+                // L’état peut avoir changé depuis l’ouverture : rien ne part si la place ou l’attente n’est plus la même.
+                if release.isCurrent(in: model.me) {
+                    Button(release.confirmTitle, role: .destructive) { model.submit(release.action) }
+                }
+                Button(release.keepTitle, role: .cancel) {}
+            } message: { release in Text(release.message(courseTitle: model.series?.title)) }
         }
         .tint(DrivyTheme.accent)
     }
@@ -65,6 +75,9 @@ struct SchoolCourseLearnerView: View {
                     .monospacedDigit().fixedSize(horizontal: false, vertical: true)
             }
             if !series.location.isEmpty { Label(series.location, systemImage: "mappin.and.ellipse") }
+            if let language = SchoolCourseLanguage.phrase(for: series.teachingLanguage) {
+                Label(language, systemImage: "character.bubble").accessibilityIdentifier("course-learner-language")
+            }
             Text("\(series.occurrences.count) \(series.occurrences.count == 1 ? "séance" : "séances") · \(SchoolCourseFormat.duration(minutes: series.totalMinutes))")
                 .foregroundStyle(DrivyTheme.muted)
             if me.state == .available || me.state == .full {
@@ -141,12 +154,12 @@ struct SchoolCourseLearnerView: View {
                     primary("Rejoindre la liste d’attente", id: "course-join-waitlist") { model.submit(.joinWaitlist) }
                 }
             case .waiting:
-                secondary("Quitter la liste d’attente", id: "course-leave-waitlist") { model.submit(.leaveWaitlist) }
+                secondary("Quitter la liste d’attente", id: "course-leave-waitlist") { release = .leaveWaitlist(rank: me.waitlistPosition) }
             case .offered:
                 if let offer = me.offer {
                     if model.cancellationClosed() { DrivyActionNote(text: "Le délai d’annulation est passé.") }
                     primary("Accepter la place", id: "course-accept-offer") { review = SchoolCourseEnrollmentReview(action: .accept(offerID: offer.id)) }
-                    secondary("Refuser", id: "course-decline-offer") { model.submit(.decline(offerID: offer.id)) }
+                    secondary("Refuser la place", id: "course-decline-offer") { release = .decline(offerID: offer.id) }
                 }
             case .enrolled:
                 if let enrollment = me.enrollment {
@@ -239,7 +252,7 @@ struct SchoolLearnerCoursesView: View {
                     Section {
                         ForEach(model.offers) { offer in
                             Button { open(offer.seriesId) } label: {
-                                SchoolCourseOfferBanner(offer: offer, title: model.title(for: offer.seriesId), zone: model.timeZone)
+                                SchoolCourseOfferBanner(offers: [offer], title: model.title(for: offer.seriesId), zone: model.timeZone)
                             }
                             .accessibilityHint("Ouvre le cours")
                         }
@@ -345,20 +358,29 @@ struct SchoolLearnerCoursesView: View {
     }
 }
 
-/// Bandeau d’une place proposée : visible sans notification, jusqu’à son échéance.
+/// Bandeau des places proposées : visible sans notification, jusqu’à leur échéance. Plusieurs offres se comptent au
+/// lieu de se cacher derrière la première (#222) ; `nextCourse` garde le prochain cours quand il n’a pas sa ligne.
 struct SchoolCourseOfferBanner: View {
-    let offer: SchoolCourseOffer
+    /// Triées par échéance : la première est la plus proche.
+    let offers: [SchoolCourseOffer]
+    /// Titre du cours, pour une offre seule.
     let title: String?
     let zone: String
+    var nextCourse: String? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
             Image(systemName: "person.3.fill").foregroundStyle(DrivyTheme.accent).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                Text(title.map { "Place proposée : \($0)" } ?? "Place proposée dans un cours")
+                Text(offers.count > 1 ? "\(offers.count) places proposées"
+                     : title.map { "Place proposée : \($0)" } ?? "Place proposée dans un cours")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.text)
-                if let expiry = offer.expiry {
-                    Text("Jusqu’à \(SchoolCourseEnrollmentFormat.moment(expiry, zone: zone))")
+                if let expiry = offers.first?.expiry {
+                    Text("\(offers.count > 1 ? "La première jusqu’à" : "Jusqu’à") \(SchoolCourseEnrollmentFormat.moment(expiry, zone: zone))")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
+                }
+                if let nextCourse {
+                    Text("Prochain cours : \(nextCourse)")
                         .font(.subheadline).foregroundStyle(DrivyTheme.muted).monospacedDigit()
                 }
             }
@@ -439,6 +461,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
     let schoolID: UUID?
     let timeZone: String
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var model: SchoolLearnerCoursesWorkspace?
     @State private var presented: SchoolLearnerCoursesWorkspace?
     @State private var offered: SchoolCourseLearnerWorkspace?
@@ -446,32 +469,7 @@ struct SchoolLearnerCourseEntry: ViewModifier {
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let model {
-                  if let offer = model.offers.first {
-                    Button {
-                        offered = model.detail(for: offer.seriesId)
-                    } label: {
-                        SchoolCourseOfferBanner(offer: offer, title: model.title(for: offer.seriesId), zone: model.timeZone)
-                            .padding(DrivySpacing.s)
-                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Ouvre le cours")
-                    .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
-                  } else if let enrollment = model.nextEnrollment(), let next = model.nextOccurrence(for: enrollment.seriesId) {
-                    Button {
-                        offered = model.detail(for: enrollment.seriesId)
-                    } label: {
-                        DrivyEntityRow(title: model.title(for: enrollment.seriesId) ?? "Cours collectif",
-                            meta: SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: model.timeZone),
-                            leading: .symbol("person.3"), showsChevron: true)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Prochain cours, \(model.title(for: enrollment.seriesId) ?? "Cours collectif"), \(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: model.timeZone))")
-                    .accessibilityIdentifier("learner-next-course")
-                    .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
-                  }
-                }
+                if let model { header(model) }
             }
             .toolbar {
                 if model != nil {
@@ -494,6 +492,44 @@ struct SchoolLearnerCourseEntry: ViewModifier {
             .sheet(item: $offered, onDismiss: { Task { await model?.load() } }) { course in
                 SchoolCourseLearnerView(model: course)
             }
+    }
+
+    /// Haut de Leçons (#222) : les places proposées à traiter et, à part, le prochain cours déjà réservé. En très grand
+    /// texte, une seule ligne les résume et ouvre la liste des cours, pour ne pas masquer les leçons.
+    @ViewBuilder private func header(_ model: SchoolLearnerCoursesWorkspace) -> some View {
+        let offers = model.offers
+        let enrollment = model.nextEnrollment()
+        let nextInterval = enrollment.flatMap { model.nextOccurrence(for: $0.seriesId) }
+            .map { SchoolPlanningFormat.interval($0.startsAt, $0.endsAt, zone: model.timeZone) }
+        let combined = typeSize.isAccessibilitySize && !offers.isEmpty && nextInterval != nil
+        if !offers.isEmpty || nextInterval != nil {
+            VStack(spacing: DrivySpacing.xs) {
+                if let first = offers.first {
+                    // Une seule offre ouvre sa fiche ; plusieurs ouvrent la liste, où chacune a sa ligne.
+                    let opensCourse = offers.count == 1 && !combined
+                    Button {
+                        if opensCourse { offered = model.detail(for: first.seriesId) } else { presented = model }
+                    } label: {
+                        SchoolCourseOfferBanner(offers: offers, title: model.title(for: first.seriesId), zone: model.timeZone,
+                                                nextCourse: combined ? nextInterval : nil)
+                            .padding(DrivySpacing.s)
+                            .background(DrivyTheme.accentSoft, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(opensCourse ? "Ouvre le cours" : "Ouvre les cours collectifs")
+                }
+                if let enrollment, let nextInterval, !combined {
+                    let title = model.title(for: enrollment.seriesId) ?? "Cours collectif"
+                    Button { offered = model.detail(for: enrollment.seriesId) } label: {
+                        DrivyEntityRow(title: title, meta: nextInterval, leading: .symbol("person.3"), showsChevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Prochain cours, \(title), \(nextInterval)")
+                    .accessibilityIdentifier("learner-next-course")
+                }
+            }
+            .padding(.horizontal, DrivySpacing.m).padding(.vertical, DrivySpacing.xs)
+        }
     }
 
     private func openPendingSeries() {

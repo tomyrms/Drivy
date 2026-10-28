@@ -225,9 +225,10 @@ struct SchoolCourseAttendanceView: View {
                             .accessibilityIdentifier("course-payment-void")
                     }
                 }
-                Button { paying = row } label: { Label("Payé sur place", systemImage: "banknote") }
+                // Une action, pas un état (#226) : « Payé » reste réservé aux montants enregistrés.
+                Button { paying = row } label: { Label("Enregistrer un règlement", systemImage: "banknote") }
                     .buttonStyle(DrivySecondaryButtonStyle())
-                    .accessibilityLabel("Payé sur place, \(name(row))")
+                    .accessibilityLabel("Enregistrer un règlement pour \(name(row))")
                     .accessibilityIdentifier("course-payment")
             }
             rowFeedback(row)
