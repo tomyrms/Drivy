@@ -5,7 +5,9 @@ import SwiftUI
 struct SchoolAccessCodeView: View {
     @Bindable var model: SchoolAccessWorkspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     @FocusState private var focus: SchoolAccountFieldID?
+    @State private var recovering = false
     @ScaledMetric(relativeTo: .title2) private var codeSize: CGFloat = 28
 
     var body: some View {
@@ -29,10 +31,13 @@ struct SchoolAccessCodeView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) }
             }
+            .sheet(isPresented: $recovering) {
+                SchoolAccountRecoveryView(client: model.recoveryClient)
+            }
         }
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
-        .onAppear { focus = model.step == .code ? .code : .firstName }
+        .onAppear { focus = model.step == .code ? .code : model.step == .register ? .firstName : .email }
         .onChange(of: model.step) { _, step in
             switch step {
             case .code: focus = .code
@@ -98,7 +103,10 @@ struct SchoolAccessCodeView: View {
     private var registerStep: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if let message = model.errorMessage { SchoolErrorNotice(message: message) }
-            HStack(alignment: .top, spacing: DrivySpacing.s) {
+            let names = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.m))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.s))
+            names {
                 SchoolAccountField(label: "Prénom", text: $model.firstName, kind: .givenName, id: .firstName, focus: $focus,
                                    identifier: "access-first-name", onSubmit: { focus = .lastName })
                 SchoolAccountField(label: "Nom", text: $model.lastName, kind: .familyName, id: .lastName, focus: $focus,
@@ -111,6 +119,7 @@ struct SchoolAccessCodeView: View {
                                onSubmit: { Task { await model.register() } })
             SchoolJoinTextLink(title: "J’ai déjà un compte", isBusy: model.isBusy) { model.show(.signIn) }
                 .accessibilityIdentifier("access-has-account")
+            editCode
         }
     }
 
@@ -124,9 +133,19 @@ struct SchoolAccessCodeView: View {
             SchoolAccountField(label: "Mot de passe", text: $model.password, kind: .currentPassword, id: .password, focus: $focus,
                                identifier: "access-sign-in-password", submitLabel: .go,
                                onSubmit: { Task { await model.signIn() } })
+            SchoolJoinTextLink(title: "Mot de passe oublié", isBusy: model.isBusy) {
+                model.prepareRecovery(); focus = nil; recovering = true
+            }
+            .accessibilityIdentifier("access-recover")
             SchoolJoinTextLink(title: "Créer un compte", isBusy: model.isBusy) { model.show(.register) }
                 .accessibilityIdentifier("access-create-account")
+            editCode
         }
+    }
+
+    private var editCode: some View {
+        SchoolJoinTextLink(title: "Modifier le code", isBusy: model.isBusy) { model.show(.code) }
+            .accessibilityIdentifier("access-edit-code")
     }
 
     private var actionBar: some View {

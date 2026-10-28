@@ -330,10 +330,13 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
 
 @MainActor final class SchoolCourseClient {
     let baseURL: URL
+    let serverClock: SchoolCourseServerClock
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
-    init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
+    init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
+         serverClock: SchoolCourseServerClock = SchoolCourseServerClock()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
+        self.serverClock = serverClock
     }
 
     func catalogue(schoolID: UUID) async throws -> SchoolCourseCatalogue {
@@ -622,7 +625,8 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
         guard contentType == "application/json" else { throw SchoolPlanningFailure.invalidResponse }
         do {
             let result = try JSONDecoder().decode(Envelope<Value>.self, from: response.data)
-            guard !result.requestId.isEmpty, SchoolLesson.date(result.serverTime) != nil else { throw SchoolPlanningFailure.invalidResponse }
+            guard !result.requestId.isEmpty, let serverTime = SchoolLesson.date(result.serverTime) else { throw SchoolPlanningFailure.invalidResponse }
+            serverClock.synchronize(serverTime: serverTime)
             return result.data
         } catch { throw SchoolPlanningFailure.invalidResponse }
     }

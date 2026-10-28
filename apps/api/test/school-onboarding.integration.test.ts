@@ -53,14 +53,51 @@ async function counts(){return (await pool.query(`SELECT (SELECT count(*)::int F
   (SELECT count(*)::int FROM drivy.school_data_policy WHERE school_id=$1) policies,(SELECT count(*)::int FROM drivy.profile_field_policy WHERE school_id=$1) profile_policies,
   (SELECT count(*)::int FROM drivy.curriculum_version WHERE school_id=$1) curricula,(SELECT count(*)::int FROM drivy.service_product_version WHERE school_id=$1) products`,[id.schoolA])).rows[0];}
 
+it('résout les règles communes au serveur et adopte une référence partagée sans inventer les prix',async()=>{
+ const draft=await prepared(true),content=draft.content,first=content.formations[0]!;
+ first.useCommonTerms=true;first.priceCents=null;first.termsText='Texte du client à ignorer';first.cancellationPolicyText='Texte du client à ignorer';
+ content.commonLessonRules={cancellationHours:null,lateAction:null,paymentText:'',exceptionsText:''};
+ const incomplete=await save(content,draft.version),review=await reviewed();
+ expect(review.ready).toBe(false);
+ expect(review.issues.map((issue:{field:string})=>issue.field)).toEqual(expect.arrayContaining(['formations.0.priceCents','commonLessonRules.lateAction','commonLessonRules.paymentText']));
+ expect((await getDraft()).content.formations[0]!.priceCents).toBeNull();
+ first.priceCents=9300;
+ const template=setupTemplates.formations.find(item=>item.categoryCode==='A')!;
+ content.formations.push({...formation(),id:randomUUID(),categoryCode:'A',label:'Conduite A',templateId:template.id,templateVersion:template.version,competencies:structuredClone(template.competencies),procedureText:template.procedureText,priceCents:10700,useCommonTerms:true});
+ content.commonLessonRules={cancellationHours:24,lateAction:'CONTACT',paymentText:'Paiement sur facture selon les modalités convenues.',exceptionsText:'Contacter le secrétariat pour toute exception.'};
+ await save(content,incomplete.version);
+ const ready=await completion(),applied=await call('POST',`${base}/complete`,ready.body,ready.version);
+ expect(applied.statusCode,applied.body).toBe(200);
+ const products=(await pool.query('SELECT unit_price_cents::int AS price,terms_version_id FROM drivy.service_product_version WHERE id=ANY($1::uuid[]) ORDER BY unit_price_cents',[applied.json().data.applied.productIds])).rows;
+ expect(products.map(item=>item.price)).toEqual([9300,10700]);expect(new Set(products.map(item=>item.terms_version_id)).size).toBe(1);
+ const terms=(await pool.query('SELECT terms_text FROM drivy.commercial_terms_version WHERE id=$1',[products[0].terms_version_id])).rows[0].terms_text;
+ expect(terms).toContain('24 heure(s)');expect(terms).toContain(content.commonLessonRules.paymentText);
+ expect(terms).not.toContain('Texte du client à ignorer');expect(terms).not.toMatch(/CHF|9300|10700/);
+ const policies=(await pool.query("SELECT p.cancellation_policy_text FROM drivy.offering_version o JOIN drivy.school_policy_version p ON p.id=o.policy_version_id WHERE o.id=ANY($1::uuid[])",[applied.json().data.applied.offeringIds])).rows;
+ expect(policies).toHaveLength(2);for(const policy of policies)expect(terms).toContain(policy.cancellation_policy_text);
+ const provenance=(await pool.query('SELECT o.category_code,c.approval_reason FROM drivy.offering_version o JOIN drivy.curriculum_version c ON c.id=o.curriculum_version_id WHERE o.id=ANY($1::uuid[])',[applied.json().data.applied.offeringIds])).rows;
+ for(const item of content.formations)expect(provenance.find(row=>row.category_code===item.categoryCode)?.approval_reason).toContain(`${item.templateId} ${item.templateVersion}`);
+});
+
+it('le choix sans frais ne demande pas un délai et reste une réponse explicite de l’école',async()=>{
+ const draft=await prepared(true),content=draft.content;content.formations[0]!.useCommonTerms=true;
+ content.commonLessonRules={cancellationHours:null,lateAction:'NO_FEE',paymentText:'Le paiement intervient après chaque leçon.',exceptionsText:''};
+ await save(content,draft.version);
+ const ready=await completion(),applied=await call('POST',`${base}/complete`,ready.body,ready.version);
+ expect(applied.statusCode,applied.body).toBe(200);
+ const terms=(await pool.query('SELECT terms_text FROM drivy.commercial_terms_version WHERE id=$1',[applied.json().data.applied.termsIds[0]])).rows[0].terms_text;
+ expect(terms).toContain('ne facture pas de frais');expect(terms).not.toContain('heure(s)');
+});
+
 it('lit sans créer de brouillon ; réserve contenus et modèles aux ADMIN du bon périmètre',async()=>{
   const before=await counts();expect((await getDraft()).version).toBe(1);expect(await counts()).toEqual(before);
   expect((await pool.query('SELECT draft_content FROM drivy.school_setup WHERE school_id=$1',[id.schoolA])).rows[0].draft_content).toBeNull();
   const templates=(await call('GET',`${base}/templates`)).json().data;
+  expect(templates.formations.map((item:{categoryCode:string})=>item.categoryCode).sort()).toEqual(['A','A1','A35','B','B1','BE','C','C1','C1E','CE','D','D1','D1E','DE','F'].sort());
   const proposals=(await call('GET',`/v1/schools/${id.schoolA}/text-proposals`)).json().data;
   const identity=(await getDraft()).content.identity;
   const personalize=(text:string)=>text.replaceAll('[Nom de l’école]',identity.name).replaceAll('[contact données]',identity.contactEmail);
-  expect(personalize(templates.privacy.noticeText)).toBe(proposals.dataPolicy.noticeText);expect(templates.privacy.retentionText).toBe(proposals.dataPolicy.retentionText);
+  expect(personalize(templates.privacy.noticeText)).toBe(proposals.dataPolicy.noticeText);expect(personalize(templates.privacy.retentionText)).toBe(proposals.dataPolicy.retentionText);
   expect(templates.profileFields).toEqual(proposals.profileFields);expect(personalize(templates.commercial.termsText)).toBe(proposals.commercialTerms.termsText);
   expect(templates.commercial.cancellationPolicyText).toBe(proposals.procedure.cancellationPolicyText);
   expect(templates.formations.every((item:{procedureText:string})=>item.procedureText===proposals.procedure.procedureText)).toBe(true);
@@ -157,6 +194,32 @@ it('annule toutes les écritures sur échec au milieu de la publication et conse
   expect((await call('POST',`${base}/complete`,command.body,command.version)).statusCode).toBe(200);
 });
 
+it('refuse deux nouvelles formations du même permis tout en conservant le brouillon',async()=>{
+  const saved=await prepared(true);saved.content.formations.push(formation());
+  const draft=await save(saved.content,saved.version),before=await counts(),review=await reviewed();
+  expect(review.issues.map((issue:{code:string})=>issue.code)).toContain('SETUP_CATEGORY_DUPLICATE');
+  const command=await completion(),denied=await call('POST',`${base}/complete`,command.body,command.version);
+  expect(denied.statusCode,denied.body).toBe(409);expect(denied.json().code).toBe('SETUP_CATEGORY_DUPLICATE');
+  expect(await counts()).toEqual(before);expect((await getDraft()).version).toBe(draft.version);
+});
+
+it('ne recrée pas un permis déjà actif et ne remplace pas sa procédure par les règles communes',async()=>{
+  await prepared(true);const first=await completion(),opened=await call('POST',`${base}/complete`,first.body,first.version);
+  expect(opened.statusCode,opened.body).toBe(200);
+  const current=await getDraft(),item=formation();current.content.selectedSections=['CATALOGUE'];current.content.formations=[item];
+  const saved=await save(current.content,current.version),before=await counts(),review=await reviewed(false);
+  expect(review.issues.map((issue:{code:string})=>issue.code)).toContain('SETUP_CATEGORY_EXISTS');
+  const create=await completion(false),denied=await call('POST',`${base}/complete`,create.body,create.version);
+  expect(denied.statusCode,denied.body).toBe(409);expect(denied.json().code).toBe('SETUP_CATEGORY_EXISTS');expect(await counts()).toEqual(before);
+  const inherited=saved.content.formations[0]!;inherited.existingOfferingId=opened.json().data.applied.offeringIds[0];inherited.cancellationPolicyText='';inherited.useCommonTerms=true;
+  saved.content.commonLessonRules={cancellationHours:null,lateAction:'NO_FEE',paymentText:'Paiement après la leçon.',exceptionsText:''};
+  await save(saved.content,saved.version);
+  expect((await reviewed(false)).issues.map((issue:{code:string})=>issue.code)).toContain('SETUP_EXISTING_RULES_REVIEW_REQUIRED');
+  const change=await completion(false),rejected=await call('POST',`${base}/complete`,change.body,change.version);
+  expect(rejected.statusCode,rejected.body).toBe(409);expect(rejected.json().code).toBe('SETUP_EXISTING_RULES_REVIEW_REQUIRED');
+  expect((await counts()).products).toBe(before.products);expect((await counts()).curricula).toBe(before.curricula);
+});
+
 it('ajoute un tarif à une école active sans réadopter les textes ni changer les anciennes références',async()=>{
   await prepared(true);const initial=await completion();const opened=(await call('POST',`${base}/complete`,initial.body,initial.version)).json().data;
   const current=await getDraft(),before=await counts(),item=formation();item.id=randomUUID();item.existingOfferingId=opened.applied.offeringIds[0];item.priceCents=10500;
@@ -199,7 +262,7 @@ it('annonce les accords GPS rendus caducs et réexige la revue quand cet impact 
   expect((await pool.query('SELECT count(*)::int n FROM drivy.recording_choice WHERE school_id=$1',[id.schoolA])).rows[0].n).toBe(1);
 });
 
-it('les prochaines actions séparent configuration, dossier et première leçon puis disparaissent après usage',async()=>{
+it('les prochaines actions persistent après annulation ou absence et cèdent la place à une réservation confirmée',async()=>{
   const initial=await call('GET',`${base}/next-actions`);expect(initial.statusCode,initial.body).toBe(200);
   expect(initial.json().data.planningReady).toBe(false);expect(initial.json().data.actions.map((a:{code:string})=>a.code)).toContain('POLICY_REVIEW_REQUIRED');
   await prepared(true);const command=await completion();const result=(await call('POST',`${base}/complete`,command.body,command.version)).json().data;
@@ -209,10 +272,16 @@ it('les prochaines actions séparent configuration, dossier et première leçon 
   const trainingId=randomUUID();await pool.query("INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE','2026-01-01')",[trainingId,id.schoolA,id.aliceLearner,result.applied.offeringIds[0],`setup-${(await getDraft()).content.formations[0]!.id}`]);
   expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('INSTRUCTOR_NOT_ASSIGNED');
   await pool.query("INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,'2020-01-01')",[randomUUID(),id.schoolA,trainingId,id.instructorMember]);
-  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0]).toMatchObject({code:'PLAN_FIRST_LESSON',label:'Planifier dans l’app Drivy',section:'eleves',query:{selection:id.aliceLearner}});
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0]).toMatchObject({code:'PLAN_FIRST_LESSON',label:'Planifier une leçon',section:'eleves',query:{selection:id.aliceLearner}});
   const policyId=(await pool.query('SELECT policy_version_id FROM drivy.offering_version WHERE id=$1',[result.applied.offeringIds[0]])).rows[0].policy_version_id;
   await pool.query(`INSERT INTO drivy.lesson(school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,status,price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection)
     VALUES($1,$2,$3,$4,$5,'2026-01-01T09:00:00Z','2026-01-01T09:50:00Z','Europe/Zurich','Lieu synthétique','CANCELLED',9300,0,$6,'{}')`,[id.schoolA,trainingId,id.aliceLearner,id.alice,id.instructorMember,policyId]);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('PLAN_FIRST_LESSON');
+  await pool.query("UPDATE drivy.lesson SET status='NO_SHOW' WHERE school_id=$1",[id.schoolA]);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions[0].code).toBe('PLAN_FIRST_LESSON');
+  await pool.query("UPDATE drivy.lesson SET status='PLANNED' WHERE school_id=$1",[id.schoolA]);
+  expect((await call('GET',`${base}/next-actions`)).json().data.actions).toEqual([]);
+  await pool.query("UPDATE drivy.lesson SET status='COMPLETED',actual_start=planned_start,actual_end=planned_end WHERE school_id=$1",[id.schoolA]);
   expect((await call('GET',`${base}/next-actions`)).json().data.actions).toEqual([]);
   await pool.query('DELETE FROM drivy.availability_rule WHERE school_id=$1',[id.schoolA]);
   const changed=(await call('GET',`${base}/next-actions`)).json().data;expect(changed.planningReady).toBe(false);expect(changed.actions.map((a:{code:string})=>a.code)).toEqual(['AVAILABILITY_REQUIRED']);

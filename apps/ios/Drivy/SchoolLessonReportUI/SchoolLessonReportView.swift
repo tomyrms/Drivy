@@ -222,6 +222,7 @@ private struct SchoolLessonReportContent: View {
     @State private var opensReportWhenReady = false
     @Binding var isFinishing: Bool
     @State private var finishError: String?
+    @State private var departureError: String?
     /// Départs et fins de leçon que l’école vient de confirmer depuis cette fiche : un retour haptique chacun.
     @State private var confirmedSteps = 0
     @State private var completionOpened = false
@@ -677,6 +678,7 @@ private struct SchoolLessonReportContent: View {
     private var headerSection: some View {
         Section {
             SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError)
+            if let departureError { SchoolErrorNotice(message: departureError, retry: { Task { await startLesson() } }) }
         }
         .drivyClearRow()
         .listRowSeparator(.hidden)
@@ -751,10 +753,10 @@ private struct SchoolLessonReportContent: View {
             switch bar {
             case .begin:
                 Button { Task { await startLesson() } } label: {
-                    DrivyBusyLabel(title: "Commencer la leçon", isBusy: isSending(.startLesson) || isSending(.savePreparation))
+                    DrivyBusyLabel(title: "Démarrer la leçon", isBusy: isOpeningTrip || isSending(.startLesson) || isSending(.savePreparation))
                 }
                 .buttonStyle(DrivyPrimaryButtonStyle())
-                .disabled(!model.acceptsInput)
+                .disabled(!model.acceptsInput || isOpeningTrip)
                 .accessibilityIdentifier("lesson-start")
             case .absent:
                 Button { confirmsNoShow = true } label: {
@@ -813,6 +815,22 @@ private struct SchoolLessonReportContent: View {
     }
 
     private func startLesson() async {
+        guard !isOpeningTrip, model.acceptsInput else { return }
+        isOpeningTrip = true; departureError = nil
+        let notice = try? await agenda.captureClient.recordingNotice(schoolID: model.scope.schoolID)
+        isOpeningTrip = false
+        guard let notice else {
+            departureError = "Le départ n’a pas pu être vérifié. Réessaie lorsque la connexion est disponible."
+            return
+        }
+        if notice.requiresGPS {
+            guard mayStartCapture(now: Date()) else {
+                departureError = "Le GPS n’est pas disponible pour ce départ. Vérifie le créneau, le module de l’école et le trajet déjà ouvert."
+                return
+            }
+            await openCapturePreparation()
+            return
+        }
         guard await model.start() else { return }
         confirmedSteps += 1
         if mayStartCapture(now: Date()) { await openCapturePreparation() }

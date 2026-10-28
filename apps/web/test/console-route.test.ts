@@ -26,6 +26,10 @@ describe('Navigation entre les tâches de gestion', () => {
 
   test('la préparation a une URL explicite distincte de l’entrée quotidienne', () => {
     expect(consolePath(school, 'apercu')).toBe(`/app/gestion/${school}/apercu`);
+    const settings = workspaces.find(workspace => workspace.key === 'settings')!;
+    const preparation = settings.items.find(item => item.section === 'apercu')!;
+    const path = consolePath(school, preparation.section, localNavigationQuery(settings, preparation, { week: '2026-09-28' }));
+    expect(restore(path)).toEqual({ schoolId: school, section: 'apercu', query: { from: 'configuration' } });
     expect(restore(`/app/gestion/${school}/offres`).section).toBe('offres');
     expect(restore(`/app/gestion/${school}/referentiels`).section).toBe('referentiels');
   });

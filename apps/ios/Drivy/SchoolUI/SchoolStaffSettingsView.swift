@@ -87,6 +87,15 @@ struct SchoolStaffSettingsView: View {
                 .drivyFormRows()
             }
             DrivyAppearanceSection()
+            Section {
+                NavigationLink {
+                    SchoolHelpView(workspace: workspace)
+                } label: {
+                    Text("Aide").foregroundStyle(DrivyTheme.text)
+                }
+                .accessibilityIdentifier("settings-help")
+            }
+            .drivyFormRows()
             SchoolMapAttributionSection()
             if let account {
                 if appLock?.biometryName != nil {

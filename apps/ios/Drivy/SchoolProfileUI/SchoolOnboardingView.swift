@@ -14,6 +14,8 @@ struct SchoolOnboardingView: View {
     @Bindable var model: SchoolProfileWorkspace
     /// Trainings already read by the caller; only those of this learner in this school are shown.
     var trainings: [SchoolTraining] = []
+    /// Le même choix scolaire que dans Profil, jamais un consentement propre à l’accueil.
+    var agendaClient: SchoolAgendaClient? = nil
     var loadsOnAppear = true
     var startsWithInformation = false
     @Environment(\.dismiss) private var dismiss
@@ -24,6 +26,8 @@ struct SchoolOnboardingView: View {
     @State private var confirmsDiscard = false
     @State private var returnsToReviewAfterDiscard = false
     @State private var location = SchoolOnboardingLocationPermission()
+    @State private var recordingChoice: SchoolRecordingChoiceWorkspace?
+    @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Un écran a déjà été montré : le premier (squelette puis écran) apparaît en fondu, les suivants glissent.
     @State private var hasShownScreen = false
@@ -45,6 +49,7 @@ struct SchoolOnboardingView: View {
                     if loadsOnAppear { await model.load() }
                     includesInformationStep = startsWithInformation || !model.canSkipOnboardingInformation
                 }
+                .task(id: recordingScopeKey) { await prepareRecordingChoice() }
                 .alert(returnsToReviewAfterDiscard ? "Revenir sans enregistrer tes informations ?" : "Quitter sans enregistrer tes informations ?",
                        isPresented: $confirmsDiscard) {
                     Button("Continuer à modifier", role: .cancel) {}
@@ -287,9 +292,13 @@ struct SchoolOnboardingView: View {
                 locationStatus
             } else {
                 stepTitle("GPS pendant les leçons")
-                VStack(alignment: .leading, spacing: DrivySpacing.m) {
-                    SchoolOnboardingPoint(symbol: "location", text: "L’appareil du moniteur enregistre le trajet, avec ton accord.")
-                    SchoolOnboardingPoint(symbol: "hand.raised", text: "Tu donnes ou modifies ton choix dans Profil. La leçon reste possible sans trajet.")
+                if let agendaClient, let learnerID = model.learnerID, let recordingChoice {
+                    SchoolOwnRecordingChoice(scope: model.scope, lessonID: nil, learnerID: learnerID,
+                        agenda: agendaClient, shared: recordingChoice)
+                } else if agendaClient != nil, model.learnerID != nil {
+                    DrivySkeletonRow(lines: 2).drivySkeleton("Lecture de l’accord GPS…")
+                } else {
+                    DrivyInlineMessage(text: "Ton choix GPS sera accessible dans Profil dès que ton dossier sera prêt. Tu peux terminer l’accueil.")
                 }
             }
         }
@@ -299,7 +308,7 @@ struct SchoolOnboardingView: View {
         if location.isDenied {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
                 DrivyStatusBadge(title: "Position non autorisée", symbol: "location.slash", tone: .warning)
-                Text("Les leçons restent possibles sans trajet. Tu pourras autoriser la position plus tard dans Réglages.")
+                Text("Tu pourras autoriser la position dans Réglages avant d’enregistrer un trajet.")
                     .font(.footnote)
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -403,7 +412,8 @@ struct SchoolOnboardingView: View {
             .accessibilityIdentifier("onboarding-skip-optional")
         } else {
             Button { save(.review) } label: {
-                DrivyBusyLabel(title: "Continuer", isBusy: isWorking)
+                DrivyBusyLabel(title: !isStaff && recordingChoice?.validAnswer == nil && recordingChoice?.mayChoose == true
+                    ? "Décider plus tard" : "Continuer", isBusy: isWorking)
             }
             .buttonStyle(DrivyPrimaryButtonStyle())
             .disabled(!model.canMutate)
@@ -592,10 +602,36 @@ struct SchoolOnboardingView: View {
         return value.isEmpty ? "Non renseigné" : value
     }
     private var gpsSummary: String {
-        guard isStaff else { return "Facultatif, selon ton choix" }
+        guard isStaff else {
+            return SchoolOnboardingRecordingSummary.label(answer: recordingChoice?.validAnswer,
+                isLoading: recordingChoice?.isLoading == true, isSaving: recordingChoice?.isBusy == true,
+                hasPending: recordingChoice.map { !$0.relatedPending.isEmpty || $0.hasOldScope } ?? false,
+                needsVerification: recordingChoice.map { $0.needsReload || $0.accessRevoked || $0.storageError != nil || $0.errorMessage != nil } ?? false)
+        }
         if location.isAuthorized { return "Position autorisée" }
         if location.isDenied { return "Position non autorisée" }
         return "À décider plus tard"
+    }
+
+    private var recordingScopeKey: String {
+        "\(model.scope.personID):\(model.scope.schoolID):\(model.scope.membershipID):\(model.scope.accessEpoch):\(model.scope.apiBaseURL):\(model.learnerID?.uuidString ?? ""):\(gpsEnabled):\(isStaff):\(agendaClient != nil)"
+    }
+
+    /// L’accueil lit le choix existant sans le modifier. Continuer ne donne jamais un accord et ne dépend pas de sa réponse.
+    private func prepareRecordingChoice() async {
+        guard gpsEnabled, !isStaff, let learnerID = model.learnerID, let agendaClient else {
+            recordingChoice?.invalidate(); recordingChoice = nil
+            return
+        }
+        if let recordingChoice, recordingChoice.scope == model.scope, recordingChoice.learnerID == learnerID {
+            if recordingChoice.needsReload, !recordingChoice.isLoading, !recordingChoice.isBusy { await recordingChoice.load() }
+            return
+        }
+        recordingChoice?.invalidate()
+        let value = SchoolOwnRecordingChoice.makeModel(scope: model.scope, lessonID: nil, learnerID: learnerID,
+            agenda: agendaClient, capture: capture)
+        recordingChoice = value
+        await value.load()
     }
 
     /// Welcome and end of the flow answer each other: a brand plate, then the title. No sentence under it.
@@ -605,6 +641,22 @@ struct SchoolOnboardingView: View {
 
     private func stepTitle(_ text: String) -> some View {
         Text(text).font(.drivyTitle).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Le récapitulatif distingue le choix confirmé d’une écriture ou d’une lecture encore incertaine.
+enum SchoolOnboardingRecordingSummary {
+    static func label(answer: SchoolRecordingChoice.Status?, isLoading: Bool, isSaving: Bool,
+                      hasPending: Bool, needsVerification: Bool) -> String {
+        if isSaving { return "Enregistrement du choix…" }
+        if hasPending { return "Choix en attente de confirmation" }
+        if isLoading { return "Vérification du choix…" }
+        if needsVerification { return "Choix à vérifier dans Profil" }
+        switch answer {
+        case .allowed: return "Enregistrement accepté"
+        case .refused: return "Enregistrement refusé"
+        case .unknown, nil: return "Pas encore décidé"
+        }
     }
 }
 

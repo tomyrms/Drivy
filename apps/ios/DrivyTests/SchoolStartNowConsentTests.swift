@@ -48,6 +48,29 @@ import Testing
         #expect(await fixture.server.writes() == 0)
     }
 
+    @Test func qualificationRejectsAnOldVerbalAgreementAndRequiresTheLearnerAccount() async throws {
+        let fixture = try await ConsentFixture.make(.recorded(.allowed))
+        await fixture.server.requireGPS(source: .verbal)
+        await fixture.gps.load()
+        #expect(fixture.gps.consent.notice?.requiresGPS == true)
+        #expect(!fixture.gps.consent.mayChoose)
+        #expect(fixture.gps.recorded == nil && !fixture.gps.wantsTrip)
+        #expect(!(await fixture.gps.consent.choose(.allowed)))
+        #expect(await fixture.server.writes() == 0)
+    }
+
+    @Test func qualificationReusesTheLearnerAgreementButDropsItAfterARetractionOnAnotherDevice() async throws {
+        let fixture = try await ConsentFixture.make(.recorded(.allowed))
+        await fixture.server.requireGPS(source: .own)
+        await fixture.gps.load()
+        #expect(fixture.gps.recorded == .allowed && fixture.gps.wantsTrip)
+        #expect(!fixture.gps.consent.mayChoose)
+        await fixture.server.setMode(.recorded(.refused))
+        await fixture.gps.refresh()
+        #expect(fixture.gps.recorded == .refused && !fixture.gps.wantsTrip)
+        #expect(await fixture.server.writes() == 0)
+    }
+
     @Test func aRememberedRefusalIsKeptAndStartsWithoutGPS() async throws {
         let fixture = try await ConsentFixture.make(.recorded(.refused))
         await fixture.gps.load()
@@ -236,6 +259,8 @@ actor ConsentServer: SchoolHTTPTransport {
     private var held = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var writeCount = 0
+    private var gpsRequired = false
+    private var readSource: SchoolRecordingChoice.Source = .verbal
     private let stamp = "2026-09-29T10:00:00Z"
 
     init(scope: SchoolCommandScope, learnerID: UUID, mode: ConsentFixture.Mode) {
@@ -244,6 +269,7 @@ actor ConsentServer: SchoolHTTPTransport {
     }
 
     func writes() -> Int { writeCount }
+    func requireGPS(source: SchoolRecordingChoice.Source) { gpsRequired = true; readSource = source }
     func setMode(_ value: ConsentFixture.Mode) { mode = value }
     func setFailing(_ value: Bool) { failing = value }
     func holdChoiceReads() { held = true }
@@ -274,8 +300,10 @@ actor ConsentServer: SchoolHTTPTransport {
         }
         if leaf == "recording-notice" {
             if failing { return problem("UNAVAILABLE", status: 503) }
-            return try json(["noticeVersionId": noticeID.uuidString, "noticeText": "Information GPS synthétique",
-                "retentionText": "Conservation de test", "contactEmail": "ecole@example.invalid", "approvedAt": stamp])
+            var notice = ["noticeVersionId": noticeID.uuidString, "noticeText": "Information GPS synthétique",
+                "retentionText": "Conservation de test", "contactEmail": "ecole@example.invalid", "approvedAt": stamp]
+            if gpsRequired { notice["practicalStartPolicy"] = "GPS_REQUIRED" }
+            return try json(notice)
         }
         if leaf == "recording-choice" {
             if held { await withCheckedContinuation { waiters.append($0) } }
@@ -287,7 +315,7 @@ actor ConsentServer: SchoolHTTPTransport {
             }
             switch mode {
             case .absent, .failing: return problem("RECORDING_CHOICE_NOT_SET", status: 404)
-            case .recorded(let status): return try json(choice(status: status, notice: noticeID, source: .verbal))
+            case .recorded(let status): return try json(choice(status: status, notice: noticeID, source: readSource))
             case .staleNotice(let status): return try json(choice(status: status, notice: staleNoticeID, source: .verbal))
             case .protectedRefusal: return try json(choice(status: .refused, notice: noticeID, source: .own))
             }

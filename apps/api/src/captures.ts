@@ -2,6 +2,7 @@ import type { FastifyInstance,FastifyRequest } from 'fastify';
 import type { Pool,PoolClient } from 'pg';
 import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
+import {requiresGPS,type PracticalStartOptions} from './practical-start-policy.js';
 import { withActor } from './database.js';
 import { ApiError,forbidden,notFound } from './errors.js';
 import { Cursors } from './cursor.js';
@@ -30,7 +31,7 @@ function guards<T>(schoolId:string,target:Target,own=false):CommandGuards<T>{ret
  additionalPersons:async db=>{if('deviceId'in target)return [];const learnerId=await targetLearner(db,schoolId,target);await learnerAccess(db,learnerId,own);await db.query("SELECT set_config('app.learner_id',$1,true)",[learnerId]);const person=(await db.query<{id:string|null}>('SELECT drivy.profile_target_person() AS id')).rows[0]?.id;if(!person)throw notFound();return [person];},
  authorize:async(db,actor)=>{if('deviceId'in target){if(!actor.roles.includes('INSTRUCTOR'))throw notFound();return;}if('learnerId'in target){await learnerAccess(db,target.learnerId,own);return;}await author(db,'lessonId'in target?target.lessonId:(await getCapture(db,schoolId,target.captureId)).lesson_id);}
 };}
-function configured(config:CaptureConfig|undefined):CaptureConfig{if(!config)throw error('CAPTURE_SERVICE_NOT_CONFIGURED','La capture scolaire n’est pas encore configurée. La leçon reste disponible sans GPS.',503);return config;}
+function configured(config:CaptureConfig|undefined):CaptureConfig{if(!config)throw error('CAPTURE_SERVICE_NOT_CONFIGURED','La capture scolaire n’est pas encore configurée. Vérifiez la configuration avec l’administration de l’école.',503);return config;}
 /** Un profil d'essai déclaré par le porteur peut couvrir toutes les versions d'un système (`26.*`) ou de l'app (`*`). */
 function matchesProfileValue(pattern:string,value:string){return pattern==='*'||pattern===value||(pattern.endsWith('.*')&&value.startsWith(pattern.slice(0,-1)));}
 function findProfile(config:CaptureConfig|undefined,input:Pick<AssessmentInput,'platform'|'deviceClass'|'modelCode'|'osVersion'|'appBuild'>):QualificationProfile|undefined{return config?.profiles.find(p=>p.platform===input.platform&&p.deviceClass===input.deviceClass&&matchesProfileValue(p.modelCode,input.modelCode)&&matchesProfileValue(p.osVersion,input.osVersion)&&matchesProfileValue(p.appBuild,input.appBuild)&&Date.parse(p.expiresAt)>Date.now());}
@@ -103,7 +104,7 @@ function manifestQuality(rows:ChunkMeta[],manifest:Manifest[]):'SYNCED'|'PARTIAL
 }
 function receipt(row:Pick<ChunkRow,'capture_id'|'segment_id'|'chunk_index'|'content_hash'|'acknowledged_at'>,duplicate:boolean){return {captureId:row.capture_id,segmentId:row.segment_id,chunkIndex:row.chunk_index,contentHash:row.content_hash,acknowledgedAt:row.acknowledged_at.toISOString(),duplicate};}
 
-export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;capture?:CaptureConfig}){
+export function registerCaptures(app:FastifyInstance,options:PracticalStartOptions&{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;capture?:CaptureConfig}){
  const base='/v1/schools/:schoolId',cursors=new Cursors(options.cursorSecret);
  const param=(r:FastifyRequest,key:string)=>uuid.parse(z.record(z.string(),z.string()).parse(r.params)[key]);
  const schoolID=(r:FastifyRequest)=>param(r,'schoolId');
@@ -117,7 +118,7 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
  // Extension de découverte : seules les clés publiques de l'origine API configurée sont exposées.
  app.get('/v1/capture-keys',async r=>{empty.parse(r.query);return envelope(await new CaptureAuthority(configured(options.capture)).publicKeys(),r);});
  // Extension de lecture : information effective avant un choix explicite, sans adoption sur GET.
- app.get(`${base}/recording-notice`,async r=>{empty.parse(r.query);return envelope(await read(r,async db=>{const n=await notice(db,schoolID(r));return {noticeVersionId:n.notice_version_id,noticeText:n.notice_text,retentionText:n.retention_text,contactEmail:n.contact_email,approvedAt:n.approved_at.toISOString()};}),r);});
+ app.get(`${base}/recording-notice`,async r=>{empty.parse(r.query);return envelope(await read(r,async db=>{const n=await notice(db,schoolID(r));return {practicalStartPolicy:requiresGPS(options,schoolID(r))?'GPS_REQUIRED':'LEGACY',noticeVersionId:n.notice_version_id,noticeText:n.notice_text,retentionText:n.retention_text,contactEmail:n.contact_email,approvedAt:n.approved_at.toISOString()};}),r);});
  app.post(`${base}/devices/:deviceId/assessments`,async(r,reply)=>{
   const body=assessmentCommand.parse(r.body),deviceId=param(r,'deviceId'),bound={...body,deviceId};
   const value=await command(r,'ASSESS_CAPTURE_DEVICE',bound,null,{deviceId},async(db,actor,school)=>{
@@ -145,9 +146,11 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
   const body=choiceCommand.parse(r.body),learnerId=param(r,'learnerId'),bound={...body,learnerId};
   const value=await command(r,'RECORD_RECORDING_CHOICE',bound,null,{learnerId},async(db,actor,school)=>{
    if(body.source==='RECORDED_VERBAL'&&!actor.roles.includes('INSTRUCTOR'))throw notFound();
+   if(requiresGPS(options,school.id)&&body.source!=='SELF')throw error('RECORDING_SELF_REQUIRED','L’élève doit faire son choix GPS depuis son compte.',403);
    if(body.lessonId&&(await getLesson(db,school.id,body.lessonId)).learner_id!==learnerId)throw notFound();
    if((await notice(db,school.id)).notice_version_id!==body.noticeVersionId)throw error('RECORDING_NOTICE_CHANGED','Relisez la notice actuelle avant de confirmer.');
    let previous:ChoiceRow|undefined;try{previous=await getChoice(db,school.id,learnerId,body.lessonId);}catch(e){if(!(e instanceof ApiError)||e.code!=='RECORDING_CHOICE_NOT_SET')throw e;}
+   if(requiresGPS(options,school.id)&&body.status==='ALLOWED'&&body.expectedChoiceVersion!==(previous?.version??0))throw error('RECORDING_CHOICE_CHANGED','Le choix a changé sur un autre appareil. Relisez-le avant de confirmer.');
    if(body.source==='RECORDED_VERBAL'&&body.status==='ALLOWED'&&previous?.source==='SELF'&&previous.status==='REFUSED')throw error('RECORDING_CHOICE_PROTECTED','Seul l’élève peut lever son refus explicite.');
    const row=(await db.query<ChoiceRow>(`INSERT INTO drivy.recording_choice(school_id,version,learner_id,lesson_id,status,notice_version_id,recorded_by,source)
     SELECT $1,coalesce(max(version),0)+1,$2,$3,$4,$5,$6,$7 FROM drivy.recording_choice WHERE school_id=$1 AND learner_id=$2 RETURNING *`,[school.id,learnerId,body.lessonId,body.status,body.noticeVersionId,actor.membershipId,body.source])).rows[0]!;
@@ -157,14 +160,21 @@ export function registerCaptures(app:FastifyInstance,options:{pool:Pool;verifyTo
  app.post(`${base}/lessons/:lessonId/captures`,async(r,reply)=>{
   const config=configured(options.capture),body=startCommand.parse(r.body),lessonId=param(r,'lessonId'),bound={...body,lessonId},expected=requireVersion(r.headers['if-match']);
   const capture=await command(r,'START_CAPTURE',bound,expected,{lessonId},async(db,actor,school)=>{
-   if(school.status!=='ACTIVE'||!school.modules.gpsEnabled)throw error('CAPTURE_DISABLED','Le GPS scolaire n’est pas activé. La leçon reste disponible sans GPS.');
+   if(school.status!=='ACTIVE'||!school.modules.gpsEnabled)throw error('CAPTURE_DISABLED','Le GPS scolaire n’est pas activé. Vérifiez la configuration avec l’administration de l’école.');
    const lesson=await getLesson(db,school.id,lessonId,true);checkVersion(lesson.version,expected);if(lesson.status!=='PLANNED')throw error('LESSON_CLOSED','Cette leçon ne permet plus de démarrer une capture.');
    if(!(await db.query<{ok:boolean}>('SELECT drivy.lesson_learner_active($1) AS ok',[lesson.training_id])).rows[0]?.ok)throw error('LEARNER_NOT_ACTIVE','Le compte élève doit avoir une appartenance active.',422);
    const training=(await db.query<{status:string;archived_at:Date|null}>(`SELECT t.status,l.archived_at FROM drivy.training t JOIN drivy.learner_profile l ON l.school_id=t.school_id AND l.id=t.learner_id
     WHERE t.school_id=$1 AND t.id=$2`,[school.id,lesson.training_id])).rows[0];
    if(training?.status!=='ACTIVE'||training.archived_at)throw error('TRAINING_NOT_ACTIVE','La formation doit être active dans un dossier non archivé.');
-   const now=Date.now();if(!lesson.actual_start&&(now<lesson.planned_start.getTime()-1_800_000||now>=lesson.planned_end.getTime()+1_800_000))throw error('CAPTURE_START_WINDOW','Commencez la leçon avant de démarrer le trajet en dehors du créneau prévu.');
+   const now=Date.now();if(!lesson.actual_start&&(now<lesson.planned_start.getTime()-1_800_000||now>=lesson.planned_end.getTime()+1_800_000))throw error('CAPTURE_START_WINDOW',requiresGPS(options,school.id)
+    ? 'Déplacez le rendez-vous dans l’agenda pour démarrer à l’heure actuelle.'
+    : 'Commencez la leçon avant de démarrer le trajet en dehors du créneau prévu.');
    const choice=await getChoice(db,school.id,lesson.learner_id,lessonId),n=await notice(db,school.id);
+   if(requiresGPS(options,school.id)&&choice.source!=='SELF')throw error('RECORDING_SELF_REQUIRED','L’élève doit confirmer lui-même son accord GPS.',403);
+   if(requiresGPS(options,school.id)){
+    const category=(await db.query<{category_code:string}>('SELECT o.category_code FROM drivy.training t JOIN drivy.offering_version o ON o.school_id=t.school_id AND o.id=t.offering_id WHERE t.school_id=$1 AND t.id=$2',[school.id,lesson.training_id])).rows[0]?.category_code;
+    if(!category||!['B','BE'].includes(category))throw error('GPS_SOURCE_UNQUALIFIED','Le suivi depuis l’appareil du moniteur n’est pas encore qualifié pour cette catégorie.');
+   }
    if(choice.status!=='ALLOWED')throw error('RECORDING_NOT_ALLOWED','Le choix actuel de l’élève ne permet pas de capturer le GPS.',403);
    if(choice.id!==body.choiceId||choice.version!==body.choiceVersion||choice.notice_version_id!==body.noticeVersionId||n.notice_version_id!==body.noticeVersionId)throw error('RECORDING_CHOICE_CHANGED','Relisez le choix et la notice avant de commencer.');
    const assessment=await getAssessment(db,school.id,body.deviceId,body.deviceAssessmentId),profile=findProfile(config,{platform:assessment.platform as 'IOS'|'ANDROID',deviceClass:assessment.device_class as 'PHONE'|'TABLET',modelCode:assessment.model_code,osVersion:assessment.os_version,appBuild:assessment.app_build});

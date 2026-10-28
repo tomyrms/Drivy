@@ -12,6 +12,14 @@ export const planningProductSchema = productSchema.extend({ current: z.boolean()
 export const slotAvailabilitySchema = z.object({ available: z.boolean(), reasonCode: z.string().nullable() });
 export type PlanningLesson = z.infer<typeof planningLessonSchema>;
 export type PlanningProduct = z.infer<typeof planningProductSchema>;
+/** Échéance informative, jamais une décision de frais. Une règle historique absente ne peut pas être déduite du texte. */
+export function individualCancellationDeadline(plannedStart:string,rules:{cancellationHours:number|null;lateAction:'CONTACT'|'NO_FEE'}|null|undefined):string|null {
+  if(rules?.lateAction!=='CONTACT'||rules.cancellationHours===null||!Number.isInteger(rules.cancellationHours)||rules.cancellationHours<0||rules.cancellationHours>8760)return null;
+  const start=Date.parse(plannedStart);
+  if(!Number.isFinite(start))return null;
+  const deadline=new Date(start-rules.cancellationHours*3600_000);
+  return Number.isNaN(deadline.getTime())?null:deadline.toISOString();
+}
 export function planningTrainingLabel(training: Training, offering?: Offering): string {
   const category = training.categoryCode ?? offering?.categoryCode;
   return `${category ? `Permis ${category}` : 'Formation'}${offering?.label?.trim() ? ` · ${offering.label.trim()}` : ''}`;

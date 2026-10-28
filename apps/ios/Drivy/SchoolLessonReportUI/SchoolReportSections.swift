@@ -425,20 +425,44 @@ struct SchoolReportTextSection: View {
     }
 }
 
-/// Niveaux par compétence : toutes celles du référentiel de la formation, à plat et dans son ordre. Les signalements
-/// du trajet, les objectifs et les niveaux déjà notés n’en choisissent, n’en trient ni n’en replient aucune (#56, #57).
+/// Compétences liées à cette leçon d’abord, puis le reste du même programme à la demande (#273).
+/// Aucun signalement ne choisit un niveau ; toutes les compétences autorisées restent accessibles.
 struct SchoolReportCompetenciesSection: View {
     @Bindable var model: SchoolLessonReportWorkspace
     @State private var expanded = Set<UUID>()
+    @State private var showsOthers = false
+    /// Groupes stables pendant la saisie : choisir un niveau ne déplace pas la ligne qui vient d’être utilisée.
+    @State private var initialRelevantIDs: Set<UUID>?
+
+    private var currentRelevantIDs: Set<UUID> {
+        SchoolReportFlowRules.relevantCompetencyIDs(evaluations: model.observations,
+            observations: model.lessonObservations, goals: model.goals)
+    }
 
     var body: some View {
         if !model.competencies.isEmpty {
+            let groups = SchoolReportFlowRules.competencyGroups(model.competencies,
+                relevantIDs: initialRelevantIDs ?? currentRelevantIDs)
             Section {
-                ForEach(model.competencies) { competency in
+                ForEach(groups.relevant) { competency in
                     SchoolReportCompetencyRow(model: model, competency: competency, expanded: $expanded)
+                }
+                if !groups.others.isEmpty {
+                    DisclosureGroup(isExpanded: $showsOthers) {
+                        ForEach(groups.others) { competency in
+                            SchoolReportCompetencyRow(model: model, competency: competency, expanded: $expanded)
+                        }
+                    } label: {
+                        Text(groups.relevant.isEmpty ? "Choisir une compétence (\(groups.others.count))"
+                             : "Autres compétences (\(groups.others.count))")
+                            .foregroundStyle(DrivyTheme.accent)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityIdentifier("lesson-report-other-competencies")
                 }
             } header: { Text("Compétences").drivyFormSectionHeader() }
                 .drivyFormRows()
+                .onAppear { if initialRelevantIDs == nil { initialRelevantIDs = currentRelevantIDs } }
         }
     }
 }

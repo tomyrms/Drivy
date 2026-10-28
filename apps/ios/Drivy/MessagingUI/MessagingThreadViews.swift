@@ -331,44 +331,80 @@ struct MessagingPollComposer: View {
     @State private var options = ["", ""]
     @State private var multiple = false
     @State private var sending = false
-    @FocusState private var focused: Int?
+    /// La mise en file a échoué : rien n’est parti et la saisie reste (#243).
+    @State private var failed = false
+    @State private var confirmsDiscard = false
+    /// Champs déjà quittés : un manque n’y est signalé qu’après, jamais dès la première lettre (#242).
+    @State private var visited: Set<Field> = []
+    @FocusState private var focused: Field?
+
+    private enum Field: Hashable {
+        case question, option(Int)
+        var isOption: Bool { if case .option = self { true } else { false } }
+    }
 
     private var poll: MessagingPlainContent.Poll? { MessagingPollRules.validated(question: question, options: options) }
+    private var problems: MessagingPollRules.Problems { MessagingPollRules.problems(question: question, options: options) }
+    /// Une saisie existe : ni le geste ni Annuler ne la perdent sans confirmation (#243).
+    private var hasInput: Bool {
+        multiple || ([question] + options).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Question") {
-                    TextField("Question", text: $question, axis: .vertical)
-                        .accessibilityIdentifier("messaging.poll.question")
+                if failed {
+                    Section {
+                        DrivyFormMessage(text: "Le sondage n’a pas pu être envoyé. Ta saisie est conservée.", tone: .danger)
+                    }
                 }
-                Section("Options") {
+                Section("Question") {
+                    VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                        TextField("Question", text: $question, axis: .vertical)
+                            .focused($focused, equals: .question)
+                            .accessibilityIdentifier("messaging.poll.question")
+                            .accessibilityHint(questionHint ?? "")
+                        if let questionHint { hint(questionHint) }
+                    }
+                }
+                Section {
                     ForEach(options.indices, id: \.self) { index in
-                        TextField("Option \(index + 1)", text: $options[index])
-                            .focused($focused, equals: index)
-                            .accessibilityIdentifier("messaging.poll.option.\(index)")
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            TextField("Option \(index + 1)", text: $options[index])
+                                .focused($focused, equals: .option(index))
+                                .accessibilityIdentifier("messaging.poll.option.\(index)")
+                                .accessibilityHint(optionHint(index) ?? "")
+                            if let message = optionHint(index) { hint(message) }
+                        }
                     }
                     .onDelete { set in if options.count - set.count >= 2 { options.remove(atOffsets: set) } }
                     if options.count < MessagingPollRules.maxOptions {
                         Button("Ajouter une option", systemImage: "plus") {
-                            options.append(""); focused = options.count - 1
+                            options.append(""); focused = .option(options.count - 1)
                         }
                     }
+                } header: { Text("Options") } footer: {
+                    // Rattaché à aucun champ : VoiceOver le lit tel quel.
+                    if let optionsHint { DrivyFormMessage(text: optionsHint, tone: .warning) }
                 }
                 Section {
                     Toggle("Plusieurs choix", isOn: $multiple).accessibilityIdentifier("messaging.poll.multiple")
                 }
             }
+            .onChange(of: focused) { previous, _ in if let previous { visited.insert(previous) } }
             .navigationTitle("Sondage")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { if hasInput { confirmsDiscard = true } else { dismiss() } }
+                        .disabled(sending)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Envoyer") {
                         guard let poll else { return }
-                        sending = true
+                        sending = true; failed = false
                         Task {
-                            if await onCreate(poll, multiple) { dismiss() }
+                            if await onCreate(poll, multiple) { dismiss() } else { failed = true }
                             sending = false
                         }
                     }
@@ -376,7 +412,41 @@ struct MessagingPollComposer: View {
                     .accessibilityIdentifier("messaging.poll.send")
                 }
             }
+            .confirmationDialog("Abandonner ce sondage ?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+                Button("Abandonner", role: .destructive) { dismiss() }
+                Button("Continuer la saisie", role: .cancel) {}
+            } message: { Text("La question et les options saisies seront perdues.") }
+            .onChange(of: failed) { _, value in
+                if value { UIAccessibility.post(notification: .announcement, argument: "Le sondage n’a pas pu être envoyé. Ta saisie est conservée.") }
+            }
         }
+        .interactiveDismissDisabled(hasInput || sending)
+    }
+
+    // MARK: Explications (#242)
+
+    private var questionHint: String? {
+        if let length = problems.questionLength { return Self.tooLong(length) }
+        return problems.questionMissing && visited.contains(.question) ? "Écris la question." : nil
+    }
+
+    private func optionHint(_ index: Int) -> String? {
+        if let length = problems.optionLengths[index] { return Self.tooLong(length) }
+        return problems.duplicates.contains(index) ? "Cette option est déjà proposée." : nil
+    }
+
+    private var optionsHint: String? {
+        guard problems.tooFewOptions, visited.contains(where: \.isOption) else { return nil }
+        return "Il faut au moins deux options."
+    }
+
+    private static func tooLong(_ length: Int) -> String {
+        "\(length) caractères : \(MessagingPollRules.maxLength) au maximum."
+    }
+
+    /// Sous un champ : VoiceOver l’entend comme indice du champ, pas une seconde fois.
+    private func hint(_ text: String) -> some View {
+        DrivyFormMessage(text: text, tone: .warning).accessibilityHidden(true)
     }
 }
 
@@ -391,12 +461,31 @@ struct MessagingSearchView: View {
     @State private var results: [MessagingHistoryEntry] = []
     /// La recherche dont `results` est la réponse : « Aucun résultat » n’est dit qu’une fois elle terminée.
     @State private var searchedQuery: String?
+    /// L’historique protégé de l’appareil a pu être lu pour cette réponse (#244).
+    @State private var historyAvailable = true
+
+    private var hasQuery: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Une frappe plus récente que la réponse : les résultats d’avant ne sont plus montrés comme les siens.
+    private var isSearching: Bool { hasQuery && searchedQuery != query }
 
     var body: some View {
         NavigationStack {
             List {
+                if hasQuery && !isSearching && !historyAvailable {
+                    Section {
+                        DrivyFormMessage(text: "Historique de cet appareil illisible : seuls les messages affichés ont été cherchés.",
+                                         tone: .warning)
+                    }
+                }
                 Section {
-                    ForEach(results) { entry in
+                    if isSearching {
+                        HStack(spacing: DrivySpacing.s) {
+                            ProgressView().accessibilityHidden(true)
+                            Text("Recherche…").foregroundStyle(DrivyTheme.muted)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    ForEach(isSearching ? [] : results) { entry in
                         Button { onSelect(entry.messageID); dismiss() } label: {
                             HStack(alignment: .top, spacing: DrivySpacing.s) {
                                 DrivyAvatar(name: workspace.displayName(entry.senderID), size: 32, photo: workspace.photos[entry.senderID])
@@ -408,7 +497,9 @@ struct MessagingSearchView: View {
                                         Text(entry.acceptedAt, format: .dateTime.day().month().hour().minute())
                                             .font(.caption).foregroundStyle(DrivyTheme.muted)
                                     }
-                                    Text(entry.content.summary).font(.subheadline).lineLimit(3).foregroundStyle(DrivyTheme.text)
+                                    // Le passage trouvé, pas le début du message (#245).
+                                    Text(MessagingSearchExcerpt.make(entry.content, query: query))
+                                        .font(.subheadline).lineLimit(3).foregroundStyle(DrivyTheme.text)
                                 }
                             }
                             .padding(.vertical, DrivySpacing.xxs)
@@ -416,9 +507,10 @@ struct MessagingSearchView: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("messaging.search.result")
                     }
-                    if !query.trimmingCharacters(in: .whitespaces).isEmpty && results.isEmpty && searchedQuery == query {
-                        DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
-                            actionTitle: "Effacer la recherche", action: { query = "" })
+                    if hasQuery && !isSearching && results.isEmpty {
+                        // La portée réelle : un message jamais ouvert ici n’est pas « inexistant » (#244).
+                        DrivyEmptyState(title: "Aucun résultat", message: "Seuls les messages déjà ouverts sur cet appareil sont cherchés.",
+                            symbol: "magnifyingglass", actionTitle: "Effacer la recherche", action: { query = "" })
                             .buttonStyle(.borderless)
                     }
                 } header: {
@@ -434,7 +526,8 @@ struct MessagingSearchView: View {
                 guard !Task.isCancelled else { return }
                 let found = await workspace.search(query, conversationID: conversationID)
                 guard !Task.isCancelled else { return }
-                results = found
+                results = found.entries
+                historyAvailable = found.historyAvailable
                 searchedQuery = query
             }
             .navigationTitle("Rechercher")

@@ -195,31 +195,39 @@ async function run(options:FormationsOptions):Promise<void> {
   assert(Number(lesson.price_cents_snapshot)===Number(existing.price_cents_snapshot)&&JSON.stringify(lesson.commercial_selection)===JSON.stringify(existing.commercial_selection)
     &&lesson.policy_version_id===existing.policy_version_id,'La réservation existante garde son prix, ses conditions et sa procédure photographiés');
 
-  setStage('formations : assistant de création du permis A');
+  setStage('formations : guide unique de création du permis A');
   await page.getByRole('link',{name:'Formations et tarifs',exact:true}).first().click();
   await page.getByRole('heading',{name:'Formations et tarifs',exact:true}).waitFor();
   await page.getByRole('link',{name:'Ajouter une formation',exact:true}).click();
-  await page.getByRole('heading',{name:'Permis',exact:true,level:1}).waitFor();
-  await page.getByLabel('Permis',{exact:true}).click();
-  await page.getByRole('combobox',{name:'Rechercher : Permis',exact:true}).fill('A');
-  await page.getByRole('option',{name:'Permis A',exact:true}).click();
-  await page.getByRole('button',{name:'Continuer',exact:true}).click();
-  await page.getByRole('heading',{name:'Compétences et règles',exact:true,level:1}).waitFor();
-  assert(await page.getByText('Proposition Drivy à relire',{exact:true}).count()===1,'Les modèles Drivy sont présentés comme une proposition à relire, pas comme un texte adopté');
-  await page.getByRole('button',{name:'Continuer',exact:true}).click();
-  await page.getByRole('heading',{name:'Premier tarif',exact:true,level:1}).waitFor();
+  await page.getByRole('heading',{name:'Préparer une formation',exact:true,level:1}).waitFor();
+  await page.getByRole('heading',{name:'Permis enseignés',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Permis A',exact:true}).click();
+  const reference=page.locator('details').filter({has:page.getByText('À relire par l’école ; ce programme ne certifie pas les prérequis de l’élève.',{exact:true})});
+  await reference.locator('summary').click();
+  assert(await reference.getByText(/^Proposition Drivy · /).isVisible()
+    &&await reference.getByText('À relire par l’école ; ce programme ne certifie pas les prérequis de l’élève.',{exact:true}).isVisible(),
+    'Les modèles Drivy sont présentés comme une proposition à relire, pas comme un texte adopté');
+  await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
+  await page.getByRole('heading',{name:'Prix et règles de l’école',exact:true}).waitFor();
   assert(await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='','Le prix n’est jamais prérempli');
-  await page.getByLabel('Nom du tarif',{exact:true}).fill('Leçon moto 50 minutes');
   await page.getByLabel('Durée (minutes)',{exact:true}).fill('50');
-  await page.getByRole('button',{name:'Continuer',exact:true}).click();
-  assert(await page.getByLabel('Prix (CHF)',{exact:true}).getAttribute('aria-invalid')==='true','Un prix absent bloque l’étape, sans être remplacé par zéro');
+  await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
+  await page.getByRole('heading',{name:'Vérifier la formation',exact:true}).waitFor();
+  assert(await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).isDisabled(),'Un prix absent bloque la confirmation, sans être remplacé par zéro');
+  await page.getByRole('button',{name:'Saisissez le prix réel de la leçon.',exact:true}).click();
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='formations.0.priceCents');
+  assert(await page.getByLabel('Prix (CHF)',{exact:true}).getAttribute('aria-invalid')==='true','L’erreur de prix retrouve le champ exact et lui associe son explication');
   await page.getByLabel('Prix (CHF)',{exact:true}).fill('110');
-  await page.getByRole('button',{name:'Continuer',exact:true}).click();
-  await page.getByRole('heading',{name:'Vérification',exact:true,level:1}).waitFor();
+  await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
+  await page.getByRole('heading',{name:'Vérifier la formation',exact:true}).waitFor();
   const beforeCreation=await counts();
-  await page.getByRole('button',{name:'Créer la formation',exact:true}).click();
+  const acknowledgement=page.getByLabel('J’ai relu les formations et tarifs sélectionnés. Je confirme leur mise à disposition.',{exact:true});
+  await acknowledgement.waitFor();
+  assert(!(await acknowledgement.isChecked())&&beforeCreation.offerings===afterCompetencies.offerings,'La formation reste un brouillon sans confirmation précochée ni publication anticipée');
+  await acknowledgement.check();await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).click();
+  await page.getByRole('heading',{name:'Formations et tarifs',exact:true}).waitFor();
+  await page.getByRole('link',{name:'Permis A',exact:true}).click();
   await page.getByRole('heading',{level:1,name:'Permis A'}).waitFor();
-  await page.getByText('La formation du permis A est créée.',{exact:true}).waitFor();
   const created=await sheet('A'),afterCreation=await counts();
   assert(created.programmes.length===1&&created.tariffs.length===1&&created.tariffs[0]!.head.unitPriceCents===11000&&afterCreation.notices===beforeCreation.notices
     &&afterCreation.profiles===beforeCreation.profiles&&afterCreation.status==='ACTIVE','La création enregistre programme, règles et premier tarif sans réadopter les textes ni réactiver l’école');

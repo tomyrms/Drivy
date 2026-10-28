@@ -1,6 +1,6 @@
 import { useConsole } from './context';
 import { FormationList, FormationSheetView } from './formation-sheet';
-import { FormationWizard } from './formation-wizard';
+import { SchoolSetupGuide } from './school-setup';
 import { LegacyReferenceRoute } from './formation-references';
 import './formations-studio.css';
 
@@ -10,7 +10,7 @@ import './formations-studio.css';
  */
 export function FormationsSection() {
   const { routeQuery = {} } = useConsole();
-  if (routeQuery.view === 'nouvelle') return <FormationWizard initialCategory={routeQuery.category} />;
+  if (routeQuery.view === 'nouvelle') return <SchoolSetupGuide catalogueOnly initialCategory={routeQuery.category} />;
   if (routeQuery.category) return <FormationSheetView key={routeQuery.category} category={routeQuery.category} />;
   // Adresse portant seulement une référence (prochaines actions, ancien lien) : la version désignée est retrouvée.
   if (routeQuery.selection) return <LegacyReferenceRoute section="formations" />;

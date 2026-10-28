@@ -10,6 +10,7 @@ struct SchoolMyProfileView: View {
     let workspace: SchoolWorkspace
     /// Le contexte de l’école ouverte pour un élève ; `nil` sans dossier (moniteur, administration, compte sans école).
     let dossier: SchoolProfileWorkspace?
+    let agendaClient: SchoolAgendaClient?
     var loadsDossierOnAppear = true
     /// Information manquante à ouvrir : la page défile jusqu’à elle et la met au clavier.
     var focus: SchoolProfileField? = nil
@@ -29,9 +30,10 @@ struct SchoolMyProfileView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(workspace: SchoolWorkspace, dossier: SchoolProfileWorkspace?, loadsDossierOnAppear: Bool = true,
-         focus: SchoolProfileField? = nil, missingFields: Set<SchoolProfileField> = []) {
+         focus: SchoolProfileField? = nil, missingFields: Set<SchoolProfileField> = [], agendaClient: SchoolAgendaClient? = nil) {
         self.workspace = workspace; self.dossier = dossier; self.loadsDossierOnAppear = loadsDossierOnAppear
         self.focus = focus; self.missingFields = missingFields
+        self.agendaClient = agendaClient
         _editor = State(initialValue: SchoolSelfProfileEditor(workspace: workspace))
     }
 
@@ -61,7 +63,7 @@ struct SchoolMyProfileView: View {
                 Button("Retirer la photo", role: .destructive) { upload(nil) }
             }
             .sheet(isPresented: $showsGuidedWelcome) {
-                if let dossier { SchoolOnboardingView(model: dossier, trainings: workspace.trainings) }
+                if let dossier { SchoolOnboardingView(model: dossier, trainings: workspace.trainings, agendaClient: agendaClient) }
             }
         }
         .tint(DrivyTheme.accent)

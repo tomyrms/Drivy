@@ -21,14 +21,13 @@ export function proposedDataPolicy(context: ProposalContext) {
   const noticeText = [
     `${context.schoolName} utilise Drivy pour organiser votre formation à la conduite : leçons, suivi de votre progression, bilans et, si vous l’acceptez, enregistrement du trajet pendant les leçons.`,
     'Les données traitées sont votre nom et vos coordonnées, vos leçons, les observations et bilans de vos moniteurs, et le trajet GPS des leçons pour lesquelles vous avez donné votre accord. Le GPS n’enregistre que pendant une leçon, depuis l’appareil du moniteur.',
-    'Y ont accès : vous, les moniteurs qui vous suivent et l’administration de l’école. Rien n’est publié ni vendu.',
+    'Les accès dépendent des rôles dans l’école. Vous voyez vos leçons réalisées, leurs observations, bilans et objectifs partagés automatiquement. Les notes privées du moniteur ne vous sont pas montrées. Les messages utilisent leur propre chiffrement et leurs propres destinataires.',
     `Drivy héberge ces données pour le compte de l’école.${routing} Les fonds de carte sont affichés par Apple Plans.`,
-    `Vous pouvez consulter, corriger ou faire supprimer vos données, et retirer votre accord GPS à tout moment, sans conséquence sur vos leçons. Écrivez à ${context.contactEmail}.`,
+    `Pour exercer vos droits ou demander une correction, un accès ou un effacement, écrivez à ${context.contactEmail}. Le retrait du choix GPS est accessible dans votre compte ; il ne supprime ni le compte ni les données déjà enregistrées. L’appareil du moniteur reçoit ce retrait à sa prochaine vérification ; hors réseau, son autorisation temporaire expire.`,
   ].join('\n\n');
   const retentionText = [
-    'Vos données sont conservées pendant votre formation.',
-    'Un trajet GPS peut être supprimé à votre demande à tout moment ; la leçon et son bilan restent alors sans trajet.',
-    'À la fin de la formation, vos données sont supprimées à votre demande, sauf ce que l’école doit garder pour ses obligations légales, comme sa comptabilité.',
+    'Drivy ne réalise pas encore de purge automatique à une échéance définie. [À compléter avec l’exploitant avant utilisation réelle : durées par type de données, traitement des sauvegardes et procédure d’effacement.]',
+    `Adressez vos demandes à ${context.contactEmail}. Une demande ne signifie pas que l’effacement a déjà eu lieu ; l’école doit examiner sa portée et les obligations de conservation applicables, puis confirmer le traitement effectué.`,
   ].join('\n\n');
   return { noticeText, retentionText, contactEmail: context.contactEmail };
 }
@@ -44,7 +43,7 @@ export const proposedProfileFields: readonly ProposedFieldRule[] = [
 export function proposedProcedure() {
   return {
     procedureText: 'Chaque leçon commence au lieu de rendez-vous convenu et dure le temps réservé. Le moniteur fait le point au départ, conduit la leçon avec vous, puis vous remet un bilan dans l’app.',
-    cancellationPolicyText: 'Une leçon peut être annulée ou déplacée sans frais jusqu’à 24 heures avant son début. Passé ce délai, ou en cas d’absence, elle est due, sauf cas de force majeure.',
+    cancellationPolicyText: '[À compléter : délai et marche à suivre choisis par l’école pour les leçons individuelles.]',
   };
 }
 
@@ -54,7 +53,7 @@ export function proposedCommercialTerms(context: ProposalContext) {
     termsText: [
       'Le prix d’une leçon est celui affiché au moment de sa réservation.',
       'Les leçons se règlent auprès de l’école, selon les moyens de paiement qu’elle accepte.',
-      'Une leçon annulée moins de 24 heures avant son début, ou manquée, est due, sauf cas de force majeure.',
+      '[À compléter : conditions d’annulation de l’école pour cette prestation.]',
       `Pour toute question : ${context.contactEmail}.`,
     ].join('\n\n'),
   };

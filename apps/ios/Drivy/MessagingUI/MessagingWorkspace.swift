@@ -1079,8 +1079,12 @@ struct MessagingInboxPreview: Equatable, Sendable {
     }
 
     /// Recherche sur l'appareil : historique scellé, complété par la mémoire de la session.
-    func search(_ query: String, conversationID: UUID) async -> [MessagingHistoryEntry] {
-        var entries = (try? await history.entries(conversationID: conversationID, scope: scope)) ?? []
+    func search(_ query: String, conversationID: UUID) async -> MessagingSearchOutcome {
+        // Sans stockage protégé ou s'il est illisible, la recherche le dit au lieu d'annoncer un résultat complet (#244).
+        var historyAvailable = !(history is UnavailableMessagingHistory)
+        var entries: [MessagingHistoryEntry] = []
+        do { entries = try await history.entries(conversationID: conversationID, scope: scope) }
+        catch { historyAvailable = false }
         let known = Set(entries.map(\.messageID))
         for message in messages[conversationID] ?? [] where !known.contains(message.id) {
             if let content = contents[message.id] {
@@ -1091,8 +1095,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
         let limit = accessByConversation[conversationID]?.readableUntilSequence
         entries = entries.filter { !hiddenForMe.contains($0.messageID) && !isHiddenLocally($0.messageID, in: conversationID)
             && (limit == nil || $0.sequence <= limit!) }
-        guard currentScope() == scope else { return [] }
-        return MessagingHistorySearch.matches(entries, query: query)
+        guard currentScope() == scope else { return MessagingSearchOutcome(entries: [], historyAvailable: historyAvailable) }
+        return MessagingSearchOutcome(entries: MessagingHistorySearch.matches(entries, query: query), historyAvailable: historyAvailable)
     }
 
     // MARK: Envoi de messages (#104)

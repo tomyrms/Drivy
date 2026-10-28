@@ -27,7 +27,7 @@ const pagination=z.object({limit:z.coerce.number().int().min(1).max(100).default
 export const memberColumns=`m.id,m.school_id AS "schoolId",m.version,m.person_id AS "personId",p.display_name AS "displayName",m.status,m.roles,m.grants,m.access_epoch AS "accessEpoch"`;
 export const assignmentColumns=`id,school_id AS "schoolId",version,training_id AS "trainingId",instructor_membership_id AS "instructorMembershipId",valid_from AS "validFrom",valid_until AS "validUntil"`;
 const offeringColumns=`id,school_id AS "schoolId",version,offering_key AS "offeringKey",label,category_code AS "categoryCode",curriculum_version_id AS "curriculumVersionId",policy_version_id AS "policyVersionId",enabled,default_duration_minutes AS "defaultDurationMinutes",default_price_cents AS "defaultPriceCents"`;
-const policyColumns=`id,school_id AS "schoolId",version,category_code AS "categoryCode",procedure_text AS "procedureText",cancellation_policy_text AS "cancellationPolicyText",source_urls AS "sourceUrls",approved,approved_at AS "approvedAt"`;
+const policyColumns=`id,school_id AS "schoolId",version,category_code AS "categoryCode",procedure_text AS "procedureText",cancellation_policy_text AS "cancellationPolicyText",cancellation_rules AS "cancellationRules",source_urls AS "sourceUrls",approved,approved_at AS "approvedAt"`;
 const curriculumColumns=`id,school_id AS "schoolId",version,category_code AS "categoryCode",revision,approved`;
 type Row=Record<string,unknown>&{id:string;version:number};
 function currentSchool(school:SchoolRow){if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','Cette école doit être active.');}

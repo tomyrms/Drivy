@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { commandMessage, createCommand, formatCents } from '../command-core';
 import { useCommandSnapshot } from '../command-store';
 import { assignmentSchema, catalogPolicySchema, learnerSchema, memberSchema, offeringSchema, readAll, readSchool, termsSchema, trainingSchema } from '../school-api';
-import { applicableProducts, assignmentCovers, canEditPlannedLesson, initialLessonForm, lessonCommercial, lessonInterval, lessonLocalInstants, lessonWriteBody, planningLessonSchema, planningProductSchema, planningTrainingLabel, slotAvailabilitySchema, type LessonForm, type PlanningLesson } from '../lesson-planning-model';
+import { applicableProducts, assignmentCovers, canEditPlannedLesson, initialLessonForm, individualCancellationDeadline, lessonCommercial, lessonInterval, lessonLocalInstants, lessonWriteBody, planningLessonSchema, planningProductSchema, planningTrainingLabel, slotAvailabilitySchema, type LessonForm, type PlanningLesson } from '../lesson-planning-model';
 import { CheckField, ConfirmDialog, Facts, Notice, SelectField, TextArea, TextField, formatDateTime } from '../ui';
 import { readError, useCommandRunner, useConsole, useLoad, useUnsavedChanges } from './context';
 import { LoadState, OutcomeNotice } from './layout';
@@ -126,6 +126,7 @@ function LoadedLessonEditor({ original: loadedOriginal, learnerId, catalogue, on
   const offering = catalogue.offerings.find(item => item.id === training?.offeringId && item.enabled);
   const policy = catalogue.policies.find(item => item.id === offering?.policyVersionId && item.approved);
   const interval = lessonInterval(form, school.timeZone);
+  const cancellationDeadline = !original && interval ? individualCancellationDeadline(interval.plannedStart, policy?.cancellationRules) : null;
   const localInstants = lessonLocalInstants(form.localStart, school.timeZone);
   const instructors = catalogue.members.filter(item => item.status === 'ACTIVE' && item.roles.includes('INSTRUCTOR')
     && (membership.roles.includes('ADMIN') || item.id === membership.membershipId)
@@ -216,6 +217,7 @@ function LoadedLessonEditor({ original: loadedOriginal, learnerId, catalogue, on
         ['Moniteur', instructors.find(item => item.id === form.instructorId)?.displayName ?? ''],
         ['Début', interval ? formatDateTime(interval.plannedStart, school.timeZone) : ''], ['Fin', interval ? formatDateTime(interval.plannedEnd, school.timeZone) : ''],
         ['Rendez-vous', form.meetingPoint || 'Non précisé'], ['Prix convenu', price !== null ? formatCents(price) : ''],
+        ...(cancellationDeadline ? [['Annulation : prévenir l’école au plus tard', `${formatDateTime(cancellationDeadline, school.timeZone)} (${school.timeZone})`] as const] : []),
       ]} />
       {terms && <details><summary>Conditions · {terms.label}</summary><p className="preserve-lines">{terms.termsText}</p></details>}
       {!original && policy && <details><summary>Procédure et annulation</summary><p className="preserve-lines">{policy.procedureText}</p><p className="preserve-lines">{policy.cancellationPolicyText}</p></details>}

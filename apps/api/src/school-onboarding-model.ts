@@ -3,6 +3,8 @@ import {fieldRule,validateRules} from './profiles.js';
 import {curriculumBody,policyBody} from './catalogue.js';
 import {policyCommand,POLICY_TEXT_MINIMUM} from './school-setup.js';
 import {proposedCommercialTerms,proposedDataPolicy,proposedProcedure,proposedProfileFields,type ProposalContext} from './text-proposals.js';
+import {swissProgrammeTemplates} from './swiss-programmes.js';
+import {commonLessonRulesSchema,commonLessonTexts} from './school-commercial-rules.js';
 
 export const setupSteps=['IDENTITY','PRIVACY','PROFILE','FORMATIONS','PRICING','REVIEW'] as const;
 export const setupSections=['IDENTITY','PRIVACY','PROFILE','CATALOGUE'] as const;
@@ -15,30 +17,28 @@ export const setupFormationSchema=z.object({
   id:z.uuid(),apply:z.boolean(),categoryCode:text(30),label:text(200),templateId:nullableText(100),templateVersion:nullableText(40),
   competencies:z.array(competency).max(200),procedureText:text(4000),cancellationPolicyText:text(4000),sourceUrls:z.array(sourceURL).max(30),
   durationMinutes:z.number().int().min(0).max(480).nullable(),priceCents:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable(),
-  termsText:text(20000),validFrom:z.iso.date().nullable(),existingOfferingId:z.uuid().nullable()
+  termsText:text(20000),validFrom:z.iso.date().nullable(),existingOfferingId:z.uuid().nullable(),useCommonTerms:z.boolean().optional()
 }).strict();
 export const setupContentSchema=z.object({
   selectedSections:z.array(z.enum(setupSections)).max(4).refine(items=>new Set(items).size===items.length),
   identity:z.object({name:text(150),timeZone:text(100),contactEmail:text(320),contactPhone:nullableText(32)}).strict(),
   privacy:z.object({noticeText:text(20000),retentionText:text(20000),contactEmail:text(320),templateId:nullableText(100),templateVersion:nullableText(40)}).strict(),
   profile:z.object({fields:z.array(draftFieldRule).max(7),effectiveFrom:z.iso.datetime({offset:true}).nullable()}).strict(),
-  formations:z.array(setupFormationSchema).max(12).refine(items=>new Set(items.map(item=>item.id)).size===items.length)
+  formations:z.array(setupFormationSchema).max(20).refine(items=>new Set(items.map(item=>item.id)).size===items.length),
+  commonLessonRules:commonLessonRulesSchema.optional()
 }).strict();
 export type SetupContent=z.infer<typeof setupContentSchema>;
 export type SetupFormation=z.infer<typeof setupFormationSchema>;
+export function resolvedSetupFormation(content:SetupContent,item:SetupFormation):SetupFormation {
+  if(!item.useCommonTerms||!content.commonLessonRules)return item;
+  const texts=commonLessonTexts(content.commonLessonRules,content.identity.contactEmail);
+  return {...item,...texts,cancellationPolicyText:item.existingOfferingId?item.cancellationPolicyText:texts.cancellationPolicyText};
+}
 export const setupDraftSchema=z.object({id:z.uuid(),schoolId:z.uuid(),version:z.number().int().positive(),status:z.enum(['DRAFT','APPLIED']),currentStep:z.enum(setupSteps),
   content:setupContentSchema,updatedAt:z.iso.datetime().nullable(),updatedByMembershipId:z.uuid(),appliedAt:z.iso.datetime().nullable()}).strict();
 export interface SetupIssue {field:string;code:string;message:string}
-export const templateVersion='2026-10-13.2';
+export const templateVersion='2026-10-28.1';
 export const defaultProfileFields:z.infer<typeof fieldRule>[]=structuredClone([...proposedProfileFields]);
-const competencies=(twoWheels:boolean)=>[
-  {key:'preparation',label:'Préparer la conduite',description:'Préparer le véhicule et son installation avant de partir.',sortOrder:0},
-  {key:'observation',label:'Observer et anticiper',description:'Observer l’environnement et anticiper les situations de circulation.',sortOrder:1},
-  {key:'position',label:twoWheels?'Trajectoire et équilibre':'Placement et trajectoire',description:'Adapter son placement et sa trajectoire à la situation.',sortOrder:2},
-  {key:'speed',label:'Adapter son allure',description:'Choisir une allure adaptée à la visibilité et aux conditions.',sortOrder:3},
-  {key:'intersections',label:'Franchir les intersections',description:'Observer, décider et communiquer avant de franchir une intersection.',sortOrder:4},
-  {key:'manoeuvres',label:'Manœuvrer',description:'Réaliser les manœuvres travaillées en tenant compte des autres usagers.',sortOrder:5}
-];
 /** Le guide et les réglages proposent les mêmes textes ; aucune lecture ne vaut adoption. */
 export function schoolSetupTemplates(context:ProposalContext) {
   const privacy=proposedDataPolicy(context),procedure=proposedProcedure(),commercial=proposedCommercialTerms(context);
@@ -46,9 +46,7 @@ export function schoolSetupTemplates(context:ProposalContext) {
     noticeText:privacy.noticeText,retentionText:privacy.retentionText},
     commercial:{id:'individual-lesson-commercial',version:templateVersion,cancellationPolicyText:procedure.cancellationPolicyText,termsText:commercial.termsText},
     profileFields:structuredClone(defaultProfileFields),
-    // Bases pédagogiques, sans âge, durée légale, habilitation ou attestation réglementaire.
-    formations:['A','A1','B','BE'].map(categoryCode=>({id:`pedagogy-${categoryCode.toLowerCase()}`,version:templateVersion,categoryCode,label:`Permis ${categoryCode}`,
-      competencies:competencies(categoryCode==='A'||categoryCode==='A1'),procedureText:procedure.procedureText,durationMinutes:45}))};
+    formations:swissProgrammeTemplates().filter(item=>!['G','M'].includes(item.categoryCode)).map(item=>({...item,procedureText:procedure.procedureText}))};
 }
 /** Identifiants/version stables pour les validations et bases synthétiques sans école. */
 export const setupTemplates=schoolSetupTemplates({schoolName:'[Nom de l’école]',contactEmail:'[contact données]'});
@@ -90,9 +88,18 @@ export function contentIssues(content:SetupContent):SetupIssue[] {
     if(content.profile.effectiveFrom!==null)add('profile.effectiveFrom','Les informations demandées prennent effet dès la confirmation. Retirez la date enregistrée pour continuer.','PROFILE_EFFECTIVE_NOW_REQUIRED');
   }
   if(content.selectedSections.includes('CATALOGUE')) {
-    for(const [index,formation] of content.formations.entries()) {
+    if(content.formations.some(item=>item.apply&&item.useCommonTerms)){
+      const rules=content.commonLessonRules;
+      if(!rules?.lateAction)add('commonLessonRules.lateAction','Choisissez la marche à suivre en cas d’annulation.');
+      if(rules?.lateAction==='CONTACT'&&rules.cancellationHours===null)add('commonLessonRules.cancellationHours','Indiquez le délai de votre école.');
+      if(!rules?.paymentText.trim())add('commonLessonRules.paymentText','Indiquez quand et comment se règle la leçon.');
+    }
+    for(const [index,item] of content.formations.entries()) {
+      const formation=resolvedSetupFormation(content,item);
       if(!formation.apply)continue;
       const prefix=`formations.${index}`;
+      if(!formation.existingOfferingId&&content.formations.some((other,otherIndex)=>otherIndex<index&&other.apply&&!other.existingOfferingId&&other.categoryCode.toUpperCase()===formation.categoryCode.toUpperCase()))add(`${prefix}.categoryCode`,'Ce permis est déjà préparé dans le brouillon. Modifiez sa formation.','SETUP_CATEGORY_DUPLICATE');
+      if(formation.useCommonTerms&&formation.existingOfferingId)add(`${prefix}.useCommonTerms`,'Ce tarif conserve la procédure de sa formation. Préparez ses conditions depuis la fiche de formation.','SETUP_EXISTING_RULES_REVIEW_REQUIRED');
       nonblank(formation.categoryCode,`${prefix}.categoryCode`,'Choisissez un permis.');
       nonblank(formation.label,`${prefix}.label`,'Indiquez le nom de la formation.');
       if(formation.priceCents===null)add(`${prefix}.priceCents`,'Saisissez le prix réel de la leçon.');

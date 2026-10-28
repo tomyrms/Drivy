@@ -42,7 +42,7 @@ struct SchoolRecordingChoiceInline: View {
             case .loading:
                 DrivySkeletonRow(lines: 2).drivySkeleton("Lecture de l’accord GPS…")
             case .unavailable:
-                DrivyInlineMessage(text: model.errorMessage ?? "L’accord GPS n’a pas pu être lu. La leçon peut démarrer sans GPS.",
+                DrivyInlineMessage(text: model.errorMessage ?? "L’accord GPS n’a pas pu être vérifié. Réessaie avant le départ.",
                     tone: .warning)
                 if !model.accessRevoked {
                     Button { Task { await model.load() } } label: { Label("Réessayer", systemImage: "arrow.clockwise") }
@@ -59,7 +59,7 @@ struct SchoolRecordingChoiceInline: View {
             case .question:
                 question
             case .answered:
-                summaryRow(title: answer == .allowed ? "Avec GPS" : "Sans GPS",
+                summaryRow(title: model.isBusy ? "Enregistrement du choix…" : answer == .allowed ? "Enregistrement accepté" : "Enregistrement refusé",
                     symbol: answer == .allowed ? "location.fill" : "location.slash", action: "Modifier") {
                     withAnimation(DrivyMotion.reveal(reduceMotion)) { editing = true }
                 }
@@ -87,14 +87,17 @@ struct SchoolRecordingChoiceInline: View {
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            SchoolGPSPromise(addressesLearner: asksLearner)
+            SchoolGPSPromise(addressesLearner: asksLearner, requiresGPS: model.notice?.requiresGPS == true)
+            if model.notice?.requiresGPS == true && !asksLearner {
+                DrivyInlineMessage(text: "L’élève choisit depuis son compte, dans Profil → Accord GPS.")
+            }
             // Deux cartes de même taille, même poids, même teinte : aucune réponse n’est mise en avant.
             let layout = typeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: DrivySpacing.s))
                 : AnyLayout(HStackLayout(spacing: DrivySpacing.s))
             layout {
-                card(.allowed, title: "Avec GPS", symbol: "location.fill")
-                card(.refused, title: "Sans GPS", symbol: "location.slash")
+                card(.allowed, title: "Accepter le GPS", symbol: "location.fill")
+                card(.refused, title: "Refuser le GPS", symbol: "location.slash")
             }
             if model.verbalAgreementIsProtected {
                 DrivyInlineMessage(text: "L’élève a refusé depuis son compte. Lui seul peut modifier ce choix.", tone: .warning)
@@ -136,7 +139,7 @@ struct SchoolRecordingChoiceInline: View {
         .disabled(!enabled)
         .accessibilityHint(status == .allowed
             ? (asksLearner ? "Ton trajet sera enregistré pendant les leçons" : "Le trajet de l’élève sera enregistré")
-            : "La leçon se déroule sans GPS")
+            : "Le compte et les rendez-vous restent accessibles")
         .accessibilityIdentifier(status == .allowed ? "gps-answer-allowed" : "gps-answer-refused")
     }
 

@@ -5,7 +5,7 @@ import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
 import {checkIdempotency,schoolCommand,type CommandActor,type CommandEffect} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
-import {getSeries} from './courses.js';
+import {canManageCourses,getSeries} from './courses.js';
 
 /**
  * Cours collectifs : appel (#42), règlements sur place (#81), accomplissement validé (#82). Trois faits distincts : aucun ne
@@ -16,6 +16,15 @@ const attendanceBody=z.object({operationId:id,status:z.enum(['PRESENT','ABSENT',
 const paymentBody=z.object({operationId:id,amountCents:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),note}).strict();
 const reasonBody=z.object({operationId:id,reason:z.string().trim().min(1).max(1000)}).strict();
 const validateBody=z.object({operationId:id,note:z.string().trim().max(1000).nullish().transform(v=>v??null)}).strict();
+const typeKey=z.enum(['FIRST_AID','AWARENESS']);
+export const learnerCourseFactsSchema=z.object({
+ schoolId:id,learnerId:id,
+ completions:z.array(z.object({id,typeKey,validatedAt:z.iso.datetime({offset:true}),seriesId:id.nullable()}).strict()),
+ enrollments:z.array(z.object({enrollmentId:id,seriesId:id,typeKey,
+  requirements:z.object({required:z.number().int().nonnegative(),present:z.number().int().nonnegative(),missing:z.number().int().nonnegative()}).strict(),
+  attendance:z.array(z.object({occurrenceId:id,status:z.enum(['PRESENT','ABSENT','EXCUSED'])}).strict()),
+ }).strict()),
+}).strict();
 
 const failures:Record<string,[number,string]>={
  NOT_FOUND:[404,'Objet introuvable dans le périmètre autorisé.'],
@@ -90,6 +99,30 @@ async function myProgress(db:PoolClient,schoolId:string,personId:string){
  return {completions:completions.map(c=>({id:c.id,typeId:c.type_id,typeTitle:c.title,validatedAt:c.validated_at.toISOString(),seriesId:c.series_id})),enrollments:progress};
 }
 
+/** Faits internes utiles au dossier, sans attestation, dispense ou date de fin de cours déduite. */
+async function learnerCourseFacts(db:PoolClient,schoolId:string,learnerId:string,personId:string){
+ // L'accès au dossier et les droits de cours sont deux contrôles distincts. Les RLS restent actives.
+ const learner=(await db.query<{person_id:string}>('SELECT person_id FROM drivy.learner_profile WHERE school_id=$1 AND id=$2',[schoolId,learnerId])).rows[0];
+ if(!learner)throw notFound();
+ if(learner.person_id!==personId&&!(await canManageCourses(db,schoolId)))throw new ApiError(403,'COURSE_ACCESS_REQUIRED',failures.COURSE_ACCESS_REQUIRED![1]);
+ const completions=(await db.query<{id:string;type_key:'FIRST_AID'|'AWARENESS';validated_at:Date;series_id:string|null}>(`SELECT c.id,t.stable_key AS type_key,c.validated_at,c.series_id
+  FROM drivy.course_completion c JOIN drivy.course_type t ON t.id=c.type_id
+  WHERE c.school_id=$1 AND c.learner_id=$2 AND c.revoked_at IS NULL AND t.stable_key IN ('FIRST_AID','AWARENESS') ORDER BY c.validated_at DESC,c.id`,[schoolId,learnerId])).rows;
+ const enrollments=(await db.query<{id:string;series_id:string;type_key:'FIRST_AID'|'AWARENESS'}>(`SELECT e.id,e.series_id,t.stable_key AS type_key
+  FROM drivy.course_enrollment e JOIN drivy.course_series s ON s.school_id=e.school_id AND s.id=e.series_id JOIN drivy.course_type t ON t.id=s.type_id
+  WHERE e.school_id=$1 AND e.learner_id=$2 AND e.status='ACTIVE' AND t.stable_key IN ('FIRST_AID','AWARENESS') ORDER BY e.created_at DESC,e.id`,[schoolId,learnerId])).rows;
+ const progress=[];
+ for(const enrollment of enrollments){
+  const requirements=(await db.query<{required:number;present:number;missing:number}>('SELECT * FROM drivy.course_requirements($1)',[enrollment.id])).rows[0];
+  if(!requirements)throw new ApiError(500,'COURSE_FACTS_INCOMPLETE','La lecture des faits de cours est incomplète.');
+  const attendance=(await db.query<{occurrence_id:string;status:'PRESENT'|'ABSENT'|'EXCUSED'}>(
+   'SELECT occurrence_id,status FROM drivy.course_attendance WHERE school_id=$1 AND enrollment_id=$2 ORDER BY occurrence_id',[schoolId,enrollment.id])).rows;
+  progress.push({enrollmentId:enrollment.id,seriesId:enrollment.series_id,typeKey:enrollment.type_key,requirements,
+   attendance:attendance.map(item=>({occurrenceId:item.occurrence_id,status:item.status}))});
+ }
+ return learnerCourseFactsSchema.parse({schoolId,learnerId,completions:completions.map(item=>({id:item.id,typeKey:item.type_key,validatedAt:item.validated_at.toISOString(),seriesId:item.series_id})),enrollments:progress});
+}
+
 export function registerCourseFacts(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier}){
  const base='/v1/schools/:schoolId',params=(r:FastifyRequest)=>z.object({schoolId:id}).passthrough().parse(r.params);
  const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});
@@ -110,6 +143,12 @@ export function registerCourseFacts(app:FastifyInstance,options:{pool:Pool;verif
  app.get(`${base}/course-progress/me`,async r=>{
   empty.parse(r.query);const {schoolId}=params(r),identity=await options.verifyToken(r.headers.authorization);
   return envelope(await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{if(!member)throw forbidden();return myProgress(db,schoolId,actor.personId);}),r);
+ });
+ app.get(`${base}/learners/:learnerId/course-facts`,async r=>{
+  empty.parse(r.query);const {schoolId}=params(r),learnerId=z.object({learnerId:id}).passthrough().parse(r.params).learnerId,identity=await options.verifyToken(r.headers.authorization);
+  return envelope(await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{
+   if(!member)throw forbidden();return learnerCourseFacts(db,schoolId,learnerId,actor.personId);
+  }),r);
  });
 
  // #42 : présence d'un élève à une séance. expectedVersion null = première saisie ; sinon correction de cette version.

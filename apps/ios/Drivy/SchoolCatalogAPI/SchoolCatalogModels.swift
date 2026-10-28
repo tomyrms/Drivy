@@ -47,9 +47,22 @@ struct SchoolCatalogPolicy: SchoolCatalogRecord {
     let categoryCode: String
     let procedureText: String
     let cancellationPolicyText: String
+    let cancellationRules: SchoolIndividualCancellationRules?
     let sourceUrls: [String]
     let approved: Bool
     let approvedAt: String?
+}
+struct SchoolIndividualCancellationRules: Codable, Sendable, Equatable {
+    enum LateAction: String, Codable, Sendable { case contact = "CONTACT", noFee = "NO_FEE" }
+    let cancellationHours: Int?
+    let lateAction: LateAction
+
+    /// Un nombre d'heures écoulées, pas un déplacement de jours civils à travers un changement d'heure.
+    func deadline(before plannedStart: Date) -> Date? {
+        guard lateAction == .contact, let hours = cancellationHours, (0...8760).contains(hours),
+              plannedStart.timeIntervalSince1970.isFinite else { return nil }
+        return plannedStart.addingTimeInterval(-TimeInterval(hours) * 3600)
+    }
 }
 struct SchoolMember: SchoolCatalogRecord {
     let id: UUID

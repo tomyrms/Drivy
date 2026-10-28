@@ -75,7 +75,7 @@ struct SchoolTripsTests {
         #expect(SchoolTripsWorkspace.badge(synced) == nil && SchoolTripsWorkspace.isReplayable(synced))
         #expect(SchoolTripsWorkspace.duration(synced) == "48 min")
         let partial = try capture(Self.item(2, start: "2026-09-28T08:00:00Z", stopped: "2026-09-28T09:05:00Z", sync: "PARTIAL"))
-        #expect(SchoolTripsWorkspace.badge(partial)?.title == "Partiel" && SchoolTripsWorkspace.isReplayable(partial))
+        #expect(SchoolTripsWorkspace.badge(partial)?.title == "Incomplet" && SchoolTripsWorkspace.isReplayable(partial))
         #expect(SchoolTripsWorkspace.duration(partial) == "1 h 05")
         let unsent = try capture(Self.item(3, start: "2026-09-28T08:00:00Z", stopped: "2026-09-28T08:30:00Z", sync: "UPLOADING"))
         #expect(SchoolTripsWorkspace.badge(unsent)?.title == "Pas encore envoyé" && !SchoolTripsWorkspace.isReplayable(unsent))

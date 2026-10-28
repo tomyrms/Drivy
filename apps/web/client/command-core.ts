@@ -18,7 +18,7 @@ export type CommandKind =
   | 'updateModules' | 'recordPermitCheck'
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
-  | 'createFormation' | 'saveFormationProgramme' | 'saveTariff'
+  | 'createFormation' | 'saveFormationProgramme' | 'saveTariff' | 'reviseSharedTerms'
   | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity'
   | 'staffEnrollCourse' | 'staffCancelCourseEnrollment' | 'cancelCourseSeries' | 'rescheduleCourseSeries' | 'saveCoursePolicy'
   | 'recordCourseAttendance' | 'recordCoursePayment' | 'voidCoursePayment' | 'validateCourse' | 'revokeCourseCompletion';
@@ -75,6 +75,7 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   createFormation: { operationType: 'CREATE_FORMATION', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’une formation' },
   saveFormationProgramme: { operationType: 'UPDATE_FORMATION_PROGRAMME', resourceType: 'Offering', target: 'created', method: 'POST', expectedStatus: 201, label: 'Modification d’une formation' },
   saveTariff: { operationType: 'SAVE_TARIFF', resourceType: 'ServiceProductVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un tarif' },
+  reviseSharedTerms: { operationType: 'REVISE_SHARED_TERMS', resourceType: 'CommercialTermsVersion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Révision des conditions communes' },
   // Cours collectifs (#38).
   createCourseType: { operationType: 'CREATE_COURSE_TYPE', resourceType: 'CourseType', target: 'created', method: 'POST', expectedStatus: 201, label: 'Création d’un type de cours' },
   createCourseSeries: { operationType: 'CREATE_COURSE_SERIES', resourceType: 'CourseSeries', target: 'created', method: 'POST', expectedStatus: 201, label: 'Enregistrement d’un cours' },

@@ -8,6 +8,8 @@ const schema = z.object({
   OIDC_JWKS_URL: z.url(),
   CURSOR_SECRET: z.string().min(32),
   MESSAGING_MODE: z.enum(['disabled', 'qualification']).default('disabled'),
+  GPS_ONLY_QUALIFICATION_SCHOOL_IDS: z.string().default('').transform(value => value.trim() === '' ? [] : value.split(',').map(id => id.trim().toLowerCase()))
+    .pipe(z.array(z.uuid()).max(100)).transform(ids => [...new Set(ids)]),
   MESSAGING_QUALIFICATION_SCHOOL_IDS: z.string().default('').transform(value => value.trim() === '' ? [] : value.split(',').map(id => id.trim().toLowerCase()))
     .pipe(z.array(z.uuid()).max(100)).transform(ids => [...new Set(ids)]),
   // Facultatif : clé propre aux codes d'invitation. Sans elle, la clé se dérive de CURSOR_SECRET (HKDF, étiquette dédiée).

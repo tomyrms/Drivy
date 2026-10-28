@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:learner-course-facts:1",
+  "title": "Faits internes des cours utiles au dossier élève",
+  "description": "GET /v1/schools/{schoolId}/learners/{learnerId}/course-facts, sans query ni corps. Enveloppe data/requestId/serverTime. Accès dossier scolaire sous RLS puis élève propre dossier ou ADMIN/INSTRUCTOR+MANAGE_COURSES. Dossier hors périmètre : 404 ; droit de cours insuffisant : 403 COURSE_ACCESS_REQUIRED. Aucune écriture, aucun paiement ou note. FIRST_AID/AWARENESS identifiés par stable_key ; accomplissements non révoqués et inscriptions actives avec leurs présences séparées par série. validatedAt est la date de validation interne, jamais une date d’attestation, une dispense ou une date de dépôt. Aucun completedOn déduit.",
+  "$defs": {
+    "LearnerCourseFacts": {
+      "type": "object",
+      "properties": {
+        "schoolId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "learnerId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "completions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "typeKey": {
+                "type": "string",
+                "enum": [
+                  "FIRST_AID",
+                  "AWARENESS"
+                ]
+              },
+              "validatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "seriesId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "typeKey",
+              "validatedAt",
+              "seriesId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "enrollments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "enrollmentId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "seriesId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "typeKey": {
+                "type": "string",
+                "enum": [
+                  "FIRST_AID",
+                  "AWARENESS"
+                ]
+              },
+              "requirements": {
+                "type": "object",
+                "properties": {
+                  "required": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "present": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "missing": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "required",
+                  "present",
+                  "missing"
+                ],
+                "additionalProperties": false
+              },
+              "attendance": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "occurrenceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "PRESENT",
+                        "ABSENT",
+                        "EXCUSED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "occurrenceId",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "enrollmentId",
+              "seriesId",
+              "typeKey",
+              "requirements",
+              "attendance"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schoolId",
+        "learnerId",
+        "completions",
+        "enrollments"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

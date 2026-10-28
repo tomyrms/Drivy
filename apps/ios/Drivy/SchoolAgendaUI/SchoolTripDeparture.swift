@@ -40,10 +40,10 @@ import UIKit
     static func issue(of prep: SchoolCapturePreparationWorkspace) -> String {
         switch prep.quickBlock {
         case .failed(let message): message
-        case .choice: "L’accord GPS de l’élève est à confirmer. La leçon continue sans GPS."
+        case .choice: "L’élève doit confirmer son accord GPS depuis son compte."
         case .refused: "L’élève a refusé l’enregistrement du trajet."
         case .permission: "Autorise la localisation pour enregistrer le trajet."
-        case nil: prep.errorMessage ?? "Le trajet n’a pas démarré. La leçon continue sans GPS."
+        case nil: prep.errorMessage ?? "Le trajet n’a pas démarré. Consulte la fiche pour vérifier l’état de la leçon."
         }
     }
 
@@ -67,6 +67,7 @@ import UIKit
         let choice = try? await client.recordingChoice(schoolID: scope.schoolID, learnerID: lesson.learnerId, lessonID: lesson.id)
         guard let current = try? await notice.value, let choice else { return false }
         return choice.status == .allowed && choice.noticeVersionId == current.noticeVersionId
+            && (!current.requiresGPS || choice.source == .own)
     }
 
     static func run(lesson: SchoolLesson, membership: SchoolMembership, scope: SchoolCommandScope,
@@ -77,17 +78,21 @@ import UIKit
         source.updateScope(scope)
         source.warmUp()
         curtain.show()
-        // Même file durable et même preuve d’opération que le bouton de la fiche ; aucun brouillon n’est touché.
-        let report = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lesson.id, client: agenda.reportClient)
-        await report.load()
-        let lessonStarted = await report.start()
-        let reason = report.errorMessage
-        report.invalidate()
-        guard lessonStarted else {
-            source.onEvent = nil
-            source.updateScope(nil)
-            source.stop()
-            return .lesson(issue: reason ?? "La leçon n’a pas pu commencer. Réessaie depuis sa fiche.")
+        guard let notice = try? await agenda.captureClient.recordingNotice(schoolID: scope.schoolID) else {
+            source.onEvent = nil; source.updateScope(nil); source.stop()
+            return .lesson(issue: "Le départ n’a pas pu être vérifié. Réessaie depuis la fiche.")
+        }
+        if !notice.requiresGPS {
+            // Compatibilité avec un serveur précédent ; le serveur de qualification refuse cet ancien départ.
+            let report = SchoolLessonReportWorkspace(scope: scope, membership: membership, lessonID: lesson.id, client: agenda.reportClient)
+            await report.load()
+            let lessonStarted = await report.start()
+            let reason = report.errorMessage
+            report.invalidate()
+            guard lessonStarted else {
+                source.onEvent = nil; source.updateScope(nil); source.stop()
+                return .lesson(issue: reason ?? "La leçon n’a pas pu commencer. Réessaie depuis sa fiche.")
+            }
         }
         switch await SchoolTripDeparture.run(lessonID: lesson.id, scope: scope, agenda: agenda, controller: controller, source: source) {
         case .started: return .trip

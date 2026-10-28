@@ -1,4 +1,4 @@
-import {writeFile} from 'node:fs/promises';
+import {readFile,writeFile} from 'node:fs/promises';
 import {z} from 'zod';
 import {setupDraftSchema,setupContentSchema} from '../src/school-onboarding-model.js';
 import {saveSetupDraftCommand,completeSetupDraftCommand} from '../src/school-onboarding.js';
@@ -10,3 +10,6 @@ await writeFile(new URL('../contracts/school-setup-draft.json',import.meta.url),
   title:'Préparation scolaire web : brouillon durable et application explicite',
   description:'GET/PUT /v1/schools/{schoolId}/setup-draft ; GET preview?activate=true|false ; POST complete. ADMIN courant, Idempotency-Key et If-Match draft requis pour les écritures. Validation métier et droits revérifiés au commit.',
   $defs:definitions},null,2)+'\n');
+// Même génération de texte dans l'aperçu web et la publication serveur, sans dépendance du build web au service API.
+await writeFile(new URL('../../web/client/common-lesson-rules.ts',import.meta.url),
+  '// Généré par apps/api/scripts/generate-school-setup-contract.ts depuis school-commercial-rules.ts.\n'+await readFile(new URL('../src/school-commercial-rules.ts',import.meta.url),'utf8'));
