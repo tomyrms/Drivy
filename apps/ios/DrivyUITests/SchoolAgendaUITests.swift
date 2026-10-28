@@ -19,11 +19,16 @@ import XCTest
         reveal(lesson, in: app)
         lesson.tap()
         XCTAssertTrue(app.navigationBars["Leçon"].waitForExistence(timeout: 15), app.debugDescription)
+        let dossier = app.buttons["lesson-open-dossier"]
+        XCTAssertTrue(dossier.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(dossier.label.contains("Camille Perret"), app.debugDescription)
+        // La fixture est à 11 h aujourd'hui : son état dépend de l'heure du runner. Planifiée ou en cours, l'en-tête
+        // ne dit rien (seul l'inhabituel s'écrit) ; passée, il dit « En attente » ou « À terminer ». Avant ce
+        // correctif, le test échouait à chaque passage avant 11 h.
         let state = element("lesson-state", in: app)
-        XCTAssertTrue(state.waitForExistence(timeout: 15), app.debugDescription)
-        // La fixture est à 11 h aujourd'hui : son état dépend de l'heure du runner.
-        XCTAssertTrue(["Planifiée", "En attente"].contains(state.label), app.debugDescription)
-        XCTAssertTrue(app.buttons["lesson-open-dossier"].label.contains("Camille Perret"), app.debugDescription)
+        if state.exists {
+            XCTAssertTrue(["En attente", "À terminer"].contains(state.label), app.debugDescription)
+        }
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "11:00", "12:00")).firstMatch.exists,
             app.debugDescription)
         app.navigationBars["Leçon"].buttons["Fermer"].tap()
