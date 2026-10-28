@@ -33,7 +33,7 @@ export async function freshDatabase({deferCourseMigrations=false}:{deferCourseMi
  return pool;
 }
 export type Call=(method:'GET'|'POST'|'PUT'|'PATCH',route:string,body?:Record<string,unknown>,version?:number|null,subject?:string,headers?:Record<string,string>)=>Promise<{statusCode:number;json:()=>any;headers:Record<string,unknown>;body:string}>;
-export async function harness(pool:Pool,options:{reauthMaxAgeSeconds?:number}={}){
+export async function harness(pool:Pool,options:{reauthMaxAgeSeconds?:number;gpsOnlyQualificationSchoolIds?:readonly string[]}={}){
  const keys=await generateKeyPair('RS256'),key=await exportJWK(keys.publicKey);
  const app=buildApp({pool,cursorSecret:'harness-test-secret-32-characters!!',...options,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'harness',alg:'RS256'}]}))});
  const base=`/v1/schools/${id.schoolA}`;

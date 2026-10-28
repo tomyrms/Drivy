@@ -1211,6 +1211,18 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Messages (#142, #168, #177) : fait aussi par le lot 9 (PR #191) ; la version de master est gardée, avec en plus les durées de sourdine 1 h, 8 h, 1 jour et les lignes de sondage à 44 pt.
 - Qualification : essai du porteur validé (IPA `226dee20`) ; 859 tests métier et suites UI Messages, cours, formulaires et bilan réussis sur iPhone et iPad (runs 40686053375, 40686057743, 40694974479). iOS seul, aucun déploiement.
 
+
+## 28 octobre 2026 : accueil web et premier rendez-vous (#247 / #258, lot partiel)
+
+- Branche `codex/accueil-premier-rendezvous`, base `e5166404`. L’aperçu d’une école active rejoint le planning existant ; préparation dans Réglages et recherche, école archivée explicite. La prochaine action est relue avec le planning et ne disparaît plus pour une première leçon annulée ou une absence seule. [Périmètre et procédure d’essai](accueil-premier-rendezvous-20261028.md).
+- PASS : compilation API, compilation web et contrôle TypeScript web, Node 24.22.1. Aucun nouveau composant externe ni migration.
+- NOT_EXECUTED : essai du porteur, tests PostgreSQL et tests web ciblés adaptés, recette clavier/petit écran. À faire après retour, puis contrôles requis avant fusion. Aucun workflow complet lancé.
+- Aucun changement natif, IPA, fusion ou déploiement. Le reste de #247/#258 et les autres catégories de #253 ne sont pas réalisés par ce lot.
+
+
+## 28 octobre 2026 — Épic #253, implémentation de qualification
+
+Branche `codex/simplification-253`. [État des 24 sujets et recette](simplification-253-20261028.md). Guide unique, programmes suisses, conditions communes, échéance d’annulation, choix GPS personnel, départ atomique de qualification, bilan et aide intégrés. Typage et compilation API/web : PASS sous Node 24.22.1. Générateurs de contrats exécutés. Tests PostgreSQL/Swift/navigateur/physiques : NOT_EXECUTED, préparés pour après l’essai du porteur. Compilation Apple et IPA à relever après leur exécution. Migration additive d’annulation préparée, non exécutée. Mise en service GPS obligatoire BLOCKED par #266 ; configuration vide par défaut. Qualification des sources et preuves de cours limitée comme détaillé dans [la matrice suisse](regles-suisses-20261028.md). Aucun déploiement ni fusion de cette branche.
 ## 28 octobre 2026 : cours collectifs, audit UX B29 à B31 et B34 (#221, #222, #223, #226)
 
 - Branche `claude/cours-audit-b29-b34-20261028`, partie de `master` `e5166404`. iOS seul : aucun contrat, aucune migration, aucun déploiement.
@@ -1236,6 +1248,33 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Replay : « Tracé ajusté à la route », « … en partie », « Tracé GPS mesuré, sans ajustement », « Ajustement à la route… » ; aide à la demande sur le tracé et les pointillés ; « Incomplet » au lieu de « Partiel », aussi dans la liste des trajets (#233).
 - Recherche Messages : extrait centré sur la correspondance, occurrences en gras, mêmes règles de casse et d'accents, coupé entre caractères entiers (#245) ; « Recherche… » tant que la réponse n'est pas celle de la saisie, portée dite quand rien n'est trouvé (messages déjà ouverts sur cet appareil), historique illisible ou absent signalé (#244).
 - PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier (2 tests ajoutés, 2 adaptés) et UI, essai du porteur, VoiceOver physique.
+
+
+## 28 octobre 2026 — IPA combinée épic #253 et 15 corrections UX B
+
+À la demande du porteur, intégration de `claude/replay-audit-b42-b44-20261028` (`db855a853f9c64b438d521e25fbe2666f50145a5`) dans la branche de travail `codex/simplification-253`. Les 15 issues #221–226, #233–236, #239, #242–245 sont incluses ; aucune n’est fermée. Conflits de replay et de ce suivi résolus en conservant les deux ensembles. La compilation indépendante de la branche UX B a réussi (run 40727684500). Le run IPA 40730352252 de #253 seul a été annulé après l’élargissement ; il ne qualifie pas cette intégration. Nouvelle compilation combinée à relever après exécution. Tests ciblés et essai physique restent NOT_EXECUTED ; aucun merge vers master ni déploiement.
+
+
+## 28 octobre 2026 — preuve IPA combinée et demande de remise à zéro
+
+IPA du commit `77306e9882216688b3250c77f72047619c42ad04` compilée et vérifiée : [preuve](preuve-ipa-253-uxb-20261028.md), run 40731165137 PASS, build 441, accès Messages de qualification inclus. Empreintes du paquet et fichiers annexes vérifiées. Tests et appareil physique NOT_EXECUTED. Le porteur a ensuite explicitement demandé le déploiement web et l’effacement des données et des comptes Drivy, confirmé dans la clarification. Préparation en cours : inventaire, sauvegardes vérifiées, conservation des services techniques et retour arrière ; aucune suppression annoncée avant exécution. Revue supplémentaire : la révision des conditions communes conserve désormais aussi leurs bornes de validité ; typage et compilation API PASS, trois régressions PostgreSQL préparées non exécutées. Aucun changement natif depuis le commit de l’IPA.
+
+
+## 28 octobre 2026 — web/API déployés et données/comptes réinitialisés sur demande
+
+Déploiement `a41cf64d153252dc133a60f29755f0685516be8f` exécuté ; [reçu, sauvegardes et retour arrière](deploiement-reset-253-20261028.md). Sauvegardes métier/identité restaurées avec succès dans deux bases temporaires puis copies temporaires supprimées. Migration additive qualifiée sur copie puis appliquée, registre 56. Réinitialisation transactionnelle des données métier et suppression ciblée des 5 comptes humains Drivy ; comptes techniques/configuration/références conservés. Contrôle final : 0 personne/école/appartenance/leçon ; 1 code d’ouverture et 2 références de cours. Services actifs, RLS/readiness et HTTPS vérifiés ; 21 fichiers publics correspondent au build. IPA combinée build 441 disponible, source native inchangée depuis 77306e98. GPS obligatoire reste désactivé/BLOCKED #266. Aucun compte créé pour le porteur, aucun test métier/UI/physique ni merge master exécuté ; attente de son essai.
+
+
+## 28 octobre 2026 — qualification après essai : épic #253 et 15 corrections UX B
+
+Le porteur a accepté l’essai puis demandé tests, corrections et clôtures. La PR #279 conserve #278 et la branche native UX B dans l’historique. Le [reçu de qualification](qualification-253-uxb-20261028.md) rassemble les preuves et la [revue de clôture](revue-cloture-253-20261028.md) les 24 sujets et 15 corrections.
+
+- Corrections après essai : permission d’audit précise du départ préparatoire GPS (migration additive), prérequis reliés aux faits de cours autorisés, heure serveur monotone pour les offres ; recettes actualisées sans suppression des contrôles métier. La sélection manuelle du replay possède une preuve exécutée de pause et de reprise.
+- PASS API/PostgreSQL : 796 tests ; web/BFF : 423 tests, aucun ignoré, sur `4a1a6885` (run40742565492). PASS navigateur : 162 contrôles sur `83aadc37` (run40743521660). Typage, compilation, contrats et intégrité documentaire réussis.
+- PASS Swift sur `94348f6f` : 1 091 tests, aucun échec/ignoré (run40742298060). PASS UI initiale : 16 tests iPhone et16 iPad sur `36d75142` (run40739185025) ; PASS cours corrigés : 7 iPhone et7 iPad sur `94348f6f` (run40745176299). Simulateurs iPhone17Pro/iPadAir11(M4), iOS26.4.1. Aucun résultat physique déduit.
+- IPA corrigée : version0.7.0 build442, SHA `94348f6f4b32c9e92c6e91843e40cf28aebd454a`, run40742302908, artefact12841010670. Archive téléchargée, trois empreintes concordantes, Messages de qualification inclus. Les sources natives sont identiques dans les commits ultérieurs ; API/web identiques au SHA qualifié, dernières recettes identiques à `83aadc37`.
+- Exploitation : version publiée toujours `a41cf64d`. Aucun nouveau déploiement ni effacement après l’essai. Le responsable de l’épic #280 a reçu les commits à intégrer et les contraintes de déploiement ; son worktree reste indépendant. Un prochain déploiement devra inclure la migration d’audit nouvelle après sauvegarde et accord distinct du porteur.
+- Limites conservées : S14/#266 est un audit terminé avec décision BLOCKED pour le GPS obligatoire réel ; configuration de qualification vide en exploitation. Lacunes S07 explicites. GPS/batterie/provenance réelle/délai de retrait distant/VoiceOver physique et qualification générale Messages non revendiqués. Le parent #192 n’entre pas dans les clôtures de cette livraison.
 
 ## 28 octobre 2026 : qualification de l'audit UX B (PR #310, 15 issues)
 

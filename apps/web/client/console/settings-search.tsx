@@ -27,6 +27,7 @@ export function SettingsSearch({ schoolId, navigate, beforeNavigate }: {
         <p className="visually-hidden" role="status">{results.length} résultat{results.length > 1 ? 's' : ''}</p>
         <ul className="search-results">{results.map(result => {
           const query: NavigationQuery = result.target ? { focus: result.target } : {};
+          if (result.section === 'apercu') query.from = 'configuration';
           const href = result.section ? consolePath(schoolId, result.section, query) : `/app/preferences?returnTo=${encodeURIComponent(window.location.pathname)}`;
           return <li key={result.id}><a className="settings-result" href={href} onClick={event => {
             if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return;

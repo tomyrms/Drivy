@@ -162,6 +162,7 @@ import UIKit
 /// Une seule exécution à la fois. Elle survit à l’écran d’où elle part : la carte du trajet remplace
 /// « Aujourd’hui » dès que le départ est confirmé.
 @MainActor @Observable final class SchoolStartNowLaunch: Identifiable {
+    enum StartPolicy: String { case legacy = "LEGACY", gpsRequired = "GPS_REQUIRED" }
     enum Step: Equatable { case learner, summary, lesson(SchoolLesson) }
     enum Phase: Equatable { case editing, requestingPermission, creating, startingTrip, waitingForPosition, done }
 
@@ -176,6 +177,10 @@ import UIKit
     private(set) var closesSheet = false
     /// Départs demandés : le retour haptique suit ce compteur.
     private(set) var launches = 0
+    /// Lue même sans contrôleur ou module GPS : leur absence ne prouve jamais la politique LEGACY.
+    private(set) var startPolicy: StartPolicy?
+    private(set) var isReadingPolicy = false
+    private(set) var policyError: String?
 
     @ObservationIgnored let agenda: SchoolAgendaClient
     @ObservationIgnored let workspace: SchoolWorkspace
@@ -186,6 +191,7 @@ import UIKit
     @ObservationIgnored private var preparation: SchoolCapturePreparationWorkspace?
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var completed = false
+    @ObservationIgnored private var policyRequest = UUID()
 
     init(form: SchoolStartNowWorkspace, agenda: SchoolAgendaClient, workspace: SchoolWorkspace,
          controller: SchoolCaptureSessionController?,
@@ -203,12 +209,13 @@ import UIKit
     var isBusy: Bool { (phase != .editing && phase != .done) || form.isBusy }
     /// Le libellé annonce le parcours qui partira : une question sans réponse ou un GPS indisponible
     /// ne doivent jamais se cacher derrière « Démarrer maintenant ».
-    var startTitle: String {
-        if gps?.isReading == true { return "Démarrer la leçon" }
-        return gps?.wantsTrip == true ? "Démarrer avec GPS" : "Démarrer sans GPS"
-    }
+    var startTitle: String { "Démarrer la leçon" }
+    var requiresGPS: Bool { startPolicy == .gpsRequired || gps?.consent.notice?.requiresGPS == true }
     var canLaunch: Bool {
         phase == .editing && !invalidated && form.canStart && gps?.isReading != true && gpsMatchesLearner
+            && startPolicy != nil && !isReadingPolicy && policyError == nil
+            && (!requiresGPS || (tripAvailable && gps?.wantsTrip == true
+                && gps?.consent.notice?.requiresGPS == true && gps?.consent.choice?.source == .own))
     }
     /// Le choix lu appartient bien à l’élève retenu : pendant un changement d’élève, rien du précédent ne vaut.
     var gpsMatchesLearner: Bool { gps.map { $0.learnerID == form.learnerID } ?? true }
@@ -223,8 +230,12 @@ import UIKit
     private static var stepMotion: Animation { DrivyMotion.step(UIAccessibility.isReduceMotionEnabled) }
 
     func open() async {
-        guard !invalidated, form.learners.isEmpty else { return }
-        await reload()
+        guard !invalidated else { return }
+        if form.learners.isEmpty { await reload() }
+        else {
+            await loadStartPolicy()
+            if let learnerID = form.learnerID { prepareGPS(for: learnerID) }
+        }
         guard !invalidated else { return }
         // Élève unique ou demande à résoudre : le récapitulatif, qui les montre.
         if step == .learner, form.learnerID != nil || form.pending != nil {
@@ -234,9 +245,12 @@ import UIKit
 
     /// Lecture (ou nouvel essai) de la feuille : l’accord GPS suit l’élève retenu, même choisi d’emblée.
     func reload() async {
+        let policyRead = Task { await loadStartPolicy() }
+        defer { policyRead.cancel() }
         // Élève imposé par sa fiche : son accord se lit pendant que la feuille se charge.
         if let preset = form.presetLearnerID { prepareGPS(for: preset) }
         await form.load()
+        await policyRead.value
         guard !invalidated, let learnerID = form.learnerID else { return }
         prepareGPS(for: learnerID)
     }
@@ -291,6 +305,7 @@ import UIKit
     func invalidate() {
         guard !invalidated else { return }
         invalidated = true
+        policyRequest = UUID(); startPolicy = nil; isReadingPolicy = false
         form.invalidate()
         gps?.close()
         if phase == .startingTrip { preparation?.invalidate() }
@@ -299,6 +314,32 @@ import UIKit
     }
 
     // MARK: - Chaîne de départ
+
+    /// Une lecture réussie de l’ancien contrat sans ce champ conserve LEGACY. Une panne ou une valeur
+    /// inconnue bloque seulement ce nouveau départ ; les demandes déjà journalisées gardent leur reprise.
+    func loadStartPolicy() async {
+        guard !invalidated, phase == .editing else { return }
+        let request = UUID(); policyRequest = request
+        startPolicy = nil; policyError = nil; isReadingPolicy = true
+        do {
+            let notice = try await agenda.captureClient.recordingNotice(schoolID: form.scope.schoolID)
+            guard !invalidated, request == policyRequest else { return }
+            guard let value = StartPolicy(rawValue: notice.practicalStartPolicy ?? "LEGACY") else {
+                throw SchoolCaptureFailure.invalidResponse
+            }
+            if let gps, let knownNotice = gps.consent.notice, knownNotice.requiresGPS != (value == .gpsRequired) {
+                await gps.refresh()
+                guard !invalidated, request == policyRequest else { return }
+            }
+            startPolicy = value
+            isReadingPolicy = false
+        } catch {
+            guard !invalidated, request == policyRequest else { return }
+            isReadingPolicy = false
+            if let failure = error as? SchoolCaptureFailure, case .rejected(let message) = failure { policyError = message }
+            else { policyError = "Les conditions de départ n’ont pas pu être vérifiées. Réessaie." }
+        }
+    }
 
     private func run() async {
         let curtain = DrivyLaunchCurtain.shared
@@ -312,13 +353,18 @@ import UIKit
             phase = .creating
         }
         guard !invalidated else { return }
+        if requiresGPS && !tripPlanned {
+            tripIssue = "La localisation doit être autorisée pour démarrer la leçon dans Drivy."
+            phase = .editing
+            return
+        }
         if tripPlanned {
             gps?.warmIfWanted()
             curtain.show()
         }
         // L’accord et la leçon s’enregistrent en même temps : aucun des deux n’attend l’autre.
         let consentSaved: Task<Bool, Never>? = gps.map { value in Task { @MainActor in await value.commit() } }
-        let lesson = await form.start()
+        let lesson = await form.start(prepareForGPS: requiresGPS)
         let consentReady = await consentSaved?.value ?? false
         guard !invalidated else { return }
         guard let lesson else {
@@ -330,11 +376,11 @@ import UIKit
         guard tripPlanned, consentReady, gps?.recorded == .allowed, mayStart(lesson), let gps else {
             gps?.close()
             if tripPlanned {
-                tripIssue = consentReady ? "Le trajet ne peut pas démarrer pour cette leçon. Elle continue sans GPS."
-                    : "L’accord GPS n’a pas pu être enregistré. La leçon continue sans GPS."
+                tripIssue = consentReady ? "Le trajet n’a pas démarré. Vérifie la fiche de la leçon avant de réessayer."
+                    : "L’accord GPS n’a pas pu être confirmé. Vérifie la fiche de la leçon."
             } else if tripWanted {
                 // Localisation refusée à l’instant dans l’alerte d’iOS : l’accord de l’élève reste enregistré.
-                tripIssue = "La localisation n’est pas autorisée pour Drivy. La leçon continue sans GPS."
+                tripIssue = "La localisation n’est pas autorisée pour Drivy. Vérifie la fiche de la leçon."
             }
             showLesson(lesson)
             if tripPlanned { await curtain.hide(afterSequence: true) }
@@ -400,13 +446,19 @@ import UIKit
 
     /// De retour dans l’app, le choix GPS se relit sans rien écrire.
     func refreshConsent() {
-        guard phase == .editing, !invalidated, let gps else { return }
-        Task { await gps.refresh() }
+        guard phase == .editing, !invalidated else { return }
+        startPolicy = nil
+        Task {
+            await loadStartPolicy()
+            await gps?.refresh()
+        }
     }
 
     func refreshGPSAvailability() {
         guard phase == .editing, !invalidated, let learnerID = form.learnerID else { return }
+        startPolicy = nil
         prepareGPS(for: learnerID)
+        Task { await loadStartPolicy() }
     }
 
     private func mayStart(_ lesson: SchoolLesson) -> Bool {

@@ -70,11 +70,13 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         !invalidated && !accessRevoked && !isLoading && !isBusy && !needsReload
             && store != nil && storageError == nil && source != nil && notice != nil
             && relatedPending.isEmpty && !hasOldScope
+            && (notice?.requiresGPS != true || source == .own)
     }
     var verbalAgreementIsProtected: Bool { source == .verbal && choice?.source == .own && choice?.status == .refused }
     /// Choix enregistré qui vaut pour l’information actuelle de l’école ; `nil` : la question est à poser.
     var validAnswer: SchoolRecordingChoice.Status? {
         guard let choice, let notice, choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else { return nil }
+        if notice.requiresGPS && choice.status == .allowed && choice.source != .own { return nil }
         return choice.status
     }
     var currentChoiceLabel: String {
@@ -157,8 +159,9 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             guard request == generation, !invalidated else { return false }
             guard relatedPending.isEmpty, !hasOldScope else { throw SchoolCaptureStorageFailure.uncertainCommand }
             let operationID = UUID()
-            let body = SchoolRecordingChoiceBody(operationId: operationID, lessonId: review.previousChoice?.lessonId,
+            var body = SchoolRecordingChoiceBody(operationId: operationID, lessonId: review.previousChoice?.lessonId,
                 status: review.status, noticeVersionId: review.notice.noticeVersionId, source: review.source)
+            if review.notice.requiresGPS { body.expectedChoiceVersion = review.previousChoice?.version ?? 0 }
             let command = try SchoolCapturePendingMutation.make(id: operationID, scope: scope,
                 kind: .recordChoice, targetID: review.learnerID, body: body)
             try await store.stage(command)
@@ -299,7 +302,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
         }
     }
     private func sameNotice(_ lhs: SchoolRecordingNotice, _ rhs: SchoolRecordingNotice) -> Bool {
-        lhs.noticeVersionId == rhs.noticeVersionId && lhs.noticeText == rhs.noticeText
+        lhs.practicalStartPolicy == rhs.practicalStartPolicy && lhs.noticeVersionId == rhs.noticeVersionId && lhs.noticeText == rhs.noticeText
             && lhs.retentionText == rhs.retentionText && lhs.contactEmail == rhs.contactEmail && lhs.approvedAt == rhs.approvedAt
     }
     /// `reading` : la panne vient de la lecture du choix, pas d’un envoi. Le message nomme alors l’accord GPS.

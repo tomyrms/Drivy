@@ -469,6 +469,18 @@ struct SchoolCaptureReplayView: View {
         let items = filter.apply(timeline.items)
         let total = DrivySeanceText.observations(timeline.items.count)
         return VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            // Le serveur lie toute capture scolaire à l’affectation du moniteur et au diagnostic de son appareil.
+            // La fiche relue est nécessaire ; le nom de l’élève dans l’en-tête ne dit jamais qui fournit les positions.
+            if let capture = model.capture, capture.id == model.captureID, capture.schoolId == model.scope.schoolID {
+                DisclosureGroup("Détails du trajet") {
+                    Label("Position de l’appareil du moniteur", systemImage: "location")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, DrivySpacing.xs)
+                }
+                .accessibilityIdentifier("replay-position-source")
+            }
             DrivySectionHeader(title: filter.isActive ? "\(items.count) sur \(total)" : total)
             if timeline.items.count >= Self.filterThreshold { filterControls(timeline) }
             // Le filtre ne promet pas plus que ce qui est chargé.
@@ -578,8 +590,7 @@ struct SchoolCaptureReplayView: View {
     /// Choisir une observation (pastille, carte, liste, repère) la donne à lire : la lecture s’arrête sur elle, sans
     /// la remplacer à la suivante ; « Lecture » reprend le suivi (#235).
     private func select(_ item: SchoolReplayTimeline.Item) {
-        player.pause()
-        step(item)
+        selectedID = player.selectObservation(item)
     }
 
     /// Précédente et suivante parcourent la chronologie sans arrêter la lecture.

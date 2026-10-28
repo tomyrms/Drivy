@@ -23,7 +23,7 @@ export const workspaces: readonly Workspace[] = [
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
     { section: 'configuration', label: 'École' }, { section: 'confidentialite', label: 'Confidentialité' },
     { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
-    { section: 'apercu', label: 'Préparation' },
+    { section: 'apercu', label: 'Préparation', query: { from: 'configuration' } },
   ] },
 ];
 

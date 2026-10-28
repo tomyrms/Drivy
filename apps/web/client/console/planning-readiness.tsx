@@ -11,10 +11,10 @@ export const destinationSection: Record<string, SectionKey> = {
 };
 
 /** Ce qui manque encore pour planifier une leçon, en tête de l'Agenda : rien quand tout est prêt. */
-export function PlanningReadinessBanner() {
+export function PlanningReadinessBanner({ refreshKey = 0 }: { refreshKey?: number }) {
   const { schoolId, school, navigate } = useConsole();
   const { revision } = useCommandSnapshot();
-  const loaded = useLoad(() => readSchool(schoolId, 'readiness', readinessSchema), [schoolId, revision, school.version]);
+  const loaded = useLoad(() => readSchool(schoolId, 'readiness', readinessSchema), [schoolId, revision, school.version, refreshKey]);
   if (school.status === 'ACTIVE' && loaded.status === 'error') return <Notice tone="error" title="Lecture impossible" actions={<ReadRetry loaded={loaded} />}><p>{loaded.error}</p></Notice>;
   const planning = loaded.data?.capabilities.find(item => item.capability === 'CAN_PLAN_LESSON');
   if (school.status !== 'ACTIVE' || !planning || planning.ready) return null;
@@ -23,7 +23,7 @@ export function PlanningReadinessBanner() {
     <ul className="blocker-list">{blockers.map(item => {
       const section = item.destinationKey ? destinationSection[item.destinationKey] : undefined;
       return <li key={item.code}><Symbol kind="dot" bare />{item.message}
-        {section && <button type="button" className="button quiet compact" onClick={() => navigate(section)}>Ouvrir</button>}</li>;
+        {section && <button type="button" className="button quiet compact" onClick={() => navigate(section, section === 'apercu' ? { from: 'configuration' } : {})}>Ouvrir</button>}</li>;
     })}</ul>
   </Notice>;
 }

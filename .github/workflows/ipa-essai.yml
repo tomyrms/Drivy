@@ -81,7 +81,8 @@ jobs:
           Les tests natifs s'exécutent séparément dans le workflow Refonte · iOS.
           L'IPA est fourni pour essai : sa production ne signifie pas que ces tests ont réussi.
           Qualification sur appareil physique : NOT_EXECUTED.
-          Leçons : agenda, élèves, GPS facultatif, observations et bilan.
+          Leçons : agenda, élèves, observations et bilan. Le parcours GPS dépend de la politique servie par l'école.
+          GPS obligatoire : qualification seulement, désactivée par défaut ; activation réelle bloquée par #266.
           Accès scolaire : connexion, formations, trajets et invitations par code.
           Administration approfondie : console web de l'école.
           Voir schoolConnectionConfigured dans build-info.json ; sans configuration, les accès scolaires sont indisponibles.

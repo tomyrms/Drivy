@@ -59,7 +59,10 @@ export const referenceSchema = z.discriminatedUnion('kind', [
 ]);
 export const proposalsSchema = z.object({
   formations: z.array(z.object({ id: z.string().max(100), version: z.string().max(40), categoryCode: z.string(), label: z.string(),
-    competencies: z.array(z.object({ key: z.string(), label: z.string(), description: z.string() }).passthrough()).max(200), procedureText: z.string(), durationMinutes: z.number().int() }).passthrough()).max(20),
+    competencies: z.array(z.object({ key: z.string(), label: z.string(), description: z.string() }).passthrough()).max(200), procedureText: z.string(), durationMinutes: z.number().int(),
+    sourceUrls: z.array(z.string().url()).max(30).optional(), qualification: z.literal('NOT_QUALIFIED').optional(), verifiedOn: civil.optional(), coverageNote: z.string().max(1000).optional(),
+    change: z.object({ kind: z.enum(['EDITORIAL','PEDAGOGICAL','REGULATORY']), effectiveFrom: civil.nullable(), summary: z.string().max(1000), application: z.string().max(1000) }).optional(),
+  }).passthrough()).max(30),
 }).passthrough();
 export const textProposalsLite = z.object({
   procedure: z.object({ procedureText: z.string().max(4000), cancellationPolicyText: z.string().max(4000) }),

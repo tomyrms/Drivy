@@ -159,7 +159,7 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
     'La préparation serveur de ce dossier autorise la planification seulement après ses vrais prérequis');
   // #51 : la première leçon se planifie depuis l'agenda du bureau, sur le dossier proposé par le guide.
   setStage('première leçon : ouverture du planning web depuis le guide');
-  await agenda();await page.getByRole('region',{name:'Première leçon',exact:true}).getByRole('button',{name:'Planifier une leçon',exact:true}).click();
+  await agenda();await page.getByRole('region',{name:'Premier rendez-vous',exact:true}).getByRole('button',{name:'Planifier une leçon',exact:true}).click();
   await page.getByRole('heading',{name:'Planifier une leçon',exact:true}).waitFor();
   const planningUrl=new URL(page.url());
   assert(planningUrl.pathname===`/app/gestion/${schoolId}/agenda`&&planningUrl.searchParams.get('view')==='nouvelle'&&planningUrl.searchParams.get('learner')===learner.id,

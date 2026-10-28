@@ -73,7 +73,7 @@ struct SchoolLearnerDossierView: View {
             // Son propre dossier (administration qui est aussi élève) s’ouvre dans « Mon profil », avec son compte Drivy.
             if model.isOwnProfile {
                 SchoolMyProfileView(workspace: workspace, dossier: model, loadsDossierOnAppear: false,
-                    focus: editingFocus, missingFields: missing)
+                    focus: editingFocus, missingFields: missing, agendaClient: agendaClient)
             } else {
                 SchoolProfileView(model: model, loadsOnAppear: false, focus: editingFocus, missingFields: missing)
             }

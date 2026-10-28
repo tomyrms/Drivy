@@ -101,7 +101,7 @@ struct SchoolCourseEnrollmentReviewView: View {
                             dismiss()
                         }
                         .buttonStyle(DrivyPrimaryButtonStyle())
-                        .disabled(model.isBusy || !review.isAvailable(in: model.me))
+                        .disabled(model.isBusy || !review.isAvailable(in: model.me, now: model.serverNow))
                         .accessibilityIdentifier("course-confirm-enrollment")
                     }.drivyFormRows()
                 }

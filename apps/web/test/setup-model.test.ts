@@ -19,7 +19,7 @@ describe('Préparation : préserver les choix avant adoption', () => {
     const draft = setupDraftSchema.parse({ id, schoolId: id, version: 1, status: 'DRAFT', currentStep: 'IDENTITY', updatedAt: null, updatedByMembershipId: null, appliedAt: null,
       content: { selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE'], identity: { name: 'École de recette', timeZone: 'Europe/Zurich', contactEmail: 'ecole@example.test', contactPhone: null },
         privacy: { noticeText: '', retentionText: '', contactEmail: 'ecole@example.test', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [] } });
-    expect(initialSetupStep(draft, 'DRAFT')).toBe('PRIVACY');
+    expect(initialSetupStep(draft, 'DRAFT')).toBe('FORMATIONS');
     expect(initialSetupStep({ ...draft, updatedAt: '2026-10-17T08:00:00.000Z' }, 'DRAFT')).toBe('IDENTITY');
     expect(initialSetupStep({ ...draft, currentStep: 'PROFILE' }, 'DRAFT')).toBe('PROFILE');
     expect(initialSetupStep(draft, 'ACTIVE')).toBe('IDENTITY');
@@ -31,9 +31,11 @@ describe('Préparation : préserver les choix avant adoption', () => {
   test('sans formation le parcours continue directement à la revue ; ajouter une formation remet les tarifs', () => {
     const content = setupContentSchema.parse({ selectedSections: [], identity: { name: '', timeZone: '', contactEmail: '', contactPhone: null },
       privacy: { noticeText: '', retentionText: '', contactEmail: '', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [] });
-    expect(setupNavigationSteps(content)).toEqual(['IDENTITY', 'PRIVACY', 'PROFILE', 'FORMATIONS', 'REVIEW']);
+    expect(setupNavigationSteps(content)).toEqual(['IDENTITY', 'FORMATIONS', 'REVIEW']);
     expect(setupNavigationSteps(content, true)).toEqual(['FORMATIONS', 'REVIEW']);
     expect(setupNavigationSteps({ ...content, formations: [setupFormation(null, '2026-10-17')] }, true)).toEqual(['FORMATIONS', 'PRICING', 'REVIEW']);
+    expect(setupNavigationSteps({ ...content, identity: { ...content.identity, name: 'École synthétique', contactEmail: 'test@example.invalid' },
+      formations: [setupFormation(null, '2026-10-17')] })).toEqual(['FORMATIONS', 'PRICING', 'REVIEW']);
   });
   test('un tarif vide, invalide ou négatif ne devient pas gratuit', () => {
     for (const price of ['', ' ', '-4', 'NaN', '1e2', '12.345', '100 CHF']) expect(setupPrice(price)).toBeNull();
@@ -45,13 +47,14 @@ describe('Préparation : préserver les choix avant adoption', () => {
     const one = setupFormation(source, '2026-10-13'), two = setupFormation(source, '2026-10-13');
     one.competencies[0]!.label = 'Adapté';
     expect(two.id).not.toBe(one.id); expect(two.competencies[0]!.label).toBe('Observer');
-    expect(one.apply).toBe(false); expect(one.priceCents).toBeNull();
+    expect(one.apply).toBe(true); expect(one.useCommonTerms).toBe(true); expect(one.priceCents).toBeNull();
   });
   test('les erreurs de relecture reviennent à leur étape utile', () => {
     expect(issueStep('content.privacy.retentionText')).toBe('PRIVACY');
     expect(issueStep('formations.0.priceCents')).toBe('PRICING');
     expect(issueStep('formations.1.competencies')).toBe('FORMATIONS');
     expect(issueStep('profile.fields')).toBe('PROFILE');
+    expect(issueStep('commonLessonRules.paymentText')).toBe('PRICING');
   });
   test('la lecture accepte un brouillon incomplet', () => {
     expect(setupContentSchema.safeParse({ selectedSections: ['IDENTITY'], identity: { name: '', timeZone: '', contactEmail: '', contactPhone: null },
@@ -59,7 +62,7 @@ describe('Préparation : préserver les choix avant adoption', () => {
   });
   test('reprendre le catalogue ne peut pas réadopter les textes d’un brouillon initial', () => {
     const content = setupContentSchema.parse({ selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE', 'CATALOGUE'], identity: { name: 'École', timeZone: 'Europe/Zurich', contactEmail: '', contactPhone: null },
-      privacy: { noticeText: 'Texte conservé', retentionText: '', contactEmail: '', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [setupFormation(null, '2026-10-13'), { ...setupFormation(null, '2026-10-13'), apply: true }] });
+      privacy: { noticeText: 'Texte conservé', retentionText: '', contactEmail: '', templateId: null, templateVersion: null }, profile: { fields: [], effectiveFrom: null }, formations: [{ ...setupFormation(null, '2026-10-13'), apply: false }, setupFormation(null, '2026-10-13')] });
     const resumed = catalogueSetupContent(content);
     expect(resumed.selectedSections).toEqual(['CATALOGUE']); expect(resumed.privacy).toEqual(content.privacy); expect(resumed.formations).toHaveLength(2);
     const afterApplication = catalogueSetupContent(content, true);

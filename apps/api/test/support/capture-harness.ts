@@ -7,7 +7,7 @@ import {trackContentHash,type CaptureConfig} from '../../src/capture-crypto.js';
 import {id,issuer} from './harness.js';
 
 /** Trajets de recette sur PostgreSQL réel : école GPS activée, notice adoptée, appareil qualifié par un profil synthétique. */
-export async function captureHarness(pool:Pool,extra:Partial<Pick<Parameters<typeof buildApp>[0],'mapMatching'|'mapMatcher'>>={}){
+export async function captureHarness(pool:Pool,extra:Partial<Pick<Parameters<typeof buildApp>[0],'mapMatching'|'mapMatcher'|'gpsOnlyQualificationSchoolIds'>>={}){
  const oidc=await generateKeyPair('RS256'),key=await exportJWK(oidc.publicKey),signing=await generateKeyPair('EdDSA',{extractable:true});
  const config:CaptureConfig={encryptionKey:Buffer.alloc(32,42),encryptionKeyId:'synthetic-only',signingKey:{...await exportJWK(signing.privateKey),kid:'synthetic-only'},issuer:'https://capture-api.example.invalid',
   profiles:[{version:'SYNTHETIC-TEST-ONLY',platform:'IOS',deviceClass:'PHONE',modelCode:'TEST',osVersion:'TEST',appBuild:'TEST',expiresAt:new Date(Date.now()+86400000).toISOString(),maxSampleAgeSeconds:5,maxHorizontalAccuracyMeters:50,minimumFreeBytes:1,requireBackground:true,requirePreciseLocation:true}],uploadHours:72};

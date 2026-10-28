@@ -18,6 +18,7 @@ import { useListState } from './list-state';
 import { RequestFailure } from '../protocol';
 import { consolePath } from './route';
 import { permitSummary, SelectedLessonContext, TrainingFollowUp } from './dossier';
+import { PrerequisiteHelp } from './prerequisite-help';
 import { ProfileCompletion } from './profile-completion';
 import { GpsConsentLine } from './gps-consent';
 import { DetailPanel, FilterTabs, ListPagination, LoadState, OutcomeNotice, Placeholder, ReadRetry, RecordSearch, SectionHeading, SplitView } from './layout';
@@ -264,6 +265,7 @@ export function LearnersSection() {
                 {inProgress && detailReady && detail.permitError && <Notice tone="error" title="Permis non consultable" live={false}
                   actions={<button type="button" className="button retry" onClick={dossier.reload}>Réessayer</button>}><p>{detail.permitError}</p></Notice>}
                 <TrainingFollowUp schoolId={schoolId} training={training} competencies={competencies} timeZone={school.timeZone} />
+                {inProgress && <PrerequisiteHelp schoolId={schoolId} learnerId={current.id} categoryCode={category(training)} today={schoolToday()} timeZone={school.timeZone} />}
                 <details className="disclosure"><summary>Gérer cette formation</summary>
                 {assigned.length > 0 && inProgress && <ul className="plain-list">{assigned.map(item => <li key={item.id}>
                   <span>{name(item.instructorMembershipId)}</span>
@@ -307,6 +309,7 @@ export function LearnersSection() {
         </>}
         {dialog?.kind === 'end' && <p className="dialog-lead">{name(dialog.assignment.instructorMembershipId)} · {title(dialog.training)}</p>}
         {dialog?.kind === 'permit' && <>
+          <PrerequisiteHelp schoolId={schoolId} learnerId={dialog.training.learnerId} categoryCode={category(dialog.training)} today={schoolToday()} timeZone={school.timeZone} />
           <p className="dialog-lead">{title(dialog.training)} · catégorie {category(dialog.training)}</p>
           <SegmentField label="Décision" value={permit.decision} disabled={runner.busy} onChange={decision => setPermit({ ...permit, decision })}
             options={[{ value: 'APPROVED', label: 'Permis valable' }, { value: 'REJECTED', label: 'Permis refusé' }]} />

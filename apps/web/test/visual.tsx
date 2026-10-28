@@ -314,9 +314,16 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
     if (path === 'setup-draft') return reply(200, envelope(structuredClone(setupDraft)), url.href);
     if (path === 'setup-draft/templates') return reply(200, envelope(setupTemplates), url.href);
     if (path === 'setup-draft/preview') return reply(200, envelope(setupPreview(url.searchParams.get('activate') === 'true')), url.href);
-    if (path === 'setup-draft/next-actions') return reply(200, envelope({ schoolId, planningReady: true, actions: parameters.has('first-lesson') ? [
-      { code: 'FIRST_LEARNER_REQUIRED', label: 'Inviter votre premier élève', section: 'invitations', query: { audience: 'learners' } },
-    ] : [] }), url.href);
+    if (path === 'setup-draft/next-actions') {
+      const firstLesson = parameters.get('first-lesson');
+      if (firstLesson === 'error') return reply(503, { code: 'SERVICE_UNAVAILABLE' }, url.href);
+      const action = firstLesson === 'pending'
+        ? { code: 'LEARNER_INVITATION_PENDING', label: 'Consulter l’invitation en attente', section: 'invitations', query: { audience: 'learners' } }
+        : firstLesson === 'plan'
+          ? { code: 'PLAN_FIRST_LESSON', label: 'Planifier une leçon', section: 'eleves', query: { selection: learnerA } }
+          : { code: 'FIRST_LEARNER_REQUIRED', label: 'Inviter votre premier élève', section: 'invitations', query: { audience: 'learners' } };
+      return reply(200, envelope({ schoolId, planningReady: true, actions: firstLesson !== null ? [action] : [] }), url.href);
+    }
     if (path === 'setup') return reply(200, envelope({ schoolId, version: 1, status: 'COMPLETED', currentStep: 'REVIEW', completedSteps: ['IDENTITY', 'DATA'], lastSavedAt: stamp, readiness }), url.href);
     if (path === 'data-policy') return reply(200, envelope(policyState), url.href);
     if (path === 'text-proposals') return reply(200, envelope(textProposals), url.href);
@@ -458,7 +465,7 @@ window.fetch = (async (input: URL | string, init?: RequestInit) => {
 const value: ConsoleContextValue = {
   schoolId, me: { personId: meId, displayName: 'Luc Martin', version: 1, memberships: [] },
   membership: { membershipId: lucId, schoolId, schoolName: 'École Synthétique', roles: ['ADMIN', 'INSTRUCTOR'], grants: reviewState === 'readonly' ? [] : ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG'], accessEpoch: 1 },
-  school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: parameters.get('status') === 'draft' ? 'DRAFT' : 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
+  school: { id: schoolId, schoolId, version: 1, name: 'École Synthétique', timeZone: 'Europe/Zurich', status: parameters.get('status') === 'draft' ? 'DRAFT' : parameters.get('status') === 'archived' ? 'ARCHIVED' : 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
     modules: { gpsEnabled: parameters.get('gps') !== 'off', packsEnabled: false, collectiveCoursesEnabled: false, courseOffersVisibleByDefault: false } },
   canConfigureCatalog: reviewState !== 'readonly', reloadSchool: async () => {}, csrf: () => 'csrf', refreshCsrf: async () => 'csrf', navigate: section => log.push(`navigate ${section}`), login: options => log.push(`login ${JSON.stringify(options ?? {})}`),
 };
@@ -485,7 +492,8 @@ const shell = parameters.get('shell') === '1';
 if (shell && !/^\/app\/gestion\//.test(location.pathname) && location.pathname !== '/app/preferences' && !['preferences', 'opening', 'operator', 'controls', 'choices'].includes(page ?? '')) {
   const sections: Record<string, string> = { home: '', overview: 'apercu', formations: 'formations', learners: 'eleves', agenda: 'agenda', trips: 'trajets', team: 'equipe', availability: 'disponibilites', absences: 'absences', config: 'configuration', privacy: 'confidentialite', profile: 'champs-profil', themes: 'signalements', formation: 'formations', 'formation-new': 'formations', uncategorized: 'prestations', conditions: 'conditions', legacy: 'offres', 'legacy-current': 'referentiels' };
   const routeParameters = new URLSearchParams();
-  if (page === 'agenda') routeParameters.set('week', agendaFixture === 'lesson-planning' ? db.lessons[0].plannedStart.slice(0, 10) : '2026-09-28');
+  if (page === 'agenda' || page === 'overview') routeParameters.set('week', agendaFixture === 'lesson-planning' ? db.lessons[0].plannedStart.slice(0, 10) : '2026-09-28');
+  if (page === 'overview' && parameters.get('from') === 'configuration') routeParameters.set('from', 'configuration');
   if (page === 'formation') { routeParameters.set('category', parameters.get('category') ?? 'B'); if (parameters.get('view')) routeParameters.set('view', parameters.get('view')!); }
   if (page === 'formation-new') routeParameters.set('view', 'nouvelle');
   // Ancienne adresse d'une version précédente du programme B (offre v1).

@@ -206,6 +206,72 @@ import Testing
 
     // MARK: Inscriptions (#39-#41)
 
+    @Test(arguments: [-172_800.0, 172_800.0])
+    func offerDeadlineUsesServerTimeRegardlessOfPhoneDate(skew: TimeInterval) async throws {
+        let serverDate = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970)).addingTimeInterval(skew)
+        let source = CourseClockSource()
+        let clock = SchoolCourseServerClock(instant: { source.instant })
+        let offer = SchoolCourseOffer(id: offerID, seriesId: seriesID,
+            expiresAt: ISO8601DateFormatter().string(from: serverDate.addingTimeInterval(60)), status: "ACTIVE")
+        let data = replyJSON(state: "OFFERED", offer: String(decoding: try JSONEncoder().encode(offer), as: UTF8.self))
+        let transport = CourseOfferClockTransport(reply: data, mine: try JSONEncoder().encode(SchoolCourseMine(items: [], offers: [offer])),
+            accepted: replyJSON(state: "ENROLLED", enrollment: enrollmentJSON()), serverDate: serverDate)
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: transport, serverClock: clock)
+        let model = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich", client: client)
+        let list = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: "Europe/Zurich", client: client)
+        let review = SchoolCourseEnrollmentReview(action: .accept(offerID: offerID))
+        await model.load(); await list.refreshOffers()
+        #expect(model.offerAvailable && list.offers.count == 1)
+        #expect(review.isAvailable(in: model.me, now: model.serverNow))
+        source.advance(59)
+        #expect(model.offerAvailable && model.serverNow == serverDate.addingTimeInterval(59))
+        source.advance(1)
+        #expect(!model.offerAvailable && list.offers.isEmpty)
+        #expect(!review.isAvailable(in: model.me, now: model.serverNow))
+        #expect(SchoolCourseEnrollmentFormat.status(try #require(model.me), zone: model.timeZone, now: model.serverNow) == "Délai de réponse passé")
+        // Fiche et confirmation restées ouvertes ; une relecture au premier plan perdue ne prolonge rien.
+        await transport.failReads()
+        await model.waitForOfferExpiry()
+        #expect(model.errorMessage != nil && !model.offerAvailable)
+        model.submit(.accept(offerID: offerID))
+        #expect(model.pending == nil)
+        #expect(await transport.acceptanceCount == 0)
+    }
+
+    @Test func acceptedBeforeDeadlineRemainsConfirmedWhenReplyArrivesLater() async throws {
+        let serverDate = try #require(SchoolLesson.date("2030-03-01T17:00:00Z"))
+        let source = CourseClockSource()
+        let clock = SchoolCourseServerClock(instant: { source.instant })
+        let offer = SchoolCourseOffer(id: offerID, seriesId: seriesID, expiresAt: "2030-03-01T17:01:00Z", status: "ACTIVE")
+        let transport = CourseOfferClockTransport(
+            reply: replyJSON(state: "OFFERED", offer: String(decoding: try JSONEncoder().encode(offer), as: UTF8.self)),
+            mine: try JSONEncoder().encode(SchoolCourseMine(items: [], offers: [offer])),
+            accepted: replyJSON(state: "ENROLLED", enrollment: enrollmentJSON()), serverDate: serverDate)
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: transport, serverClock: clock)
+        let model = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich", client: client)
+        await model.load()
+        source.advance(59)
+        model.submit(.accept(offerID: offerID))
+        try await HubFixture.wait { await transport.acceptanceCount == 1 }
+        source.advance(61)
+        #expect(!model.offerAvailable && model.isSending)
+        await transport.finishAcceptance(at: serverDate.addingTimeInterval(120))
+        try await HubFixture.wait { model.pending == nil }
+        #expect(model.me?.state == .enrolled && model.confirmation == "Inscription confirmée")
+    }
+
+    @Test func serverClockNeverMovesBackwardsOrAddsServerProcessingTimeTwice() throws {
+        let source = CourseClockSource()
+        let clock = SchoolCourseServerClock(instant: { source.instant })
+        let date = try #require(SchoolLesson.date("2030-03-01T17:00:00Z"))
+        source.advance(5)
+        clock.synchronize(serverTime: date)
+        #expect(clock.now == date)
+        source.advance(10)
+        clock.synchronize(serverTime: date.addingTimeInterval(-100))
+        #expect(clock.now == date.addingTimeInterval(10))
+    }
+
     private let enrollmentID = UUID(uuidString: "77777777-7777-4777-8777-777777777777")!
     private let learnerID = UUID(uuidString: "88888888-8888-4888-8888-888888888888")!
     private let offerID = UUID(uuidString: "99999999-9999-4999-8999-999999999999")!
@@ -591,5 +657,42 @@ private struct CourseJourneyReadTransport: SchoolHTTPTransport {
         guard let data = responses[route], (request.httpMethod ?? "GET") == "GET" else { throw URLError(.notConnectedToInternet) }
         let body: [String: Any] = ["data": try JSONSerialization.jsonObject(with: data), "requestId": "course-journey", "serverTime": "2030-03-10T08:00:00Z"]
         return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, contentType: "application/json")
+    }
+}
+
+@MainActor private final class CourseClockSource {
+    var instant = ContinuousClock.now
+    func advance(_ seconds: Double) { instant = instant.advanced(by: .seconds(seconds)) }
+}
+
+private actor CourseOfferClockTransport: SchoolHTTPTransport {
+    let reply: Data
+    let mine: Data
+    let accepted: Data
+    var serverDate: Date
+    private var readsFail = false
+    private var acceptance: CheckedContinuation<Void, Never>?
+    private(set) var acceptanceCount = 0
+    init(reply: Data, mine: Data, accepted: Data, serverDate: Date) {
+        self.reply = reply; self.mine = mine; self.accepted = accepted; self.serverDate = serverDate
+    }
+    func failReads() { readsFail = true }
+    func finishAcceptance(at date: Date) { serverDate = date; acceptance?.resume(); acceptance = nil }
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let url = request.url!
+        let data: Data
+        let status: Int
+        if url.lastPathComponent == "accept" {
+            acceptanceCount += 1
+            await withCheckedContinuation { acceptance = $0 }
+            data = accepted; status = 201
+        } else {
+            guard !readsFail, url.lastPathComponent == "me" else { throw URLError(.notConnectedToInternet) }
+            data = url.path.contains("course-enrollments") ? mine : reply
+            status = 200
+        }
+        let envelope: [String: Any] = ["data": try JSONSerialization.jsonObject(with: data), "requestId": "offer-clock-test",
+            "serverTime": ISO8601DateFormatter().string(from: serverDate)]
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: envelope), status: status, url: url, contentType: "application/json")
     }
 }

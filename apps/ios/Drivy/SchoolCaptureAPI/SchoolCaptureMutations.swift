@@ -101,6 +101,7 @@ struct SchoolRecordingChoiceBody: Codable, Sendable {
     let status: SchoolRecordingChoice.Status
     let noticeVersionId: UUID
     let source: SchoolRecordingChoice.Source
+    var expectedChoiceVersion: Int? = nil
     func encode(to encoder: any Encoder) throws {
         var value = encoder.container(keyedBy: CodingKeys.self)
         try value.encode(operationId, forKey: .operationId)
@@ -108,6 +109,7 @@ struct SchoolRecordingChoiceBody: Codable, Sendable {
         try value.encode(status, forKey: .status)
         try value.encode(noticeVersionId, forKey: .noticeVersionId)
         try value.encode(source, forKey: .source)
+        try value.encodeIfPresent(expectedChoiceVersion, forKey: .expectedChoiceVersion)
     }
 }
 
@@ -172,4 +174,6 @@ struct SchoolRecordingNotice: Decodable, Sendable {
     let retentionText: String
     let contactEmail: String
     let approvedAt: String
+    var practicalStartPolicy: String? = nil
+    var requiresGPS: Bool { practicalStartPolicy == "GPS_REQUIRED" }
 }

@@ -3,6 +3,7 @@ import type {FastifyInstance,FastifyRequest} from 'fastify';
 import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
 import type {TokenVerifier} from './auth.js';
+import {requiresGPS,type PracticalStartOptions} from './practical-start-policy.js';
 import {withActor} from './database.js';
 import {schoolCommand,schoolColumns,checkIdempotency,checkVersion,requireVersion,type CommandActor,type CommandGuards,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
@@ -16,7 +17,7 @@ const selection=z.object({mode:z.enum(['UNIT_PRICE','ENTITLEMENT']),serviceProdu
 const interval={plannedStart:date,plannedEnd:date,timeZone:z.string().min(1).max(100),meetingPoint:z.string().trim().max(500).nullish().transform(value=>value??''),instructorMembershipId:id};
 const createCommand=z.object({operationId:id,trainingId:id,...interval,agreedPriceCents:amount,bufferMinutes:z.number().int().min(0).max(240),policyVersionId:id,commercialSelection:selection}).strict();
 const commercialChange=z.object({commercialSelection:selection,agreedPriceCents:amount,expectedAccountVersion:z.number().int().positive().nullable(),reason:z.string().trim().min(1).max(1000)}).strict();
-const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional()}).strict();
+export const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional(),prepareForGPS:z.boolean().optional()}).strict();
 /** startedAt (extension facultative, A2-03) : instant du geste « Commencer » sur l'appareil, pour une commande arrivée en retard. */
 const startLessonCommand=z.object({operationId:id,startedAt:date.optional()}).strict();
 const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional()}).strict();
@@ -217,7 +218,7 @@ export async function schoolPlanningBlockers(db:PoolClient,schoolId:string){
   ...(row.profile_policy?[]:[missing('PROFILE_POLICY_NOT_READY','Publiez la politique des informations nécessaires.','PROFILE_POLICY')])
  ];
 }
-export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string}){
+export function registerLessons(app:FastifyInstance,options:PracticalStartOptions&{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string}){
  const base='/v1/schools/:schoolId',cursors=new Cursors(options.cursorSecret),schoolID=(r:FastifyRequest)=>z.object({schoolId:id}).parse(r.params).schoolId;
   const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});
   // Lecture indicative avant le tarif : les occupations privées ne quittent jamais le serveur.
@@ -338,6 +339,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   let data:Lesson;
   try{
    data=await schoolCommand<Lesson>(options.pool,identity,schoolId,'START_LESSON_NOW',body,null,async(db,actor,school)=>{
+    if(requiresGPS(options,school.id)&&!body.prepareForGPS)throw new ApiError(409,'GPS_START_REQUIRED','Démarrez la leçon depuis la préparation GPS de l’application à jour.');
     const start=new Date();
     const offer=(await db.query<{default_duration_minutes:number|null}>(`SELECT o.default_duration_minutes FROM drivy.training t JOIN drivy.offering_version o ON o.school_id=t.school_id AND o.id=t.offering_id WHERE t.school_id=$1 AND t.id=$2`,[school.id,body.trainingId])).rows[0];
     if(!offer)throw notFound();if(!offer.default_duration_minutes)throw new ApiError(422,'OFFERING_NOT_READY','L’offre doit indiquer la durée d’une leçon.');
@@ -348,9 +350,9 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
     if(catalog>BigInt(Number.MAX_SAFE_INTEGER))throw new ApiError(422,'INVALID_AMOUNT','Le montant dépasse la limite acceptée.');
     const selection:Selection={mode:'UNIT_PRICE',serviceProductVersionId:product.id,quantity,entitlementLotId:null,acceptedTermsVersionId:product.terms_version_id};
     await validateCommercial(db,school.id,selection,Number(catalog),context.category_code,minutes,startIso,school.timeZone,false);
-    const row=await insertLesson(db,school,context,{trainingId:body.trainingId,instructorId:actor.membershipId,start:startIso,end:endIso,meetingPoint:body.meetingPoint??'',priceCents:Number(catalog),bufferMinutes:0,policyVersionId:context.policy_version_id,selection,actualStart:startIso});
+    const row=await insertLesson(db,school,context,{trainingId:body.trainingId,instructorId:actor.membershipId,start:startIso,end:endIso,meetingPoint:body.meetingPoint??'',priceCents:Number(catalog),bufferMinutes:0,policyVersionId:context.policy_version_id,selection,...(body.prepareForGPS?{}:{actualStart:startIso})});
     await occupations(db,row,context.instructor_person_id);await revision(db,row,actor,body.operationId,'Initial booking');await event(db,row,body.operationId,'LessonCreated');
-    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonStartedNow',changedFields:['plannedStart','plannedEnd','actualStart','instructorMembershipId','meetingPoint','commercialSelection']};
+    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:body.prepareForGPS?'LessonPreparedForGPS':'LessonStartedNow',changedFields:['plannedStart','plannedEnd',...(body.prepareForGPS?[]:['actualStart']),'instructorMembershipId','meetingPoint','commercialSelection']};
    },['INSTRUCTOR'],guards);
   }catch(error){return slotConflict(error,startNowConflictMessage);}
   reply.code(201).header('ETag',`"${data.version}"`);return envelope(data,r);
@@ -362,6 +364,7 @@ export function registerLessons(app:FastifyInstance,options:{pool:Pool;verifyTok
   const bound={...body,lessonId};
   const data=await schoolCommand<Lesson>(options.pool,identity,schoolId,'START_LESSON',bound,expected,async(db,_actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);
+   if(requiresGPS(options,school.id))throw new ApiError(409,'GPS_START_REQUIRED','Démarrez la leçon depuis la préparation GPS de l’application à jour.');
    if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
    if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Cette leçon a déjà commencé. Continuez la leçon.');
    if(school.status!=='ACTIVE')throw new ApiError(409,'SCHOOL_NOT_ACTIVE','L’école doit être active pour commencer une leçon.');

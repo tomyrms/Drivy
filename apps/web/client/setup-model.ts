@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { profilePolicySchema } from './school-api.js';
+import { commonLessonRulesSchema, commonLessonTexts } from './common-lesson-rules.js';
 
 export const setupSteps = ['IDENTITY', 'PRIVACY', 'PROFILE', 'FORMATIONS', 'PRICING', 'REVIEW'] as const;
 export type SetupStep = typeof setupSteps[number];
 export const setupStepLabels: Record<SetupStep, string> = {
   IDENTITY: 'Votre école', PRIVACY: 'Confidentialité', PROFILE: 'Informations des élèves',
-  FORMATIONS: 'Vos formations', PRICING: 'Vos tarifs', REVIEW: 'Vérifier et démarrer',
+  FORMATIONS: 'Permis enseignés', PRICING: 'Prix et règles de l’école', REVIEW: 'Résumé et confirmation',
 };
 const uuid = z.string().uuid();
 const competency = z.object({ key: z.string(), label: z.string(), description: z.string(), sortOrder: z.number().int() });
@@ -14,14 +15,14 @@ export const setupFormationSchema = z.object({
   templateId: z.string().nullable(), templateVersion: z.string().nullable(),
   competencies: z.array(competency).max(200), procedureText: z.string(), cancellationPolicyText: z.string(),
   sourceUrls: z.array(z.string()).max(30), durationMinutes: z.number().int().nullable(), priceCents: z.number().int().nullable(),
-  termsText: z.string(), validFrom: z.string().nullable(), existingOfferingId: uuid.nullable(),
+  termsText: z.string(), validFrom: z.string().nullable(), existingOfferingId: uuid.nullable(), useCommonTerms: z.boolean().optional(),
 });
 export const setupContentSchema = z.object({
   selectedSections: z.array(z.enum(['IDENTITY', 'PRIVACY', 'PROFILE', 'CATALOGUE'])).max(4),
   identity: z.object({ name: z.string(), timeZone: z.string(), contactEmail: z.string(), contactPhone: z.string().nullable() }),
   privacy: z.object({ noticeText: z.string(), retentionText: z.string(), contactEmail: z.string(), templateId: z.string().nullable(), templateVersion: z.string().nullable() }),
   profile: z.object({ fields: profilePolicySchema.shape.fields, effectiveFrom: z.string().nullable() }),
-  formations: z.array(setupFormationSchema).max(12),
+  formations: z.array(setupFormationSchema).max(20), commonLessonRules: commonLessonRulesSchema.optional(),
 });
 export const setupDraftSchema = z.object({
   id: uuid, schoolId: uuid, version: z.number().int().positive(), status: z.enum(['DRAFT', 'APPLIED']),
@@ -34,7 +35,9 @@ export const setupTemplatesSchema = z.object({
   commercial: z.object({ id: z.string(), version: z.string(), cancellationPolicyText: z.string(), termsText: z.string() }).optional(),
   profileFields: profilePolicySchema.shape.fields,
   formations: z.array(z.object({ id: z.string(), version: z.string(), categoryCode: z.string(), label: z.string(),
-    competencies: z.array(competency), procedureText: z.string(), durationMinutes: z.number().int() })),
+    competencies: z.array(competency), procedureText: z.string(), durationMinutes: z.number().int(),
+    sourceUrls: z.array(z.string()).optional(), qualification: z.literal('NOT_QUALIFIED').optional(),
+    coverageNote: z.string().optional(), verifiedOn: z.string().optional() })),
 });
 export const setupPreviewSchema = z.object({
   schoolId: uuid, draftVersion: z.number().int().positive(), schoolVersion: z.number().int().positive(),
@@ -55,11 +58,12 @@ export function initialSetupStep(draft: SetupDraft, schoolStatus: string): Setup
   const identity = draft.content.identity;
   if (!identity.name.trim() || !z.email().safeParse(identity.contactEmail).success || !identity.timeZone || /^[+-]/.test(identity.timeZone)) return 'IDENTITY';
   try { new Intl.DateTimeFormat('fr', { timeZone: identity.timeZone }); } catch { return 'IDENTITY'; }
-  return 'PRIVACY';
+  return 'FORMATIONS';
 }
 /** A price editor is useful only when there is a formation to price. */
 export function setupNavigationSteps(content: SetupContent | null, catalogueOnly = false): readonly SetupStep[] {
-  const steps: readonly SetupStep[] = catalogueOnly ? ['FORMATIONS', 'PRICING', 'REVIEW'] : setupSteps;
+  const steps: readonly SetupStep[] = catalogueOnly || !!content?.identity.name.trim() && !!content.identity.contactEmail.trim()
+    ? ['FORMATIONS', 'PRICING', 'REVIEW'] : ['IDENTITY', 'FORMATIONS', 'PRICING', 'REVIEW'];
   return content && content.formations.length === 0 ? steps.filter(step => step !== 'PRICING') : steps;
 }
 export function setupExampleText(text: string, content: SetupContent): string {
@@ -94,6 +98,7 @@ export function issueStep(field: string): SetupStep {
   if (path.startsWith('identity')) return 'IDENTITY';
   if (path.startsWith('privacy')) return 'PRIVACY';
   if (path.startsWith('profile')) return 'PROFILE';
+  if (path.startsWith('commonLessonRules')) return 'PRICING';
   if (/price|duration|terms|validFrom|cancellation/i.test(path)) return 'PRICING';
   if (path.startsWith('formations')) return 'FORMATIONS';
   return 'REVIEW';
@@ -111,9 +116,14 @@ export function templateAlreadyAdded(formations: readonly Pick<SetupFormation, '
   return formations.some(item => item.categoryCode === categoryCode);
 }
 export function setupFormation(template: SetupTemplates['formations'][number] | null, today: string): SetupFormation {
-  return { id: crypto.randomUUID(), apply: false, categoryCode: template?.categoryCode ?? '', label: template?.label ?? '',
+  return { id: crypto.randomUUID(), apply: true, useCommonTerms: true, categoryCode: template?.categoryCode ?? '', label: template?.label ?? '',
     templateId: template?.id ?? null, templateVersion: template?.version ?? null,
     competencies: template ? structuredClone(template.competencies) : [{ key: 'competence-1', label: '', description: '', sortOrder: 0 }],
-    procedureText: template?.procedureText ?? '', cancellationPolicyText: '', sourceUrls: [], durationMinutes: template?.durationMinutes ?? 45,
+    procedureText: template?.procedureText ?? '', cancellationPolicyText: '', sourceUrls: [...(template?.sourceUrls ?? [])], durationMinutes: template?.durationMinutes ?? 45,
     priceCents: null, termsText: '', validFrom: today, existingOfferingId: null };
+}
+export function resolvedSetupFormation(content: SetupContent, item: SetupFormation): SetupFormation {
+  if (!item.useCommonTerms || !content.commonLessonRules) return item;
+  const texts = commonLessonTexts(content.commonLessonRules, content.identity.contactEmail);
+  return { ...item, ...texts, cancellationPolicyText: item.existingOfferingId ? item.cancellationPolicyText : texts.cancellationPolicyText };
 }
