@@ -1236,3 +1236,10 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Replay : « Tracé ajusté à la route », « … en partie », « Tracé GPS mesuré, sans ajustement », « Ajustement à la route… » ; aide à la demande sur le tracé et les pointillés ; « Incomplet » au lieu de « Partiel », aussi dans la liste des trajets (#233).
 - Recherche Messages : extrait centré sur la correspondance, occurrences en gras, mêmes règles de casse et d'accents, coupé entre caractères entiers (#245) ; « Recherche… » tant que la réponse n'est pas celle de la saisie, portée dite quand rien n'est trouvé (messages déjà ouverts sur cet appareil), historique illisible ou absent signalé (#244).
 - PASS : compilation de l'app par l'IPA d'essai. NOT_EXECUTED : tests métier (2 tests ajoutés, 2 adaptés) et UI, essai du porteur, VoiceOver physique.
+
+## 28 octobre 2026 : qualification de l'audit UX B (PR #310, 15 issues)
+
+- Essai du porteur validé sur l'IPA `db855a85` (run 40727684500).
+- PASS : tests métier `db855a85` (run 40738918926), 864 tests Swift Testing en 79 suites, 202 XCTest, scénario réel du relais exécuté. Les deux premières tentatives ont échoué sur le seul `MatrixMessagingRelayIntegrationTests`, aux étapes READINESS puis CONVERSATION (relais jetable injoignable) ; la troisième est passée sans changement de code.
+- PASS : UI iPhone et iPad (run 40738923088), `SchoolCourseJourneyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests/testSearchInsideConversationFindsMessage`, 16 tests par appareil.
+- NOT_EXECUTED : VoiceOver physique, réseau dégradé réel. iOS seul, aucun déploiement.
