@@ -97,7 +97,7 @@ it('lit sans créer de brouillon ; réserve contenus et modèles aux ADMIN du bo
   const proposals=(await call('GET',`/v1/schools/${id.schoolA}/text-proposals`)).json().data;
   const identity=(await getDraft()).content.identity;
   const personalize=(text:string)=>text.replaceAll('[Nom de l’école]',identity.name).replaceAll('[contact données]',identity.contactEmail);
-  expect(personalize(templates.privacy.noticeText)).toBe(proposals.dataPolicy.noticeText);expect(templates.privacy.retentionText).toBe(proposals.dataPolicy.retentionText);
+  expect(personalize(templates.privacy.noticeText)).toBe(proposals.dataPolicy.noticeText);expect(personalize(templates.privacy.retentionText)).toBe(proposals.dataPolicy.retentionText);
   expect(templates.profileFields).toEqual(proposals.profileFields);expect(personalize(templates.commercial.termsText)).toBe(proposals.commercialTerms.termsText);
   expect(templates.commercial.cancellationPolicyText).toBe(proposals.procedure.cancellationPolicyText);
   expect(templates.formations.every((item:{procedureText:string})=>item.procedureText===proposals.procedure.procedureText)).toBe(true);

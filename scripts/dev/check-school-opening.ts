@@ -258,13 +258,25 @@ async function main() {
     stage='création volontaire et perte de réponse navigateur';
     await page.route('**/app/bff/opening/create',async route=>{await route.fetch();await route.abort('failed');},{times:1});
     await page.getByRole('button',{name:'Créer mon école',exact:true}).click();
-    await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Permis enseignés',exact:true}).waitFor();
     const school=(await administration.query('SELECT id,status FROM drivy.school')).rows[0];assert(!!school && school.status==='DRAFT','La création confirmée est retrouvée après une réponse navigateur perdue');
     const membership=(await administration.query('SELECT roles,grants FROM drivy.membership WHERE school_id=$1',[school.id])).rows[0];
     assert(membership.roles.join(',')==='ADMIN,INSTRUCTOR' && membership.grants.join(',')==='CONFIGURE_CATALOG','L’administrateur et le rôle moniteur choisi sont durables');
     assert(new URL(page.url()).pathname===`/app/gestion/${school.id}/apercu`
       &&await page.getByRole('link',{name:'Continuer la préparation',exact:true}).count()===0,
-      'La création confirmée enchaîne sur la confidentialité sans écran intermédiaire ni formulaire d’identité répété');
+      'La création confirmée enchaîne sur les permis enseignés sans écran intermédiaire ni formulaire d’identité répété');
+    const openReview=async()=>{
+      await page.getByRole('navigation',{name:'Étapes de préparation',exact:true}).getByRole('button',{name:/Résumé et confirmation/}).click();
+      await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
+    };
+    const editReviewSection=async(name:string)=>{
+      const review=page.getByRole('button',{name:'Vérifier la préparation',exact:true});
+      if(await review.isVisible())await review.click();
+      await page.locator('.setup-workspace section').filter({has:page.getByRole('heading',{name,exact:true})})
+        .getByRole('button',{name:'Modifier',exact:true}).click();
+      await page.getByRole('heading',{name,exact:true}).waitFor();
+    };
+    await openReview();await editReviewSection('Confidentialité');
     stage='première sauvegarde du guide';
     const notice='Recette synthétique uniquement. Les leçons et observations partagées sont visibles par l’élève ; les notes privées restent privées. Aucun compte réel.';
     const retention='Texte de recette synthétique uniquement. Les données de cette base éphémère sont supprimées à la fin du test.';
@@ -283,7 +295,7 @@ async function main() {
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
     await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();
     assert(lostDraftHTTPStatus===200&&z.uuid().safeParse(lostDraftOperation).success,'La sauvegarde du brouillon est confirmée au serveur avant la perte de sa réponse');
-    assert(await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).isDisabled(),'Le guide bloque une nouvelle sauvegarde tant que le résultat précédent reste inconnu');
+    assert(await page.getByRole('button',{name:'Enregistrer et quitter',exact:true}).isDisabled(),'Le guide bloque une nouvelle sauvegarde tant que le résultat précédent reste inconnu');
     stage='rechargement du guide avec une sauvegarde au résultat inconnu';
     page.once('dialog',async dialog=>{if(dialog.type()==='beforeunload')await dialog.accept();else await dialog.dismiss();});
     await page.reload();await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();
@@ -300,15 +312,15 @@ async function main() {
     assert(recoveredSave.ok()&&savedReceipt.operationId===lostDraftOperation&&savedReceipt.resourceId===school.id&&savedReceipt.resourceVersion===draftBefore.version+1,
       'AP72 confirme la même opération et la seule nouvelle version du brouillon');
     await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor({state:'hidden'});
-    await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
     const draftResponse=await consumerContext.request.get(draftEndpoint);
     const draft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await draftResponse.json());
-    assert(draftResponse.ok()&&draft.data.version===savedReceipt.resourceVersion&&draft.data.currentStep==='PROFILE'&&draft.data.content.privacy.noticeText===notice&&draft.data.content.privacy.retentionText===retention,
-      'Le guide reprend l’étape Profil et les textes réellement enregistrés après la réponse perdue');
-    await page.getByRole('button',{name:'Retour',exact:true}).click();await page.getByRole('heading',{name:'Confidentialité',exact:true}).waitFor();
+    assert(draftResponse.ok()&&draft.data.version===savedReceipt.resourceVersion&&draft.data.currentStep==='REVIEW'&&draft.data.content.privacy.noticeText===notice&&draft.data.content.privacy.retentionText===retention,
+      'Le guide reprend le résumé et les textes réellement enregistrés après la réponse perdue');
+    await editReviewSection('Confidentialité');
     assert(await page.getByLabel('Information des personnes',{exact:true}).inputValue()===notice&&await page.getByLabel('Conservation des données',{exact:true}).inputValue()===retention,
       'Les champs du guide retrouvent les textes du serveur après vérification du reçu');
-    await page.getByRole('button',{name:/Informations des élèves/}).click();await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    await openReview();await editReviewSection('Informations des élèves');
     const durableSave=(await administration.query("SELECT count(*)::int AS n FROM drivy.operation WHERE school_id=$1 AND operation_id=$2 AND command_type='SAVE_SCHOOL_SETUP_DRAFT'",[school.id,lostDraftOperation])).rows[0];
     assert(draftWrites===1&&durableSave.n===1,'La reprise AP72 et la navigation du guide ne renvoient aucune sauvegarde ni commande en double');
     await page.unroute(draftEndpoint);
@@ -324,11 +336,11 @@ async function main() {
     page=await consumerContext.newPage();await page.goto(`${origin}/app`);
     await signIn(page,'school@example.invalid',consumerPassword);
     await page.getByRole('link',{name:'Ouvrir l’école Auto-école Recette · synthétique',exact:true}).click();
-    await page.getByRole('heading',{name:'Informations des élèves',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();await editReviewSection('Informations des élèves');
     assert(await page.getByLabel('Explication · Téléphone',{exact:true}).inputValue()===savedPhoneExplanation,
       'Un navigateur indépendant reprend l’étape confirmée et le contenu serveur, sans annoncer la frappe non enregistrée comme sauvegardée');
     const resumedDraft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await (await consumerContext.request.get(draftEndpoint)).json()).data;
-    assert(resumedDraft.version===savedReceipt.resourceVersion&&resumedDraft.currentStep==='PROFILE'&&resumedDraft.content.privacy.noticeText===notice&&resumedDraft.content.privacy.retentionText===retention,
+    assert(resumedDraft.version===savedReceipt.resourceVersion&&resumedDraft.currentStep==='REVIEW'&&resumedDraft.content.privacy.noticeText===notice&&resumedDraft.content.privacy.retentionText===retention,
       'La reconnexion sans lien d’ouverture retrouve le même brouillon et n’ajoute aucune version');
     assert(await page.evaluate(()=>sessionStorage.length===0&&localStorage.length===0),
       'La reprise indépendante ne dépend d’aucun contenu ni reçu conservé dans le stockage du premier navigateur');
@@ -368,7 +380,7 @@ async function main() {
     const phoneExplanation=page.getByLabel('Explication · Téléphone',{exact:true});
     const originalPhoneExplanation=await phoneExplanation.inputValue();
     await page.locator('details').filter({has:phoneExplanation}).locator('summary').click();await phoneExplanation.fill('');
-    await page.getByRole('button',{name:/Vérifier et démarrer/}).click();
+    await openReview();
     await page.getByRole('button',{name:'Expliquez à l’élève pourquoi cette information est demandée.',exact:true}).click();
     await page.waitForFunction(()=>{const active=document.activeElement;return active instanceof HTMLTextAreaElement&&active.name.startsWith('profile.fields.')&&active.value==='';});
     assert(await phoneExplanation.evaluate(element=>element===document.activeElement&&element.getAttribute('aria-invalid')==='true'&&!!document.getElementById(element.getAttribute('aria-describedby')??'')?.textContent?.includes('pourquoi cette information'))&&await phoneExplanation.isVisible(),
@@ -376,28 +388,30 @@ async function main() {
     await phoneExplanation.fill(originalPhoneExplanation);
     stage='transition du guide sur mobile depuis le bas de page';await page.setViewportSize({width:390,height:844});
     await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
-    await page.getByRole('heading',{name:'Vos formations',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
     await page.waitForFunction(()=>{const title=document.querySelector('.setup-title');const bounds=title?.getBoundingClientRect();return title===document.activeElement&&bounds&&bounds.top>=0&&bounds.bottom<window.innerHeight;});
     assert(true,'Continuer depuis le bas d’une étape mobile montre et focalise le titre de l’étape suivante');
     await page.setViewportSize({width:1440,height:1100});
     stage='préparation des informations élèves et du permis B';
-    await page.getByRole('heading',{name:'Vos formations',exact:true}).waitFor();await page.getByRole('button',{name:'Permis B',exact:true}).click();
+    await page.getByRole('navigation',{name:'Étapes de préparation',exact:true}).getByRole('button',{name:/Permis enseignés/}).click();
+    await page.getByRole('heading',{name:'Permis enseignés',exact:true}).waitFor();await page.getByRole('button',{name:'Permis B',exact:true}).click();
     const secondCompetence=page.locator('[name="formations.0.competencies.1.label"]');
     const thirdDescription=page.locator('[name="formations.0.competencies.2.description"]');
     const originalSecondCompetence=await secondCompetence.inputValue(),originalThirdDescription=await thirdDescription.inputValue();
     await page.locator('details').filter({has:secondCompetence}).locator('summary').click();
     await secondCompetence.fill('');await thirdDescription.fill('');
-    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vos tarifs',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Prix et règles de l’école',exact:true}).waitFor();
     await page.getByLabel('Prix (CHF)',{exact:true}).fill('95');await page.getByLabel('Durée (minutes)',{exact:true}).fill('50');
-    await page.getByLabel('Conditions d’annulation',{exact:true}).fill('');
-    await page.getByLabel('Conditions du tarif',{exact:true}).fill('Tarif synthétique pour une leçon de 50 minutes, destiné seulement à cette recette.');
-    await page.getByLabel('Proposer cette formation et ce tarif après confirmation',{exact:true}).check();
-    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Vérifier et démarrer',exact:true}).waitFor();
+    await page.getByLabel('En cas d’annulation',{exact:true}).click();
+    await page.getByRole('option',{name:'Un délai, puis contact avec l’école',exact:true}).click();
+    await page.getByLabel('Prévenir combien d’heures avant la leçon ?',{exact:true}).fill('');
+    await page.getByLabel('Quand et comment se règle la leçon ?',{exact:true}).fill('Tarif synthétique pour une leçon de 50 minutes, destiné seulement à cette recette.');
+    await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
     stage='erreurs précises et associées dans les compétences et l’annulation';
     for(const [field,message,value] of [
       ['formations.0.competencies.1.label','Indiquez le nom de cette compétence.',originalSecondCompetence],
       ['formations.0.competencies.2.description','Décrivez cette compétence.',originalThirdDescription],
-      ['formations.0.cancellationPolicyText','Complétez les conditions d’annulation.','Recette synthétique : annulation au moins 24 heures avant la leçon.']
+      ['commonLessonRules.cancellationHours','Indiquez le délai de votre école.','24']
     ] as const) {
       await page.getByRole('button',{name:message,exact:true}).click();
       const fieldInput=page.locator(`[name="${field}"]`);
@@ -406,8 +420,7 @@ async function main() {
       await fieldInput.fill(value);
       await page.waitForFunction(name=>document.querySelector(`[name="${name}"]`)?.getAttribute('aria-invalid')!=='true',field);
       assert(before.invalid==='true'&&before.description.includes(message)&&before.visible,`La revue cible ${field}, associe son erreur et retire celle-ci après correction`);
-      await page.getByRole('button',{name:/Vérifier et démarrer/}).click();
-      await page.getByRole('heading',{name:'Vérifier et démarrer',exact:true}).waitFor();
+      await openReview();
     }
     const acknowledgement=page.getByLabel('J’ai relu ces choix et ces textes. Je les adopte pour mon école et confirme son activation.',{exact:true});await acknowledgement.waitFor();
     assert(!(await acknowledgement.isChecked()),'Les textes et l’activation ne sont jamais préconfirmés');
@@ -417,9 +430,15 @@ async function main() {
     await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();
     assert((await administration.query('SELECT status FROM drivy.school WHERE id=$1',[school.id])).rows[0].status==='ACTIVE','L’agenda apparaît après le commit ACTIVE');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.service_product_version WHERE school_id=$1 AND unit_price_cents=9500',[school.id])).rows[0].n===1,'Le tarif saisi est créé sans montant inventé');
+    const cancellation=(await administration.query('SELECT cancellation_rules FROM drivy.school_policy_version WHERE school_id=$1',[school.id])).rows;
+    assert(cancellation.length===1&&cancellation[0].cancellation_rules?.cancellationHours===24&&cancellation[0].cancellation_rules?.lateAction==='CONTACT',
+      'La confirmation conserve le délai de 24 heures et le contact avec l’école dans les règles structurées');
     await page.reload();await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();assert(true,'Une école active revient à l’agenda après rechargement');
     await page.screenshot({path:resolve(artifactDirectory,'03-agenda-desktop-synthetic.png'),fullPage:true});
-    stage='préparation web sur écran mobile';await page.setViewportSize({width:390,height:844});await page.goto(`${origin}/app/gestion/${school.id}/apercu`);
+    stage='entrée quotidienne puis préparation web sur écran mobile';await page.setViewportSize({width:390,height:844});await page.goto(`${origin}/app/gestion/${school.id}/apercu`);
+    await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();
+    assert(new URL(page.url()).pathname===`/app/gestion/${school.id}/agenda`,'L’ancienne entrée quotidienne d’une école active retrouve son agenda');
+    await page.goto(`${origin}/app/gestion/${school.id}/apercu?from=configuration`);
     await page.getByRole('heading',{name:'Préparation de l’école',exact:true}).waitFor();
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'La préparation mobile ne déborde pas horizontalement');
     stage='menu mobile des paramètres et restitution du focus';

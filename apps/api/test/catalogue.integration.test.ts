@@ -6,6 +6,7 @@ import {createLocalJWKSet,exportJWK,generateKeyPair,SignJWT} from 'jose';
 import {buildApp} from '../src/app.js';
 import {createTokenVerifier} from '../src/auth.js';
 import {fixtureIds as id,seedFixtures} from '../scripts/fixtures.js';
+import {migrationFilePattern} from '../scripts/migrations.js';
 const url=process.env.TEST_DATABASE_URL;if(!url || new URL(url).pathname!=='/drivy_test')throw new Error('Base de recette drivy_test requise.');
 const pool=new Pool({connectionString:url});const issuer='https://identity.test.invalid';const path=`/v1/schools/${id.schoolA}`;
 let app:ReturnType<typeof buildApp>;let keys:Awaited<ReturnType<typeof generateKeyPair>>;
@@ -17,7 +18,7 @@ beforeAll(async()=>{
  await pool.query('GRANT drivy_app,drivy_invitation_mailer TO drivy_test_migrator WITH ADMIN OPTION');
  const migration=new Pool({connectionString:url,options:'-c role=drivy_test_migrator'});
  try {await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
-  for(const name of (await readdir(new URL('../migrations/',import.meta.url))).filter(n=>/^[0-9]{3}_.*\.sql$/.test(n)).sort()){
+  for(const name of (await readdir(new URL('../migrations/',import.meta.url))).filter(n=>migrationFilePattern.test(n)).sort()){
    const sql=await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8');const db=await migration.connect();
    try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
    if(name.startsWith('001_'))await seedFixtures(pool,issuer);

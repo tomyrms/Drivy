@@ -59,7 +59,7 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     // 041 déplace l’identité du dossier vers le compte : ces colonnes sont vérifiées à part, le reste doit être identique.
     const identityColumns=['first_name','last_name','contact_phone','photo_version','contact_email','birth_date','postal_address'];
     const movedColumns=['display_name','contact_email','contact_phone','first_name','last_name','birth_date','postal_address','profile_photo_document_id','profile_readiness','version'];
-    const ignored=(table:string)=>table==='school_setup'?newColumns:table==='offering_version'?['label']:table==='person'?[...identityColumns,'version']:table==='learner_profile'?movedColumns:[];
+    const ignored=(table:string)=>table==='school_setup'?newColumns:table==='offering_version'?['label']:table==='school_policy_version'?['cancellation_rules']:table==='person'?[...identityColumns,'version']:table==='learner_profile'?movedColumns:[];
     const snapshot=async()=>{
       const result:Record<string,unknown[]>={};
       for(const table of tables) {
@@ -74,6 +74,8 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     // Le migrateur de production reprend les checksums déjà enregistrés et applique seulement les nouveautés.
     await migrate(migration);
     expect(await snapshot()).toEqual(before);
+    // L'ajout nullable du 28 octobre ne déduit aucune règle des anciens textes libres.
+    expect((await pool.query('SELECT count(*)::int n FROM drivy.school_policy_version WHERE cancellation_rules IS NOT NULL')).rows[0].n).toBe(0);
     expect(await identities()).toEqual(namesBefore);
     expect((await pool.query('SELECT name,sha256,applied_at FROM public.drivy_migrations WHERE name=ANY($1::text[]) ORDER BY name',[oldNames])).rows).toEqual(history);
     const newNames=(await readdir(directory)).filter(name=>migrationFilePattern.test(name)&&!oldNames.includes(name)).sort();

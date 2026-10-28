@@ -15,8 +15,12 @@ async function sharedProducts(){
  const termsId=terms.json().data.id as string,products:{id:string;key:string;siteId:string|null}[]=[];
  for(const siteId of [null,randomUUID()]){
   const key=`shared-${randomUUID()}`;
-  const response=await call('POST','/service-products',{operationId:randomUUID(),productKey:key,label:'Leçon synthétique',type:'INDIVIDUAL_LESSON',categoryCode:'B',siteId,durationMinutes:50,unitLabel:'leçon',unitPriceCents:9000,validFrom:today(),validUntil:null,termsVersionId:termsId,enabled:true},null,admin);
-  expect(response.statusCode,response.body).toBe(201);products.push({id:response.json().data.id as string,key,siteId});
+  const response=await call('POST','/service-products',{operationId:randomUUID(),productKey:key,label:'Leçon synthétique',type:'INDIVIDUAL_LESSON',categoryCode:'B',siteId:null,durationMinutes:50,unitLabel:'leçon',unitPriceCents:9000,validFrom:today(),validUntil:null,termsVersionId:termsId,enabled:true},null,admin);
+  expect(response.statusCode,response.body).toBe(201);
+  const productId=response.json().data.id as string;
+  // La création par site reste interdite par l'API. Simuler une version historique pour vérifier sa préservation.
+  if(siteId)await pool.query('UPDATE drivy.service_product_version SET site_id=$2 WHERE id=$1',[productId,siteId]);
+  products.push({id:productId,key,siteId});
  }
  return {termsId,termsText,products};
 }
