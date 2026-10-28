@@ -1169,3 +1169,9 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 - Release `7a7031d` installée sur le homelab par `.local/deploy-reactivite-20261028.py` (copie du script du 27 octobre) : sauvegarde vérifiée de `drivy_refonte` (`/root/drivy_refonte-before-7a7031d…-20261028T100056Z-…dump`), 55 migrations inchangées et empreintes vérifiées, API, web et worker sur la release, API prête (200), web public 200 avec le nouveau bundle.
 - Seul le web change côté serveur (#121 à #123). Aucune migration.
 - NOT_EXECUTED : essai du portail web déployé par le porteur.
+
+## 28 octobre 2026 : #182 fil Messages présenté par Exyte Chat (PR #184)
+
+- Fil Exyte par défaut, ancien fil et réglage d’essai retirés : bulles, heure, coches, réactions, avatars, menu d’Exyte 3.3.0 aux couleurs Drivy ; composeur, citations intégrées aux réponses, sondages, droits, E2EE et file protégée Drivy ; glisser à gauche pour répondre, appui long de 0,25 s, réaction retirée d’un appui. [Décisions et reprise](reprise-exyte-chat-182-20261027.md), PR #184.
+- Qualification Apple : tests UI messagerie adaptés et réussis sur iPhone et iPad (FeatureCheck 17, Thread 8, Latency 3), 71 tests métier `messaging`, IPA avec Messages sur le commit fusionné avec `master` ([run 40668797322](https://github.com/tomyrms/Drivy/actions/runs/40668797322)).
+- Reste : décision Giphy (binaire MPL 2.0 embarqué d’office par Exyte) avant diffusion publique ; VoiceOver physique, réseau et GPS en leçon non qualifiés. Aucun déploiement nécessaire (iOS seul).
