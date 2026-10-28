@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { SchoolCommand } from '../command-core';
 import { commandMessage } from '../command-core';
 import { commandRefreshesSchool } from '../command-conflicts';
@@ -151,6 +151,9 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], s
 export function useDraft<T>(baseline: T | null) {
   const [draft, setDraft] = useState<T | null>(baseline);
   const [acknowledged, setAcknowledged] = useState<string | null>(null);
+  // Read after an await: the confirmation compares the latest typing, not the render that submitted.
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
   const previous = useRef<string | null>(baseline === null ? null : JSON.stringify(baseline));
   const serialized = baseline === null ? null : JSON.stringify(baseline);
   useEffect(() => {
@@ -164,11 +167,48 @@ export function useDraft<T>(baseline: T | null) {
   const edited = draft !== null && saved !== null && JSON.stringify(draft) !== saved;
   const releaseGuard = useUnsavedChanges(edited);
   const reset = () => { releaseGuard(); if (saved !== null) setDraft(JSON.parse(saved) as T); };
-  const markSaved = (value: T) => { releaseGuard(); setDraft(value); setAcknowledged(JSON.stringify(value)); };
+  /**
+   * `value` is what the school confirmed. With `sent`, typing continued since that submission stays on screen,
+   * still to be saved, instead of being replaced by the confirmation (#123).
+   */
+  const markSaved = (value: T, sent?: T) => {
+    setAcknowledged(JSON.stringify(value));
+    const current = latestDraft.current;
+    const keptEdits = sent !== undefined && current !== null && JSON.stringify(current) !== JSON.stringify(sent);
+    if (!keptEdits) releaseGuard();
+    setDraft(previous => keptEdits && previous !== null ? previous : value);
+  };
   return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset, markSaved };
 }
 
 export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; message: string; code?: string; needsLogin?: boolean } | null;
+
+/**
+ * Requests of this school still followed by the store, by targeted resource (#121, #122): the row concerned says what is
+ * under way. A requested state is never a right nor a confirmed fact: it unlocks nothing and disappears with its result.
+ */
+export function usePendingResources(schoolId: string): ReadonlyMap<string, SchoolCommand['kind']> {
+  const { entries } = useCommandSnapshot();
+  return useMemo(() => {
+    const pending = new Map<string, SchoolCommand['kind']>();
+    for (const entry of entries.values()) {
+      if (entry.meta.schoolId === schoolId && entry.meta.resourceId) pending.set(entry.meta.resourceId.toLowerCase(), entry.meta.kind);
+    }
+    return pending;
+  }, [entries, schoolId]);
+}
+
+/** Creations of this kind still followed for this school: no identifier, code or link exists before the school answers. */
+export function usePendingCreations(schoolId: string, kind: SchoolCommand['kind']): number {
+  const { entries } = useCommandSnapshot();
+  return useMemo(() => [...entries.values()].filter(entry => entry.meta.schoolId === schoolId && entry.meta.kind === kind).length,
+    [entries, schoolId, kind]);
+}
+
+export const pendingResourceLabel: Partial<Record<SchoolCommand['kind'], string>> = {
+  resendInvitation: 'Renvoi en cours', revokeInvitation: 'Révocation en cours',
+  updateMember: 'Modification en cours', deactivateMember: 'Retrait en cours',
+};
 
 /**
  * Submit one command through the shared store and report its real outcome to the section.

@@ -30,7 +30,8 @@ import Testing
         let command = try #require(outbox.value)
         try await HubFixture.wait { !model.isSending }
         #expect(model.pending == command && outbox.value == command && model.undoState == .none)
-        #expect(model.canRetry && !model.canRecord)
+        // La demande incertaine reste en tête de file ; un autre geste peut la suivre (#112).
+        #expect(model.canRetry && model.canRecord)
         model.stop()
     }
 

@@ -40,7 +40,7 @@ enum SchoolReportObservationRoute: Identifiable {
             instructorName: model.lesson?.providedInstructorName, isOwnLearner: model.isOwnLearner,
             roles: model.membership.roles)?.name ?? "Trajet"
         replay = SchoolTripReplayRoute(model: SchoolCaptureReplayWorkspace(scope: model.scope, client: context.agenda.captureClient,
-            captureID: capture.id), learnerName: title, lessonTimeZone: model.lesson?.timeZone)
+            captureID: capture.id, cache: .shared), learnerName: title, lessonTimeZone: model.lesson?.timeZone)
     }
 
     func openList() { observation = .list(UUID()) }

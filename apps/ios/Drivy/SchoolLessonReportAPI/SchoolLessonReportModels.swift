@@ -149,13 +149,13 @@ struct SchoolCompleteLesson: Encodable {
     let actualStart: String, actualEnd: String
     let workedOn: String, observationText: String, nextStep: String, anomalyReason: String?
 }
-struct SchoolSavePreparation: Encodable {
+struct SchoolSavePreparation: Codable {
     let operationId: UUID
     let goals: [SchoolLessonGoal]
     let administrativeCheckNote: String
     // Omission volontaire de plannedWaypoints : les repères existants sont conservés.
 }
-struct SchoolSaveWish: Encodable {
+struct SchoolSaveWish: Codable {
     let operationId: UUID
     let text: String
     // L'association éventuelle à une leçon demeure inchangée.

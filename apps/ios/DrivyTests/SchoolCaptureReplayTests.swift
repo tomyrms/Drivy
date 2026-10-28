@@ -92,6 +92,30 @@ import Testing
         #expect(model.fragments.count == 1 && model.fragments[0].points.map(\.sequence) == [0, 1, 2, 3, 4])
     }
 
+    /// #115 : un trajet déjà ouvert se rouvre sans retélécharger ses pages tant que l’école garde sa version.
+    @Test func reopeningAnUnchangedReplayKeepsItsPagesAndOnlyRereadsItsVersion() async {
+        let server = ReplayMatchingServer(replies: [.ready(), .ready(), .ready(), .ready()])
+        let cache = SchoolReplayCache()
+        let first = cachedWorkspace(server, cache)
+        await first.load()
+        #expect(first.isComplete && first.pointCount == 3 && first.matchingState == .matched)
+        let pagesRead = await server.replayReads
+        let second = cachedWorkspace(server, cache)
+        await second.load()
+        #expect(second.isComplete && second.pointCount == 3 && second.observations == first.observations)
+        #expect(second.matchingState == .matched && second.errorMessage == nil)
+        #expect(await server.replayReads == pagesRead)
+        // Une autre époque d’accès ne lit jamais ce qui a été gardé pour la précédente.
+        #expect(cache.entry(scope: ConfigurationFixture.scope(epoch: 2), captureID: server.captureID) == nil)
+        second.invalidate()
+        #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID) == nil)
+    }
+
+    private func cachedWorkspace(_ server: ReplayMatchingServer, _ cache: SchoolReplayCache) -> SchoolCaptureReplayWorkspace {
+        SchoolCaptureReplayWorkspace(scope: ConfigurationFixture.scope(), client: client(server), captureID: server.captureID,
+            cache: cache, sleep: { _ in try Task.checkCancellation() }, now: { 0 })
+    }
+
     private func timeline(_ model: SchoolCaptureReplayWorkspace) -> SchoolReplayTimeline {
         SchoolReplayTimeline(fragments: model.fragments, observations: model.observations,
             startsAt: model.startsAt, endsAt: model.endsAt, matched: model.matchedRoute)

@@ -405,6 +405,24 @@ import Testing
         await fixture.waitUntilSettled()
     }
 
+    /// #111 : l’école ne répond pas encore ; le bail local encore valable suffit à reprendre la collecte.
+    @Test func resumingReopensTheSegmentWithoutWaitingForTheSchool() async throws {
+        let fixture = try await CaptureLifecycleFixture.make()
+        let controller = fixture.controller
+        await controller.pause()
+        #expect(controller.state == .paused && !fixture.source.isRunning)
+        await fixture.server.holdTransfers()
+        await controller.resume()
+        #expect(controller.state == .recording && controller.transition == nil && controller.isCollecting)
+        #expect(fixture.source.isRunning && controller.segments.count == 2)
+        await fixture.server.releaseTransfers()
+        // La relecture de l’école, arrivée après, confirme le trajet : rien ne s’arrête.
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.state == .recording && controller.errorMessage == nil)
+        #expect(await controller.stopAndSynchronize())
+        await fixture.waitUntilSettled()
+    }
+
     @Test func aSignalGapKeepsTheRecordingStateOnScreenWhileItsNewSegmentOpens() async throws {
         let fixture = try await CaptureLifecycleFixture.make()
         let controller = fixture.controller
