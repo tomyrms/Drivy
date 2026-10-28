@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 28 octobre 2026 — audit UX, lot 9 : fil de discussion (#142, #168, #177)
+
+- Branche `claude/audit-ux-lot9-fil`, sur master avec le fil Exyte. Zones d'appui des réactions et des reprises, menu de sourdine selon l'état réel avec l'heure de fin, erreurs qui s'expliquent avant de se masquer et sans renvoi aveugle. [Détail](audit-ux-lot9-fil-20261028.md).
+- Validé à l'essai par le porteur (IPA build 431). Tests UI `MessagingLatencyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests` : iPad réussis sauf deux lancements d'app ratés par le simulateur ; iPhone réussis sauf un retrait rapide de réaction, réussi à la relance ciblée sur cette branche et sur master (runs 40684982359, 40693720605, 40693724801). iOS seulement, rien à déployer.
+
 ## 28 octobre 2026 — audit UX, lots 5 à 8 (#148-#150, #159-#161, #164-#165, #166/#167/#171/#176)
 
 - Branche `claude/audit-ux-lots-5-8`, sur les lots 2 à 4. Agenda : aller à une date, choisir soi-même l'horaire, sorties des blocages. Cours : langue, type avec description, suivi toujours visible. Bilan : trajets nommés par leur horaire, « Ce que verra l'élève ». Messages : état vide avec le général, recherche au-delà de la page, recherche des membres, école en sous-titre. [Détail](audit-ux-lots5-8-20261028.md).
