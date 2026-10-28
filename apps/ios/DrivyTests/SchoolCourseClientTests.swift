@@ -175,6 +175,35 @@ import Testing
         #expect(SchoolCourseClient.failure(412, "VERSION_CONFLICT") == .conflict)
     }
 
+    @Test func teachingLanguageIsShownOnlyWhenTheSchoolSetIt() {
+        #expect(SchoolCourseLanguage.phrase(for: nil) == nil)
+        #expect(SchoolCourseLanguage.phrase(for: "  ") == nil)
+        #expect(SchoolCourseLanguage.phrase(for: "de") == "Cours en allemand")
+        #expect(SchoolCourseLanguage.phrase(for: "fr") == "Cours en français")
+        // Hors catalogue : son nom système ou son code, jamais le français par défaut.
+        let other = SchoolCourseLanguage.phrase(for: "rm")
+        #expect(other != nil && other != "Cours en français")
+        #expect(SchoolCourseLanguage.phrase(for: "zz9") == "Langue : ZZ9")
+    }
+
+    @Test func releasingAPlaceSaysItsRealConsequenceAndChecksTheCurrentState() throws {
+        let decline = SchoolCourseRelease.decline(offerID: offerID)
+        #expect(decline.action == .decline(offerID: offerID))
+        #expect(decline.message(courseTitle: "Premiers secours")
+            == "La place proposée pour « Premiers secours » passera à la personne suivante et tu quitteras la liste d’attente.")
+        let leave = SchoolCourseRelease.leaveWaitlist(rank: 3)
+        #expect(leave.action == .leaveWaitlist)
+        #expect(leave.message(courseTitle: nil) == "Tu perdras ton rang (3). Si tu la rejoins plus tard, tu repasseras en dernier.")
+        let offer = "{\"id\":\"\(offerID.uuidString.lowercased())\",\"seriesId\":\"\(seriesID.uuidString.lowercased())\",\"expiresAt\":\"2030-03-01T17:30:00.000Z\",\"status\":\"ACTIVE\"}"
+        let offered = try JSONDecoder().decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "OFFERED", offer: offer)).me
+        let waiting = try JSONDecoder().decode(SchoolCourseLearnerReply.self, from: replyJSON(state: "WAITING", position: "3")).me
+        #expect(decline.isCurrent(in: offered))
+        #expect(!SchoolCourseRelease.decline(offerID: UUID()).isCurrent(in: offered))
+        #expect(!decline.isCurrent(in: waiting))
+        #expect(leave.isCurrent(in: waiting))
+        #expect(!leave.isCurrent(in: offered))
+    }
+
     // MARK: Inscriptions (#39-#41)
 
     private let enrollmentID = UUID(uuidString: "77777777-7777-4777-8777-777777777777")!
@@ -222,6 +251,9 @@ import Testing
         // 17:30 UTC = 18:30 à Zurich en hiver : l’heure suit le fuseau de l’école.
         let sameDay = try #require(SchoolLesson.date("2030-03-01T08:00:00Z"))
         #expect(SchoolCourseEnrollmentFormat.status(offered.me, zone: "Europe/Zurich", now: sameDay) == "Place proposée jusqu’à 18:30")
+        // #224 : l’échéance passée sur l’appareil n’est plus dite comme une place encore ouverte.
+        let afterExpiry = try #require(SchoolLesson.date("2030-03-01T17:31:00Z"))
+        #expect(SchoolCourseEnrollmentFormat.status(offered.me, zone: "Europe/Zurich", now: afterExpiry) == "Délai de réponse passé")
 
         let words: [(SchoolCourseLearnerState.State, String)] = [(.available, "Disponible"), (.full, "Complet"), (.enrolled, "Inscrit"),
             (.completed, "Déjà effectué"), (.cancelled, "Annulé")]

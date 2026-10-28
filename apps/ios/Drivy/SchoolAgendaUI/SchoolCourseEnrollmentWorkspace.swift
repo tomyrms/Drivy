@@ -11,6 +11,8 @@ import Observation
         case .waiting: return me.waitlistPosition.map { "En attente (rang \($0))" } ?? "En attente"
         case .offered:
             guard let expiry = me.offer?.expiry else { return "Place proposée" }
+            // Échéance passée sur cet appareil : la fiche se relit, l’école dit la suite (#224).
+            if expiry <= now { return "Délai de réponse passé" }
             return "Place proposée jusqu’à \(moment(expiry, zone: zone, now: now))"
         case .completed: return "Déjà effectué"
         case .cancelled: return "Annulé"
@@ -44,6 +46,55 @@ import Observation
         components.scheme = "mailto"; components.path = email
         components.queryItems = [URLQueryItem(name: "subject", value: "Annulation : \(courseTitle)")]
         return components.url
+    }
+}
+
+/// Geste qui rend une place ou un rang (#223), confirmé avec sa conséquence réelle : refuser passe la place à la
+/// personne suivante et sort de la liste d’attente ; la quitter perd le rang, et la rejoindre repart en dernier.
+enum SchoolCourseRelease: Equatable {
+    case decline(offerID: UUID)
+    case leaveWaitlist(rank: Int?)
+
+    var action: SchoolCourseLearnerAction {
+        switch self {
+        case .decline(let offerID): .decline(offerID: offerID)
+        case .leaveWaitlist: .leaveWaitlist
+        }
+    }
+    var title: String {
+        switch self {
+        case .decline: "Refuser la place ?"
+        case .leaveWaitlist: "Quitter la liste d’attente ?"
+        }
+    }
+    var confirmTitle: String {
+        switch self {
+        case .decline: "Refuser la place"
+        case .leaveWaitlist: "Quitter la liste"
+        }
+    }
+    var keepTitle: String {
+        switch self {
+        case .decline: "Garder la proposition"
+        case .leaveWaitlist: "Rester en attente"
+        }
+    }
+    func message(courseTitle: String?) -> String {
+        let course = courseTitle.map { " pour « \($0) »" } ?? ""
+        switch self {
+        case .decline:
+            return "La place proposée\(course) passera à la personne suivante et tu quitteras la liste d’attente."
+        case .leaveWaitlist(let rank):
+            return "Tu perdras ton rang\(rank.map { " (\($0))" } ?? "")\(course). Si tu la rejoins plus tard, tu repasseras en dernier."
+        }
+    }
+    /// La proposition ou l’attente vue à l’ouverture est toujours celle de la fiche ; l’échéance reste arbitrée par l’école.
+    func isCurrent(in me: SchoolCourseLearnerState?) -> Bool {
+        guard let me else { return false }
+        switch self {
+        case .decline(let offerID): return me.state == .offered && me.offer?.id == offerID
+        case .leaveWaitlist: return me.state == .waiting
+        }
     }
 }
 
@@ -261,8 +312,10 @@ struct SchoolCourseLearnerPending: Equatable {
         self.schoolID = schoolID; self.timeZone = timeZone; self.client = client
     }
 
+    /// Propositions encore ouvertes, la plus proche échéance d’abord.
     var offers: [SchoolCourseOffer] {
         (mine?.offers ?? []).filter { ($0.expiry ?? .distantPast) > Date() }
+            .sorted { ($0.expiry ?? .distantFuture) < ($1.expiry ?? .distantFuture) }
     }
 
     /// Fiches ouvertes dans ce contexte : rouvrir un cours retrouve sa demande en cours (#126).

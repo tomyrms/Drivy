@@ -18,6 +18,12 @@ struct SchoolCaptureReplayView: View {
     @State private var resetCameraID = UUID()
     @State private var followsPosition = true
     @State private var showsList = false
+    /// Observation lue en entier (#234) ; la sélection et l’instant restent ceux du dock.
+    @State private var reading: SchoolReplayTimeline.Item?
+    /// Filtre des observations, commun au rail, à la liste, à la chronologie et à la carte (#236).
+    @State private var filter = SchoolReplayObservationFilter()
+    @FocusState private var searching: Bool
+    @State private var showsTraceHelp = false
     /// Des pastilles sont cachées au-delà de ce bord du rail : lui seul s’estompe.
     @State private var railHidesLeading = false
     @State private var railHidesTrailing = false
@@ -53,11 +59,15 @@ struct SchoolCaptureReplayView: View {
         .onChange(of: contentKey, initial: true) { _, _ in rebuildTimeline() }
         .onChange(of: reduceMotion, initial: true) { _, value in player.reduceMotion = value }
         .onChange(of: scenePhase) { _, phase in if phase != .active { player.pause() } }
-        .onAppear { player.onCross = { id in selectedID = id } }
+        // Suivi automatique pendant la lecture : seulement ce que le filtre laisse voir.
+        .onAppear { player.onCross = { id in
+            if let item = timeline?.items.first(where: { $0.id == id }), filter.matches(item) { selectedID = id }
+        } }
         .onDisappear { player.pause(); model.stopLoading() }
         .sheet(isPresented: $showsList) {
             if let timeline { listSheet(timeline) }
         }
+        .sheet(item: $reading) { item in fullTextSheet(item) }
     }
 
     private func rebuildTimeline() {
@@ -100,7 +110,7 @@ struct SchoolCaptureReplayView: View {
         let day = SchoolReplayFormatting.startLabel(model.startsAt, lessonTimeZone: lessonTimeZone)
         let suffix = day.map { " · \($0)" } ?? ""
         switch model.quality ?? "" {
-        case "PARTIAL": return DrivyMapStatus(title: "Partiel\(suffix)", symbol: "exclamationmark.circle", tone: .warning)
+        case "PARTIAL": return DrivyMapStatus(title: "Incomplet\(suffix)", symbol: "exclamationmark.circle", tone: .warning)
         default: return DrivyMapStatus(title: day ?? "Trajet", symbol: "point.topleft.down.to.point.bottomright.curvepath")
         }
     }
@@ -210,28 +220,55 @@ struct SchoolCaptureReplayView: View {
         case .waitingForSync:
             DrivyLoadingState(title: "Synchronisation du trajet…")
         case .processing:
-            DrivyLoadingState(title: "Recalage en cours…")
+            DrivyLoadingState(title: "Ajustement à la route…")
         case .retrying:
-            DrivyLoadingState(title: "Reprise du recalage…")
+            DrivyLoadingState(title: "Nouvel essai d’ajustement à la route…")
         case .matched, .noReliableMatch:
-            Text(matchingCoverageLabel).font(.caption).foregroundStyle(DrivyTheme.muted)
+            HStack(spacing: 0) {
+                Text(matchingCoverageLabel).font(.caption).foregroundStyle(DrivyTheme.muted)
+                traceHelpButton
+            }
         case .unavailable:
-            SchoolErrorNotice(message: "Recalage indisponible. Le tracé mesuré reste lisible.", retry: nil)
+            SchoolErrorNotice(message: "Ajustement à la route indisponible. Le tracé GPS mesuré reste lisible.", retry: nil)
         case .deferred(let reason):
             SchoolErrorNotice(message: reason == "WAITING_FOR_SYNC"
                 ? "Synchronisation encore en attente. Réessaie plus tard."
-                : "Recalage différé. Le tracé mesuré reste lisible.", retry: { Task { await model.load() } })
+                : "Ajustement à la route différé. Le tracé GPS mesuré reste lisible.", retry: { Task { await model.load() } })
         case .failed:
-            SchoolErrorNotice(message: "Le recalage n’a pas pu être chargé. Le tracé mesuré reste lisible.",
+            SchoolErrorNotice(message: "L’ajustement à la route n’a pas pu être chargé. Le tracé GPS mesuré reste lisible.",
                 retry: { Task { await model.load() } })
         }
     }
 
     private var matchingCoverageLabel: String {
         switch timeline?.matchingCoverage.state ?? .none {
-        case .full: "Tracé recalé"
-        case .partial: "Recalage partiel"
-        case .none: "Aucune correspondance fiable"
+        case .full: "Tracé ajusté à la route"
+        case .partial: "Tracé ajusté à la route en partie"
+        case .none: "Tracé GPS mesuré, sans ajustement"
+        }
+    }
+
+    /// Aide à la demande (#233) : ce que montre le tracé, sans encombrer la carte ni promettre une précision.
+    private var traceHelpButton: some View {
+        Button { showsTraceHelp = true } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundStyle(DrivyTheme.accent)
+                .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .padding(.vertical, -DrivySpacing.s)
+        .accessibilityLabel("À propos du tracé")
+        .accessibilityIdentifier("school-replay-trace-help")
+        .popover(isPresented: $showsTraceHelp) {
+            Text(SchoolReplayTraceHelp.text(incomplete: model.quality == "PARTIAL"))
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(idealWidth: 300, alignment: .leading)
+                .padding(DrivySpacing.m)
+                .presentationCompactAdaptation(.popover)
         }
     }
 
@@ -244,7 +281,7 @@ struct SchoolCaptureReplayView: View {
                     : timeline.items.isEmpty ? "L’école n’a reconstruit aucune position pour ce trajet."
                     : "Les observations gardent leur heure. Retrouve-les sur la chronologie.")
         } else {
-            SchoolReplayMap(timeline: timeline, player: player, selectedID: selectedID,
+            SchoolReplayMap(timeline: timeline, items: filter.apply(timeline.items), player: player, selectedID: selectedID,
                 resetCameraID: resetCameraID, followsPosition: $followsPosition, onSelect: select)
         }
     }
@@ -262,39 +299,40 @@ struct SchoolCaptureReplayView: View {
     @ViewBuilder
     private func selectedDetail(_ timeline: SchoolReplayTimeline) -> some View {
         if let item = timeline.items.first(where: { $0.id == selectedID }) {
-            HStack(alignment: .top, spacing: DrivySpacing.s) {
-                // Focus du dock : pastille pleine, le thème du signalement.
-                SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: DrivyLayout.tapTarget, filled: true)
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(item.title)
-                        .font(.headline)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(item.statusLabel)
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(item.tone.foreground)
-                    if item.isMarker, item.text != item.title {
-                        Text(item.text).font(.subheadline)
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Text(meta(item))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(DrivyTheme.muted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
-                Button { selectedID = nil } label: {
-                    Image(systemName: "xmark")
-                        .font(DrivyMapGlyph.control)
-                        .foregroundStyle(DrivyTheme.muted)
-                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                        .background(DrivyTheme.surfaceMuted, in: Circle())
-                        .contentShape(Circle())
-                }
-                .buttonStyle(DrivyTileButtonStyle())
-                .accessibilityLabel("Fermer l’observation")
-            }
+            // Lire le texte entier arrête la lecture : l’observation ne change pas pendant qu’on la lit (#234).
+            SchoolReplaySelectedDetail(item: item, meta: meta(item), close: { selectedID = nil },
+                                       readAll: { player.pause(); reading = item })
+                .id(item.id)
         }
+    }
+
+    /// Texte entier d’une observation, au-dessus du replay : fermer rend le dock tel qu’il était.
+    private func fullTextSheet(_ item: SchoolReplayTimeline.Item) -> some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.s) {
+                    HStack(alignment: .top, spacing: DrivySpacing.s) {
+                        SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: DrivyLayout.tapTarget, filled: true)
+                        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                            Text(item.title).font(.headline)
+                            Text(item.statusLabel).font(.subheadline.weight(.semibold)).foregroundStyle(item.tone.foreground)
+                        }
+                    }
+                    if item.isMarker, item.text != item.title { Text(item.text).font(.body) }
+                    Text(meta(item)).font(.caption.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .drivyPageContent()
+            }
+            .background(DrivyTheme.surface)
+            .navigationTitle("Observation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { reading = nil } } }
+        }
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private func meta(_ item: SchoolReplayTimeline.Item) -> String {
@@ -311,10 +349,12 @@ struct SchoolCaptureReplayView: View {
                 .foregroundStyle(DrivyTheme.muted)
                 .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
         } else {
+            let items = filter.apply(timeline.items)
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
                     HStack(spacing: DrivySpacing.xs) {
-                        ForEach(timeline.items) { item in
+                        if filter.isActive { activeFilterChip(shown: items.count, total: timeline.items.count) }
+                        ForEach(items) { item in
                             chip(item, isSelected: item.id == selectedID) { select(item) }
                                 .id(item.id)
                         }
@@ -394,23 +434,56 @@ struct SchoolCaptureReplayView: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
+    /// En tête du rail filtré : le compte et l’effacement, d’un appui ; le point de lecture ne bouge pas.
+    private func activeFilterChip(shown: Int, total: Int) -> some View {
+        Button { filter = SchoolReplayObservationFilter() } label: {
+            HStack(spacing: DrivySpacing.xs) {
+                Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(DrivyTheme.accent)
+                Text("\(shown) sur \(total)").font(.subheadline.weight(.semibold).monospacedDigit())
+                Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(DrivyTheme.muted)
+            }
+            .foregroundStyle(DrivyTheme.text)
+            .padding(.horizontal, DrivySpacing.s)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .background(DrivyTheme.accentSoft, in: Capsule())
+            .overlay { Capsule().strokeBorder(DrivyTheme.accent, lineWidth: 1) }
+            .contentShape(Capsule())
+            .fixedSize()
+        }
+        .buttonStyle(DrivyTileButtonStyle())
+        .accessibilityLabel("Filtre actif, \(shown) \(shown == 1 ? "observation" : "observations") sur \(total)")
+        .accessibilityHint("Efface le filtre")
+        .accessibilityIdentifier("school-replay-filter-clear")
+    }
+
     private func playerPanel(_ timeline: SchoolReplayTimeline, showsList: Bool) -> some View {
         var openList: (() -> Void)? = nil
         if showsList { openList = { player.pause(); self.showsList = true } }
-        return SchoolReplayPlayerPanel(player: player, timeline: timeline, selectedID: $selectedID,
-                                       openList: openList, select: select)
+        return SchoolReplayPlayerPanel(player: player, timeline: timeline, timed: filter.apply(timeline.timedItems),
+                                       selectedID: $selectedID, openList: openList, select: select, step: step)
     }
 
     // MARK: List
 
     private func observationList(_ timeline: SchoolReplayTimeline, closesSheet: Bool) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
-            DrivySectionHeader(title: DrivySeanceText.observations(timeline.items.count))
+        let items = filter.apply(timeline.items)
+        let total = DrivySeanceText.observations(timeline.items.count)
+        return VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            DrivySectionHeader(title: filter.isActive ? "\(items.count) sur \(total)" : total)
+            if timeline.items.count >= Self.filterThreshold { filterControls(timeline) }
+            // Le filtre ne promet pas plus que ce qui est chargé.
+            if filter.isActive && !model.isComplete {
+                Text("Recherche dans la partie déjà chargée du trajet.").font(.caption).foregroundStyle(DrivyTheme.muted)
+            }
             if timeline.items.isEmpty {
                 DrivyEmptyState(title: "Aucune observation", symbol: "text.bubble")
+            } else if items.isEmpty {
+                DrivyEmptyState(title: "Aucune observation trouvée", symbol: "magnifyingglass")
+                Button("Effacer le filtre") { filter = SchoolReplayObservationFilter() }
+                    .buttonStyle(DrivySecondaryButtonStyle())
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(timeline.items) { item in
+                    ForEach(items) { item in
                         Button {
                             select(item)
                             if closesSheet { showsList = false }
@@ -444,6 +517,50 @@ struct SchoolCaptureReplayView: View {
         }
     }
 
+    /// En dessous, la liste se lit d’un coup d’œil : ni recherche ni filtre.
+    private static let filterThreshold = 4
+
+    @ViewBuilder private func filterControls(_ timeline: SchoolReplayTimeline) -> some View {
+        DrivySearchField(text: $filter.query, prompt: "Rechercher une observation", focus: $searching)
+            .accessibilityIdentifier("school-replay-search")
+        let kinds = SchoolReplayObservationFilter.kinds(in: timeline.items)
+        if kinds.count > 1 {
+            ScrollView(.horizontal) {
+                HStack(spacing: DrivySpacing.xs) {
+                    ForEach(kinds) { entry in kindChip(entry.kind, count: entry.count) }
+                }
+                .padding(.vertical, DrivySpacing.xxs)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private func kindChip(_ kind: SchoolReplayObservationKind, count: Int) -> some View {
+        let isOn = filter.kinds.contains(kind)
+        return Button {
+            if isOn { filter.kinds.remove(kind) } else { filter.kinds.insert(kind) }
+        } label: {
+            HStack(spacing: DrivySpacing.xs) {
+                Text(kind.label).font(.subheadline)
+                Text("\(count)").font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+            }
+            .foregroundStyle(DrivyTheme.text)
+            .padding(.horizontal, DrivySpacing.s)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .background(isOn ? DrivyTheme.accentSoft : DrivyTheme.surfaceMuted, in: Capsule())
+            .overlay {
+                Capsule().strokeBorder(isOn ? DrivyTheme.accent : (contrast == .increased ? DrivyTheme.controlBorder : DrivyTheme.border),
+                                       lineWidth: isOn ? 1.5 : 1)
+            }
+            .contentShape(Capsule())
+            .fixedSize()
+            .animation(DrivyMotion.feedback(reduceMotion), value: isOn)
+        }
+        .buttonStyle(DrivyTileButtonStyle())
+        .accessibilityLabel("\(kind.label), \(count)")
+        .accessibilityAddTraits(isOn ? [.isSelected] : [])
+    }
+
     private func listSheet(_ timeline: SchoolReplayTimeline) -> some View {
         NavigationStack {
             ScrollView { observationList(timeline, closesSheet: true).drivyPageContent() }
@@ -458,9 +575,105 @@ struct SchoolCaptureReplayView: View {
 
     // MARK: Playback
 
+    /// Choisir une observation (pastille, carte, liste, repère) la donne à lire : la lecture s’arrête sur elle, sans
+    /// la remplacer à la suivante ; « Lecture » reprend le suivi (#235).
     private func select(_ item: SchoolReplayTimeline.Item) {
+        player.pause()
+        step(item)
+    }
+
+    /// Précédente et suivante parcourent la chronologie sans arrêter la lecture.
+    private func step(_ item: SchoolReplayTimeline.Item) {
         selectedID = item.id
         if let value = item.offset { player.seek(to: value) }
+    }
+}
+
+/// Observation choisie, dans le dock. Titre et note gardent trois lignes pour ne pas cacher les commandes ; coupés,
+/// « Voir tout » ouvre le texte entier sans quitter la sélection ni l’instant (#234).
+private struct SchoolReplaySelectedDetail: View {
+    let item: SchoolReplayTimeline.Item
+    let meta: String
+    let close: () -> Void
+    let readAll: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var titleIsCut = false
+    @State private var noteIsCut = false
+
+    var body: some View {
+        let limit = dynamicTypeSize.isAccessibilitySize ? nil : 3
+        HStack(alignment: .top, spacing: DrivySpacing.s) {
+            // Focus du dock : pastille pleine, le thème du signalement.
+            SchoolObservationToken(glyph: item.glyph, tone: item.tone, side: DrivyLayout.tapTarget, filled: true)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    SchoolReplayClampedText(text: item.title, font: .headline, lineLimit: limit, isCut: $titleIsCut)
+                    Text(item.statusLabel)
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(item.tone.foreground)
+                    if item.isMarker, item.text != item.title {
+                        SchoolReplayClampedText(text: item.text, font: .subheadline, lineLimit: limit, isCut: $noteIsCut)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                HStack(spacing: DrivySpacing.s) {
+                    Text(meta)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(DrivyTheme.muted)
+                    if titleIsCut || noteIsCut {
+                        Spacer(minLength: 0)
+                        Button("Voir tout", action: readAll)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.accent)
+                            .frame(minHeight: DrivyLayout.tapTarget)
+                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Met la lecture en pause et ouvre le texte complet")
+                            .accessibilityIdentifier("school-replay-read-all")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(DrivyMapGlyph.control)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                    .background(DrivyTheme.surfaceMuted, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(DrivyTileButtonStyle())
+            .accessibilityLabel("Fermer l’observation")
+        }
+    }
+}
+
+/// Texte limité à quelques lignes qui sait s’il est coupé : sa hauteur entière, mesurée en coulisse, dépasse la
+/// hauteur affichée.
+private struct SchoolReplayClampedText: View {
+    let text: String
+    let font: Font
+    let lineLimit: Int?
+    @Binding var isCut: Bool
+    @State private var shown: CGFloat = 0
+    @State private var full: CGFloat = 0
+
+    var body: some View {
+        Text(text).font(font)
+            .lineLimit(lineLimit)
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { shown = $0; update() }
+            .background(alignment: .topLeading) {
+                Text(text).font(font)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .hidden()
+                    .accessibilityHidden(true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { full = $0; update() }
+            }
+    }
+
+    private func update() {
+        let cut = lineLimit != nil && full > shown + 1
+        if cut != isCut { isCut = cut }
     }
 }
 
@@ -469,12 +682,14 @@ struct SchoolCaptureReplayView: View {
 private struct SchoolReplayPlayerPanel: View {
     let player: SchoolReplayPlayer
     let timeline: SchoolReplayTimeline
+    /// Observations datées que le filtre laisse voir ; les interruptions restent celles du trajet.
+    let timed: [SchoolReplayTimeline.Item]
     @Binding var selectedID: UUID?
     let openList: (() -> Void)?
     let select: (SchoolReplayTimeline.Item) -> Void
+    let step: (SchoolReplayTimeline.Item) -> Void
 
     var body: some View {
-        let timed = timeline.timedItems
         let current = min(max(0, player.offset), timeline.duration)
         let inGap = !timeline.samples.isEmpty && timeline.sample(at: current) == nil
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
@@ -510,8 +725,8 @@ private struct SchoolReplayPlayerPanel: View {
                     player.toggle()
                 },
                 cycleSpeed: { player.cycleSpeed() },
-                previous: { if let item = adjacent(in: timed, forward: false) { select(item) } },
-                next: { if let item = adjacent(in: timed, forward: true) { select(item) } },
+                previous: { if let item = adjacent(in: timed, forward: false) { step(item) } },
+                next: { if let item = adjacent(in: timed, forward: true) { step(item) } },
                 openList: openList
             )
         }
@@ -532,6 +747,8 @@ private struct SchoolReplayPlayerPanel: View {
 /// playhead moving along the drawn line. Manual exploration suspends the follow mode.
 private struct SchoolReplayMap: View {
     let timeline: SchoolReplayTimeline
+    /// Observations à épingler, après filtre ; le tracé et ses départ et arrivée restent entiers.
+    let items: [SchoolReplayTimeline.Item]
     let player: SchoolReplayPlayer
     let selectedID: UUID?
     let resetCameraID: UUID
@@ -564,7 +781,7 @@ private struct SchoolReplayMap: View {
                 signature: "end", label: SchoolMapEndpointMarker.Kind.end.label, side: 22, priority: 210,
                 content: AnyView(SchoolMapEndpointMarker(kind: .end))))
         }
-        for item in timeline.items {
+        for item in items {
             guard let coordinate = item.coordinate else { continue }
             let selected = selectedID == item.id
             result.append(DrivyRouteMapPin(id: item.id.uuidString, coordinate: coordinate,

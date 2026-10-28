@@ -77,6 +77,39 @@ enum MessagingPollRules {
     static let maxOptions = 12
     static let maxLength = 200
 
+    /// Ce qui empêche l’envoi, champ par champ (#242) : les règles de `validated`, sans en ajouter.
+    struct Problems: Equatable {
+        var questionMissing = false
+        /// Longueur de la question quand elle dépasse `maxLength`.
+        var questionLength: Int?
+        /// Longueur de chaque option trop longue, par indice de champ.
+        var optionLengths: [Int: Int] = [:]
+        /// Options qui répètent une option précédente, sans tenir compte de la casse.
+        var duplicates: Set<Int> = []
+        var tooFewOptions = false
+        var tooManyOptions = false
+        var isEmpty: Bool { self == Problems() }
+    }
+
+    static func problems(question: String, options: [String]) -> Problems {
+        var problems = Problems()
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        problems.questionMissing = q.isEmpty
+        if q.count > maxLength { problems.questionLength = q.count }
+        var seen = Set<String>()
+        var filled = 0
+        for (index, option) in options.enumerated() {
+            let label = option.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !label.isEmpty else { continue }
+            filled += 1
+            if label.count > maxLength { problems.optionLengths[index] = label.count }
+            if !seen.insert(label.lowercased()).inserted { problems.duplicates.insert(index) }
+        }
+        problems.tooFewOptions = filled < 2
+        problems.tooManyOptions = filled > maxOptions
+        return problems
+    }
+
     /// Options vides retirÃ©es, doublons refusÃ©s, au moins deux options.
     static func validated(question: String, options: [String]) -> MessagingPlainContent.Poll? {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)

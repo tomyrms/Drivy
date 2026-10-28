@@ -84,6 +84,15 @@ struct SchoolReplayTimeline {
             return SchoolObservationPictogram(themeKey: themeKey, title: text)?.glyph ?? status?.glyph ?? .note
         }
         var tone: DrivyTone { status?.tone ?? .neutral }
+        var kind: SchoolReplayObservationKind {
+            if isMarker { return .moment }
+            switch status {
+            case .attention?: return .attention
+            case .toWorkOn?: return .toWorkOn
+            case .positive?: return .positive
+            case nil: return .note
+            }
+        }
     }
 
     let start: Date
@@ -417,6 +426,69 @@ struct SchoolReplayTimeline {
         }
         guard low > 0, let offset = timedItems[low - 1].offset, offset > lower else { return nil }
         return timedItems[low - 1]
+    }
+}
+
+/// Aide du tracé (#233) : les mots de l’écran, sans faire passer l’ajustement pour une position mesurée certaine.
+enum SchoolReplayTraceHelp {
+    static func text(incomplete: Bool) -> String {
+        var parts = ["Le trait suit les positions GPS mesurées pendant la leçon, ajustées à la route quand la correspondance est fiable.",
+                     "Les pointillés relient des moments sans mesure : aucune position n’y est inventée."]
+        if incomplete { parts.append("Une partie des positions n’a pas été reçue par l’école.") }
+        return parts.joined(separator: " ")
+    }
+}
+
+/// Type d’une observation du replay, pour le filtre (#236).
+enum SchoolReplayObservationKind: CaseIterable, Hashable {
+    case attention, toWorkOn, positive, moment, note
+
+    var label: String {
+        switch self {
+        case .attention: "Attention"
+        case .toWorkOn: "À retravailler"
+        case .positive: "Points positifs"
+        case .moment: "Moments à revoir"
+        case .note: "Notes"
+        }
+    }
+}
+
+/// Filtre des observations du replay (#236) : il ne porte que sur elles, jamais sur le tracé, ses interruptions ou
+/// le temps écoulé. Partagé par le rail, la liste, la chronologie et la carte.
+struct SchoolReplayObservationFilter: Equatable {
+    var query = ""
+    /// Vide : tous les types.
+    var kinds: Set<SchoolReplayObservationKind> = []
+
+    var isActive: Bool { !kinds.isEmpty || !trimmedQuery.isEmpty }
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    func matches(_ item: SchoolReplayTimeline.Item) -> Bool {
+        if !kinds.isEmpty && !kinds.contains(item.kind) { return false }
+        let query = trimmedQuery
+        guard !query.isEmpty else { return true }
+        return [item.title, item.text, item.statusLabel].contains {
+            $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
+
+    func apply(_ items: [SchoolReplayTimeline.Item]) -> [SchoolReplayTimeline.Item] {
+        isActive ? items.filter(matches) : items
+    }
+
+    struct KindCount: Identifiable, Equatable {
+        let kind: SchoolReplayObservationKind
+        let count: Int
+        var id: SchoolReplayObservationKind { kind }
+    }
+
+    /// Types présents dans ce trajet, dans l’ordre du menu, avec leur nombre.
+    static func kinds(in items: [SchoolReplayTimeline.Item]) -> [KindCount] {
+        SchoolReplayObservationKind.allCases.compactMap { kind in
+            let count = items.reduce(0) { $0 + ($1.kind == kind ? 1 : 0) }
+            return count > 0 ? KindCount(kind: kind, count: count) : nil
+        }
     }
 }
 
