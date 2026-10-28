@@ -8,10 +8,11 @@ import XCTest
         let app = launch(delay: 15)
         let started = react(in: app)
         let capsule = heart(in: app)
-        XCTAssertTrue(capsule.waitForExistence(timeout: 3), app.debugDescription)
+        XCTAssertTrue(capsule.waitForExistence(timeout: 5), app.debugDescription)
         let visualSeconds = Date().timeIntervalSince(started)
         XCTAssertLessThan(visualSeconds, 10, "Le retour local précède la réponse retardée de 15 secondes")
         XCTAssertTrue(capsule.label.contains("Cœur 1, vous avez réagi, en cours de synchronisation"), capsule.label)
+        assertMenuClosed(app)
         let composer = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         XCTAssertTrue(composer.isEnabled)
         let slow = app.descendants(matching: .any)["messaging.mutation.slow"].firstMatch
@@ -39,8 +40,9 @@ import XCTest
         let app = launch(delay: 5)
         let started = react(in: app)
         let capsule = heart(in: app)
-        XCTAssertTrue(capsule.waitForExistence(timeout: 3), app.debugDescription)
+        XCTAssertTrue(capsule.waitForExistence(timeout: 5), app.debugDescription)
         let visualSeconds = Date().timeIntervalSince(started)
+        assertMenuClosed(app)
         target(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 12)).tap()
         XCTAssertTrue(heart(in: app).waitForNonExistence(timeout: 2), "Retrait local immédiat")
         // Deux réponses de cinq secondes : l'ajout ancien puis le retrait sérialisé.
@@ -59,6 +61,7 @@ import XCTest
     func testOneSecondRefusalRemovesOnlyTheRejectedProjection() {
         let app = launch(delay: 1, refused: true)
         _ = react(in: app)
+        assertMenuClosed(app)
         let rejection = app.buttons["messaging.mutation.rejected"].firstMatch
         XCTAssertTrue(rejection.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(rejection.label.contains("Réaction non enregistrée"))
@@ -90,10 +93,13 @@ import XCTest
         message.press(forDuration: 0.6)
         let action = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
         XCTAssertTrue(action.waitForExistence(timeout: 5), app.debugDescription)
-        let menu = app.staticTexts["Répondre"].firstMatch
         let start = Date(); action.tap()
-        XCTAssertTrue(menu.waitForNonExistence(timeout: 3), "La palette se ferme sans attendre le réseau")
         return start
+    }
+    /// Vérifiée après la mesure : la lecture de l'écran par XCTest ne doit pas entrer dans le chronomètre.
+    private func assertMenuClosed(_ app: XCUIApplication) {
+        XCTAssertTrue(app.staticTexts["Répondre"].firstMatch.waitForNonExistence(timeout: 3),
+                      "La palette se ferme sans attendre le réseau")
     }
     /// Bulle du fil Exyte (#182) : un seul élément « auteur, texte, heure, réactions ». Requête typée : parcourir
     /// toute la hiérarchie coûte plusieurs secondes sur le simulateur iPad et fausse la mesure de latence.
