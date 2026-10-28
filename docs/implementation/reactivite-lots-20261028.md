@@ -25,8 +25,8 @@ Déjà en place à l'ouverture et seulement constaté : file web par opération 
 | --- | --- |
 | `npm run typecheck` dans `apps/web` | PASS |
 | `npx vitest run` dans `apps/web` | PASS, 34 fichiers, 401 tests |
-| Compilation de l'app (IPA, runner Apple) | voir STATUS.md ; l'IPA ne compile pas la cible de tests |
-| Tests Swift ajoutés ou adaptés | NOT_EXECUTED : `SchoolLiveObservationRecorderTests` (file, ordre, hors réseau, annulation locale), `SchoolLiveObservationUndoTests`, `SchoolObservationRefusalTests`, `SchoolCommandSchedulingTests` (règle de conflit), `SchoolLessonPreparationReactivityTests` (nouveau), `SchoolCaptureLifecycleTests` (reprise sans attendre l'école), `SchoolCaptureReplayTests` (cache) |
+| Compilation de l'app (IPA, runner Apple) | PASS (run 40603892937) ; IPA d'intégration avec Messages essayée par le porteur (run 40604764617) |
+| Tests Swift ajoutés ou adaptés | PASS sur `a817d92` : 847 tests métier (run 40609074704) et `FieldFlowTests` iPhone et iPad (runs 40606267774 et 40610221505). La première campagne a révélé « Terminer » pendant l'ouverture locale d'une reprise (#111), corrigé en `a817d92`. Suites : `SchoolLiveObservationRecorderTests` (file, ordre, hors réseau, annulation locale), `SchoolLiveObservationUndoTests`, `SchoolObservationRefusalTests`, `SchoolCommandSchedulingTests` (règle de conflit), `SchoolLessonPreparationReactivityTests` (nouveau), `SchoolCaptureLifecycleTests` (reprise sans attendre l'école), `SchoolCaptureReplayTests` (cache) |
 | Recette physique GPS, réseau dégradé réel, VoiceOver | NOT_EXECUTED |
 
 ## Reste à qualifier ou à faire
