@@ -113,6 +113,23 @@ dessin. Messages sans citation : bulle Exyte inchangée. Non exécuté : tests, 
 - NOT_EXECUTED : tests UI (voir ci-dessous), captures, VoiceOver, iPad, clavier matériel, fluidité et mémoire,
   capture réseau, GPS pendant une leçon.
 
+## Qualification avant fusion (28 octobre 2026)
+
+- Tests UI adaptés au fil Exyte : une bulle est un élément « auteur, texte, heure, réactions » (identifiant
+  `messaging.message`) ; les réactions y disent « vous avez réagi » et leur état provisoire ; la citation d'une réponse
+  est un bouton « En réponse à … » distinct.
+- PASS : `MessagingFeatureCheckUITests` (17) et `MessagingThreadUITests` (8) sur iPhone et iPad,
+  [run 40594878235](https://github.com/tomyrms/Drivy/actions/runs/40594878235) (`abe42f1`) ; réaction par appui long
+  et ouverture du fil rejoués après la zone d'appui des réactions,
+  [run 40602026024](https://github.com/tomyrms/Drivy/actions/runs/40602026024).
+- PASS sur le commit fusionné avec `master` (`ecee2d0`) : `MessagingLatencyUITests` 3 sur 3 sur iPhone et iPad
+  ([run 40668797322](https://github.com/tomyrms/Drivy/actions/runs/40668797322)), tests métier `messaging` 71 réussis
+  ([run 40668808268](https://github.com/tomyrms/Drivy/actions/runs/40668808268)), IPA avec Messages
+  ([run 40668819491](https://github.com/tomyrms/Drivy/actions/runs/40668819491)).
+- Corrigé pendant la qualification : sur iPad, l'appui sur la bande des réactions n'était pas reçu par un geste simultané
+  posé sur la bulle Exyte ; une zone transparente posée au-dessus le reçoit. Les tests de latence chronomètrent
+  l'apparition locale juste après le toucher (la lecture de l'écran par XCTest coûte plusieurs secondes sur iPad).
+
 ## Reste à faire
 
 1. Parcours sur appareil : envoi hors ligne puis en ligne, pagination, saut depuis la recherche, l'épingle et la
