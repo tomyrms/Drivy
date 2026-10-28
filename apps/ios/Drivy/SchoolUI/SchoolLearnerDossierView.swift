@@ -133,16 +133,25 @@ struct SchoolLearnerDossierView: View {
         let links = SchoolLearnerContactLink.links(for: contact(of: learner))
         let unfolds = canUnfold(learner)
         return VStack(alignment: .leading, spacing: 0) {
-            // Rien à déplier : la carte reste lisible, l’appui ne fait rien (un bouton désactivé griserait le nom).
-            Button { if unfolds { toggleInformation() } } label: {
-                identity(learner, reservesMenu: !links.isEmpty, unfolds: unfolds)
+            // Rien à déplier : l’identité n’est qu’un en-tête, sans bouton ni annonce « activable » (#154) ; un bouton
+            // désactivé griserait le nom.
+            Group {
+                if unfolds {
+                    Button { toggleInformation() } label: {
+                        identity(learner, reservesMenu: !links.isEmpty, unfolds: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityValue(showsInformation ? "Informations personnelles dépliées" : "Informations personnelles repliées")
+                    .accessibilityHint("Affiche ou masque les informations personnelles")
+                } else {
+                    identity(learner, reservesMenu: !links.isEmpty, unfolds: false)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isHeader)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel([learner.displayName, permitLine, learner.archivedAt == nil ? nil : "Archivé"]
                 .compactMap { $0 }.joined(separator: ", "))
-            .accessibilityValue(unfolds ? (showsInformation ? "Informations personnelles dépliées" : "Informations personnelles repliées") : "")
-            .accessibilityHint(unfolds ? "Affiche ou masque les informations personnelles" : "")
             // Historic UI-test identifier: it designates the full name that heads the dossier.
             .accessibilityIdentifier("learner-profile-first-name")
             // The menu sits over the header, outside the button: opening it never unfolds the card.
@@ -405,7 +414,11 @@ struct SchoolLearnerDossierView: View {
                 SchoolErrorNotice(message: error, retry: { Task { await workspace.loadTrainings() } })
             }
             if !workspace.isLoadingTrainings && workspace.trainings.isEmpty && workspace.trainingsError == nil {
-                DrivyEmptyState(title: "Aucune formation", message: "Ouvre-la sur le web.", symbol: "steeringwheel")
+                // Seule l’administration ouvre une formation : un moniteur apprend qui peut agir.
+                DrivyEmptyState(title: "Aucune formation",
+                    message: workspace.membership?.roles.contains("ADMIN") == true
+                        ? "Ouvre-la sur le web." : "L’administration l’ouvre sur le web.",
+                    symbol: "steeringwheel")
             }
             if let trainingClient, !workspace.trainings.isEmpty {
                 // The section control, the permit filter and the content live in this page's own scroll.

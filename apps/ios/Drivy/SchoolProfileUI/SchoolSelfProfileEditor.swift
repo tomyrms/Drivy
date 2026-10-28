@@ -13,8 +13,13 @@ final class SchoolSelfProfileEditor {
     private(set) var isLoading = true
     private(set) var isSaving = false
     private(set) var isSavingPhoto = false
-    /// Dernier échec de lecture, d’enregistrement ou de photo du compte, dit tel quel ; la saisie reste en place.
+    /// Dernier échec de lecture ou d’enregistrement du compte, dit tel quel ; la saisie reste en place.
     private(set) var errorMessage: String?
+    /// La photo s’enregistre seule, dès qu’elle est cadrée (#155) : son échec et son résultat se lisent près d’elle.
+    private(set) var photoErrorMessage: String?
+    private(set) var photoResult: String?
+    /// Une photo a été enregistrée ou retirée pendant cette ouverture : fermer sans enregistrer ne l’annule pas.
+    private(set) var photoChanged = false
     @ObservationIgnored private let workspace: SchoolWorkspace
 
     nonisolated static let emptyAddress = SchoolPostalAddress(line1: "", line2: nil, postalCode: "", locality: "", countryCode: "")
@@ -96,13 +101,18 @@ final class SchoolSelfProfileEditor {
     /// Remplace (`jpeg`) ou retire (`nil`) la photo ; elle n’apparaît qu’après l’accord de l’école.
     func setPhoto(_ jpeg: Data?) async -> Bool {
         guard !isSavingPhoto else { return false }
-        isSavingPhoto = true; errorMessage = nil
+        isSavingPhoto = true; photoErrorMessage = nil; photoResult = nil
         defer { isSavingPhoto = false }
-        do { try await workspace.setSelfPhoto(jpeg); return true }
-        catch { errorMessage = Self.message(error); return false }
+        do {
+            try await workspace.setSelfPhoto(jpeg)
+            photoChanged = true
+            photoResult = jpeg == nil ? "Photo retirée." : "Photo enregistrée."
+            return true
+        }
+        catch { photoErrorMessage = Self.message(error); return false }
     }
 
-    func failPhoto() { errorMessage = SchoolSelfProfileFailure.invalidPhoto.localizedDescription }
+    func failPhoto() { photoResult = nil; photoErrorMessage = SchoolSelfProfileFailure.invalidPhoto.localizedDescription }
 
     private static func message(_ error: any Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription

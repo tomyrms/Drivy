@@ -156,6 +156,9 @@ protocol SchoolAPI: AnyObject {
     func me() async throws -> SchoolPerson
     func school(id: UUID) async throws -> SchoolDetails
     func learners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner>
+    /// Une page des dossiers actifs auxquels manque une information requise (filtre serveur `requiresAction`),
+    /// combinable avec la recherche ; le serveur relit la portée du compte comme pour la liste.
+    func incompleteLearners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner>
     func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner
     func trainings(schoolID: UUID, learnerID: UUID, cursor: String?) async throws -> SchoolPage<SchoolTraining>
     func training(schoolID: UUID, id: UUID) async throws -> SchoolTraining
@@ -247,6 +250,11 @@ extension SchoolAPI {
         try await learners(schoolID: schoolID, query: "", cursor: nil)
     }
     func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? { nil }
+    /// Sans filtre serveur, la page lue est filtrée sur place : mêmes curseurs, mêmes lignes que la liste.
+    func incompleteLearners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner> {
+        let page = try await learners(schoolID: schoolID, query: query, cursor: cursor)
+        return SchoolPage(items: page.items.filter(SchoolRequiredActionRules.profileIsIncomplete), nextCursor: page.nextCursor)
+    }
     func selfProfile() async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
     func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }
     func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile { throw SchoolSelfProfileFailure.unsupported }

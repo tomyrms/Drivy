@@ -32,6 +32,9 @@ struct SchoolBrowserView: View {
                     }
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
+                if workspace.school?.status == "ACTIVE" {
+                    ToolbarItem(placement: .topBarTrailing) { filterMenu }
+                }
                 if let openAccount { DrivyAccountToolbarItem(openAccount: openAccount) }
             }
             .navigationSplitViewColumnWidth(min: DrivyLayout.splitListMinWidth, ideal: DrivyLayout.splitListIdealWidth,
@@ -66,6 +69,36 @@ struct SchoolBrowserView: View {
 
     private var trimmedSearch: String { workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// « Profil à compléter » (#153) : un filtre du serveur, combiné à la recherche. Le nombre n’est donné que pour
+    /// l’administration, qui lit les dossiers à compléter de toute l’école ; ailleurs, aucun total n’est deviné.
+    private var filterMenu: some View {
+        let filtered = workspace.showsIncompleteProfilesOnly
+        return Menu {
+            Picker("Afficher", selection: Binding(get: { workspace.showsIncompleteProfilesOnly },
+                set: { value in Task { await workspace.setIncompleteProfilesOnly(value) } })) {
+                Text("Tous les élèves").tag(false)
+                Text(incompleteFilterTitle).tag(true)
+            }
+            .pickerStyle(.inline)
+        } label: {
+            // Le symbole plein dit qu’un filtre réduit la liste, comme dans l’historique des leçons.
+            Label("Filtrer", systemImage: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+        }
+        .accessibilityLabel("Filtrer les élèves")
+        .accessibilityValue(filtered ? "Profil à compléter" : "Tous les élèves")
+        .accessibilityIdentifier("learners-filter")
+    }
+
+    private var incompleteFilterTitle: String {
+        guard let count = workspace.learnersToComplete?.count else { return "Profil à compléter" }
+        return "Profil à compléter (\(count))"
+    }
+
+    /// Repères des homonymes de la liste affichée : la fin de l’identifiant, jamais une donnée personnelle.
+    private var homonymReferences: [UUID: String] {
+        HomonymReference.references(workspace.learners.map { ($0.id, $0.displayName) })
+    }
+
     private var learnerList: some View {
         List(selection: Binding(get: { workspace.selectedLearnerID }, set: { workspace.selectLearner($0) })) {
             if (workspace.isLoadingSchool || workspace.isSearching) && workspace.learners.isEmpty {
@@ -85,6 +118,22 @@ struct SchoolBrowserView: View {
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
+            if workspace.showsIncompleteProfilesOnly && workspace.school?.status == "ACTIVE" {
+                // Le filtre se voit en tête de liste et se retire d’un geste.
+                HStack(spacing: DrivySpacing.s) {
+                    Label("Profil à compléter", systemImage: "line.3.horizontal.decrease.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.text)
+                    Spacer(minLength: DrivySpacing.xs)
+                    Button("Tout afficher") { Task { await workspace.setIncompleteProfilesOnly(false) } }
+                        .buttonStyle(.drivyText)
+                        .accessibilityIdentifier("learners-filter-clear")
+                }
+                .frame(minHeight: DrivyLayout.tapTarget)
+                .buttonStyle(.borderless)
+                .listRowSeparator(.hidden)
+                .drivyPlainRows()
+            }
             if let school = workspace.school, school.status != "ACTIVE" {
                 DrivyEmptyState(title: school.status == "ARCHIVED" ? "École archivée" : "L’école se prépare",
                     message: school.status == "ARCHIVED" ? "" : "Termine sa préparation sur le web.",
@@ -97,10 +146,14 @@ struct SchoolBrowserView: View {
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
+            let references = homonymReferences
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
-                    SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id)
+                    SchoolLearnerRow(learner: learner, isSelected: workspace.selectedLearnerID == learner.id,
+                        photo: workspace.photo(for: learner.personId), reference: references[learner.id])
                 }
+                // La même photo que le dossier, lue par l’identifiant de la personne quand la ligne paraît.
+                .task(id: learner.personId) { await workspace.loadPhoto(for: learner.personId) }
                 .accessibilityIdentifier("school-learner-\(learner.id.uuidString)")
                 .listRowInsets(EdgeInsets(top: DrivySpacing.xxs, leading: DrivySpacing.m, bottom: DrivySpacing.xxs, trailing: DrivySpacing.m))
                 .listRowSeparatorTint(DrivyTheme.border)
@@ -133,7 +186,10 @@ struct SchoolBrowserView: View {
     }
 
     @ViewBuilder private var emptyLearners: some View {
-        if !trimmedSearch.isEmpty {
+        if workspace.showsIncompleteProfilesOnly && trimmedSearch.isEmpty {
+            DrivyEmptyState(title: "Aucun profil à compléter", symbol: "checkmark.circle",
+                actionTitle: "Tout afficher", action: { Task { await workspace.setIncompleteProfilesOnly(false) } })
+        } else if !trimmedSearch.isEmpty {
             DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
                 actionTitle: "Effacer la recherche", action: { workspace.setSearchText("") })
         } else if let inviteLearner {
@@ -216,10 +272,15 @@ struct SchoolChooserView: View {
 private struct SchoolLearnerRow: View {
     let learner: SchoolLearner
     let isSelected: Bool
+    /// Photo autorisée déjà lue pour cette personne ; les initiales sinon.
+    var photo: Data? = nil
+    /// Seulement quand un homonyme est affiché (#152) : « Réf. A1B2 », lu aussi par VoiceOver.
+    var reference: String? = nil
     @Environment(SchoolRequiredActionStore.self) private var requiredActions: SchoolRequiredActionStore?
 
     var body: some View {
-        DrivyEntityRow(title: learner.displayName, leading: .avatar(learner.displayName), badge: badge, isSelected: isSelected)
+        DrivyEntityRow(title: learner.displayName, meta: reference.map { "Réf. \($0)" },
+            leading: .person(learner.displayName, photo: photo), badge: badge, isSelected: isSelected)
     }
 
     /// Ce que la ligne dit en plus du nom. Un profil auquel il manque une information requise est nommé

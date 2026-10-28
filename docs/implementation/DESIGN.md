@@ -368,6 +368,10 @@ Les styles système `.borderedProminent`, `.bordered` et `.controlSize` ne rempl
 | Chargement plein écran | `ProgressView("…")` centré sur `canvas` | Même texte nommé. |
 | Vide dans une section | `DrivyEmptyState` | Titre, une action si elle existe ; pas de paragraphe. Titre seul (liste vide) : glyphe `largeTitle` centré dans l’espace disponible (168 pt au moins), sans texte ajouté ; en tailles d’accessibilité, disposition empilée habituelle. |
 | Écran entier vide ou accès perdu | `ContentUnavailableView` | Titre, courte description de la marche à suivre, action. |
+| Liste principale vide (Élèves, Messages, contacts) | `DrivyEmptyState` en ligne de la liste | Jamais en surimpression : la ligne se pose sous ce qui reste (Général) et garde le tirer pour actualiser. Action seulement si elle existe (« Inviter un élève », « Nouvelle conversation »). |
+| Recherche sans résultat | `DrivyEmptyState(title: « Aucun résultat », symbol: "magnifyingglass", actionTitle: « Effacer la recherche »)` | Partout la même ligne ; pas de `ContentUnavailableView.search`. Dite seulement quand la recherche a répondu. |
+| Aucune sélection (colonne de détail iPad) | `ContentUnavailableView` | Titre et symbole, sans action ni description. |
+| Attente de l’école (dossier, formation) | `ContentUnavailableView` | Le fait, sans délai promis ; « Contacter l’école » si elle publie des coordonnées, « Actualiser ». |
 | Erreur | `SchoolErrorNotice(message:retry:)` | Fond `dangerSurface`, symbole aligné sur la première ligne du message (pas au centre du bloc), message qui dit quoi faire, `DrivyRetryButton`. Saisie conservée. |
 | Succès ou alerte hors `Form` | `DrivyInlineMessage(text:tone:)` | Près de l’action, après écriture durable. |
 | Succès ou alerte dans un `Form` | `DrivyFormMessage` | Même vocabulaire. |

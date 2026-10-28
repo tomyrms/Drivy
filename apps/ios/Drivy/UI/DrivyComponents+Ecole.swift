@@ -113,6 +113,8 @@ private struct DrivySchoolButtonLabel: View {
 /// Leading visual of an entity row: initials for a person, a symbol otherwise.
 enum DrivyRowLeading {
     case avatar(String)
+    /// Une personne avec sa photo autorisée, déjà lue ; les initiales tant qu’elle manque, sans changer la hauteur.
+    case person(String, photo: Data?)
     case symbol(String)
     /// Catégorie de permis (`categoryCode`) : son véhicule dans la même pastille qu’un symbole.
     case license(String)
@@ -170,6 +172,8 @@ struct DrivyEntityRow: View {
         switch leading {
         case .avatar(let name):
             DrivyAvatar(name: name, isSelected: isSelected)
+        case .person(let name, let photo):
+            DrivyAvatar(name: name, isSelected: isSelected, photo: photo)
         case .symbol(let symbol):
             Image(systemName: symbol)
                 .font(.body)
@@ -293,15 +297,21 @@ struct DrivyFormField: View {
     var isMissing = false
     var focus: FocusState<SchoolProfileField?>.Binding? = nil
     var focusValue: SchoolProfileField? = nil
+    /// Ce que le champ veut dire, à la demande : un bouton d’information plutôt qu’une note posée sous le champ.
+    var info: String? = nil
+    @State private var showsInfo = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.xs) {
-                if isMissing { DrivyActionDot().transition(.opacity) }
-                Text(label).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            HStack(alignment: .center, spacing: DrivySpacing.xs) {
+                Group {
+                    if isMissing { DrivyActionDot().transition(.opacity) }
+                    Text(label).font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                }
+                .accessibilityHidden(true)
+                if let info { infoButton(info) }
             }
-            .accessibilityHidden(true)
             field
                 .accessibilityLabel(label)
                 // La valeur forcée remplaçait la saisie : VoiceOver annonçait un champ vide.
@@ -310,6 +320,29 @@ struct DrivyFormField: View {
         }
         .padding(.vertical, DrivySpacing.xxs)
         .animation(DrivyMotion.feedback(reduceMotion), value: isMissing)
+    }
+
+    /// Cible de 44 pt sans agrandir la ligne du libellé.
+    private func infoButton(_ info: String) -> some View {
+        Button { showsInfo = true } label: {
+            Image(systemName: "info.circle")
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.accent)
+                .frame(minWidth: DrivyLayout.tapTarget, minHeight: DrivyLayout.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .padding(.vertical, -DrivySpacing.s)
+        .accessibilityLabel("À propos : \(label)")
+        .popover(isPresented: $showsInfo) {
+            Text(info)
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(idealWidth: 300, alignment: .leading)
+                .padding(DrivySpacing.m)
+                .presentationCompactAdaptation(.popover)
+        }
     }
 
     @ViewBuilder private var field: some View {

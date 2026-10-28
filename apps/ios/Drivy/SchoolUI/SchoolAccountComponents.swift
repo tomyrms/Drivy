@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -205,25 +206,69 @@ struct SchoolAccountHeading: View {
 
 /// Recadre au centre en carré, réduit à 512 px au plus et réencode en JPEG : aucune métadonnée de la photo
 /// d’origine (position, appareil) ne part, et l’envoi reste sous la limite de l’école.
+/// La photo de profil, du fichier choisi à l’avatar envoyé (#156). L’original n’est jamais envoyé ni gardé : il est
+/// redressé et réduit en mémoire pour le cadrage, puis seul le carré choisi est réencodé, sans métadonnées.
 enum SchoolProfilePhotoEncoder {
     static let side: CGFloat = 512
     static let maxBytes = 250_000
+    /// Plus grand côté de l’aperçu de cadrage : assez pour un avatar net, sans décoder une photo de 48 Mpx en entier.
+    static let previewMaxPixel = 2048
+    static let maxZoom: CGFloat = 4
 
-    static func squareJPEG(from data: Data) -> Data? {
+    /// L’image redressée (orientation EXIF appliquée) et réduite par ImageIO, réencodée sans ses métadonnées.
+    static func uprightPreview(from data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: previewMaxPixel,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
+              min(image.width, image.height) >= 64 else { return nil }
+        return UIImage(cgImage: image).jpegData(compressionQuality: 0.9)
+    }
+
+    /// Points d’écran par pixel de l’image : au zoom 1, le petit côté remplit le cadre.
+    static func displayScale(imageSize: CGSize, frameSide: CGFloat, zoom: CGFloat) -> CGFloat {
+        let short = min(imageSize.width, imageSize.height)
+        guard short > 0, frameSide > 0 else { return 1 }
+        return frameSide / short * min(maxZoom, max(1, zoom))
+    }
+
+    /// Déplacement du centre de l’image, borné pour qu’elle couvre toujours le cadre.
+    static func clampedOffset(_ offset: CGSize, imageSize: CGSize, frameSide: CGFloat, zoom: CGFloat) -> CGSize {
+        let scale = displayScale(imageSize: imageSize, frameSide: frameSide, zoom: zoom)
+        let maxX = max(0, (imageSize.width * scale - frameSide) / 2)
+        let maxY = max(0, (imageSize.height * scale - frameSide) / 2)
+        return CGSize(width: min(maxX, max(-maxX, offset.width)), height: min(maxY, max(-maxY, offset.height)))
+    }
+
+    /// Le carré de l’image, en pixels, vu dans le cadre.
+    static func cropRect(imageSize: CGSize, frameSide: CGFloat, zoom: CGFloat, offset: CGSize) -> CGRect {
+        let scale = displayScale(imageSize: imageSize, frameSide: frameSide, zoom: zoom)
+        let shown = clampedOffset(offset, imageSize: imageSize, frameSide: frameSide, zoom: zoom)
+        let edge = frameSide / scale
+        return CGRect(x: imageSize.width / 2 - (frameSide / 2 + shown.width) / scale,
+                      y: imageSize.height / 2 - (frameSide / 2 + shown.height) / scale,
+                      width: edge, height: edge)
+    }
+
+    /// Le carré choisi dans l’aperçu, en JPEG de 512 px au plus et 250 ko au plus.
+    static func squareJPEG(fromPreview data: Data, crop: CGRect) -> Data? {
         guard let image = UIImage(data: data), let cg = image.cgImage else { return nil }
-        let width = CGFloat(cg.width), height = CGFloat(cg.height)
-        let crop = min(width, height)
-        guard crop >= 64 else { return nil }
-        // L’orientation EXIF est appliquée par le dessin ; le carré se prend dans l’image redressée.
-        let upright = image.size
-        let edge = min(upright.width, upright.height)
-        let target = min(side, edge * image.scale)
+        let square = crop.integral.intersection(CGRect(x: 0, y: 0, width: cg.width, height: cg.height))
+        let edge = min(square.width, square.height)
+        guard edge >= 64, let cropped = cg.cropping(to: CGRect(x: square.minX, y: square.minY, width: edge, height: edge)) else {
+            return nil
+        }
+        let target = min(side, edge)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1; format.opaque = true
         let rendered = UIGraphicsImageRenderer(size: CGSize(width: target, height: target), format: format).image { _ in
-            let factor = target / edge
-            let drawn = CGSize(width: upright.width * factor, height: upright.height * factor)
-            image.draw(in: CGRect(x: (target - drawn.width) / 2, y: (target - drawn.height) / 2, width: drawn.width, height: drawn.height))
+            UIImage(cgImage: cropped).draw(in: CGRect(x: 0, y: 0, width: target, height: target))
         }
         for quality in [0.82, 0.7, 0.55, 0.4] as [CGFloat] {
             if let jpeg = rendered.jpegData(compressionQuality: quality), jpeg.count <= maxBytes { return jpeg }
