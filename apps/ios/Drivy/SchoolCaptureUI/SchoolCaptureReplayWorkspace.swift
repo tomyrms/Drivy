@@ -42,6 +42,42 @@ struct SchoolReplayRetryBudget {
     }
 }
 
+/// Replays privés déjà reconstruits pendant cette session (#115), en mémoire seulement : jamais écrits sur le disque,
+/// purgés à la déconnexion, liés au compte, à l’école, à l’adhésion et à l’époque d’accès. Seul un trajet synchronisé
+/// y entre ; sa version est relue auprès de l’école à chaque ouverture avant d’éviter le téléchargement des pages.
+@MainActor final class SchoolReplayCache {
+    static let shared = SchoolReplayCache()
+    struct Entry {
+        let capture: SchoolCaptureSession
+        let fragments: [SchoolCaptureReplayFragment]
+        let observations: [SchoolPrivateGeoObservation]
+        let quality: String?
+        let matchedRoute: SchoolMatchedRoute?
+    }
+    private struct Key: Equatable {
+        let scope: SchoolCommandScope
+        let captureID: UUID
+    }
+    let capacity: Int
+    private var entries: [(key: Key, entry: Entry)] = []
+
+    init(capacity: Int = 3) { self.capacity = capacity }
+
+    func entry(scope: SchoolCommandScope, captureID: UUID) -> Entry? {
+        entries.first { $0.key == Key(scope: scope, captureID: captureID) }?.entry
+    }
+    func store(_ entry: Entry, scope: SchoolCommandScope) {
+        let key = Key(scope: scope, captureID: entry.capture.id)
+        entries.removeAll { $0.key == key }
+        entries.insert((key, entry), at: 0)
+        if entries.count > capacity { entries.removeLast(entries.count - capacity) }
+    }
+    func remove(scope: SchoolCommandScope, captureID: UUID) {
+        entries.removeAll { $0.key == Key(scope: scope, captureID: captureID) }
+    }
+    func reset() { entries = [] }
+}
+
 /// A private replay is reconstructed by the school. Neither local examples nor
 /// published-report geometry are substituted for unavailable private points.
 @MainActor @Observable final class SchoolCaptureReplayWorkspace: Identifiable {
@@ -65,12 +101,14 @@ struct SchoolReplayRetryBudget {
     @ObservationIgnored private let now: @Sendable () -> TimeInterval
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private let cache: SchoolReplayCache?
     var isInvalidated: Bool { invalidated }
 
-    init(scope: SchoolCommandScope, client: SchoolCaptureClient, captureID: UUID,
+    /// `cache` : celui de l’app pour les écrans ; aucun par défaut, chaque test reste isolé.
+    init(scope: SchoolCommandScope, client: SchoolCaptureClient, captureID: UUID, cache: SchoolReplayCache? = nil,
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
          now: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
-        self.scope = scope; self.client = client; self.captureID = captureID
+        self.scope = scope; self.client = client; self.captureID = captureID; self.cache = cache
         self.sleep = sleep; self.now = now
     }
 
@@ -110,9 +148,12 @@ struct SchoolReplayRetryBudget {
 
     private func performLoad(_ request: UUID) async {
         guard current(request) else { return }
-        isLoading = true
+        // #115 : un trajet déjà ouvert pendant cette session se montre aussitôt ; l’école confirme ensuite sa version.
+        let cached = capture == nil ? cache?.entry(scope: scope, captureID: captureID) : nil
+        if let cached { adopt(cached) }
+        isLoading = cached == nil
         errorMessage = nil
-        matchingState = .loading
+        if cached?.matchedRoute == nil { matchingState = .loading }
         var initial: SchoolMatchedRoute?
         var initialFailure: SchoolCaptureFailure?
         do {
@@ -127,6 +168,16 @@ struct SchoolReplayRetryBudget {
                 // A matching outage must not prevent the measured replay from opening.
             }
             guard current(request) else { return }
+            if let cached, try await isUnchanged(cached, request: request) {
+                // Même version, même synchronisation : les pages déjà reconstruites restent, seul le recalage se relit.
+                isLoading = false
+                if let initialFailure, initialFailure != .unavailable && initialFailure != .changed {
+                    if matchedRoute == nil { matchingState = .failed }
+                    return
+                }
+                await refreshMatching(request, initial: initial)
+                return
+            }
             try await loadMeasurements(request, preserving: capture != nil)
             guard current(request) else { return }
             isLoading = false
@@ -141,6 +192,31 @@ struct SchoolReplayRetryBudget {
             guard current(request) else { return }
             failMeasurements(error)
         }
+    }
+
+    private func adopt(_ entry: SchoolReplayCache.Entry) {
+        capture = entry.capture; fragments = entry.fragments; observations = entry.observations
+        quality = entry.quality; matchedRoute = entry.matchedRoute; isComplete = true
+        if let route = entry.matchedRoute { matchingState = route.spans.isEmpty ? .noReliableMatch : .matched }
+        contentRevision += 1
+    }
+
+    /// Une seule lecture du trajet : sa version et sa synchronisation disent si les pages gardées valent encore.
+    private func isUnchanged(_ cached: SchoolReplayCache.Entry, request: UUID) async throws -> Bool {
+        let latest = try await client.capture(schoolID: scope.schoolID, captureID: captureID, scope: scope)
+        guard current(request) else { throw CancellationError() }
+        guard latest.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
+        guard latest.version == cached.capture.version, latest.syncState == cached.capture.syncState else { return false }
+        capture = latest
+        return true
+    }
+
+    /// Seul un trajet complet et synchronisé est gardé : un trajet encore en envoi changera de pages.
+    private func remember() {
+        guard let cache, let capture, isComplete, capture.syncState == .synced,
+              capture.publicationState == .privateCapture else { return }
+        cache.store(.init(capture: capture, fragments: fragments, observations: observations, quality: quality,
+                          matchedRoute: matchedRoute), scope: scope)
     }
 
     private func loadMeasurements(_ request: UUID, preserving: Bool) async throws {
@@ -227,6 +303,7 @@ struct SchoolReplayRetryBudget {
             matchedRoute = nil
             isComplete = true
             contentRevision += 1
+            remember()
     }
 
     private static func sortedObservations(_ values: [UUID: SchoolPrivateGeoObservation]) -> [SchoolPrivateGeoObservation] {
@@ -302,6 +379,7 @@ struct SchoolReplayRetryBudget {
                         matchedRoute = value
                         matchingState = value.spans.isEmpty ? .noReliableMatch : .matched
                         contentRevision += 1
+                        remember()
                         return
                     }
                     if value.reason == "WAITING_FOR_SYNC" { matchingState = .waitingForSync }
@@ -344,6 +422,7 @@ struct SchoolReplayRetryBudget {
 
     private func failMeasurements(_ error: any Error) {
         if let failure = error as? SchoolCaptureFailure, failure != .unavailable {
+            cache?.remove(scope: scope, captureID: captureID)
             fragments = []; observations = []; capture = nil; matchedRoute = nil; isComplete = false
             contentRevision += 1
         }
@@ -354,6 +433,7 @@ struct SchoolReplayRetryBudget {
     func invalidate() {
         stopLoading()
         invalidated = true
+        cache?.remove(scope: scope, captureID: captureID)
         matchingState = .idle
         fragments = []; observations = []; capture = nil; matchedRoute = nil; isLoading = false; isComplete = false
         contentRevision += 1
