@@ -79,7 +79,7 @@ async function waitFor(url:string) {
 async function signIn(page:Page,email:string,password:string) {
   await page.getByLabel('E-mail',{exact:true}).fill(email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);
   await page.getByRole('button',{name:'Se connecter',exact:true}).click();
-  await page.getByRole('heading',{name:'Se connecter à Drivy',exact:true}).waitFor({state:'hidden'});
+  await page.getByRole('heading',{name:'Se connecter',exact:true}).waitFor({state:'hidden'});
 }
 type NewAccount={firstName:string;lastName:string;email:string;password:string};
 async function fillRegistration(page:Page,account:NewAccount) {
@@ -90,14 +90,14 @@ async function fillRegistration(page:Page,account:NewAccount) {
 /** Account creation with the code or link already opened; waits until the form is gone. */
 async function register(page:Page,account:NewAccount) {
   await fillRegistration(page,account);
-  const refused=page.locator('.account-entry .notice.error');
+  const refused=page.getByRole('region',{name:'Créer votre compte',exact:true}).getByRole('alert');
   await Promise.race([page.getByRole('button',{name:'Créer mon compte',exact:true}).waitFor({state:'detached'}),refused.waitFor()]);
   // Le message affiché (texte d'interface, sans donnée de personne) rejoint l'étape pour le diagnostic de la recette.
   if(await refused.count())throw new Error(`REGISTRATION_REFUSED: ${await refused.innerText()}`);
 }
 /** A refused creation: returns the message shown, the form stays. */
 async function submitRegistration(page:Page,account:NewAccount) {
-  await fillRegistration(page,account);const notice=page.locator('.account-entry .notice.error');await notice.waitFor();return notice.innerText();
+  await fillRegistration(page,account);const notice=page.getByRole('region',{name:'Créer votre compte',exact:true}).getByRole('alert');await notice.waitFor();return notice.innerText();
 }
 async function main() {
   const databaseURL=process.env.ONBOARDING_E2E_DATABASE_URL;
@@ -212,9 +212,9 @@ async function main() {
     await signIn(operatorPage,'operator@example.invalid',operatorPassword);
     assert(new URL(operatorPage.url()).origin===origin,'La connexion se fait sur la page Drivy, sans détour par le fournisseur');
     stage='génération du lien via l’interface opérateur';await operatorPage.getByRole('button',{name:'Créer un lien d’ouverture',exact:true}).click();
-    const linkInput=operatorPage.getByLabel('Lien à transmettre',{exact:true});await linkInput.waitFor();const openingLink=await linkInput.inputValue();
+    const linkInput=operatorPage.getByLabel('Lien d’ouverture',{exact:true});await linkInput.waitFor();const openingLink=await linkInput.inputValue();
     assert(new URL(openingLink).pathname==='/app/ouvrir' && !new URL(openingLink).search,'Le lien de création porte son secret dans le fragment uniquement');
-    const openingCode=await operatorPage.getByLabel('Code à transmettre',{exact:true}).inputValue();
+    const openingCode=await operatorPage.getByLabel('Code d’ouverture',{exact:true}).inputValue();
     assert(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(openingCode)&&new URL(openingLink).hash===`#token=${openingCode}`,'Le lien porte un code court, lisible et saisissable à la main');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.school')).rows[0].n===0,'Créer ou consulter un lien ne crée pas d’école');
 
@@ -231,7 +231,7 @@ async function main() {
     const openedSession=await consumerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true)}).safeParse(await openedSession.json()).success,'Le compte créé avec le code est aussitôt connecté');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.person')).rows[0].n===0,'Le nouveau compte OIDC n’est pas créé dans la base métier avant confirmation');
-    assert(await page.getByLabel('Nom affiché',{exact:true}).inputValue()==='Responsable Synthétique'
+    assert(await page.getByLabel('Nom du responsable',{exact:true}).inputValue()==='Responsable Synthétique'
       &&await page.getByLabel('E-mail de l’école',{exact:true}).inputValue()==='school@example.invalid',
       'L’ouverture reprend le nom et l’adresse du compte sans nouvelle saisie');
     assert(!(await page.getByLabel('Je donne aussi des leçons',{exact:true}).isChecked()),
@@ -246,12 +246,12 @@ async function main() {
     await page.setViewportSize({width:1440,height:1100});
     stage='erreur de fuseau ciblée avant création';
     const openingZone=page.getByLabel('Fuseau horaire',{exact:true});
-    const zoneDetails=page.locator('details').filter({has:openingZone});
-    await zoneDetails.locator('summary').click();await openingZone.fill('Zurich');await zoneDetails.locator('summary').click();
+    await openingZone.fill('Zurich');
     await page.getByRole('button',{name:'Créer mon école',exact:true}).click();
     await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='timeZone');
-    assert(await openingZone.getAttribute('aria-invalid')==='true' && await zoneDetails.getAttribute('open')!==null,
-      'Un fuseau invalide rouvre le détail et cible le champ avec une explication');
+    const zoneError=await openingZone.evaluate(element=>(element.getAttribute('aria-describedby')??'').split(/\s+/).filter(Boolean).some(id=>!!document.getElementById(id)?.textContent?.trim()));
+    assert(await openingZone.getAttribute('aria-invalid')==='true' && await openingZone.isVisible() && zoneError,
+      'Un fuseau invalide cible le champ visible et lui associe une explication');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.school')).rows[0].n===0,'Une saisie invalide ne consomme pas le lien et ne crée aucune école');
     await openingZone.fill('Europe/Zurich');
     await page.getByLabel('Je donne aussi des leçons',{exact:true}).check();
