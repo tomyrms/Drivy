@@ -441,7 +441,7 @@ struct SchoolHomeView: View {
                     SchoolTrainingScreen(client: trainingClient, workspace: workspace, learner: learner,
                         trainingIDs: trainings.map(\.id), permit: $chosenPermit, section: section, ownLessons: true)
                 } else {
-                    learnerStatus
+                    learnerStatus(for: section)
                 }
             }
             .navigationTitle(title)
@@ -456,11 +456,11 @@ struct SchoolHomeView: View {
     }
 
     /// Un seul fond pour chaque état : erreur, attente et vide se remplacent sans saut de couleur.
-    private var learnerStatus: some View {
+    private func learnerStatus(for section: SchoolTrainingSection) -> some View {
         // Défilement pour pouvoir tirer : un dossier que l’école vient d’ouvrir se lit sans relancer l’app.
         GeometryReader { proxy in
             ScrollView {
-                learnerStatusContent(height: proxy.size.height)
+                learnerStatusContent(for: section, height: proxy.size.height)
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
             }
             .refreshable { await refreshLearnerStatus() }
@@ -478,7 +478,7 @@ struct SchoolHomeView: View {
     }
 
     /// `height` : la hauteur visible. Dans le défilement, un état vide se centre sur elle comme hors défilement.
-    @ViewBuilder private func learnerStatusContent(height: CGFloat) -> some View {
+    @ViewBuilder private func learnerStatusContent(for section: SchoolTrainingSection, height: CGFloat) -> some View {
         if let error = workspace.schoolError ?? workspace.learnersError ?? workspace.learnerError ?? workspace.trainingsError {
             SchoolErrorNotice(message: error, retry: { retryLearner() }).drivyPageContent()
         } else if workspace.isLoadingSchool || workspace.isSearching || workspace.isLoadingLearner || workspace.isLoadingTrainings
@@ -493,12 +493,16 @@ struct SchoolHomeView: View {
                 .frame(minHeight: height)
         } else if ownLearner == nil {
             SchoolLearnerWaitingState(title: "Dossier pas encore ouvert", symbol: "person.crop.circle.badge.questionmark",
-                message: "Tes leçons apparaîtront ici quand ton école l’aura ouvert.", school: workspace.school,
+                message: section == .progress
+                    ? "Ta progression apparaîtra ici quand ton école l’aura ouvert."
+                    : "Tes leçons apparaîtront ici quand ton école l’aura ouvert.", school: workspace.school,
                 refresh: { await refreshLearnerStatus() })
                 .frame(minHeight: height)
         } else {
             SchoolLearnerWaitingState(title: "Aucune formation", symbol: "steeringwheel",
-                message: "Tes leçons apparaîtront ici quand ton école t’aura ouvert une formation.", school: workspace.school,
+                message: section == .progress
+                    ? "Ta progression apparaîtra ici quand ton école t’aura ouvert une formation."
+                    : "Tes leçons apparaîtront ici quand ton école t’aura ouvert une formation.", school: workspace.school,
                 refresh: { await refreshLearnerStatus() })
                 .frame(minHeight: height)
         }
