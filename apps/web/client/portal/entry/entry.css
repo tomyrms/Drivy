@@ -1,0 +1,123 @@
+/* #319: entry pages outside the school console (sign-in, code, account, schools, invitation, recovery, unknown page). */
+.entry-app { padding-bottom: 0; }
+.entry-topbar { min-height: 68px; }
+.entry-main { flex: 1; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; padding: 56px 24px 72px; }
+.entry-main:focus { outline: 0; }
+.entry-main-narrow { max-width: 448px; }
+.entry-main-wide { max-width: 720px; padding-top: 48px; }
+
+/* Signed-out forms: centred heading, one surface, distinct alternatives below. */
+.entry-auth { display: grid; gap: 24px; }
+.entry-auth-header { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.entry-auth-header h1, .entry-heading h1 { margin: 0; font-size: clamp(26px, 4vw, 30px); line-height: 1.2; font-weight: 700; letter-spacing: -.03em; }
+.entry-auth-header .entry-muted { max-width: 34ch; }
+.entry-context { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; margin: 0; color: var(--muted-foreground); font-weight: 550; }
+.entry-context > svg { width: 16px; height: 16px; flex-shrink: 0; }
+.entry-context-action.ui-button { min-height: 44px; padding-inline: 6px; font-size: 13px; }
+.entry-card { display: grid; gap: 20px; padding: 28px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); box-shadow: var(--portal-shadow); }
+.entry-form { display: grid; gap: 24px; }
+.entry-form [data-slot="field-group"] { gap: 18px; }
+.entry-name-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.entry-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.entry-inline-link { position: relative; color: var(--accent-foreground); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+/* The visible link stays compact; its touch target reaches 44 px. */
+.entry-inline-link::after { content: ""; position: absolute; inset: -14px -8px; }
+.entry-inline-link:focus-visible { border-radius: 4px; }
+.entry-submit.ui-button { width: 100%; }
+.entry-alternatives { display: grid; gap: 16px; }
+.entry-alternatives [data-slot="field-separator-content"] { background: var(--background); font-size: 13px; }
+.entry-alternatives > .ui-button { width: 100%; }
+.entry-spin { animation: entry-spin 900ms linear infinite; }
+@keyframes entry-spin { to { transform: rotate(360deg); } }
+
+/* Signed-in pages. */
+.entry-heading { display: grid; gap: 6px; }
+.entry-eyebrow { margin: 0; color: var(--muted-foreground); font-weight: 550; }
+.entry-busy { display: flex; align-items: center; gap: 8px; margin: -12px 0; min-height: 0; color: var(--muted-foreground); font-size: 13px; }
+.entry-busy:empty { margin: -12px 0; }
+.entry-busy svg { width: 16px; height: 16px; }
+.entry-loading { display: grid; gap: 16px; }
+.entry-muted { margin: 0; color: var(--muted-foreground); font-size: 14px; }
+.entry-alert-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; grid-column: 1 / -1; }
+.entry-success { border-color: color-mix(in srgb, var(--portal-success) 35%, transparent); background: var(--portal-success-background); color: var(--portal-success); }
+.entry-success [data-slot="alert-description"] { color: var(--foreground); }
+.entry-warning { border-color: color-mix(in srgb, var(--portal-warning) 35%, transparent); background: var(--portal-warning-background); color: var(--portal-warning); }
+.entry-warning [data-slot="alert-description"] { color: var(--foreground); }
+.entry-icon-tile { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); color: var(--muted-foreground); }
+.entry-icon-tile svg { width: 20px; height: 20px; }
+.entry-icon-accent { border-color: transparent; background: var(--accent); color: var(--accent-foreground); }
+.entry-icon-large { width: 48px; height: 48px; flex-basis: 48px; border-radius: 12px; }
+.entry-icon-large svg { width: 22px; height: 22px; }
+
+.entry-pending { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border)); border-radius: 12px; background: var(--card); box-shadow: var(--portal-shadow); }
+.entry-pending h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 650; }
+
+.entry-section { display: grid; gap: 16px; }
+.entry-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; min-height: 44px; }
+.entry-section-head h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+.entry-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.entry-school-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: var(--portal-shadow); overflow: hidden; }
+.entry-school-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 72px; padding: 14px 18px; }
+.entry-school-list li + li { border-top: 1px solid var(--border); }
+.entry-school-text { display: grid; gap: 2px; min-width: 0; }
+.entry-school-text strong { font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+.entry-school-text span { color: var(--muted-foreground); font-size: 13px; }
+.entry-school-skeleton { display: grid; gap: 8px; }
+.entry-empty { border: 1px dashed var(--border); background: var(--card); padding: 40px 24px; }
+.entry-empty [data-slot="empty-icon"][data-variant="icon"] { width: 44px; height: 44px; border-radius: 10px; background: var(--accent); color: var(--accent-foreground); }
+.entry-empty [data-slot="empty-icon"] svg { width: 20px; height: 20px; }
+.entry-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.entry-inline-code { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.entry-inline-code h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.entry-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.entry-inline-code .entry-submit.ui-button { width: auto; }
+
+/* Invitation: who joins, which school, the complete texts, then the confirmation. */
+.entry-identity { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.entry-identity [data-slot="avatar"] { width: 44px; height: 44px; }
+.entry-identity-text { display: grid; gap: 1px; flex: 1; min-width: 180px; }
+.entry-identity-text h2 { margin: 0; color: var(--muted-foreground); font-size: 12px; font-weight: 600; }
+.entry-identity-text strong { font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+.entry-identity-text span { color: var(--muted-foreground); font-size: 13px; overflow-wrap: anywhere; }
+.entry-badge-warning { height: 26px; padding-inline: 8px; border-color: color-mix(in srgb, var(--portal-warning) 40%, transparent); background: var(--portal-warning-background); color: var(--portal-warning); }
+.entry-identity-action.ui-button { margin-left: auto; }
+.entry-invitation { display: grid; border: 1px solid var(--border); border-radius: 14px; background: var(--card); box-shadow: var(--portal-shadow); overflow: hidden; }
+.entry-invitation > * { padding: 24px 28px; }
+.entry-invitation > * + * { border-top: 1px solid var(--border); }
+.entry-invitation-head { display: flex; align-items: center; gap: 14px; }
+.entry-invitation-head h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; overflow-wrap: anywhere; }
+.entry-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; margin: 0; }
+.entry-facts div { display: grid; gap: 2px; min-width: 0; }
+.entry-facts dt { color: var(--muted-foreground); font-size: 13px; }
+.entry-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.entry-policy { display: grid; gap: 8px; }
+.entry-policy h3 { margin: 8px 0 0; font-size: 14px; font-weight: 650; }
+.entry-policy h3:first-child { margin-top: 0; }
+.entry-policy p { margin: 0; line-height: 1.65; white-space: pre-line; }
+.entry-policy p.entry-muted { margin-top: 8px; }
+.entry-policy a { color: var(--accent-foreground); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.entry-acceptance { display: grid; gap: 14px; background: color-mix(in srgb, var(--muted) 55%, var(--card)); }
+.entry-confirmation { align-items: flex-start; gap: 12px; }
+.entry-confirmation [data-slot="checkbox"] { width: 20px; height: 20px; margin-top: 2px; }
+.entry-confirmation [data-slot="field-label"] { font-weight: 500; font-size: 15px; cursor: pointer; }
+
+@media (max-width: 640px) {
+  .entry-main { padding: 32px 20px 48px; gap: 20px; }
+  .entry-main-wide { padding-top: 28px; }
+  .entry-card { padding: 20px; }
+  .entry-name-row { grid-template-columns: 1fr; gap: 18px; }
+  .entry-pending { flex-wrap: wrap; }
+  .entry-pending > .ui-button { width: 100%; }
+  .entry-school-list li { grid-template-columns: auto minmax(0, 1fr); padding: 14px 16px; }
+  .entry-school-list li > .ui-button { grid-column: 2; justify-self: start; }
+  .entry-invitation > * { padding: 20px; }
+  .entry-facts { grid-template-columns: 1fr; gap: 14px; }
+  .entry-actions > .ui-button { flex: 1 1 100%; }
+  .entry-identity-action.ui-button { margin-left: 0; width: 100%; }
+}
+@media (hover: hover) {
+  .entry-inline-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .entry-spin { animation: none; }
+}

@@ -29,14 +29,26 @@ async function loadPage() {
   const isConsole = /^\/app\/gestion(\/|$)/.test(path);
   const knownConsole = isConsole && consoleParts.length <= 5 && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
   const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
-  // The rebuilt console and preferences (#311) are opt-in per browser and never load the historical stylesheets.
-  const portal = (knownConsole || path === '/app/preferences') && readPresentation() === 'portal';
+  // The rebuilt console, preferences and entry (#311, #319) are opt-in per browser and never load the historical stylesheets.
+  const portalEntry = ['/app', '/app/invitation', '/app/recover'].includes(path) || (!knownEntry && !knownConsole);
+  const portal = (knownConsole || portalEntry || path === '/app/preferences') && readPresentation() === 'portal';
   try {
     if (portal) {
       root.render(<p role="status">Chargement de Drivy…</p>);
       if (path === '/app/preferences') {
         const { PortalPreferencesPage } = await import('./portal/account/preferences-page');
         root.render(<PortalPreferencesPage />);
+      } else if (path === '/app/recover') {
+        const { PortalRecoveryPage } = await import('./portal/entry/recovery-page');
+        root.render(<PortalRecoveryPage />);
+      } else if (path === '/app' || path === '/app/invitation') {
+        // The fragment was already removed above; the link only lives in this object.
+        const { PortalEntryPage } = await import('./portal/entry/entry-page');
+        root.render(<PortalEntryPage invitationLink={invitationLink} />);
+      } else if (!knownConsole) {
+        document.title = 'Page introuvable · Drivy';
+        const { PortalNotFoundPage } = await import('./portal/entry/not-found-page');
+        root.render(<PortalNotFoundPage />);
       } else {
         const { PortalConsole } = await import('./portal/portal-console');
         root.render(<PortalConsole />);
