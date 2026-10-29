@@ -11,7 +11,7 @@ import { ReadFeedback } from '../agenda/presentation';
 import { instantDayLabel, occurrenceTimes } from './course-presentation';
 import { attendanceSummary, filterByName } from './participants-model';
 import { FeedbackText } from './participants-parts';
-import type { CourseParticipants } from './use-course-participants';
+import { feedbackKey, type CourseParticipants } from './use-course-participants';
 
 /**
  * The call of one named session. One line per participant, the state next to the name and three choices under it:
@@ -46,7 +46,7 @@ export function AttendanceTab({ state, occurrenceId, onOccurrence, now }: { stat
         return <li key={row.enrollmentId} className="participants-call">
           <div className="participants-main"><strong>{row.learnerDisplayName || 'Élève'}</strong>
             <span className="participants-state" data-state={cell.status ?? 'unset'}>{cell.status ? attendanceLabels[cell.status] : 'Non renseigné'}</span>
-            <FeedbackText feedback={state.feedback[row.enrollmentId]} /></div>
+            <FeedbackText feedback={state.feedback[feedbackKey('call', row.enrollmentId)]} /></div>
           {editable ? <ToggleGroup className="participants-choices" variant="outline" aria-label={`Présence de ${row.learnerDisplayName || 'cet élève'}`} value={cell.status ? [cell.status] : []} disabled={state.locked}
             onValueChange={values => choose(row, (values as string[]).find(value => value !== cell.status))}>
             {attendanceStatuses.map(status => <ToggleGroupItem key={status} value={status}>{attendanceLabels[status]}</ToggleGroupItem>)}</ToggleGroup>

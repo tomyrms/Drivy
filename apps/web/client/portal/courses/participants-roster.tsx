@@ -17,7 +17,7 @@ import { instantDateTime, keptMessage } from './course-presentation';
 import { offerState, rosterSplit } from './participants-model';
 import { ActionDialog } from './participants-dialogs';
 import { FeedbackText } from './participants-parts';
-import type { CourseParticipants } from './use-course-participants';
+import { feedbackKey, type CourseParticipants } from './use-course-participants';
 
 /** Enrolment, seat and waiting list are three different facts. Staff can enrol; nobody here can push a waiting entry onto a seat. */
 export function RosterTab({ state, series, now }: { state: CourseParticipants; series: CourseSeries; now: number }) {
@@ -37,7 +37,7 @@ export function RosterTab({ state, series, now }: { state: CourseParticipants; s
       : <ul className="participants-list">{active.map(item => <li key={item.id}>
         <div className="participants-main"><strong>{item.learnerDisplayName || 'Élève'}</strong>
           <span className="course-muted">{sourceLabel(item.source)} · annulation libre jusqu’au {instantDateTime(item.selfCancelDeadline, school.timeZone)}</span>
-          <FeedbackText feedback={state.feedback[item.id]} /></div>
+          <FeedbackText feedback={state.feedback[feedbackKey('roster', item.id)]} /></div>
         <Button variant="ghost" disabled={state.locked} aria-label={`Annuler l’inscription de ${item.learnerDisplayName || 'cet élève'}`} onClick={() => setCancelling(item)}>Annuler l’inscription</Button>
       </li>)}</ul>}
     {roster.waitlist.length > 0 && <section aria-labelledby="participants-waitlist"><h2 id="participants-waitlist">Liste d’attente</h2>

@@ -11,7 +11,7 @@ import { instantDateTime } from './course-presentation';
 import { eligibility, filterByName } from './participants-model';
 import { ActionDialog } from './participants-dialogs';
 import { FeedbackText } from './participants-parts';
-import type { CourseParticipants } from './use-course-participants';
+import { feedbackKey, type CourseParticipants } from './use-course-participants';
 
 const missingLabel = (count: number) => `${count} ${count === 1 ? 'séance obligatoire reste' : 'séances obligatoires restent'} à marquer présente${count === 1 ? '' : 's'}`;
 
@@ -41,7 +41,7 @@ export function CompletionTab({ state, series }: { state: CourseParticipants; se
               <span className="course-muted">{requirementLabel(row.requirements)}</span>
               {completion && <span className="participants-state" data-state="validated">Validé le {instantDateTime(completion.validatedAt, school.timeZone)}{kind === 'validated-elsewhere' ? ' · autre session' : ''}</span>}
               {kind === 'missing' && <span className="course-muted">{missingLabel(row.requirements.missing)}</span>}
-              <FeedbackText feedback={state.feedback[row.enrollmentId]} /></div>
+              <FeedbackText feedback={state.feedback[feedbackKey('completion', row.enrollmentId)]} /></div>
             {kind === 'eligible' && <Button disabled={state.locked} aria-label={`Valider le cours pour ${row.learnerDisplayName || 'cet élève'}`} onClick={() => setValidating(row)}>Valider</Button>}
             {kind === 'validated' && completion && <Button variant="ghost" disabled={state.locked} aria-label={`Retirer la validation de ${row.learnerDisplayName || 'cet élève'}`} onClick={() => setRevoking({ row, completionId: completion.id })}>Retirer</Button>}
             {kind === 'cancelled' && <Badge variant="outline">Annulée</Badge>}

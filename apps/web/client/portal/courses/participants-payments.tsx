@@ -16,7 +16,7 @@ import { instantDateTime, keptMessage } from './course-presentation';
 import { groupSettledCents, filterByName, settledCents } from './participants-model';
 import { ActionDialog } from './participants-dialogs';
 import { FeedbackText } from './participants-parts';
-import type { CourseParticipants } from './use-course-participants';
+import { feedbackKey, type CourseParticipants } from './use-course-participants';
 
 /**
  * On-site settlements, in CHF. Only what the school confirmed is counted. A correction is one more record: the entry it voids
@@ -41,7 +41,7 @@ export function PaymentsTab({ state }: { state: CourseParticipants }) {
           <div className="participants-row">
             <div className="participants-main"><strong>{row.learnerDisplayName || 'Élève'}</strong>
               <span className="course-muted">{row.payments.length === 0 ? 'Aucun règlement' : `${formatCents(settledCents(row))} compté`}</span>
-              <FeedbackText feedback={state.feedback[row.enrollmentId]} /></div>
+              <FeedbackText feedback={state.feedback[feedbackKey('payments', row.enrollmentId)]} /></div>
             {row.status === 'ACTIVE' ? <Button variant="outline" disabled={state.locked} aria-label={`Consigner un règlement pour ${row.learnerDisplayName || 'cet élève'}`} onClick={() => setPaying(row)}>Consigner un règlement</Button>
               : <Badge variant="outline">Annulée</Badge>}
           </div>

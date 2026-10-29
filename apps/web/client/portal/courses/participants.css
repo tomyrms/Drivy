@@ -4,6 +4,7 @@
 .participants-tabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { border-radius: 0; background: transparent; box-shadow: none; flex: 0 0 auto; height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; color: var(--muted-foreground); font-size: 14px; }
 .participants-tabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"][data-active] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 650; }
 .participants-tab { display: grid; gap: 20px; min-width: 0; }
+.participants-tab > section { display: grid; gap: 12px; }
 .participants-tab h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
 .participants-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .participants-total { margin: 0; display: grid; justify-items: end; gap: 2px; }
