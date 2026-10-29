@@ -11,7 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { Skeleton } from '../../components/ui/skeleton';
 import { ReadFeedback } from '../components/feedback';
-import { NotRebuilt } from '../components/not-rebuilt';
+import { SetupGuide } from '../setup/setup-guide';
 import './overview.css';
 
 const nextActionsSchema = z.object({ schoolId: z.string().uuid(), planningReady: z.boolean(), actions: z.array(z.object({
@@ -30,7 +30,7 @@ export function OverviewPilot() {
     if (dailyEntry) navigate('agenda', { week: routeQuery?.week, day: routeQuery?.day, instructor: routeQuery?.instructor,
       lesson: routeQuery?.lesson, learner: routeQuery?.learner, course: routeQuery?.course, occurrence: routeQuery?.occurrence, view: routeQuery?.view }, { replace: true });
   }, [dailyEntry, navigate, routeQuery]);
-  if (school.status === 'DRAFT' || catalogueOnly) return <NotRebuilt title={catalogueOnly ? 'Préparer une formation' : 'Préparation de l’école'} />;
+  if (school.status === 'DRAFT' || catalogueOnly) return <SetupGuide catalogueOnly={catalogueOnly} />;
   if (school.status === 'ARCHIVED') return <section className="overview-page">
     <h1>École archivée</h1>
     <Alert><Info aria-hidden="true" /><AlertTitle>La préparation est fermée</AlertTitle><AlertDescription>Le planning et les informations de l’école restent consultables selon vos accès.</AlertDescription></Alert>

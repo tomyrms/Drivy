@@ -11,7 +11,7 @@ function readRoute(): Route {
   const query = readNavigationQuery(location.search);
   // Preserve the one-page link already handed to the owner.
   if (!page && !query.selection) query.selection = ids.instructor;
-  return { page: destinations.includes(page ?? '') ? page as SectionKey : 'equipe', query };
+  return { page: page === 'preparation' ? 'apercu' : destinations.includes(page ?? '') ? page as SectionKey : 'equipe', query };
 }
 export function usePreviewNavigation() {
   const [route, setRoute] = useState(readRoute);

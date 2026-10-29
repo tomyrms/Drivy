@@ -2,7 +2,6 @@ import { Suspense, type ReactNode } from 'react';
 import { ArrowRight, Building2, RefreshCw } from 'lucide-react';
 import { useManagementConsole } from '../console/management-runtime';
 import { ConsoleContext } from '../console/context';
-import { sectionTitles } from '../console/navigation';
 import { roleLabel } from '../protocol';
 import { UiSuspendedContext } from '../ui-suspension';
 import { BrandSymbol } from '../BrandSymbol';
@@ -14,7 +13,6 @@ import { PortalFrame } from './frame';
 import { portalPages, portalSections } from './pages';
 import { PortalPendingRequests } from './runtime/pending-requests';
 import { PortalIdentityDialog } from './runtime/identity-dialog';
-import { NotRebuilt } from './components/not-rebuilt';
 import { PortalSettingsSearch, PortalSettingsFocus } from './settings/settings-search';
 import './portal.css';
 
@@ -58,7 +56,6 @@ export function PortalConsole() {
   </EntryLayout>;
 
   const Page = portalPages[route.section];
-  const setup = runtime.setupMode;
   const pageKey = `${runtime.draftScope}-${route.section}-${route.section === 'invitations' ? route.query.audience ?? 'learners' : route.section === 'apercu' ? route.query.from ?? '' : ''}`;
   return <UiSuspendedContext.Provider value={resumeGate !== null}>
     <ConsoleContext.Provider value={context}>
@@ -79,7 +76,7 @@ export function PortalConsole() {
           <PortalPendingRequests />
           <PortalSettingsFocus target={route.query.focus} navigationKey={`${route.section}:${runtime.historyIndex.current}:${resumeGate ?? ''}`} />
           <Suspense fallback={<Loading label="Chargement de la page" />}>
-            {Page && !setup ? <Page key={pageKey} /> : <NotRebuilt key={pageKey} title={sectionTitles[route.section]} />}
+            {Page && <Page key={pageKey} />}
           </Suspense>
         </div>
       </PortalFrame>

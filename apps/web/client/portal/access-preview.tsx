@@ -18,11 +18,20 @@ import { usePreviewNavigation } from './preview/use-preview-navigation';
 import { ids, previewMe, previewMembership, previewSchool } from './preview/fixtures';
 import { memberSchema, readSchool } from '../school-api';
 import { installPreviewTransport, setPreviewScenario, type PreviewScenario } from './preview/transport';
+import { EntryPreview, installEntryPreview, type EntryScene } from './preview/entry-preview';
+import { SchoolOpeningPage } from './opening/opening-page';
+import { entryRoutes } from './entry/entry-model';
 import './portal.css';
 
 declare const __DRIVY_PREVIEW_SHA__: string;
 z.config({ jitless: true });
-installPreviewTransport();
+const previewPage = new URLSearchParams(location.search).get('page');
+const entryScenes: Record<string, EntryScene> = { connexion: 'login', ecoles: 'schools', invitation: 'invitation', recuperation: 'recovery' };
+const requestedScene = new URLSearchParams(location.search).get('scene');
+const allowedScenes: readonly string[] = ['login', 'schools', 'empty', 'invitation', 'expired', 'unverified', 'mismatch', 'lost-reply', 'changed', 'slow', 'recovery', 'recovery-unavailable'];
+const entryScene = previewPage && entryScenes[previewPage] ? requestedScene && allowedScenes.includes(requestedScene) ? requestedScene as EntryScene : entryScenes[previewPage] : null;
+if (entryScene) installEntryPreview(entryScene); else installPreviewTransport();
+if (previewPage === 'preparation') previewSchool.status = 'DRAFT';
 commandStore.scopeToPerson(ids.person);
 commandStore.scopeToAccess(ids.school, ids.admin, 1);
 // The first published link (no page parameter) keeps opening the access editor directly.
@@ -72,5 +81,8 @@ function Preview() {
   </PortalFrame></ConsoleContext.Provider>;
 }
 // Personal preferences live outside the school console, as in the real application.
-createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('page') === 'preferences'
-  ? <PortalPreferencesPage back="?page=agenda" /> : <Preview />);
+const openingRoutes = { ...entryRoutes, account: '?page=ecoles', invitation: '?page=invitation', recover: '?page=recuperation', opening: '?page=ouverture', preferences: '?page=preferences', school: () => '?page=preparation' };
+createRoot(document.getElementById('root')!).render(entryScene ? <EntryPreview scene={entryScene} />
+  : previewPage === 'preferences' ? <PortalPreferencesPage back="?page=agenda" />
+  : previewPage === 'ouverture' || previewPage === 'operateur' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={previewPage === 'operateur'} routes={openingRoutes} destination={() => '?page=preparation'} />
+  : <Preview />);

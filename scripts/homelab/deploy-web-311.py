@@ -15,7 +15,7 @@ import subprocess
 import tarfile
 
 WEB = r'''
-import base64,datetime,hashlib,io,json,os,pathlib,re,shutil,subprocess,tarfile,time
+import base64,datetime,fcntl,hashlib,io,json,os,pathlib,re,shutil,subprocess,tarfile,time
 ROOT=pathlib.Path('/opt/drivy-refonte')
 OVERRIDE=pathlib.Path('/etc/systemd/system/drivy-refonte-web.service.d/95-epic311-web.conf')
 def run(args):
@@ -23,13 +23,13 @@ def run(args):
     if r.returncode: raise RuntimeError('Server check failed; private diagnostics suppressed')
     return r.stdout
 def digest(data): return hashlib.sha256(data).hexdigest()
-def services():
+def services(require_active=True):
     result={}
     for label in ['api','web','course-worker','identity','ingress']:
         data=run(['systemctl','show','drivy-refonte-'+label,'--property=ActiveState,MainPID,WorkingDirectory,NRestarts']).decode()
         v=dict(line.split('=',1) for line in data.splitlines() if '=' in line)
-        if v['ActiveState']!='active' or v['MainPID']=='0': raise RuntimeError('Required service is inactive: '+label)
-        v['processDirectory']=os.readlink('/proc/'+v['MainPID']+'/cwd')
+        if require_active and (v['ActiveState']!='active' or v['MainPID']=='0'): raise RuntimeError('Required service is inactive: '+label)
+        if v['MainPID']!='0': v['processDirectory']=os.readlink('/proc/'+v['MainPID']+'/cwd')
         result[label]=v
     return result
 def private_state():
@@ -46,11 +46,13 @@ def health(expected):
         time.sleep(.5)
     raise RuntimeError('Served frontend does not match release')
 def restore_override(directory,existed):
-    if existed: OVERRIDE.write_bytes((directory/'override.before').read_bytes())
+    if existed:
+        temporary=OVERRIDE.with_suffix('.pending'); temporary.write_bytes((directory/'override.before').read_bytes()); temporary.chmod(0o644); temporary.replace(OVERRIDE)
     elif OVERRIDE.exists(): OVERRIDE.unlink()
     restart()
 def execute(req):
-    before=services(); previous=pathlib.Path(before['web']['processDirectory']); check_release(previous)
+    before=services(require_active=not bool(req.get('rollback')))
+    previous=pathlib.Path(before['web'].get('processDirectory',before['web']['WorkingDirectory'])).resolve(); check_release(previous)
     config_before=private_state()
     if req.get('rollback'):
         identifier=req['rollback']
@@ -65,7 +67,7 @@ def execute(req):
         if not req['execute']: return {'action':'rollback-plan','id':identifier,'previousRelease':str(old)}
         restore_override(directory,receipt['overrideExisted'])
         health(receipt['previousHtml'])
-        after=services()
+        after=services(require_active=False)
         if after['web']['processDirectory']!=str(old): raise RuntimeError('Rollback directory mismatch')
         return {'action':'rolled-back','id':identifier,'webDirectory':str(old)}
     if str(previous)!=req['expectedPrevious']: raise RuntimeError('Current web changed since review')
@@ -139,9 +141,17 @@ def execute(req):
         (directory/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
         return receipt
     except Exception:
+        current_directory=run(['systemctl','show','drivy-refonte-web','--property=WorkingDirectory','--value']).decode().strip()
+        if not OVERRIDE.exists() or digest(OVERRIDE.read_bytes())!=receipt['overrideAfter'] or current_directory!=str(release):
+            raise RuntimeError('Activation failed and configuration changed concurrently; automatic rollback refused')
         restore_override(directory,existed); health(receipt['previousHtml'])
         raise RuntimeError('Activation failed; previous web restored')
-try: print(json.dumps(execute(REQUEST)))
+try:
+    if REQUEST['execute']:
+        with open('/run/lock/drivy-web311.lock','a') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            print(json.dumps(execute(REQUEST)))
+    else: print(json.dumps(execute(REQUEST)))
 except Exception as error:
     print(json.dumps({'error':str(error) if isinstance(error,RuntimeError) else 'Operation failed; private diagnostics suppressed'}))
     raise SystemExit(1)
@@ -203,7 +213,7 @@ def ct(number,code):
         except Exception: message='Remote operation failed; private diagnostics suppressed'
         raise RuntimeError(message)
     return json.loads(result.stdout)
-if REQUEST['execute'] and not REQUEST.get('rollback'):
+if REQUEST['execute']:
     # Recheck the plan before taking a backup; the actual switch rechecks once more.
     ct(114,'REQUEST='+repr(REQUEST|{'execute':False})+'\n'+WEB)
     REQUEST['databaseBackup']=ct(113,BACKUP)

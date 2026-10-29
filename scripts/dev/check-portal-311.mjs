@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 const { chromium } = await import(process.env.DRIVY_PLAYWRIGHT_MODULE ? pathToFileURL(process.env.DRIVY_PLAYWRIGHT_MODULE).href : 'playwright');
 const [base = 'http://127.0.0.1:5188/preview-311.html', output = '.local/portal-311-smoke'] = process.argv.slice(2);
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.DRIVY_CHROMIUM_EXECUTABLE ? { executablePath: process.env.DRIVY_CHROMIUM_EXECUTABLE } : {});
 const results = [];
 try {
   for (const [width, theme] of [[390, 'dark'], [1440, 'light']]) {
@@ -31,7 +31,7 @@ try {
     }
     await page.goto(`${base}?page=configuration`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Rechercher un réglage' }).click();
-    await page.getByRole('textbox', { name: 'Rechercher dans les paramètres' }).fill('Téléphone');
+    await page.getByLabel('Rechercher dans les paramètres').fill('Téléphone');
     await page.getByRole('link', { name: /Téléphone de l’école/ }).click();
     await page.waitForFunction(() => document.activeElement?.id === 'school-phone');
     await page.screenshot({ path: resolve(output, `search-focus-${width}-${theme}.png`) });

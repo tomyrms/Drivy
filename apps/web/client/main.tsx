@@ -1,12 +1,16 @@
 import { createRoot } from 'react-dom/client';
+import { z } from 'zod';
 import { readInvitationLink } from './invitation-link';
 import { readOpeningLink } from './school-opening-model';
 import { sectionKeys } from './console/sections';
 import { BrandSymbol } from './BrandSymbol';
-import { readPresentation } from './presentation';
+import { Button } from './components/ui/button';
 import './theme';
+import './portal/portal.css';
 
-// Remove any token fragment before rendering, fetching or authenticating, whatever the page.
+// Strict CSP: validation must not compile functions at runtime.
+z.config({ jitless: true });
+// Remove bearer fragments before rendering, fetching or authenticating on every route.
 const path = window.location.pathname.replace(/\/+$/, '');
 const isOpening = path === '/app/ouvrir';
 const openingLink = isOpening ? readOpeningLink() : { token: null, error: false };
@@ -15,77 +19,59 @@ const element = document.getElementById('root');
 if (!element) throw new Error('Élément racine introuvable.');
 const root = createRoot(element);
 
+// Old presentation bookmarks keep their destination, never the retired UI.
+const params = new URLSearchParams(window.location.search);
+if (params.has('presentation')) {
+  params.delete('presentation');
+  const search = params.toString();
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${search ? `?${search}` : ''}`);
+}
+try { window.localStorage.removeItem('drivy.web.presentation'); } catch { /* Optional preference cleanup only. */ }
+
 function retryLoading() {
-  // A failed module fetch can remain cached by the browser. Reload explicitly, never in a loop.
-  // Keep a not-yet-submitted bearer link in memory only. The fragment is never sent to the server.
+  // A failed module fetch may be cached. An unsubmitted link stays in memory/the fragment only.
   const token = openingLink.token ?? invitationLink.token;
   if (token) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#token=${encodeURIComponent(token)}`);
   window.location.reload();
 }
 
+function LoadingPage({ failed = false }: { failed?: boolean }) {
+  return <div className="portal-app">
+    <header className="portal-topbar"><a className="portal-brand" href="/app/" aria-label="Drivy, mes écoles"><BrandSymbol /><span>Drivy</span></a></header>
+    <main className="portal-entry">{failed ? <section className="portal-entry-card">
+      <h1 tabIndex={-1} ref={heading => heading?.focus()}>Chargement impossible</h1>
+      <p role="alert">Vérifiez votre connexion, puis réessayez de charger cette page.</p>
+      <Button onClick={retryLoading}>Réessayer</Button>
+    </section> : <p role="status">Chargement de Drivy…</p>}</main>
+  </div>;
+}
+
 async function loadPage() {
-  // Exclusive surfaces are loaded only when requested. Link sanitization stays shared.
   const consoleParts = path.split('/');
-  const isConsole = /^\/app\/gestion(\/|$)/.test(path);
-  const knownConsole = isConsole && consoleParts.length <= 5 && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
+  const knownConsole = /^\/app\/gestion(\/|$)/.test(path) && consoleParts.length <= 5
+    && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
   const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
-  // The rebuilt console, preferences and entry (#311, #319) are opt-in per browser and never load the historical stylesheets.
-  const portalEntry = ['/app', '/app/invitation', '/app/recover'].includes(path) || (!knownEntry && !knownConsole);
-  const portal = (knownConsole || portalEntry || path === '/app/preferences') && readPresentation() === 'portal';
+  root.render(<LoadingPage />);
   try {
-    if (portal) {
-      root.render(<p role="status">Chargement de Drivy…</p>);
-      if (path === '/app/preferences') {
-        const { PortalPreferencesPage } = await import('./portal/account/preferences-page');
-        root.render(<PortalPreferencesPage />);
-      } else if (path === '/app/recover') {
-        const { PortalRecoveryPage } = await import('./portal/entry/recovery-page');
-        root.render(<PortalRecoveryPage />);
-      } else if (path === '/app' || path === '/app/invitation') {
-        // The fragment was already removed above; the link only lives in this object.
-        const { PortalEntryPage } = await import('./portal/entry/entry-page');
-        root.render(<PortalEntryPage invitationLink={invitationLink} />);
-      } else if (!knownConsole) {
-        document.title = 'Page introuvable · Drivy';
-        const { PortalNotFoundPage } = await import('./portal/entry/not-found-page');
-        root.render(<PortalNotFoundPage />);
-      } else {
-        const { PortalConsole } = await import('./portal/portal-console');
-        root.render(<PortalConsole />);
-      }
-      return;
-    }
-    await import('./legacy-styles');
-    root.render(<div className="app-shell"><main className="main"><p role="status">Chargement de Drivy…</p></main></div>);
     if (!knownEntry && !knownConsole) {
-      document.title = 'Page introuvable · Drivy';
-      root.render(<div className="app-shell"><header className="site-header"><a className="brand" href="/app/"><BrandSymbol /><span>Drivy</span></a></header><main className="main"><section className="account-entry">
-        <h1 tabIndex={-1} ref={heading => heading?.focus()}>Page introuvable</h1>
-        <p>Cette adresse ne correspond à aucune page de Drivy.</p>
-        <a className="button primary" href="/app/">Retrouver mes écoles</a>
-      </section></main></div>);
+      const { PortalNotFoundPage } = await import('./portal/entry/not-found-page');
+      root.render(<PortalNotFoundPage />);
     } else if (path === '/app/recover') {
-      const { AccountRecoveryPage } = await import('./account-recovery');
-      root.render(<AccountRecoveryPage />);
+      const { PortalRecoveryPage } = await import('./portal/entry/recovery-page');
+      root.render(<PortalRecoveryPage />);
     } else if (path === '/app/preferences') {
-      const { PreferencesPage } = await import('./preferences');
-      root.render(<PreferencesPage />);
+      const { PortalPreferencesPage } = await import('./portal/account/preferences-page');
+      root.render(<PortalPreferencesPage />);
     } else if (isOpening || path === '/app/operateur') {
-      const { SchoolOpeningPage } = await import('./school-opening');
+      const { SchoolOpeningPage } = await import('./portal/opening/opening-page');
       root.render(<SchoolOpeningPage link={openingLink} operator={!isOpening} />);
     } else if (knownConsole) {
-      const { ManagementConsole } = await import('./console/Console');
-      root.render(<ManagementConsole />);
+      const { PortalConsole } = await import('./portal/portal-console');
+      root.render(<PortalConsole />);
     } else {
-      const { App } = await import('./App');
-      root.render(<App invitationLink={invitationLink} />);
+      const { PortalEntryPage } = await import('./portal/entry/entry-page');
+      root.render(<PortalEntryPage invitationLink={invitationLink} />);
     }
-  } catch {
-    root.render(<div className="app-shell"><header className="site-header"><a className="brand" href="/app/"><BrandSymbol /><span>Drivy</span></a></header><main className="main"><section className="account-entry">
-      <h1 tabIndex={-1} ref={heading => { heading?.focus(); }}>Chargement impossible</h1>
-      <p role="alert">Vérifiez votre connexion, puis réessayez de charger cette page.</p>
-      <button type="button" className="button primary" onClick={retryLoading}>Réessayer</button>
-    </section></main></div>);
-  }
+  } catch { root.render(<LoadingPage failed />); }
 }
 void loadPage();
