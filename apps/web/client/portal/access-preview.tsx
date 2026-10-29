@@ -7,6 +7,7 @@ import { commandStore } from '../command-store';
 import { PortalFrame } from './frame';
 import { AccessPilot } from './access/access-page';
 import { portalPages, portalSections } from './pages';
+import { PortalPreferencesPage } from './account/preferences-page';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
@@ -50,7 +51,8 @@ function Preview() {
     registerUnsavedChanges: navigation.registerUnsavedChanges, confirmNavigation: navigation.confirmNavigation,
     setNavigationGuard: navigation.setNavigationGuard, login: () => {}, confirmIdentity: async () => true,
   };
-  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} preview={{ build: __DRIVY_PREVIEW_SHA__ }}>
+  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} preview={{ build: __DRIVY_PREVIEW_SHA__ }}
+    account={{ onPreferences: () => navigation.confirmNavigation(() => location.assign('?page=preferences')), onLogout: () => navigation.confirmNavigation(() => { commandStore.clear(); location.reload(); }) }}>
     <PortalPendingRequests />
     <Suspense fallback={<div className="grid gap-5" aria-label="Chargement de la page" role="status"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>}>
       {route.page === 'equipe' && isFirstLink() ? <AccessPilot initialEdit /> : <Page />}
@@ -67,4 +69,6 @@ function Preview() {
     </DialogContent></Dialog>
   </PortalFrame></ConsoleContext.Provider>;
 }
-createRoot(document.getElementById('root')!).render(<Preview />);
+// Personal preferences live outside the school console, as in the real application.
+createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('page') === 'preferences'
+  ? <PortalPreferencesPage back="?page=agenda" /> : <Preview />);

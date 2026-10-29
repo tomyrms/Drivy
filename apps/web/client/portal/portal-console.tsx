@@ -79,7 +79,7 @@ export function PortalConsole() {
         schoolName={state.school.name} userName={runtime.personName ?? 'Mon compte'}
         schools={runtime.adminSchools.map(member => ({ id: member.schoolId, name: member.schoolName }))} currentSchoolId={state.membership.schoolId}
         onSchoolChange={schoolId => runtime.proceedNavigation(() => { runtime.pushPath(`/app/gestion/${schoolId}`); runtime.setRoute({ schoolId, section: 'apercu', query: {} }); })}
-        account={{ busy, onPreferences: () => runtime.proceedNavigation(() => { runtime.unsaved.current.clear(); window.location.assign('/app/preferences'); }),
+        account={{ busy, onPreferences: () => runtime.proceedNavigation(() => { runtime.unsaved.current.clear(); window.location.assign(`/app/preferences?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`); }),
           onLogout: () => runtime.proceedNavigation(runtime.requestLogout) }}>
         {resumeGate !== null && <div className="portal-resume-gate">{resumeGate === 'checking'
           ? <Loading label="Vérification de vos accès…" />

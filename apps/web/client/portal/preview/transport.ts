@@ -1,5 +1,5 @@
 import { commandSpecs, type SchoolCommand } from '../../command-core';
-import { db, ids, previewId, previewSchool, courseCatalogue, progress, reports, stamp, type FixtureRecord } from './fixtures';
+import { db, ids, previewId, previewMe, previewSchool, courseCatalogue, progress, reports, stamp, type FixtureRecord } from './fixtures';
 import { previewFamilies } from './families';
 import type { PreviewRequest, PreviewTools } from './family';
 
@@ -7,6 +7,8 @@ export type PreviewScenario = 'normal' | 'refused' | 'slow' | 'lost-reply' | 'co
 let scenario: PreviewScenario = 'normal';
 let sequence = 1000;
 const results = new Map<string, { status: number; body: unknown }>();
+// Personal notification choices of the synthetic account (#333).
+const notifications = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: false };
 const receipts = new Map<string, unknown>();
 const nextId = () => previewId(++sequence);
 const envelope = (data: unknown) => ({ data: structuredClone(data), requestId: nextId(), serverTime: new Date().toISOString() });
@@ -23,6 +25,19 @@ export function installPreviewTransport() {
       Object.defineProperty(response, 'url', { value: url.href }); return response;
     };
     const prefix = `/app/bff/schools/${ids.school}`;
+    // Personal routes of the synthetic account only: session, identity and notification choices.
+    if (url.origin === location.origin && ['/app/bff/session', '/app/bff/me', '/app/bff/me/notification-preferences'].includes(url.pathname)) {
+      if (url.pathname === '/app/bff/session') return reply(200, { authenticated: true, csrfToken: 'synthetic-preview', invitationPending: false, reauthenticationRequired: false, user: { displayName: previewMe.displayName, emailVerified: true } });
+      if (url.pathname === '/app/bff/me') return reply(200, { data: previewMe });
+      if ((init?.method ?? 'GET') === 'GET') return reply(200, { data: { ...notifications } });
+      const submitted = scenario;
+      await new Promise(resolve => setTimeout(resolve, submitted === 'slow' ? 6000 : 500));
+      if (submitted === 'refused') return reply(409, { code: 'PREFERENCES_REJECTED' });
+      if (submitted === 'conflict' || new Headers(init?.headers).get('If-Match') !== `"${notifications.version}"`) return reply(412, { code: 'VERSION_CONFLICT' });
+      Object.assign(notifications, JSON.parse(String(init?.body ?? '{}')), { version: notifications.version + 1 });
+      if (submitted === 'lost-reply') throw new TypeError('Synthetic response lost');
+      return reply(200, { data: { ...notifications } });
+    }
     if (url.origin !== location.origin || !(url.pathname === prefix || url.pathname.startsWith(`${prefix}/`))) return reply(403, { code: 'PREVIEW_NETWORK_BLOCKED' });
     const path = url.pathname.slice(prefix.length).replace(/^\//, '');
     const [collection, resourceId, action] = path.split('/');

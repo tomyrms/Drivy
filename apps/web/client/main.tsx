@@ -29,13 +29,18 @@ async function loadPage() {
   const isConsole = /^\/app\/gestion(\/|$)/.test(path);
   const knownConsole = isConsole && consoleParts.length <= 5 && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
   const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
-  // The rebuilt console (#311) is opt-in per browser and never loads the historical stylesheets.
-  const portalConsole = knownConsole && readPresentation() === 'portal';
+  // The rebuilt console and preferences (#311) are opt-in per browser and never load the historical stylesheets.
+  const portal = (knownConsole || path === '/app/preferences') && readPresentation() === 'portal';
   try {
-    if (portalConsole) {
+    if (portal) {
       root.render(<p role="status">Chargement de Drivy…</p>);
-      const { PortalConsole } = await import('./portal/portal-console');
-      root.render(<PortalConsole />);
+      if (path === '/app/preferences') {
+        const { PortalPreferencesPage } = await import('./portal/account/preferences-page');
+        root.render(<PortalPreferencesPage />);
+      } else {
+        const { PortalConsole } = await import('./portal/portal-console');
+        root.render(<PortalConsole />);
+      }
       return;
     }
     await import('./legacy-styles');
