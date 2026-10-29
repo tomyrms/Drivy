@@ -153,5 +153,9 @@ struct SchoolReportLocalDraftKeeper: ViewModifier {
             do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
             model.persistLocalDraft()
         }
+        .task(id: model.editedTextDrafts) {
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            model.persistLocalDraft()
+        }
     }
 }
