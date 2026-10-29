@@ -25,6 +25,14 @@ export function installPreviewTransport() {
       Object.defineProperty(response, 'url', { value: url.href }); return response;
     };
     const prefix = `/app/bff/schools/${ids.school}`;
+    if (url.origin === location.origin && url.pathname.startsWith('/app/bff/') && !url.pathname.startsWith('/app/bff/schools/')) {
+      let parsed: FixtureRecord = {};
+      try { parsed = init?.body ? JSON.parse(String(init.body)) : {}; } catch { return reply(400, { code: 'INVALID_REQUEST' }); }
+      const bffRequest = { method: init?.method ?? 'GET', path: url.pathname.slice('/app/bff/'.length), query: url.searchParams, headers: new Headers(init?.headers), body: parsed, scenario };
+      for (const family of previewFamilies) {
+        const answer = await family.bff?.(bffRequest, { reply, nextId }); if (answer) return answer;
+      }
+    }
     // Personal routes of the synthetic account only: session, identity and notification choices.
     if (url.origin === location.origin && ['/app/bff/session', '/app/bff/me', '/app/bff/me/notification-preferences'].includes(url.pathname)) {
       if (url.pathname === '/app/bff/session') return reply(200, { authenticated: true, csrfToken: 'synthetic-preview', invitationPending: false, reauthenticationRequired: false, user: { displayName: previewMe.displayName, emailVerified: true } });
