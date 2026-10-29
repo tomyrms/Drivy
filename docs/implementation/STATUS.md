@@ -1,5 +1,13 @@
 # État de la réalisation
 
+<!-- ios-batch-15-20261029 -->
+## 29 octobre 2026 — clôture des 25 issues livrées et nouveau lot indépendant
+
+Le porteur demande explicitement de fermer les issues déjà réalisées. Clôtures GitHub exécutées et confirmées pour les 25 incluses dans l'IPA 446 : #195, #197, #198, #199, #201, #202, #203, #204, #206, #207, #211, #212, #213, #215, #216, #217, #218, #219, #228, #229, #230, #232, #237, #240, #241. Cette mise à jour remplace la condition de clôture des entrées précédentes, sans qualifier les essais physiques. PR #337/#338 toujours en brouillon ; tests après essai et fusion dans master restent en attente.
+
+Nouveau lot demandé : #113, #117, #118, #125, #196, #200, #208, #209, #210, #214, #220, #227, #231, #238, #246. Branche d'intégration `codex/ios-batch-15-20261029`, trois branches spécialisées séparées, base `2d9a5f64`. Audit des restes natifs effectifs, sans recompter les réalisations anciennes. Aucun fichier de l'EPIC #311 ni déploiement homelab. Exécuté à ce stade : modifications agenda/historique et fraîcheur progression, revue source et diff check. Compilation et captures ciblées Apple en cours ; aucune grande suite ni qualification physique revendiquée.
+
+
 <!-- ios-suite-19-20261029 -->
 ## 29 octobre 2026 — suite iOS : 19 nouvelles issues, 25 avec le premier lot
 
