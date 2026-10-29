@@ -1,7 +1,8 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/ui/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu';
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { Switch } from '../../components/ui/switch';
@@ -37,11 +38,15 @@ export function GeneralFields({ draft, onChange, disabled, problems, showErrors,
   </FieldGroup>;
 }
 
-/** Liste ordonnée : ajout, retrait et déplacement par de vrais boutons ; l'ordre enregistré est celui affiché. */
+/**
+ * Liste ordonnée, une ligne par compétence : le libellé se lit d'un coup d'œil, une seule ligne est ouverte pour être modifiée.
+ * Monter, descendre et retirer sont de vrais boutons dans un menu ; l'ordre enregistré est celui affiché.
+ */
 export function CompetencyFields({ items, onChange, disabled, showErrors }: { items: CompetencyDraft[]; onChange: (items: CompetencyDraft[]) => void; disabled: boolean; showErrors: boolean }) {
   const problems = competencyProblems(items);
   const list = useRef<HTMLOListElement>(null);
-  const pending = useRef<{ uid: string; move?: -1 | 1 } | 'add' | null>(null);
+  const pending = useRef<{ uid: string; target: 'row' | 'field' } | 'add' | null>(null);
+  const [openUid, setOpenUid] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   // Le focus suit l'élément avec le DOM de la nouvelle liste, avant toute saisie suivante.
   useLayoutEffect(() => {
@@ -49,52 +54,61 @@ export function CompetencyFields({ items, onChange, disabled, showErrors }: { it
     if (!target) return;
     if (target === 'add') { list.current?.parentElement?.querySelector<HTMLElement>('[data-add-competency]')?.focus(); return; }
     const row = list.current?.querySelector<HTMLElement>(`[data-uid="${target.uid}"]`);
-    if (target.move) {
-      const same = row?.querySelector<HTMLButtonElement>(`[data-move="${target.move}"]`);
-      (same && !same.disabled ? same : row?.querySelector<HTMLButtonElement>(`[data-move="${-target.move}"]`))?.focus();
-    } else row?.querySelector<HTMLElement>('input')?.focus();
-  }, [items]);
+    (target.target === 'field' ? row?.querySelector<HTMLElement>('input') : row?.querySelector<HTMLElement>('[data-row-menu]'))?.focus();
+  }, [items, openUid]);
   const name = (item: CompetencyDraft, index: number) => item.label.trim() || `compétence ${index + 1}`;
   const move = (index: number, delta: -1 | 1) => {
     const item = items[index]!;
-    pending.current = { uid: item.uid, move: delta };
+    pending.current = { uid: item.uid, target: 'row' };
     onChange(moveItem(items, index, delta));
     setAnnouncement(`${name(item, index)} : position ${index + delta + 1} sur ${items.length}.`);
   };
   const remove = (index: number) => {
     const item = items[index]!, next = items[index + 1] ?? items[index - 1];
-    pending.current = next ? { uid: next.uid } : 'add';
+    pending.current = next ? { uid: next.uid, target: 'row' } : 'add';
+    if (openUid === item.uid) setOpenUid(null);
     onChange(items.filter(entry => entry.uid !== item.uid));
     setAnnouncement(`${name(item, index)} retirée.`);
   };
-  const add = () => { const item = emptyCompetency(); pending.current = { uid: item.uid }; onChange([...items, item]); };
+  const add = () => { const item = emptyCompetency(); pending.current = { uid: item.uid, target: 'field' }; setOpenUid(item.uid); onChange([...items, item]); };
+  const open = (uid: string) => { pending.current = { uid, target: 'field' }; setOpenUid(uid); };
   return <FieldSet className="cat-competency-editor">
     <FieldLegend className="sr-only">Compétences enseignées</FieldLegend>
     {showErrors && problems.list && <FieldError>{problems.list}</FieldError>}
     <ol ref={list} className="cat-competency-list">
       {items.map((item, index) => {
-        const label = problems.items[index]?.label, description = problems.items[index]?.description;
-        return <li key={item.uid} data-uid={item.uid} className="cat-competency">
+        const label = problems.items[index]?.label ?? null, description = problems.items[index]?.description ?? null;
+        const invalid = showErrors && (!!label || !!description);
+        const expanded = openUid === item.uid || invalid;
+        return <li key={item.uid} data-uid={item.uid} className="cat-competency" data-open={expanded || undefined} data-invalid={invalid || undefined}>
           <span className="cat-competency-index" aria-hidden="true">{index + 1}</span>
-          <FieldGroup className="cat-competency-fields">
-            <Field data-invalid={showErrors && !!label}>
-              <FieldLabel htmlFor={`competency-${item.uid}`}>Compétence {index + 1}</FieldLabel>
-              <Input id={`competency-${item.uid}`} value={item.label} maxLength={200} disabled={disabled} aria-invalid={showErrors && !!label}
-                onChange={event => onChange(items.map(entry => entry.uid === item.uid ? { ...entry, label: event.target.value } : entry))} />
-              {showErrors && label && <FieldError>{label}</FieldError>}
-            </Field>
-            <Field data-invalid={showErrors && !!description}>
-              <FieldLabel htmlFor={`competency-description-${item.uid}`}>Ce que l’élève apprend</FieldLabel>
-              <Textarea id={`competency-description-${item.uid}`} rows={3} maxLength={4000} value={item.description} disabled={disabled} aria-invalid={showErrors && !!description}
-                onChange={event => onChange(items.map(entry => entry.uid === item.uid ? { ...entry, description: event.target.value } : entry))} />
-              {showErrors && description && <FieldError>{description}</FieldError>}
-            </Field>
-          </FieldGroup>
-          <div className="cat-competency-actions" role="group" aria-label={`Ordre de ${name(item, index)}`}>
-            <Button type="button" variant="outline" size="icon" data-move="-1" disabled={disabled || index === 0} onClick={() => move(index, -1)} aria-label={`Monter ${name(item, index)}`}><ArrowUp /></Button>
-            <Button type="button" variant="outline" size="icon" data-move="1" disabled={disabled || index === items.length - 1} onClick={() => move(index, 1)} aria-label={`Descendre ${name(item, index)}`}><ArrowDown /></Button>
-            <Button type="button" variant="ghost" disabled={disabled} onClick={() => remove(index)} aria-label={`Retirer ${name(item, index)}`}><Trash2 data-icon="inline-start" />Retirer</Button>
-          </div>
+          {expanded
+            ? <FieldGroup className="cat-competency-fields">
+              <Field data-invalid={showErrors && !!label}>
+                <FieldLabel htmlFor={`competency-${item.uid}`}>Compétence {index + 1}</FieldLabel>
+                <Input id={`competency-${item.uid}`} value={item.label} maxLength={200} disabled={disabled} aria-invalid={showErrors && !!label}
+                  onChange={event => onChange(items.map(entry => entry.uid === item.uid ? { ...entry, label: event.target.value } : entry))} />
+                {showErrors && label && <FieldError>{label}</FieldError>}
+              </Field>
+              <Field data-invalid={showErrors && !!description}>
+                <FieldLabel htmlFor={`competency-description-${item.uid}`}>Ce que l’élève apprend</FieldLabel>
+                <Textarea id={`competency-description-${item.uid}`} rows={3} maxLength={4000} value={item.description} disabled={disabled} aria-invalid={showErrors && !!description}
+                  onChange={event => onChange(items.map(entry => entry.uid === item.uid ? { ...entry, description: event.target.value } : entry))} />
+                {showErrors && description && <FieldError>{description}</FieldError>}
+              </Field>
+              {!invalid && <Button type="button" variant="outline" className="cat-competency-done" onClick={() => { pending.current = { uid: item.uid, target: 'row' }; setOpenUid(null); }}>Terminer</Button>}
+            </FieldGroup>
+            : <button type="button" className="cat-competency-summary" disabled={disabled} onClick={() => open(item.uid)} aria-label={`Modifier ${name(item, index)}`}>
+              <strong>{item.label.trim() || 'Sans nom'}</strong><span>{item.description.trim() || 'Sans description'}</span></button>}
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" data-row-menu disabled={disabled} aria-label={`Actions pour ${name(item, index)}`} />}><Ellipsis aria-hidden="true" /></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              <DropdownMenuItem onClick={() => open(item.uid)}><Pencil aria-hidden="true" />Modifier</DropdownMenuItem>
+              <DropdownMenuItem disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp aria-hidden="true" />Monter</DropdownMenuItem>
+              <DropdownMenuItem disabled={index === items.length - 1} onClick={() => move(index, 1)}><ArrowDown aria-hidden="true" />Descendre</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => remove(index)}><Trash2 aria-hidden="true" />Retirer</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </li>;
       })}
     </ol>

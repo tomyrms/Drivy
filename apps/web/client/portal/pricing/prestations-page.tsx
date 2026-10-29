@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { useConsole } from '../../console/context';
-import { BackButton, ReadFeedback } from '../formations/catalogue-ui';
+import { ReadFeedback } from '../formations/catalogue-ui';
 import { useCatalogueCommand } from '../formations/catalogue-command';
 import type { TariffType } from '../../formation-api';
 import { TariffReference } from './tariff-reference';
@@ -35,11 +35,7 @@ export function PrestationsPage() {
   const types: TariffType[] = ['EXTERNAL_SERVICE', 'EXAM_SUPPORT', ...(school.modules.collectiveCoursesEnabled ? ['COLLECTIVE_COURSE' as const] : [])];
   const select = (id: string | null) => setRouteQuery?.(id ? { selection: id } : {}, false, true);
   return <section className="cat-page">
-    <BackButton onClick={() => navigate('formations', {})}>Formations</BackButton>
-    <header className="cat-heading">
-      <h1 ref={title} tabIndex={-1}>Prestations sans permis</h1>
-      <div className="cat-heading-actions"><Button variant="ghost" onClick={() => navigate('conditions', {})}>Conditions commerciales<ArrowRight data-icon="inline-end" /></Button></div>
-    </header>
+    <h1 className="visually-hidden" ref={title} tabIndex={-1}>Prestations sans permis</h1>
     <ReadFeedback loaded={loaded} label="Lecture des prestations" />
     {data && <>
       {consult && <div className="cat-surface cat-consulted">
@@ -48,7 +44,8 @@ export function PrestationsPage() {
           badge={<Badge variant="secondary" className="cat-badge" data-tone="neutral">{reference.data.current ? 'Version actuelle' : 'Version précédente'}</Badge>} />}
       </div>}
       <TariffsPanel tariffs={data.tariffs} categoryCode={null} today={data.today} canConfigure={data.canConfigureCatalog} types={types} proposals={proposals.data} command={command}
-        reload={loaded.reload} programmeCount={0} selection={selection} onSelect={select} onConsultVersion={id => select(id)} onOpenTerms={id => navigate('conditions', { selection: id })} />
+        reload={loaded.reload} programmeCount={0} selection={selection} listLabel="Prestations sans permis"
+        actions={<Button variant="ghost" onClick={() => navigate('conditions', {})}>Conditions commerciales<ArrowRight data-icon="inline-end" /></Button>} onSelect={select} onConsultVersion={id => select(id)} onOpenTerms={id => navigate('conditions', { selection: id })} />
     </>}
   </section>;
 }

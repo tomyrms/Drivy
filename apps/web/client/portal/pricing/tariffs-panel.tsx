@@ -1,4 +1,4 @@
-import { useEffect, useRef, type FormEvent } from 'react';
+import { useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { Plus, ReceiptText } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
@@ -18,6 +18,12 @@ export interface TariffsPanelProps {
   /** Identifiant de version ouvert (adresse), `null` pour revenir à la liste. */
   selection: string | undefined; onSelect: (versionId: string | null) => void; onConsultVersion: (versionId: string) => void;
   onOpenTerms: (termsId: string) => void;
+  /** Libellé du retour depuis la fiche d'un tarif : le nom de la liste. */
+  listLabel: string;
+  /** Une édition de tarif occupe toute la page : la fiche masque son en-tête et ses onglets. */
+  onEditing?: (editing: boolean) => void;
+  /** Actions complémentaires de la page, avant l'action d'ajout. */
+  actions?: ReactNode;
 }
 
 /** Tarifs d'un permis ou prestations sans permis : liste, fiche, création et révision avec la même composition. */
@@ -26,10 +32,11 @@ export function TariffsPanel(props: TariffsPanelProps) {
   const editor = useTariffEditor({ tariffs, categoryCode, today, types: props.types, proposals: props.proposals, command, reload: props.reload, onSaved: id => { if (id) props.onSelect(id); } });
   const opened = props.selection ? tariffs.find(item => item.head.id === props.selection || item.history.some(version => version.id === props.selection)) : undefined;
   const groups = tariffGroups(tariffs);
-  const title = categoryCode ? 'Tarifs' : 'Prestations';
   const heading = useRef<HTMLHeadingElement>(null);
   const was = useRef(false);
   useEffect(() => { if (was.current && !editor.editing) heading.current?.focus(); was.current = editor.editing && !editor.quick; }, [editor.editing, editor.quick]);
+  const fullPage = editor.editing && !editor.quick;
+  useEffect(() => { props.onEditing?.(fullPage); return () => props.onEditing?.(false); }, [fullPage]);
   const blocked = command.busy;
   const review = <TariffReviewDialog editor={editor} command={command} today={today} />;
   if (editor.editing && !editor.quick && editor.draft) {
@@ -52,15 +59,15 @@ export function TariffsPanel(props: TariffsPanelProps) {
     </>;
   }
   if (opened) return <>
-    <BackButton onClick={() => props.onSelect(null)}>{title}</BackButton>
+    <BackButton onClick={() => props.onSelect(null)}>{props.listLabel}</BackButton>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     <TariffDetail tariff={opened} today={today} canConfigure={canConfigure} busy={blocked} onEdit={() => editor.openEdit(opened)} onToggle={enabled => editor.openToggle(opened, enabled)}
       onConsultVersion={props.onConsultVersion} onOpenTerms={props.onOpenTerms} />
     {review}
   </>;
   return <section className="cat-section" aria-labelledby="cat-tariffs-title">
-    <div className="cat-section-head"><h2 id="cat-tariffs-title" ref={heading} tabIndex={-1}>{title}</h2>
-      <div className="cat-section-actions">{canConfigure && <Button disabled={blocked} onClick={editor.openCreate}><Plus data-icon="inline-start" />{categoryCode ? 'Ajouter un tarif' : 'Ajouter une prestation'}</Button>}</div></div>
+    <div className="cat-section-head"><h2 id="cat-tariffs-title" className="visually-hidden" ref={heading} tabIndex={-1}>{categoryCode ? 'Tarifs' : 'Prestations'}</h2>
+      <div className="cat-section-actions">{props.actions}{canConfigure && <Button disabled={blocked} onClick={editor.openCreate}><Plus data-icon="inline-start" />{categoryCode ? 'Ajouter un tarif' : 'Ajouter une prestation'}</Button>}</div></div>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     {!canConfigure && <p className="cat-hint">L’autorisation de configurer les tarifs est nécessaire pour les modifier ; certains tarifs non proposés peuvent ne pas être visibles.</p>}
     {categoryCode && props.programmeCount > 1 && <p className="cat-muted">Ces tarifs sont communs aux {props.programmeCount} parcours du permis {categoryCode}.</p>}
