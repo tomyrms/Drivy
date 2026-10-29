@@ -22,6 +22,8 @@ export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<Compone
   conditions: lazy(() => import('./pricing/terms-page').then(module => ({ default: module.TermsPage }))),
   trajets: lazy(() => import('./trips/trips-page').then(module => ({ default: module.TripsPilot }))),
   configuration: lazy(() => import('./settings/school-page').then(module => ({ default: module.SchoolSettingsPilot }))),
+  confidentialite: lazy(() => import('./settings/privacy-page').then(module => ({ default: module.PrivacyPilot }))),
+  'champs-profil': lazy(() => import('./settings/privacy-page').then(module => ({ default: module.ProfileFieldsPilot }))),
   signalements: lazy(() => import('./signals/signals-page').then(module => ({ default: module.SignalsPilot }))),
 };
 

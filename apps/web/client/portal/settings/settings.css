@@ -16,6 +16,34 @@
 .settings-readonly { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--muted); font-size: .9rem; }
 .settings-readonly span { color: var(--muted-foreground); }
 .settings-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.settings-card-title { display: grid; gap: 4px; }
+.settings-state { display: flex; align-items: center; gap: 10px; font-weight: 550; }
+.settings-state svg { width: 18px; height: 18px; color: var(--primary); }
+.settings-copy { white-space: pre-line; overflow-wrap: anywhere; line-height: 1.6; }
+.settings-disclosure { display: grid; gap: 6px; }
+.settings-disclosure-trigger { justify-self: start; margin-left: -10px; font-weight: 600; }
+.settings-disclosure-trigger svg { transition: transform 150ms ease; }
+.settings-disclosure-trigger[data-panel-open] svg { transform: rotate(90deg); }
+.settings-fields { display: grid; gap: 14px; }
+.settings-field-row { display: grid; gap: 10px; margin: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
+.settings-field-row legend { padding: 0 4px; font-weight: 650; }
+.settings-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-choice { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; font-weight: 500; }
+.settings-choice:has([data-checked]) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.settings-preview { display: grid; gap: 14px; padding: 16px; border-radius: 10px; background: var(--muted); }
+.settings-preview-field { display: grid; gap: 6px; }
+.settings-preview-field > p:first-child { display: flex; justify-content: space-between; gap: 8px; }
+.settings-preview-photo { width: 72px; height: 72px; border-radius: 999px; border: 1px dashed var(--border); background: var(--card); }
+.settings-links { list-style: none; margin: 0; padding: 0; display: grid; }
+.settings-links li + li { border-top: 1px solid var(--border); }
+.settings-links button { width: 100%; height: auto; min-height: 60px; justify-content: space-between; gap: 12px; padding: 10px 4px; text-align: left; white-space: normal; font-weight: 400; }
+.settings-links button > span { display: grid; gap: 2px; }
+.settings-review { width: min(640px, calc(100vw - 32px)); }
+.settings-review-body { display: grid; gap: 12px; max-height: min(60vh, 520px); overflow-y: auto; }
+.settings-review-body h3 { font-weight: 650; }
+.settings-ack { display: flex; align-items: flex-start; gap: 10px; }
+.settings-ack label { font-weight: 500; line-height: 1.4; }
+@media (prefers-reduced-motion: reduce) { .settings-disclosure-trigger svg { transition: none; } }
 @media (max-width: 640px) {
   .settings-heading h1 { font-size: 1.6rem; }
   .settings-card { padding: 18px 16px; }
