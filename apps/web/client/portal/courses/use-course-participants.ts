@@ -11,6 +11,9 @@ const sheetEnvelope = z.object({ data: courseSheetSchema });
 /** Codes after which what is on screen is stale: the row is read again before anything else is attempted. */
 const rereadCodes = ['VERSION_CONFLICT', 'NOT_FOUND', 'COURSE_PAYMENT_VOIDED', 'COURSE_COMPLETION_REVOKED', 'COURSE_ALREADY_COMPLETED', 'COURSE_ENROLLMENT_CLOSED'];
 
+/** Feedback belongs to a task: a payment confirmed on a person never reads as news in the call or the validation of that same person. */
+export const feedbackKey = (task: 'roster' | 'call' | 'payments' | 'completion', id: string) => `${task}:${id}`;
+
 export interface RowFeedback { text: string; tone: 'pending' | 'error' | 'success' }
 export type SendResult = { status: 'confirmed' } | { status: 'pending' } | { status: 'rejected'; message: string };
 
@@ -87,19 +90,19 @@ export function useCourseParticipants(series: CourseSeries) {
     const cell = attendanceCell(row, occurrenceId);
     const body = attendanceBody(cell, status);
     if (!body) return Promise.resolve<SendResult>({ status: 'confirmed' });
-    return send('recordCourseAttendance', `course-enrollments/${row.enrollmentId}/attendance/${occurrenceId}`, body, row.enrollmentId, cell.version ?? 0, 'Présence enregistrée.', row.enrollmentId);
+    return send('recordCourseAttendance', `course-enrollments/${row.enrollmentId}/attendance/${occurrenceId}`, body, row.enrollmentId, cell.version ?? 0, 'Présence enregistrée.', feedbackKey('call', row.enrollmentId));
   };
-  const enroll = (learnerId: string) => send('staffEnrollCourse', `course-series/${series.id}/enrollments`, { learnerId }, undefined, 0, 'Élève inscrit.', `enroll:${learnerId}`, { returnsSheet: false, roster: true });
+  const enroll = (learnerId: string) => send('staffEnrollCourse', `course-series/${series.id}/enrollments`, { learnerId }, undefined, 0, 'Élève inscrit.', feedbackKey('roster', `enroll:${learnerId}`), { returnsSheet: false, roster: true });
   const cancelEnrollment = (enrollment: { id: string; version: number }, reason: string) =>
-    send('staffCancelCourseEnrollment', `course-enrollments/${enrollment.id}/staff-cancel`, { reason }, enrollment.id, enrollment.version, 'Inscription annulée.', enrollment.id, { ifMatch: enrollment.version, returnsSheet: false, roster: true });
+    send('staffCancelCourseEnrollment', `course-enrollments/${enrollment.id}/staff-cancel`, { reason }, enrollment.id, enrollment.version, 'Inscription annulée.', feedbackKey('roster', enrollment.id), { ifMatch: enrollment.version, returnsSheet: false, roster: true });
   const pay = (row: CourseSheetRow, amountCents: number, note: string | null) =>
-    send('recordCoursePayment', `course-enrollments/${row.enrollmentId}/payments`, { amountCents, note }, undefined, 0, 'Règlement enregistré.', row.enrollmentId);
+    send('recordCoursePayment', `course-enrollments/${row.enrollmentId}/payments`, { amountCents, note }, undefined, 0, 'Règlement enregistré.', feedbackKey('payments', row.enrollmentId));
   const voidPayment = (row: CourseSheetRow, paymentId: string, reason: string) =>
-    send('voidCoursePayment', `course-payments/${paymentId}/void`, { reason }, paymentId, 1, 'Saisie annulée.', row.enrollmentId);
+    send('voidCoursePayment', `course-payments/${paymentId}/void`, { reason }, paymentId, 1, 'Saisie annulée.', feedbackKey('payments', row.enrollmentId));
   const validate = (row: CourseSheetRow) =>
-    send('validateCourse', `course-enrollments/${row.enrollmentId}/validate`, { note: null }, undefined, 0, 'Cours validé.', row.enrollmentId);
+    send('validateCourse', `course-enrollments/${row.enrollmentId}/validate`, { note: null }, undefined, 0, 'Cours validé.', feedbackKey('completion', row.enrollmentId));
   const revoke = (row: CourseSheetRow, completionId: string, reason: string) =>
-    send('revokeCourseCompletion', `course-completions/${completionId}/revoke`, { reason }, completionId, 1, 'Validation retirée.', row.enrollmentId);
+    send('revokeCourseCompletion', `course-completions/${completionId}/revoke`, { reason }, completionId, 1, 'Validation retirée.', feedbackKey('completion', row.enrollmentId));
   return { sheetRead, rosterRead, sheet, occurrences: sorted, runner, locked, feedback, mark, enroll, cancelEnrollment, pay, voidPayment, validate, revoke,
     reread: () => { sheetRead.reload(); rosterRead.reload(); } };
 }
