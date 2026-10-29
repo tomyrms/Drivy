@@ -90,9 +90,8 @@ import Observation
     /// reconnaît comme point de départ, et une saisie faite pendant l’envoi n’y passe pas pour un conflit (#113).
     @ObservationIgnored private var confirmedPreparation: PreparationContent?
     @ObservationIgnored private var confirmedWish: String?
-    /// Bilan tel qu’il part au premier envoi, puis tel que l’école l’a confirmé alors que la saisie a continué (#114) :
+    /// Bilan tel que l’école l’a confirmé alors que la saisie a continué (#114) :
     /// la relecture le reconnaît comme point de départ, la saisie suivante n’est ni remplacée ni prise pour un conflit.
-    @ObservationIgnored private var sendingReport: DraftContent?
     @ObservationIgnored private var confirmedReport: DraftContent?
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
@@ -146,11 +145,13 @@ import Observation
     }
     var preparationChanged: Bool {
         guard isAuthor, let preparation else { return false }
+        let edited = SchoolLessonTextDraft.Content(goals: goals, text: administrativeNote)
         return goals != preparation.goals || administrativeNote != (preparation.administrativeCheckNote ?? "")
+            || sentText(.preparation).map { $0 != edited } == true
     }
     var wishChanged: Bool {
         guard isOwnLearner, let wish else { return false }
-        return wishText != wish.text
+        return wishText != wish.text || sentText(.wish).map { $0.text != wishText } == true
     }
     /// Bilan modifié par le moniteur. Une proposition laissée telle quelle n’en est pas une.
     var reportEdited: Bool {
@@ -285,24 +286,47 @@ import Observation
     }
 
     private func sentText(_ kind: SchoolLessonTextDraft.Kind) -> SchoolLessonTextDraft.Content? {
-        guard let pending, pending.scope == scope else { return nil }
+        if let pending, let sent = sentText(kind, command: pending) { return sent }
+        // Le reçu peut précéder la relecture : revenir à l'ancienne base reste alors une nouvelle saisie.
+        switch kind {
+        case .preparation: return confirmedPreparation.map { .init(goals: $0.goals, text: $0.note) }
+        case .wish: return confirmedWish.map { .init(text: $0) }
+        }
+    }
+    private func sentText(_ kind: SchoolLessonTextDraft.Kind, command: PendingSchoolCommand) -> SchoolLessonTextDraft.Content? {
+        guard command.scope == scope else { return nil }
         switch kind {
         case .preparation:
-            guard pending.kind == .savePreparation,
-                  let body = try? JSONDecoder().decode(SchoolSavePreparation.self, from: pending.body) else { return nil }
+            guard let preparation, command.kind == .savePreparation, command.resourceID == preparation.id,
+                  command.routeResourceID == lessonID,
+                  let body = try? JSONDecoder().decode(SchoolSavePreparation.self, from: command.body) else { return nil }
             return .init(goals: body.goals, text: body.administrativeCheckNote)
         case .wish:
-            guard pending.kind == .saveWish,
-                  let body = try? JSONDecoder().decode(SchoolSaveWish.self, from: pending.body) else { return nil }
+            guard let wish, command.kind == .saveWish, command.resourceID == wish.id,
+                  command.routeResourceID == wish.trainingId,
+                  let body = try? JSONDecoder().decode(SchoolSaveWish.self, from: command.body) else { return nil }
             return .init(text: body.text)
         }
+    }
+    /// ACK direct et AP72 reconnaissent exactement la même révision, de cette ressource seulement.
+    private func rememberConfirmedText(_ command: PendingSchoolCommand) -> Bool {
+        if let content = sentText(.preparation, command: command) {
+            confirmedPreparation = .init(goals: content.goals, note: content.text)
+            return true
+        }
+        if let content = sentText(.wish, command: command) {
+            confirmedWish = content.text
+            return true
+        }
+        return false
     }
     @discardableResult private func persistTextDrafts() -> Bool {
         guard let textDrafts else { return true }
         guard !invalidated, !textDraftReadFailed else { return false }
         do {
             for context in textDraftContexts {
-                if context.base == context.edited {
+                let sent = sentText(context.kind)
+                if context.base == context.edited && (sent == nil || sent == context.edited) {
                     try textDrafts.remove(scope: scope, kind: context.kind, resourceID: context.id, explicit: false)
                 } else {
                     let old = try textDrafts.read(scope: scope, kind: context.kind, resourceID: context.id)
@@ -311,7 +335,7 @@ import Observation
                     try textDrafts.save(.init(kind: context.kind, resourceID: context.id,
                         baseVersion: keepsBase ? old!.baseVersion : context.version,
                         base: keepsBase ? old!.base : context.base, edited: context.edited,
-                        sent: sentText(context.kind) ?? (keepsBase ? old?.sent : nil), savedAt: Date()), scope: scope)
+                        sent: sent ?? (keepsBase ? old?.sent : nil), savedAt: Date()), scope: scope)
                 }
             }
             storedTextDrafts = editedTextDrafts
@@ -344,7 +368,8 @@ import Observation
         do {
             for context in textDraftContexts where (context.kind == .preparation ? restoresPreparation : restoresWish) {
                 guard let stored = try textDrafts.read(scope: scope, kind: context.kind, resourceID: context.id) else { continue }
-                if stored.edited == context.base {
+                let sent = sentText(context.kind)
+                if stored.edited == context.base && (sent == nil || sent == stored.edited) {
                     try textDrafts.remove(scope: scope, kind: context.kind, resourceID: context.id, explicit: false)
                 } else {
                     if context.kind == .preparation { goals = stored.edited.goals; administrativeNote = stored.edited.text }
@@ -864,8 +889,6 @@ import Observation
         // l’école vient de confirmer sur une version déjà dépassée.
         guard let draft, canMutate, !awaitsRereadAfterWrite, isAuthor, validTexts, observationsValid else { return false }
         let operation = UUID()
-        sendingReport = editedDraft(id: draft.id)
-        defer { sendingReport = nil }
         return await prepare(SchoolSaveReport(operationId: operation, workedOn: workedOn, observationText: observationText, nextStep: nextStep, observations: observations), id: operation, kind: .saveReportDraft, version: draft.version, resourceID: draft.id)
     }
     /// Garder pour soi le bilan, le trajet ou certaines observations ; tout le reste est vu par l’élève.
@@ -909,10 +932,11 @@ import Observation
             try outbox.remove(pending)
             guard request == generation, !invalidated else { return }
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
-            if pending.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
+            if !rememberConfirmedText(pending), pending.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(pending)
             if confirmsThisReport(pending) {
-                if let sent = sendingReport, sent != editedDraft(id: sent.id) {
+                guard let sent = sentReport(pending) else { fail(SchoolReportFailure.invalidResponse); return }
+                if sent != editedDraft(id: sent.id) {
                     confirmedReport = sent
                     confirmation = "Bilan enregistré. Tes dernières modifications restent à enregistrer."
                     await load(); persistLocalDraft(); return
@@ -957,19 +981,12 @@ import Observation
             guard request == generation, !invalidated else { return false }
             pending = nil; isBusy = false
             // Objectifs et souhait : la saisie continue jusqu’à la relecture, qui reconnaît la révision confirmée.
-            switch command.kind {
-            case .savePreparation:
-                confirmedPreparation = (try? JSONDecoder().decode(SchoolSavePreparation.self, from: command.body))
-                    .map { PreparationContent(goals: $0.goals, note: $0.administrativeCheckNote) }
-            case .saveWish:
-                confirmedWish = (try? JSONDecoder().decode(SchoolSaveWish.self, from: command.body))?.text
-            case .updateLessonSharing: break
-            default: awaitsRereadAfterWrite = true
-            }
+            if !rememberConfirmedText(command), command.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(command)
             if confirmsThisReport(command) {
                 // Saisie poursuivie pendant l’envoi : la fiche reste ouverte, rien de saisi n’est perdu (#114).
-                if let sent = sendingReport, sent != editedDraft(id: sent.id) {
+                guard let sent = sentReport(command) else { fail(SchoolReportFailure.invalidResponse); return false }
+                if sent != editedDraft(id: sent.id) {
                     confirmedReport = sent
                     confirmation = "Bilan enregistré. Tes dernières modifications restent à enregistrer."
                     await load()
@@ -1023,6 +1040,13 @@ import Observation
     }
     private func confirmsThisReport(_ command: PendingSchoolCommand) -> Bool {
         command.scope == scope && command.kind == .saveReportDraft && command.resourceID == draft?.id
+    }
+    /// Le corps durable reste disponible après une réponse perdue ou une fermeture, contrairement à une variable d’envoi.
+    private func sentReport(_ command: PendingSchoolCommand) -> DraftContent? {
+        guard confirmsThisReport(command), let id = command.resourceID,
+              let content = try? JSONDecoder().decode(SchoolReportLocalDraft.Content.self, from: command.body) else { return nil }
+        return .init(id: id, workedOn: content.workedOn, observationText: content.observationText,
+            nextStep: content.nextStep, observations: content.observations)
     }
     private func announceConfirmedChange(_ command: PendingSchoolCommand) {
         let affectsThisLesson = command.scope == scope && command.resourceID != nil && (

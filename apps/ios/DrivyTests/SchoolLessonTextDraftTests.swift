@@ -53,6 +53,61 @@ import Testing
         #expect(!reopened.persistLocalDraft())
     }
 
+    @Test func verifyingAReportReceiptKeepsTheIndependentPreparationDraft() async throws {
+        let server = LessonFinishServer(), store = TextDraftMemoryStore(), reports = LocalDraftStub()
+        let model = workspace(server, store: store, reports: reports)
+        await model.load()
+        model.administrativeNote = "Préparation privée à garder"
+        model.workedOn = "Bilan envoyé"
+        #expect(model.persistLocalDraft())
+        await server.setReceiptAvailable(false)
+        #expect(await model.saveDraft() == false)
+        await server.setReceiptAvailable(true)
+        await model.verifyPending()
+        #expect(model.reportSaveConfirmed && reports.values.isEmpty)
+        let retained = try #require(try store.read(scope: ConfigurationFixture.scope(), kind: .preparation, resourceID: HubFixture.lessonID))
+        #expect(retained.edited.text == "Préparation privée à garder")
+        model.close()
+        let reopened = workspace(server, store: store, reports: reports)
+        await reopened.load()
+        #expect(reopened.administrativeNote == retained.edited.text && reopened.preparationChanged)
+    }
+
+    @Test func verifyingAReportReceiptUsesTheDurableBodyAfterTheFirstSendFinished() async throws {
+        let server = LessonFinishServer(), store = TextDraftMemoryStore(), reports = LocalDraftStub()
+        let model = workspace(server, store: store, reports: reports)
+        await server.storeSaves(); await server.holdSave(); await server.setReceiptAvailable(false)
+        await model.load(); model.workedOn = "Bilan envoyé"
+        let sending = Task { await model.saveDraft() }
+        try await HubFixture.wait { await server.isHoldingSave() }
+        model.workedOn = "Suite du bilan à conserver"
+        #expect(model.persistLocalDraft())
+        await server.releaseSave()
+        #expect(await sending.value == false)
+        // saveDraft est terminé : il n’existe plus de variable éphémère du premier envoi.
+        await server.setReceiptAvailable(true)
+        await model.verifyPending()
+        #expect(model.pending == nil && !model.reportSaveConfirmed)
+        #expect(model.workedOn == "Suite du bilan à conserver" && model.draft?.workedOn == "Bilan envoyé")
+        #expect(model.reportEdited && !model.needsReload && model.canMutate)
+        let retained = try #require(reports.values.values.first)
+        #expect(retained.base.workedOn == "Bilan envoyé" && retained.edited.workedOn == model.workedOn)
+    }
+
+    @Test func anotherLessonsPendingPreparationIsNotTheSentBaseOfThisDraft() async throws {
+        let server = HubServer(), store = TextDraftMemoryStore(), outbox = ConfigurationOutboxStub()
+        let operation = UUID()
+        try outbox.save(.init(id: operation, scope: ConfigurationFixture.scope(), kind: .savePreparation,
+            resourceVersion: 1, createdAt: Date(),
+            body: JSONEncoder().encode(SchoolSavePreparation(operationId: operation, goals: [], administrativeCheckNote: "Autre leçon")),
+            resourceID: UUID(), routeResourceID: UUID()))
+        let model = workspace(server, store: store, outbox: outbox)
+        await model.load(); model.administrativeNote = "Saisie de cette leçon"
+        #expect(model.persistLocalDraft())
+        let retained = try #require(try store.read(scope: ConfigurationFixture.scope(), kind: .preparation, resourceID: HubFixture.lessonID))
+        #expect(retained.sent == nil && retained.edited.text == "Saisie de cette leçon")
+    }
+
     @Test func encryptedTextsAreSeparatedByKindTrainingLessonAccountAndEpoch() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -76,12 +131,14 @@ import Testing
         #expect(try store.read(scope: scope, kind: .wish, resourceID: HubFixture.trainingID) == nil)
     }
 
-    private func workspace(_ server: HubServer, store: any SchoolLessonTextDraftStore) -> SchoolLessonReportWorkspace {
+    private func workspace(_ server: any SchoolHTTPTransport, store: any SchoolLessonTextDraftStore,
+                           reports: (any SchoolReportLocalDraftStore)? = nil,
+                           outbox: any SchoolCommandOutbox = ConfigurationOutboxStub()) -> SchoolLessonReportWorkspace {
         let member = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École synthétique", roles: ["INSTRUCTOR"], grants: ["permit_review"], accessEpoch: 1)
         let client = SchoolLessonReportClient(baseURL: URL(string: "https://api.example.invalid")!, tokenSource: HubToken(), transport: server)
         return SchoolLessonReportWorkspace(scope: ConfigurationFixture.scope(), membership: member, lessonID: HubFixture.lessonID,
-            client: client, outbox: ConfigurationOutboxStub(), textDrafts: store)
+            client: client, outbox: outbox, localDrafts: reports, textDrafts: store)
     }
 }
 
