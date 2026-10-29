@@ -13,9 +13,12 @@ import Testing
             lessonID: HubFixture.lessonID, client: client, outbox: ConfigurationOutboxStub())
         await model.load()
         #expect(model.isOwnLearner && model.canMutate)
+        _ = try #require(model.wish, "La fixture doit fournir un souhait décodable avant de vérifier sa reprise.")
         model.wishText = "Souhait envoyé"
         let sending = Task { await model.saveWish() }
         try await HubFixture.wait { await server.holdsPut() }
+        let isHeld = await server.holdsPut()
+        try #require(isHeld, "La première écriture doit être réellement suspendue avant la saisie suivante.")
         model.wishText = "Souhait suivant"
         await server.releasePut()
         await sending.value
@@ -44,7 +47,7 @@ private actor WishReceiptServer: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         let url = request.url!, parts = url.pathComponents.map { $0.lowercased() }
         func ok(_ value: [String: Any]) throws -> SchoolHTTPResponse {
-            .init(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": "wish-synthetic",
+            .init(data: try JSONSerialization.data(withJSONObject: ["data": value, "requestId": "70000000-0000-4000-8000-000000000092",
                 "serverTime": "2026-09-28T13:30:00Z"]), status: 200, url: url, contentType: "application/json")
         }
         if parts.last == "me" {
