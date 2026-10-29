@@ -3,8 +3,8 @@ import Observation
 import SwiftUI
 import UIKit
 
-/// Aujourd’hui : la carte et la leçon qui compte maintenant. Une leçon passée sans résultat passe en premier
-/// si elle a été démarrée ; sinon la prochaine, avec son départ. Un trajet se lance toujours depuis une leçon et son élève ;
+/// Aujourd’hui : la carte et les engagements du moniteur. Une leçon commencée reste prioritaire,
+/// puis le cours en cours ou le prochain rendez-vous. Un trajet se lance toujours depuis une leçon et son élève ;
 /// tant qu’aucune leçon n’est en cours ou imminente, « Démarrer une leçon » en crée une qui commence maintenant
 /// (le serveur contrôle le planning) puis enchaîne sur le départ du trajet.
 struct SchoolTodayView: View {
@@ -27,6 +27,8 @@ struct SchoolTodayView: View {
     @State private var requestID = UUID()
     @State private var error: String?
     @State private var opened: OpenedLesson?
+    @State private var courseRead = SchoolAgendaCourses()
+    @State private var courseDetail: SchoolCourseDetailWorkspace?
     @State private var presentsStartNow = false
     /// La feuille « Démarrer une leçon » appartient à l’écran : la carte qui porte son bouton change avec l’heure.
     @State private var startNow = SchoolStartNowPresentation()
@@ -48,7 +50,7 @@ struct SchoolTodayView: View {
     }
 
     private var scopeKey: String {
-        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)"
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.schoolId.uuidString ?? ""):\(workspace.school?.timeZone ?? "Europe/Zurich"):\(workspace.membership?.roles.sorted().joined(separator: ",") ?? "")"
     }
     /// La carte occupe tout l’écran : titre flottant, sans barre système.
     private var floatsTitle: Bool { !typeSize.isAccessibilitySize }
@@ -59,8 +61,22 @@ struct SchoolTodayView: View {
     private var instructorFilter: UUID? {
         workspace.membership?.roles.contains("INSTRUCTOR") == true ? workspace.membership?.membershipId : nil
     }
-    private var planned: [SchoolLesson] {
-        lessons.filter { $0.status == "PLANNED" }.sorted { $0.plannedStart < $1.plannedStart }
+    private var schoolTimeZone: String { workspace.school?.timeZone ?? "Europe/Zurich" }
+    private var schoolCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: schoolTimeZone) ?? .current
+        return calendar
+    }
+    private func courseScope(_ day: Date) -> SchoolAgendaScope {
+        let start = schoolCalendar.startOfDay(for: day)
+        let end = schoolCalendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        return SchoolAgendaScope(prefix: scopeKey, range: SchoolAgendaRange(start: start, end: end))
+    }
+    private func appointments(_ now: Date) -> [SchoolAgendaEvent] {
+        let current = loadedKey == dayKey(now)
+        return SchoolTodayAppointments.ordered(lessons: current ? lessons : [], unfinished: current ? unfinished : [],
+            courses: courseRead.items(in: courseScope(now)), on: now, calendar: schoolCalendar,
+            instructorID: instructs ? instructorFilter : nil, captureLessonID: captureController?.lessonID, now: now)
     }
 
     var body: some View {
@@ -131,7 +147,10 @@ struct SchoolTodayView: View {
             if opened == nil { Task { await load() } }
         }
         .onChange(of: scopeKey) { _, _ in
-            opened = nil; presentsStartNow = false
+            opened = nil; presentsStartNow = false; courseDetail = nil; courseRead.reset()
+        }
+        .sheet(item: $courseDetail, onDismiss: { Task { await load() } }) { model in
+            SchoolCourseDetailView(model: model, timeZone: schoolTimeZone)
         }
         .modifier(SchoolStartNowSheets(presentation: startNow, workspace: workspace, agendaClient: agendaClient))
         .sheet(item: $opened, onDismiss: {
@@ -247,16 +266,15 @@ struct SchoolTodayView: View {
 
     /// Panneau de la journée : la leçon qui compte maintenant et son action dominante, puis le reste du jour.
     @ViewBuilder private func card(now: Date, floating: Bool) -> some View {
-        let active = planned.first { $0.hasStarted }
-        let next = planned.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
-        // Un rendez-vous manqué ne passe devant un autre qu’à défaut : il reste à l’écran, « En attente », tant que
-        // rien d’autre n’est prévu, comme dans l’agenda.
-        let featured = SchoolTodayPresentation.featured(in: planned, now: now)
+        let events = appointments(now)
+        let featured = events.first
+        let courseError = courseRead.error(in: courseScope(now), timeZone: schoolTimeZone)
+        let complete = loadedKey == dayKey(now) && error == nil && courseRead.isComplete(in: courseScope(now))
         DrivyMapDock(floating: floating) {
-            if let lesson = featured {
+            if case .lesson(let lesson)? = featured {
                 // Une leçon commencée se lit « En cours » sur sa ligne, pas seulement dans le libellé du bouton.
                 lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote
-                    ?? (lesson.hasStarted ? DrivyRowNote(text: "En cours", tone: .accent) : nil))
+                    ?? (lesson.hasStarted ? DrivyRowNote(text: "En cours", tone: .accent) : nil), featured: true)
                 if instructs && lesson.instructorMembershipId == workspace.membership?.membershipId
                     && (lesson.hasStarted || SchoolLessonHubRules.mayBegin(lesson, now: now)) {
                     Button { Task { await commence(lesson) } } label: {
@@ -267,112 +285,80 @@ struct SchoolTodayView: View {
                     .accessibilityIdentifier(lesson.hasStarted ? "today-continue-lesson" : "today-start")
                     if !lesson.hasStarted { startNowButton(prominent: false) }
                 }
-                following(now: now, featured: lesson, next: active == nil ? nil : next)
-            } else if loadedKey != dayKey(now) && error == nil {
+            } else if case .course(let item)? = featured {
+                courseSummary(item, now: now)
+                Button("Ouvrir le cours") { openCourse(item) }
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
+                    .accessibilityIdentifier("today-open-course")
+            } else if !complete && error == nil && courseError == nil {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     DrivySkeletonBlock(width: 180, height: 32)
                     DrivySkeletonRow(leading: .avatar)
                     DrivySkeletonBlock(height: 52, radius: DrivyRadius.content)
                 }.drivySkeleton("Chargement de la journée…")
-            } else if error == nil {
-                Text(lessons.isEmpty ? "Aucune leçon aujourd’hui" : "Aucune autre leçon aujourd’hui")
+            } else if complete {
+                Text("Aucun autre rendez-vous aujourd’hui")
                     .font(.headline).foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
                 if instructs { startNowButton(prominent: true) }
             }
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
-            unfinishedList(now: now, excluding: featured?.id)
+            if let courseError { SchoolErrorNotice(message: courseError, retry: { Task { await loadCourses() } }) }
+            followingAppointments(Array(events.dropFirst()), now: now)
         }
     }
 
-    /// Les leçons restées à terminer depuis un autre jour, sous la journée : la ligne dit le jour, son mot
-    /// « À terminer » dit quoi faire, et la fiche s’ouvre pour la finir.
-    /// La leçon déjà en tête du panneau n’y est pas répétée.
-    @ViewBuilder private func unfinishedList(now: Date, excluding featuredID: UUID?) -> some View {
-        let unfinished = unfinished.filter { $0.id != featuredID }
-        if !unfinished.isEmpty {
-            VStack(spacing: 0) {
-                Divider().overlay(DrivyTheme.border)
-                ForEach(unfinished) { lesson in
-                    Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-                        DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                            details: [day(lesson)], state: lesson.drivyState(now: now))
-                    }
-                    .buttonStyle(DrivyRowButtonStyle())
-                    .accessibilityHint("Ouvre la leçon à terminer")
-                    .accessibilityIdentifier("today-unfinished-\(lesson.id.uuidString)")
+    /// La prochaine ligne reste directe ; les autres engagements restent ouvrables sur place.
+    @ViewBuilder private func followingAppointments(_ events: [SchoolAgendaEvent], now: Date) -> some View {
+        if let next = events.first {
+            Divider().overlay(DrivyTheme.border)
+            appointmentRow(next, now: now)
+            if events.count > 1 {
+                DisclosureGroup("Autres rendez-vous (\(events.count - 1))") {
+                    ForEach(Array(events.dropFirst())) { appointmentRow($0, now: now) }
                 }
+                .foregroundStyle(DrivyTheme.text)
+                .accessibilityIdentifier("today-other-appointments")
             }
         }
+    }
+
+    @ViewBuilder private func appointmentRow(_ event: SchoolAgendaEvent, now: Date) -> some View {
+        switch event {
+        case .lesson(let lesson): lessonSummary(lesson, note: lesson.drivyState(now: now).rowNote)
+        case .course(let item): courseSummary(item, now: now)
+        }
+    }
+
+    private func courseSummary(_ item: SchoolAgendaCourseItem, now: Date) -> some View {
+        Button { openCourse(item) } label: {
+            DrivyLessonRow(start: item.occurrence.start.map { SchoolDateFormat.template("HHmm", $0, zone: schoolTimeZone) } ?? "—",
+                end: item.occurrence.end.map { SchoolDateFormat.template("HHmm", $0, zone: schoolTimeZone) } ?? "—",
+                title: item.series.title, details: [item.series.typeTitle, item.series.location].filter { !$0.isEmpty },
+                note: item.occurrence.start.map { $0 <= now } == true ? DrivyRowNote(text: "En cours", tone: .accent) : nil)
+        }
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityHint("Ouvre cette séance de cours")
+        .accessibilityIdentifier("today-course-\(item.occurrence.id.uuidString)")
+    }
+
+    private func openCourse(_ item: SchoolAgendaCourseItem) {
+        guard let agendaClient, let membership = workspace.membership, instructs,
+              item.series.schoolId == membership.schoolId else { return }
+        courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: agendaClient.courseClient,
+            series: item.series, learners: workspace.learners, selectedOccurrenceID: item.occurrence.id)
     }
 
     /// Même lecture compacte que l’agenda : horaire, élève, lieu et éventuel état inhabituel.
     /// La fiche de leçon reste accessible depuis toute la ligne.
-    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?) -> some View {
+    private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?, featured: Bool = false) -> some View {
         Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                details: [lesson.meetingPoint], note: note)
+                details: (unfinished.contains { $0.id == lesson.id } ? [day(lesson)] : []) + [lesson.meetingPoint], note: note)
         }
         .buttonStyle(DrivyRowButtonStyle())
-        .accessibilityIdentifier("today-focus-lesson")
+        .accessibilityIdentifier(featured ? "today-focus-lesson" : "today-lesson-\(lesson.id.uuidString)")
         .accessibilityHint("Ouvre la leçon")
-    }
-
-    /// Après la leçon en tête : la suivante en une ligne, le reste de la journée en une pastille « +2 ».
-    /// La liste complète se lit dans l’agenda ; le panneau laisse la carte respirer.
-    @ViewBuilder private func following(now: Date, featured: SchoolLesson, next: SchoolLesson?) -> some View {
-        let rest = SchoolTodayPresentation.upcomingLessons(lessons, now: now,
-            excluding: Set([featured.id, next?.id].compactMap { $0 }))
-        // Une leçon manquée reste lisible ici (« En attente ») quand aucune autre n’est prévue après elle.
-        let upcoming = next ?? rest.first { !$0.hasStarted && !SchoolLessonHubRules.isMissed($0, now: now) }
-            ?? rest.first { !$0.hasStarted }
-        if let upcoming {
-            Divider().overlay(DrivyTheme.border)
-            nextLine(upcoming, extra: rest.filter { $0.id != upcoming.id }.count, now: now)
-        }
-    }
-
-    /// Même colonne d’heure que la leçon du dessus : les noms s’alignent. Sans heure de fin ni lieu, que la fiche donne.
-    private func nextLine(_ lesson: SchoolLesson, extra: Int, now: Date) -> some View {
-        let moment = SchoolTodayPresentation.moment(for: lesson, now: now)
-        return Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
-            // Heure, nom, pastille et chevron sur la première ligne, comme la leçon du dessus.
-            HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.m) {
-                Text(startTime(lesson))
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(DrivyTheme.text)
-                    .frame(minWidth: 52, alignment: .leading)
-                    .fixedSize()
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    Text(name(lesson))
-                        .font(.headline)
-                        .foregroundStyle(DrivyTheme.text)
-                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                    Text(moment)
-                        .font(.subheadline)
-                        .foregroundStyle(DrivyTheme.muted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if extra > 0 {
-                    Text("+\(extra)")
-                        .font(.footnote.weight(.semibold)).monospacedDigit()
-                        .foregroundStyle(DrivyTheme.muted)
-                        .padding(.horizontal, DrivySpacing.xs)
-                        .frame(minWidth: 32, minHeight: 24)
-                        .background(DrivyTheme.surfaceMuted, in: Capsule())
-                }
-                DrivyRowChevron()
-            }
-            .padding(.vertical, DrivySpacing.s)
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Ensuite, \(startTime(lesson)), \(name(lesson)), \(moment)"
-                + (extra == 0 ? "" : extra == 1 ? ", et une autre leçon aujourd’hui" : ", et \(extra) autres leçons aujourd’hui"))
-        }
-        .buttonStyle(DrivyRowButtonStyle())
-        .accessibilityHint("Ouvre la prochaine leçon")
-        .accessibilityIdentifier("today-next-lesson")
     }
 
     /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.
@@ -459,8 +445,32 @@ struct SchoolTodayView: View {
         lessons = day.lessons; unfinished = day.unfinished; loadedKey = key
     }
 
-    /// Relit la journée sans effacer ce qui est affiché.
+    /// Chaque source conserve son propre résultat : une panne de cours ne valide pas une journée vide.
     @MainActor private func load() async {
+        guard !presentsStartNow, !startingPlanned else { return }
+        async let lessonRead: Void = loadLessons()
+        async let coursesRead: Void = loadCourses()
+        _ = await (lessonRead, coursesRead)
+    }
+
+    @MainActor private func loadCourses() async {
+        let wanted = courseScope(Date())
+        guard let agendaClient, let membership = workspace.membership, instructs else {
+            await courseRead.load(scope: wanted, isCurrent: { courseScope(Date()) == wanted }) { [] }
+            return
+        }
+        let refreshAccess = await courseRead.load(scope: wanted, isCurrent: { courseScope(Date()) == wanted }) {
+            try await agendaClient.courseClient.series(schoolID: membership.schoolId, from: wanted.range.start, to: wanted.range.end)
+        }
+        if refreshAccess {
+            courseDetail = nil; opened = nil; requestID = UUID(); isLoading = false
+            lessons = []; unfinished = []; loadedKey = nil; SchoolTodayMemory.forget()
+            await workspace.refreshAccount(minimumInterval: 0)
+        }
+    }
+
+    /// Relit les leçons sans effacer ce qui est affiché.
+    @MainActor private func loadLessons() async {
         // Ce bouton porte plusieurs feuilles successives. Un refresh le remplaçant ne doit pas fermer la chaîne.
         guard !presentsStartNow, !startingPlanned else { return }
         guard let agendaClient, let membership = workspace.membership else {
@@ -515,7 +525,7 @@ struct SchoolTodayView: View {
             switch error as? SchoolAgendaFailure {
             case .authentication, .forbidden:
                 SchoolTodayMemory.forget()
-                lessons = []; unfinished = []; loadedKey = nil; opened = nil
+                lessons = []; unfinished = []; loadedKey = nil; opened = nil; courseDetail = nil; courseRead.reset()
                 self.error = (error as? LocalizedError)?.errorDescription ?? "Les leçons du jour n’ont pas pu être chargées."
                 // « Réessayer » seul ne sortirait jamais d’une session expirée ou d’un accès retiré : le compte est
                 // relu. Refusé, il ouvre la reconnexion ; modifié, il recharge l’école ; inchangé, rien ne bouge.
