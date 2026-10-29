@@ -87,7 +87,7 @@ export function CourseReschedule({ series, catalogue, onBack, onChanged, onRerea
   return <section className="course-page">
     <Button variant="ghost" className="course-back" disabled={locked} onClick={back}><ArrowLeft data-icon="inline-start" />Retour au cours</Button>
     <header className="course-heading"><div><span className="course-eyebrow">{series.title}</span><h1 ref={heading} tabIndex={-1}>Modifier les dates</h1></div></header>
-    {series.seatsTaken > 0 && <Alert><AlertTitle>{seatsLabel(series.seatsTaken)} concernés</AlertTitle><AlertDescription>Les séances gardent leur identité : seules leurs dates et leurs moniteurs changent.</AlertDescription></Alert>}
+    {series.seatsTaken > 0 && <Alert><AlertTitle>{seatsLabel(series.seatsTaken)} concernés</AlertTitle></Alert>}
     {feedback}
     <SessionList sessions={sessions} problems={problems} instructors={instructors} before={opened.sessions} changed={changed} locked={locked} onEdit={key => setStage({ kind: 'session', key })} />
     <div className="course-footer"><Button variant="ghost" disabled={locked} onClick={back}>Annuler</Button><Button disabled={locked || !dirty} onClick={review}>Relire<ArrowRight data-icon="inline-end" /></Button></div>

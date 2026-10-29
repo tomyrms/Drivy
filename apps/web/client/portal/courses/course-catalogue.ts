@@ -14,9 +14,10 @@ export function useCourseCatalogue() {
 }
 
 /** Courses are offered only where the school enabled the module and the school grants the right to manage them. */
+export const coursesManageable = (moduleEnabled: boolean, catalogue: Pick<CourseCatalogue, 'canManage'> | undefined): boolean => moduleEnabled && catalogue?.canManage === true;
 export function useCanManageCourses(catalogue: { data: CourseCatalogue | undefined }): boolean {
   const { school } = useConsole();
-  return school.modules.collectiveCoursesEnabled && catalogue.data?.canManage === true;
+  return coursesManageable(school.modules.collectiveCoursesEnabled, catalogue.data);
 }
 
 /** The confirmed resource of a write, when the response carried it; null after a receipt-only confirmation. */
