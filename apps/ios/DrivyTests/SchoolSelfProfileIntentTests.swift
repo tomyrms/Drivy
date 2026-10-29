@@ -88,7 +88,8 @@ import Testing
         #expect(await restored.save())
         #expect(api.writes.count == 1)
         #expect(!reopened.hasPendingSelfProfile)
-        #expect(store.values.values.allSatisfy(\.isEmpty))
+        let noRetainedIntent = store.values.values.allSatisfy { $0.isEmpty }
+        #expect(noRetainedIntent)
     }
 
     @Test func conflictRetainsChoiceAndRequiresExplicitReviewBeforeNewVersion() async throws {
