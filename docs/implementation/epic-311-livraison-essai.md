@@ -35,4 +35,16 @@ Déploiement dans une nouvelle release web immuable sur CT114. Configuration pri
 
 Un reçu privé conserve l’état précédent. En cas d’échec d’activation, retour automatique au rendu précédent sous garde de concurrence. Retour manuel disponible via `--rollback <id>` (plan) puis `--execute` (nouvelle sauvegarde préalable). Les contrôles refusent un déploiement concurrent ou un état différent de celui relu.
 
-Le résultat effectif (SHA, sauvegarde, URL, vérifications publiques et plan de rollback) sera ajouté après exécution. `master` et les issues attendent le retour du porteur puis les campagnes complètes.
+## Déploiement effectif — 29 octobre, 22:25 Europe/Zurich
+
+- URL : <https://drivy.shulker.ch/app/>.
+- Commit source déployé : `4af4b0e6748081f90201169132cccd5c9fd6cfdb` ; les commits suivants de cette note ne changent pas le code servi.
+- Sauvegarde CT113 : `/root/drivy_refonte-before-web311-20261029T212517Z.dump`, 1 921 190 octets, catalogue et tous les blocs relus avec succès ; aucune restauration réelle effectuée.
+- Reçu de déploiement et rollback : `20261029T212518Z-4af4b0e67480`. Plan de retour vers `be8a02457ef2c8877117e9a13557b288738fc4bf` vérifié après activation ; pas de rollback exécuté.
+- Web actif, zéro redémarrage automatique ; API, worker, identité et ingress inchangés. Configuration privée et BFF compilée inchangées. Ingress est un service oneshot actif, sans processus permanent : le contrôle tient compte de ce type d’unité.
+- HTTPS public : six routes d’entrée/préférences servent le HTML exact ; **104 fichiers statiques vérifiés par empreinte**. Réponse sans cache, CSP stricte sans `unsafe-eval`, session anonyme vérifiée sans exposer son jeton.
+- Navigateur : nouvelle connexion rendue et capture relue, préférences/version, invitation, récupération, ouverture et opérateur chargés. Aucun plantage JavaScript constaté sur ces pages ; l’appel des préférences sans connexion est refusé avec 401 et propose de se reconnecter, comme prévu. Contrôle Atrium : nouveau portail et SHA exact.
+
+Limites connues de cet essai : récupération par e-mail toujours désactivée dans la configuration existante, avec message explicite ; une URL arbitraire hors des routes `/app` connues (ex. `/app/inconnue`) garde la réponse JSON 404 de la BFF. Le composant de page introuvable est disponible sur les routes de console servies ; étendre le fallback BFF devra préserver les 404 des API/assets et être qualifié après le retour du porteur. Aucun parcours authentifié avec données réelles n’a été effectué à sa place.
+
+À essayer personnellement : connexion et choix d’école ; agenda/leçons/cours ; dossier élève ; équipe/invitations/accès ; formations, tarifs et textes ; participants/appel/règlements ; réglages, recherche, thème et mobile. `master` et les issues attendent le retour du porteur puis les campagnes complètes.

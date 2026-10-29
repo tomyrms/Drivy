@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 29 octobre 2026, 22:25 — #311 déployé pour essai du porteur
+
+- Nouvelle web app active sur https://drivy.shulker.ch/app/ au commit `4af4b0e6748081f90201169132cccd5c9fd6cfdb`. Sauvegarde PostgreSQL créée et archive relue avant bascule ; configuration sauvegardée, BFF et autres services inchangés ; plan de rollback vérifié après bascule.
+- 34 contrôles navigateur synthétiques réussis, compilation/typage et tests ciblés réussis ; six routes publiques et 104 assets comparés au build, entrée réelle chargée dans le navigateur. [Reçu, limites et parcours à essayer](epic-311-livraison-essai.md#déploiement-effectif--29-octobre-2225-europezurich).
+- **En attente du retour utilisateur** : essai authentifié personnel, corrections, campagnes complètes et qualification, performances/sécurité, fusion master et clôtures. Récupération e-mail désactivée dans la configuration existante ; fallback 404 hors routes connues reste celui de la BFF. Aucune qualification exhaustive revendiquée.
+
 ## 29 octobre 2026, soir — #311, reprise intégrée avant essai homelab
 
 - Reprise de `codex/epic-311-rebuild` à `33232416`, sans réinitialisation. Sauvegardes récupérées dans trois worktrees isolés ; Équipe déjà intégrée vérifiée par équivalence de patch. [Livraison d’essai](epic-311-livraison-essai.md).
