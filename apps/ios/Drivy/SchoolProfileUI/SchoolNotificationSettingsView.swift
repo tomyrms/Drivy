@@ -118,7 +118,7 @@ struct SchoolNotificationSettingsView: View {
                 .accessibilityHint("Sauvegarde des clés et appareils de messagerie")
                 .accessibilityIdentifier("notification-messaging-settings")
             } else {
-                Text("Messages n’est pas disponible dans cette école.")
+                Text("Les paramètres de Messages ne sont pas disponibles ici.")
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
