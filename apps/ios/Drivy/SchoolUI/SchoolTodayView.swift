@@ -290,6 +290,9 @@ struct SchoolTodayView: View {
                 Button("Ouvrir le cours") { openCourse(item) }
                     .buttonStyle(DrivyPrimaryButtonStyle(size: .field))
                     .accessibilityIdentifier("today-open-course")
+                if instructs, let start = item.occurrence.start, start > now {
+                    startNowButton(prominent: false)
+                }
             } else if !complete && error == nil && courseError == nil {
                 VStack(alignment: .leading, spacing: DrivySpacing.m) {
                     DrivySkeletonBlock(width: 180, height: 32)

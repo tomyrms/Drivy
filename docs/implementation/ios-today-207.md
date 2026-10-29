@@ -8,6 +8,7 @@
 - Priorité explicite : leçon de la capture connue, leçon commencée aujourd’hui, leçon commencée un jour précédent, cours actuellement en cours, prochain rendez-vous chronologique, puis leçon manquée non commencée.
 - Les autres engagements restent ouvrables, première ligne directe puis dépliage local. Une leçon ancienne montre sa date. Les cours écoulés sans action requise ne concurrencent plus le prochain rendez-vous.
 - La fiche de cours existante reçoit l’ID exact d’occurrence. Participants/appel restent gérés par les droits et horaires existants du détail. Aucune action GPS de cours.
+- Un cours futur conserve aussi « Démarrer une leçon » en action secondaire : le moniteur peut lancer une leçon individuelle immédiate. Un cours en cours ne propose pas ce raccourci. Le serveur continue à contrôler les conflits du planning.
 - Les lectures leçons/cours sont indépendantes. Échec ou borne de 200 cours restent signalés ; une source seule ne prouve pas une journée vide. Les résultats sont isolés par compte, appartenance, époque, école, rôles, fuseau et jour. Un refus d’accès efface le contenu et relit les droits.
 
 DA : `DrivyMapDock`, `DrivyLessonRow`, couleurs/espacements Drivy, feuille de détail existante et `DisclosureGroup` SwiftUI. Aucune dépendance. Règles R62/R64, cours-collectifs, calendrier-notifications et contrats AP145–AP151 consultés ; l’adaptateur courant `SchoolCourseClient` reste la source d’intégration, sans changement du contrat canonique.
