@@ -280,7 +280,7 @@ async function main() {
       stage=`personnalisation depuis le résumé : ${name}`;
       await page.locator('.setup-summary-part').filter({has:page.getByRole('heading',{name,exact:true})})
         .getByRole('button',{name:/^Modifier/}).click();
-      await page.getByRole('heading',{name,exact:true}).waitFor();
+      await page.getByRole('heading',{name:name==='Permis proposés'?'Permis enseignés':name,exact:true}).waitFor();
     };
     const revealPhoneExplanation=async()=>{
       await expand(page,'Adapter les informations demandées');
@@ -292,6 +292,11 @@ async function main() {
     const requestLogout=async()=>{
       await page.getByRole('button',{name:/^Compte de /}).click();
       await page.getByRole('menuitem',{name:'Se déconnecter',exact:true}).click();
+    };
+    const reviewRecoveredDraft=async()=>{
+      stage='relecture explicite après reprise du brouillon confirmé';
+      await page.getByRole('button',{name:'Vérifier la préparation',exact:true}).click();
+      await page.locator('.setup-summary').waitFor();
     };
     await openReview();await editReviewSection('Confidentialité');
     stage='première sauvegarde du guide';
@@ -334,7 +339,7 @@ async function main() {
     const draft=z.object({data:z.object({version:z.number().int(),currentStep:z.string(),content:z.object({privacy:z.object({noticeText:z.string(),retentionText:z.string()})})})}).parse(await draftResponse.json());
     assert(draftResponse.ok()&&draft.data.version===savedReceipt.resourceVersion&&draft.data.currentStep==='REVIEW'&&draft.data.content.privacy.noticeText===notice&&draft.data.content.privacy.retentionText===retention,
       'Le guide reprend le résumé et les textes réellement enregistrés après la réponse perdue');
-    await page.locator('.setup-summary').waitFor();
+    await reviewRecoveredDraft();
     await editReviewSection('Confidentialité');
     assert(await page.getByLabel('Information des personnes',{exact:true}).inputValue()===notice&&await page.getByLabel('Conservation des données',{exact:true}).inputValue()===retention,
       'Les champs du guide retrouvent les textes du serveur après vérification du reçu');
@@ -355,7 +360,7 @@ async function main() {
     await signIn(page,'school@example.invalid',consumerPassword);
     await page.getByRole('link',{name:'Ouvrir l’école Auto-école Recette · synthétique',exact:true}).click();
     await page.getByRole('heading',{name:'Résumé et confirmation',exact:true}).waitFor();
-    await page.locator('.setup-summary').waitFor();await editReviewSection('Informations des élèves');
+    await reviewRecoveredDraft();await editReviewSection('Informations des élèves');
     await revealPhoneExplanation();
     assert(await page.getByLabel('Explication · Téléphone',{exact:true}).inputValue()===savedPhoneExplanation,
       'Un navigateur indépendant reprend l’étape confirmée et le contenu serveur, sans annoncer la frappe non enregistrée comme sauvegardée');
