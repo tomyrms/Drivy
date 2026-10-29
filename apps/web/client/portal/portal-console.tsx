@@ -15,6 +15,7 @@ import { portalPages, portalSections } from './pages';
 import { PortalPendingRequests } from './runtime/pending-requests';
 import { PortalIdentityDialog } from './runtime/identity-dialog';
 import { NotRebuilt } from './components/not-rebuilt';
+import { PortalSettingsSearch, PortalSettingsFocus } from './settings/settings-search';
 import './portal.css';
 
 function EntryLayout({ children }: { children: ReactNode }) {
@@ -62,6 +63,7 @@ export function PortalConsole() {
   return <UiSuspendedContext.Provider value={resumeGate !== null}>
     <ConsoleContext.Provider value={context}>
       <PortalFrame active={route.section} activeQuery={route.query} available={portalSections}
+        search={<PortalSettingsSearch />}
         onNavigate={(section, query) => context.navigate(section, query)}
         schoolName={state.school.name} userName={runtime.personName ?? 'Mon compte'}
         schools={runtime.adminSchools.map(member => ({ id: member.schoolId, name: member.schoolName }))} currentSchoolId={state.membership.schoolId}
@@ -75,6 +77,7 @@ export function PortalConsole() {
         <div hidden={resumeGate !== null} inert={resumeGate !== null}>
           {runtime.logoutError && <Alert variant="destructive"><AlertTitle>Déconnexion non confirmée</AlertTitle><AlertDescription>{runtime.logoutError}</AlertDescription></Alert>}
           <PortalPendingRequests />
+          <PortalSettingsFocus target={route.query.focus} navigationKey={`${route.section}:${runtime.historyIndex.current}:${resumeGate ?? ''}`} />
           <Suspense fallback={<Loading label="Chargement de la page" />}>
             {Page && !setup ? <Page key={pageKey} /> : <NotRebuilt key={pageKey} title={sectionTitles[route.section]} />}
           </Suspense>

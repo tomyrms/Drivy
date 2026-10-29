@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Skeleton } from '../components/ui/skeleton';
 import { PortalSelect } from './components/portal-select';
 import { PortalPendingRequests } from './runtime/pending-requests';
+import { PortalSettingsSearch, PortalSettingsFocus } from './settings/settings-search';
 import { usePreviewNavigation } from './preview/use-preview-navigation';
 import { ids, previewMe, previewMembership, previewSchool } from './preview/fixtures';
 import { memberSchema, readSchool } from '../school-api';
@@ -51,9 +52,10 @@ function Preview() {
     registerUnsavedChanges: navigation.registerUnsavedChanges, confirmNavigation: navigation.confirmNavigation,
     setNavigationGuard: navigation.setNavigationGuard, login: () => {}, confirmIdentity: async () => true,
   };
-  return <ConsoleContext.Provider value={value}><PortalFrame active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} preview={{ build: __DRIVY_PREVIEW_SHA__ }}
+  return <ConsoleContext.Provider value={value}><PortalFrame search={<PortalSettingsSearch />} active={route.page} activeQuery={route.query} available={portalSections} onNavigate={(section, query) => navigation.navigate(section, query)} schoolName={previewSchool.name} userName={previewMe.displayName} preview={{ build: __DRIVY_PREVIEW_SHA__ }}
     account={{ onPreferences: () => navigation.confirmNavigation(() => location.assign('?page=preferences')), onLogout: () => navigation.confirmNavigation(() => { commandStore.clear(); location.reload(); }) }}>
     <PortalPendingRequests />
+    <PortalSettingsFocus target={route.query.focus} navigationKey={`${route.page}:${JSON.stringify(route.query)}`} />
     <Suspense fallback={<div className="grid gap-5" aria-label="Chargement de la page" role="status"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>}>
       {route.page === 'equipe' && isFirstLink() ? <AccessPilot initialEdit /> : <Page />}
     </Suspense>

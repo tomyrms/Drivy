@@ -16,7 +16,7 @@ export default defineConfig({
     },
   }],
   resolve: { alias: { '@': fileURLToPath(new URL('./client', import.meta.url)) } },
-  define: { __DRIVY_PREVIEW_SHA__: JSON.stringify(sha) },
+  define: { __DRIVY_PREVIEW_SHA__: JSON.stringify(sha), __DRIVY_BUILD_SHA__: JSON.stringify(sha) },
   build: { outDir: 'dist/preview-311', emptyOutDir: true, sourcemap: false, rolldownOptions: { input: fileURLToPath(new URL('./preview-311.html', import.meta.url)) } },
   server: { host: '127.0.0.1', port: 5188, strictPort: true },
 });

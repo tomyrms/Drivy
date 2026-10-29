@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Building2, Pencil } from 'lucide-react';
 import { characters, createCommand, filled, isEmail } from '../../command-core';
 import { useCommandSnapshot } from '../../command-store';
@@ -22,6 +22,7 @@ export function SchoolSettingsPilot() {
   const identity = useDraft<Identity>({ name: school.name, contactEmail: school.contactEmail, contactPhone: school.contactPhone ?? '' });
   const [attempted, setAttempted] = useState(false);
   const [editing, setEditing] = useState(() => !!routeQuery?.focus?.startsWith('school-'));
+  useEffect(() => { if (routeQuery?.focus?.startsWith('school-')) setEditing(true); }, [routeQuery?.focus]);
   const editButton = useRef<HTMLButtonElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const focusOnEdit = useRef(false);
@@ -34,6 +35,8 @@ export function SchoolSettingsPilot() {
   // Typing continues while sending; only a request still to verify closes the fields.
   const fieldsOpen = loaded.data !== undefined && (!runner.pending || runner.pending.phase === 'sending');
   const value = identity.draft;
+  const latestValue = useRef(value);
+  latestValue.current = value;
   const errors = value ? {
     name: filled(value.name, 150) ? null : 'Indiquez le nom de l’école (150 caractères au plus).',
     contactEmail: isEmail(value.contactEmail.trim()) ? null : 'Indiquez une adresse e-mail valide.',
@@ -49,7 +52,12 @@ export function SchoolSettingsPilot() {
     const sent = value;
     const result = await runner.run(createCommand({ schoolId, kind: 'updateSchool', path: '', ifMatch: school.version, resourceVersion: school.version,
       body: { ...normalized, contactPhone: normalized.contactPhone || null, timeZone: school.timeZone, impactConfirmed: true } }), 'Les coordonnées de l’école sont enregistrées.');
-    if (result.status === 'confirmed') { identity.markSaved(normalized, sent); setAttempted(false); setEditing(false); requestAnimationFrame(() => editButton.current?.focus()); }
+    if (result.status === 'confirmed') {
+      identity.markSaved(normalized, sent); setAttempted(false);
+      if (JSON.stringify(latestValue.current) === JSON.stringify(sent)) {
+        setEditing(false); requestAnimationFrame(() => editButton.current?.focus());
+      }
+    }
   }
   const close = () => { identity.reset(); setAttempted(false); setEditing(false); requestAnimationFrame(() => editButton.current?.focus()); };
   const error = (key: keyof Identity) => attempted ? errors?.[key] ?? null : null;

@@ -26,12 +26,13 @@ export interface PortalFrameProps {
   currentSchoolId?: string;
   onSchoolChange?: (schoolId: string) => void;
   account?: { onPreferences: () => void; onLogout: () => void; busy?: boolean };
+  search?: ReactNode;
 }
 
 const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
 
 /** One navigation tree and one mounted page at every viewport width. */
-export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, preview, schools = [], currentSchoolId, onSchoolChange, account }: PortalFrameProps) {
+export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, preview, schools = [], currentSchoolId, onSchoolChange, account, search }: PortalFrameProps) {
   const theme = useTheme();
   const content = useRef<HTMLElement>(null);
   const workspaces = useMemo(() => availableWorkspaces(new Set(available)), [available]);
@@ -71,6 +72,7 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
           </DropdownMenu>
         : <div className="portal-school"><Building2 aria-hidden="true" /><span>{schoolName}</span></div>}
       <div className="portal-topbar-end">
+        {search}
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" className="portal-theme-trigger" aria-label="Choisir l’apparence" />}>
             <ThemeIcon aria-hidden="true" /><span>Apparence</span><ChevronDown aria-hidden="true" />

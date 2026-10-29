@@ -132,6 +132,7 @@ function PolicyTextsCard({ proposals, fieldsPublished, onAdopted }: { proposals:
 
   async function confirm() {
     if (!value || !valid || !policy) return;
+    if (replacesTexts && (impact.status !== 'ready' || !impact.data)) return;
     const result: SubmitResult = await runner.run(createCommand({ schoolId, kind: 'saveDataPolicy', path: 'data-policy', ifMatch: policy.version, resourceVersion: policy.version,
       body: { noticeText: value.noticeText, retentionText: value.retentionText, contactEmail: value.contactEmail.trim(), reviewAcknowledged: true,
         ...(publishesFields ? { publishProposedFields: true } : {}) } }), 'Les textes sont adoptés.');
@@ -170,8 +171,9 @@ function PolicyTextsCard({ proposals, fieldsPublished, onAdopted }: { proposals:
       </div>
     </form>}
     <Review open={reviewing} busy={runner.busy} onCancel={() => setReviewing(false)} onConfirm={() => void confirm()} title="Relire les textes" confirmLabel="J’adopte ces textes"
-      acknowledgement="J’ai relu ces textes et je les adopte pour mon école." blocked={replacesTexts && impact.status === 'loading' ? 'Vérification des trajets GPS concernés…' : null}>
+      acknowledgement="J’ai relu ces textes et je les adopte pour mon école." blocked={runner.blockedReason ?? (replacesTexts && (impact.status !== 'ready' || !impact.data) ? 'Les effets sur les trajets GPS doivent être vérifiés avant l’adoption.' : null)}>
       <CommandFeedback runner={runner} />
+      {replacesTexts && <ReadFeedback loaded={impact} label="Vérification des trajets GPS concernés" />}
       {consequences.length > 0 && <Alert><AlertTitle>Effet sur le GPS</AlertTitle><AlertDescription>{consequences.map(sentence => <p key={sentence}>{sentence}</p>)}</AlertDescription></Alert>}
       {value && <><h3>Information</h3><p className="settings-copy">{value.noticeText}</p><h3>Conservation</h3><p className="settings-copy">{value.retentionText}</p>
         <dl className="settings-values"><div><dt>Contact pour les données</dt><dd>{value.contactEmail.trim()}</dd></div></dl></>}

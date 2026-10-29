@@ -12,6 +12,7 @@ import { Label } from '../../components/ui/label';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Skeleton } from '../../components/ui/skeleton';
 import { Switch } from '../../components/ui/switch';
+import { buildSha } from '../build';
 import '../portal.css';
 import './account.css';
 
@@ -59,6 +60,7 @@ export function PortalPreferencesPage({ back = preferencesReturn(window.location
           <CollapsibleTrigger render={<Button variant="ghost" className="account-disclosure-trigger" />}>Contacter mon école<ChevronRight aria-hidden="true" /></CollapsibleTrigger>
           <CollapsibleContent><p className="account-muted">Retrouvez les coordonnées de votre école dans votre invitation ou dans l’app Drivy.</p></CollapsibleContent>
         </Collapsible>
+        <p className="account-muted">Version <code title={buildSha}>{buildSha.slice(0, 12)}</code></p>
       </section>
     </main>
   </div>;
