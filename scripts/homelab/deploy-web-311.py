@@ -26,9 +26,10 @@ def digest(data): return hashlib.sha256(data).hexdigest()
 def services(require_active=True):
     result={}
     for label in ['api','web','course-worker','identity','ingress']:
-        data=run(['systemctl','show','drivy-refonte-'+label,'--property=ActiveState,MainPID,WorkingDirectory,NRestarts']).decode()
+        data=run(['systemctl','show','drivy-refonte-'+label,'--property=ActiveState,SubState,Type,MainPID,WorkingDirectory,NRestarts']).decode()
         v=dict(line.split('=',1) for line in data.splitlines() if '=' in line)
-        if require_active and (v['ActiveState']!='active' or v['MainPID']=='0'): raise RuntimeError('Required service is inactive: '+label)
+        completed_ingress=label=='ingress' and v['Type']=='oneshot' and v['SubState']=='exited'
+        if require_active and (v['ActiveState']!='active' or v['MainPID']=='0' and not completed_ingress): raise RuntimeError('Required service is inactive: '+label)
         if v['MainPID']!='0': v['processDirectory']=os.readlink('/proc/'+v['MainPID']+'/cwd')
         result[label]=v
     return result
