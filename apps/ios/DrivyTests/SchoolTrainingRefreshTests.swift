@@ -58,14 +58,18 @@ import Testing
         await model.load()
         let before = try #require(model.progress)
         let competencies = model.competencies
+        let readAt = try #require(model.progressReadAt)
+        #expect(!model.isRefreshingProgress)
         await server.setProgressStatus(503)
         await model.loadProgress()
         #expect(model.progress?.items == before.items)
         #expect(model.competencies == competencies)
         #expect(model.progressError != nil)
+        #expect(model.progressReadAt == readAt && !model.isRefreshingProgress)
         await server.setProgressStatus(403)
         await model.loadProgress()
         #expect(model.progress == nil && model.competencies.isEmpty)
+        #expect(model.progressReadAt == nil && !model.isRefreshingProgress)
         #expect(model.progressError != nil)
         #expect(model.training != nil && !model.accessRevoked)
         await server.setProgressStatus(401)
@@ -77,6 +81,7 @@ import Testing
         await model.refreshOnAppear()
         #expect(!model.accessRevoked && model.canOpenPedagogicalContent)
         #expect(model.training != nil && !model.lessons.isEmpty && model.progress != nil)
+        #expect(model.progressReadAt != nil && !model.isRefreshingProgress)
     }
 
     @Test func anUnfinishedPastLessonDoesNotTakeTheNextLearnerWish() async {
