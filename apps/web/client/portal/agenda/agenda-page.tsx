@@ -16,6 +16,8 @@ import { phaseLabels, ReadFeedback } from './presentation';
 import { AgendaAddMenu } from '../courses/course-add-menu';
 import { CoursePolicyDialog } from '../courses/course-policy-dialog';
 import { CourseWorkspace } from '../courses/course-workspace';
+import { PlanningReadinessBanner } from './planning-readiness';
+import { FirstLessonActions } from './first-lesson-actions';
 import './agenda.css';
 
 type AgendaState = ReturnType<typeof useAgenda>;
@@ -24,11 +26,13 @@ const weekday = (date: string) => new Intl.DateTimeFormat('fr-CH', { weekday: 's
 export function AgendaPilot() {
   const state = useAgenda();
   const [policyOpen, setPolicyOpen] = useState(false);
+  const [readinessRefresh, setReadinessRefresh] = useState(0);
+  const refresh = () => { setReadinessRefresh(value => value + 1); state.refresh(); };
   const { school, membership } = state.context;
   const selection = state.selection;
-  if (selection && 'lesson' in selection) return <LessonWorkspace key={selection.lesson ?? 'new'} lessonId={selection.lesson ?? null} onClose={state.close} onSaved={state.refresh}
+  if (selection && 'lesson' in selection) return <LessonWorkspace key={selection.lesson ?? 'new'} lessonId={selection.lesson ?? null} onClose={state.close} onSaved={refresh}
     onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })} />;
-  if (selection && 'course' in selection) return <CourseWorkspace key="course" courseId={selection.course ?? null} occurrenceId={selection.occurrence} catalogue={state.catalogue} onClose={state.close} onShow={state.showCourse} onChanged={state.refresh} />;
+  if (selection && 'course' in selection) return <CourseWorkspace key="course" courseId={selection.course ?? null} occurrenceId={selection.occurrence} catalogue={state.catalogue} onClose={state.close} onShow={state.showCourse} onChanged={refresh} />;
   const dayView = state.compact || state.presentation === 'day';
   const today = civilDateIn(school.timeZone, state.now);
   const visibleDays = dayView ? state.days.filter(item => item.day === state.day) : state.days;
@@ -40,8 +44,10 @@ export function AgendaPilot() {
   return <section className="agenda-page">
     <header className="agenda-heading"><div><span className="agenda-eyebrow">Planning de l’école</span><h1 id="portal-agenda-title" tabIndex={-1}>Agenda</h1></div>
       {canPlan && <AgendaAddMenu canCreateCourse={state.canManageCourses} onLesson={() => state.openLesson(null)} onCourse={state.openNewCourse} />}</header>
+    <PlanningReadinessBanner refreshKey={readinessRefresh} />
+    {school.status === 'ACTIVE' && <FirstLessonActions refreshKey={readinessRefresh} />}
     <div className="agenda-toolbar"><div className="agenda-period"><div className="agenda-arrows"><Button variant="outline" size="icon" aria-label={dayView ? 'Jour précédent' : 'Semaine précédente'} onClick={() => state.chooseDay(addDays(state.day, dayView ? -1 : -7))}><ChevronLeft /></Button><Button variant="outline" size="icon" aria-label={dayView ? 'Jour suivant' : 'Semaine suivante'} onClick={() => state.chooseDay(addDays(state.day, dayView ? 1 : 7))}><ChevronRight /></Button></div><h2>{dayView ? formatDayHeading(state.day) : formatWeek(state.monday)}</h2></div>
-      <div className="agenda-actions"><Button variant="outline" onClick={() => state.chooseDay(today)}>Aujourd’hui</Button><Button variant="outline" size="icon" aria-label="Actualiser l’agenda" onClick={state.refresh}><RefreshCw /></Button>{state.canManageCourses && <Button variant="outline" size="icon" aria-label="Règles des cours" onClick={() => setPolicyOpen(true)}><Settings2 /></Button>}<Button variant="outline" size="icon" aria-label="Filtres et date" aria-expanded={state.filtersOpen} onClick={() => state.setFiltersOpen(!state.filtersOpen)}><SlidersHorizontal /></Button>
+      <div className="agenda-actions"><Button variant="outline" onClick={() => state.chooseDay(today)}>Aujourd’hui</Button><Button variant="outline" size="icon" aria-label="Actualiser l’agenda" onClick={refresh}><RefreshCw /></Button>{state.canManageCourses && <Button variant="outline" size="icon" aria-label="Règles des cours" onClick={() => setPolicyOpen(true)}><Settings2 /></Button>}<Button variant="outline" size="icon" aria-label="Filtres et date" aria-expanded={state.filtersOpen} onClick={() => state.setFiltersOpen(!state.filtersOpen)}><SlidersHorizontal /></Button>
         {!state.compact && <ToggleGroup value={[state.presentation]} onValueChange={values => { if (values[0] === 'week' || values[0] === 'day') state.setPresentation(values[0]); }} aria-label="Présentation de l’agenda" variant="outline"><ToggleGroupItem value="day">Jour</ToggleGroupItem><ToggleGroupItem value="week">Semaine</ToggleGroupItem></ToggleGroup>}
       </div></div>
     {state.filtersOpen && <FieldGroup className="agenda-filters"><Field><FieldLabel htmlFor="agenda-date">Aller à la date</FieldLabel><Input id="agenda-date" type="date" value={state.day} onChange={event => { if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value)) state.chooseDay(event.target.value); }} /></Field>
