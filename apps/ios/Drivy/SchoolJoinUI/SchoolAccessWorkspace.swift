@@ -26,6 +26,8 @@ struct SchoolAccessOutcome: Equatable {
     private(set) var preview: SchoolAccessPreview?
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    private(set) var codeInputError: String?
+    private(set) var credentialsRejected = false
     /// Connecté : la racine ferme la feuille et poursuit avec ce résultat.
     private(set) var outcome: SchoolAccessOutcome?
     /// Connecté : la feuille peut se fermer (avec ou sans suite à donner).
@@ -45,8 +47,43 @@ struct SchoolAccessOutcome: Equatable {
         !isBusy && input != nil && !firstName.trimmed.isEmpty && !lastName.trimmed.isEmpty
             && email.trimmed.contains("@") && password.count >= 8
     }
-    var canSignIn: Bool { !isBusy && email.trimmed.contains("@") && !password.isEmpty }
+    var canSignIn: Bool { !isBusy && SchoolSignInValidation.canSubmit(email: email, password: password) }
     var recoveryClient: SchoolAccountRecoveryClient { client.recoveryClient() }
+
+    func updateCode(_ value: String) {
+        guard !isBusy, step == .code else { return }
+        guard value.utf8.count <= 2_048 else {
+            codeInputError = "Ce contenu est trop long. Saisis le code court reçu."; return
+        }
+        if value.contains("/") {
+            codeText = value
+        } else {
+            let characters = value.uppercased().filter { !$0.isWhitespace && !"-‐‑–—".contains($0) }
+            guard characters.count <= 8, characters.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else {
+                codeInputError = "Ce contenu n’est pas un code reconnu. Saisis les huit caractères reçus."; return
+            }
+            codeText = SchoolInvitationCode.formatted(value)
+        }
+        codeInputError = nil
+    }
+
+    /// Le collage est un geste explicite. Une valeur refusée ne remplace jamais la saisie précédente.
+    func pasteCode(_ value: String) {
+        guard !isBusy, step == .code else { return }
+        guard value.utf8.count <= 2_048 else {
+            codeInputError = "Ce contenu est trop long. Saisis le code court reçu."; return
+        }
+        guard SchoolAccessInput.parse(value, configuration: client.configuration) != nil else {
+            codeInputError = "Ce contenu n’est pas un code ou un lien Drivy reconnu. Saisis le code reçu."; return
+        }
+        updateCode(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        errorMessage = nil
+    }
+
+    func credentialsDidChange() {
+        guard credentialsRejected, !isBusy else { return }
+        credentialsRejected = false; errorMessage = nil
+    }
 
     /// Titre de l’étape de création : ce que le code ouvre.
     var registerTitle: String {
@@ -75,6 +112,7 @@ struct SchoolAccessOutcome: Equatable {
             return
         }
         let request = begin()
+        codeInputError = nil
         input = nil; preview = nil
         do {
             let value = try await client.preview(parsed)
@@ -115,14 +153,14 @@ struct SchoolAccessOutcome: Equatable {
 
     func show(_ next: Step) {
         guard !isBusy else { return }
-        errorMessage = nil; password = ""
+        errorMessage = nil; codeInputError = nil; credentialsRejected = false; password = ""
         if next == .code { input = nil; preview = nil }
         step = next == .register && input == nil ? .code : next
     }
 
     func prepareRecovery() {
         guard !isBusy else { return }
-        password = ""; errorMessage = nil
+        password = ""; errorMessage = nil; credentialsRejected = false
     }
 
     func invalidate() { generation = UUID(); isBusy = false; password = "" }
@@ -132,6 +170,7 @@ struct SchoolAccessOutcome: Equatable {
         guard request == generation else { return }
         isBusy = false
         guard connected else {
+            credentialsRejected = identity.signInFailure == .invalidCredentials
             errorMessage = identity.errorMessage ?? IdentityFailure.unavailable.localizedDescription
             identity.clearError()
             return
@@ -146,7 +185,7 @@ struct SchoolAccessOutcome: Equatable {
     }
 
     private func begin() -> UUID {
-        generation = UUID(); isBusy = true; errorMessage = nil
+        generation = UUID(); isBusy = true; errorMessage = nil; credentialsRejected = false
         return generation
     }
 

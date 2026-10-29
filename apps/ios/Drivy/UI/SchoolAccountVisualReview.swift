@@ -4,7 +4,7 @@ import SwiftUI
 /// Les vrais écrans, des transports et journaux exclusivement en mémoire.
 /// Aucune connexion OIDC, requête réseau ou permission GPS n'est demandée.
 struct SchoolAccountVisualReview: View {
-    static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-loading", "sign-in-unconfigured", "sign-in-recovery-ready", "account", "app-lock", "app-privacy",
+    static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-network-error", "sign-in-attempts", "sign-in-loading", "sign-in-unconfigured", "sign-in-recovery-ready", "sign-in-recovery-error", "account", "app-lock", "app-privacy",
         "access-code", "access-register", "access-opening", "school-opening",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "profile-instructor", "onboarding-welcome", "onboarding-information",
@@ -18,14 +18,27 @@ struct SchoolAccountVisualReview: View {
     @State private var openingModel: SchoolOpeningWorkspace?
     @State private var lock = AppLock(store: UserDefaults(suiteName: "ch.drivy.visual-review.lock")!)
     @State private var error: String?
+    @State private var signInFailure: IdentityFailure?
+
+    init(screen: String) {
+        self.screen = screen
+        let failure: IdentityFailure? = switch screen {
+        case "sign-in-error": .invalidCredentials
+        case "sign-in-network-error": .unavailable
+        case "sign-in-attempts": .attempts
+        default: nil
+        }
+        _signInFailure = State(initialValue: failure)
+    }
 
     var body: some View {
         Group {
             if screen.hasPrefix("sign-in") {
                 NavigationStack {
                     SchoolSignInLanding(isConfigured: screen != "sign-in-unconfigured", isWorking: screen == "sign-in-loading",
-                        errorMessage: screen == "sign-in-error" ? IdentityFailure.invalidCredentials.localizedDescription : nil,
-                        signIn: { _, _ in }, joinWithCode: {}, recoveryClient: recoveryClient)
+                        errorMessage: signInFailure?.localizedDescription,
+                        signIn: { _, _ in }, joinWithCode: {}, clearError: { signInFailure = nil },
+                        recoveryClient: recoveryClient, credentialsRejected: signInFailure == .invalidCredentials)
                         .navigationTitle("Drivy")
                 }
             } else if screen == "app-lock" {
@@ -65,7 +78,7 @@ struct SchoolAccountVisualReview: View {
         let configuration = AppConfiguration(apiBaseURL: URL(string: "https://visual.drivy.invalid")!,
             issuer: URL(string: "https://visual.drivy.invalid/identity")!, clientID: "visual", redirectURL: AppConfiguration.callback)
         return SchoolAccountRecoveryClient(configuration: configuration,
-            transport: SchoolRecoveryVisualTransport(available: screen == "sign-in-recovery-ready"))
+            transport: SchoolRecoveryVisualTransport(available: screen == "sign-in-recovery-ready", fails: screen == "sign-in-recovery-error"))
     }
 
     @MainActor private func prepare() async throws {
@@ -263,7 +276,9 @@ private struct SchoolAccountVisualJoinTransport: SchoolHTTPTransport {
 
 private struct SchoolRecoveryVisualTransport: SchoolHTTPTransport {
     let available: Bool
+    var fails = false
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        if fails { throw URLError(.notConnectedToInternet) }
         let url: Any = available ? "https://visual.drivy.invalid/app/recover" : NSNull()
         let payload = try JSONSerialization.data(withJSONObject: ["data": ["available": available, "recoveryUrl": url],
                                                                  "serverTime": "2026-10-26T12:00:00Z"])
