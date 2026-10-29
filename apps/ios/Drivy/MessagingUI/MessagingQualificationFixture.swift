@@ -107,6 +107,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         reactions[MessagingQualificationIDs.message(1, 21)] = ["👍": [MessagingQualificationIDs.leaPerson, scope.accountID],
                                                               "😂": [MessagingQualificationIDs.marcPerson]]
         pinned = [MessagingQualificationIDs.message(1, 20)]
+        if arguments.contains("-messaging-ui-two-pins") { pinned.insert(MessagingQualificationIDs.message(1, 24)) }
     }
 
     /// Synthetic conversations shared by the HTTP fixture and the in-memory history (inbox previews).

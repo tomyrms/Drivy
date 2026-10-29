@@ -178,42 +178,73 @@ struct MessagingPinnedBanner: View {
     let workspace: MessagingWorkspace
     let pinned: [MessagingWireMessage]
     let onSelect: (UUID) -> Void
-    @State private var index = 0
+    @State private var selection = MessagingPinnedSelection()
+    @ScaledMetric(relativeTo: .footnote) private var bannerHeight = DrivyLayout.tapTarget
 
     var body: some View {
-        if !pinned.isEmpty {
-            let current = pinned[min(index, pinned.count - 1)]
-            Button {
-                onSelect(current.id)
-                index = (index + 1) % pinned.count
-            } label: {
-                // Une seule ligne compacte, flottante, sans bloc pleine largeur (retour du porteur).
-                HStack(spacing: DrivySpacing.xs) {
-                    Image(systemName: "pin.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
-                        .accessibilityHidden(true)
-                    Text(workspace.contents[current.id]?.summary ?? "Message épinglé")
-                        .lineLimit(1).font(.footnote).foregroundStyle(DrivyTheme.text)
+        let ids = pinned.map(\.id)
+        Group {
+            if let selectedID = selection.current(in: ids), let current = pinned.first(where: { $0.id == selectedID }) {
+                let position = (ids.firstIndex(of: current.id) ?? 0) + 1
+                let summary = workspace.contents[current.id]?.summary ?? "Message épinglé"
+                // Ouvrir et parcourir sont deux actions : le texte annoncé reste celui de la cible ouverte.
+                HStack(spacing: 0) {
+                    Button {
+                        // Une mise à jour de droits ou un désépinglage peut précéder le prochain rendu SwiftUI.
+                        let available = workspace.pinnedMessages(current.conversationID).map(\.id)
+                        guard available.contains(current.id) else { return }
+                        selection.reconcile(with: available)
+                        onSelect(current.id)
+                    } label: {
+                        HStack(spacing: DrivySpacing.xs) {
+                            Image(systemName: "pin.fill")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.accent)
+                                .accessibilityHidden(true)
+                            Text(summary).lineLimit(1).font(.footnote).foregroundStyle(DrivyTheme.text)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if pinned.count > 1 {
+                                Text("\(position)/\(pinned.count)")
+                                    .font(.caption2.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                            }
+                        }
+                        .padding(.horizontal, DrivySpacing.s)
+                        .frame(minHeight: bannerHeight)
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Message épinglé : \(summary)")
+                    .accessibilityValue(pinned.count > 1 ? "\(position) sur \(pinned.count)" : "")
+                    .accessibilityHint("Affiche ce message")
+                    .accessibilityIdentifier("messaging.pinned")
                     if pinned.count > 1 {
-                        Text("\(min(index, pinned.count - 1) + 1)/\(pinned.count)")
-                            .font(.caption2.monospacedDigit()).foregroundStyle(DrivyTheme.muted)
+                        Button { selection.advance(in: ids) } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.accent)
+                                .frame(width: DrivyLayout.tapTarget, height: bannerHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Message épinglé suivant")
+                        .accessibilityHint("Change l’aperçu sans déplacer la conversation")
+                        .accessibilityIdentifier("messaging.pinned.next")
+                        .accessibilityAdjustableAction { direction in
+                            switch direction {
+                            case .increment: selection.advance(in: ids)
+                            case .decrement: selection.advance(in: ids, backwards: true)
+                            @unknown default: break
+                            }
+                        }
                     }
                 }
-                .padding(.horizontal, DrivySpacing.s).padding(.vertical, 6)
+                .buttonStyle(.plain)
                 .background(DrivyTheme.surfaceRaised, in: Capsule())
                 .overlay(Capsule().stroke(DrivyTheme.border, lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
                 .frame(maxWidth: 320)
                 .padding(.top, DrivySpacing.xxs)
-                .frame(minHeight: DrivyLayout.tapTarget)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Message épinglé : \(workspace.contents[current.id]?.summary ?? "")")
-            .accessibilityHint(pinned.count > 1 ? "Affiche le message, puis le suivant au prochain appui" : "Affiche le message")
-            .accessibilityIdentifier("messaging.pinned")
         }
+        .onChange(of: ids, initial: true) { _, available in selection.reconcile(with: available) }
     }
 }
 
