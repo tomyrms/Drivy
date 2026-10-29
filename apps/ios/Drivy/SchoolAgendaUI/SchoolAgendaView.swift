@@ -206,11 +206,13 @@ struct SchoolAgendaView: View {
 
     @ViewBuilder private var schoolFilter: some View {
         if isAdmin {
+            let instructors = courseCatalogue?.instructors ?? []
+            let references = HomonymReference.references(instructors.map { ($0.id, $0.displayName) })
             Picker("Moniteur", selection: $instructorSelection) {
                 Text(isInstructor ? "Mes rendez-vous" : "Toute l’école").tag("default")
                 if isInstructor { Text("Toute l’école").tag("all") }
-                ForEach(courseCatalogue?.instructors ?? []) { instructor in
-                    Text(instructorLabel(instructor)).tag(instructor.id.uuidString)
+                ForEach(instructors) { instructor in
+                    Text(HomonymReference.label(instructor.displayName, reference: references[instructor.id])).tag(instructor.id.uuidString)
                 }
                 if let id = UUID(uuidString: instructorSelection),
                    courseCatalogue?.instructors.contains(where: { $0.id == id }) != true {
@@ -255,6 +257,7 @@ struct SchoolAgendaView: View {
 
     private var searchResults: some View {
         let results = searchEvents
+        let references = HomonymReference.references(lessons.map { ($0.learnerId, learnerName($0)) })
         let complete = loaded?.prefix == scopePrefix && loaded?.range.contains(currentScope.range) == true
             && error == nil && !isLoading && courseRead.isComplete(in: currentScope)
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
@@ -279,7 +282,7 @@ struct SchoolAgendaView: View {
                             if let start = event.start { Text(formattedDay(start, template: "EEEEdMMMM")) }
                             switch event {
                             case .lesson(let lesson):
-                                Text("Leçon · \(searchLearnerLabel(lesson))").font(.headline)
+                                Text("Leçon · \(HomonymReference.label(learnerName(lesson), reference: references[lesson.learnerId]))").font(.headline)
                                 Text("\(time(lesson.startsAt)) – \(time(lesson.endsAt))")
                             case .course(let item):
                                 Text("Cours · \(item.series.title)").font(.headline)
@@ -293,11 +296,6 @@ struct SchoolAgendaView: View {
                 }
             }
         }
-    }
-
-    private func searchLearnerLabel(_ lesson: SchoolLesson) -> String {
-        let references = HomonymReference.references(lessons.map { ($0.learnerId, learnerName($0)) })
-        return HomonymReference.label(learnerName(lesson), reference: references[lesson.learnerId])
     }
 
     private var nextAppointment: some View {
@@ -324,6 +322,7 @@ struct SchoolAgendaView: View {
             onFound: { date in select(date) },
             onAccessFailure: {
                 lessons = []; dayIndex = [:]; loaded = nil; courseRead.reset(); courseCatalogue = nil
+                freshness.reset(); error = "Ton accès à cet agenda a changé. Actualise ton école."
                 SchoolAgendaMemory.forget()
                 await workspace.refreshAccount(minimumInterval: 0)
             })

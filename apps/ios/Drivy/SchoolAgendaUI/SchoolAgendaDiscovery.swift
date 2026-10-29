@@ -91,7 +91,8 @@ enum SchoolAgendaDiscovery {
                 guard !Task.isCancelled, generation == id, isCurrent() else { return }
                 let agenda = error as? SchoolAgendaFailure, planning = error as? SchoolPlanningFailure
                 if agenda == .authentication || agenda == .forbidden || planning == .unauthorized || planning == .forbidden || planning == .notFound {
-                    cancel(clear: true)
+                    message = "Tes accès ont changé. Actualisation de l’école…"
+                    searchedRange = nil
                     await onAccessFailure()
                 } else {
                     message = "Recherche incomplète. La lecture des rendez-vous a échoué. Réessaie."
