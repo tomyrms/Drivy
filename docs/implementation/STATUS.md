@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 29 octobre 2026, 22:47 — Tomy School remplie pour l’essai du porteur
+
+- À sa demande explicite, ajout de 24 élèves et 3 moniteurs, 36 leçons, 16 bilans, 48 observations sans GPS, 8 cours/18 séances, 32 inscriptions, appels et règlements. Catalogue à 4 catégories/14 prestations, disponibilités et absences. Libellés naturels, aucun suffixe test dans l’UI. [Résultat et vérifications](tomy-school-content-20261029.md).
+- Sauvegarde PostgreSQL vérifiée avant population atomique ; contraintes et conservation de l’existant contrôlées avant commit, lecture sous RLS après commit et rejeu annulé sans doublon. Aucun compte OIDC, invitation, message, position ou notification créés. Aucun changement du build web déployé.
+- Essai et retour du porteur attendus ; campagnes complètes, fusion et clôtures restent différées.
+
 ## 29 octobre 2026, 22:25 — #311 déployé pour essai du porteur
 
 - Nouvelle web app active sur https://drivy.shulker.ch/app/ au commit `4af4b0e6748081f90201169132cccd5c9fd6cfdb`. Sauvegarde PostgreSQL créée et archive relue avant bascule ; configuration sauvegardée, BFF et autres services inchangés ; plan de rollback vérifié après bascule.

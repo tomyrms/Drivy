@@ -1,6 +1,6 @@
 # Peuplement synthétique de Tomy School — personnes
 
-Fragment préparé le 29 octobre 2026 pour la demande du porteur : donner du contenu plausible à son école de recette, sans libellé « test » dans les écrans. `scripts/dev/tomy-school-people.sql` est une préparation locale, pas une migration et pas une preuve d'exécution sur le homelab.
+Fragment préparé le 29 octobre 2026 pour la demande du porteur : donner du contenu plausible à son école de recette, sans libellé « test » dans les écrans. `scripts/dev/tomy-school-people.sql` n’est pas une migration. Son intégration et son exécution ultérieures sur le homelab sont consignées dans [le reçu de population](tomy-school-content-20261029.md).
 
 Il apporte 24 élèves et 3 moniteurs fictifs. Chaque élève a une formation active : 16 B, 4 A, 2 A1, 2 BE. Prénom, nom, date de naissance et adresse sont synthétiques ; les adresses de contact utilisent exclusivement `example.com`. Aucun téléphone, document, photo, compte OIDC, invitation, appareil push, consentement ou vérification physique de permis n'est créé. Un souhait pédagogique bref accompagne seulement chaque nouvelle formation. Les préférences de notifications des 27 nouvelles personnes sont toutes désactivées.
 
