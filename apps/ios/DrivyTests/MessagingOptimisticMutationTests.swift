@@ -362,10 +362,11 @@ final class MessagingOptimisticMutationTests: XCTestCase {
             recoveryContent: Data(text.utf8))
     }
 
-    private func sender(_ service: SendingService, outbox: MemoryOutbox = MemoryOutbox()) -> MessagingWorkspace {
+    private func sender(_ service: SendingService, outbox: MemoryOutbox = MemoryOutbox(),
+                        sendLatency: MessagingMutationLatency? = nil) -> MessagingWorkspace {
         let box = MutationScopeBox(scope)
         return MessagingWorkspace(scope: scope, service: service, cryptography: ReadyCipher(), outbox: outbox,
-                                  mutationLatency: latency, currentScope: { box.value })
+                                  mutationLatency: sendLatency ?? latency, currentScope: { box.value })
     }
 
     private func isAccepted(_ status: MessagingWorkspace.SendStatus?) -> Bool {
@@ -400,6 +401,39 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await until { self.isAccepted(workspace.sendStatus(entry.clientMessageID)) }
         let sent = await service.sent
         XCTAssertEqual(sent, [entry.clientMessageID, entry.clientMessageID])
+        let entries = await service.sentEntries
+        XCTAssertEqual(entries.map(\.ciphertext.payload), [entry.ciphertext.payload, entry.ciphertext.payload])
+        XCTAssertEqual(entries.map(\.ciphertext.expectedMembersEpoch), [entry.ciphertext.expectedMembersEpoch, entry.ciphertext.expectedMembersEpoch])
+    }
+
+    func testUnconfirmedResponseCannotRestartAnInFlightSend() async {
+        let service = SendingService(holding: true, school: school, account: account)
+        let workspace = sender(service, sendLatency: MessagingMutationLatency(slow: .milliseconds(5), unconfirmed: .milliseconds(10)))
+        let entry = pending("réponse lente")
+        workspace.scheduleSend(entry)
+        await until { workspace.sendStatus(entry.clientMessageID) == .unconfirmed }
+        workspace.retrySend(entry)
+        XCTAssertEqual(workspace.sendStatus(entry.clientMessageID), .unconfirmed,
+                       "La reprise ne doit pas remettre en file une requête encore active")
+        let sent = await service.sent
+        XCTAssertEqual(sent, [entry.clientMessageID])
+        await service.releaseAll()
+        await until { self.isAccepted(workspace.sendStatus(entry.clientMessageID)) }
+        let accepted = await service.sent
+        XCTAssertEqual(accepted, [entry.clientMessageID], "La réponse tardive confirme la même bulle sans nouvel envoi")
+    }
+
+    func testProtectionRefusalCannotBeRetriedByAnAlternateUIAction() async {
+        let service = SendingService(holding: false, school: school, account: account)
+        await service.setFailure(.protectionUnavailable)
+        let workspace = sender(service)
+        let entry = pending("à conserver")
+        workspace.scheduleSend(entry)
+        await until { workspace.sendStatus(entry.clientMessageID) == .failed(.protectionUnavailable) }
+        workspace.retrySend(entry)
+        XCTAssertEqual(workspace.sendStatus(entry.clientMessageID), .failed(.protectionUnavailable))
+        let sent = await service.sent
+        XCTAssertEqual(sent, [entry.clientMessageID])
     }
 
     func testOfflineSendWaitsThenLeavesOnReconnect() async {
@@ -498,6 +532,7 @@ private actor GatedMuteDirectory: MessagingDirectoryService {
 /// Envois retenus jusqu'à `releaseAll` ; échec programmable ; accusé conforme au contrat.
 private actor SendingService: MessagingService {
     private(set) var sent: [UUID] = []
+    private(set) var sentEntries: [MessagingPending] = []
     private var holding: Bool
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var failure: MessagingFailure?
@@ -517,6 +552,7 @@ private actor SendingService: MessagingService {
     }
     func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement {
         sent.append(pending.clientMessageID)
+        sentEntries.append(pending)
         if holding { await withCheckedContinuation { waiters.append($0) } }
         if let failure { throw failure }
         return MessagingAcknowledgement(clientMessageID: pending.clientMessageID, serverMessageID: UUID(),

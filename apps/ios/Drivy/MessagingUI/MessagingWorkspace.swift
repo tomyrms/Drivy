@@ -1135,8 +1135,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
 
     /// « Réessayer » : la MÊME entrée (même clientMessageId), dédupliquée par le serveur.
     func retrySend(_ entry: MessagingPending) {
-        let status = sendStates[entry.clientMessageID]
-        guard status != .sending, status != .slow else { return }
+        guard MessagingSendPresentation(status: sendStates[entry.clientMessageID]).canRetry,
+              sendClocks[entry.clientMessageID] == nil else { return }
         scheduleSend(entry)
     }
 

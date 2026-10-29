@@ -123,6 +123,11 @@ private enum ExyteBubbleMetrics {
         var hasher = Hasher()
         hasher.combine(actions)
         hasher.combine(reporting)
+        if let presentation = sendPresentation(item) {
+            // Plusieurs états n'ont volontairement aucune coche Exyte : leurs libellés doivent quand même évoluer.
+            hasher.combine(presentation.accessibilityLabel)
+            hasher.combine(presentation.canRetry)
+        }
         if let wire = item.message {
             hasher.combine(wire.meta.pinned)
             hasher.combine(wire.meta.replyToMessageID)
@@ -191,15 +196,12 @@ private enum ExyteBubbleMetrics {
 
     /// Coches seulement pour un événement réel : accusé serveur pour « envoyé », reçu de lecture pour « lu ».
     private func status(_ item: MessagingThreadItem) -> ExyteChat.Message.Status? {
-        if let entry = item.pending {
-            switch workspace.sendStatus(entry.clientMessageID) {
-            case .failed?, .unconfirmed?, .uncertain?:
-                // L'icône d'erreur d'Exyte renvoie ce brouillon vide : il ne porte que l'identité de l'envoi.
-                return .error(DraftMessage(id: item.id, text: "", medias: [], giphyMedia: nil, recording: nil,
-                                           replyMessage: nil, createdAt: item.date))
-            case .accepted?: return .sent
-            default: return .sending
-            }
+        if let presentation = sendPresentation(item) {
+            if presentation.isAccepted { return .sent }
+            if presentation.showsSendingIndicator { return .sending }
+            // Exyte n'a pas d'état « résultat inconnu » : la ligne Drivy en porte l'icône, le texte et l'action.
+            // Ni coche de succès, ni animation d'envoi, ni icône d'erreur qui renverrait aveuglément le message.
+            return nil
         }
         guard let wire = item.message, wire.senderID == accountID, !wire.meta.deletedForEveryone else { return nil }
         let readers = workspace.readers(of: wire)
@@ -250,14 +252,8 @@ private enum ExyteBubbleMetrics {
             if !readers.isEmpty {
                 parts.append(isGeneral ? "lu par " + readers.map(workspace.displayName).joined(separator: ", ") : "lu")
             }
-        } else if let entry = item.pending {
-            switch workspace.sendStatus(entry.clientMessageID) {
-            case .failed?: parts.append("échec de l'envoi")
-            case .unconfirmed?, .uncertain?: parts.append("envoi non confirmé")
-            case .offline?: parts.append("en attente de connexion")
-            case .accepted?: parts.append("envoyé")
-            default: parts.append("envoi en cours")
-            }
+        } else if let presentation = sendPresentation(item) {
+            parts.append(presentation.accessibilityLabel)
         }
         return parts.joined(separator: ", ")
     }
@@ -273,12 +269,12 @@ private enum ExyteBubbleMetrics {
         }
     }
 
+    func sendPresentation(_ item: MessagingThreadItem) -> MessagingSendPresentation? {
+        item.pending.map { MessagingSendPresentation(status: workspace.sendStatus($0.clientMessageID)) }
+    }
+
     func needsSendRetry(_ item: MessagingThreadItem) -> Bool {
-        guard let entry = item.pending else { return false }
-        switch workspace.sendStatus(entry.clientMessageID) {
-        case .failed?, .unconfirmed?, .uncertain?: return true
-        default: return false
-        }
+        sendPresentation(item)?.canRetry == true
     }
 
     // MARK: Actions
@@ -360,7 +356,7 @@ private enum ExyteBubbleMetrics {
 
     /// Même envoi, même identifiant : jamais un second message.
     func retrySend(displayID: String) {
-        guard let entry = item(displayID)?.pending else { return }
+        guard let item = item(displayID), needsSendRetry(item), let entry = item.pending else { return }
         composer.retry(entry)
     }
 
@@ -440,6 +436,7 @@ private enum ExyteBubbleMetrics {
 struct MessagingConversationView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .footnote) private var pinnedBannerHeight = DrivyLayout.tapTarget
     @State private var connectivity = MessagingConnectivity()
     let workspace: MessagingWorkspace
     let conversationID: UUID
@@ -539,7 +536,7 @@ struct MessagingConversationView: View {
         let thread = thread
         let pinned = !workspace.pinnedMessages(conversationID).isEmpty
         ChatView(messages: thread.items.map(thread.exyteMessage), chatType: .conversation, replyMode: .quote,
-                 // Exyte ne rappelle cette fonction que pour l'icône d'erreur d'un envoi : c'est un nouvel essai.
+                 // La composition reste Drivy ; toute éventuelle reprise Exyte revalide l'état de la même intention.
                  didSendMessage: { draft in if let id = draft.id { thread.retrySend(displayID: id) } },
                  messageBuilder: { params in MessagingThreadRow(thread: thread, params: params) },
                  inputViewBuilder: { _ in MessagingThreadFooter(thread: thread, onReported: { reportSent = true }) },
@@ -566,7 +563,7 @@ struct MessagingConversationView: View {
             .keyboardDismissMode(.interactive)
             .setMessageFont(UIFont.preferredFont(forTextStyle: .body))
             .messageMenuAnimationDuration(reduceMotion ? 0.1 : 0.15)
-            .contentInsets(top: pinned ? DrivyLayout.tapTarget : 0)
+            .contentInsets(top: pinned ? pinnedBannerHeight : 0)
             .onContentOffsetChange { thread.offsetChanged($0) }
             .scrollTo(thread.scrollRequest)
             .onMessageReaction(didReactTo: { message, draft in thread.react(draft.type, displayID: message.id) },
@@ -1015,7 +1012,7 @@ private struct MessagingReplyBubble<Actions: View>: View {
                     in: RoundedRectangle(cornerRadius: ExyteBubbleMetrics.radius, style: .continuous))
     }
 
-    /// Mêmes icônes et couleurs que la coche d'Exyte ; l'erreur réessaie le même envoi.
+    /// Mêmes coches qu'Exyte. Les états non confirmés et les refus sont portés par la ligne Drivy, sans coche.
     @ViewBuilder private var status: some View {
         let images = ChatTheme.drivy.images.message
         switch message.status {
@@ -1024,12 +1021,7 @@ private struct MessagingReplyBubble<Actions: View>: View {
         case .delivered?: statusImage(images.delivered, DrivyTheme.muted)
         case .readBy?: statusImage(images.read, DrivyTheme.accent)
         case .error?:
-            Button { thread.retrySend(displayID: item.id) } label: {
-                statusImage(images.error, DrivyTheme.danger)
-                    .contentShape(Rectangle().inset(by: -17))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Réessayer l’envoi")
+            statusImage(images.error, DrivyTheme.danger)
         case nil: Color.clear
         }
     }
@@ -1255,41 +1247,37 @@ private struct MessagingThreadStateLine: View {
 
     /// Envoi normal (moins de 5 s) : seule la coche d'Exyte parle. Un vrai problème est nommé et réessayable.
     @ViewBuilder private func pendingStatus(_ entry: MessagingPending) -> some View {
-        switch workspace.sendStatus(entry.clientMessageID) {
-        case .failed(let failure)?:
+        let presentation = MessagingSendPresentation(status: workspace.sendStatus(entry.clientMessageID))
+        if let failure = presentation.failure {
             // L’appui sur « Échec » ouvre l’explication (#177). Un refus qui demande d’abord une correction (accès,
             // appareils, protection) ne propose pas de renvoi aveugle ; le message reste conservé sur l’appareil.
             let description = MessagingDiagnostics.shared.describe(failure)
             HStack(spacing: DrivySpacing.xs) {
                 Menu {
                     Section(description) {
-                        if failure.allowsSameSendRetry {
+                        if presentation.canRetry {
                             Button("Réessayer", systemImage: "arrow.clockwise") { thread.retrySend(displayID: item.id) }
                         }
                     }
                 } label: {
-                    Label("Échec", systemImage: "exclamationmark.circle").foregroundStyle(DrivyTheme.danger)
+                    Label(presentation.label ?? "Échec", systemImage: presentation.symbol).foregroundStyle(DrivyTheme.danger)
                         .contentShape(Rectangle().inset(by: -14))
                 }
                 .accessibilityLabel("Échec : \(description)")
                 .accessibilityHint("Ouvre l’explication")
                 .accessibilityIdentifier("messaging.pending.failure")
-                if failure.allowsSameSendRetry { retryButton }
+                if presentation.canRetry { retryButton }
             }
             .font(.caption2)
-        case .unconfirmed?, .uncertain?:
+        } else if let label = presentation.label {
             HStack(spacing: DrivySpacing.xs) {
-                Label("Non confirmé", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                Label(label, systemImage: presentation.symbol)
                     .foregroundStyle(DrivyTheme.muted)
-                retryButton
+                    .accessibilityLabel(presentation.accessibilityLabel)
+                    .accessibilityIdentifier("messaging.pending.status")
+                if presentation.canRetry { retryButton }
             }
             .font(.caption2)
-        case .offline?:
-            Label("En attente de connexion", systemImage: "wifi.slash").font(.caption2).foregroundStyle(DrivyTheme.muted)
-        case .slow?:
-            Label("Envoi…", systemImage: "clock").font(.caption2).foregroundStyle(DrivyTheme.muted)
-        default:
-            EmptyView()
         }
     }
 
@@ -1633,17 +1621,5 @@ private struct MessagingTallHitShape: Shape {
     func path(in rect: CGRect) -> Path {
         let extra = max(0, (height - rect.height) / 2)
         return Path(rect.insetBy(dx: 0, dy: -extra))
-    }
-}
-
-extension MessagingFailure {
-    /// Le même envoi peut aboutir en le renvoyant : panne, réponse illisible, participants changés (le message est
-    /// rechiffré), conflit. Accès retiré, conversation fermée, appareils en trop ou protection absente demandent d’abord
-    /// autre chose : aucun renvoi aveugle n’est proposé (#177).
-    var allowsSameSendRetry: Bool {
-        switch self {
-        case .unavailable, .invalidResponse, .membersChanged, .stateConflict, .mutationReceiptUnavailable: true
-        default: false
-        }
     }
 }
