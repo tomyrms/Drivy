@@ -199,7 +199,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             data = #"{"conversationId":"\#(conversation)"}"#
         } else if path.hasSuffix("/conversations"), method == "GET" {
             let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?.first { $0.name == "cursor" }?.value
+                .queryItems?.first { $0.name == "before" }?.value
             data = rich ? try conversationList(cursor: cursor) : #"{"items":[],"nextCursor":null}"#
         } else if path.hasSuffix("/messages"), method == "GET" {
             if rich, let id = uuid(after: "conversations", in: parts) {
@@ -258,7 +258,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             row["peerPersonId"] = item.peer.map { $0.uuidString.lowercased() as Any } ?? NSNull()
             return row
         }
-        let next: Any = unreadFilter && firstPage ? "fixture-inbox-page-2" : NSNull()
+        let next: Any = unreadFilter && firstPage ? MessagingQualificationIDs.lea.uuidString.lowercased() : NSNull()
         return try json(["items": items, "nextCursor": next])
     }
 
