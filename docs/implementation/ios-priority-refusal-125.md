@@ -26,3 +26,5 @@ Si une ancienne opération reste inconnue, la restriction locale reste en place 
 ## Contrôles
 
 Relecture indépendante : accès au refus pendant relecture/coffre indisponible corrigé ; abandon d'un refus conservé interdit pour éviter de reprendre un UUID déjà classé. `git diff --check` exécuté. Trois tests synthétiques ajoutés : accord retenu puis refus durable, isolation/chiffrement/reprise d'époque, réponse inconnue puis reprise du même UUID. Une sélection CI `consent` exécute seulement SchoolStartNowConsentTests, sans grande suite. Résultats Apple à reporter dans la livraison ; aucun essai physique présumé ici.
+
+Sur la branche d'intégration : [run Apple 40957419205](https://github.com/tomyrms/Drivy/actions/runs/40957419205), SHA `1cc85310f42e8a621b124305e3a540a0c3c08742`, réussi. Rapport de la sélection consentement : 20 tests réussis, zéro échec/ignoré, incluant les trois cas ajoutés. Compilation Release finale dans l'IPA 447 ; les limites physiques ci-dessus restent à qualifier.

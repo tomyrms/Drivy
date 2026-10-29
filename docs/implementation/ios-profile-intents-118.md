@@ -47,3 +47,7 @@ Pour Messages, utiliser la référence vivante à `SchoolWorkspace` uniquement l
 Le serveur nettoie les segments de métadonnées JPEG. Après réponse perdue, si les octets relus ne correspondent pas exactement au choix local, l’app demande une revue au lieu d’inventer une preuve de succès ; un nouvel envoi explicitement validé peut être nécessaire. Aucun moteur de tâche de fond ni reprise automatique au seul retour réseau n’est ajouté.
 
 La frappe non validée du formulaire n’est pas assimilée à une intention envoyable ; le dialogue existant de fermeture protège ce brouillon de session. Les choix validés sont journalisés. La fermeture forcée avant une persistance réussie, le disque physiquement plein, Keychain après verrouillage, VoiceOver, Dynamic Type, latence réelle et essais multi-appareils attendent qualification. Aucune preuve physique ni parité web n’est revendiquée.
+
+## Résultat Apple sur la branche d’intégration
+
+Le [run 40960532711](https://github.com/tomyrms/Drivy/actions/runs/40960532711), SHA `cec9a058e8d2196a6e28e26986e195e33b617719`, a exécuté les dix tests ci-dessus sur simulateur iPhone 17 Pro : 10 réussis, zéro échec/ignoré. La première compilation de la cible de test avait échoué sur une expansion de macro `#expect(allSatisfy(\.isEmpty))` ; calculer le booléen avant l’assertion corrige uniquement le test. Le code produit est identique à celui de l’IPA 447 (`633f20d3`). Aucun essai physique ni grande suite déduit de ce résultat.

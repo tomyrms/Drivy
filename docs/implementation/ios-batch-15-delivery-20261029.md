@@ -2,20 +2,36 @@
 
 Branche `codex/ios-batch-15-20261029`, base `2d9a5f64` de l'IPA 446. Les 25 corrections précédentes restent incluses. Ce document suit 15 tickets supplémentaires, soit 40 tickets traités au total ; les preuves et limites ci-dessous distinguent réalisation native, essai et qualification.
 
-L'EPIC #311 et son périmètre web sont exclus. Les trois branches spécialisées sont `codex/ios-durability-113-117-118-125`, `codex/ios-messages-200-238-246` et `codex/ios-layout-196-220-227-231`. Aucun déploiement homelab, modification API ou fusion dans master. Seuls les filtres de lancement de contrôles Apple sont étendus pour exécuter un petit parcours de consentement et les fixtures visuelles demandées.
+L'EPIC #311 et son périmètre web sont exclus. Les trois branches spécialisées sont `codex/ios-durability-113-117-118-125`, `codex/ios-messages-200-238-246` et `codex/ios-layout-196-220-227-231`. Aucun déploiement homelab, modification API ou fusion dans master. Les filtres de lancement des contrôles Apple permettent de sélectionner consentement, brouillons et profil ; les fixtures servent aux comparaisons visuelles.
+
+## IPA à installer
+
+**Drivy 0.7.0, build 447**, non signé, iOS/iPadOS 26 minimum. Fichier copié et vérifié dans `C:\Users\jtoma\Downloads\Drivy-0.7.0-447.ipa`. Le signer et l'installer avec iLoader, comme les précédents essais. L'IPA 446 reste disponible séparément.
+
+- [Téléchargement GitHub](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882) ; [compilation Release réussie](https://github.com/tomyrms/Drivy/actions/runs/40959499844).
+- Code produit : `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`. Les deux corrections de tests intervenues ensuite ne changent pas le binaire.
+- 18 293 386 octets ; SHA-256 : `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`.
+- Manifeste de sommes, commit/run, verrou des dépendances, CRC de l'archive, version du plist et absence de signature vérifiés. Empreinte du fichier dans Téléchargements identique. Connexion scolaire configurée et accès Messages de qualification compilé.
 
 ## État des preuves
 
 - Agenda : compilation Apple et sélection de quatre suites réussies, [run 40954007339](https://github.com/tomyrms/Drivy/actions/runs/40954007339), SHA `a444d2d38e8ca95272c3c0c40c1f3b57f1f96d4a`. Rapport : 73 tests, 78 exécutions avec paramètres, zéro échec/ignoré. Les corrections ultérieures de génération des lectures et d'annulation au changement de jour sont relues ; elles ne sont pas assimilées à ce SHA testé.
-- Captures originales avant changement : [run 40953177715](https://github.com/tomyrms/Drivy/actions/runs/40953177715) réussi sur `2d9a5f64`, iPhone/iPad, clair, données synthétiques. Liste des cours et fiche présentent effectivement des fonds différents ; comparaison finale encore à relever.
-- Captures avec fixtures comparables, consentement ciblé et compilation finale : en cours, à compléter avant livraison.
+- Consentement : [run 40957419205](https://github.com/tomyrms/Drivy/actions/runs/40957419205) réussi sur `1cc85310`, 20 tests réussis, zéro échec/ignoré.
+- Captures originales : [run 40953177715](https://github.com/tomyrms/Drivy/actions/runs/40953177715), puis comparaison de vingt PNG, dix [avant](https://github.com/tomyrms/Drivy/actions/runs/40954527122) (`ee5bc2cb`) et dix [après](https://github.com/tomyrms/Drivy/actions/runs/40957481494) (`1cc85310`), iPhone/iPad, clair, données synthétiques. Les corrections #196/#220/#227/#231 sont visibles. Deux superpositions système limitent des zones de capture ; voir la [preuve détaillée](ios-layout-196-220-227-231.md).
+- Profil : [run 40960532711](https://github.com/tomyrms/Drivy/actions/runs/40960532711) réussi sur `cec9a058`, 10 tests réussis, zéro échec/ignoré. La première compilation des tests (`40959548945`) avait échoué sur une assertion incompatible avec la macro Swift Testing ; correction limitée au test.
+- Brouillons : [relance ciblée 40961435005](https://github.com/tomyrms/Drivy/actions/runs/40961435005) réussie sur `da901183274c707163e4b2e59e54a7e990c3c130`, 49 tests, 53 exécutions avec paramètres, zéro échec/ignoré. Le premier contrôle (`40958460343`) avait 48 tests réussis et un test en échec : l'identifiant invalide de la fixture empêchait de charger le souhait, donc d'exercer sa reprise. Identifiant corrigé et préconditions explicites ajoutées ; aucun changement produit. Le lancement `40958362414` a été annulé avant exécution au profit d'une branche CI distincte.
+- Compilation Release finale réussie, IPA ci-dessus. Les tests Messages et mise en page préparés ne sont pas revendiqués comme exécutés.
 - Grandes suites, recette physique, GPS/batterie/VoiceOver : non exécutés. Aucun rendu simulateur ne qualifie ces points physiques.
 
-Les 25 issues de l'IPA 446 ont été fermées sur demande explicite du porteur. Les PR #337/#338 restent en brouillon ; cette clôture n'autorise ni fusion ni tests complets. L'essai du porteur reste attendu avant la qualification pertinente puis fusion.
+Les **40 issues** des deux tableaux ci-dessous ont été fermées sur demande explicite du porteur : les 25 de l'IPA 446, puis les 15 de ce lot après les contrôles ciblés. Les PR [#337](https://github.com/tomyrms/Drivy/pull/337), [#338](https://github.com/tomyrms/Drivy/pull/338) et [#339](https://github.com/tomyrms/Drivy/pull/339) restent en brouillon ; cette clôture n'autorise ni fusion ni tests complets. L'essai du porteur reste attendu avant la qualification pertinente puis fusion. Aucune case de qualification physique n'a été cochée par assimilation à la compilation ou au simulateur.
 
 ## Comment essayer les 15 nouveaux tickets
 
 Utiliser des comptes et objets d'essai avec les rôles indiqués. Les modifications de profil, invitations, choix GPS et règlements suivent les droits et écritures réels du service.
+
+Pour commencer sans matériel supplémentaire : connexion (#195–#199), navigation Messages (#200/#202/#238/#240/#241/#246), agenda (#207–#210), historique et progression (#206/#214–#218), puis les écrans de cours et invitations selon vos droits. Essayer ensuite les écritures sur des objets d'essai.
+
+Pour les cas hors réseau, charger d'abord l'écran, couper Wi-Fi et données mobiles, effectuer la manipulation, puis rétablir le réseau et utiliser la vérification/reprise proposée. Le mode avion seul ne reproduit pas précisément une réponse perdue après écriture : ce cas, les réponses retardées dans un ordre précis, une panne du coffre et le changement de textes de consentement exigent un scénario contrôlé. Ils sont décrits pour la qualification technique, sans manipulation à deviner dans l'IPA. Les conflits inter-appareils demandent deux sessions du même compte. Les essais iPad, GPS physique et VoiceOver demandent le matériel ou les réglages correspondants.
 
 | Issue | Manipulation | Résultat attendu |
 |---|---|---|
@@ -69,4 +85,4 @@ Elles sont incluses dans le même binaire ; fermer une issue ne remplace pas son
 
 ## Détails techniques
 
-[Agenda/historique](ios-agenda-discovery-208-214-20261029.md), [brouillons](ios-preparation-drafts-113.md), [progression](ios-progress-freshness-117.md), [refus GPS](ios-priority-refusal-125.md), [mise en page](ios-layout-196-220-227-231.md), [Messages](ios-messages-entry-menu-aliases-200-238-246.md), [lot précédent](ios-suite-19-delivery-20261029.md).
+[Agenda/historique](ios-agenda-discovery-208-214-20261029.md), [brouillons](ios-preparation-drafts-113.md), [progression](ios-progress-freshness-117.md), [profil](ios-profile-intents-118.md), [projection du profil dans Messages](ios-messages-self-profile-projection-118-20261029.md), [refus GPS](ios-priority-refusal-125.md), [mise en page](ios-layout-196-220-227-231.md), [Messages](ios-messages-entry-menu-aliases-200-238-246.md), [lot précédent](ios-suite-19-delivery-20261029.md).

@@ -1,12 +1,17 @@
 # État de la réalisation
 
 <!-- ios-batch-15-20261029 -->
-## 29 octobre 2026 — clôture des 25 issues livrées et nouveau lot indépendant
+## 29 octobre 2026 — IPA 447 : 15 issues supplémentaires, 40 réalisées et fermées
 
-Le porteur demande explicitement de fermer les issues déjà réalisées. Clôtures GitHub exécutées et confirmées pour les 25 incluses dans l'IPA 446 : #195, #197, #198, #199, #201, #202, #203, #204, #206, #207, #211, #212, #213, #215, #216, #217, #218, #219, #228, #229, #230, #232, #237, #240, #241. Cette mise à jour remplace la condition de clôture des entrées précédentes, sans qualifier les essais physiques. PR #337/#338 toujours en brouillon ; tests après essai et fusion dans master restent en attente.
+Nouveau lot natif : #113, #117, #118, #125, #196, #200, #208, #209, #210, #214, #220, #227, #231, #238, #246. Les 25 issues de l'IPA 446 restent incluses. Les 40 clôtures GitHub sont confirmées sur demande explicite du porteur ; elles ne constituent pas une validation de recette physique. PR #337/#338/#339 en brouillon, retour d'essai attendu avant tests pertinents puis fusion dans master.
 
-Nouveau lot demandé : #113, #117, #118, #125, #196, #200, #208, #209, #210, #214, #220, #227, #231, #238, #246. Branche d'intégration `codex/ios-batch-15-20261029`, trois branches spécialisées séparées, base `2d9a5f64`. Audit des restes natifs effectifs, sans recompter les réalisations anciennes. Aucun fichier de l'EPIC #311 ni déploiement homelab. Exécuté à ce stade : modifications agenda/historique et fraîcheur progression, revue source et diff check. Compilation et captures ciblées Apple en cours ; aucune grande suite ni qualification physique revendiquée.
+Branche `codex/ios-batch-15-20261029`, trois branches spécialisées séparées, base `2d9a5f64`. Les restes des issues déjà partiellement livrées ont été rapprochés de leurs commentaires/PR, sans recompter leurs anciennes réalisations. Aucun changement web/API/contrat/migration/homelab, aucun déploiement. EPIC #311 exclue ; seule cette entrée additive concerne le suivi partagé.
 
+Compilation Release réussie : Drivy 0.7.0 (447), code produit `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`, [IPA](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882). Paquet non signé copié dans `C:/Users/jtoma/Downloads/Drivy-0.7.0-447.ipa` ; manifeste, SHA-256, CRC ZIP, plist, dépendances et copie vérifiés. Empreinte `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`.
+
+Contrôles ciblés Apple réussis : agenda 73 tests (78 exécutions paramétrées, run 40954007339), consentement 20 (40957419205), profil 10 (40960532711), brouillons 49 (40961435005). SHA et limites documentés dans le guide ; les corrections ultérieures de garde d'agenda ne sont pas assimilées au SHA testé. Les échecs intermédiaires profil/brouillon provenaient du code de test et sont corrigés sans changer le produit de l'IPA. Vingt captures comparables avant/après inspectées pour #196/#220/#227/#231. Revues croisées et `git diff --check` effectués. Grandes suites, tests UI préparés, recette physique, GPS/batterie/VoiceOver : non exécutés.
+
+[Livraison, preuves et recette de chacune des 40 issues](ios-batch-15-delivery-20261029.md). Les anciennes mentions d'attente de clôture ci-dessous sont remplacées par la demande explicite du porteur ; l'attente de validation et de fusion demeure.
 
 <!-- ios-suite-19-20261029 -->
 ## 29 octobre 2026 — suite iOS : 19 nouvelles issues, 25 avec le premier lot
