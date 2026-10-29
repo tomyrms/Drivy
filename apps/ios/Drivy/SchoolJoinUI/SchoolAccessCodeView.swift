@@ -10,6 +10,8 @@ struct SchoolAccessCodeView: View {
     @State private var recovering = false
     @State private var checkedSignInFields: Set<SchoolAccountFieldID> = []
     @ScaledMetric(relativeTo: .title2) private var codeSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .body) private var minimumNameWidth: CGFloat = 200
+    @State private var namesWidth: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -115,7 +117,8 @@ struct SchoolAccessCodeView: View {
     private var registerStep: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
             if let message = model.errorMessage { SchoolErrorNotice(message: message) }
-            let names = typeSize.isAccessibilitySize
+            // Même sous-arbre de champs et même focus pendant une rotation : seule la disposition change.
+            let names = typeSize.isAccessibilitySize || namesWidth < minimumNameWidth * 2 + DrivySpacing.s
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.m))
                 : AnyLayout(HStackLayout(alignment: .top, spacing: DrivySpacing.s))
             names {
@@ -124,6 +127,7 @@ struct SchoolAccessCodeView: View {
                 SchoolAccountField(label: "Nom", text: $model.lastName, kind: .familyName, id: .lastName, focus: $focus,
                                    identifier: "access-last-name", onSubmit: { focus = .email })
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { namesWidth = $0 }
             SchoolAccountField(label: "E-mail", text: $model.email, kind: .email, id: .email, focus: $focus,
                                identifier: "access-email", onSubmit: { focus = .password })
             SchoolAccountField(label: "Mot de passe", text: $model.password, kind: .newPassword, id: .password, focus: $focus,

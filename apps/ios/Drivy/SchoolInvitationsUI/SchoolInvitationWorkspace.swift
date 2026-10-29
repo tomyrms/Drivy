@@ -37,8 +37,13 @@ final class SchoolInvitationWorkspace: Identifiable {
     /// Demande que l’école a déclaré ne pas connaître : rien n’a été enregistré, elle peut être abandonnée.
     private(set) var absentPendingID: UUID?
     var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
-    private(set) var errorMessage: String?
+    /// Une panne de lecture ne remplace pas le résultat d’une mutation d’invitation.
+    private(set) var readErrorMessage: String?
+    private(set) var operationErrorMessage: String?
+    private(set) var operationInvitationID: UUID?
+    var errorMessage: String? { operationErrorMessage ?? readErrorMessage }
     private(set) var successMessage: String?
+    private(set) var successInvitationID: UUID?
     private(set) var accessFailure: SchoolInvitationFailure?
     private(set) var offerings: [SchoolOffering] = []
     private(set) var instructors: [SchoolInvitationInstructor] = []
@@ -126,7 +131,8 @@ final class SchoolInvitationWorkspace: Identifiable {
         school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []; instructors = []
         invitationReferences = [:]; loadedPageCount = 1
         selectedOfferingIDs = []; selectedInstructorID = nil; creationOptionsError = nil
-        email = ""; selectedRoles = [.learner]; errorMessage = nil; successMessage = nil
+        email = ""; selectedRoles = [.learner]; readErrorMessage = nil; operationErrorMessage = nil; successMessage = nil
+        operationInvitationID = nil; successInvitationID = nil
         isLoading = false; isLoadingMore = false; isBusy = false; storageAccessible = false
     }
 
@@ -136,7 +142,7 @@ final class SchoolInvitationWorkspace: Identifiable {
         generation = UUID(); pageRequest = UUID()
         let request = generation
         let pagesToReload = loadedPageCount
-        isLoading = true; isLoadingMore = false; storageAccessible = false; errorMessage = nil
+        isLoading = true; isLoadingMore = false; storageAccessible = false; readErrorMessage = nil
         needsReload = true
         var storageError: String?
         do {
@@ -214,8 +220,11 @@ final class SchoolInvitationWorkspace: Identifiable {
                 }
             }
             hasLoaded = true; needsReload = false; isLoading = false
-            errorMessage = storageError ?? (receiptRefused
-                ? "Tes droits ne permettent pas de vérifier cette demande. Sa référence reste conservée." : nil)
+            readErrorMessage = storageError
+            if receiptRefused {
+                operationErrorMessage = "Tes droits ne permettent pas de vérifier cette demande. Sa référence reste conservée."
+                operationInvitationID = pending?.resourceID
+            }
         } catch {
             guard request == generation else { return }
             isLoading = false
@@ -231,7 +240,7 @@ final class SchoolInvitationWorkspace: Identifiable {
         pageRequest = UUID()
         let pageID = pageRequest
         isLoadingMore = true
-        errorMessage = storageAccessible ? nil : SchoolConfigurationFailure.storage.localizedDescription
+        readErrorMessage = storageAccessible ? nil : SchoolConfigurationFailure.storage.localizedDescription
         do {
             let page = try await api.invitations(schoolID: scope.schoolID, cursor: cursor)
             guard request == generation, pageID == pageRequest else { return }
@@ -319,15 +328,16 @@ final class SchoolInvitationWorkspace: Identifiable {
     func abandonPending() async {
         guard canVerifyPending, pendingAbsent, let command = pending else { return }
         do { try outbox.remove(command) }
-        catch { storageAccessible = false; fail(error); return }
-        pending = nil; absentPendingID = nil; pendingRequiresReview = false; errorMessage = nil
+        catch { storageAccessible = false; fail(error, context: .operation(command.resourceID)); return }
+        pending = nil; absentPendingID = nil; pendingRequiresReview = false; operationErrorMessage = nil
+        operationInvitationID = nil
         await load()
     }
 
     func verifyPending() async {
         guard canVerifyPending, let command = pending else { return }
         let request = generation
-        isBusy = true; errorMessage = nil
+        isBusy = true; operationErrorMessage = nil; operationInvitationID = command.resourceID
         do {
             let receipt = try await api.operation(schoolID: scope.schoolID, id: command.id)
             guard command.matches(receipt) else { throw SchoolInvitationFailure.invalidResponse }
@@ -336,10 +346,11 @@ final class SchoolInvitationWorkspace: Identifiable {
             pending = nil; pendingRequiresReview = false; isBusy = false; didConfirmWrite = true
             if issuesCode(command) {
                 // A receipt never carries the code: only a new one can be handed over.
-                successMessage = nil
+                successMessage = nil; successInvitationID = nil
                 codeRecovery = SchoolCodeRecovery(invitationID: receipt.resourceId, version: receipt.resourceVersion)
             } else {
                 successMessage = "Le résultat de la demande a été confirmé."
+                successInvitationID = receipt.resourceId
             }
             if command.kind == .createInvitation { email = ""; selectedRoles = [.learner] }
             await load()
@@ -347,19 +358,19 @@ final class SchoolInvitationWorkspace: Identifiable {
             guard request == generation else { return }
             isBusy = false
             if error as? SchoolInvitationFailure == .operationUnknown {
-                absentPendingID = command.id; errorMessage = nil
+                absentPendingID = command.id; operationErrorMessage = nil
             } else if error as? SchoolInvitationFailure == .forbidden {
                 // AP72 permission depends on the original command type. A
                 // denied G1B receipt does not itself revoke invitation access.
                 await load(receiptRefused: true)
-            } else { fail(error) }
+            } else { fail(error, context: .operation(command.resourceID)) }
         }
     }
 
     private func prepare<Value: Encodable>(_ value: Value, id: UUID, kind: SchoolCommandKind,
         resource: UUID?, version: Int) async -> Bool {
         guard mayEdit else { return false }
-        successMessage = nil; errorMessage = nil
+        successMessage = nil; successInvitationID = nil; operationErrorMessage = nil; operationInvitationID = resource
         do {
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             let command = PendingSchoolCommand(id: id, scope: scope, kind: kind, resourceVersion: version,
@@ -367,7 +378,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             try outbox.save(command)
             pending = command; pendingRequiresReview = false
         } catch {
-            storageAccessible = false; fail(error); return false
+            storageAccessible = false; fail(error, context: .operation(resource)); return false
         }
         return await transmit(firstAttempt: true)
     }
@@ -376,8 +387,8 @@ final class SchoolInvitationWorkspace: Identifiable {
         guard canRetryPending, let command = pending else { return false }
         let request = generation
         do { try outbox.save(command) }
-        catch { storageAccessible = false; fail(error); return false }
-        isBusy = true; errorMessage = nil
+        catch { storageAccessible = false; fail(error, context: .operation(command.resourceID)); return false }
+        isBusy = true; operationErrorMessage = nil; operationInvitationID = command.resourceID
         // An older pagination response cannot restore the pre-command version.
         pageRequest = UUID(); isLoadingMore = false
         do {
@@ -402,6 +413,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                 successMessage = command.kind == .revokeInvitation ? "Invitation révoquée. Le lien ne permet plus de rejoindre l’école."
                     : "Invitation enregistrée. La réception de l’e-mail n’est pas confirmée ici."
             }
+            successInvitationID = successMessage == nil ? nil : result.id
             await load()
             return true
         } catch {
@@ -412,7 +424,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                     do { try outbox.remove(command) }
                     catch {
                         guard request == generation else { return false }
-                        isBusy = false; storageAccessible = false; fail(error); return false
+                        isBusy = false; storageAccessible = false; fail(error, context: .operation(command.resourceID)); return false
                     }
                     guard request == generation else { return false }
                     pending = nil; needsReload = true
@@ -423,7 +435,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             }
             guard request == generation else { return false }
             if error as? SchoolInvitationFailure == .pendingCommand { pendingRequiresReview = true }
-            isBusy = false; fail(error)
+            isBusy = false; fail(error, context: .operation(command.resourceID))
             return false
         }
     }
@@ -474,10 +486,22 @@ final class SchoolInvitationWorkspace: Identifiable {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.unicodeScalars.count <= 1000
     }
 
-    private func fail(_ error: any Error) {
+    private enum FailureContext { case reading, operation(UUID?) }
+
+    private func fail(_ error: any Error, context: FailureContext = .reading) {
+        let message: String
+        if let failure = error as? SchoolInvitationFailure { message = failure.localizedDescription }
+        else if let failure = error as? SchoolConfigurationFailure { message = failure.localizedDescription }
+        else { message = SchoolInvitationFailure.unavailable.localizedDescription }
+        switch context {
+        case .reading: readErrorMessage = message
+        case .operation(let invitationID): operationErrorMessage = message; operationInvitationID = invitationID
+        }
         if let failure = error as? SchoolInvitationFailure {
-            errorMessage = failure.localizedDescription
             if failure == .unauthorized || failure == .forbidden {
+                // Le refus d’accès concerne désormais toute la lecture, pas un détail devenu inaccessible.
+                readErrorMessage = message; operationErrorMessage = nil; operationInvitationID = nil
+                successInvitationID = nil
                 school = nil; invitations = []; nextCursor = nil; selectedID = nil
                 invitationReferences = [:]; loadedPageCount = 1
                 offerings = []; instructors = []; selectedOfferingIDs = []; selectedInstructorID = nil
@@ -487,7 +511,6 @@ final class SchoolInvitationWorkspace: Identifiable {
                 generation = UUID(); pageRequest = UUID(); isLoading = false; isLoadingMore = false
                 accessFailure = failure
             }
-        } else if let failure = error as? SchoolConfigurationFailure { errorMessage = failure.localizedDescription }
-        else { errorMessage = SchoolInvitationFailure.unavailable.localizedDescription }
+        }
     }
 }

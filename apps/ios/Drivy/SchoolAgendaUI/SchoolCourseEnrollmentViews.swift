@@ -260,6 +260,7 @@ struct SchoolLearnerCoursesView: View {
             List {
                 if let message = model.errorMessage {
                     SchoolErrorNotice(message: message, retry: { Task { await model.load() } })
+                        .drivyFormRows()
                 }
                 if !model.offers.isEmpty {
                     Section {
@@ -270,6 +271,7 @@ struct SchoolLearnerCoursesView: View {
                             .accessibilityHint("Ouvre le cours")
                         }
                     }
+                    .drivyFormRows()
                 }
                 if !model.activeEnrollments.isEmpty {
                     Section {
@@ -293,7 +295,8 @@ struct SchoolLearnerCoursesView: View {
                             .accessibilityHint("Ouvre ton inscription")
                             .accessibilityIdentifier("learner-course-progress")
                         }
-                    } header: { Text("Mes inscriptions") }
+                    } header: { Text("Mes inscriptions").drivyFormSectionHeader() }
+                    .drivyFormRows()
                 }
                 if let progress = model.progress, !progress.completions.isEmpty {
                     Section {
@@ -305,12 +308,15 @@ struct SchoolLearnerCoursesView: View {
                                 completionRow(completion)
                             }
                         }
-                    } header: { Text("Cours effectués") }
+                    } header: { Text("Cours effectués").drivyFormSectionHeader() }
+                    .drivyFormRows()
                 }
                 if !model.hasLoaded && model.errorMessage == nil {
                     DrivyLoadingState(title: "Chargement…")
+                        .drivyFormRows()
                 } else if model.hasLoaded && model.availableCourses.isEmpty {
-                    Section { Text("Aucun autre cours disponible").foregroundStyle(DrivyTheme.muted) } header: { Text("Disponibles") }
+                    Section { Text("Aucun autre cours disponible").foregroundStyle(DrivyTheme.muted) } header: { Text("Disponibles").drivyFormSectionHeader() }
+                    .drivyFormRows()
                 } else {
                     Section {
                         ForEach(model.availableCourses) { course in
@@ -318,9 +324,14 @@ struct SchoolLearnerCoursesView: View {
                                 .accessibilityHint("Ouvre le cours")
                                 .accessibilityIdentifier("learner-course-row")
                         }
-                    } header: { Text("Disponibles") }
+                    } header: { Text("Disponibles").drivyFormSectionHeader() }
+                    .drivyFormRows()
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .frame(maxWidth: SchoolFormLayout.maxWidth).frame(maxWidth: .infinity)
+            .background(DrivyTheme.canvas)
             .navigationTitle("Cours collectifs").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() } } }
             .task { await model.load() }
