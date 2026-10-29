@@ -19,6 +19,7 @@ import Foundation
     private(set) var storageAvailable = false
     private(set) var contextCurrent = false
     private(set) var conflictingDefaults: SchoolPlanningDefaults?
+    private(set) var removedProductNotice: String?
     var trainingCategoryCode = ""
     var serviceProductKey = ""
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
@@ -40,10 +41,29 @@ import Foundation
             && hasChanges
     }
     var canRetry: Bool { pending?.kind == .savePlanningDefaults && pending?.scope == scope && !isBusy && !isLoading }
+    var draft: SchoolPlanningPreferenceDraft {
+        SchoolPlanningPreferenceDraft(trainingCategoryCode: trainingCategoryCode, serviceProductKey: serviceProductKey)
+    }
+
+    func selectCategory(_ code: String) {
+        guard code != trainingCategoryCode else { return }
+        let previous = products.first { $0.productKey == serviceProductKey }?.label ?? "précédent"
+        trainingCategoryCode = code
+        if !serviceProductKey.isEmpty && !availableProducts.contains(where: { $0.productKey == serviceProductKey }) {
+            serviceProductKey = ""
+            removedProductNotice = "Le tarif \(previous) ne s’applique plus à cette formation. Choisis un tarif ou garde aucune préférence."
+        }
+        successMessage = nil
+    }
+
+    func selectProduct(_ key: String) {
+        serviceProductKey = key; removedProductNotice = nil; successMessage = nil
+    }
 
     func load(keepingEdits: Bool = true) async {
         guard !isBusy, !isLoading else { return }
-        let preservingEdits = keepingEdits && saved != nil && hasChanges
+        let draftAtStart = draft
+        let hadEdits = keepingEdits && saved != nil && hasChanges
         isLoading = true; errorMessage = nil; storageAvailable = false; contextCurrent = false; conflictingDefaults = nil
         defer { isLoading = false }
         do {
@@ -76,6 +96,8 @@ import Foundation
             let terms = try await termsRead.readValue
             try Task.checkCancellation()
             let date = SchoolCatalogFormatting.civilDate(Date(), timeZone: school.timeZone)
+            // Une réponse tardive ne remplace jamais une saisie modifiée après le début de la lecture.
+            let preservingEdits = hadEdits || draft != draftAtStart
             self.offerings = offerings.filter { offering in offering.enabled && policies.contains { $0.id == offering.policyVersionId && $0.approved } }
             self.products = products.filter { product in
                 product.enabled && product.current != false && product.type == "INDIVIDUAL_LESSON" && product.siteId == nil
@@ -84,26 +106,45 @@ import Foundation
             }
             if preservingEdits, saved?.version != current.version {
                 conflictingDefaults = current
-                errorMessage = "Les préférences ont changé depuis leur ouverture. Recharge leur nouvelle version avant d’enregistrer."
+                errorMessage = "Les préférences ont changé à l’école. Compare les deux versions avant de continuer."
             } else {
                 saved = current; contextCurrent = true; conflictingDefaults = nil
             }
             if !preservingEdits {
                 trainingCategoryCode = current.trainingCategoryCode ?? ""; serviceProductKey = current.serviceProductKey ?? ""
+                removedProductNotice = nil
             }
         } catch {
             if error as? SchoolPlanningFailure == .forbidden || error as? SchoolPlanningFailure == .unauthorized
                 || error as? SchoolAPIError == .forbidden || error as? SchoolAPIError == .unauthorized {
                 saved = nil; conflictingDefaults = nil; offerings = []; products = []; trainingCategoryCode = ""; serviceProductKey = ""
+                removedProductNotice = nil
             }
             if !(error is CancellationError) { errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
         }
     }
-    func useUpdatedDefaults() {
-        guard !isBusy, !isLoading, pending == nil, let current = conflictingDefaults else { return }
-        saved = current; trainingCategoryCode = current.trainingCategoryCode ?? ""
-        serviceProductKey = current.serviceProductKey ?? ""
+    func conflictReview() -> SchoolPlanningPreferenceConflict? {
+        guard let current = conflictingDefaults else { return nil }
+        return SchoolPlanningPreferenceConflict(local: draft, remote: current)
+    }
+    func canResolve(_ review: SchoolPlanningPreferenceConflict) -> Bool {
+        !isBusy && !isLoading && pending == nil && conflictingDefaults?.version == review.remote.version && draft == review.local
+    }
+    @discardableResult func resolve(_ review: SchoolPlanningPreferenceConflict, keepLocal: Bool) -> Bool {
+        guard canResolve(review), let current = conflictingDefaults else { return false }
+        saved = current
+        if !keepLocal {
+            trainingCategoryCode = current.trainingCategoryCode ?? ""
+            serviceProductKey = current.serviceProductKey ?? ""
+            removedProductNotice = nil
+        }
         conflictingDefaults = nil; contextCurrent = true; errorMessage = nil; successMessage = nil
+        if !trainingCategoryCode.isEmpty && !categories.contains(trainingCategoryCode) {
+            errorMessage = "La formation choisie n’est plus disponible. Choisis une formation ou aucune préférence."
+        } else if !serviceProductKey.isEmpty && !availableProducts.contains(where: { $0.productKey == serviceProductKey }) {
+            errorMessage = "Le tarif choisi n’est plus disponible. Choisis un tarif ou aucune préférence."
+        }
+        return true
     }
     func save() async {
         guard canSave, let saved else { return }
@@ -146,12 +187,13 @@ import Foundation
         await load(keepingEdits: true)
     }
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async {
+        let draftAtSend = draft
         isBusy = true; errorMessage = nil; successMessage = nil
         do {
             try outbox.save(command)
             try await client.send(command)
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
-            isBusy = false; await load(keepingEdits: false)
+            isBusy = false; await load(keepingEdits: draft != draftAtSend)
         } catch {
             // Refus motivé, ou service qui ne connaît pas cette écriture (404) : l’école a répondu, rien n’est
             // enregistré. La demande quitte la file au lieu de bloquer toutes les autres écritures de l’école.
@@ -166,6 +208,7 @@ import Foundation
                 }
             }
             isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription
+            if error as? SchoolPlanningFailure == .conflict, pending == nil { await load(keepingEdits: true) }
         }
     }
 }
@@ -173,6 +216,7 @@ import Foundation
 struct SchoolPlanningSettingsView: View {
     @State private var model: SchoolPlanningSettingsWorkspace
     @State private var confirmsDiscard = false
+    @State private var conflictReview: SchoolPlanningPreferenceConflict?
     @Environment(\.dismiss) private var dismiss
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
         _model = State(initialValue: SchoolPlanningSettingsWorkspace(scope: scope, client: client, outbox: outbox))
@@ -187,9 +231,10 @@ struct SchoolPlanningSettingsView: View {
                     VStack(alignment: .leading, spacing: DrivySpacing.s) {
                         if model.conflictingDefaults != nil {
                             DrivyFormMessage(text: error, tone: .danger)
-                            Button("Utiliser les préférences actualisées") { model.useUpdatedDefaults() }
+                            Button("Comparer les préférences") { conflictReview = model.conflictReview() }
                                 .frame(minHeight: DrivyLayout.tapTarget)
                                 .disabled(model.isBusy || model.isLoading || model.pending != nil)
+                                .accessibilityIdentifier("planning-settings-compare")
                         } else {
                             SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
                         }
@@ -207,26 +252,30 @@ struct SchoolPlanningSettingsView: View {
                 if model.saved != nil {
                     DrivyRowGroup {
                         preferenceField("Formation par défaut") {
-                            Picker("Formation par défaut", selection: $model.trainingCategoryCode) {
-                                Text("Aucune").tag("")
+                            Picker("Formation par défaut", selection: Binding(get: { model.trainingCategoryCode }, set: { model.selectCategory($0) })) {
+                                Text("Aucune préférence").tag("")
                                 ForEach(model.categories, id: \.self) { DrivingLicenseLabel(title: "Permis \($0)", code: $0).tag($0) }
                                 if !model.trainingCategoryCode.isEmpty && !model.categories.contains(model.trainingCategoryCode) {
                                     Text("Formation indisponible").tag(model.trainingCategoryCode)
                                 }
                             }
-                            .onChange(of: model.trainingCategoryCode) { _, _ in
-                                if !model.availableProducts.contains(where: { $0.productKey == model.serviceProductKey }) { model.serviceProductKey = "" }
-                            }
                         }
                         preferenceField("Tarif par défaut") {
-                            Picker("Tarif par défaut", selection: $model.serviceProductKey) {
-                                Text("Aucun").tag("")
+                            Picker("Tarif par défaut", selection: Binding(get: { model.serviceProductKey }, set: { model.selectProduct($0) })) {
+                                Text("Aucune préférence").tag("")
                                 ForEach(model.availableProducts) { product in
-                                    Text("\(product.label) · \(SchoolCatalogFormatting.price(product.unitPriceCents))").tag(product.productKey)
+                                    Text(SchoolPlanningPreferenceFormat.product(product)).tag(product.productKey)
                                 }
                                 if !model.serviceProductKey.isEmpty && !model.availableProducts.contains(where: { $0.productKey == model.serviceProductKey }) {
                                     Text("Tarif indisponible").tag(model.serviceProductKey)
                                 }
+                            }
+                            if let notice = model.removedProductNotice {
+                                Text(notice).font(.footnote).foregroundStyle(DrivyTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("planning-settings-product-removed")
+                                Button("Garder aucune préférence") { model.selectProduct("") }
+                                    .frame(minHeight: DrivyLayout.tapTarget)
                             }
                         }
                     }.disabled(model.isLoading || model.isBusy || model.pending != nil)
@@ -261,6 +310,10 @@ struct SchoolPlanningSettingsView: View {
             }
         }
         .task { await model.load() }
+        .onChange(of: model.removedProductNotice) { _, notice in
+            if let notice { AccessibilityNotification.Announcement(notice).post() }
+        }
+        .sheet(item: $conflictReview) { review in SchoolPlanningConflictView(model: model, review: review) }
     }
 
     private func preferenceField<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -273,5 +326,48 @@ struct SchoolPlanningSettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, DrivySpacing.xs)
+    }
+}
+
+private struct SchoolPlanningConflictView: View {
+    let model: SchoolPlanningSettingsWorkspace
+    let review: SchoolPlanningPreferenceConflict
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Tes choix non enregistrés") {
+                    values(category: review.local.trainingCategoryCode, product: review.local.serviceProductKey)
+                }
+                Section("Version actuelle à l’école") {
+                    values(category: review.remote.trainingCategoryCode ?? "", product: review.remote.serviceProductKey ?? "")
+                }
+                if !model.canResolve(review) {
+                    Text("Ces choix ont changé. Ferme cette comparaison puis ouvre-la à nouveau.")
+                        .foregroundStyle(DrivyTheme.danger)
+                }
+                Section {
+                    Button("Utiliser la version de l’école") {
+                        if model.resolve(review, keepLocal: false) { dismiss() }
+                    }.accessibilityIdentifier("planning-settings-use-remote")
+                    Button("Garder mes choix à enregistrer") {
+                        if model.resolve(review, keepLocal: true) { dismiss() }
+                    }.accessibilityIdentifier("planning-settings-keep-local")
+                }.disabled(!model.canResolve(review))
+            }
+            .navigationTitle("Comparer les préférences")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Annuler") { dismiss() } } }
+        }
+    }
+
+    @ViewBuilder private func values(category: String, product: String) -> some View {
+        LabeledContent("Formation", value: SchoolPlanningPreferenceFormat.category(category))
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text("Tarif").foregroundStyle(DrivyTheme.muted)
+            Text(SchoolPlanningPreferenceFormat.product(key: product, in: model.products))
+                .fixedSize(horizontal: false, vertical: true)
+        }.accessibilityElement(children: .combine)
     }
 }
