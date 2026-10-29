@@ -188,4 +188,3 @@ Les epics de réactivité possèdent déjà des socles et de nombreux parcours. 
 | [#334](https://github.com/tomyrms/Drivy/issues/334) | [Frontend R23] Retirer vraiment les anciennes vues et CSS, migrer les liens et verrouiller la nouvelle frontière UI | Exclu — Claude #311 | Aucune intervention ; historique web ou périmètre de reconstruction. |
 | [#335](https://github.com/tomyrms/Drivy/issues/335) | [Frontend R24] Qualifier chaque écran desktop/mobile : composition réelle, clavier, accessibilité et absence de rendu hérité | Exclu — Claude #311 | Aucune intervention ; historique web ou périmètre de reconstruction. |
 | [#336](https://github.com/tomyrms/Drivy/issues/336) | [Frontend R25] Livrer un aperçu vérifiable avant les tests étendus, puis qualifier performances et sécurité | Exclu — Claude #311 | Aucune intervention ; historique web ou périmètre de reconstruction. |
-
