@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CourseSeries, SeriesForm, SessionForm } from '../../console/course-model';
+import { coursesManageable } from './course-catalogue';
 import { changedSessions, civilDayLabel, formSignature, isSessionRefusal, languageLabel, seriesStateLabel, seriesSummary, sessionMinutes } from './course-presentation';
 
 const session = (key: string, patch: Partial<SessionForm> = {}): SessionForm => ({ key, date: '2026-11-04', start: '18:00', end: '20:00', instructor: 'marie', attendanceRequired: true, ...patch });
@@ -48,5 +49,12 @@ describe('collective course presentation', () => {
     expect(isSessionRefusal('COURSE_INSTRUCTOR_CONFLICT')).toBe(true);
     expect(isSessionRefusal('VERSION_CONFLICT')).toBe(false);
     expect(isSessionRefusal(undefined)).toBe(false);
+  });
+
+  it('offers courses only where the module is on and the school grants management', () => {
+    expect(coursesManageable(true, { canManage: true })).toBe(true);
+    expect(coursesManageable(false, { canManage: true })).toBe(false);
+    expect(coursesManageable(true, { canManage: false })).toBe(false);
+    expect(coursesManageable(true, undefined)).toBe(false);
   });
 });
