@@ -3,7 +3,7 @@ import Security
 @preconcurrency import AppAuth
 
 enum IdentityFailure: Error, LocalizedError {
-    case notConfigured, unavailable, invalidProvider, reauthentication, storage, invalidArchive, differentAccount, invalidCredentials
+    case notConfigured, unavailable, invalidProvider, reauthentication, storage, invalidArchive, differentAccount, invalidCredentials, attempts
 
     var errorDescription: String? {
         switch self {
@@ -15,6 +15,7 @@ enum IdentityFailure: Error, LocalizedError {
         case .invalidArchive: "La session enregistrée est illisible. Connecte-toi à nouveau."
         case .differentAccount: "La confirmation doit être faite avec le même compte. Ta session actuelle est conservée."
         case .invalidCredentials: "E-mail ou mot de passe incorrect."
+        case .attempts: "Trop d’essais de connexion. Patiente quelques minutes avant de réessayer."
         }
     }
 }

@@ -34,12 +34,12 @@ final class AppAuthPasswordAuthorization: PasswordAuthorizing {
 
     private func discover(_ configuration: AppConfiguration) async throws -> OIDServiceConfiguration {
         let archive: Data = try await withCheckedThrowingContinuation { continuation in
-            OIDAuthorizationService.discoverConfiguration(forIssuer: configuration.issuer) { service, _ in
+            OIDAuthorizationService.discoverConfiguration(forIssuer: configuration.issuer) { service, error in
                 // Le callback Objective-C ne transfère qu’une valeur immuable.
                 if let service, let data = try? NSKeyedArchiver.archivedData(withRootObject: service, requiringSecureCoding: true) {
                     continuation.resume(returning: data)
                 } else {
-                    continuation.resume(throwing: IdentityFailure.unavailable)
+                    continuation.resume(throwing: Self.failure(error))
                 }
             }
         }
@@ -64,10 +64,26 @@ final class AppAuthPasswordAuthorization: PasswordAuthorizing {
         return response
     }
 
-    /// Un refus du fournisseur (identifiants faux, compte bloqué un moment) se dit sans détail ;
-    /// tout le reste (réseau, panne) reste une indisponibilité.
+    /// Seuls les codes structurés du fournisseur sont lus, jamais sa description ni son corps brut.
+    /// AppAuth peut envelopper un HTTP 429 dans une erreur OAuth : le transport garde la priorité.
     nonisolated static func failure(_ error: (any Error)?) -> IdentityFailure {
         guard let error = error as NSError? else { return .unavailable }
-        return error.domain == OIDOAuthTokenErrorDomain ? .invalidCredentials : .unavailable
+        var underlying: NSError? = error
+        for _ in 0..<8 {
+            guard let current = underlying else { break }
+            if current.domain == OIDHTTPErrorDomain {
+                if current.code == 429 { return .attempts }
+                if current.code == 408 || current.code >= 500 { return .unavailable }
+            }
+            underlying = current.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        guard error.domain == OIDOAuthTokenErrorDomain,
+              let response = error.userInfo[OIDOAuthErrorResponseErrorKey] as? [String: Any],
+              let code = response[OIDOAuthErrorFieldError] as? String else { return .unavailable }
+        switch code {
+        case "invalid_grant": return .invalidCredentials
+        case "invalid_client", "unauthorized_client", "unsupported_grant_type", "invalid_scope": return .invalidProvider
+        default: return .unavailable
+        }
     }
 }
