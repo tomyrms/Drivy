@@ -54,6 +54,8 @@ export function PortalSettingsFocus({ target, navigationKey }: { target: string 
     if (!target) return;
     let completed = false;
     const focus = () => {
+      // Wait until the closing search popup releases its focus trap and is unmounted.
+      if (document.querySelector('[data-slot="dialog-content"]')) return;
       const field = document.getElementById(target);
       if (completed || !field || field.matches(':disabled') || field.closest('[hidden], [inert]')) return;
       if (!field.matches('input,textarea,select,button,a')) field.tabIndex = -1;

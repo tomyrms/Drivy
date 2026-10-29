@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 29 octobre 2026, soir — #311, reprise intégrée avant essai homelab
+
+- Reprise de `codex/epic-311-rebuild` à `33232416`, sans réinitialisation. Sauvegardes récupérées dans trois worktrees isolés ; Équipe déjà intégrée vérifiée par équivalence de patch. [Livraison d’essai](epic-311-livraison-essai.md).
+- #319/#320/#326/#327/#329/#330 raccordés : entrée et récupération, ouverture et préparation, catalogue et textes, participants/appel/règlements, recherche et réglages. Pages secondaires et blocages de planification conservés. Nouveau portail rendu unique ; 60 fichiers historiques retirés, garde du graphe d’imports et du bundle renforcée.
+- **Exécuté** : typage client/serveur, compilation de production ; 91 tests ciblés d’intégration et contrôles ciblés des agents documentés. Recette navigateur synthétique 390 sombre/1440 clair avec recherche et focus ; recette finale consignée dans la livraison.
+- **À suivre** : essai personnel sur données réelles après sauvegarde et déploiement web uniquement. Matrices complètes R24, PostgreSQL, performance, sécurité, accessibilité réelle et régression Apple différées au retour du porteur. Aucune fusion dans master, aucune clôture d’issue. L’inventaire des 110 vues indique l’intégration, pas une qualification exhaustive.
+
 ## 29 octobre 2026, après-midi — #311, cinq familles de plus, aperçu publié
 
 - Reconstruits par le coordinateur pendant la limite d’usage des agents : Signalements (#331), Trajets (#332), Préférences personnelles (#333), Accueil et préparation (#321), fiche École (#330, coordonnées et fuseau). Retours de page et message « pas encore reconstruite » mutualisés dans `portal/components`. Socle : bouton fantôme désactivé sans bordure, barre basse à cinq espaces.

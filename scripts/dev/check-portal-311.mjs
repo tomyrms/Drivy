@@ -19,10 +19,12 @@ try {
     const failures = [];
     page.on('pageerror', error => failures.push(error.message));
     page.on('console', message => { if (message.type() === 'error') failures.push(message.text()); });
-    for (const destination of ['agenda', 'eleves', 'equipe', 'formations', 'prestations', 'confidentialite', 'champs-profil', 'configuration', 'preferences']) {
+    for (const destination of ['agenda', 'eleves', 'equipe', 'formations', 'prestations', 'confidentialite', 'champs-profil', 'configuration', 'preferences', 'preparation', 'connexion', 'ecoles', 'invitation', 'recuperation', 'ouverture', 'operateur']) {
       await page.goto(`${base}?page=${destination}`, { waitUntil: 'networkidle' });
       await page.getByRole('heading').first().waitFor();
       await page.evaluate(() => document.fonts.ready);
+      assert.equal(await page.getByText('Lecture impossible', { exact: true }).count(), 0, `${destination}: preview data unavailable`);
+      if (destination === 'preparation') await page.locator('.setup-workspace').waitFor();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       assert(overflow <= 1, `${destination} overflows at ${width}: ${overflow}`);
       await page.screenshot({ path: resolve(output, `${destination}-${width}-${theme}.png`) });

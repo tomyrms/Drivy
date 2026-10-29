@@ -12,6 +12,18 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), {
     name: 'drivy-build-identity',
     transformIndexHtml: () => [{ tag: 'meta', attrs: { name: 'drivy-build', content: sha }, injectTo: 'head' }],
+    generateBundle() {
+      const modules = [...this.getModuleIds()].map(id => id.replaceAll('\\', '/'));
+      const forbidden = modules.filter(id => {
+        const path = id.split('/client/')[1]?.split('?')[0];
+        if (!path) return false;
+        return ['legacy-styles.ts', 'presentation.ts', 'portal/components/not-rebuilt.tsx'].includes(path)
+          || path.startsWith('portal/preview/') || path === 'portal/access-preview.tsx'
+          || path.endsWith('.css') && !path.startsWith('portal/')
+          || path.endsWith('.tsx') && !path.startsWith('portal/') && !path.startsWith('components/ui/') && !['main.tsx', 'BrandSymbol.tsx'].includes(path);
+      });
+      if (forbidden.length) this.error(`Retired or synthetic presentation in production: ${forbidden.join(', ')}`);
+    },
   }],
   define: { __DRIVY_BUILD_SHA__: JSON.stringify(sha) },
   resolve: { alias: { '@': fileURLToPath(new URL('./client', import.meta.url)) } },

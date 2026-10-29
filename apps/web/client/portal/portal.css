@@ -225,14 +225,13 @@
 .portal-build code { font-family: ui-monospace, monospace; }
 .portal-entry { width: min(560px, 100%); margin: 0 auto; padding: 56px 24px; display: grid; gap: 20px; }
 .portal-entry-card { display: grid; gap: 18px; justify-items: start; }
-.portal-entry-card h1, .portal-not-rebuilt h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; }
-.portal-entry-card p, .portal-not-rebuilt p { color: var(--muted-foreground); }
+.portal-entry-card h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; }
+.portal-entry-card p { color: var(--muted-foreground); }
 .portal-school-list { width: 100%; list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
 .portal-school-list li + li { border-top: 1px solid var(--border); }
 .portal-school-list button { width: 100%; height: auto; min-height: 64px; justify-content: flex-start; gap: 14px; padding: 14px 18px; border-radius: 0; text-align: left; font-weight: 400; }
 .portal-school-list button > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .portal-school-list button > span > span { color: var(--muted-foreground); font-size: .85rem; }
-.portal-not-rebuilt { display: grid; gap: 14px; justify-items: start; padding-block: 24px; }
 .portal-resume-gate { display: grid; gap: 16px; }
 .portal-skip-link { position: fixed; top: 12px; left: 12px; padding: 12px; z-index: 100; background: var(--primary); color: var(--primary-foreground); border-radius: 8px; transform: translateY(-180%); }
 .portal-skip-link:focus { transform: none; }

@@ -118,6 +118,9 @@ def execute(req):
                     target.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(old,target)
     shutil.copytree(previous/'dist/server',release/'dist/server')
     for filename in ['package.json','package-lock.json']: shutil.copy2(previous/filename,release/filename)
+    for path in release.rglob('*'):
+        if path.is_dir(): path.chmod(0o755)
+        elif path.is_file(): path.chmod(0o644)
     (release/'node_modules').symlink_to((previous/'node_modules').resolve(),target_is_directory=True)
     # Snapshot compiled BFF hashes without exporting data or private configuration.
     bff={str(p.relative_to(previous/'dist/server')):digest(p.read_bytes()) for p in (previous/'dist/server').rglob('*') if p.is_file()}
