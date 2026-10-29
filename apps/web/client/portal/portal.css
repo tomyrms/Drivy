@@ -179,7 +179,7 @@
 .ui-button-lg { min-height: 48px; padding-inline: 20px; }
 .ui-button-icon { width: 44px; padding: 0; }
 .ui-button:disabled, .ui-button[data-disabled], .ui-button[aria-disabled="true"] { color: var(--muted-foreground); background: var(--muted); border-color: var(--border); cursor: not-allowed; box-shadow: none; }
-.ui-button-link:disabled, .ui-button-ghost:disabled { background: transparent; }
+.ui-button-link:disabled, .ui-button-ghost:disabled, .ui-button-link[data-disabled], .ui-button-ghost[data-disabled] { background: transparent; border-color: transparent; }
 .ui-dialog-overlay { position: fixed; inset: 0; z-index: 50; background: var(--portal-overlay); }
 .ui-dialog-content { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 50; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; padding: 28px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: var(--portal-popup-shadow); }
 .ui-dialog-header { display: flex; flex-direction: column; gap: 8px; padding-right: 32px; margin-bottom: 24px; }
@@ -241,8 +241,8 @@
   .portal-workspace { display: flex; flex-direction: column; }
   .portal-sidebar { display: contents; }
   .portal-navigation { position: fixed; inset: auto 0 0; z-index: 30; padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--sidebar); border-top: 1px solid var(--sidebar-border); }
-  .portal-navigation ul { width: min(640px, 100%); margin-inline: auto; grid-template-columns: repeat(var(--portal-nav-count, 3), minmax(0, 1fr)); gap: 6px; }
-  .portal-nav-item { flex-direction: column; justify-content: center; min-height: 56px; padding: 6px 2px; gap: 3px; font-size: 12px; line-height: 1.5; }
+  .portal-navigation ul { width: min(640px, 100%); margin-inline: auto; grid-template-columns: repeat(var(--portal-nav-count, 3), minmax(0, 1fr)); gap: 4px; }
+  .portal-nav-item { flex-direction: column; justify-content: center; min-height: 56px; padding: 6px 0; gap: 3px; font-size: 12px; line-height: 1.5; letter-spacing: -0.01em; }
   .portal-nav-label { display: none; }
   .portal-nav-short { display: inline; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .portal-surface { flex: 1; }

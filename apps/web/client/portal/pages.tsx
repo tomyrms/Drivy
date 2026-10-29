@@ -19,6 +19,7 @@ export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<Compone
   procedures: lazy(() => import('./formations/catalogue-page').then(module => ({ default: module.ProceduresPage }))),
   prestations: lazy(() => import('./pricing/prestations-page').then(module => ({ default: module.PrestationsPage }))),
   conditions: lazy(() => import('./pricing/terms-page').then(module => ({ default: module.TermsPage }))),
+  signalements: lazy(() => import('./signals/signals-page').then(module => ({ default: module.SignalsPilot }))),
 };
 
 export const portalSections = Object.keys(portalPages) as SectionKey[];
