@@ -13,6 +13,8 @@
 
 Les mutations GPS restent dans SQLCipher ; le coffre de refus contient une intention préalable, pas un faux reçu. Le choix officiel affiché pour les autorisations continue à venir de l'école. Une intention non confirmée n'est pas un accord de démarrer.
 
+Matrice native : lecture de notice, accord général/par leçon, refus SELF et choix verbal du moniteur sont présents ; les contrôles de partage du bilan restent dans leur parcours existant. Aucun service autonome d'export complet ou d'effacement intégral n'est livré par ce lot : aucune demande, progression, suppression distante ou disponibilité d'artefact n'est simulée.
+
 Références relues : R41/R42, modèles AP152/AP153, receipt AP72, règles d'époque R35, contrat de notice et choix existant, tests de consentement du démarrage immédiat. La politique GPS_REQUIRED servie par l'école conserve ses gardes existantes.
 
 ## Recette
