@@ -49,6 +49,16 @@ Relève à 23 h 05 (agents Opus neufs, mêmes worktrees, deux à la fois) : Plan
 
 Les agents reprennent sur leur branche `claude/311-*` ; le coordinateur réintègre ensuite seulement les nouveaux commits (`git cherry-pick <dernier intégré>..claude/311-*`).
 
+### État au 29 octobre, midi
+
+Les agents Opus de relève (23 h) ont été coupés par la limite hebdomadaire sans rien laisser. Les agents d’origine ont repris à 11 h 40.
+
+Intégré depuis la publication `e2a0d5e6` (non publié) : Planning #328 cours collectifs (`b19f15e0`, notes `7cd9d33a`, `d3dee6fe`) ; Catalogue, premières finitions de #326/#327 (`61204610`, `f3a80c59`, `58de5ccc`). Vérifié sur la branche intégrée : typage client et serveur, 472 tests web, build de production, build d’aperçu.
+
+En cours : Planning → #329 participants, attente, appel, règlements, validation ; Catalogue → fin de #326/#327 et notes. Incident : l’agent Planning a lancé un `taskkill /IM node.exe` trop large en fin de #328 ; aucun dégât constaté (sidecars Atrium et runtime Codex vivants), consigne donnée de ne plus le faire.
+
+La branche coordinatrice est envoyée sur `origin/codex/epic-311-rebuild` pour sauvegarde, avec `[skip ci]` en tête : aucun workflow lancé. Pas de PR à ce stade.
+
 ## Vagues suivantes prévues
 
 - Vague 2 : école (#320 ouverture/guide, #321 accueil, #330 réglages/confidentialité/GPS, #331 signalements), trajets (#332), participants et appel des cours (#329, même propriétaire que #328), entrée et compte (#319, #333).

@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 29 octobre 2026 — #311, cours collectifs intégrés, branche sauvegardée
+
+- Intégrés : cours collectifs (#328 : ajout depuis l’agenda, brouillon de série, séances, revue et publication, fiche, capacité, dates, annulation de la série, politique) et finitions Formations et tarifs (#326/#327 partiels). Pas encore publiés dans l’aperçu.
+- **Exécuté** sur la branche intégrée : typage client et serveur, 472 tests web, build de production, build d’aperçu ; l’agent a joué Refus, Conflit et Réponse perdue sur les cours à 1440/390 en clair et sombre. **Non exécuté** : module de cours désactivé en navigateur, clavier et lecteur d’écran réels.
+- En cours : #329 (participants), fin de #326/#327. Branche `codex/epic-311-rebuild` envoyée sur GitHub pour sauvegarde, sans CI ni PR. Aucune sous-issue clôturée.
+
 ## 28 octobre 2026, soir — #311, trois familles intégrées et publiées en aperçu
 
 - Intégrés : Équipe (#325 annuaire, fiche membre, retrait d’accès, invitations), Disponibilités et Absences (#323), Formations et tarifs (#326/#327, partiels). Publiés sur l’aperçu isolé au SHA `e2a0d5e6`, données fictives. [Publication](epic-311-preview-publication.md#publication-avec-équipe-disponibilitésabsences-formations-et-tarifs).
