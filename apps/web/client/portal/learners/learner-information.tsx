@@ -37,13 +37,27 @@ export function LearnerInformation({ learner, state }: { learner: Learner; state
 export function LearnerPrerequisites({ learnerId, category }: { learnerId: string; category: string }) {
   const state = usePrerequisites(learnerId, category);
   const [detail, setDetail] = useState<string | null>(null);
+  // Category references from the former prerequisite help, without its presentation.
+  // An empty rule set is not a conclusion that a category has no requirements.
+  const known = ['A1', 'A35', 'A', 'B', 'B1', 'BE', 'C1', 'C', 'C1E', 'CE', 'D1', 'D', 'D1E', 'DE', 'F', 'G', 'M'].includes(category);
+  const source = category === 'A35' ? 'https://www.vd.ch/mobilite/automobile-et-navigation/permis/motocycles-a1-et-a'
+    : `https://lepermisdeconduire.ch/categories-de-permis/categorie-${category.toLowerCase()}/`;
   const selected = state.hints.find(hint => hint.id === detail);
   const type = detail === 'first-aid' ? 'FIRST_AID' : detail === 'awareness' ? 'AWARENESS' : null;
   const facts = state.read?.status === 'READY' ? state.read.data : null;
   const completions = type ? facts?.completions.filter(item => item.typeKey === type) ?? [] : [];
   const enrollments = type ? facts?.enrollments.filter(item => item.typeKey === type) ?? [] : [];
+  if (!known) return null;
+  if (category === 'G' || category === 'M') return <section className="student-section">
+    <div className="student-section-heading"><h3>Prérequis du parcours</h3><span className="student-muted">Permis {category}</span></div>
+    <p>Préparation théorique ; aucun permis d’élève ni examen pratique ordinaire. Les cas particuliers restent à vérifier auprès du canton.</p>
+    <a className="student-source-link" href={source} target="_blank" rel="noreferrer noopener">Exigences officielles<ExternalLink aria-hidden="true" /></a>
+  </section>;
   return <section className="student-section"><div className="student-section-heading"><h3>Prérequis du parcours</h3><span className="student-muted">Permis {category}</span></div><PortalSelect id={`prerequisite-${category}`} label="Démarche" value={state.moment} onValueChange={value => { if (value === 'APPLICATION' || value === 'THEORY' || value === 'PRACTICAL') { state.setMoment(value); setDetail(null); } }} options={[{ value: 'APPLICATION', label: 'Demande de permis' }, { value: 'THEORY', label: 'Examen théorique' }, { value: 'PRACTICAL', label: 'Examen pratique' }]} />
-    <ReadFeedback loaded={state.loaded} />{state.hints.length ? <div className="student-prerequisite-list">{state.hints.map(hint => <button type="button" key={hint.id} onClick={() => setDetail(hint.id)}><FileCheck aria-hidden="true" /><span><strong>{hint.label}</strong><span>{hint.conclusion}</span></span><ArrowRight aria-hidden="true" /></button>)}</div> : <p className="student-muted">Aucun repère disponible pour cette démarche.</p>}
+    <ReadFeedback loaded={state.loaded} />{state.hints.length ? <div className="student-prerequisite-list">{state.hints.map(hint => <button type="button" key={hint.id} onClick={() => setDetail(hint.id)}><FileCheck aria-hidden="true" /><span><strong>{hint.label}</strong><span>{hint.conclusion}</span></span><ArrowRight aria-hidden="true" /></button>)}</div> : <>
+      <p className="student-muted">Aucune conclusion automatique pour cette démarche.</p>
+      <a className="student-source-link" href={source} target="_blank" rel="noreferrer noopener">Consulter les exigences de ce permis<ExternalLink aria-hidden="true" /></a>
+    </>}
     <Dialog open={!!selected} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className="student-prerequisite-dialog"><DialogHeader><DialogTitle>{selected?.label}</DialogTitle><DialogDescription>{selected?.conclusion}</DialogDescription></DialogHeader>{selected && <><p>{selected.detail}</p>{completions.map(item => <p key={item.id}>Accomplissement interne validé le {dateTime(item.validatedAt, 'Europe/Zurich')}.</p>)}{enrollments.map(item => <dl className="student-facts" key={item.enrollmentId}><div><dt>Présences enregistrées</dt><dd>{item.requirements.present} / {item.requirements.required} séquences requises</dd></div><div><dt>Séquences manquantes</dt><dd>{item.requirements.missing}</dd></div></dl>)}{(completions.length > 0 || enrollments.length > 0) && <p className="student-muted">Ces faits internes ne remplacent ni l’attestation officielle, ni le contrôle d’une dispense.</p>}<a className="student-source-link" href={selected.sourceUrl} target="_blank" rel="noreferrer">Consulter la source<ExternalLink aria-hidden="true" /></a><p className="student-source-date">Repère vérifié le {selected.checkedOn} · version {selected.version}</p></>}<DialogFooter><Button variant="outline" onClick={() => setDetail(null)}>Fermer</Button></DialogFooter></DialogContent></Dialog>
   </section>;
 }
