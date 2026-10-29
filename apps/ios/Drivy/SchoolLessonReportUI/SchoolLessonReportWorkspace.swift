@@ -911,7 +911,15 @@ import Observation
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
             if pending.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(pending)
-            if confirmsThisReport(pending) { discardLocalDraft(); reportSaveConfirmed = true; return }
+            if confirmsThisReport(pending) {
+                if let sent = sendingReport, sent != editedDraft(id: sent.id) {
+                    confirmedReport = sent
+                    confirmation = "Bilan enregistré. Tes dernières modifications restent à enregistrer."
+                    await load(); persistLocalDraft(); return
+                }
+                guard persistTextDrafts(), discardReportDraft() else { return }
+                reportSaveConfirmed = true; return
+            }
             await load()
         } catch SchoolReportFailure.operationUnknown {
             // L’école répond sans ambiguïté : la fiche reste lisible et la demande peut être renvoyée ou abandonnée.
