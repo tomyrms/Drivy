@@ -26,3 +26,9 @@ Les contrôles composent les sources shadcn Base UI installées, notamment [Fiel
 Sous Node 24.22.1 : 32 tests ciblés PASS (`school-opening-model`, `school-opening-bff`, `setup-model`, `setup-guide-model`) ; 3 tests de frontière du portail PASS. Typages client et serveur/tests PASS après correction de la prop optionnelle stricte du guide, avec copie locale des modules d’entrée #319 non incluse dans ce lot. La dépendance d’entrée doit être intégrée avant le lot d’ouverture.
 
 Recette visuelle du guide et de l’opérateur, raccord authentifié, interaction clavier et essai du porteur sur le homelab restent à effectuer sur le commit d’intégration. Cette note ne revendique ni campagne complète, ni nouvelle qualification PostgreSQL, ni déploiement. Le coordinateur reporte cet état dans `STATUS.md` pour éviter un conflit de ce fichier partagé.
+
+## Correction de l’aperçu après intégration
+
+Le contrôle visuel a révélé une collision de route : la famille catalogue répondait à `setup-draft/templates` avant le guide, avec seulement les formations. Cette réponse échouait au contrat de préparation, qui attend aussi la version, la confidentialité et les champs du profil. La famille préparation devient l’unique propriétaire de cette lecture ; sa réponse conserve les propositions pédagogiques et réglementaires B/BE du catalogue ainsi que les exemples A/A1. Les contrôleurs de production et la validation stricte restent identiques.
+
+Deux tests ciblés passent par la même priorité catalogue/préparation/aperçu : réponse commune validée par les deux schémas et brouillon complet de la bonne école. La recette visuelle intégrée doit être relancée après ce correctif.

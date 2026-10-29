@@ -1,6 +1,7 @@
 import { setupContentSchema, setupSteps, resolvedSetupFormation, type SetupDraft, type SetupPreview, type SetupTemplates } from '../../../setup-model';
 import { db, ids, previewSchool, stamp, type FixtureRecord } from '../fixtures';
 import type { PreviewFamily, PreviewTools } from '../family';
+import { catalogueSetupTemplates } from './catalogue';
 
 /** Only the isolated preview imports these synthetic proposals; they are never adopted by a real school. */
 const templates: SetupTemplates = { version: 'preview-311', privacy: { id: 'preview-notice', version: 'preview-311',
@@ -10,6 +11,11 @@ const templates: SetupTemplates = { version: 'preview-311', privacy: { id: 'prev
   formations: ['A', 'A1', 'B', 'BE'].map(categoryCode => ({ id: `preview-${categoryCode}`, version: 'preview-311', categoryCode, label: `Permis ${categoryCode}`, durationMinutes: 45,
     competencies: ['Préparer le véhicule', 'Observer et anticiper', 'Adapter son allure'].map((label, sortOrder) => ({ key: `competency-${sortOrder}`, label, description: 'Exemple pédagogique synthétique.', sortOrder })),
     procedureText: 'Déroulement synthétique à relire dans cet aperçu.', qualification: 'NOT_QUALIFIED', coverageNote: 'Programme synthétique, sans qualification réglementaire.' })) };
+// Both screens read the same route: retain the catalogue's rich proposals while completing the setup contract.
+const sharedTemplates = { ...templates, formations: templates.formations.map(base => {
+  const catalogue = catalogueSetupTemplates.formations.find(item => item.categoryCode === base.categoryCode);
+  return catalogue ? { ...base, ...catalogue, competencies: catalogue.competencies.map((item, sortOrder) => ({ ...item, sortOrder })) } : base;
+}) };
 let draft: SetupDraft;
 function review(activate: boolean): SetupPreview {
   const content = draft.content, issues: SetupPreview['issues'] = [];
@@ -70,7 +76,7 @@ export const setupFamily: PreviewFamily = {
   },
   read(request, tools) {
     if (request.path === 'setup-draft') return tools.reply(200, tools.envelope(draft));
-    if (request.path === 'setup-draft/templates') return tools.reply(200, tools.envelope(templates));
+    if (request.path === 'setup-draft/templates') return tools.reply(200, tools.envelope(sharedTemplates));
     if (request.path === 'setup-draft/preview') return tools.reply(200, tools.envelope(review(request.query.get('activate') === 'true')));
     return undefined;
   },

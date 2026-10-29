@@ -224,6 +224,8 @@ const templates = {
       change: { kind: 'REGULATORY', effectiveFrom: dayAfter(60), summary: 'Évolution des conditions de la remorque.', application: 'À relire avant toute application.' } },
   ],
 };
+// The setup family owns the shared endpoint and completes these proposals with identity/privacy/profile defaults.
+export { templates as catalogueSetupTemplates };
 const proposals = { procedure: { procedureText, cancellationPolicyText: cancellationText }, commercialTerms: { label: 'Conditions de l’école', termsText } };
 
 /* ------------------------------------------------------------ Commandes */
@@ -332,7 +334,6 @@ export const catalogueFamily: PreviewFamily = {
   read(request, tools) {
     const [first, second, third] = request.segments;
     if (first === 'text-proposals') return tools.reply(200, tools.envelope(proposals));
-    if (first === 'setup-draft' && second === 'templates') return tools.reply(200, tools.envelope(templates));
     if (first !== 'formations') return undefined;
     if (!second) return tools.reply(200, tools.envelope(list()));
     if (second === 'sheet') { const value = sheet(request.query.get('category') ?? ''); return value ? tools.reply(200, tools.envelope(value)) : tools.reply(404, { code: 'NOT_FOUND' }); }
