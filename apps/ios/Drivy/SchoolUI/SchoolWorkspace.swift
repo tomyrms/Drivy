@@ -1,23 +1,23 @@
 import Foundation
 import Observation
 
-/// In-memory, authorized projections. Changing account or school drops all
+/// Authorized projections and protected personal intentions. Changing account or school drops all
 /// school data synchronously; a late response never restores the old context.
 @MainActor
 @Observable
 final class SchoolWorkspace {
-    private(set) var person: SchoolPerson?
+    private(set) var confirmedPerson: SchoolPerson?
     private(set) var membership: SchoolMembership?
     private(set) var school: SchoolDetails?
-    private(set) var learners: [SchoolLearner] = []
+    private(set) var confirmedLearners: [SchoolLearner] = []
     /// Le dossier du compte connecté reste distinct de l’annuaire et de ses recherches.
-    private(set) var ownLearner: SchoolLearner?
+    private(set) var confirmedOwnLearner: SchoolLearner?
     private(set) var ownLearnerError: String?
     /// Les dossiers actifs de toute l’école auxquels manque une information requise, pour l’administration ;
     /// `nil` tant que rien n’a été lu. Le point de l’onglet Élèves s’y lit, quelles que soient la recherche et les
     /// pages affichées.
     private(set) var learnersToComplete: Set<UUID>?
-    private(set) var learner: SchoolLearner?
+    private(set) var confirmedLearner: SchoolLearner?
     private(set) var trainings: [SchoolTraining] = []
     private(set) var selectedLearnerID: UUID?
     private(set) var searchText = ""
@@ -63,7 +63,54 @@ final class SchoolWorkspace {
     @ObservationIgnored private var ownLearnerReadAt: Date?
     @ObservationIgnored private var awaitsManagementReturn = false
 
-    init(api: any SchoolAPI) { self.api = api }
+    @ObservationIgnored private let accountIntentBaseURL: URL?
+    @ObservationIgnored private let selfIntentStore: (any SchoolSelfProfileIntentStore)?
+    @ObservationIgnored private var selfIntentScope: AccountIntentScope?
+    @ObservationIgnored private var selfWriteTail: Task<Void, Never>?
+    private var selfIntents = SchoolSelfProfileIntents()
+    private(set) var selfProfileIntentError: String?
+
+    init(api: any SchoolAPI, accountIntentBaseURL: URL? = nil,
+         selfIntentStore: (any SchoolSelfProfileIntentStore)? = nil) {
+        self.api = api; self.accountIntentBaseURL = accountIntentBaseURL
+        self.selfIntentStore = selfIntentStore ?? (accountIntentBaseURL == nil ? nil : EncryptedSchoolSelfProfileIntentStore())
+    }
+
+    /// Projection de la personne connectée, sans inventer une version ni des droits.
+    var person: SchoolPerson? {
+        guard let current = confirmedPerson else { return nil }
+        return SchoolPerson(personId: current.personId, version: current.version,
+            displayName: pendingSelfProfileEdit?.displayName ?? current.displayName,
+            locale: current.locale, memberships: current.memberships)
+    }
+    var selfProfile: SchoolSelfProfile? {
+        guard let base = confirmedSelfProfile else { return nil }
+        return pendingSelfProfileEdit.map { SchoolSelfProfileIntent.projecting($0, on: base) } ?? base
+    }
+    var learners: [SchoolLearner] { confirmedLearners.map(projectedLearner) }
+    var learner: SchoolLearner? { confirmedLearner.map(projectedLearner) }
+    var ownLearner: SchoolLearner? { confirmedOwnLearner.map(projectedLearner) }
+    var pendingSelfProfileEdit: SchoolSelfProfileEdit? { selfIntents.fields?.edit }
+    var pendingSelfPhotoChoice: SchoolSelfPhotoIntent? { selfIntents.photo?.photoChoice }
+    var hasPendingSelfProfile: Bool { !selfIntents.isEmpty }
+    var profileAccountBaseURL: URL? { accountIntentBaseURL }
+
+    func displayName(for personID: UUID) -> String? {
+        personID == person?.personId ? person?.displayName : nil
+    }
+
+    private func projectedLearner(_ value: SchoolLearner) -> SchoolLearner {
+        guard value.personId == confirmedPerson?.personId else { return value }
+        let edit: SchoolSelfProfileEdit
+        if let pending = pendingSelfProfileEdit { edit = pending }
+        else if let profile = confirmedSelfProfile, profile.version >= (confirmedPerson?.version ?? 0) {
+            edit = SchoolSelfProfileEdit(profile)
+        } else { return value }
+        return SchoolLearner(id: value.id, schoolId: value.schoolId, personId: value.personId, version: value.version,
+            displayName: edit.displayName, contactEmail: edit.contactEmail.isEmpty ? nil : edit.contactEmail,
+            contactPhone: edit.contactPhone.isEmpty ? nil : edit.contactPhone, archivedAt: value.archivedAt,
+            profileReadiness: value.profileReadiness, profilePhotoDocumentId: value.profilePhotoDocumentId)
+    }
 
     var entryDestination: SchoolEntryDestination {
         .resolve(schoolStatus: school?.status, roles: membership?.roles)
@@ -73,8 +120,10 @@ final class SchoolWorkspace {
         SchoolTrainingModelCache.reset()
         accountRequest = UUID()
         accountRefresh = UUID()
-        person = nil
-        selfProfile = nil
+        confirmedPerson = nil
+        selfIntentScope = nil; selfIntents = SchoolSelfProfileIntents(); selfProfileIntentError = nil
+        selfWriteTail = nil
+        confirmedSelfProfile = nil
         selfPhoto = nil
         peoplePhotos = [:]
         accountError = nil
@@ -91,7 +140,7 @@ final class SchoolWorkspace {
     /// rien n’est effacé à l’écran (une feuille ouverte, un dossier, un trajet en cours restent en place) et seul un
     /// changement de droits recharge l’école. Sinon (première lecture, accès refusé, déconnexion), tout repart de zéro.
     func loadAccount() async {
-        if person != nil, !accessRevoked, !isLoadingAccount {
+        if confirmedPerson != nil, !accessRevoked, !isLoadingAccount {
             await refreshAccount(minimumInterval: 0)
             return
         }
@@ -106,7 +155,8 @@ final class SchoolWorkspace {
         do {
             let result = try await api.me()
             guard request == accountRequest else { return }
-            person = result
+            applyAccount(result)
+            try? restoreSelfIntents()
             accountReadAt = Date()
             isLoadingAccount = false
             if let preferred = result.memberships.first(where: { $0.schoolId == preferredSchool }) {
@@ -126,7 +176,7 @@ final class SchoolWorkspace {
     /// failure changes nothing, a refusal from the school closes the account as any read does.
     @discardableResult
     func refreshAccount(minimumInterval: TimeInterval = 300, now: Date = Date()) async -> Bool {
-        guard let current = person, !isLoadingAccount else { return false }
+        guard let current = confirmedPerson, !isLoadingAccount else { return false }
         if let accountReadAt, now.timeIntervalSince(accountReadAt) < minimumInterval { return true }
         let request = accountRequest
         let previousReadAt = accountReadAt
@@ -138,8 +188,9 @@ final class SchoolWorkspace {
             // Several screens can request a silent refresh at once. Only the latest
             // reading may replace the account and its rights, even within one session.
             guard request == accountRequest, refresh == accountRefresh else { return false }
-            guard result.personId == current.personId else { await loadAccountFromScratch(); return person != nil && !accessRevoked }
-            person = result
+            guard result.personId == current.personId else { await loadAccountFromScratch(); return confirmedPerson != nil && !accessRevoked }
+            applyAccount(result)
+            try? restoreSelfIntents()
             guard let selected = membership else {
                 if result.memberships.count == 1, let only = result.memberships.first { await selectSchool(only) }
                 return true
@@ -167,52 +218,210 @@ final class SchoolWorkspace {
     }
 
     /// Profil personnel complet, relu auprès de l’école ; sa photo est relue si sa version a changé.
-    private(set) var selfProfile: SchoolSelfProfile?
-    /// Photo du compte connecté, en mémoire seulement (jamais écrite sur l’appareil), avec la version lue.
+    private(set) var confirmedSelfProfile: SchoolSelfProfile?
+    /// Photo confirmée en mémoire ; seuls les octets d’une intention encore à confirmer restent dans le journal chiffré.
     private(set) var selfPhoto: SchoolProfilePhoto?
 
     @discardableResult
     func loadSelfProfile() async throws -> SchoolSelfProfile {
-        guard let current = person else { throw SchoolAPIError.unauthorized }
+        guard let current = confirmedPerson else { throw SchoolAPIError.unauthorized }
+        let generation = accountRequest
         do {
             let profile = try await api.selfProfile()
-            guard profile.personId == current.personId, person?.personId == current.personId else { throw SchoolAPIError.invalidResponse }
+            guard generation == accountRequest, profile.personId == current.personId, confirmedPerson?.personId == current.personId else { throw SchoolAPIError.invalidResponse }
             apply(profile)
+            try restoreSelfIntents()
             await refreshSelfPhoto()
-            return profile
+            guard generation == accountRequest, let latest = confirmedSelfProfile else { throw CancellationError() }
+            return latest
         } catch {
-            _ = invalidateAccess(for: error)
+            if generation == accountRequest { _ = invalidateAccess(for: error) }
             throw error
         }
+    }
+
+    /// L'intention est protégée avant d'être affichée ailleurs ou remise au transport.
+    @discardableResult
+    func retainSelfProfile(_ edit: SchoolSelfProfileEdit) throws -> UUID {
+        try restoreSelfIntents()
+        guard let base = confirmedSelfProfile else { throw SchoolAPIError.unavailable }
+        let id = selfIntents.fields?.edit == edit ? selfIntents.fields?.id ?? UUID() : UUID()
+        let intent = SchoolSelfProfileIntent(id: id, kind: .fields, base: base,
+            fields: SchoolSelfProfileIntent.projecting(edit, on: base), jpeg: nil)
+        var next = selfIntents; next.fields = intent
+        try saveSelfIntents(next)
+        return intent.id
+    }
+
+    @discardableResult
+    func retainSelfPhoto(_ jpeg: Data?) throws -> UUID {
+        try restoreSelfIntents()
+        guard let current = confirmedPerson else { throw SchoolAPIError.unauthorized }
+        guard jpeg.map({ $0.count <= 262_144 }) ?? true else { throw SchoolSelfProfileFailure.invalidPhoto }
+        let base = confirmedSelfProfile ?? SchoolSelfProfile(personId: current.personId,
+            displayName: current.displayName, version: current.version)
+        let id = selfIntents.photo?.jpeg == jpeg ? selfIntents.photo?.id ?? UUID() : UUID()
+        let intent = SchoolSelfProfileIntent(id: id, kind: .photo, base: base, fields: nil, jpeg: jpeg)
+        var next = selfIntents; next.photo = intent
+        try saveSelfIntents(next)
+        return intent.id
     }
 
     func saveSelfProfile(_ edit: SchoolSelfProfileEdit) async throws {
-        guard let current = person, let version = selfProfile?.version ?? Optional(current.version) else { throw SchoolAPIError.unauthorized }
+        _ = try await sendSelfProfileIntent(retainSelfProfile(edit))
+    }
+
+    func setSelfPhoto(_ jpeg: Data?) async throws {
+        _ = try await sendSelfProfileIntent(retainSelfPhoto(jpeg))
+    }
+
+    /// Une seule file par compte, même quand deux éditeurs ont été ouverts.
+    /// `false` : un choix plus récent a remplacé celui-ci avant son départ.
+    @discardableResult
+    func sendSelfProfileIntent(_ id: UUID) async throws -> Bool {
+        let generation = accountRequest
+        let previous = selfWriteTail
+        let work = Task { @MainActor [weak self] () async throws -> Bool in
+            await previous?.value
+            guard let self, self.accountRequest == generation else { throw CancellationError() }
+            return try await self.sendRetainedSelfIntent(id, generation: generation)
+        }
+        selfWriteTail = Task { @MainActor in _ = try? await work.value }
+        return try await work.value
+    }
+
+    private func restoreSelfIntents() throws {
+        guard let current = confirmedPerson else { throw SchoolAPIError.unauthorized }
+        guard let accountIntentBaseURL, let selfIntentStore else { return }
+        let scope = AccountIntentScope(personID: current.personId, apiBaseURL: accountIntentBaseURL.absoluteString)
+        guard selfIntentScope != scope else { return }
         do {
-            apply(try await api.saveSelfProfile(edit, version: version))
-        } catch SchoolSelfProfileFailure.changed {
-            _ = try? await loadSelfProfile()
-            throw SchoolSelfProfileFailure.changed
+            let value = try selfIntentStore.read(scope: scope) ?? SchoolSelfProfileIntents()
+            try value.validate(personID: current.personId)
+            selfIntents = value; selfIntentScope = scope; selfProfileIntentError = nil
         } catch {
+            selfProfileIntentError = "Les changements conservés sur cet appareil ne peuvent pas être lus. Réessaie après son déverrouillage."
+            throw error
+        }
+    }
+
+    private func saveSelfIntents(_ value: SchoolSelfProfileIntents) throws {
+        do {
+            if let selfIntentStore {
+                guard let scope = selfIntentScope else { throw SchoolConfigurationFailure.storage }
+                try selfIntentStore.save(value, scope: scope)
+            }
+            selfIntents = value; selfProfileIntentError = nil
+        } catch {
+            selfProfileIntentError = "La synchronisation ne peut pas être confirmée sur cet appareil. Tes changements restent à vérifier."
+            throw error
+        }
+    }
+
+    private func retainedSelfIntent(_ id: UUID) -> SchoolSelfProfileIntent? {
+        [selfIntents.fields, selfIntents.photo].compactMap { $0 }.first { $0.id == id }
+    }
+
+    private func sendRetainedSelfIntent(_ id: UUID, generation: UUID) async throws -> Bool {
+        guard retainedSelfIntent(id) != nil else { return false }
+        do {
+            if let attempted = selfIntents.attempted {
+                // Une réponse perdue impose une lecture. Ne jamais transformer une nouvelle version en ACK.
+                let remote = try await loadSelfProfile()
+                guard generation == accountRequest else { throw CancellationError() }
+                if try await matchesSelfIntent(attempted, profile: remote, generation: generation) {
+                    try finishSelfIntent(attempted, profile: remote, photo: attempted.jpeg)
+                } else if remote.version == attempted.base.version {
+                    try await transmitSelfIntent(attempted, generation: generation)
+                } else {
+                    var next = selfIntents; next.attempted = nil
+                    try saveSelfIntents(next)
+                    throw SchoolSelfProfileFailure.changed
+                }
+                if attempted.id == id, retainedSelfIntent(id) == nil { return true }
+            }
+            guard var intent = retainedSelfIntent(id) else { return false }
+            guard let current = confirmedPerson else { throw SchoolAPIError.unauthorized }
+            var base = confirmedSelfProfile ?? intent.base
+            // /me a pu observer une version plus récente que le profil complet.
+            if current.version > base.version { base = try await loadSelfProfile() }
+            guard generation == accountRequest else { throw CancellationError() }
+            guard intent.baseStillMatches(base) else { throw SchoolSelfProfileFailure.changed }
+            intent.base = base
+            var next = selfIntents; next.attempted = intent
+            try saveSelfIntents(next)
+            try await transmitSelfIntent(intent, generation: generation)
+            return true
+        } catch {
+            guard generation == accountRequest else { throw CancellationError() }
+            if (error as? SchoolConfigurationFailure) != .storage {
+                selfProfileIntentError = (error as? LocalizedError)?.errorDescription ?? SchoolAPIError.unavailable.localizedDescription
+            }
             _ = invalidateAccess(for: error)
             throw error
         }
     }
 
-    /// Remplace (`jpeg`) ou retire (`nil`) la photo. L’écran ne montre la nouvelle photo qu’après l’accord de l’école.
-    func setSelfPhoto(_ jpeg: Data?) async throws {
-        guard let version = selfProfile?.version ?? person?.version else { throw SchoolAPIError.unauthorized }
-        do {
-            let profile = try await api.setSelfPhoto(jpeg, version: version)
-            apply(profile)
-            if let jpeg, let photo = profile.photoVersion { selfPhoto = SchoolProfilePhoto(version: photo, data: jpeg) } else { selfPhoto = nil }
-        } catch SchoolSelfProfileFailure.changed {
-            _ = try? await loadSelfProfile()
-            throw SchoolSelfProfileFailure.changed
-        } catch {
-            _ = invalidateAccess(for: error)
-            throw error
+    private func matchesSelfIntent(_ intent: SchoolSelfProfileIntent, profile: SchoolSelfProfile,
+                                   generation: UUID) async throws -> Bool {
+        switch intent.kind {
+        case .fields: return intent.edit == SchoolSelfProfileEdit(profile)
+        case .photo:
+            guard let jpeg = intent.jpeg else { return profile.photoVersion == nil }
+            guard profile.photoVersion != nil else { return false }
+            let bytes = try await api.personPhoto(personID: profile.personId)
+            // Le JPEG peut avoir été nettoyé par le serveur : une différence demande une revue, pas un faux ACK.
+            let after = try await api.selfProfile()
+            guard generation == accountRequest, after.personId == profile.personId else { throw CancellationError() }
+            guard after.version == profile.version else { throw SchoolSelfProfileFailure.changed }
+            return bytes == jpeg
         }
+    }
+
+    private func transmitSelfIntent(_ intent: SchoolSelfProfileIntent, generation: UUID) async throws {
+        do {
+            let profile: SchoolSelfProfile
+            switch intent.kind {
+            case .fields:
+                guard let edit = intent.edit else { throw SchoolConfigurationFailure.storage }
+                profile = try await api.saveSelfProfile(edit, version: intent.base.version)
+            case .photo: profile = try await api.setSelfPhoto(intent.jpeg, version: intent.base.version)
+            }
+            guard generation == accountRequest else { throw CancellationError() }
+            guard profile.personId == intent.base.personId, profile.version >= intent.base.version else {
+                throw SchoolAPIError.invalidResponse
+            }
+            switch intent.kind {
+            case .fields:
+                guard intent.edit == SchoolSelfProfileEdit(profile) else { throw SchoolAPIError.invalidResponse }
+            case .photo:
+                guard (intent.jpeg == nil) == (profile.photoVersion == nil) else { throw SchoolAPIError.invalidResponse }
+            }
+            try finishSelfIntent(intent, profile: profile, photo: intent.jpeg)
+        } catch let failure as SchoolSelfProfileFailure {
+            guard generation == accountRequest else { throw CancellationError() }
+            // Un refus explicite ne laisse pas une requête inconnue à rejouer. Le choix utile reste conservé.
+            var next = selfIntents; next.attempted = nil
+            try saveSelfIntents(next)
+            if failure == .changed { _ = try? await loadSelfProfile() }
+            throw failure
+        }
+    }
+
+    private func finishSelfIntent(_ intent: SchoolSelfProfileIntent, profile: SchoolSelfProfile, photo: Data?) throws {
+        apply(profile)
+        if intent.kind == .photo, confirmedSelfProfile?.version == profile.version {
+            selfPhoto = photo.flatMap { bytes in profile.photoVersion.map { SchoolProfilePhoto(version: $0, data: bytes) } }
+            peoplePhotos.removeValue(forKey: profile.personId)
+        }
+        var next = selfIntents
+        if next.fields?.id == intent.id { next.fields = nil }
+        else if intent.kind == .fields { next.fields?.base = profile }
+        if next.photo?.id == intent.id { next.photo = nil }
+        else if intent.kind == .photo { next.photo?.base = profile }
+        if next.attempted?.id == intent.id { next.attempted = nil }
+        // Le résultat peut être acquis à l'école et son retrait local échouer : aucune confirmation locale mensongère.
+        try saveSelfIntents(next)
     }
 
     /// Photos des autres personnes lues pendant la session (mémoire seulement). `nil` stocké : la personne n’en a pas.
@@ -220,7 +429,10 @@ final class SchoolWorkspace {
 
     /// Photo d’une personne de l’école, lue une fois par session. Le compte connecté reprend la sienne.
     func photo(for personID: UUID) -> Data? {
-        if personID == person?.personId { return selfPhoto?.data }
+        if personID == confirmedPerson?.personId {
+            if let choice = pendingSelfPhotoChoice { return choice.jpeg }
+            return selfPhoto?.data
+        }
         return peoplePhotos[personID] ?? nil
     }
 
@@ -228,7 +440,7 @@ final class SchoolWorkspace {
     @ObservationIgnored private var loadingPhotos: Set<UUID> = []
 
     func loadPhoto(for personID: UUID) async {
-        guard personID != person?.personId, peoplePhotos[personID] == nil, !loadingPhotos.contains(personID) else { return }
+        guard personID != confirmedPerson?.personId, peoplePhotos[personID] == nil, !loadingPhotos.contains(personID) else { return }
         let scope = schoolScope
         loadingPhotos.insert(personID)
         defer { loadingPhotos.remove(personID) }
@@ -243,19 +455,30 @@ final class SchoolWorkspace {
     }
 
     private func refreshSelfPhoto() async {
-        guard let profile = selfProfile else { return }
+        guard let profile = confirmedSelfProfile else { return }
         guard let version = profile.photoVersion else { selfPhoto = nil; return }
         if selfPhoto?.version == version { return }
-        if let data = try? await api.personPhoto(personID: profile.personId), selfProfile?.photoVersion == version {
+        selfPhoto = nil
+        if let data = try? await api.personPhoto(personID: profile.personId), confirmedSelfProfile?.personId == profile.personId,
+           confirmedSelfProfile?.photoVersion == version {
             selfPhoto = SchoolProfilePhoto(version: version, data: data)
         }
     }
 
+    private func applyAccount(_ value: SchoolPerson) {
+        // /me peut avoir commencé avant l'ACK d'une écriture. Ses droits restent frais, pas son ancien nom.
+        if let profile = confirmedSelfProfile, profile.personId == value.personId, profile.version > value.version {
+            confirmedPerson = SchoolPerson(personId: value.personId, version: profile.version,
+                displayName: profile.displayName, locale: value.locale, memberships: value.memberships)
+        } else { confirmedPerson = value }
+    }
+
     private func apply(_ profile: SchoolSelfProfile) {
-        guard let current = person, profile.personId == current.personId else { return }
-        selfProfile = profile
-        if current.displayName != profile.displayName || current.version != profile.version {
-            person = SchoolPerson(personId: current.personId, version: profile.version, displayName: profile.displayName,
+        guard let current = confirmedPerson, profile.personId == current.personId,
+              profile.version >= (confirmedSelfProfile?.version ?? 0) else { return }
+        confirmedSelfProfile = profile
+        if profile.version >= current.version, current.displayName != profile.displayName || current.version != profile.version {
+            confirmedPerson = SchoolPerson(personId: current.personId, version: profile.version, displayName: profile.displayName,
                 locale: current.locale, memberships: current.memberships)
         }
     }
@@ -275,7 +498,7 @@ final class SchoolWorkspace {
 
     /// Relecture explicite de l'entrée, sans effacer l'état confirmé en cas de panne.
     func refreshEntry() async {
-        guard person != nil, !isLoadingAccount, !isLoadingSchool, !isRefreshingEntry else { return }
+        guard confirmedPerson != nil, !isLoadingAccount, !isLoadingSchool, !isRefreshingEntry else { return }
         isRefreshingEntry = true
         defer { isRefreshingEntry = false }
         let request = accountRequest, previousScope = schoolScope
@@ -292,7 +515,7 @@ final class SchoolWorkspace {
     }
 
     func selectSchool(_ selected: SchoolMembership) async {
-        guard person?.memberships.contains(selected) == true else { return }
+        guard confirmedPerson?.memberships.contains(selected) == true else { return }
         var resumesLearner = false
         if membership == selected {
             // Même école, mêmes droits (nouvel essai, retour d'une adhésion) : la portée reste en place pour que les
@@ -303,7 +526,7 @@ final class SchoolWorkspace {
             // Une lecture du dossier écartée ici ne rend jamais la main : ses indicateurs repartent de zéro et le
             // dossier est relu une fois l'école confirmée, au lieu de rester sur un chargement sans fin.
             resumesLearner = selectedLearnerID != nil
-                && (isLoadingLearner || isLoadingTrainings || isLoadingMoreTrainings || (learner == nil && learnerError == nil))
+                && (isLoadingLearner || isLoadingTrainings || isLoadingMoreTrainings || (confirmedLearner == nil && learnerError == nil))
             isLoadingLearner = false; isLoadingTrainings = false; isLoadingMoreTrainings = false
             // Même règle pour la liste : une recherche ou une page écartée ne laisse pas son attente affichée.
             isSearching = false; isLoadingMoreLearners = false
@@ -324,7 +547,7 @@ final class SchoolWorkspace {
                 if scope == schoolScope, entryDestination == .instructor { await refreshOwnLearner(minimumInterval: 0) }
                 await refreshLearnersToComplete()
             } else {
-                ownLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
+                confirmedOwnLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
             }
             if resumesLearner, scope == schoolScope, selectedLearnerID != nil, !isLoadingLearner {
                 await loadSelectedLearner()
@@ -398,19 +621,19 @@ final class SchoolWorkspace {
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             if entryDestination == .learner && query.isEmpty {
-                ownLearner = page.items.first { $0.personId == person?.personId }
+                confirmedOwnLearner = page.items.first { $0.personId == confirmedPerson?.personId }
             }
             var fresh: [SchoolLearner] = []
             Self.merge(page.items, into: &fresh)
             noteProfiles(page.items)
             if learnerCursors.isEmpty {
                 // Une seule page affichée : elle est remplacée par sa relecture.
-                learners = fresh
+                confirmedLearners = fresh
                 nextLearnersCursor = page.nextCursor
             } else {
                 // Des pages suivantes sont affichées : la première est relue, les lignes des autres restent à leur suite.
                 let read = Set(fresh.map(\.id))
-                learners = fresh + learners.filter { !read.contains($0.id) }
+                confirmedLearners = fresh + confirmedLearners.filter { !read.contains($0.id) }
             }
         } catch {
             guard scope == schoolScope, request == searchRequest else { return }
@@ -421,7 +644,7 @@ final class SchoolWorkspace {
     /// Un compte moniteur et élève garde son dossier même s’il est absent de la page de l’annuaire.
     /// La réponse relue reste limitée à ce compte, cette école et les droits courants.
     func refreshOwnLearner(minimumInterval: TimeInterval = 60, now: Date = Date()) async {
-        guard let membership, membership.roles.contains("LEARNER"), let personID = person?.personId,
+        guard let membership, membership.roles.contains("LEARNER"), let personID = confirmedPerson?.personId,
               school?.status == "ACTIVE" else { return }
         if let ownLearnerReadAt, now.timeIntervalSince(ownLearnerReadAt) < minimumInterval { return }
         let scope = schoolScope, previousReadAt = ownLearnerReadAt
@@ -435,7 +658,7 @@ final class SchoolWorkspace {
                   page.items.allSatisfy({ $0.schoolId == membership.schoolId && $0.personId == personID }) else {
                 throw SchoolAPIError.invalidResponse
             }
-            ownLearner = page.items.first
+            confirmedOwnLearner = page.items.first
         } catch {
             guard scope == schoolScope, request == ownLearnerRequest else { return }
             if !invalidateAccess(for: error) {
@@ -465,8 +688,8 @@ final class SchoolWorkspace {
     /// enregistrée éteint son point sans attendre la prochaine lecture de l’école.
     private func noteProfiles(_ items: [SchoolLearner]) {
         if membership?.roles.contains("LEARNER") == true,
-           let own = items.first(where: { $0.personId == person?.personId && $0.schoolId == membership?.schoolId }) {
-            ownLearner = own
+           let own = items.first(where: { $0.personId == confirmedPerson?.personId && $0.schoolId == membership?.schoolId }) {
+            confirmedOwnLearner = own
         }
         guard var pending = learnersToComplete else { return }
         for item in items {
@@ -490,7 +713,7 @@ final class SchoolWorkspace {
             guard page.nextCursor != cursor,
                   page.nextCursor.map({ !learnerCursors.contains($0) }) ?? true else { throw SchoolAPIError.invalidCursor }
             learnerCursors.insert(cursor)
-            Self.merge(page.items, into: &learners)
+            Self.merge(page.items, into: &confirmedLearners)
             noteProfiles(page.items)
             nextLearnersCursor = page.nextCursor
             isLoadingMoreLearners = false
@@ -504,8 +727,10 @@ final class SchoolWorkspace {
     /// Nom d’un élève hors de la page affichée (trajet en cours) ; une lecture refusée ou en panne ne dit rien.
     func learnerName(_ id: UUID) async -> String? {
         guard let schoolID = membership?.schoolId else { return nil }
-        let learner = try? await api.learner(schoolID: schoolID, id: id)
-        return learner?.schoolId == schoolID && learner?.id == id ? learner?.displayName : nil
+        let scope = schoolScope
+        guard let value = try? await api.learner(schoolID: schoolID, id: id), scope == schoolScope,
+              value.schoolId == schoolID, value.id == id else { return nil }
+        return projectedLearner(value).displayName
     }
 
     func selectLearner(_ id: UUID?) {
@@ -524,15 +749,15 @@ final class SchoolWorkspace {
         isLoadingMoreTrainings = false
         learnerError = nil
         // Relecture du dossier déjà affiché : il reste à l’écran jusqu’à la réponse, sans écran de chargement.
-        isLoadingLearner = learner?.id != id
+        isLoadingLearner = confirmedLearner?.id != id
         do {
             let result = try await api.learner(schoolID: schoolID, id: id)
             guard scope == schoolScope, request == learnerRequest, selectedLearnerID == id else { return }
             guard result.id == id, result.schoolId == schoolID else { throw SchoolAPIError.invalidResponse }
-            learner = result
+            confirmedLearner = result
             // La liste Élèves porte le même élève : sa ligne suit le dossier relu (nom, coordonnées) sans attendre sa
             // propre relecture. Ni l’ordre ni la pagination ne changent, et un élève absent de la liste n’y est pas ajouté.
-            if let row = learners.firstIndex(where: { $0.id == result.id }) { learners[row] = result }
+            if let row = confirmedLearners.firstIndex(where: { $0.id == result.id }) { confirmedLearners[row] = result }
             noteProfiles([result])
             isLoadingLearner = false
             await loadTrainings()
@@ -548,7 +773,7 @@ final class SchoolWorkspace {
     }
 
     func loadTrainings() async {
-        guard let schoolID = membership?.schoolId, let learnerID = selectedLearnerID, learner != nil else { return }
+        guard let schoolID = membership?.schoolId, let learnerID = selectedLearnerID, confirmedLearner != nil else { return }
         let scope = schoolScope
         let request = learnerRequest
         trainingsRequest = UUID()
@@ -619,7 +844,7 @@ final class SchoolWorkspace {
         debounceTask = nil
         searchRequest = UUID()
         searchText = text
-        if !preservingSelection { learners = [] }
+        if !preservingSelection { confirmedLearners = [] }
         nextLearnersCursor = nil
         learnerCursors = []
         learnersError = nil
@@ -638,10 +863,10 @@ final class SchoolWorkspace {
             guard scope == schoolScope, request == searchRequest else { return }
             guard page.items.allSatisfy({ $0.schoolId == schoolID }) else { throw SchoolAPIError.invalidResponse }
             if entryDestination == .learner && query.isEmpty {
-                ownLearner = page.items.first { $0.personId == person?.personId }
+                confirmedOwnLearner = page.items.first { $0.personId == confirmedPerson?.personId }
             }
-            learners = []
-            Self.merge(page.items, into: &learners)
+            confirmedLearners = []
+            Self.merge(page.items, into: &confirmedLearners)
             noteProfiles(page.items)
             nextLearnersCursor = page.nextCursor
             isSearching = false
@@ -663,7 +888,7 @@ final class SchoolWorkspace {
         schoolError = nil
         isLoadingSchool = false
         learnersReadAt = nil
-        ownLearnerRequest = UUID(); ownLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
+        ownLearnerRequest = UUID(); confirmedOwnLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
         learnersToComplete = nil
         beginSearch("")
     }
@@ -672,7 +897,7 @@ final class SchoolWorkspace {
         learnerRequest = UUID()
         trainingsRequest = UUID()
         selectedLearnerID = nil
-        learner = nil
+        confirmedLearner = nil
         learnerError = nil
         isLoadingLearner = false
         trainings = []
