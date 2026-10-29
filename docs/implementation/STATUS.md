@@ -1,5 +1,10 @@
 # État de la réalisation
 
+## 29 octobre 2026, après-midi — #311, cinq familles de plus, aperçu publié
+
+- Reconstruits par le coordinateur pendant la limite d’usage des agents : Signalements (#331), Trajets (#332), Préférences personnelles (#333), Accueil et préparation (#321), fiche École (#330, coordonnées et fuseau). Retours de page et message « pas encore reconstruite » mutualisés dans `portal/components`. Socle : bouton fantôme désactivé sans bordure, barre basse à cinq espaces.
+- Aperçu publié au SHA `ce3b3559` avec en plus les cours collectifs (#328). **Exécuté** : typage client et serveur, 472 tests web, deux builds, captures 1440/390 par famille, chargement public. **Reste** : #329 (participants, en cours chez Planning), fin de #326/#327, #330 confidentialité/GPS/informations élèves, #319 entrée et invitation, #320 ouverture et guide, puis raccord réel, retrait de l’ancien rendu et qualification. Aucune sous-issue clôturée.
+
 ## 29 octobre 2026 — #311, cours collectifs intégrés, branche sauvegardée
 
 - Intégrés : cours collectifs (#328 : ajout depuis l’agenda, brouillon de série, séances, revue et publication, fiche, capacité, dates, annulation de la série, politique) et finitions Formations et tarifs (#326/#327 partiels). Pas encore publiés dans l’aperçu.
