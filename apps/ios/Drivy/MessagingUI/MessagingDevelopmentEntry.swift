@@ -8,6 +8,7 @@ enum MessagingDevelopmentEntry {
                      transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
                      session: MessagingDevelopmentSession? = nil,
                      photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
+                     schoolWorkspace: SchoolWorkspace? = nil,
                      schoolName: String? = nil,
                      arguments: [String] = ProcessInfo.processInfo.arguments,
                      currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) -> SchoolMessagingEntry? {
@@ -23,10 +24,10 @@ enum MessagingDevelopmentEntry {
         return SchoolMessagingEntry(scopeID: scopeID,
             isQualification: SchoolMessagingDevelopment.isQualificationBuild, makeView: { peerID in
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay, session: session,
-                currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID, schoolName: schoolName))
+                currentScope: currentScope, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, initialPeerID: peerID, schoolName: schoolName))
         }, makeSettingsView: {
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay, session: session,
-                currentScope: currentScope, photoLoader: photoLoader, initialPeerID: nil,
+                currentScope: currentScope, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, initialPeerID: nil,
                 schoolName: schoolName, settingsOnly: true))
         })
     }
@@ -39,12 +40,12 @@ final class MessagingDevelopmentSession {
     fileprivate weak var current: MessagingDevelopmentResources?
 
     fileprivate func resources(scope: MessagingScope, http: MessagingHTTPTransport, relay: MessagingCryptoHTTPRelay,
-        photoLoader: @escaping @Sendable (UUID) async -> Data?,
+        photoLoader: @escaping @Sendable (UUID) async -> Data?, schoolWorkspace: SchoolWorkspace?,
         currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) throws -> MessagingDevelopmentResources {
         guard currentScope() == scope else { throw MessagingFailure.contextChanged }
         if let current, current.scope == scope, current.isCurrent() { return current }
         let created = try MessagingDevelopmentResources(scope: scope, http: http, relay: relay,
-            photoLoader: photoLoader, currentScope: currentScope)
+            photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
         current = created
         return created
     }
@@ -59,7 +60,7 @@ fileprivate final class MessagingDevelopmentResources {
     func isCurrent() -> Bool { currentScope() == scope }
 
     init(scope: MessagingScope, http: MessagingHTTPTransport, relay: MessagingCryptoHTTPRelay,
-        photoLoader: @escaping @Sendable (UUID) async -> Data?,
+        photoLoader: @escaping @Sendable (UUID) async -> Data?, schoolWorkspace: SchoolWorkspace?,
         currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) throws {
         self.scope = scope; self.currentScope = currentScope
         let store = try MessagingProtectedStore(scope: scope)
@@ -68,7 +69,7 @@ fileprivate final class MessagingDevelopmentResources {
         workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
             cryptography: cryptography, outbox: store, drafts: store, directory: http, actions: http,
             history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
-            reports: store, mutations: store, photoLoader: photoLoader, currentScope: currentScope)
+            reports: store, mutations: store, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
     }
 }
 
@@ -79,6 +80,7 @@ private struct MessagingDevelopmentContainer: View {
     let session: MessagingDevelopmentSession
     let currentScope: @MainActor @Sendable () -> MessagingScope?
     let photoLoader: @Sendable (UUID) async -> Data?
+    let schoolWorkspace: SchoolWorkspace?
     let initialPeerID: UUID?
     let schoolName: String?
     var settingsOnly = false
@@ -107,7 +109,7 @@ private struct MessagingDevelopmentContainer: View {
             do {
                 // Ouverture du Keychain et des fichiers uniquement après ouverture de la sheet.
                 resources = try session.resources(scope: scope, http: http, relay: relay,
-                    photoLoader: photoLoader, currentScope: currentScope)
+                    photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
             } catch { failure = .protectionUnavailable }
         }
     }

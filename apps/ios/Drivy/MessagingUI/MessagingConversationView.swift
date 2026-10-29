@@ -139,6 +139,7 @@ private enum ExyteBubbleMetrics {
         var hasher = Hasher()
         hasher.combine(actions)
         hasher.combine(reporting)
+        hasher.combine(message.user.name)
         if let presentation = sendPresentation(item) {
             // Plusieurs états n'ont volontairement aucune coche Exyte : leurs libellés doivent quand même évoluer.
             hasher.combine(presentation.accessibilityLabel)
@@ -1217,7 +1218,7 @@ private struct MessagingThreadAvatar: View {
 
     var body: some View {
         let id = UUID(uuidString: user.id)
-        DrivyAvatar(name: user.name, size: ExyteBubbleMetrics.avatar, photo: id.flatMap { workspace.photos[$0] })
+        DrivyAvatar(name: user.name, size: ExyteBubbleMetrics.avatar, photo: id.flatMap { workspace.photo(for: $0) })
             .task(id: user.id) {
                 if let id, workspace.members.first(where: { $0.id == id })?.hasPhoto == true {
                     await workspace.loadPhoto(id)
@@ -1549,7 +1550,7 @@ private struct MessagingThreadComposer: View {
                 ForEach(people.prefix(6)) { person in
                     Button { composer.insertMention(person) } label: {
                         HStack(spacing: DrivySpacing.s) {
-                            DrivyAvatar(name: person.displayName, size: 28, photo: workspace.photos[person.id])
+                            DrivyAvatar(name: person.displayName, size: 28, photo: workspace.photo(for: person.id))
                             Text(person.displayName).foregroundStyle(DrivyTheme.text)
                             Spacer(minLength: 0)
                         }
