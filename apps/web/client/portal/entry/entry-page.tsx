@@ -23,7 +23,7 @@ export function PortalEntryPage({ invitationLink, page = entryPageFromPath(windo
   const invitationClosed = state.page === 'invitation' && (state.linkMustReopen || state.linkError);
   const showHeading = state.authenticated || invitationClosed;
   return <EntryFrame home={routes.account} width={state.authenticated ? 'wide' : 'narrow'} busy={!state.loaded}
-    account={state.authenticated ? { name: state.personName, preferences: routes.preferences, busy, onLogout: state.logout } : null}>
+    account={state.authenticated ? { name: state.personName, preferences: routes.preferences, busy: busy || state.uncertain, onLogout: state.logout } : null}>
     {showHeading && <header className="entry-heading">
       {state.page === 'account' && state.authenticated && <p className="entry-eyebrow">{state.personName}</p>}
       <h1 ref={state.heading} tabIndex={-1}>{state.page === 'invitation' ? 'Rejoindre une école' : 'Vos écoles'}</h1>

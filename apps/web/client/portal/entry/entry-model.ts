@@ -116,7 +116,7 @@ export function invitationNeedsVerifiedEmail(preview: InvitationPreview | null |
   return !!preview && preview.delivery !== 'CODE' && session?.user?.emailVerified !== true;
 }
 export function canAcceptInvitation(preview: InvitationPreview | null | undefined, session: Session | null, reviewed: boolean): boolean {
-  return !!preview && !!session?.csrfToken && reviewed && !invitationNeedsVerifiedEmail(preview, session);
+  return !!preview && session?.authenticated === true && !!session.csrfToken && reviewed && !invitationNeedsVerifiedEmail(preview, session);
 }
 
 /** A new link refused only because a preceding acceptance is still unknown: recover that intention instead. */
@@ -130,7 +130,11 @@ export function admissionNeedsCheck(cause: unknown): boolean {
  */
 export function acceptanceFailure(cause: unknown): { dropPreview: boolean; uncertain: boolean } {
   if (!(cause instanceof RequestFailure)) return { dropPreview: false, uncertain: false };
-  return { dropPreview: cause.code === 'INVITATION_PREVIEW_CHANGED', uncertain: cause.status === 0 || cause.status >= 500 };
+  return {
+    dropPreview: ['INVITATION_PREVIEW_CHANGED', 'INVITATION_CHANGED', 'INVITATION_EXPIRED', 'INVITATION_REVOKED',
+      'INVITATION_INVALID', 'INVITATION_NOT_FOUND', 'INVITATION_USED', 'INVITATION_IDENTITY_MISMATCH'].includes(cause.code),
+    uncertain: cause.status === 0 || cause.status >= 500 || admissionNeedsCheck(cause) || cause.code === 'SESSION_LOST_RESULT_UNKNOWN',
+  };
 }
 
 /** A refused session forgets everything personal on the page. */

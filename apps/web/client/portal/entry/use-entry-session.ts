@@ -34,6 +34,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
   const inFlight = useRef(false);
   const generation = useRef(0);
   const acceptedSession = useRef<string | null>(null);
+  const checkedSession = useRef<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
   function navigate(next: EntryPageKind) {
@@ -49,11 +50,14 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
    */
   async function refresh(current: number, keepView = true) {
     setPreview(null);
+    setMe(null);
     setReviewed(false);
     if (!keepView) { setMe(null); setSession(null); setLoaded(false); }
     let next = await request('session', sessionSchema);
     if (current !== generation.current) return;
     if (acceptedSession.current !== next.csrfToken) setAccepted(null);
+    if (checkedSession.current !== next.csrfToken) setUncertain(false);
+    checkedSession.current = next.csrfToken;
     if (invitationLink.token) {
       try {
         await request('invitation', okSchema, { csrf: next.csrfToken, body: { token: invitationLink.token } });
@@ -78,6 +82,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
       if (current !== generation.current) return;
       setMe(result.data);
     } catch (cause) {
+      if (current !== generation.current) return;
       if (!(cause instanceof RequestFailure) || cause.code !== 'IDENTITY_NOT_LINKED') throw cause;
       setMe(null);
     }
@@ -118,7 +123,11 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
     void perform('Ouverture de votre espace…', refresh);
     const onPageShow = (event: PageTransitionEvent) => {
       // A browser history restoration is not a fresh authorization check.
-      if (event.persisted) void perform('Vérification de vos accès…', current => refresh(current, false));
+      if (event.persisted) {
+        generation.current++;
+        inFlight.current = false;
+        void perform('Vérification de vos accès…', current => refresh(current, false));
+      }
     };
     const onHashChange = () => {
       const incoming = readInvitationLink();
@@ -139,6 +148,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
     window.addEventListener('hashchange', onHashChange);
     return () => {
       generation.current++;
+      inFlight.current = false;
       window.removeEventListener('pageshow', onPageShow);
       window.removeEventListener('hashchange', onHashChange);
     };
@@ -160,7 +170,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
   }
 
   async function logout() {
-    if (!session) return;
+    if (!session || uncertain) return;
     await perform('Déconnexion en cours…', async current => {
       await endSession();
       if (current !== generation.current) return;
@@ -174,7 +184,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
 
   async function clearInvitation() {
     const csrf = session?.csrfToken;
-    if (!csrf) return;
+    if (!csrf || uncertain) return;
     await perform('Fermeture de l’invitation…', async current => {
       await request('invitation/clear', okSchema, { csrf, body: {} });
       if (current !== generation.current) return;

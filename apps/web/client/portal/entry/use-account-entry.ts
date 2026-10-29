@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { okSchema, request, sessionSchema } from '../../protocol';
 import {
   accessCodeSchema, accountCreationFailure, accountProblems, codeFromInput, codeProblem, createdAccountSchema, entryFailureMessage,
-  hasProblems, initialAccessKind, initialEntryStep, signInProblems, type AccessKind, type EntryStep,
+  hasProblems, initialAccessKind, initialEntryStep, signInProblems, type AccessKind, type AccountDraft, type DraftProblems, type EntryStep,
 } from './entry-model';
 
 export interface AccountEntryOptions {
@@ -48,12 +48,16 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true); setError(null);
-    try { await action((await request('session', sessionSchema)).csrfToken); }
+    try {
+      const session = await request('session', sessionSchema);
+      if (mounted.current) await action(session.csrfToken);
+    }
     catch (cause) { if (mounted.current) setError(entryFailureMessage(cause)); }
     finally { inFlight.current = false; if (mounted.current) setBusy(false); }
   }
   async function inspect(value: string, csrf: string) {
     const result = await request('access-code', accessCodeSchema, { csrf, body: { code: codeFromInput(value) } });
+    if (!mounted.current) return;
     setKind(result.kind); setSchoolName(result.schoolName ?? null);
     if (signedIn) { onSignedIn(result.kind); return; }
     setStep('register');
@@ -67,16 +71,17 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
 
   const signInDraft = { email, password };
   const accountDraft = { firstName, lastName, email, password };
-  const problems = step === 'login' ? signInProblems(signInDraft) : step === 'register' ? accountProblems(accountDraft) : {};
+  const problems: DraftProblems<AccountDraft> = step === 'login' ? signInProblems(signInDraft) : step === 'register' ? accountProblems(accountDraft) : {};
   const typedCodeProblem = step === 'code' ? codeProblem(code) : null;
 
   function signIn() {
     setShowProblems(true);
     if (hasProblems(signInProblems(signInDraft))) return false;
     void run(async csrf => {
-      await request('password-login', okSchema, { csrf, body: { email, password } });
-      setPassword('');
-      onSignedIn(kind);
+      try {
+        await request('password-login', okSchema, { csrf, body: { email, password } });
+        if (mounted.current) onSignedIn(kind);
+      } finally { if (mounted.current) setPassword(''); }
     });
     return true;
   }
@@ -95,8 +100,8 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
       let result;
       try { result = await request('accounts', createdAccountSchema, { csrf, body: { ...named, firstName, lastName, email, password } }); }
       catch (cause) { throw accountCreationFailure(kind, cause); }
-      setPassword('');
-      onSignedIn(result.kind);
+      finally { if (mounted.current) setPassword(''); }
+      if (mounted.current) onSignedIn(result.kind);
     });
     return true;
   }
