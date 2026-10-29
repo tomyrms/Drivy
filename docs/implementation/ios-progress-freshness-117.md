@@ -1,6 +1,6 @@
 # Fraîcheur de progression — #117
 
-30 octobre 2026, base `2d9a5f64`. La lecture parallèle existait (`d4da07b3`, PR #189), mais sa date était confondue avec celle des leçons et n’était pas visible.
+29 octobre 2026, base `2d9a5f64`. La lecture parallèle existait (`d4da07b3`, PR #189), mais sa date était confondue avec celle des leçons et n’était pas visible.
 
 `SchoolTrainingWorkspace` date maintenant la lecture réussie de la progression et de son référentiel ensemble. Une réponse ancienne/annulée ne rafraîchit pas cette date ; une panne garde la projection et sa date, un refus retire les deux. Le rendu indique l’actualisation en cours ou la date de lecture dans le fuseau scolaire. Aucun niveau ni compteur optimiste ajouté. Une erreur de référentiel ne remplace plus une projection complète par une lecture incomplète.
 

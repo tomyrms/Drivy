@@ -41,8 +41,14 @@ import Observation
     private(set) var information: String?
     private(set) var confirmation: String?
     /// Échec du coffre local, distinct d'une écriture refusée par l'école.
-    private(set) var localDraftError: String?
-    private(set) var localDraftReadFailed = false
+    private(set) var reportDraftError: String?
+    private var reportDraftReadFailed = false
+    private var textDraftReadFailed = false
+    private var textDraftRemovalFailed = false
+    private var textDraftError: String?
+    private var storedTextDrafts: [SchoolLessonTextDraft.Content]?
+    var localDraftError: String? { textDraftError ?? reportDraftError }
+    var localDraftReadFailed: Bool { reportDraftReadFailed || textDraftReadFailed }
     /// Vrai uniquement après le reçu de sauvegarde de ce bilan et le retrait durable de sa demande.
     private(set) var reportSaveConfirmed = false
     private(set) var pendingReviewed = false
@@ -71,6 +77,7 @@ import Observation
     @ObservationIgnored private let notifications: NotificationCenter
     /// Brouillon chiffré sur l’appareil ; absent, la saisie ne vit qu’en mémoire.
     @ObservationIgnored private let localDrafts: (any SchoolReportLocalDraftStore)?
+    @ObservationIgnored private let textDrafts: (any SchoolLessonTextDraftStore)?
     /// Cette fiche vient de terminer la leçon : la prochaine lecture propose les objectifs comme travail réalisé.
     @ObservationIgnored private var proposesWorkedOn = false
     @ObservationIgnored private var generation = UUID()
@@ -90,9 +97,10 @@ import Observation
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default,
-         localDrafts: (any SchoolReportLocalDraftStore)? = nil) {
+         localDrafts: (any SchoolReportLocalDraftStore)? = nil, textDrafts: (any SchoolLessonTextDraftStore)? = nil) {
         self.scope = scope; self.membership = membership; self.lessonID = lessonID; self.client = client; self.outbox = outbox
         self.notifications = notifications; self.localDrafts = localDrafts
+        self.textDrafts = textDrafts ?? (outbox is EncryptedSchoolCommandOutbox ? EncryptedSchoolLessonTextDraftStore() : nil)
     }
     var isAuthor: Bool { membership.roles.contains("INSTRUCTOR") && lesson?.instructorMembershipId == membership.membershipId }
     var canReadLessonContent: Bool { isAuthor || isOwnLearner || membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") }
@@ -165,7 +173,7 @@ import Observation
     }
     /// Écrit la saisie du bilan dans le brouillon chiffré de l’appareil, ou le retire quand il n’y a plus rien à garder.
     /// Un coffre illisible n’écrit rien : la saisie reste en mémoire, jamais en clair sur le disque.
-    @discardableResult func persistLocalDraft() -> Bool {
+    @discardableResult private func persistReportDraft() -> Bool {
         guard let localDrafts, !invalidated, isAuthor, let draft, lesson?.status == "COMPLETED" else { return false }
         guard !localDraftReadFailed else { return false }
         localDraftRemovalFailed = false
@@ -177,30 +185,39 @@ import Observation
             } else {
                 try localDrafts.remove(scope: scope, draftID: draft.id)
             }
-            localDraftError = nil
+            reportDraftError = nil
             return true
         } catch {
-            localDraftError = reportEdited
+            reportDraftError = reportEdited
                 ? "Le brouillon n’a pas pu être conservé sur cet appareil. Garde cette fiche ouverte et réessaie."
                 : "Le brouillon n’a pas pu être supprimé de cet appareil. Réessaie avant de quitter."
             return false
         }
     }
+    @discardableResult func persistLocalDraft() -> Bool {
+        guard !invalidated, !localDraftReadFailed else { return false }
+        let reportAvailable = localDrafts != nil && isAuthor && draft != nil && lesson?.status == "COMPLETED"
+        if reportAvailable, !persistReportDraft() { return false }
+        guard persistTextDrafts() else { return false }
+        return reportAvailable || (textDrafts != nil && !textDraftContexts.isEmpty)
+    }
+
     var requiresLocalDraftResolution: Bool { localDraftReadFailed || localDraftError != nil }
 
     /// Même sans différence affichée, le retrait de l'ancien brouillon doit être effectif avant la sortie.
     func closeWithoutLocalEdits() -> Bool {
         guard !invalidated, !hasLocalEdits, !holdsScreen, !localDraftReadFailed else { return false }
-        if localDrafts != nil, isAuthor, draft != nil, lesson?.status == "COMPLETED" {
+        if (localDrafts != nil && isAuthor && draft != nil && lesson?.status == "COMPLETED") || (textDrafts != nil && !textDraftContexts.isEmpty) {
             guard persistLocalDraft() else { return false }
         }
         close()
         return true
     }
-    /// Le coffre ne contient que le bilan, pas les objectifs ni le souhait : ne pas promettre leur conservation.
+    /// Toutes les parties modifiées doivent avoir un coffre ; aucun choix ne disparaît à la fermeture.
     var canKeepLocalDraft: Bool {
-        localDrafts != nil && !invalidated && !localDraftReadFailed && isAuthor && draft != nil && lesson?.status == "COMPLETED"
-            && reportEdited && !preparationChanged && !wishChanged && !holdsScreen
+        !invalidated && !localDraftReadFailed && !holdsScreen && hasLocalEdits
+            && (!reportEdited || (localDrafts != nil && isAuthor && draft != nil && lesson?.status == "COMPLETED"))
+            && (!(preparationChanged || wishChanged) || textDrafts != nil)
     }
     /// Aucun envoi à l'école. Une demande déjà en file y reste, même après fermeture de la fiche.
     func keepLocalDraftAndClose() -> Bool {
@@ -209,28 +226,36 @@ import Observation
         return true
     }
     /// Le moniteur renonce à sa saisie, ou l’école vient de l’enregistrer.
-    @discardableResult func discardLocalDraft(explicit: Bool = false) -> Bool {
+    @discardableResult private func discardReportDraft(explicit: Bool = false) -> Bool {
         guard let localDrafts, let draft else { return true }
         guard explicit || !localDraftReadFailed else { return false }
         localDraftDiscardRequested = explicit
         do {
             if explicit { try localDrafts.discard(scope: scope, draftID: draft.id) }
             else { try localDrafts.remove(scope: scope, draftID: draft.id) }
-            localDraftReadFailed = false
+            reportDraftReadFailed = false
             localDraftRemovalFailed = false
-            localDraftError = nil
+            reportDraftError = nil
             return true
         } catch {
             localDraftRemovalFailed = true
-            localDraftError = "Le brouillon n’a pas pu être supprimé de cet appareil. Réessaie avant de quitter."
+            reportDraftError = "Le brouillon n’a pas pu être supprimé de cet appareil. Réessaie avant de quitter."
             return false
         }
     }
+    @discardableResult func discardLocalDraft(explicit: Bool = false) -> Bool {
+        localDraftDiscardRequested = explicit
+        guard explicit || !localDraftReadFailed else { return false }
+        guard discardReportDraft(explicit: explicit) else { return false }
+        return removeTextDrafts(explicit: explicit)
+    }
     func retryLocalDraft() {
         guard !invalidated else { return }
-        if localDraftRemovalFailed { discardLocalDraft(explicit: localDraftDiscardRequested) }
+        if localDraftRemovalFailed || textDraftRemovalFailed { discardLocalDraft(explicit: localDraftDiscardRequested) }
         else if localDraftReadFailed {
-            if restoreUnsentReport() {
+            let reportConflict = restoreUnsentReport()
+            let textConflict = restoreTextDrafts(preparation: true, wish: true)
+            if reportConflict || textConflict {
                 needsReload = true
                 errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
             }
@@ -238,6 +263,101 @@ import Observation
     }
     private static func content(of draft: SchoolReportDraft) -> SchoolReportLocalDraft.Content {
         .init(workedOn: draft.workedOn, observationText: draft.observationText, nextStep: draft.nextStep, observations: draft.observations)
+    }
+
+    private typealias TextDraftContext = (kind: SchoolLessonTextDraft.Kind, id: UUID, version: Int,
+        base: SchoolLessonTextDraft.Content, edited: SchoolLessonTextDraft.Content)
+    private var textDraftContexts: [TextDraftContext] {
+        var result: [TextDraftContext] = []
+        if isAuthor, let preparation {
+            result.append((.preparation, lessonID, preparation.version,
+                .init(goals: preparation.goals, text: preparation.administrativeCheckNote ?? ""),
+                .init(goals: goals, text: administrativeNote)))
+        }
+        if isOwnLearner, let wish {
+            result.append((.wish, wish.trainingId, wish.version, .init(text: wish.text), .init(text: wishText)))
+        }
+        return result
+    }
+    var editedTextDrafts: [SchoolLessonTextDraft.Content] { textDraftContexts.map(\.edited) }
+    var textDraftIsStored: Bool {
+        (preparationChanged || wishChanged) && textDraftError == nil && storedTextDrafts == editedTextDrafts
+    }
+
+    private func sentText(_ kind: SchoolLessonTextDraft.Kind) -> SchoolLessonTextDraft.Content? {
+        guard let pending, pending.scope == scope else { return nil }
+        switch kind {
+        case .preparation:
+            guard pending.kind == .savePreparation,
+                  let body = try? JSONDecoder().decode(SchoolSavePreparation.self, from: pending.body) else { return nil }
+            return .init(goals: body.goals, text: body.administrativeCheckNote)
+        case .wish:
+            guard pending.kind == .saveWish,
+                  let body = try? JSONDecoder().decode(SchoolSaveWish.self, from: pending.body) else { return nil }
+            return .init(text: body.text)
+        }
+    }
+    @discardableResult private func persistTextDrafts() -> Bool {
+        guard let textDrafts else { return true }
+        guard !invalidated, !textDraftReadFailed else { return false }
+        do {
+            for context in textDraftContexts {
+                if context.base == context.edited {
+                    try textDrafts.remove(scope: scope, kind: context.kind, resourceID: context.id, explicit: false)
+                } else {
+                    let old = try textDrafts.read(scope: scope, kind: context.kind, resourceID: context.id)
+                    // Un conflit non résolu garde sa base : enregistrer localement ne l’acquitte pas.
+                    let keepsBase = needsReload && old != nil
+                    try textDrafts.save(.init(kind: context.kind, resourceID: context.id,
+                        baseVersion: keepsBase ? old!.baseVersion : context.version,
+                        base: keepsBase ? old!.base : context.base, edited: context.edited,
+                        sent: sentText(context.kind) ?? (keepsBase ? old?.sent : nil), savedAt: Date()), scope: scope)
+                }
+            }
+            storedTextDrafts = editedTextDrafts
+            textDraftError = nil; textDraftRemovalFailed = false
+            return true
+        } catch {
+            textDraftError = "La préparation ou le souhait n’a pas pu être conservé sur cet appareil. Garde cette fiche ouverte et réessaie."
+            return false
+        }
+    }
+    private func removeTextDrafts(explicit: Bool) -> Bool {
+        guard let textDrafts else { return true }
+        do {
+            for context in textDraftContexts {
+                try textDrafts.remove(scope: scope, kind: context.kind, resourceID: context.id, explicit: explicit)
+            }
+            storedTextDrafts = nil
+            textDraftReadFailed = false; textDraftRemovalFailed = false; textDraftError = nil
+            return true
+        } catch {
+            textDraftRemovalFailed = true
+            textDraftError = "Le brouillon de préparation ou de souhait n’a pas pu être supprimé. Réessaie avant de quitter."
+            return false
+        }
+    }
+    /// Après lecture autorisée seulement : l’auteur et l’élève ne retrouvent jamais le brouillon de l’autre.
+    private func restoreTextDrafts(preparation restoresPreparation: Bool, wish restoresWish: Bool) -> Bool {
+        guard let textDrafts else { return false }
+        var conflict = false
+        do {
+            for context in textDraftContexts where (context.kind == .preparation ? restoresPreparation : restoresWish) {
+                guard let stored = try textDrafts.read(scope: scope, kind: context.kind, resourceID: context.id) else { continue }
+                if stored.edited == context.base {
+                    try textDrafts.remove(scope: scope, kind: context.kind, resourceID: context.id, explicit: false)
+                } else {
+                    if context.kind == .preparation { goals = stored.edited.goals; administrativeNote = stored.edited.text }
+                    else { wishText = stored.edited.text }
+                    conflict = conflict || stored.conflicts(with: context.base)
+                }
+            }
+            textDraftReadFailed = false; textDraftError = nil
+        } catch {
+            textDraftReadFailed = true
+            textDraftError = "Le brouillon de préparation ou de souhait n’a pas pu être relu. Réessaie avant de modifier la saisie."
+        }
+        return conflict
     }
     /// Après une lecture qui a remis le bilan sur la version de l’école : reprend la saisie gardée sur l’appareil,
     /// sinon propose les objectifs comme travail réalisé juste après la fin de la leçon.
@@ -248,12 +368,12 @@ import Observation
         if let localDrafts {
             do {
                 let stored = try localDrafts.read(scope: scope, draftID: draft.id)
-                localDraftReadFailed = false
+                reportDraftReadFailed = false
                 localDraftRemovalFailed = false; localDraftDiscardRequested = false
-                localDraftError = nil
+                reportDraftError = nil
                 if let stored {
                     if stored.edited == server {
-                        _ = discardLocalDraft()
+                        _ = discardReportDraft()
                     } else {
                         workedOn = stored.edited.workedOn; observationText = stored.edited.observationText
                         nextStep = stored.edited.nextStep; observations = stored.edited.observations
@@ -261,9 +381,9 @@ import Observation
                     }
                 }
             } catch {
-                localDraftReadFailed = true
+                reportDraftReadFailed = true
                 localDraftRemovalFailed = false; localDraftDiscardRequested = false
-                localDraftError = "Le brouillon de cet appareil n’a pas pu être relu. Réessaie avant de modifier le bilan."
+                reportDraftError = "Le brouillon de cet appareil n’a pas pu être relu. Réessaie avant de modifier le bilan."
                 return false
             }
         }
@@ -371,8 +491,8 @@ import Observation
         training = nil; account = nil; currentLevels = [:]; captures = []; permitRecorded = false; permitReviewDenied = false
         isLoading = false; isBusy = false; storageAccessible = false; revisionsError = nil; reportSaveConfirmed = false
         isFirstSend = false; awaitsRereadAfterWrite = false
-        localDraftError = nil
-        localDraftReadFailed = false; localDraftRemovalFailed = false; localDraftDiscardRequested = false
+        reportDraftError = nil; textDraftError = nil; textDraftReadFailed = false; textDraftRemovalFailed = false; storedTextDrafts = nil
+        reportDraftReadFailed = false; localDraftRemovalFailed = false; localDraftDiscardRequested = false
         wake()
     }
     /// Attend la fin de la relecture ou de l’envoi en cours. Un appui fait pendant ce bref passage n’est ni grisé
@@ -589,6 +709,9 @@ import Observation
                 workedOnProposal = nil
                 if !discardingEdits, restoreUnsentReport() { conflict = true }
             }
+            if !discardingEdits,
+               restoreTextDrafts(preparation: preparationPolicy == .replace && !preparationUnread,
+                                wish: wishPolicy == .replace && wishRead.message == nil) { conflict = true }
             competencies = curriculumRead.value ?? []
             currentLevels = Dictionary((progressRead.value?.items ?? []).map { ($0.competencyId, $0) }, uniquingKeysWith: { first, _ in first })
             if observationsRead.message == nil { lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") } }
@@ -605,6 +728,7 @@ import Observation
             if conflict {
                 errorMessage = "Ta saisie est conservée. Le contenu enregistré a changé ou n’a pas pu être relu. Copie ton texte si nécessaire, puis actualise avant d’enregistrer."
             }
+            if !conflict, !localDraftReadFailed { _ = persistTextDrafts() }
             wake()
             if author && lesson.status == "PLANNED" { await refreshCaptures() }
         } catch {
@@ -656,12 +780,14 @@ import Observation
         // Relu après l’attente : un second appui n’envoie pas deux fois les mêmes objectifs.
         guard let preparation, canMutate, isAuthor, preparationValid, preparationChanged else { return false }
         let operation = UUID()
+        guard persistTextDrafts() else { return false }
         return await prepare(SchoolSavePreparation(operationId: operation, goals: goals, administrativeCheckNote: administrativeNote), id: operation, kind: .savePreparation, version: preparation.version, resourceID: preparation.id, routeID: lessonID)
     }
     func saveWish() async {
         await settled()
         guard let wish, canMutate, isOwnLearner, wishChanged, wishText.unicodeScalars.count <= 500 else { return }
         let operation = UUID()
+        guard persistTextDrafts() else { return }
         _ = await prepare(SchoolSaveWish(operationId: operation, text: wishText), id: operation, kind: .saveWish, version: wish.version, resourceID: wish.id, routeID: wish.trainingId)
     }
     /// Motif exigé seulement tant que le permis n’est pas confirmé (R07).
@@ -842,7 +968,8 @@ import Observation
                     persistLocalDraft()
                     return true
                 }
-                discardLocalDraft(); reportSaveConfirmed = true; return true
+                guard persistTextDrafts(), discardReportDraft() else { return false }
+                reportSaveConfirmed = true; return true
             }
             confirmation = Self.confirmationText(for: command.kind)
             // Partage : l’état confirmé suffit. Seul un bilan passé privé ou rendu visible change le brouillon côté école.

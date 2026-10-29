@@ -74,6 +74,18 @@ struct AccountIntentScope: Codable, Sendable, Equatable, Hashable {
         } catch { throw SchoolConfigurationFailure.storage }
     }
 
+    /// Sans abandon explicite, un fichier illisible ne se supprime jamais silencieusement.
+    func remove(for scope: AccountIntentScope, discardingUnreadable: Bool = false) throws {
+        do {
+            guard scope.isValid else { throw SchoolConfigurationFailure.storage }
+            let target = url(scope)
+            guard FileManager.default.fileExists(atPath: target.path) else { return }
+            if !discardingUnreadable { _ = try read(for: scope) }
+            try FileManager.default.removeItem(at: target)
+            try sync(directory, directory: true)
+        } catch { throw SchoolConfigurationFailure.storage }
+    }
+
     private func authentication(_ scope: AccountIntentScope) -> Data {
         Data("drivy-account-intents-v1|\(purpose)|\(scope.apiBaseURL)|\(scope.personID.uuidString)".utf8)
     }

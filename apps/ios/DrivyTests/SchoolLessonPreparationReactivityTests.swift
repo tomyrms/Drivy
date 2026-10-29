@@ -35,12 +35,30 @@ import Testing
         #expect(model.preparation?.version == 2 && model.confirmation == "Objectifs enregistrés.")
     }
 
-    private func workspace(_ server: PreparationHoldServer) -> SchoolLessonReportWorkspace {
+    @Test func closingDuringTheFirstSendRestoresTheNextRevisionOnTheConfirmedBase() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = EncryptedSchoolLessonTextDraftStore(directory: directory, keyData: Data(repeating: 8, count: 32))
+        let server = PreparationHoldServer(hub: HubServer()), first = workspace(server, textDrafts: store)
+        await first.load(); first.administrativeNote = "Première version"
+        let sending = Task { await first.savePreparation() }
+        try await HubFixture.wait { await server.holdsPut() }
+        first.administrativeNote = "Révision suivante"
+        #expect(first.keepLocalDraftAndClose())
+        await server.releasePut(); _ = await sending.value
+        let reopened = workspace(server, textDrafts: store)
+        await reopened.load()
+        #expect(reopened.administrativeNote == "Révision suivante")
+        #expect(reopened.preparation?.administrativeCheckNote == "Première version")
+        #expect(!reopened.needsReload && reopened.canMutate)
+    }
+
+    private func workspace(_ server: PreparationHoldServer, textDrafts: (any SchoolLessonTextDraftStore)? = nil) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: ["INSTRUCTOR"], grants: ["permit_review"], accessEpoch: 1)
         let client = SchoolLessonReportClient(baseURL: URL(string: "https://api.example.invalid")!, tokenSource: HubToken(), transport: server)
         return SchoolLessonReportWorkspace(scope: ConfigurationFixture.scope(), membership: membership, lessonID: HubFixture.lessonID,
-            client: client, outbox: ConfigurationOutboxStub())
+            client: client, outbox: ConfigurationOutboxStub(), textDrafts: textDrafts)
     }
 }
 
