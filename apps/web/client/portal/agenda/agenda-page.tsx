@@ -1,5 +1,5 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, TriangleAlert, Users } from 'lucide-react';
+import { useState, type CSSProperties } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, MapPin, RefreshCw, Search, Settings2, SlidersHorizontal, TriangleAlert, Users } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
@@ -8,15 +8,14 @@ import { Input } from '../../components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { addDays, civilDateIn, formatDayHeading, formatTimeRange, formatWeek, lessonPhase } from '../../agenda-model';
 import type { AgendaEvent } from '../../console/agenda-projection';
-import { courseSeriesSchema } from '../../console/course-model';
-import { useConsole, useLoad } from '../../console/context';
-import { readSchool } from '../../school-api';
-import { RequestFailure } from '../../protocol';
 import { PortalSelect } from '../components/portal-select';
 import { useAgenda } from './use-agenda';
 import { calendarInterval, calendarLanes } from './calendar-layout';
 import { LessonWorkspace } from './lesson-workspace';
-import { dateTime, phaseLabels, ReadFeedback } from './presentation';
+import { phaseLabels, ReadFeedback } from './presentation';
+import { AgendaAddMenu } from '../courses/course-add-menu';
+import { CoursePolicyDialog } from '../courses/course-policy-dialog';
+import { CourseWorkspace } from '../courses/course-workspace';
 import './agenda.css';
 
 type AgendaState = ReturnType<typeof useAgenda>;
@@ -24,11 +23,12 @@ const weekday = (date: string) => new Intl.DateTimeFormat('fr-CH', { weekday: 's
 
 export function AgendaPilot() {
   const state = useAgenda();
+  const [policyOpen, setPolicyOpen] = useState(false);
   const { school, membership } = state.context;
   const selection = state.selection;
   if (selection && 'lesson' in selection) return <LessonWorkspace key={selection.lesson ?? 'new'} lessonId={selection.lesson ?? null} onClose={state.close} onSaved={state.refresh}
     onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })} />;
-  if (selection && 'course' in selection && selection.course) return <CourseContext key={selection.course} courseId={selection.course} occurrenceId={selection.occurrence} onClose={state.close} />;
+  if (selection && 'course' in selection) return <CourseWorkspace key="course" courseId={selection.course ?? null} occurrenceId={selection.occurrence} catalogue={state.catalogue} onClose={state.close} onShow={state.showCourse} onChanged={state.refresh} />;
   const dayView = state.compact || state.presentation === 'day';
   const today = civilDateIn(school.timeZone, state.now);
   const visibleDays = dayView ? state.days.filter(item => item.day === state.day) : state.days;
@@ -39,9 +39,9 @@ export function AgendaPilot() {
   const canPlan = membership.roles.includes('ADMIN') || membership.roles.includes('INSTRUCTOR');
   return <section className="agenda-page">
     <header className="agenda-heading"><div><span className="agenda-eyebrow">Planning de l’école</span><h1 id="portal-agenda-title" tabIndex={-1}>Agenda</h1></div>
-      {canPlan && <Button onClick={() => state.openLesson(null)}><Plus data-icon="inline-start" />Planifier une leçon</Button>}</header>
+      {canPlan && <AgendaAddMenu canCreateCourse={state.canManageCourses} onLesson={() => state.openLesson(null)} onCourse={state.openNewCourse} />}</header>
     <div className="agenda-toolbar"><div className="agenda-period"><div className="agenda-arrows"><Button variant="outline" size="icon" aria-label={dayView ? 'Jour précédent' : 'Semaine précédente'} onClick={() => state.chooseDay(addDays(state.day, dayView ? -1 : -7))}><ChevronLeft /></Button><Button variant="outline" size="icon" aria-label={dayView ? 'Jour suivant' : 'Semaine suivante'} onClick={() => state.chooseDay(addDays(state.day, dayView ? 1 : 7))}><ChevronRight /></Button></div><h2>{dayView ? formatDayHeading(state.day) : formatWeek(state.monday)}</h2></div>
-      <div className="agenda-actions"><Button variant="outline" onClick={() => state.chooseDay(today)}>Aujourd’hui</Button><Button variant="outline" size="icon" aria-label="Actualiser l’agenda" onClick={state.refresh}><RefreshCw /></Button><Button variant="outline" size="icon" aria-label="Filtres et date" aria-expanded={state.filtersOpen} onClick={() => state.setFiltersOpen(!state.filtersOpen)}><SlidersHorizontal /></Button>
+      <div className="agenda-actions"><Button variant="outline" onClick={() => state.chooseDay(today)}>Aujourd’hui</Button><Button variant="outline" size="icon" aria-label="Actualiser l’agenda" onClick={state.refresh}><RefreshCw /></Button>{state.canManageCourses && <Button variant="outline" size="icon" aria-label="Règles des cours" onClick={() => setPolicyOpen(true)}><Settings2 /></Button>}<Button variant="outline" size="icon" aria-label="Filtres et date" aria-expanded={state.filtersOpen} onClick={() => state.setFiltersOpen(!state.filtersOpen)}><SlidersHorizontal /></Button>
         {!state.compact && <ToggleGroup value={[state.presentation]} onValueChange={values => { if (values[0] === 'week' || values[0] === 'day') state.setPresentation(values[0]); }} aria-label="Présentation de l’agenda" variant="outline"><ToggleGroupItem value="day">Jour</ToggleGroupItem><ToggleGroupItem value="week">Semaine</ToggleGroupItem></ToggleGroup>}
       </div></div>
     {state.filtersOpen && <FieldGroup className="agenda-filters"><Field><FieldLabel htmlFor="agenda-date">Aller à la date</FieldLabel><Input id="agenda-date" type="date" value={state.day} onChange={event => { if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value)) state.chooseDay(event.target.value); }} /></Field>
@@ -61,6 +61,7 @@ export function AgendaPilot() {
         {state.days.map(day => <div className="agenda-day-column" key={day.day} aria-label={formatDayHeading(day.day)} data-today={day.day === today}>{calendarLanes(day.items, school.timeZone).map(item => <div key={item.event.key} className="agenda-positioned-event agenda-positioned" style={{ top: item.start - startHour * 60, height: item.end - item.start - 4, left: `calc(${item.lane / item.lanes * 100}% + 3px)`, width: `calc(${100 / item.lanes}% - 6px)` } as CSSProperties}><EventEntry event={item.event} state={state} /></div>)}</div>)}
       </div></div>{events.length === 0 && state.emptyConfirmed && <p className="agenda-week-empty">{state.searching ? 'Aucune leçon pour cet élève cette semaine.' : 'Aucun rendez-vous cette semaine.'}</p>}
     </div>}
+    {state.canManageCourses && state.catalogue.data && <CoursePolicyDialog open={policyOpen} catalogue={state.catalogue.data} onClose={() => setPolicyOpen(false)} onSaved={state.catalogue.reload} onReread={state.catalogue.reload} />}
     <footer className="agenda-read-time">{state.freshness.complete && state.freshness.readAt ? `Actualisé à ${new Intl.DateTimeFormat('fr-CH', { timeZone: school.timeZone, timeStyle: 'short' }).format(state.freshness.readAt)}` : 'La lecture complète de l’agenda n’est pas confirmée.'}<span>{school.timeZone}</span></footer>
   </section>;
 }
@@ -81,15 +82,4 @@ function EventEntry({ event, state }: { event: AgendaEvent; state: AgendaState }
     <span className="agenda-event-clock"><Clock3 aria-hidden="true" />{formatTimeRange(event.startsAt, end, state.context.school.timeZone)}</span><strong>{title}</strong><span className="agenda-event-instructor">{!isLesson && <Users aria-hidden="true" />}{instructor}</span>{place && <span className="agenda-event-place"><MapPin aria-hidden="true" />{place}</span>}
     {stateLabel && <span className="agenda-event-state">{stateLabel}</span>}{warning && <span className="agenda-event-warning"><TriangleAlert aria-hidden="true" /><span>Permis à vérifier</span></span>}
   </button>;
-}
-
-function CourseContext({ courseId, occurrenceId, onClose }: { courseId: string; occurrenceId?: string | undefined; onClose: () => void }) {
-  const { schoolId } = useConsole();
-  const heading = useRef<HTMLHeadingElement>(null);
-  const loaded = useLoad(async () => { const series = await readSchool(schoolId, `course-series/${courseId}`, courseSeriesSchema); if (series.id !== courseId || series.schoolId !== schoolId) throw new RequestFailure('INVALID_RESPONSE'); return series; }, [schoolId, courseId]);
-  const series = loaded.data;
-  useEffect(() => { if (series) heading.current?.focus(); }, [series?.id]);
-  return <section className="agenda-page"><Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button><ReadFeedback loaded={loaded} label="Lecture du cours" />
-    {series && <><header className="agenda-heading"><div><span className="agenda-eyebrow">{series.typeTitle}</span><h1 ref={heading} tabIndex={-1}>{series.title}</h1></div>{series.status !== 'PUBLISHED' && <Badge variant="secondary">{series.status === 'DRAFT' ? 'Brouillon' : series.status === 'CANCELLED' ? 'Annulé' : 'Clos'}</Badge>}</header><div className="agenda-detail-layout"><div className="agenda-detail-main"><section><h2>Séances</h2><ol className="agenda-occurrences">{series.occurrences.map(occurrence => <li key={occurrence.id} data-selected={occurrence.id === occurrenceId}><span className="agenda-occurrence-index">{occurrence.position}</span><div><strong>{dateTime(occurrence.startsAt, occurrence.timeZone)}</strong><p>{formatTimeRange(occurrence.startsAt, occurrence.endsAt, occurrence.timeZone)} · {occurrence.instructorDisplayName}</p>{occurrence.attendanceRequired && <span className="agenda-muted">Présence requise</span>}</div></li>)}</ol></section>{series.description && <section><h2>À propos du cours</h2><p className="agenda-prose">{series.description}</p></section>}{series.conditions && <section><h2>Conditions</h2><p className="agenda-prose">{series.conditions}</p></section>}</div><aside className="agenda-context"><Users aria-hidden="true" /><h2>{series.seatsTaken} / {series.capacity} inscrits</h2><dl className="agenda-facts"><div><dt>Responsable</dt><dd>{series.responsibleDisplayName}</dd></div><div><dt>Lieu</dt><dd>{series.location || 'Non précisé'}</dd></div><div><dt>Annulation autonome jusqu’au</dt><dd>{dateTime(series.selfCancellationDeadline, series.occurrences[0]?.timeZone ?? 'Europe/Zurich')}</dd></div></dl></aside></div></>}
-  </section>;
 }
