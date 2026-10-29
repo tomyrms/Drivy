@@ -48,10 +48,104 @@ import Testing
         #expect(!model.canSave && model.errorMessage != nil)
         await model.save()
         #expect(await server.writes().isEmpty)
-        model.useUpdatedDefaults()
+        let review = try #require(model.conflictReview())
+        #expect(model.resolve(review, keepLocal: false))
         #expect(model.saved?.version == 2 && model.conflictingDefaults == nil)
         #expect(model.trainingCategoryCode == "B" && model.serviceProductKey.isEmpty)
         #expect(model.errorMessage == nil && !model.hasChanges)
+    }
+
+    @Test func incompatibleProductIsExplainedWithoutChoosingAnotherProduct() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        model.selectCategory("B"); model.selectProduct("lesson-50")
+        model.selectCategory("")
+        #expect(model.serviceProductKey == "lesson-50" && model.removedProductNotice == nil)
+        model.selectCategory("A")
+        #expect(model.serviceProductKey.isEmpty && model.removedProductNotice != nil)
+        model.selectCategory("B")
+        #expect(model.serviceProductKey.isEmpty, "Retour au permis précédent sans restaurer silencieusement un ancien choix")
+        model.selectProduct("")
+        #expect(model.removedProductNotice == nil)
+        model.selectProduct("lesson-50"); model.selectCategory("B")
+        #expect(model.serviceProductKey == "lesson-50")
+        #expect(await server.writes().isEmpty)
+    }
+
+    @Test func keepingLocalConflictUsesTheReviewedVersionAndStillRequiresSave() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        model.selectCategory("B"); model.selectProduct("lesson-50")
+        await server.changeDefaultsRemotely(); await model.load()
+        let review = try #require(model.conflictReview())
+        #expect(review.local.serviceProductKey == "lesson-50" && review.remote.serviceProductKey == nil)
+        #expect(model.resolve(review, keepLocal: true))
+        #expect(model.serviceProductKey == "lesson-50" && model.hasChanges && model.canSave)
+        #expect(model.successMessage == nil)
+        #expect(await server.writes().isEmpty)
+        await model.save()
+        let writes = await server.writes()
+        #expect(writes.count == 1 && writes[0].value(forHTTPHeaderField: "If-Match") == "\"2\"")
+    }
+
+    @Test func staleComparisonCannotReplaceNewLocalOrRemoteChoices() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        model.selectCategory("B"); model.selectProduct("lesson-50")
+        await server.changeDefaultsRemotely(); await model.load()
+        let first = try #require(model.conflictReview())
+        model.selectProduct("")
+        #expect(!model.resolve(first, keepLocal: false))
+        #expect(model.serviceProductKey.isEmpty && model.saved?.version == 1)
+        model.selectProduct("lesson-50")
+        let second = try #require(model.conflictReview())
+        await server.changeDefaultsRemotely(); await model.load()
+        #expect(!model.resolve(second, keepLocal: true))
+        #expect(model.conflictingDefaults?.version == 3 && model.serviceProductKey == "lesson-50")
+    }
+
+    @Test func retiredProductCanBeKeptAsDraftButNeverSavedAsIfEligible() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        model.selectCategory("B"); model.selectProduct("lesson-50")
+        await server.setProductAvailable(false); await server.changeDefaultsRemotely(); await model.load()
+        let review = try #require(model.conflictReview())
+        #expect(model.resolve(review, keepLocal: true))
+        #expect(model.serviceProductKey == "lesson-50" && !model.canSave && model.errorMessage != nil)
+        model.selectProduct("")
+        #expect(!model.hasChanges, "Le choix explicite aucune préférence retrouve la valeur serveur")
+        #expect(await server.writes().isEmpty)
+    }
+
+    @Test func aLateDefaultsReadDoesNotEraseNewLocalChoices() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        await server.pauseNextDefaultsRead()
+        let loading = Task { await model.load(keepingEdits: false) }
+        await server.waitForPausedDefaultsRead()
+        model.selectCategory("B"); model.selectProduct("lesson-50")
+        await server.resumeDefaultsRead(); await loading.value
+        #expect(model.serviceProductKey == "lesson-50" && model.trainingCategoryCode == "B" && model.hasChanges)
+        #expect(await server.writes().isEmpty)
+    }
+
+    @Test func productLabelsIncludeRealDurationAndAllowZeroPrice() {
+        func product(minutes: Int?, cents: Int64) -> SchoolServiceProduct {
+            SchoolServiceProduct(id: UUID(), schoolId: HubFixture.schoolID, version: 1, productKey: "key", label: "Leçon",
+                type: "INDIVIDUAL_LESSON", categoryCode: "B", durationMinutes: minutes, siteId: nil, unitLabel: "leçon",
+                unitPriceCents: cents, validFrom: "2020-01-01", validUntil: nil, termsVersionId: UUID(), enabled: true)
+        }
+        let short = SchoolPlanningPreferenceFormat.product(product(minutes: 45, cents: 0))
+        let long = SchoolPlanningPreferenceFormat.product(product(minutes: 90, cents: 9000))
+        #expect(short.contains("45 min") && short.contains(SchoolCatalogFormatting.price(0)))
+        #expect(long.contains("1 h 30") && short != long)
+        #expect(SchoolPlanningPreferenceFormat.product(product(minutes: nil, cents: 0)).contains("Durée indisponible"))
+        #expect(SchoolPlanningPreferenceFormat.product(key: "retired", in: []).contains("indisponible"))
     }
 
     @Test func cancellationReasonUsesTheAPIsUTF16Limit() async throws {
@@ -261,6 +355,10 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     private let failReadsAfterCancellation: Bool
     private var sent: [URLRequest] = []
     private var readUnavailable = false
+    private var productAvailable = true
+    private var pausesNextDefaultsRead = false
+    private var pausedDefaultsRead: CheckedContinuation<Void, Never>?
+    private var defaultsPauseWaiter: CheckedContinuation<Void, Never>?
     private var availabilityFailure: Int?
     private var pausesNextAvailabilityRead = false
     private var pausedAvailabilityRead: CheckedContinuation<Void, Never>?
@@ -281,7 +379,14 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     func resumeAvailabilityRead() {
         pausedAvailabilityRead?.resume(); pausedAvailabilityRead = nil
     }
-    func changeDefaultsRemotely() { defaultsVersion = 2; category = "B"; productKey = NSNull() }
+    func changeDefaultsRemotely() { defaultsVersion += 1; category = "B"; productKey = NSNull() }
+    func setProductAvailable(_ value: Bool) { productAvailable = value }
+    func pauseNextDefaultsRead() { pausesNextDefaultsRead = true }
+    func waitForPausedDefaultsRead() async {
+        if pausedDefaultsRead != nil { return }
+        await withCheckedContinuation { defaultsPauseWaiter = $0 }
+    }
+    func resumeDefaultsRead() { pausedDefaultsRead?.resume(); pausedDefaultsRead = nil }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         if readUnavailable && request.httpMethod == "GET" { throw URLError(.notConnectedToInternet) }
         sent.append(request)
@@ -318,9 +423,15 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
             return try ok(["accepted": true])
         }
         if parts.last == "planning-defaults" {
+            if request.httpMethod == "GET", pausesNextDefaultsRead {
+                pausesNextDefaultsRead = false
+                await withCheckedContinuation { continuation in
+                    pausedDefaultsRead = continuation; defaultsPauseWaiter?.resume(); defaultsPauseWaiter = nil
+                }
+            }
             if request.httpMethod == "PUT" {
                 let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
-                defaultsVersion = 2; operationID = body["operationId"] as? String
+                defaultsVersion += 1; operationID = body["operationId"] as? String
                 category = body["trainingCategoryCode"] ?? NSNull(); productKey = body["serviceProductKey"] ?? NSNull()
             }
             return try ok(record(ConfigurationFixture.membershipID, ["version": defaultsVersion, "trainingCategoryCode": category, "serviceProductKey": productKey]))
@@ -332,11 +443,11 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
                     "resourceId": HubFixture.lessonID.uuidString, "resourceVersion": 3, "committedAt": ISO8601DateFormatter().string(from: Date())])
             }
             return try ok(["operationId": operationID, "commandType": "SAVE_PLANNING_DEFAULTS", "resourceType": "PlanningDefaults",
-                "resourceId": ConfigurationFixture.membershipID.uuidString, "resourceVersion": 2, "committedAt": ISO8601DateFormatter().string(from: Date())])
+                "resourceId": ConfigurationFixture.membershipID.uuidString, "resourceVersion": defaultsVersion, "committedAt": ISO8601DateFormatter().string(from: Date())])
         }
         if parts.last == "offerings" { return try page([record(offeringID, ["offeringKey": "B", "categoryCode": "B", "curriculumVersionId": UUID().uuidString, "policyVersionId": policyID.uuidString, "enabled": true, "defaultDurationMinutes": 50, "defaultPriceCents": 9000])]) }
         if parts.last == "policy-versions" { return try page([record(policyID, ["categoryCode": "B", "procedureText": "Procédure", "cancellationPolicyText": "Annulation", "sourceUrls": [], "approved": true, "approvedAt": "2026-01-01T00:00:00Z"])]) }
-        if parts.last == "service-products" { return try page([record(Self.productID, ["productKey": "lesson-50", "label": "Leçon", "type": "INDIVIDUAL_LESSON", "categoryCode": "B", "durationMinutes": 50, "siteId": NSNull(), "unitLabel": "leçon", "unitPriceCents": 9000, "validFrom": "2020-01-01", "validUntil": NSNull(), "termsVersionId": termsID.uuidString, "enabled": true, "current": true])]) }
+        if parts.last == "service-products" { return try page(productAvailable ? [record(Self.productID, ["productKey": "lesson-50", "label": "Leçon", "type": "INDIVIDUAL_LESSON", "categoryCode": "B", "durationMinutes": 50, "siteId": NSNull(), "unitLabel": "leçon", "unitPriceCents": 9000, "validFrom": "2020-01-01", "validUntil": NSNull(), "termsVersionId": termsID.uuidString, "enabled": true, "current": true])] : []) }
         if parts.last == "commercial-terms" { return try page([record(termsID, ["label": "Conditions", "termsText": "Texte", "validFrom": "2020-01-01", "validUntil": NSNull(), "approved": true])]) }
         if parts.last == "members" { return try page([record(ConfigurationFixture.membershipID, ["personId": ConfigurationFixture.personID.uuidString, "displayName": "Moniteur de test", "status": "ACTIVE", "roles": ["ADMIN", "INSTRUCTOR"], "grants": [], "accessEpoch": 1])]) }
         if parts.last == "learners" { return try page([record(HubFixture.learnerID, ["personId": UUID().uuidString, "displayName": "Élève de test", "contactEmail": NSNull(), "contactPhone": NSNull(), "archivedAt": NSNull()])]) }
