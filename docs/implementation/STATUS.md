@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 29 octobre 2026 — refonte web acceptée et tickets clôturés à la demande du porteur
+
+- Retour explicite du porteur : « c’est parfait », puis demande de fermer tous les tickets concernant la refonte web. Les 56 tickets des deux epics sont CLOSED, état relu sur GitHub : #311 et #312–#336 ; #280 et #281–#309. #247/#255 étaient déjà fermés.
+- #311 et #312–#334 clôturés sur livraison et acceptation produit. Ancienne direction #280/#281–#309 fermée comme remplacée. #335/#336 fermés administrativement comme non poursuivis dans ce jalon, avec limites de qualification explicites ; aucune case de test cochée sans preuve. L’historique et les critères initiaux sont conservés dans chaque ticket.
+- Build homelab toujours `4af4b0e6748081f90201169132cccd5c9fd6cfdb`, Tomy School remplie. Cette opération de suivi ne réalise ni la campagne exhaustive, ni la fusion dans master ; elles ne sont pas présentées comme exécutées. [Livraison](epic-311-livraison-essai.md), [contenu de l’école](tomy-school-content-20261029.md).
+
 ## 29 octobre 2026, 22:47 — Tomy School remplie pour l’essai du porteur
 
 - À sa demande explicite, ajout de 24 élèves et 3 moniteurs, 36 leçons, 16 bilans, 48 observations sans GPS, 8 cours/18 séances, 32 inscriptions, appels et règlements. Catalogue à 4 catégories/14 prestations, disponibilités et absences. Libellés naturels, aucun suffixe test dans l’UI. [Résultat et vérifications](tomy-school-content-20261029.md).

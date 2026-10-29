@@ -48,3 +48,10 @@ Un reçu privé conserve l’état précédent. En cas d’échec d’activation
 Limites connues de cet essai : récupération par e-mail toujours désactivée dans la configuration existante, avec message explicite ; une URL arbitraire hors des routes `/app` connues (ex. `/app/inconnue`) garde la réponse JSON 404 de la BFF. Le composant de page introuvable est disponible sur les routes de console servies ; étendre le fallback BFF devra préserver les 404 des API/assets et être qualifié après le retour du porteur. Aucun parcours authentifié avec données réelles n’a été effectué à sa place.
 
 À essayer personnellement : connexion et choix d’école ; agenda/leçons/cours ; dossier élève ; équipe/invitations/accès ; formations, tarifs et textes ; participants/appel/règlements ; réglages, recherche, thème et mobile. `master` et les issues attendent le retour du porteur puis les campagnes complètes.
+
+
+## Validation du porteur et clôture du suivi
+
+Le 29 octobre, après livraison et ajout du contenu de Tomy School, le porteur répond « c’est parfait » et demande explicitement la fermeture de tous les tickets de refonte web. 56 tickets fermés et état relu sur GitHub : #311/#312–#336 et ancienne direction #280/#281–#309. Les tickets de la nouvelle présentation sont clos sur acceptation produit ; l’ancienne direction est close comme remplacée. #335/#336 portent une clôture administrative explicite (non poursuivis dans ce jalon), sans revendiquer leur qualification exhaustive. Les critères et cases historiques restent conservés.
+
+Cette clôture de suivi ne constitue pas une campagne complète de tests, une certification d’accessibilité/sécurité/performance ou une fusion dans master. Les preuves exécutées et limites de la livraison ci-dessus restent inchangées. Aucun service ou contenu scolaire modifié lors de cette clôture.
