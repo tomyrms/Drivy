@@ -23,7 +23,7 @@ struct SchoolOfficeVisualReview: View {
                             outbox: models.outbox)
                     }
                 case "invitation-create": InvitationCreationView(model: models.invitations)
-                case "invitations", "invitation-detail": SchoolInvitationsView(model: models.invitations)
+                case "invitations", "invitation-detail", "invitation-feedback", "invitation-success": SchoolInvitationsView(model: models.invitations)
                 case "lesson-tariff":
                     NavigationStack {
                         SchoolLessonReportView(client: models.agenda.reportClient, schoolWorkspace: context.workspace,
@@ -81,7 +81,7 @@ struct SchoolOfficeVisualReview: View {
         let scope = context.agenda.scope(person: person, membership: membership)
         let baseURL = URL(string: "https://visual.drivy.invalid")!, token = SchoolVisualToken()
         let transport = SchoolOfficeVisualTransport(responses: try SchoolOfficeVisualData.responses(permitWarning: permitWarning),
-            allowsWrites: !permitWarning)
+            allowsWrites: !permitWarning, invitationScenario: draftScreen)
         let outbox = SchoolOfficeVisualOutbox(allowsWrites: !permitWarning)
         self.outbox = outbox
         if draftScreen == "lesson-draft-error" {
@@ -126,9 +126,13 @@ struct SchoolOfficeVisualReview: View {
             planning.productID = SchoolOfficeVisualData.productID
             planning.meetingPoint = "Gare de Cernier"
             await planning.loadAvailability()
-        case "invitations", "invitation-create", "invitation-detail":
+        case "invitations", "invitation-create", "invitation-detail", "invitation-feedback", "invitation-success":
             await invitations.load()
-            if screen == "invitation-detail" { invitations.selectedID = invitations.invitations.first?.id }
+            if screen != "invitations" && screen != "invitation-create" { invitations.selectedID = invitations.invitations.first?.id }
+            if let invitation = invitations.selectedInvitation {
+                if screen == "invitation-feedback" { _ = await invitations.resendAfterConfirmation(invitation) }
+                if screen == "invitation-success" { _ = await invitations.revokeAfterConfirmation(invitation, reason: "Contrôle synthétique du retour d’opération.") }
+            }
         default: break
         }
     }
@@ -161,8 +165,8 @@ struct SchoolOfficeVisualReview: View {
         responses["\(root)/closures"] = try envelope(page([]))
         // Réponse explicitement synthétique : le rendu ne qualifie pas le contrôle de réservation serveur.
         responses["\(root)/lessons/availability"] = try envelope(["available": true, "reasonCode": NSNull()])
-        let invitations: [[String: Any]] = ["PENDING", "ACCEPTED", "EXPIRED"].map { status in
-            ["id": UUID().uuidString, "schoolId": school, "version": 1, "maskedEmail": NSNull(), "roles": ["LEARNER"],
+        let invitations: [[String: Any]] = ["PENDING", "ACCEPTED", "EXPIRED"].enumerated().map { index, status in
+            ["id": SchoolVisualData.identifier(1200 + index).uuidString, "schoolId": school, "version": 1, "maskedEmail": NSNull(), "roles": ["LEARNER"],
                 "status": status, "expiresAt": "2026-10-06T10:00:00Z", "delivery": "CODE", "trainingCategoryCode": "B",
                 "training": ["offeringId": SchoolVisualData.offeringID.uuidString, "instructorMembershipId": member]]
         }
@@ -227,15 +231,31 @@ struct SchoolOfficeVisualReview: View {
 private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     private var responses: [String: Data]
     private let allowsWrites: Bool
-    init(responses: [String: Data], allowsWrites: Bool = true) {
+    private let invitationScenario: String
+    init(responses: [String: Data], allowsWrites: Bool = true, invitationScenario: String = "") {
         self.responses = responses
         self.allowsWrites = allowsWrites
+        self.invitationScenario = invitationScenario
     }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid" else { throw SchoolAPIError.invalidResponse }
         guard allowsWrites || (request.httpMethod ?? "GET") == "GET" else { throw SchoolAPIError.invalidResponse }
         func envelope(_ value: Any) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
+        }
+        if request.httpMethod == "POST", url.path.contains("/invitations/"),
+           invitationScenario == "invitation-feedback" || invitationScenario == "invitation-success" {
+            if invitationScenario == "invitation-feedback" { throw URLError(.networkConnectionLost) }
+            let collection = url.deletingLastPathComponent().deletingLastPathComponent().path
+            let invitationID = url.deletingLastPathComponent().lastPathComponent
+            guard let bytes = responses[collection], let root = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+                  var page = root["data"] as? [String: Any], var items = page["items"] as? [[String: Any]],
+                  let index = items.firstIndex(where: { ($0["id"] as? String)?.lowercased() == invitationID.lowercased() }) else {
+                throw SchoolAPIError.invalidResponse
+            }
+            items[index]["version"] = 2; items[index]["status"] = "REVOKED"
+            page["items"] = items; responses[collection] = try envelope(page)
+            return SchoolHTTPResponse(data: try envelope(items[index]), status: 200, url: url, contentType: "application/json")
         }
         if request.httpMethod == "POST", url.lastPathComponent == "start-now" {
             let lessonPath = url.deletingLastPathComponent().appendingPathComponent(SchoolVisualData.plannedLessonID.uuidString).path

@@ -22,6 +22,8 @@ import XCTest
         "lesson-competencies", "lesson-route", "learner-lesson", "learner-lesson-planned", "learner-permit", "start-now-gps-known",
         "sign-in-recovery-ready", "course-learner", "course-enrolled", "course-list", "course-editor", "course-roster",
         "course-attendance", "course-payments-before-start",
+        "access-register-long", "access-register-narrow", "course-payments-history", "course-list-empty", "course-list-error",
+        "course-list-loading", "course-learner-error", "course-learner-loading", "invitation-feedback", "invitation-success",
     ]
 
     func testRequestedScreensAtRealOrientations() throws {
@@ -78,7 +80,7 @@ import XCTest
                     RunLoop.current.run(until: Date().addingTimeInterval(10))
                     let readyIdentifier: String? = switch screen {
                     case "learner", "dossier", "dossier-multi", "dossier-incomplete": "learner-dossier"
-                    case "access-code", "access-register", "access-opening": "access-code"
+                    case "access-code", "access-register", "access-register-long", "access-register-narrow", "access-opening": "access-code"
                     case "school-opening": "school-opening"
                     case "learner-permit": "learner-permit-detail"
                     case "lesson-competencies", "lesson-route", "learner-lesson": "lesson-summary"

@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Vraies vues et données fictives ; toutes les mutations échouent sans toucher de serveur.
 struct SchoolCourseVisualReview: View {
-    static let screens: Set<String> = ["course-learner", "course-enrolled", "course-list", "course-editor", "course-roster", "course-attendance", "course-payments-before-start"]
+    static let screens: Set<String> = ["course-learner", "course-enrolled", "course-list", "course-editor", "course-roster", "course-attendance", "course-payments-before-start",
+        "course-payments-history", "course-list-empty", "course-list-error", "course-list-loading", "course-learner-error", "course-learner-loading"]
     let screen: String
     @State private var fixture: SchoolCourseVisualFixture?
     @State private var error: String?
@@ -15,8 +16,8 @@ struct SchoolCourseVisualReview: View {
                 case "course-editor": SchoolCourseEditorView(model: fixture.editor)
                 case "course-roster":
                     NavigationStack { Form { SchoolCourseRosterSection(model: fixture.roster) }.navigationTitle("Participants") }
-                case "course-list": SchoolLearnerCoursesView(model: fixture.courses)
-                case "course-attendance", "course-payments-before-start": SchoolCourseAttendanceView(model: fixture.attendance)
+                case "course-list", "course-list-empty", "course-list-error", "course-list-loading": SchoolLearnerCoursesView(model: fixture.courses)
+                case "course-attendance", "course-payments-before-start", "course-payments-history": SchoolCourseAttendanceView(model: fixture.attendance)
                 default: SchoolCourseLearnerView(model: fixture.learner)
                 }
             } else if let error { Text(error) }
@@ -68,20 +69,27 @@ struct SchoolCourseVisualReview: View {
             createdAt: iso.string(from: now.addingTimeInterval(-15 * 86_400)), cancelledAt: nil, cancelKind: nil, cancelReason: nil)
         let me = SchoolCourseLearnerState(learnerId: learnerID, state: enrolled ? .enrolled : .available, enrollment: enrolled ? enrollment : nil,
             offer: nil, waitlistPosition: nil, waitlistEnabled: true, contactEmail: "ecole@example.invalid")
+        let history = [
+            SchoolCoursePayment(id: SchoolVisualData.identifier(750), amountCents: 3000, recordedAt: "2026-09-21T10:00:00Z", note: nil, voidedAt: nil, voidReason: nil),
+            SchoolCoursePayment(id: SchoolVisualData.identifier(751), amountCents: 5000, recordedAt: "2026-09-22T10:00:00Z", note: nil, voidedAt: "2026-09-23T10:00:00Z", voidReason: "Saisie corrigée dans l’exemple."),
+            SchoolCoursePayment(id: SchoolVisualData.identifier(752), amountCents: 2000, recordedAt: "2026-09-23T11:00:00Z", note: nil, voidedAt: nil, voidReason: nil)
+        ]
         let rows = ["Alex Exemple", "Noa Exemple", "Robin Exemple"].enumerated().map { index, name in
             SchoolCourseSheetRow(enrollmentId: SchoolVisualData.identifier(730 + index), learnerId: SchoolVisualData.identifier(740 + index),
                 learnerDisplayName: name, status: .active, cancelledAt: nil,
                 attendance: occurrences.map { SchoolCourseAttendanceMark(occurrenceId: $0.id, status: nil, version: nil, recordedAt: nil) },
-                requirements: SchoolCourseRequirements(required: 4, present: 0, missing: 4), payments: [], completion: nil)
+                requirements: SchoolCourseRequirements(required: 4, present: 0, missing: 4),
+                payments: screen == "course-payments-history" && index == 0 ? history : [], completion: nil)
         }
-        let sheet = SchoolCourseSheet(series: series, rights: SchoolCourseSheetRights(canTakeAttendance: true, canRecordPayment: true, canValidate: true), rows: rows)
+        let sheet = SchoolCourseSheet(series: series, rights: SchoolCourseSheetRights(canTakeAttendance: screen != "course-payments-history",
+            canRecordPayment: true, canValidate: screen != "course-payments-history"), rows: rows)
         var responses: [String: Data] = [:]
         func encoded<T: Encodable>(_ value: T) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["data": JSONSerialization.jsonObject(with: JSONEncoder().encode(value)),
                 "requestId": "course-visual", "serverTime": iso.string(from: now)])
         }
         responses["course-catalogue"] = try encoded(catalogue)
-        responses["course-series"] = try encoded(SchoolCourseVisualPage(items: begun ? [] : [series]))
+        responses["course-series"] = try encoded(SchoolCourseVisualPage(items: begun || screen == "course-list-empty" ? [] : [series]))
         responses["course-series/\(seriesID)/me"] = try encoded(SchoolCourseLearnerReply(series: series, me: me))
         responses["course-series/\(seriesID)"] = try encoded(series)
         responses["course-series/\(seriesID)/sheet"] = try encoded(sheet)
@@ -93,7 +101,7 @@ struct SchoolCourseVisualReview: View {
         responses["course-series/\(seriesID)/enrollments"] = try JSONSerialization.data(withJSONObject: ["data": ["items": [], "waitlist": []],
             "requestId": "course-visual", "serverTime": iso.string(from: now)])
         let client = SchoolCourseClient(baseURL: URL(string: "https://visual.drivy.invalid")!, tokenSource: SchoolCourseVisualToken(),
-            transport: SchoolCourseVisualTransport(responses: responses))
+            transport: SchoolCourseVisualTransport(responses: responses, screen: screen))
         learner = SchoolCourseLearnerWorkspace(schoolID: school, seriesID: seriesID, timeZone: "Europe/Zurich", client: client)
         courses = SchoolLearnerCoursesWorkspace(schoolID: school, timeZone: "Europe/Zurich", client: client)
         editor = SchoolCourseEditorWorkspace(schoolID: school, membershipID: member, timeZone: "Europe/Zurich", client: client, catalogue: catalogue, series: series)
@@ -113,8 +121,11 @@ private struct SchoolCourseVisualPage: Encodable { let items: [SchoolCourseSerie
 }
 private struct SchoolCourseVisualTransport: SchoolHTTPTransport {
     let responses: [String: Data]
+    let screen: String
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid" else { throw SchoolAPIError.invalidResponse }
+        if screen.hasSuffix("-loading") { try await Task.sleep(for: .seconds(120)) }
+        if screen.hasSuffix("-error") { throw URLError(.notConnectedToInternet) }
         guard (request.httpMethod ?? "GET") == "GET" else { throw URLError(.notConnectedToInternet) }
         let route = url.pathComponents.dropFirst(4).joined(separator: "/")
         guard let data = responses[route] else { throw SchoolAPIError.invalidResponse }
