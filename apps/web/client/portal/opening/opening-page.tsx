@@ -55,11 +55,14 @@ export function SchoolOpeningPage({ link, operator = false, routes = entryRoutes
 function SchoolFields({ state }: { state: SchoolOpeningState }) {
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (!state.invalidField) return;
+    // Validation may finish while perform() still disables the fieldset. Keep the target
+    // until the controls are enabled, rather than consuming a focus request that did nothing.
+    if (!state.invalidField || state.busy || state.uncertain) return;
     const input = form.current?.elements.namedItem(state.invalidField);
-    if (input instanceof HTMLInputElement) input.focus();
-    state.setInvalidField(null);
-  }, [state.invalidField]);
+    if (!(input instanceof HTMLInputElement) || input.matches(':disabled')) return;
+    input.focus();
+    if (document.activeElement === input) state.setInvalidField(null);
+  }, [state.invalidField, state.busy, state.uncertain, state.setInvalidField]);
   const field = (name: 'schoolName' | 'contactEmail' | 'contactPhone' | 'displayName' | 'timeZone', label: string, type: 'text' | 'email' | 'tel', autoComplete: string, maxLength: number) =>
     <Field data-invalid={!!state.fieldErrors[name]}>
       <FieldLabel htmlFor={`opening-${name}`}>{label}</FieldLabel>
