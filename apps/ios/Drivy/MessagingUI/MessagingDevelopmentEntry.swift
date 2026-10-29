@@ -22,6 +22,10 @@ enum MessagingDevelopmentEntry {
             isQualification: SchoolMessagingDevelopment.isQualificationBuild, makeView: { peerID in
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay,
                 currentScope: currentScope, photoLoader: photoLoader, initialPeerID: peerID, schoolName: schoolName))
+        }, makeSettingsView: {
+            AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay,
+                currentScope: currentScope, photoLoader: photoLoader, initialPeerID: nil,
+                schoolName: schoolName, settingsOnly: true))
         })
     }
 }
@@ -34,6 +38,7 @@ private struct MessagingDevelopmentContainer: View {
     let photoLoader: @Sendable (UUID) async -> Data?
     let initialPeerID: UUID?
     let schoolName: String?
+    var settingsOnly = false
     @State private var workspace: MessagingWorkspace?
     @State private var keys: MatrixMessagingCryptography?
     @State private var failure: MessagingFailure?
@@ -41,8 +46,12 @@ private struct MessagingDevelopmentContainer: View {
     var body: some View {
         Group {
             if let workspace {
-                MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys,
-                                   schoolName: schoolName, currentScope: currentScope)
+                if settingsOnly {
+                    MessagingSettingsView(keys: keys, scope: scope, currentScope: currentScope)
+                } else {
+                    MessagingInboxView(workspace: workspace, initialPeerID: initialPeerID, keys: keys,
+                                       schoolName: schoolName, currentScope: currentScope)
+                }
             } else if let failure {
                 ContentUnavailableView("Messages indisponibles", systemImage: "lock.shield",
                     description: Text(failure.localizedDescription))
