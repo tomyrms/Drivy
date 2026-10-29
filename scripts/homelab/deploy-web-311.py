@@ -218,10 +218,11 @@ def ct(number,code):
     return json.loads(result.stdout)
 if REQUEST['execute']:
     # Recheck the plan before taking a backup; the actual switch rechecks once more.
-    ct(114,'REQUEST='+repr(REQUEST|{'execute':False})+'\n'+WEB)
+    ct(114,'REQUEST='+repr(REQUEST|{'execute':False})+'\\n'+WEB)
     REQUEST['databaseBackup']=ct(113,BACKUP)
-print(json.dumps(ct(114,'REQUEST='+repr(REQUEST)+'\n'+WEB),indent=2))
+print(json.dumps(ct(114,'REQUEST='+repr(REQUEST)+'\\n'+WEB),indent=2))
 '''
+    compile(host, '<homelab-deployment>', 'exec')
     result = subprocess.run(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-o', 'StrictHostKeyChecking=yes',
                              'root@192.168.1.106', 'python3 -'], input=host.encode(), capture_output=True, timeout=900)
     if result.returncode:
