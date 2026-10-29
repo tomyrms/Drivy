@@ -84,7 +84,10 @@ export const planningFamily: PreviewFamily = {
       [session(3, '18:00', '20:00', luc), session(10, '18:00', '20:00', luc), session(17, '18:00', '20:00', marie), session(24, '18:00', '20:00', luc, false)], next),
       describe({ id: previewId(740), version: 2, status: 'CANCELLED', typeId: firstAid, title: 'Premiers secours — groupe B', description: '', location: 'Salle de formation',
         conditions: '', teachingLanguage: 'de', responsibleMembershipId: luc, capacity: 8, minParticipants: null, seatsTaken: 0, publishedAt: stamp },
-      [session(5, '09:00', '12:00', luc)], next));
+      [session(5, '09:00', '12:00', luc)], next),
+      describe({ id: previewId(721), version: 1, status: 'DRAFT', typeId: awareness, title: 'Sensibilisation — cycle de printemps', description: '', location: 'Salle de formation',
+        conditions: '', teachingLanguage: 'fr', responsibleMembershipId: luc, capacity: 16, minParticipants: 6, publishedAt: null },
+      Array.from({ length: 10 }, (_, index) => session(35 + index * 7, '18:30', '20:30', index % 3 === 2 ? marie : luc, index % 4 !== 3)), next));
     // The existing pilot course also needs identifiers for its derived fields.
     Object.assign(series[0]!, describe(series[0]!, series[0]!.occurrences, next));
   },
@@ -105,7 +108,11 @@ export const planningFamily: PreviewFamily = {
   refusalCode(request) {
     if (request.collection === 'availability-rules' || request.collection === 'closures') return 'EXISTING_BOOKINGS';
     if (request.collection === 'course-types') return 'COURSE_TYPE_EXISTS';
-    if (request.collection === 'course-series') return request.action === 'cancel' ? 'COURSE_NOT_PUBLISHED' : 'COURSE_INSTRUCTOR_CONFLICT';
+    if (request.collection === 'course-series') {
+      if (request.action === 'cancel' || request.action === 'capacity') return 'COURSE_ACCESS_REQUIRED';
+      return request.action === 'reschedule' ? 'COURSE_SCHEDULE_CONFLICT' : 'COURSE_INSTRUCTOR_CONFLICT';
+    }
+    if (request.collection === 'course-policy') return 'COURSE_ACCESS_REQUIRED';
     return undefined;
   },
 };

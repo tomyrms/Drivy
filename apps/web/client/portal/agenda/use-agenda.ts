@@ -9,6 +9,7 @@ import { courseSeriesListSchema } from '../../console/course-model';
 import { useConsole, useLoad } from '../../console/context';
 import { useListState } from '../../console/list-state';
 import { distinctLabel, homonymReferences } from '../../person-reference';
+import { useCanManageCourses, useCourseCatalogue } from '../courses/course-catalogue';
 
 /** One read projection shared by both layouts. Selection contains identifiers only. */
 export function useAgenda() {
@@ -22,7 +23,7 @@ export function useAgenda() {
   const [presentation, setPresentation] = useListState<'day' | 'week'>('portal/agenda/presentation', () => window.matchMedia('(max-width: 767px)').matches ? 'day' : 'week');
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [localSelection, setLocalSelection] = useState<{ lesson?: string | null; course?: string; occurrence?: string } | null>(null);
+  const [localSelection, setLocalSelection] = useState<{ lesson?: string | null; course?: string | null; occurrence?: string | undefined } | null>(null);
   const [returnPosition, setReturnPosition] = useListState('portal/agenda/return', { top: 0, grid: 0, focus: 'portal-agenda-title' });
   const rememberPosition = (focus: string) => setReturnPosition({ top: window.scrollY, grid: document.getElementById('agenda-grid-scroll')?.scrollTop ?? 0, focus });
   const monday = weekStart(routeQuery?.week ?? routeQuery?.day ?? period);
@@ -42,6 +43,9 @@ export function useAgenda() {
     if (!bounds) throw new Error('Période invalide.');
     return (await readSchool(schoolId, 'course-series', courseSeriesListSchema, bounds)).items;
   }, [schoolId, revision, bounds?.from, bounds?.to], `${schoolId}/${monday}`);
+  // Collective courses: types, delays and instructors. A failure here never blocks the lessons.
+  const catalogue = useCourseCatalogue();
+  const canManageCourses = useCanManageCourses(catalogue);
   const searchQuery = agendaSearchQuery(directory, search).trim();
   const searching = Boolean(search.trim());
   const events = useMemo(() => bounds ? agendaDays(lessonsOfLearners(lessons.data?.items ?? [], directory.data?.learners ?? [], searchQuery), courses.data ?? [], {
@@ -92,7 +96,18 @@ export function useAgenda() {
     setLocalSelection({ course: id, occurrence });
     setRouteQuery?.({ ...routeQuery, week: monday, day, lesson: undefined, course: id, occurrence, view: undefined }, false, true);
   });
+  const openNewCourse = () => go(() => {
+    rememberPosition('portal-agenda-add');
+    setLocalSelection({ course: null });
+    setRouteQuery?.({ ...routeQuery, week: monday, day, lesson: undefined, course: undefined, occurrence: undefined, view: 'nouveau-cours' }, false, true);
+  });
+  /** Moves to a course without leaving the course workspace (a new draft that was just saved, a course that was just published). */
+  const showCourse = (id: string, occurrence?: string) => {
+    setLocalSelection({ course: id, occurrence });
+    setRouteQuery?.({ ...routeQuery, week: monday, day, lesson: undefined, course: id, occurrence, view: undefined }, true, true);
+  };
   const selection = routeQuery ? routeQuery.lesson ? { lesson: routeQuery.lesson } : routeQuery.view === 'nouvelle' ? { lesson: null }
+    : routeQuery.view === 'nouveau-cours' ? { course: null, occurrence: undefined }
     : routeQuery.course ? { course: routeQuery.course, occurrence: routeQuery.occurrence } : null : localSelection;
   const close = () => {
     setLocalSelection(null); setRouteQuery?.({ ...routeQuery, lesson: undefined, course: undefined, occurrence: undefined, view: undefined }, false, true);
@@ -103,5 +118,5 @@ export function useAgenda() {
   };
   return { context, now, monday, day, days, search, setSearch, instructor, chooseInstructor, instructorOptions, presentation, setPresentation,
     compact, filtersOpen, setFiltersOpen, directory, lessons, courses, partial, freshness, emptyConfirmed, searching, learnerName, memberName,
-    refresh, chooseDay, openLesson, openCourse, close, selection };
+    refresh, chooseDay, openLesson, openCourse, openNewCourse, showCourse, close, selection, catalogue, canManageCourses };
 }
