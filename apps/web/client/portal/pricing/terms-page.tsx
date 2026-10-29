@@ -78,13 +78,14 @@ function TermsReader({ reference, command, onRevised }: { reference: Extract<Cat
   const { navigate, canConfigureCatalog } = useConsole();
   const revision = useSharedTermsRevision(reference, command, onRevised);
   const title = useRef<HTMLHeadingElement>(null);
+  const editorTitle = useRef<HTMLHeadingElement>(null);
   const was = useRef(false);
-  useEffect(() => { if (was.current && !revision.editing) title.current?.focus(); was.current = revision.editing; }, [revision.editing]);
+  useEffect(() => { if (was.current && !revision.editing) title.current?.focus(); if (!was.current && revision.editing) editorTitle.current?.focus(); was.current = revision.editing; }, [revision.editing]);
   const blocked = command.busy;
   const submit = (event: FormEvent) => { event.preventDefault(); revision.review(); };
   if (revision.editing) return <>
     <form className="cat-editor" noValidate onSubmit={submit} aria-labelledby="terms-editor-title">
-      <header className="cat-editor-head"><h2 id="terms-editor-title" tabIndex={-1} ref={node => node?.focus()}>Réviser les conditions communes</h2>
+      <header className="cat-editor-head"><h2 id="terms-editor-title" tabIndex={-1} ref={editorTitle}>Réviser les conditions communes</h2>
         <p className="cat-muted">{reference.terms.label} · version {reference.terms.version}</p></header>
       {!revision.reviewing && <CommandFeedback runner={command.runner} />}
       <FieldGroup>
@@ -102,6 +103,8 @@ function TermsReader({ reference, command, onRevised }: { reference: Extract<Cat
     </form>
     <ReviewDialog open={revision.reviewing} title="Adopter ces conditions ?" description={`${reference.terms.label} · version ${reference.terms.version}`} runner={command.runner} busy={blocked}
       confirmLabel="Adopter les nouvelles conditions" disabled={!revision.acknowledged} onClose={revision.closeReview} onConfirm={() => void revision.confirm()}>
+      <section className="cat-review"><h3>Texte</h3>
+        <div className="cat-diff"><div><span>Avant</span><p>{reference.terms.termsText}</p></div><div><span>Après</span><p>{revision.text.trim()}</p></div></div></section>
       <section className="cat-review"><h3>{plural(revision.impacted.length, 'tarif concerné', 'tarifs concernés')}</h3>
         <ul>{revision.impacted.map(item => <li key={item.id}><strong>{item.label}</strong><span className="cat-muted"> · {item.categoryCode ? `permis ${item.categoryCode}` : 'sans permis'}</span></li>)}</ul></section>
       <p className="cat-muted">Chacun de ces tarifs reçoit une nouvelle version. Les réservations existantes gardent leurs conditions.</p>

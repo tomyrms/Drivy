@@ -167,7 +167,11 @@
   .cat-facts > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .cat-editor { padding: 20px 16px; border-radius: 12px; gap: 20px; }
   .cat-editor-bar { position: sticky; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 5; margin: 0 -16px -20px; padding: 12px 16px; background: var(--card); border-radius: 0 0 12px 12px; }
-  .cat-editor-bar > button { flex: 1; }
+  .cat-editor-bar > button { flex: 0 0 auto; }
+  .cat-editor-bar > button[type="submit"] { flex: 1 1 auto; }
+  .cat-section-actions { width: 100%; }
+  .cat-section-actions > button { flex: 1 1 100%; }
+  .cat-section-actions > button:last-child { order: -1; }
   .cat-field-pair { grid-template-columns: minmax(0, 1fr); }
   .cat-diff { grid-template-columns: minmax(0, 1fr); }
   .cat-changes > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
