@@ -122,33 +122,44 @@ export type TariffEditor = ReturnType<typeof useTariffEditor>;
 type TermsReference = Extract<CatalogueReference, { kind: 'TERMS' }>;
 
 /** Révision des conditions communes : tarifs impactés relus, engagements anciens conservés par le serveur. */
-export function useSharedTermsRevision(reference: TermsReference, command: CatalogueCommand, onRevised: (versionId: string | null) => void) {
+export function useSharedTermsRevision(reference: TermsReference, command: CatalogueCommand, onRevised: (versionId: string | null) => void,
+  read: { ready: boolean; reload: () => void }) {
   const { schoolId } = useConsole();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(reference.terms.termsText);
   const [reviewing, setReviewing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [attempted, setAttempted] = useState(false);
+  const [waitingFor, setWaitingFor] = useState<TermsReference | null>(null);
   const impacted = reference.usedBy.filter(item => item.current);
   const changed = text.trim() !== reference.terms.termsText.trim();
   const problem = text.trim().length < 20 ? 'Rédigez les conditions (20 caractères au moins).' : null;
   useUnsavedChanges(editing && changed && !command.busy);
   useEffect(() => { setEditing(false); setText(reference.terms.termsText); setReviewing(false); setAcknowledged(false); setAttempted(false); }, [reference.id]);
+  // A changed impact list requires another deliberate review, without discarding the drafted text.
+  useEffect(() => {
+    setAcknowledged(false);
+    if (waitingFor && reference !== waitingFor) setWaitingFor(null);
+  }, [reference, waitingFor]);
+  const readReady = read.ready && waitingFor === null;
   const reset = () => { setEditing(false); setReviewing(false); setAcknowledged(false); setAttempted(false); };
   return {
     editing, text, setText: (value: string) => { setText(value); setAcknowledged(false); }, reviewing, acknowledged, setAcknowledged, attempted, impacted, changed, problem,
-    canRevise: impacted.length > 0,
+    canRevise: impacted.length > 0, readReady,
     open: () => { setText(reference.terms.termsText); setEditing(true); command.runner.clearOutcome(); },
     cancel: () => { if (command.busy) return; setText(reference.terms.termsText); reset(); },
-    review: () => { setAttempted(true); if (!problem && changed) { setAcknowledged(false); command.runner.clearOutcome(); setReviewing(true); } },
+    review: () => { setAttempted(true); if (readReady && !problem && changed) { setAcknowledged(false); command.runner.clearOutcome(); setReviewing(true); } },
     closeReview: () => { if (!command.busy) setReviewing(false); },
     confirm: async () => {
-      if (command.busy || problem || !changed || !acknowledged || !impacted.length) return;
+      if (!readReady || command.busy || problem || !changed || !acknowledged || !impacted.length) return;
       const result = await command.submit(createCommand({ schoolId, kind: 'reviseSharedTerms', path: 'formations/terms/revise', resourceVersion: 0,
         body: { termsVersionId: reference.id, expectedProductVersionIds: impacted.map(item => item.id), termsText: text.trim(), reviewAcknowledged: true } }),
         'Les nouvelles conditions sont enregistrées.', reset);
       if (result.status === 'confirmed') onRevised(createdId(result));
       if (result.status === 'pending') setReviewing(false);
+      if (result.status === 'rejected' && changedCodes.has(result.code)) {
+        setAcknowledged(false); setReviewing(false); setWaitingFor(reference); read.reload();
+      }
     },
   };
 }

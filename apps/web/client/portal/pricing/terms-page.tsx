@@ -68,15 +68,16 @@ function TermsDetail({ selection, command, onSelect }: { selection: string; comm
   return <>
     <ReadFeedback loaded={detail} label="Lecture des conditions" />
     {reference && (reference.kind === 'TERMS'
-      ? <TermsReader reference={reference} command={command} onRevised={id => { if (id) onSelect(id); }} />
+      ? <TermsReader reference={reference} command={command} onRevised={id => { if (id) onSelect(id); }} read={{ ready: detail.status === 'ready', reload: detail.reload }} />
       : <Empty className="cat-empty"><EmptyHeader><EmptyTitle>Cet élément n’est pas une version de conditions</EmptyTitle></EmptyHeader>
         <EmptyContent><Button variant="outline" onClick={() => navigate('formations', { selection: reference.id })}>Ouvrir l’élément</Button></EmptyContent></Empty>)}
   </>;
 }
 
-function TermsReader({ reference, command, onRevised }: { reference: Extract<CatalogueReference, { kind: 'TERMS' }>; command: CatalogueCommand; onRevised: (id: string | null) => void }) {
+function TermsReader({ reference, command, onRevised, read }: { reference: Extract<CatalogueReference, { kind: 'TERMS' }>; command: CatalogueCommand; onRevised: (id: string | null) => void;
+  read: { ready: boolean; reload: () => void } }) {
   const { navigate, canConfigureCatalog } = useConsole();
-  const revision = useSharedTermsRevision(reference, command, onRevised);
+  const revision = useSharedTermsRevision(reference, command, onRevised, read);
   const title = useRef<HTMLHeadingElement>(null);
   const editorTitle = useRef<HTMLHeadingElement>(null);
   const was = useRef(false);
@@ -98,11 +99,11 @@ function TermsReader({ reference, command, onRevised }: { reference: Extract<Cat
       </FieldGroup>
       <footer className="cat-editor-bar">
         <Button type="button" variant="ghost" disabled={blocked} onClick={revision.cancel}>Annuler</Button>
-        <Button type="submit" disabled={blocked || !revision.changed}>Relire les changements</Button>
+        <Button type="submit" disabled={blocked || !revision.readReady || !revision.changed}>Relire les changements</Button>
       </footer>
     </form>
     <ReviewDialog open={revision.reviewing} title="Adopter ces conditions ?" description={`${reference.terms.label} · version ${reference.terms.version}`} runner={command.runner} busy={blocked}
-      confirmLabel="Adopter les nouvelles conditions" disabled={!revision.acknowledged} onClose={revision.closeReview} onConfirm={() => void revision.confirm()}>
+      confirmLabel="Adopter les nouvelles conditions" disabled={!revision.readReady || !revision.acknowledged} onClose={revision.closeReview} onConfirm={() => void revision.confirm()}>
       <section className="cat-review"><h3>Texte</h3>
         <div className="cat-diff"><div><span>Avant</span><p>{reference.terms.termsText}</p></div><div><span>Après</span><p>{revision.text.trim()}</p></div></div></section>
       <section className="cat-review"><h3>{plural(revision.impacted.length, 'tarif concerné', 'tarifs concernés')}</h3>

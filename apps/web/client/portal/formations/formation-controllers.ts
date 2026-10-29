@@ -106,7 +106,7 @@ export function useReferenceUpdate(programme: Programme, categoryCode: string, c
   return {
     open, setOpen, loaded, template, diff,
     apply: async (reload: () => void) => {
-      if (!diff || !diff.canApply || command.busy) return;
+      if (loaded.status !== 'ready' || !diff || !diff.canApply || command.busy) return;
       const result = await command.submit(createCommand({ schoolId, kind: 'saveFormationProgramme', path: 'formations/programmes', resourceVersion: 0,
         body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: programme.head.id, competencies: diff.competencies, source: diff.source } }),
         'Le programme est mis à jour pour les nouvelles inscriptions.', () => setOpen(false));

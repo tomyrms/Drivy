@@ -25,7 +25,7 @@ export function ReferenceUpdate({ programme, categoryCode, canConfigure, command
     <Button variant="outline" onClick={() => { command.runner.clearOutcome(); update.setOpen(true); }}><RefreshCw data-icon="inline-start" />Mettre à jour depuis la référence</Button>
     <ReviewDialog open={update.open} title={`Référence du permis ${categoryCode}`} runner={command.runner} busy={command.busy}
       confirmLabel={diff && diff.additions.length > 0 ? `Ajouter ${plural(diff.additions.length, 'compétence')}` : 'Ajouter'}
-      disabled={!canConfigure || !diff?.canApply} onClose={() => update.setOpen(false)} onConfirm={() => void update.apply(reload)}>
+      disabled={!canConfigure || update.loaded.status !== 'ready' || !diff?.canApply} onClose={() => update.setOpen(false)} onConfirm={() => void update.apply(reload)}>
       <ReadFeedback loaded={update.loaded} label="Lecture de la référence" />
       {update.loaded.status === 'ready' && (!template || !diff
         ? <p className="cat-muted">Aucune référence n’est disponible pour ce permis.</p>
