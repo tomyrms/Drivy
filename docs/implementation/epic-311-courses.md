@@ -28,7 +28,7 @@ Branche `claude/311-planning`, après `b4dee986` (#323). Périmètre : `apps/web
 
 ## Aperçu synthétique
 
-`families/planning.ts` : type prédéfinis et personnalisés, politique, un brouillon de deux séances, une série longue en brouillon (dix séances), un cours publié de quatre séances avec cinq inscrits, un cours annulé. Les écritures suivent les vraies routes ; `If-Match` est respecté ; refus crédibles par action (conflit de moniteur, conflit d'horaire à l'inscrit, accès) ; rendez-vous et séances publiées créent de vrais conflits.
+`families/planning.ts` : types prédéfinis et personnalisés, politique, un brouillon de deux séances, une série longue en brouillon (dix séances), un cours publié de quatre séances avec cinq inscrits, un cours annulé. Les écritures suivent les vraies routes ; `If-Match` est respecté ; refus crédibles par action (conflit de moniteur, conflit d'horaire à l'inscrit, accès) ; rendez-vous et séances publiées créent de vrais conflits.
 
 ## Vérifications exécutées (dans `apps/web`)
 
