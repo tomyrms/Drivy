@@ -12,6 +12,7 @@ import { CourseNotice } from './course-notice';
 import { CourseParticipantsEntry } from './course-participants-slot';
 import { instantDateTime, instantDayLabel, languageLabel, occurrenceTimes, seriesStateLabel } from './course-presentation';
 import { CourseReschedule } from './course-reschedule';
+import { ParticipantsView, type ParticipantTask } from './participants-view';
 
 /**
  * A course as people read it: title, dates, instructors and places first. Changing it is a separate, deliberate action:
@@ -21,10 +22,11 @@ export function CourseSheet({ series, catalogue, occurrenceId, notice, onClose, 
   series: CourseSeries; catalogue: CourseCatalogue | undefined; occurrenceId: string | undefined; notice: string | null; onClose: () => void;
   onChanged: (series: CourseSeries | null, message: string) => void; onReread: () => void;
 }) {
-  const { school } = useConsole();
+  const { school, membership } = useConsole();
   const timeZone = school.timeZone;
   const [dialog, setDialog] = useState<'capacity' | 'cancel' | null>(null);
   const [rescheduling, setRescheduling] = useState(false);
+  const [participants, setParticipants] = useState<{ task: ParticipantTask; occurrenceId?: string } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const selected = useRef<HTMLLIElement>(null);
   useHeadingFocus(heading, series.id);
@@ -34,6 +36,9 @@ export function CourseSheet({ series, catalogue, occurrenceId, notice, onClose, 
   const missing = occurrenceId !== undefined && !series.occurrences.some(item => item.id === occurrenceId);
   const done = (next: CourseSeries | null, message: string) => { setDialog(null); setRescheduling(false); onChanged(next, message); };
 
+  // Participants are for people who run courses; the school still decides each task from the rights it returns with the sheet.
+  const canOpenParticipants = (series.status === 'PUBLISHED' || series.status === 'CLOSED') && (membership.roles.includes('ADMIN') || membership.roles.includes('INSTRUCTOR'));
+  if (participants) return <ParticipantsView key={series.id} series={series} task={participants.task} occurrenceId={participants.occurrenceId} onBack={() => setParticipants(null)} />;
   if (rescheduling && catalogue) return <CourseReschedule series={series} catalogue={catalogue} onBack={() => setRescheduling(false)} onChanged={done} onReread={onReread} />;
   const language = languageLabel(series.teachingLanguage);
   return <section className="course-page">
@@ -54,13 +59,14 @@ export function CourseSheet({ series, catalogue, occurrenceId, notice, onClose, 
             id={`course-occurrence-${item.id}`} data-selected={item.id === occurrenceId} aria-current={item.id === occurrenceId ? 'true' : undefined}>
             <span className="course-session-index" aria-hidden="true">{item.position}</span>
             <div className="course-session-main"><strong>{instantDayLabel(item.startsAt, timeZone)}<span className="course-session-time"> · {occurrenceTimes(item, timeZone)}</span></strong>
-              <span className="course-muted">{item.instructorDisplayName}{!item.attendanceRequired && ' · '}{!item.attendanceRequired && <Badge variant="secondary">Facultative</Badge>}</span></div></li>)}</ol>
+              <span className="course-muted">{item.instructorDisplayName}{!item.attendanceRequired && ' · '}{!item.attendanceRequired && <Badge variant="secondary">Facultative</Badge>}</span></div>
+            {canOpenParticipants && Date.parse(item.startsAt) <= Date.now() && <Button variant="outline" aria-label={`Faire l’appel de la séance ${item.position}`} onClick={() => setParticipants({ task: 'attendance', occurrenceId: item.id })}>Appel</Button>}</li>)}</ol>
         </section>
         {series.description && <p className="course-prose">{series.description}</p>}
         {series.conditions && <section><h2>Conditions</h2><p className="course-prose">{series.conditions}</p></section>}
       </div>
       <aside className="course-aside">
-        <CourseParticipantsEntry series={series} />
+        <CourseParticipantsEntry series={series} canOpen={canOpenParticipants} onOpen={task => setParticipants({ task, ...(occurrenceId ? { occurrenceId } : {}) })} />
         <dl className="course-facts">
           <div><dt>Responsable</dt><dd>{series.responsibleDisplayName || 'Non renseigné'}</dd></div>
           {series.location && <div><dt>Lieu</dt><dd>{series.location}</dd></div>}
