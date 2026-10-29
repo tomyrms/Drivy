@@ -353,6 +353,8 @@ export const catalogueFamily: PreviewFamily = {
   },
   refusalCode(request) {
     if (request.collection !== 'formations') return undefined;
-    return request.resourceId === 'programmes' ? 'PROGRAMME_INCOMPLETE' : request.resourceId === 'tariffs' ? 'TARIFF_SCHEDULING_UNSUPPORTED' : request.resourceId === 'terms' ? 'INVALID_REQUEST' : undefined;
+    // Un refus crédible pour une saisie valide : le nom de parcours déjà pris, sinon l'autorisation de configurer le catalogue retirée entre-temps.
+    if (request.resourceId === 'programmes' && request.body.label) return 'PROGRAMME_LABEL_TAKEN';
+    return ['programmes', 'tariffs', 'terms'].includes(request.resourceId ?? '') ? 'CATALOGUE_ACCESS_REQUIRED' : undefined;
   },
 };

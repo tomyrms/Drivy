@@ -25,7 +25,7 @@ export function HistoryView({ sheet, selection }: { sheet: FormationSheet; selec
   const detached = sheet.unattached.curricula.length > 0 || sheet.unattached.procedures.length > 0;
   const zone = school.timeZone;
   return <section className="cat-section">
-    <div className="cat-section-head"><h2>Historique</h2></div>
+    <h2 className="visually-hidden">Versions enregistrées</h2>
     {selection && <div className="cat-surface cat-consulted">
       <ReadFeedback loaded={reference} label="Lecture de la version" />
       {reference.data && <ReferenceView reference={reference.data} onClose={() => consult(undefined)} />}

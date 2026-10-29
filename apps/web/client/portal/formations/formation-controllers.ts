@@ -48,7 +48,8 @@ export interface ProgrammeEditorOptions<D> {
   success: string;
   reload: () => void;
 }
-interface Editing<D> { draft: D; snapshot: string; baseId: string; rebased: boolean; waiting: boolean }
+/** `waitingFor` : la fiche affichée au moment du conflit ; une nouvelle lecture la remplace, l'édition repart alors de la version relue. */
+interface Editing<D> { draft: D; snapshot: string; baseId: string; rebased: boolean; waitingFor: Programme | null }
 
 /**
  * Édition d'une seule rubrique d'un parcours. La version attendue (`expectedOfferingVersionId`) est celle lue à l'ouverture ;
@@ -64,14 +65,14 @@ export function useProgrammeEditor<D>(options: ProgrammeEditorOptions<D>) {
   useUnsavedChanges(dirty && !command.busy);
   // Après relecture, l'édition repart de la version actuelle et le dit.
   useEffect(() => {
-    if (editing?.waiting && programme.head.id !== editing.baseId) setEditing({ ...editing, baseId: programme.head.id, waiting: false, rebased: true });
-  }, [programme.head.id, editing]);
+    if (editing?.waitingFor && programme !== editing.waitingFor) setEditing({ ...editing, baseId: programme.head.id, waitingFor: null, rebased: true });
+  }, [programme, editing]);
   const valid = editing ? options.valid(editing.draft) : false;
   const changed = editing ? options.changed(editing.draft) : false;
   const close = () => { setEditing(null); setReviewing(false); setAttempted(false); };
   return {
     editing: editing !== null, draft: editing?.draft ?? null, rebased: editing?.rebased ?? false, dirty, valid, changed, attempted, reviewing,
-    open: () => { const draft = options.initial(); setEditing({ draft, snapshot: JSON.stringify(draft), baseId: programme.head.id, rebased: false, waiting: false }); setAttempted(false); command.runner.clearOutcome(); },
+    open: () => { const draft = options.initial(); setEditing({ draft, snapshot: JSON.stringify(draft), baseId: programme.head.id, rebased: false, waitingFor: null }); setAttempted(false); command.runner.clearOutcome(); },
     update: (draft: D) => setEditing(current => current ? { ...current, draft } : current),
     cancel: () => { if (!command.busy) close(); },
     /** Relire : valide, puis présente les différences avant l'envoi. */
@@ -85,8 +86,10 @@ export function useProgrammeEditor<D>(options: ProgrammeEditorOptions<D>) {
       if (!editing || command.busy || !options.valid(editing.draft) || !options.changed(editing.draft)) return;
       const result = await command.submit(createCommand({ schoolId, kind: 'saveFormationProgramme', path: 'formations/programmes', resourceVersion: 0,
         body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: editing.baseId, ...options.body(editing.draft) } }), options.success, close);
+      // Résultat incertain : la relecture (modale) se ferme pour laisser accessible la vérification de la demande en attente.
+      if (result.status === 'pending') { setReviewing(false); return; }
       if (result.status !== 'rejected') return;
-      if (changedCodes.has(result.code)) { setEditing(current => current ? { ...current, waiting: true } : current); setReviewing(false); options.reload(); }
+      if (changedCodes.has(result.code)) { setEditing(current => current ? { ...current, waitingFor: programme } : current); setReviewing(false); options.reload(); }
       else if (unchangedCodes.has(result.code)) { setReviewing(false); options.reload(); }
     },
   };
@@ -107,6 +110,7 @@ export function useReferenceUpdate(programme: Programme, categoryCode: string, c
       const result = await command.submit(createCommand({ schoolId, kind: 'saveFormationProgramme', path: 'formations/programmes', resourceVersion: 0,
         body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: programme.head.id, competencies: diff.competencies, source: diff.source } }),
         'Le programme est mis à jour pour les nouvelles inscriptions.', () => setOpen(false));
+      if (result.status === 'pending') setOpen(false);
       if (result.status === 'rejected' && (changedCodes.has(result.code) || unchangedCodes.has(result.code))) reload();
     },
   };
