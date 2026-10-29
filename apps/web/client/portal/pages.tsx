@@ -6,6 +6,7 @@ import type { SectionKey } from '../console/sections';
  * A section absent from this registry is not offered by the rebuilt navigation.
  */
 export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<ComponentType>>> = {
+  apercu: lazy(() => import('./overview/overview-page').then(module => ({ default: module.OverviewPilot }))),
   agenda: lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot }))),
   eleves: lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot }))),
   equipe: lazy(() => import('./team/team-page').then(module => ({ default: module.TeamPilot }))),

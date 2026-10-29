@@ -6,7 +6,6 @@ import { sectionTitles } from '../console/navigation';
 import { roleLabel } from '../protocol';
 import { UiSuspendedContext } from '../ui-suspension';
 import { BrandSymbol } from '../BrandSymbol';
-import { choosePresentation } from '../presentation';
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -15,11 +14,8 @@ import { PortalFrame } from './frame';
 import { portalPages, portalSections } from './pages';
 import { PortalPendingRequests } from './runtime/pending-requests';
 import { PortalIdentityDialog } from './runtime/identity-dialog';
+import { NotRebuilt } from './components/not-rebuilt';
 import './portal.css';
-
-function useLegacyPresentation() {
-  return () => { choosePresentation('legacy'); window.location.reload(); };
-}
 
 function EntryLayout({ children }: { children: ReactNode }) {
   return <div className="portal-app">
@@ -30,15 +26,6 @@ function EntryLayout({ children }: { children: ReactNode }) {
 
 function Loading({ label }: { label: string }) {
   return <div className="grid gap-5" role="status" aria-label={label}><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>;
-}
-
-function NotRebuilt({ title }: { title: string }) {
-  const openLegacy = useLegacyPresentation();
-  return <section className="portal-not-rebuilt">
-    <h1 tabIndex={-1}>{title}</h1>
-    <p>Cette page n’a pas encore sa nouvelle présentation.</p>
-    <Button variant="outline" onClick={openLegacy}>Ouvrir l’ancienne présentation<ArrowRight aria-hidden="true" /></Button>
-  </section>;
 }
 
 /** Authenticated console with the rebuilt presentation: same runtime, store, guards and URLs as the historical console. */
