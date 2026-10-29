@@ -7,10 +7,16 @@ import { activeCompletion, activePayments, attendanceCell, type AttendanceStatus
 
 type Occurrence = CourseSeries['occurrences'][number];
 
-/** The session shown for the call: the one asked for, else the first not over, else the last. Never one chosen by the clock alone when asked. */
+/**
+ * The session shown for the call. The one asked for wins; else the session under way; else the last one that started (the call being
+ * taken is almost always the one held now or just before); else the first, which has not started. The call is never opened on a future session by default.
+ */
 export function defaultOccurrenceId(occurrences: readonly Occurrence[], requested: string | undefined, now: number): string {
   const ordered = [...occurrences].sort((a, b) => a.position - b.position);
-  return ordered.find(item => item.id === requested)?.id ?? ordered.find(item => Date.parse(item.endsAt) >= now)?.id ?? ordered.at(-1)?.id ?? '';
+  const asked = ordered.find(item => item.id === requested);
+  const underway = ordered.find(item => Date.parse(item.startsAt) <= now && now <= Date.parse(item.endsAt));
+  const lastStarted = [...ordered].reverse().find(item => Date.parse(item.startsAt) <= now);
+  return (asked ?? underway ?? lastStarted ?? ordered[0])?.id ?? '';
 }
 
 export interface AttendanceSummary { present: number; absent: number; excused: number; unset: number }

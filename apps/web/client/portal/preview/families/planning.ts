@@ -1,6 +1,7 @@
 import { schoolTimeToInstant } from '../../../command-core';
 import { dayAfter, ids, previewId, stamp, type FixtureRecord } from '../fixtures';
 import type { PreviewFamily, PreviewRequest, PreviewTools } from '../family';
+import { participantsRefusal, readParticipants, seedParticipants, writeParticipants } from './planning-participants';
 
 /**
  * Synthetic planning family: instructor hours and absences, collective courses (types, series, sessions, policy).
@@ -87,17 +88,28 @@ export const planningFamily: PreviewFamily = {
       [session(5, '09:00', '12:00', luc)], next),
       describe({ id: previewId(721), version: 1, status: 'DRAFT', typeId: awareness, title: 'Sensibilisation — cycle de printemps', description: '', location: 'Salle de formation',
         conditions: '', teachingLanguage: 'fr', responsibleMembershipId: luc, capacity: 16, minParticipants: 6, publishedAt: null },
-      Array.from({ length: 10 }, (_, index) => session(35 + index * 7, '18:30', '20:30', index % 3 === 2 ? marie : luc, index % 4 !== 3)), next));
+      Array.from({ length: 10 }, (_, index) => session(35 + index * 7, '18:30', '20:30', index % 3 === 2 ? marie : luc, index % 4 !== 3)), next),
+      describe({ id: previewId(750), version: 1, status: 'PUBLISHED', typeId: firstAid, title: 'Premiers secours — groupe A', description: 'Deux soirées de gestes et une révision facultative.', location: 'Salle de formation',
+        conditions: '', teachingLanguage: 'fr', responsibleMembershipId: luc, capacity: 3, minParticipants: null, seatsTaken: 3, publishedAt: stamp },
+      [session(-14, '18:00', '20:00', luc), session(-7, '18:00', '20:00', marie), session(7, '18:00', '19:00', luc, false)], next),
+      describe({ id: previewId(760), version: 1, status: 'PUBLISHED', typeId: awareness, title: 'Sensibilisation — grand groupe', description: '', location: 'Aula du Léman',
+        conditions: '', teachingLanguage: 'fr', responsibleMembershipId: luc, capacity: 20, minParticipants: 8, seatsTaken: 18, publishedAt: stamp },
+      [session(-3, '18:00', '21:00', luc), session(4, '18:00', '21:00', marie)], next));
+    seedParticipants({ db: () => store, at, policy });
     // The existing pilot course also needs identifiers for its derived fields.
     Object.assign(series[0]!, describe(series[0]!, series[0]!.occurrences, next));
   },
   read(request, tools) {
+    const participants = readParticipants(request, tools);
+    if (participants) return participants;
     if (request.path !== 'course-catalogue') return undefined;
     const instructors = (store.members ?? []).filter(item => item.status === 'ACTIVE' && item.roles.includes('INSTRUCTOR')).map(item => ({ membershipId: item.id, displayName: item.displayName }));
     return tools.reply(200, tools.envelope({ schoolId: ids.school, canManage: true, types, policy, instructors }));
   },
   write(request, tools) {
     const { collection } = request;
+    const participants = writeParticipants(request, tools);
+    if (participants) return participants;
     if (collection === 'availability-rules') return writeRule(request, tools);
     if (collection === 'closures') return writeClosure(request, tools);
     if (collection === 'course-types') return writeType(request, tools);
@@ -108,6 +120,8 @@ export const planningFamily: PreviewFamily = {
   refusalCode(request) {
     if (request.collection === 'availability-rules' || request.collection === 'closures') return 'EXISTING_BOOKINGS';
     if (request.collection === 'course-types') return 'COURSE_TYPE_EXISTS';
+    const participants = participantsRefusal(request);
+    if (participants) return participants;
     if (request.collection === 'course-series') {
       if (request.action === 'cancel' || request.action === 'capacity') return 'COURSE_ACCESS_REQUIRED';
       return request.action === 'reschedule' ? 'COURSE_SCHEDULE_CONFLICT' : 'COURSE_INSTRUCTOR_CONFLICT';

@@ -10,12 +10,14 @@ const payment = (id: string, amountCents: number, voidedAt: string | null = null
 const cell = (occurrenceId: string, status: 'PRESENT' | 'ABSENT' | 'EXCUSED' | null) => ({ occurrenceId, status, version: status ? 1 : null, recordedAt: status ? '2026-11-02T19:00:00Z' : null });
 
 describe('course participants model', () => {
-  it('picks the session asked for, else the next one, else the last', () => {
+  it('opens the call on the session asked for, else the one under way, else the last one that started', () => {
     const now = Date.parse('2026-11-10T00:00:00Z');
     expect(defaultOccurrenceId(occurrences, 'a', now)).toBe('a');
-    expect(defaultOccurrenceId(occurrences, undefined, now)).toBe('c');
-    expect(defaultOccurrenceId(occurrences, 'gone', now)).toBe('c');
+    expect(defaultOccurrenceId(occurrences, undefined, now)).toBe('b');
+    expect(defaultOccurrenceId(occurrences, 'gone', now)).toBe('b');
+    expect(defaultOccurrenceId(occurrences, undefined, Date.parse('2026-11-16T18:00:00Z'))).toBe('c');
     expect(defaultOccurrenceId(occurrences, undefined, Date.parse('2027-01-01T00:00:00Z'))).toBe('c');
+    expect(defaultOccurrenceId(occurrences, undefined, Date.parse('2026-11-01T00:00:00Z'))).toBe('a');
     expect(defaultOccurrenceId([], undefined, now)).toBe('');
   });
 
