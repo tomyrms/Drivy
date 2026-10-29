@@ -171,7 +171,7 @@ function CommonLessonRulesSection({ content, onChange, errorFor }: StepProps) {
   return <section className="setup-rules" aria-labelledby="setup-rules-title">
     <h3 id="setup-rules-title">Règles communes des leçons</h3>
     <PortalSelect id="setup-late-action" name="commonLessonRules.lateAction" label="En cas d’annulation" value={rules.lateAction} placeholder="Choisir la règle de l’école"
-      error={errorFor('commonLessonRules.lateAction') ?? undefined} onValueChange={value => update({ lateAction: value === 'CONTACT' || value === 'NO_FEE' ? value : null })}
+      {...(errorFor('commonLessonRules.lateAction') ? { error: errorFor('commonLessonRules.lateAction')! } : {})} onValueChange={value => update({ lateAction: value === 'CONTACT' || value === 'NO_FEE' ? value : null })}
       options={[{ value: 'CONTACT', label: 'Un délai, puis contact avec l’école' }, { value: 'NO_FEE', label: 'Annulation sans frais, sur demande à l’école' }]} />
     {rules.lateAction === 'CONTACT' && <TextField name="commonLessonRules.cancellationHours" label="Prévenir combien d’heures avant la leçon ?" suffix="h" inputMode="numeric" autoComplete="off" maxLength={4} className="setup-short"
       value={rules.cancellationHours === null ? '' : String(rules.cancellationHours)} error={errorFor('commonLessonRules.cancellationHours')}

@@ -60,7 +60,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     return { draft, templates, offerings: offerings.items.filter(item => item.enabled) };
   }, [schoolId, snapshot.revision]);
   const steps = setupNavigationSteps(content, catalogueOnly);
-  const blocked = saving || runner.busy || !!runner.pending || reviewing || needsAdoption.current;
+  const blocked = saving || runner.busy || !!runner.pending || !!pending || reviewing || needsAdoption.current;
   const key = `setup-draft:${catalogueOnly ? 'catalogue' : 'initial'}`;
   const today = civilDateIn(school.timeZone);
   const finished = () => navigate(catalogueOnly ? exitTo : 'agenda');
@@ -140,7 +140,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     ? reviewIssues.filter(issue => issue.field.replace(/^content\./, '') === path).map(issue => issue.message).join(' ') || null : null;
 
   async function refreshReview(saved: SetupDraft) {
-    setReviewing(true); setReadFailure(null); setAcknowledged(false);
+    setReviewing(true); setReadFailure(null); setAcknowledged(false); setPreview(null);
     try {
       const result = await readSchool(schoolId, 'setup-draft/preview', setupPreviewSchema, { activate: String(school.status === 'DRAFT') });
       if (result.schoolId !== schoolId || result.draftVersion !== saved.version) throw new RequestFailure('VERSION_CONFLICT', 412);

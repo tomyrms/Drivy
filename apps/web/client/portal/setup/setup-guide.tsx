@@ -29,7 +29,7 @@ function GuideProgress({ guide }: { guide: SetupGuideState }) {
       const state = setupStepState(item, content, document.currentStep, reviewIssues);
       const passed = !secondary && index < position;
       return <li key={item} data-current={item === step || undefined} data-passed={passed || undefined}>
-        <button type="button" aria-current={item === step ? 'step' : undefined} disabled={blocked} onClick={() => jump(item)}>
+        <button type="button" aria-label={shortLabels[item]} aria-current={item === step ? 'step' : undefined} disabled={blocked} onClick={() => jump(item)}>
           <span className="setup-progress-mark" aria-hidden="true">{passed ? <Check /> : index + 1}</span>
           <span className="setup-progress-label">{shortLabels[item]}</span>
           {state && <Badge variant={state === 'À revoir' ? 'destructive' : 'outline'} className="setup-progress-state">{state}</Badge>}
@@ -63,8 +63,9 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
     const frame = window.requestAnimationFrame(() => {
       const root = heading.current?.parentElement;
       const path = focusField.replace(/^content\./, '');
-      const target = [...(root?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[name],textarea[name]') ?? [])]
-        .find(input => input.type !== 'hidden' && (input.name === path || input.name.startsWith(`${path}.`)));
+      const target = path === 'commonLessonRules.lateAction' ? window.document.getElementById('setup-late-action')
+        : [...(root?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[name],textarea[name]') ?? [])]
+          .find(input => input.type !== 'hidden' && (input.name === path || input.name.startsWith(`${path}.`)));
       if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'center', behavior: 'instant' }); }
       guide.setFocusField(null);
     });
