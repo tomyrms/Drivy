@@ -37,7 +37,7 @@ export function useReference(selection: string | undefined, extra: readonly unkn
 }
 
 export type TariffMode = { kind: 'create' } | { kind: 'edit'; productKey: string; baseId: string };
-interface TariffEditing { mode: TariffMode; draft: TariffDraft; snapshot: string; /** Basculer l'offre sans ouvrir le formulaire. */ quick: boolean; rebased: boolean; waiting: boolean }
+interface TariffEditing { mode: TariffMode; draft: TariffDraft; snapshot: string; /** Basculer l'offre sans ouvrir le formulaire. */ quick: boolean; rebased: boolean; waitingFor: Tariff | undefined }
 
 export interface TariffEditorOptions {
   tariffs: readonly Tariff[];
@@ -65,9 +65,9 @@ export function useTariffEditor(options: TariffEditorOptions) {
   useUnsavedChanges(dirty && !command.busy);
   const current = editing?.mode.kind === 'edit' ? tariffs.find(item => item.productKey === (editing.mode as { productKey: string }).productKey) : undefined;
   useEffect(() => {
-    if (editing?.waiting && current && editing.mode.kind === 'edit' && current.head.id !== editing.mode.baseId)
-      setEditing({ ...editing, mode: { ...editing.mode, baseId: current.head.id }, waiting: false, rebased: true });
-  }, [current?.head.id, editing]);
+    if (editing?.waitingFor && current && current !== editing.waitingFor && editing.mode.kind === 'edit')
+      setEditing({ ...editing, mode: { ...editing.mode, baseId: current.head.id }, waitingFor: undefined, rebased: true });
+  }, [current, editing]);
   const mode = editing?.mode.kind === 'edit' ? 'UPDATE' as const : 'CREATE' as const;
   const start = current ? updatedValidFrom(current, today) : editing?.draft.validFrom ?? today;
   const problems = editing ? tariffProblems(editing.draft, mode, today, start) : null;
@@ -80,18 +80,18 @@ export function useTariffEditor(options: TariffEditorOptions) {
     problems, valid: problems?.valid ?? false, changed, dirty, attempted, reviewing, start,
     openCreate: () => {
       const draft = newTariffDraft(options.types[0]!, today, sharedTerms);
-      setEditing({ mode: { kind: 'create' }, draft, snapshot: JSON.stringify(draft), quick: false, rebased: false, waiting: false });
+      setEditing({ mode: { kind: 'create' }, draft, snapshot: JSON.stringify(draft), quick: false, rebased: false, waitingFor: undefined });
       setAttempted(false); command.runner.clearOutcome();
     },
     openEdit: (tariff: Tariff) => {
       const draft = tariffDraft(tariff);
-      setEditing({ mode: { kind: 'edit', productKey: tariff.productKey, baseId: tariff.head.id }, draft, snapshot: JSON.stringify(draft), quick: false, rebased: false, waiting: false });
+      setEditing({ mode: { kind: 'edit', productKey: tariff.productKey, baseId: tariff.head.id }, draft, snapshot: JSON.stringify(draft), quick: false, rebased: false, waitingFor: undefined });
       setAttempted(false); command.runner.clearOutcome();
     },
     /** Ne plus proposer / proposer à nouveau : même commande, seul « enabled » change, confirmée avant l'envoi. */
     openToggle: (tariff: Tariff, enabled: boolean) => {
       const draft = { ...tariffDraft(tariff), enabled };
-      setEditing({ mode: { kind: 'edit', productKey: tariff.productKey, baseId: tariff.head.id }, draft, snapshot: JSON.stringify(tariffDraft(tariff)), quick: true, rebased: false, waiting: false });
+      setEditing({ mode: { kind: 'edit', productKey: tariff.productKey, baseId: tariff.head.id }, draft, snapshot: JSON.stringify(tariffDraft(tariff)), quick: true, rebased: false, waitingFor: undefined });
       setAttempted(false); setReviewing(true); command.runner.clearOutcome();
     },
     update: (draft: TariffDraft) => setEditing(state => state ? { ...state, draft } : state),
@@ -110,8 +110,9 @@ export function useTariffEditor(options: TariffEditorOptions) {
       const result = await command.submit(createCommand({ schoolId, kind: 'saveTariff', path: 'formations/tariffs', resourceVersion: 0, body }),
         created ? 'Le tarif est ajouté.' : editing.quick ? (editing.draft.enabled ? 'Le tarif est de nouveau proposé.' : 'Le tarif n’est plus proposé.') : 'Le tarif est enregistré.', reset);
       if (result.status === 'confirmed') options.onSaved?.(createdId(result));
+      if (result.status === 'pending') setReviewing(false);
       if (result.status !== 'rejected') return;
-      if (changedCodes.has(result.code)) { setEditing(state => state ? { ...state, waiting: true, quick: false } : state); setReviewing(false); options.reload(); }
+      if (changedCodes.has(result.code)) { setEditing(state => state ? { ...state, waitingFor: current, quick: false } : state); setReviewing(false); options.reload(); }
       else if (unchangedCodes.has(result.code)) { reset(); options.reload(); }
     },
   };
@@ -147,6 +148,7 @@ export function useSharedTermsRevision(reference: TermsReference, command: Catal
         body: { termsVersionId: reference.id, expectedProductVersionIds: impacted.map(item => item.id), termsText: text.trim(), reviewAcknowledged: true } }),
         'Les nouvelles conditions sont enregistrées.', reset);
       if (result.status === 'confirmed') onRevised(createdId(result));
+      if (result.status === 'pending') setReviewing(false);
     },
   };
 }
