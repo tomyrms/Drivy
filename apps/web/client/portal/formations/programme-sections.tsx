@@ -21,16 +21,19 @@ import { editorTitles } from './sheet-routing';
 interface SectionProps {
   sheet: FormationSheet; programme: Programme; command: CatalogueCommand; proposals: TextProposalsLite | undefined;
   reload: () => void; onTariffs: () => void; onHistory: () => void;
+  /** Une édition ouverte occupe toute la page : la fiche masque son en-tête et ses onglets. */
+  onEditing: (editing: boolean) => void;
 }
 const effectText = (programme: Programme) => programme.enrollments.current + programme.enrollments.previous > 0
-  ? 'S’applique aux nouvelles inscriptions. Les élèves déjà inscrits gardent leur programme et leurs règles, y compris pour leurs prochaines leçons.'
+  ? 'S’applique aux nouvelles inscriptions. Les élèves déjà inscrits gardent leur programme, leurs règles et leurs évaluations, y compris pour leurs prochaines leçons.'
   : 'S’applique aux nouvelles inscriptions.';
 
-/** Rend le focus au titre une fois l'édition fermée, après confirmation ou annulation. */
-function useRestoreFocus(editing: boolean) {
+/** Rend le focus au titre une fois l'édition fermée, et signale à la fiche qu'une édition occupe la page. */
+function useRestoreFocus(editing: boolean, onEditing: (editing: boolean) => void) {
   const heading = useRef<HTMLHeadingElement>(null);
   const was = useRef(false);
   useEffect(() => { if (was.current && !editing) heading.current?.focus(); was.current = editing; }, [editing]);
+  useEffect(() => { onEditing(editing); return () => onEditing(false); }, [editing]);
   return heading;
 }
 
@@ -56,8 +59,10 @@ function EditorFrame({ view, scope, rebased, saved, dirty, busy, reviewing, comm
   </form>;
 }
 
-function SectionHead({ title, headingRef, children }: { title: string; headingRef: RefObject<HTMLHeadingElement | null>; children?: ReactNode }) {
-  return <div className="cat-section-head"><h2 id="cat-section-title" ref={headingRef} tabIndex={-1}>{title}</h2><div className="cat-section-actions">{children}</div></div>;
+/** Le titre de la rubrique est déjà celui de l'onglet : il reste pour les lecteurs d'écran, l'écran garde un repère utile et l'action. */
+function SectionHead({ title, headingRef, lead, children }: { title: string; headingRef: RefObject<HTMLHeadingElement | null>; lead?: ReactNode; children?: ReactNode }) {
+  return <div className="cat-section-head"><h2 id="cat-section-title" className="visually-hidden" ref={headingRef} tabIndex={-1}>{title}</h2>
+    {lead ? <p className="cat-section-lead">{lead}</p> : null}<div className="cat-section-actions">{children}</div></div>;
 }
 
 function EditButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
@@ -72,12 +77,12 @@ export function ProgrammeSection({ view, ...props }: SectionProps & { view: 'gen
   return view === 'general' ? <GeneralSection {...props} /> : view === 'competences' ? <CompetenciesSection {...props} /> : <RulesSection {...props} />;
 }
 
-function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistory }: SectionProps) {
+function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistory, onEditing }: SectionProps) {
   const multiple = sheet.programmes.length > 1;
   const others = sheet.programmes.filter(item => item !== programme).flatMap(item => item.head.label ? [item.head.label] : []);
   const editor: ProgrammeEditor<GeneralDraft> = useProgrammeEditor<GeneralDraft>({ programme, command, reload, success: 'Le parcours est enregistré.', initial: () => generalDraft(programme),
     valid: draft => generalProblems(draft, multiple, others).valid, changed: draft => Object.keys(generalChanges(draft, programme)).length > 0, body: draft => generalChanges(draft, programme) });
-  const heading = useRestoreFocus(editor.editing);
+  const heading = useRestoreFocus(editor.editing, onEditing);
   const blocked = command.busy;
   if (editor.editing && editor.draft) {
     const problems = generalProblems(editor.draft, multiple, others);
@@ -93,19 +98,18 @@ function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistor
     </>;
   }
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Général" headingRef={heading}>{sheet.canConfigureCatalog && <EditButton label="Modifier" disabled={blocked} onClick={editor.open} />}</SectionHead>
+    <SectionHead title="Général" headingRef={heading} lead={multiple ? `Parcours ${programmeName(programme, sheet.programmes)}` : null}>{sheet.canConfigureCatalog && <EditButton label="Modifier" disabled={blocked} onClick={editor.open} />}</SectionHead>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
-    {multiple && <p className="cat-muted">Parcours : {programmeName(programme, sheet.programmes)}</p>}
     <ProgrammeOverview sheet={sheet} programme={programme} onTariffs={onTariffs} onHistory={onHistory} />
   </section>;
 }
 
-function CompetenciesSection({ sheet, programme, command, reload }: SectionProps) {
+function CompetenciesSection({ sheet, programme, command, reload, onEditing }: SectionProps) {
   const current = programme.curriculum?.competencies ?? [];
   const editor: ProgrammeEditor<CompetencyDraft[]> = useProgrammeEditor<CompetencyDraft[]>({ programme, command, reload, success: 'Les compétences sont enregistrées pour les nouvelles inscriptions.',
     initial: () => current.length ? competencyDrafts(current) : [emptyCompetency()], valid: draft => competencyProblems(draft).valid,
     changed: draft => competenciesChanged(draft, current) || !programme.curriculum?.approved, body: draft => ({ competencies: competencyPayload(draft) }) });
-  const heading = useRestoreFocus(editor.editing);
+  const heading = useRestoreFocus(editor.editing, onEditing);
   const blocked = command.busy;
   if (editor.editing && editor.draft) {
     const changes = competencyChanges(current, editor.draft);
@@ -122,23 +126,23 @@ function CompetenciesSection({ sheet, programme, command, reload }: SectionProps
     </>;
   }
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Compétences" headingRef={heading}>
+    <SectionHead title="Compétences" headingRef={heading} lead={current.length ? plural(current.length, 'compétence') : null}>
       {sheet.canConfigureCatalog && <EditButton label={current.length ? 'Modifier les compétences' : 'Ajouter les compétences'} disabled={blocked} onClick={editor.open} />}
     </SectionHead>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     {current.length ? <>
       {programme.curriculum && !programme.curriculum.approved && <p className="cat-muted">Ces compétences n’ont jamais été appliquées.</p>}
-      <p className="cat-muted">{plural(current.length, 'compétence')}</p><CompetencyList items={current} />
+      <CompetencyList items={current} />
     </> : <p className="cat-muted">Aucune compétence enregistrée pour ce parcours.</p>}
     {sheet.canConfigureCatalog && <div className="cat-section-foot"><ReferenceUpdate programme={programme} categoryCode={sheet.categoryCode} canConfigure={sheet.canConfigureCatalog} command={command} reload={reload} /></div>}
   </section>;
 }
 
-function RulesSection({ sheet, programme, command, proposals, reload }: SectionProps) {
+function RulesSection({ sheet, programme, command, proposals, reload, onEditing }: SectionProps) {
   const current = programme.procedure;
   const editor: ProgrammeEditor<RulesDraft> = useProgrammeEditor<RulesDraft>({ programme, command, reload, success: 'Le déroulement et l’annulation sont enregistrés pour les nouvelles inscriptions.',
     initial: () => rulesDraft(current), valid: draft => rulesProblems(draft).valid, changed: draft => rulesChanged(draft, current) || !current?.approved, body: draft => ({ procedure: rulesPayload(draft) }) });
-  const heading = useRestoreFocus(editor.editing);
+  const heading = useRestoreFocus(editor.editing, onEditing);
   const blocked = command.busy;
   if (editor.editing && editor.draft) {
     const changes = rulesChanges(current, editor.draft);
@@ -156,7 +160,7 @@ function RulesSection({ sheet, programme, command, proposals, reload }: SectionP
     </>;
   }
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Règles" headingRef={heading}>{sheet.canConfigureCatalog && <EditButton label={current ? 'Modifier les règles' : 'Rédiger les règles'} disabled={blocked} onClick={editor.open} />}</SectionHead>
+    <SectionHead title="Règles" headingRef={heading} lead={null}>{sheet.canConfigureCatalog && <EditButton label={current ? 'Modifier les règles' : 'Rédiger les règles'} disabled={blocked} onClick={editor.open} />}</SectionHead>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     {current ? <RulesReader procedure={current} /> : <p className="cat-muted">Aucune règle enregistrée pour ce parcours.</p>}
   </section>;

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { History } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
@@ -33,37 +33,43 @@ export function PermitSheet({ category }: { category: string }) {
   const inside = (query: NavigationQuery) => setRouteQuery?.({ category, ...query }, false, true);
   const tariffTypes: TariffType[] = ['INDIVIDUAL_LESSON', 'EXAM_SUPPORT', ...(school.modules.collectiveCoursesEnabled ? ['COLLECTIVE_COURSE' as const] : [])];
   const learners = programmes.reduce((sum, item) => sum + item.enrollments.current + item.enrollments.previous, 0);
-  return <section className="cat-page">
-    <BackButton onClick={() => view === 'historique' ? go({ view: 'general', ...(selected ? { programme: selected.offeringKey } : {}) }) : navigate('formations', {})}>{view === 'historique' ? `Permis ${category}` : 'Formations'}</BackButton>
+  const [editing, setEditing] = useState(false);
+  // Un parcours ancien sans prix de référence est expliqué par son propre message : l'énoncé générique serait trompeur.
+  const priceOnly = !!data && data.programmes.filter(item => !item.head.complete).every(item => !item.head.hasReferencePrice);
+  const issues = (data?.issues ?? []).filter(issue => !(issue === 'PROGRAMME_INCOMPLETE' && priceOnly));
+  return <section className="cat-page" data-editing={editing || undefined}>
+    {!editing && <BackButton onClick={() => view === 'historique' ? go({ view: 'general', ...(selected ? { programme: selected.offeringKey } : {}) }) : navigate('formations', {})}>{view === 'historique' ? `Permis ${category}` : 'Formations'}</BackButton>}
     <ReadFeedback loaded={loaded} label={`Lecture du permis ${category}`} />
     {data && <>
-      <header className="cat-heading cat-sheet-head">
+      {!editing && <header className="cat-heading cat-sheet-head">
         <div className="cat-title"><PermitMark code={data.categoryCode} />
           <div><h1 ref={title} tabIndex={-1}>{view === 'historique' ? 'Historique' : `Permis ${data.categoryCode}`}</h1>
             <p className="cat-muted">{view === 'historique' ? `Permis ${data.categoryCode}` : `${plural(learners, 'élève')} en formation · ${plural(data.tariffs.length, 'tarif')}`}</p></div>
           {view !== 'historique' && <StateBadge badge={categoryBadge(data.state)} />}</div>
         {view !== 'historique' && <div className="cat-heading-actions"><Button variant="ghost" onClick={() => inside({ view: 'historique' })}><History data-icon="inline-start" />Historique</Button></div>}
-      </header>
-      {data.issues.length > 0 && view !== 'historique' && <Alert><AlertTitle>À compléter</AlertTitle>
-        <AlertDescription><ul className="cat-issues">{data.issues.map(issue => <li key={issue}>{categoryIssueText(issue)}</li>)}</ul></AlertDescription></Alert>}
+      </header>}
+      {!editing && issues.length > 0 && view !== 'historique' && <Alert><AlertTitle>À compléter</AlertTitle>
+        <AlertDescription><ul className="cat-issues">{issues.map(issue => <li key={issue}>{categoryIssueText(issue)}</li>)}</ul></AlertDescription></Alert>}
+      {!editing && !data.programmes.every(item => item.head.hasReferencePrice) && view !== 'historique' && <Alert><AlertTitle>Prix de référence absent</AlertTitle>
+        <AlertDescription>Ce parcours ancien n’a pas de prix de référence : aucun prix n’est supposé. Préparez de nouveau ce permis pour le compléter.</AlertDescription></Alert>}
       {view === 'historique'
         ? <HistoryView sheet={data} selection={routeQuery.selection} />
         : <Tabs value={view} onValueChange={next => { const value = sheetView(String(next)); go({ view: value, ...(selected && value !== 'tarifs' ? { programme: selected.offeringKey } : {}) }); }} className="cat-tabs">
-          <TabsList aria-label={`Rubriques du permis ${data.categoryCode}`}>{rubrics.map(rubric => <TabsTrigger key={rubric.view} value={rubric.view}>{rubric.label}</TabsTrigger>)}</TabsList>
+          {!editing && <TabsList aria-label={`Rubriques du permis ${data.categoryCode}`}>{rubrics.map(rubric => <TabsTrigger key={rubric.view} value={rubric.view}>{rubric.label}</TabsTrigger>)}</TabsList>}
           <TabsContent value={view} className="cat-tab-content">
             {view === 'tarifs'
               ? <TariffsPanel tariffs={data.tariffs} categoryCode={data.categoryCode} today={data.today} canConfigure={data.canConfigureCatalog} types={tariffTypes} proposals={proposals.data}
-                command={command} reload={loaded.reload} programmeCount={programmes.length} selection={routeQuery.selection}
+                command={command} reload={loaded.reload} programmeCount={programmes.length} selection={routeQuery.selection} listLabel="Tarifs" onEditing={setEditing}
                 onSelect={id => inside({ view: 'tarifs', ...(id ? { selection: id } : {}) })} onConsultVersion={id => inside({ view: 'historique', selection: id })} onOpenTerms={id => navigate('conditions', { selection: id })} />
               : !selected
                 ? <Empty className="cat-empty"><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Aucun parcours pour ce permis</EmptyTitle></EmptyHeader>
                   {data.canConfigureCatalog && <EmptyContent><Button onClick={() => navigate('apercu', { from: 'formations', category: data.categoryCode })}>Préparer ce permis</Button></EmptyContent>}</Empty>
                 : <>
-                  {programmes.length > 1 && <PortalSelect id="cat-programme" label="Parcours" value={selected.offeringKey} className="cat-programme-switch"
+                  {!editing && programmes.length > 1 && <PortalSelect id="cat-programme" label="Parcours" value={selected.offeringKey} className="cat-programme-switch"
                     options={programmes.map(item => ({ value: item.offeringKey, label: programmeName(item, programmes) }))} onValueChange={key => { if (key) go({ view, programme: key }); }} />}
-                  {!data.canConfigureCatalog && <p className="cat-hint">L’autorisation de configurer les tarifs est nécessaire pour modifier ce permis.</p>}
+                  {!editing && !data.canConfigureCatalog && <p className="cat-hint">L’autorisation de configurer les tarifs est nécessaire pour modifier ce permis.</p>}
                   <ProgrammeSection key={`${view}:${selected.offeringKey}`} view={view as Exclude<SheetView, 'historique' | 'tarifs'>} sheet={data} programme={selected} command={command} proposals={proposals.data} reload={loaded.reload}
-                    onTariffs={() => inside({ view: 'tarifs' })} onHistory={() => inside({ view: 'historique' })} />
+                    onTariffs={() => inside({ view: 'tarifs' })} onHistory={() => inside({ view: 'historique' })} onEditing={setEditing} />
                 </>}
           </TabsContent>
         </Tabs>}

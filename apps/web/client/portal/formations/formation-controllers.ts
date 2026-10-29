@@ -27,7 +27,12 @@ export function useFormationSheet(category: string) {
   const loaded = useLoad(() => readFormationSheet(schoolId, category), [schoolId, category, revision], `${schoolId}/${category}`);
   const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsLite), [schoolId]);
   const programmes = loaded.data?.programmes ?? [];
-  const selected = programmes.find(item => item.offeringKey === routeQuery.programme) ?? programmes[0];
+  // Le serveur ordonne les parcours par date de dernière version : enregistrer un parcours le ferait changer de place.
+  // Le parcours ouvert reste donc celui qui a été affiché en premier, tant que l'adresse n'en désigne pas un autre.
+  const [first, setFirst] = useState<string | null>(null);
+  useEffect(() => { if (!first && programmes[0]) setFirst(programmes[0].offeringKey); }, [first, programmes]);
+  const wanted = routeQuery.programme ?? first;
+  const selected = programmes.find(item => item.offeringKey === wanted) ?? programmes[0];
   return { loaded, proposals, programmes, selected };
 }
 
