@@ -3,7 +3,7 @@ import { Plus, ReceiptText } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import type { Tariff, TariffType, TextProposalsLite } from '../../formation-api';
-import { BackButton, ChangeList, CommandFeedback, ReviewDialog, useFocusOnMount } from '../formations/catalogue-ui';
+import { ActionSlot, BackButton, ChangeList, CommandFeedback, ReviewDialog, useFocusOnMount } from '../formations/catalogue-ui';
 import type { CatalogueCommand } from '../formations/catalogue-command';
 import { civilDate } from '../formations/formation-format';
 import { TariffForm } from './tariff-form';
@@ -22,6 +22,8 @@ export interface TariffsPanelProps {
   listLabel: string;
   /** Une édition de tarif occupe toute la page : la fiche masque son en-tête et ses onglets. */
   onEditing?: (editing: boolean) => void;
+  /** Emplacement des actions sur la rangée des onglets de la fiche ; sans emplacement, l'action reste dans la page. */
+  actionSlot?: HTMLElement | null;
   /** Actions complémentaires de la page, avant l'action d'ajout. */
   actions?: ReactNode;
 }
@@ -66,8 +68,8 @@ export function TariffsPanel(props: TariffsPanelProps) {
     {review}
   </>;
   return <section className="cat-section" aria-labelledby="cat-tariffs-title">
-    <div className="cat-section-head"><h2 id="cat-tariffs-title" className="visually-hidden" ref={heading} tabIndex={-1}>{categoryCode ? 'Tarifs' : 'Prestations'}</h2>
-      <div className="cat-section-actions">{props.actions}{canConfigure && <Button disabled={blocked} onClick={editor.openCreate}><Plus data-icon="inline-start" />{categoryCode ? 'Ajouter un tarif' : 'Ajouter une prestation'}</Button>}</div></div>
+    <h2 id="cat-tariffs-title" className="visually-hidden" ref={heading} tabIndex={-1}>{categoryCode ? 'Tarifs' : 'Prestations'}</h2>
+    <ActionSlot slot={props.actionSlot}><div className={props.actionSlot ? undefined : 'cat-section-head'}><div className="cat-section-actions">{props.actions}{canConfigure && <Button disabled={blocked} onClick={editor.openCreate}><Plus data-icon="inline-start" />{categoryCode ? 'Ajouter un tarif' : 'Ajouter une prestation'}</Button>}</div></div></ActionSlot>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     {!canConfigure && <p className="cat-hint">L’autorisation de configurer les tarifs est nécessaire pour les modifier ; certains tarifs non proposés peuvent ne pas être visibles.</p>}
     {categoryCode && props.programmeCount > 1 && <p className="cat-muted">Ces tarifs sont communs aux {props.programmeCount} parcours du permis {categoryCode}.</p>}

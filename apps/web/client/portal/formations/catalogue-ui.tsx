@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
@@ -39,6 +40,11 @@ export function useFocusOnMount<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   useEffect(() => { ref.current?.focus(); }, []);
   return ref;
+}
+
+/** Rend ses enfants dans l'emplacement d'actions de la rangée d'onglets, ou à la place si la fiche n'en fournit pas. */
+export function ActionSlot({ slot, children }: { slot: HTMLElement | null | undefined; children: ReactNode }) {
+  return slot ? createPortal(children, slot) : <>{children}</>;
 }
 
 export function BackButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {

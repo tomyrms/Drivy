@@ -8,7 +8,7 @@ import {
   competenciesChanged, competencyDrafts, competencyPayload, competencyProblems, emptyCompetency, generalChanges, generalDraft, generalProblems,
   programmeName, rulesChanged, rulesDraft, rulesPayload, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft,
 } from '../../console/formation-model';
-import { ChangeList, CommandFeedback, ReviewDialog } from './catalogue-ui';
+import { ActionSlot, ChangeList, CommandFeedback, ReviewDialog } from './catalogue-ui';
 import type { CatalogueCommand } from './catalogue-command';
 import { competencyChangeCount, competencyChanges, generalDifferences, rulesChanges, type CompetencyChanges, type TextChange } from './formation-diff';
 import { useProgrammeEditor, type ProgrammeEditor } from './formation-controllers';
@@ -23,6 +23,8 @@ interface SectionProps {
   reload: () => void; onTariffs: () => void; onHistory: () => void;
   /** Une édition ouverte occupe toute la page : la fiche masque son en-tête et ses onglets. */
   onEditing: (editing: boolean) => void;
+  /** Emplacement des actions de rubrique, sur la rangée des onglets. */
+  actionSlot: HTMLElement | null;
 }
 const effectText = (programme: Programme) => programme.enrollments.current + programme.enrollments.previous > 0
   ? 'S’applique aux nouvelles inscriptions. Les élèves déjà inscrits gardent leur programme, leurs règles et leurs évaluations, y compris pour leurs prochaines leçons.'
@@ -60,9 +62,12 @@ function EditorFrame({ view, scope, rebased, saved, dirty, busy, reviewing, comm
 }
 
 /** Le titre de la rubrique est déjà celui de l'onglet : il reste pour les lecteurs d'écran, l'écran garde un repère utile et l'action. */
-function SectionHead({ title, headingRef, lead, children }: { title: string; headingRef: RefObject<HTMLHeadingElement | null>; lead?: ReactNode; children?: ReactNode }) {
-  return <div className="cat-section-head"><h2 id="cat-section-title" className="visually-hidden" ref={headingRef} tabIndex={-1}>{title}</h2>
-    {lead ? <p className="cat-section-lead">{lead}</p> : null}<div className="cat-section-actions">{children}</div></div>;
+function SectionHead({ title, headingRef, lead, slot, children }: { title: string; headingRef: RefObject<HTMLHeadingElement | null>; lead?: ReactNode; slot: HTMLElement | null; children?: ReactNode }) {
+  return <>
+    <h2 id="cat-section-title" className="visually-hidden" ref={headingRef} tabIndex={-1}>{title}</h2>
+    {lead ? <p className="cat-section-lead">{lead}</p> : null}
+    {children ? <ActionSlot slot={slot}>{children}</ActionSlot> : null}
+  </>;
 }
 
 function EditButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
@@ -77,7 +82,7 @@ export function ProgrammeSection({ view, ...props }: SectionProps & { view: 'gen
   return view === 'general' ? <GeneralSection {...props} /> : view === 'competences' ? <CompetenciesSection {...props} /> : <RulesSection {...props} />;
 }
 
-function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistory, onEditing }: SectionProps) {
+function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistory, onEditing, actionSlot }: SectionProps) {
   const multiple = sheet.programmes.length > 1;
   const others = sheet.programmes.filter(item => item !== programme).flatMap(item => item.head.label ? [item.head.label] : []);
   const editor: ProgrammeEditor<GeneralDraft> = useProgrammeEditor<GeneralDraft>({ programme, command, reload, success: 'Le parcours est enregistré.', initial: () => generalDraft(programme),
@@ -98,13 +103,13 @@ function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistor
     </>;
   }
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Général" headingRef={heading} lead={multiple ? `Parcours ${programmeName(programme, sheet.programmes)}` : null}>{sheet.canConfigureCatalog && <EditButton label="Modifier" disabled={blocked} onClick={editor.open} />}</SectionHead>
+    <SectionHead title="Général" headingRef={heading} slot={actionSlot} lead={multiple ? `Parcours ${programmeName(programme, sheet.programmes)}` : null}>{sheet.canConfigureCatalog && <EditButton label="Modifier" disabled={blocked} onClick={editor.open} />}</SectionHead>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     <ProgrammeOverview sheet={sheet} programme={programme} onTariffs={onTariffs} onHistory={onHistory} />
   </section>;
 }
 
-function CompetenciesSection({ sheet, programme, command, reload, onEditing }: SectionProps) {
+function CompetenciesSection({ sheet, programme, command, reload, onEditing, actionSlot }: SectionProps) {
   const current = programme.curriculum?.competencies ?? [];
   const editor: ProgrammeEditor<CompetencyDraft[]> = useProgrammeEditor<CompetencyDraft[]>({ programme, command, reload, success: 'Les compétences sont enregistrées pour les nouvelles inscriptions.',
     initial: () => current.length ? competencyDrafts(current) : [emptyCompetency()], valid: draft => competencyProblems(draft).valid,
@@ -126,7 +131,7 @@ function CompetenciesSection({ sheet, programme, command, reload, onEditing }: S
     </>;
   }
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Compétences" headingRef={heading} lead={current.length ? plural(current.length, 'compétence') : null}>
+    <SectionHead title="Compétences" headingRef={heading} slot={actionSlot} lead={current.length ? plural(current.length, 'compétence') : null}>
       {sheet.canConfigureCatalog && <EditButton label={current.length ? 'Modifier les compétences' : 'Ajouter les compétences'} disabled={blocked} onClick={editor.open} />}
     </SectionHead>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
@@ -138,7 +143,7 @@ function CompetenciesSection({ sheet, programme, command, reload, onEditing }: S
   </section>;
 }
 
-function RulesSection({ sheet, programme, command, proposals, reload, onEditing }: SectionProps) {
+function RulesSection({ sheet, programme, command, proposals, reload, onEditing, actionSlot }: SectionProps) {
   const current = programme.procedure;
   const editor: ProgrammeEditor<RulesDraft> = useProgrammeEditor<RulesDraft>({ programme, command, reload, success: 'Le déroulement et l’annulation sont enregistrés pour les nouvelles inscriptions.',
     initial: () => rulesDraft(current), valid: draft => rulesProblems(draft).valid, changed: draft => rulesChanged(draft, current) || !current?.approved, body: draft => ({ procedure: rulesPayload(draft) }) });
@@ -160,7 +165,7 @@ function RulesSection({ sheet, programme, command, proposals, reload, onEditing 
     </>;
   }
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Règles" headingRef={heading} lead={null}>{sheet.canConfigureCatalog && <EditButton label={current ? 'Modifier les règles' : 'Rédiger les règles'} disabled={blocked} onClick={editor.open} />}</SectionHead>
+    <SectionHead title="Règles" headingRef={heading} slot={actionSlot} lead={null}>{sheet.canConfigureCatalog && <EditButton label={current ? 'Modifier les règles' : 'Rédiger les règles'} disabled={blocked} onClick={editor.open} />}</SectionHead>
     <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
     {current ? <RulesReader procedure={current} /> : <p className="cat-muted">Aucune règle enregistrée pour ce parcours.</p>}
   </section>;
