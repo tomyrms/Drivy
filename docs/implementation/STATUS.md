@@ -1,5 +1,13 @@
 # État de la réalisation
 
+<!-- ios-suite-19-20261029 -->
+## 29 octobre 2026 — suite iOS : 19 nouvelles issues, 25 avec le premier lot
+
+Branche `codex/ios-suite-19-20261029`, hors EPIC #311 et web de Claude. Implémentations : #201, #202, #203, #204, #206, #207, #211, #212, #213, #215, #216, #217, #218, #219, #228, #229, #230, #232, #240. Les six précédentes (#195, #197, #198, #199, #237, #241) sont incluses dans la même candidature.
+
+Relectures croisées et `git diff --check` effectués. Compilation Release/IPA finale EN ATTENTE. Tests ciblés préparés mais non exécutés ; grandes suites et essais physiques NOT_EXECUTED. Aucun déploiement, fusion dans master ou clôture. Retour du porteur attendu avant tests pertinents puis fusion/clôture. Détail et preuves : [livraison des 19 issues](ios-suite-19-delivery-20261029.md).
+
+
 ## 29 octobre 2026 — lot iOS indépendant de #311, avant essai
 
 - Inventaire des 155 issues ouvertes et rapprochement commentaires/branches/commits/PR : [triage](ios-independent-triage-20261029.md). #311, sa reprise de #280 et les disponibilités web #248–252 sont exclus.
