@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 29 octobre 2026 — lot iOS indépendant de #311, avant essai
+
+- Inventaire des 155 issues ouvertes et rapprochement commentaires/branches/commits/PR : [triage](ios-independent-triage-20261029.md). #311, sa reprise de #280 et les disponibilités web #248–252 sont exclus.
+- Intégration `codex/ios-independent-20261029` depuis `master c94ec2bb` : connexion/récupération #195/#197/#198/#199 ([détail](ios-auth-195-199.md)), états d’envoi/épingles Messages #237/#241 ([détail](ios-messages-237-241.md)). Aucun changement web, API, contrat, migration, dépendance ou workflow ; aucun déploiement requis.
+- Exécuté : revue de source, revue indépendante de l’authentification, contrôle de périmètre et `git diff --check`. Compilation Release/IPA à lancer avec accès Messages. Tests ciblés préparés, aucune suite exécutée pendant le développement.
+- Attente du retour du porteur sur l’IPA avant tests pertinents, fusion et clôture. #50 non activée. Rendu/VoiceOver physiques, réseau dégradé réel, GPS/batterie : aucune qualification revendiquée.
+- Entrée additive sur la branche iOS ; documents et worktrees du chantier #311 intacts.
+
 ## 28 octobre 2026 — audit UX, lot 9 : fil de discussion (#142, #168, #177)
 
 - Branche `claude/audit-ux-lot9-fil`, sur master avec le fil Exyte. Zones d'appui des réactions et des reprises, menu de sourdine selon l'état réel avec l'heure de fin, erreurs qui s'expliquent avant de se masquer et sans renvoi aveugle. [Détail](audit-ux-lot9-fil-20261028.md).
