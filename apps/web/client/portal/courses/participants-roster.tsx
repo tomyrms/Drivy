@@ -79,7 +79,7 @@ function EnrollDialog({ state, series, full, roster, onClose }: { state: CourseP
     if (result.status === 'rejected') { setRefusal(result.message); return; }
     onClose();
   }
-  return <Dialog open onOpenChange={(next, details) => { if (state.locked) { details.cancel(); return; } if (!next) onClose(); }}><DialogContent showCloseButton={!state.locked}>
+  return <Dialog open onOpenChange={(next, details) => { if (state.locked) { details.cancel(); return; } if (!next) onClose(); }}><DialogContent className="participants-dialog" showCloseButton={!state.locked}>
     <DialogHeader><DialogTitle>Inscrire un élève</DialogTitle><DialogDescription>{series.title}</DialogDescription></DialogHeader>
     <form noValidate onSubmit={event => { event.preventDefault(); void enroll(); }}>
       <ReadFeedback loaded={learners} label="Lecture des élèves" />

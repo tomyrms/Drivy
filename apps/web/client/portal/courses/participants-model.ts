@@ -34,13 +34,14 @@ export const attendanceStatusOf = (row: CourseSheetRow, occurrenceId: string): A
 
 /** What the school counts as settled for one participant: confirmed records not voided. A correction is a later record, never an edit. */
 export const settledCents = (row: Pick<CourseSheetRow, 'payments'>): number => activePayments(row).reduce((sum, payment) => sum + payment.amountCents, 0);
-export const groupSettledCents = (rows: readonly CourseSheetRow[]): number => rows.filter(row => row.status === 'ACTIVE').reduce((sum, row) => sum + settledCents(row), 0);
+// Cancelling an enrolment never refunds a payment: confirmed records keep counting.
+export const groupSettledCents = (rows: readonly CourseSheetRow[]): number => rows.reduce((sum, row) => sum + settledCents(row), 0);
 
 export type OfferState = 'waiting' | 'offered' | 'expired';
 /** A proposed seat whose deadline passed is shown as expired; the school, not this screen, removes it. */
 export function offerState(entry: Pick<WaitlistEntry, 'status' | 'offerExpiresAt'>, now: number): OfferState {
   if (entry.status !== 'OFFERED') return 'waiting';
-  return entry.offerExpiresAt !== null && Date.parse(entry.offerExpiresAt) < now ? 'expired' : 'offered';
+  return entry.offerExpiresAt !== null && Date.parse(entry.offerExpiresAt) <= now ? 'expired' : 'offered';
 }
 
 /** Active enrolments first (ordered by name), cancelled ones kept apart: the history of the series stays readable. */

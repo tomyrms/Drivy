@@ -1,5 +1,7 @@
 # #311 / R16 #327 : tarifs et conditions communes
 
+> Note héritée de `backup/311-catalogue-20261029-2050` (`dd37e256`), relue lors de la reprise du 29 octobre. Les anciennes recettes et captures citées ne sont pas revendiquées comme rejouées. Voir les preuves et corrections nouvelles dans [epic-311-catalogue-participants-reprise.md](epic-311-catalogue-participants-reprise.md).
+
 Même branche et mêmes règles que `epic-311-formations.md`. Nouveau code dans `apps/web/client/portal/pricing/` ; les tarifs liés à un permis vivent dans la fiche du permis (vue `tarifs`), les prestations sans permis dans la section `prestations`, les conditions dans la section `conditions`. Validations et corps de commande repris de `console/formation-model.ts` (`tariffProblems`, `createTariffBody`, `updateTariffBody`, `tariffChanged`, `parseCents`), sans copier l'ancien rendu.
 
 ## État ligne par ligne de l'inventaire

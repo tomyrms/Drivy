@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import { createCommand, type SchoolCommand } from '../../command-core';
+import { useCommandSnapshot } from '../../command-store';
 import { attendanceBody, attendanceCell, courseErrorMessage, courseRosterSchema, courseSheetSchema, type AttendanceStatus, type CourseSeries, type CourseSheet, type CourseSheetRow } from '../../console/course-model';
 import { useCommandRunner, useConsole, useLoad } from '../../console/context';
 import { RequestFailure } from '../../protocol';
@@ -25,7 +26,17 @@ export type SendResult = { status: 'confirmed' } | { status: 'pending' } | { sta
 export function useCourseParticipants(series: CourseSeries) {
   const { schoolId, me, membership } = useConsole();
   const scope = `${schoolId}/${me.personId}/${membership.membershipId}/${membership.accessEpoch}/${series.id}`;
-  const runner = useCommandRunner();
+  const { revision } = useCommandSnapshot();
+  const pendingResult = useRef<{ key: string; rowId: string; success: string } | null>(null);
+  const runner = useCommandRunner(() => {
+    // A receipt confirms the original intention, including after its dialog closed.
+    // Free its key so a later, genuinely new payment with the same amount is not a replay.
+    const pending = pendingResult.current;
+    if (!pending) return;
+    pendingResult.current = null;
+    attempts.current.delete(pending.key);
+    note(pending.rowId, { text: pending.success, tone: 'success' });
+  });
   const writeGeneration = useRef(0);
   const attempts = useRef(new Map<string, string>());
   const inFlight = useRef(false);
@@ -34,14 +45,17 @@ export function useCourseParticipants(series: CourseSeries) {
     const sheet = await readSchool(schoolId, `course-series/${series.id}/sheet`, courseSheetSchema);
     if (sheet.series.id !== series.id || sheet.series.schoolId !== schoolId) throw new RequestFailure('INVALID_RESPONSE');
     return { sheet, generation };
-  }, [schoolId, series.id, series.version], undefined, `course-sheet-view/${series.id}`);
+  }, [schoolId, series.id, series.version, revision], `${schoolId}/${series.id}`, `course-sheet-view/${series.id}`);
   const rosterRead = useLoad(async () => {
     if (!series.canManage) return { items: [], waitlist: [], restricted: true };
     return { ...(await readSchool(schoolId, `course-series/${series.id}/enrollments`, courseRosterSchema)), restricted: false };
-  }, [schoolId, series.id, series.version, series.canManage], undefined, `course-roster/${series.id}`);
+  }, [schoolId, series.id, series.version, series.canManage, revision], `${schoolId}/${series.id}`, `course-roster/${series.id}`);
   const [fresh, setFresh] = useState<{ scope: string; sheet: CourseSheet } | null>(null);
   useEffect(() => { if (sheetRead.data && readIsCurrent(sheetRead.data.generation, writeGeneration.current)) setFresh(null); }, [sheetRead.data]);
-  const sheet: CourseSheet | undefined = fresh?.scope === scope ? fresh.sheet : sheetRead.data?.sheet;
+  // Access failures clear useLoad's data. A previously confirmed local response must
+  // not keep exposing its participants after the server withdraws those rights.
+  const sheet: CourseSheet | undefined = sheetRead.status === 'error' && !sheetRead.data ? undefined
+    : fresh?.scope === scope ? fresh.sheet : sheetRead.data?.sheet;
   const [feedback, setFeedback] = useState<Record<string, RowFeedback>>({});
   const timers = useRef(new Map<string, number>());
   useEffect(() => () => { for (const timer of timers.current.values()) window.clearTimeout(timer); }, []);
@@ -65,7 +79,11 @@ export function useCourseParticipants(series: CourseSeries) {
       const command = createCommand({ schoolId, kind, path, body, resourceVersion, ...(resourceId ? { resourceId } : {}), ...(options.ifMatch !== undefined ? { ifMatch: options.ifMatch } : {}), ...(previous ? { operationId: previous } : {}) });
       attempts.current.set(key, command.operationId);
       const result = await runner.run(command, success);
-      if (result.status === 'pending') { note(rowId, { text: 'Résultat en cours de vérification', tone: 'pending' }); return { status: 'pending' }; }
+      if (result.status === 'pending') {
+        pendingResult.current = { key, rowId, success };
+        note(rowId, { text: 'Résultat en cours de vérification', tone: 'pending' });
+        return { status: 'pending' };
+      }
       attempts.current.delete(key);
       if (result.status === 'rejected') {
         const message = courseErrorMessage(result.code) ?? result.message;
@@ -79,7 +97,9 @@ export function useCourseParticipants(series: CourseSeries) {
       if (options.returnsSheet !== false) {
         const parsed = sheetEnvelope.safeParse(result.body);
         writeGeneration.current += 1;
-        if (parsed.success) setFresh({ scope, sheet: parsed.data.data }); else sheetRead.reload();
+        if (parsed.success && parsed.data.data.series.id === series.id && parsed.data.data.series.schoolId === schoolId)
+          setFresh({ scope, sheet: parsed.data.data });
+        else sheetRead.reload();
       }
       if (options.roster) rosterRead.reload();
       return { status: 'confirmed' };

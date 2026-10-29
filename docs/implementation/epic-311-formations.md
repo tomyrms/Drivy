@@ -1,5 +1,7 @@
 # #311 / R15 #326 : permis, programmes, compétences et règles
 
+> Note héritée de `backup/311-catalogue-20261029-2050` (`dd37e256`), relue lors de la reprise du 29 octobre. Les résultats navigateur et les comptes de tests ci-dessous sont le rapport de l'agent précédent, pas une réexécution lors de la reprise. Les contrôles effectivement rejoués sont consignés dans [epic-311-catalogue-participants-reprise.md](epic-311-catalogue-participants-reprise.md). Le raccord du guide est pris en charge avec #320 par le coordinateur.
+
 Famille reconstruite sur la branche `claude/311-catalogue` (base `d9c85479`). Nouveau code dans `apps/web/client/portal/formations/`, aperçu synthétique dans `portal/preview/families/catalogue.ts`. Aucun ancien rendu importé (garde de l'aperçu : `legacyPresentationImports: 0`), aucun fichier de l'ancienne console, backend, API, migration, Swift ou CI modifié. Fichiers partagés touchés : `portal/pages.tsx` (six sections enregistrées) et `portal/preview/families.ts` (un import).
 
 ## État ligne par ligne de l'inventaire

@@ -33,7 +33,7 @@ export function ActionDialog({ open, title, subject, facts, consequence, reasonL
     if (result.status === 'rejected') { setRefusal(result.message); return; }
     onClose();
   }
-  return <Dialog open={open} onOpenChange={(next, details) => { if (locked) { details.cancel(); return; } if (!next) onClose(); }}><DialogContent showCloseButton={!locked}>
+  return <Dialog open={open} onOpenChange={(next, details) => { if (locked) { details.cancel(); return; } if (!next) onClose(); }}><DialogContent className="participants-dialog" showCloseButton={!locked}>
     <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{subject}</DialogDescription></DialogHeader>
     <form noValidate onSubmit={event => { event.preventDefault(); void confirm(); }}>
       {facts && <dl className="participants-facts">{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}

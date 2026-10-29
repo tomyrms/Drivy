@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
-import { Field, FieldError, FieldLabel } from '../../components/ui/field';
+import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { formatCents, parseCents } from '../../command-core';
@@ -77,15 +77,17 @@ function PaymentDialog({ state, row, onClose }: { state: CourseParticipants; row
     if (result.status === 'rejected') { setRefusal(result.message); return; }
     onClose();
   }
-  return <Dialog open onOpenChange={(next, details) => { if (state.locked) { details.cancel(); return; } if (!next) onClose(); }}><DialogContent showCloseButton={!state.locked}>
+  return <Dialog open onOpenChange={(next, details) => { if (state.locked) { details.cancel(); return; } if (!next) onClose(); }}><DialogContent className="participants-dialog" showCloseButton={!state.locked}>
     <DialogHeader><DialogTitle>Consigner un règlement</DialogTitle><DialogDescription>{row.learnerDisplayName || 'Élève'}</DialogDescription></DialogHeader>
     <form noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
+      <FieldGroup>
       <Field data-invalid={touched && cents === null}><FieldLabel htmlFor="payment-amount">Montant (CHF)</FieldLabel>
         <Input id="payment-amount" inputMode="decimal" value={amount} placeholder="120.00" disabled={state.locked} aria-invalid={touched && cents === null} onChange={event => { setRefusal(null); setAmount(event.target.value); }} />
         {touched && cents === null && <FieldError>{problem}</FieldError>}</Field>
       <Field data-invalid={touched && cents !== null && Boolean(problem)}><FieldLabel htmlFor="payment-note">Note (facultatif)</FieldLabel>
         <Textarea id="payment-note" value={note} maxLength={PAYMENT_NOTE_LIMIT} rows={2} disabled={state.locked} onChange={event => setNote(event.target.value)} />
         {touched && cents !== null && problem && <FieldError>{problem}</FieldError>}</Field>
+      </FieldGroup>
       {refusal && <Alert variant="destructive"><AlertDescription>{keptMessage(refusal)}</AlertDescription></Alert>}
       <CommandFeedback outcome={state.runner.outcome?.needsLogin ? state.runner.outcome : null} blocked={state.runner.blockedReason} />
       <DialogFooter><Button type="button" variant="outline" disabled={state.locked} onClick={onClose}>Annuler</Button>

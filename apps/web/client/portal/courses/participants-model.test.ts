@@ -31,7 +31,7 @@ describe('course participants model', () => {
   it('counts a payment only until it is voided, and never as a refund', () => {
     const settled = row({ payments: [payment('p1', 12000), payment('p2', 5000, '2026-11-03T08:00:00Z'), payment('p3', 250)] });
     expect(settledCents(settled)).toBe(12250);
-    expect(groupSettledCents([settled, row({ payments: [payment('p4', 9500)] }), row({ status: 'CANCELLED', payments: [payment('p5', 9500)] })])).toBe(21750);
+    expect(groupSettledCents([settled, row({ payments: [payment('p4', 9500)] }), row({ status: 'CANCELLED', payments: [payment('p5', 9500)] })])).toBe(31250);
   });
 
   it('reads an offer deadline: proposed, expired, or simply waiting', () => {
@@ -39,6 +39,7 @@ describe('course participants model', () => {
     expect(offerState({ status: 'WAITING', offerExpiresAt: null }, now)).toBe('waiting');
     expect(offerState({ status: 'OFFERED', offerExpiresAt: '2026-11-03T12:00:00Z' }, now)).toBe('offered');
     expect(offerState({ status: 'OFFERED', offerExpiresAt: '2026-11-01T12:00:00Z' }, now)).toBe('expired');
+    expect(offerState({ status: 'OFFERED', offerExpiresAt: '2026-11-02T12:00:00Z' }, now)).toBe('expired');
   });
 
   it('separates active enrolments from cancelled ones, ordered by name', () => {
