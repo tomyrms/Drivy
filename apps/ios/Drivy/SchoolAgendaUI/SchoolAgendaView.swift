@@ -30,6 +30,7 @@ struct SchoolAgendaView: View {
     /// Administration qui enseigne aussi : ses leçons par défaut, toute l’école sur demande.
     @State private var instructorSelection = "default"
     @State private var catalogueError: String?
+    @State private var catalogueRequest = UUID()
     @State private var searchText = ""
     @State private var nextSearch = SchoolAgendaNextSearch()
     /// Cours collectifs (#38) : séances de la fenêtre lue, catalogue pour savoir qui peut en créer.
@@ -176,6 +177,7 @@ struct SchoolAgendaView: View {
             nextSearch.cancel(clear: true)
         }
         .onChange(of: currentScope) { _, _ in nextSearch.cancel(clear: true) }
+        .onChange(of: selectedDate) { _, _ in nextSearch.cancel(clear: true) }
         .onDisappear { nextSearch.cancel() }
         // Retour au premier plan : la période se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
         // relira déjà l’agenda à sa fermeture.
@@ -314,10 +316,11 @@ struct SchoolAgendaView: View {
 
     private func findNextAppointment() {
         guard let schoolID = workspace.membership?.schoolId else { return }
-        let wanted = currentScope, filter = instructorFilter
+        let wanted = currentScope, filter = instructorFilter, anchor = calendar.startOfDay(for: selectedDate)
         nextSearch.start(after: selectedDate, calendar: calendar, instructorID: filter,
-            isCurrent: { currentScope == wanted },
-            lessons: { range in try await fetchLessons(schoolID: schoolID, range: range, filter: filter, stillWanted: { currentScope == wanted }) },
+            isCurrent: { currentScope == wanted && calendar.startOfDay(for: selectedDate) == anchor },
+            lessons: { range in try await fetchLessons(schoolID: schoolID, range: range, filter: filter,
+                stillWanted: { currentScope == wanted && calendar.startOfDay(for: selectedDate) == anchor }) },
             courses: { range in try await client.courseClient.series(schoolID: schoolID, from: range.start, to: range.end) },
             onFound: { date in select(date) },
             onAccessFailure: {
@@ -577,14 +580,15 @@ struct SchoolAgendaView: View {
         }
     }
     @MainActor private func loadCourseCatalogue() async {
+        let request = UUID(); catalogueRequest = request
         guard mayPlan, let schoolID = workspace.membership?.schoolId else { courseCatalogue = nil; return }
         let wanted = identityScope
         do {
             let catalogue = try await client.courseClient.catalogue(schoolID: schoolID)
-            guard !Task.isCancelled, identityScope == wanted else { return }
+            guard !Task.isCancelled, identityScope == wanted, catalogueRequest == request else { return }
             courseCatalogue = catalogue; catalogueError = nil
         } catch {
-            guard !Task.isCancelled, identityScope == wanted else { return }
+            guard !Task.isCancelled, identityScope == wanted, catalogueRequest == request else { return }
             if let failure = error as? SchoolPlanningFailure,
                failure == .unauthorized || failure == .forbidden || failure == .notFound {
                 courseCatalogue = nil; courseRead.reset(); lessons = []; loaded = nil; dayIndex = [:]
