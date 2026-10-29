@@ -3,12 +3,17 @@ import SwiftUI
 struct MessagingOwnDevicesView: View {
     @State var model: MessagingOwnDevicesModel
     @AccessibilityFocusState private var errorFocused: Bool
+    @State private var namingLocalDevice: MessagingOwnDevice?
 
     var body: some View {
         List {
             if let snapshot = model.snapshot {
                 Section("Cet appareil") {
-                    Text(snapshot.localDevice.id).font(.subheadline.monospaced())
+                    deviceLabel(snapshot.localDevice)
+                    Button("Nommer cet appareil") { namingLocalDevice = snapshot.localDevice }
+                        .disabled(!model.canRename(snapshot.localDevice))
+                        .accessibilityIdentifier("messaging.devices.renameLocal")
+                    identifier(snapshot.localDevice.id)
                     fingerprint(snapshot.localDevice.fingerprint)
                         .accessibilityIdentifier("messaging.devices.localFingerprint")
                 }
@@ -22,7 +27,7 @@ struct MessagingOwnDevicesView: View {
                     ForEach(snapshot.devices) { device in
                         Button { model.select(device) } label: {
                             HStack {
-                                Text(device.id).font(.body.monospaced())
+                                deviceLabel(device)
                                 Spacer()
                                 if device.isVerified {
                                     Image(systemName: "checkmark.shield")
@@ -34,6 +39,9 @@ struct MessagingOwnDevicesView: View {
                         .accessibilityIdentifier("messaging.devices.device.\(device.id)")
                     }
                 }
+            }
+            if let aliasError = model.aliasError {
+                Section { Label(aliasError, systemImage: "exclamationmark.triangle") }
             }
             if model.selected == nil, let failure = model.failure {
                 Section {
@@ -57,9 +65,13 @@ struct MessagingOwnDevicesView: View {
         .sheet(item: Binding(get: { model.selected }, set: { if $0 == nil { model.cancelComparison() } })) { device in
             comparison(device)
         }
+        .sheet(item: $namingLocalDevice) { device in
+            NavigationStack { MessagingDeviceAliasEditor(model: model, device: device) }
+        }
         .task { await model.activate() }
         .onDisappear { model.invalidate() }
         .onChange(of: model.failure) { _, value in errorFocused = value != nil }
+        .onChange(of: model.snapshot == nil) { _, absent in if absent { namingLocalDevice = nil } }
     }
 
     private var capabilityMessage: String? {
@@ -74,7 +86,11 @@ struct MessagingOwnDevicesView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(device.id).font(.body.monospaced())
+                    deviceLabel(device)
+                    NavigationLink("Nommer cet appareil") { MessagingDeviceAliasEditor(model: model, device: device) }
+                        .disabled(!model.canRename(device))
+                        .accessibilityIdentifier("messaging.devices.rename")
+                    identifier(device.id)
                     fingerprint(device.fingerprint)
                 }
                 if model.verifiedDeviceID == device.id || device.isVerified {
@@ -109,6 +125,25 @@ struct MessagingOwnDevicesView: View {
             }
             .interactiveDismissDisabled(model.working)
         }
+    }
+
+    private func deviceLabel(_ device: MessagingOwnDevice) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text(model.displayName(device)).font(.headline).foregroundStyle(DrivyTheme.text)
+            Text("Réf. \(model.reference(device))").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(model.displayName(device)), référence \(model.reference(device))"
+            + (device.isCurrent ? ", cet appareil" : ""))
+    }
+
+    private func identifier(_ value: String) -> some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+            Text("Identifiant").font(.subheadline).foregroundStyle(DrivyTheme.muted)
+            Text(value).font(.body.monospaced()).textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func fingerprint(_ value: String) -> some View {

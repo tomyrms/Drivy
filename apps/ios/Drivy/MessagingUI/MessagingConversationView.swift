@@ -2,11 +2,21 @@ import ExyteChat
 import SwiftUI
 
 /// Actions du menu Exyte, calculées par message à partir des droits Drivy puis revérifiées à l'exécution.
-/// Aucune n'est marquée destructive : l'alerte interne d'Exyte n'est pas traduite, la confirmation reste Drivy.
+/// Le menu natif Drivy porte les rôles destructifs ; le menu interne d'Exyte n'est jamais ouvert.
 enum MessagingExyteMenuAction: String, CaseIterable, MessageMenuAction, Sendable {
     case reply, pin, unpin, copy, deleteForMe, deleteForEveryone
 
     static let customDataKey = "drivy.menu"
+
+    var isDeletion: Bool { self == .deleteForMe || self == .deleteForEveryone }
+    var nativeRole: ButtonRole? { isDeletion ? .destructive : nil }
+    var consequence: String? {
+        switch self {
+        case .deleteForMe: "Masque ce message pour ton compte. Les autres participants le gardent. Une confirmation suivra."
+        case .deleteForEveryone: "Demande sa suppression pour tous les participants. Une confirmation suivra."
+        default: nil
+        }
+    }
 
     func title() -> String {
         switch self {
@@ -62,9 +72,15 @@ private enum ExyteBubbleMetrics {
     private(set) var scrollRequest: ScrollToParams?
     private(set) var notice: String?
     var confirmDeleteForEveryone: MessagingWireMessage?
+    var confirmDeleteForMe: MessagingWireMessage?
     var confirmClosePoll: MessagingWireMessage?
     var votersFor: MessagingWireMessage?
     var showPollComposer = false
+    struct MenuTarget: Identifiable { let id: String }
+    var menuTarget: MenuTarget?
+    private enum MenuChoice { case action(MessagingExyteMenuAction, String), reaction(String, String) }
+    private var menuChoice: MenuChoice?
+    private var menuGeneration = UUID()
     private(set) var loadingOlder = false
     /// Hauteur du pied (composeur, signalement), qu'Exyte place sous la liste : le bouton de retour reste au-dessus.
     private(set) var footerHeight: CGFloat = 0
@@ -213,7 +229,8 @@ private enum ExyteBubbleMetrics {
         guard let wire = item.message else { return pendingText(item) == nil ? [] : [.copy] }
         var actions: [MessagingExyteMenuAction] = []
         if !wire.meta.deletedForEveryone && access.canWrite {
-            actions += [.reply, wire.meta.pinned ? .unpin : .pin]
+            actions.append(.reply)
+            if !isGeneral || access.isGroupAdmin { actions.append(wire.meta.pinned ? .unpin : .pin) }
         }
         if !wire.meta.deletedForEveryone, workspace.contents[wire.id]?.text != nil { actions.append(.copy) }
         actions.append(.deleteForMe)
@@ -285,7 +302,7 @@ private enum ExyteBubbleMetrics {
 
     /// Les droits sont relus au moment de l'action : un menu resté ouvert n'élargit jamais l'accès.
     func perform(_ action: MessagingExyteMenuAction, displayID: String) {
-        guard let item = item(displayID) else { return }
+        guard let item = item(displayID), menuActions(item).contains(action) else { return }
         switch action {
         case .copy:
             if let wire = item.message {
@@ -302,7 +319,7 @@ private enum ExyteBubbleMetrics {
             workspace.setPinned(wire, pinned: action == .pin)
         case .deleteForMe:
             guard let wire = item.message else { return }
-            workspace.delete(wire, for: .me)
+            confirmDeleteForMe = wire
         case .deleteForEveryone:
             guard let wire = item.message, !wire.meta.deletedForEveryone,
                   MessagingPermissions.canDeleteForEveryone(senderID: wire.senderID, account: accountID, access: access)
@@ -316,7 +333,7 @@ private enum ExyteBubbleMetrics {
         return canInteract(wire)
     }
 
-    /// Exyte ferme le menu avant cet appel (#102) ; l'intention est posée aussitôt, sans attendre le réseau.
+    /// Le menu ferme avant cet appel ; l'intention est posée sans attendre le réseau.
     func react(_ reaction: ReactionType, displayID: String) {
         guard case .emoji(let emoji) = reaction, MessagingReactionPalette.all.contains(emoji),
               let wire = item(displayID)?.message, canInteract(wire) else { return }
@@ -336,17 +353,51 @@ private enum ExyteBubbleMetrics {
         return true
     }
 
-    /// Clavier ouvert : il se ferme d'abord, puis le menu s'ouvre sur une mise en page stable. Exyte ignore le
-    /// clavier pendant son menu, ce qui faisait sauter le fil sous le doigt.
-    func openMenu(_ show: @escaping () -> Void) {
-        guard !reporting else { return }
+    /// Le clavier ferme avant la feuille native. Une fermeture/changement de contexte annule l'ouverture différée.
+    func openMenu(displayID: String) {
+        guard let item = item(displayID), !menuActions(item).isEmpty else { return }
+        menuGeneration = UUID()
+        let generation = menuGeneration
+        menuChoice = nil
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        guard composer.isFocused else { return show() }
+        guard composer.isFocused else { menuTarget = MenuTarget(id: displayID); return }
         composer.blur()
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(320))
-            show()
+            do { try await Task.sleep(for: .milliseconds(320)) } catch { return }
+            guard generation == menuGeneration, let current = self.item(displayID), !menuActions(current).isEmpty else { return }
+            menuTarget = MenuTarget(id: displayID)
         }
+    }
+
+    func chooseMenuAction(_ action: MessagingExyteMenuAction, displayID: String) {
+        guard menuTarget?.id == displayID else { return }
+        menuChoice = .action(action, displayID); menuTarget = nil
+    }
+
+    func chooseMenuReaction(_ emoji: String, displayID: String) {
+        guard menuTarget?.id == displayID else { return }
+        menuChoice = .reaction(emoji, displayID); menuTarget = nil
+    }
+
+    /// Une confirmation ne concurrence pas la présentation du menu. Les droits sont relus après sa fermeture.
+    func completeMenuChoice() {
+        let choice = menuChoice; menuChoice = nil
+        switch choice {
+        case .action(let action, let displayID): perform(action, displayID: displayID)
+        case .reaction(let emoji, let displayID): react(.emoji(emoji), displayID: displayID)
+        case nil: break
+        }
+    }
+
+    func cancelMenu() {
+        menuGeneration = UUID(); menuChoice = nil; menuTarget = nil
+        confirmDeleteForEveryone = nil; confirmDeleteForMe = nil; confirmClosePoll = nil
+    }
+
+    func confirmDeletion(_ reviewed: MessagingWireMessage, for scope: MessagingDeletionScope) {
+        guard let current = items.first(where: { $0.message?.id == reviewed.id }),
+              menuActions(current).contains(scope == .me ? .deleteForMe : .deleteForEveryone), let message = current.message else { return }
+        workspace.delete(message, for: scope)
     }
 
     func reply(displayID: String) {
@@ -431,7 +482,7 @@ private enum ExyteBubbleMetrics {
     }
 }
 
-/// Conversation (#182) : liste, bulles, heure, coches, réactions, avatars, menu et glisser pour répondre d'Exyte Chat,
+/// Conversation (#182) : liste, bulles, heure, coches, réactions et avatars d'Exyte Chat,
 /// aux couleurs Drivy ; composeur, sondages, citations, droits, E2EE, file protégée et états d'envoi restent Drivy.
 struct MessagingConversationView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -469,6 +520,15 @@ struct MessagingConversationView: View {
     }
 
     private var composer: MessagingComposerModel { thread.composer }
+    private var confirmationPresented: Binding<Bool> {
+        Binding(get: { thread.confirmDeleteForEveryone != nil || thread.confirmDeleteForMe != nil || thread.confirmClosePoll != nil },
+            set: { if !$0 { thread.confirmDeleteForEveryone = nil; thread.confirmDeleteForMe = nil; thread.confirmClosePoll = nil } })
+    }
+    private var confirmationTitle: String {
+        if thread.confirmDeleteForEveryone != nil { return "Supprimer pour tout le monde ?" }
+        if thread.confirmDeleteForMe != nil { return "Supprimer pour moi ?" }
+        return "Clore le sondage ?"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -491,6 +551,9 @@ struct MessagingConversationView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .modifier(lifecycle)
+        .sheet(item: $thread.menuTarget, onDismiss: { thread.completeMenuChoice() }) { target in
+            MessagingMessageMenu(thread: thread, displayID: target.id)
+        }
         .sheet(isPresented: $thread.showPollComposer) {
             MessagingPollComposer { poll, multiple in
                 await composer.send(MessagingPlainContent(poll: poll), pollAllowsMultiple: multiple)
@@ -511,17 +574,21 @@ struct MessagingConversationView: View {
         }
         .navigationDestination(isPresented: $showMembers) { MessagingMembersView(workspace: workspace) }
         .alert("Signalement transmis", isPresented: $reportSent) { Button("OK") {} }
-        .confirmationDialog("Supprimer pour tout le monde ?",
-                            isPresented: Binding(get: { thread.confirmDeleteForEveryone != nil },
-                                                 set: { if !$0 { thread.confirmDeleteForEveryone = nil } }),
-                            titleVisibility: .visible, presenting: thread.confirmDeleteForEveryone) { message in
-            Button("Supprimer pour tout le monde", role: .destructive) { workspace.delete(message, for: .everyone) }
-        }
-        .confirmationDialog("Clore le sondage ?",
-                            isPresented: Binding(get: { thread.confirmClosePoll != nil },
-                                                 set: { if !$0 { thread.confirmClosePoll = nil } }),
-                            titleVisibility: .visible, presenting: thread.confirmClosePoll) { message in
-            Button("Clore le sondage", role: .destructive) { Task { await workspace.closePoll(message) } }
+        .confirmationDialog(confirmationTitle, isPresented: confirmationPresented, titleVisibility: .visible) {
+            if let message = thread.confirmDeleteForEveryone {
+                Button("Supprimer pour tout le monde", role: .destructive) { thread.confirmDeletion(message, for: .everyone) }
+            } else if let message = thread.confirmDeleteForMe {
+                Button("Supprimer pour moi", role: .destructive) { thread.confirmDeletion(message, for: .me) }
+            } else if let message = thread.confirmClosePoll {
+                Button("Clore le sondage", role: .destructive) { Task { await workspace.closePoll(message) } }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            if thread.confirmDeleteForEveryone != nil {
+                Text("Le contenu sera retiré de cette conversation pour tous les participants. Les copies déjà reçues ne peuvent pas être effacées ici.")
+            } else if thread.confirmDeleteForMe != nil {
+                Text("Ce message sera masqué pour ton compte. Les autres participants le garderont.")
+            }
         }
     }
 
@@ -556,7 +623,7 @@ struct MessagingConversationView: View {
             .avatarBuilder { user in MessagingThreadAvatar(workspace: workspace, user: user) }
             .showScrollToBottomButton(false)
             .showNetworkConnectionProblem(false)
-            // Appui long et glisser sont portés par la ligne : plus courts, et le clavier se ferme avant le menu.
+            // La ligne ouvre le menu natif Drivy ; aucune alerte ni suppression par défaut d'Exyte.
             .showMessageMenuOnLongPress(false)
             .linkPreviewsEnabled(false)
             .setAvailableInputs([.text])
@@ -676,7 +743,7 @@ private struct MessagingThreadLifecycle: ViewModifier {
                                                 atBottom: thread.atBottom)
             }
             .onAppear { connectivity.start() }
-            .onDisappear { connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
+            .onDisappear { thread.cancelMenu(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
             .onChange(of: lastDelivered?.id) { _, _ in
                 guard let last = lastDelivered else { return }
                 if last.senderID == workspace.scope.accountID {
@@ -693,7 +760,7 @@ private struct MessagingThreadLifecycle: ViewModifier {
                 if available { Task { await workspace.refreshVisible(conversationID: conversationID) } }
             }
             .onChange(of: workspace.error) { _, failure in
-                if failure == .contextChanged || failure == .accessChanged { composer.reset() }
+                if failure == .contextChanged || failure == .accessChanged { thread.cancelMenu(); composer.reset() }
             }
             .onChange(of: workspace.resumeGeneration) { _, _ in Task { await composer.resume() } }
             .task {
@@ -747,7 +814,7 @@ private struct MessagingThreadRow: View {
                                                 onChanged: { swipeChanged($0) },
                                                 onEnded: { swipeEnded(item.id) }))
             .gesture(MessagingMenuPressGesture(isEnabled: !thread.reporting) {
-                thread.openMenu(params.showContextMenuClosure)
+                thread.openMenu(displayID: item.id)
             })
             .background(highlighted ? DrivyTheme.accentSoft : Color.clear,
                         in: RoundedRectangle(cornerRadius: DrivyRadius.field, style: .continuous))
@@ -785,7 +852,7 @@ private struct MessagingThreadRow: View {
                             .frame(height: reactionBand)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                if !thread.tapReactions(displayID: item.id) { thread.openMenu(params.showContextMenuClosure) }
+                                if !thread.tapReactions(displayID: item.id) { thread.openMenu(displayID: item.id) }
                             }
                     }
                 }
@@ -847,7 +914,8 @@ private struct MessagingThreadRow: View {
             }
         }
         ForEach(thread.menuActions(item).filter { $0 != .reply }, id: \.self) { action in
-            Button(action.title()) { thread.perform(action, displayID: item.id) }
+            Button(action.title(), role: action.nativeRole) { thread.perform(action, displayID: item.id) }
+                .accessibilityHint(action.consequence ?? "")
         }
         if let wire = item.message, workspace.mutationAttention(for: wire)?.needsAttention == true {
             Button("Réessayer la synchronisation") { workspace.retryMutations(for: wire) }
