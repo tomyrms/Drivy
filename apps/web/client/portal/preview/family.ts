@@ -27,11 +27,6 @@ export interface PreviewTools {
   nextId(): string;
 }
 
-/**
- * Synthetic behaviour of one rebuilt family. Seed adds records to the shared fixture store at load.
- * Read and write return undefined to let the next family or the generic store answer.
- * Writes reach a family only after idempotency, the slow/refused/conflict scenarios and JSON parsing.
- */
 /** A synthetic request to a route outside the school: session, accounts, invitations, opening links. Path after /app/bff/. */
 export interface PreviewBffRequest {
   method: string;
@@ -42,6 +37,11 @@ export interface PreviewBffRequest {
   scenario: PreviewScenario;
 }
 
+/**
+ * Synthetic behaviour of one rebuilt family. Seed adds records to the shared fixture store at load.
+ * Read and write return undefined to let the next family or the generic store answer.
+ * Writes reach a family only after idempotency, the slow/refused/conflict scenarios and JSON parsing.
+ */
 export interface PreviewFamily {
   name: string;
   /**
