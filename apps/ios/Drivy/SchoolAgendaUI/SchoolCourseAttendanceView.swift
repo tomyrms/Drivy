@@ -213,19 +213,7 @@ struct SchoolCourseAttendanceView: View {
                             .accessibilityIdentifier("course-payment-pending")
                     }
                 }
-                ForEach(row.payments.filter { $0.voidedAt == nil }) { payment in
-                    if model.isVoiding(payment.id, in: row) {
-                        Label("Annulation du règlement de \(SchoolCatalogFormatting.price(payment.amountCents)) en cours", systemImage: "clock")
-                            .font(.subheadline).foregroundStyle(DrivyTheme.muted)
-                    } else {
-                        Button {
-                            reversal = SchoolCourseReversal(kind: .payment(payment.id, payment.amountCents), enrollmentID: row.enrollmentId, learnerName: name(row))
-                        } label: { Label("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents))", systemImage: "arrow.uturn.backward") }
-                            .buttonStyle(DrivySecondaryButtonStyle())
-                            .accessibilityLabel("Annuler le règlement de \(SchoolCatalogFormatting.price(payment.amountCents)), \(name(row))")
-                            .accessibilityIdentifier("course-payment-void")
-                    }
-                }
+                SchoolCoursePaymentHistory(model: model, row: row, reversal: $reversal)
                 // Une action, pas un état (#226) : « Payé » reste réservé aux montants enregistrés.
                 Button { paying = row } label: { Label("Enregistrer un règlement", systemImage: "banknote") }
                     .buttonStyle(DrivySecondaryButtonStyle())
