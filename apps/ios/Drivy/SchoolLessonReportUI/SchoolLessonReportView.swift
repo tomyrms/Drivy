@@ -295,6 +295,8 @@ private struct SchoolLessonReportContent: View {
             Button("Terminer") { beginCompletion() }
                 .accessibilityIdentifier("lesson-confirm-completion")
             Button("Poursuivre la leçon", role: .cancel) { }
+        } message: {
+            Text(captureStatus == .collecting ? SchoolLessonCompletionMessage.withTrip : SchoolLessonCompletionMessage.withoutTrip)
         }
         .alert("Recharger et perdre la saisie ?", isPresented: $showReloadConfirmation) {
             Button("Recharger", role: .destructive) { Task { await model.load(discardingEdits: true) } }
