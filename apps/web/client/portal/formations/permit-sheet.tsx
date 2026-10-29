@@ -34,6 +34,7 @@ export function PermitSheet({ category }: { category: string }) {
   const tariffTypes: TariffType[] = ['INDIVIDUAL_LESSON', 'EXAM_SUPPORT', ...(school.modules.collectiveCoursesEnabled ? ['COLLECTIVE_COURSE' as const] : [])];
   const learners = programmes.reduce((sum, item) => sum + item.enrollments.current + item.enrollments.previous, 0);
   const [editing, setEditing] = useState(false);
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   // Un parcours ancien sans prix de référence est expliqué par son propre message : l'énoncé générique serait trompeur.
   const priceOnly = !!data && data.programmes.filter(item => !item.head.complete).every(item => !item.head.hasReferencePrice);
   const issues = (data?.issues ?? []).filter(issue => !(issue === 'PROGRAMME_INCOMPLETE' && priceOnly));
@@ -55,11 +56,14 @@ export function PermitSheet({ category }: { category: string }) {
       {view === 'historique'
         ? <HistoryView sheet={data} selection={routeQuery.selection} />
         : <Tabs value={view} onValueChange={next => { const value = sheetView(String(next)); go({ view: value, ...(selected && value !== 'tarifs' ? { programme: selected.offeringKey } : {}) }); }} className="cat-tabs">
-          {!editing && <TabsList aria-label={`Rubriques du permis ${data.categoryCode}`}>{rubrics.map(rubric => <TabsTrigger key={rubric.view} value={rubric.view}>{rubric.label}</TabsTrigger>)}</TabsList>}
+          {!editing && <div className="cat-tabbar">
+            <TabsList aria-label={`Rubriques du permis ${data.categoryCode}`}>{rubrics.map(rubric => <TabsTrigger key={rubric.view} value={rubric.view}>{rubric.label}</TabsTrigger>)}</TabsList>
+            <div className="cat-tabbar-actions" ref={setActionSlot} />
+          </div>}
           <TabsContent value={view} className="cat-tab-content">
             {view === 'tarifs'
               ? <TariffsPanel tariffs={data.tariffs} categoryCode={data.categoryCode} today={data.today} canConfigure={data.canConfigureCatalog} types={tariffTypes} proposals={proposals.data}
-                command={command} reload={loaded.reload} programmeCount={programmes.length} selection={routeQuery.selection} listLabel="Tarifs" onEditing={setEditing}
+                command={command} reload={loaded.reload} programmeCount={programmes.length} selection={routeQuery.selection} listLabel="Tarifs" onEditing={setEditing} actionSlot={actionSlot}
                 onSelect={id => inside({ view: 'tarifs', ...(id ? { selection: id } : {}) })} onConsultVersion={id => inside({ view: 'historique', selection: id })} onOpenTerms={id => navigate('conditions', { selection: id })} />
               : !selected
                 ? <Empty className="cat-empty"><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Aucun parcours pour ce permis</EmptyTitle></EmptyHeader>
@@ -69,7 +73,7 @@ export function PermitSheet({ category }: { category: string }) {
                     options={programmes.map(item => ({ value: item.offeringKey, label: programmeName(item, programmes) }))} onValueChange={key => { if (key) go({ view, programme: key }); }} />}
                   {!editing && !data.canConfigureCatalog && <p className="cat-hint">L’autorisation de configurer les tarifs est nécessaire pour modifier ce permis.</p>}
                   <ProgrammeSection key={`${view}:${selected.offeringKey}`} view={view as Exclude<SheetView, 'historique' | 'tarifs'>} sheet={data} programme={selected} command={command} proposals={proposals.data} reload={loaded.reload}
-                    onTariffs={() => inside({ view: 'tarifs' })} onHistory={() => inside({ view: 'historique' })} onEditing={setEditing} />
+                    onTariffs={() => inside({ view: 'tarifs' })} onHistory={() => inside({ view: 'historique' })} onEditing={setEditing} actionSlot={actionSlot} />
                 </>}
           </TabsContent>
         </Tabs>}
