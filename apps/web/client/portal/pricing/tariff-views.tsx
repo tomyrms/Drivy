@@ -11,7 +11,7 @@ import '../formations/formations.css';
 import './pricing.css';
 
 const badgeOf = (tariff: Tariff) => tariffStatusBadge(tariff.status, tariff.head, shortDate);
-const typeLine = (head: TariffVersion) => [tariffTypeLabels[head.type], head.durationMinutes ? duration(head.durationMinutes) : null].filter(Boolean).join(' · ');
+const typeLine = (head: TariffVersion) => [head.label.trim().toLocaleLowerCase('fr') === tariffTypeLabels[head.type].toLocaleLowerCase('fr') ? null : tariffTypeLabels[head.type], head.durationMinutes ? duration(head.durationMinutes) : null].filter(Boolean).join(' · ');
 
 /** Prix, unité, durée et état effectif lisibles sans ouvrir le détail. Un prix absent n'est jamais affiché comme 0. */
 export function TariffRow({ tariff, onOpen, archived = false }: { tariff: Tariff; onOpen: () => void; archived?: boolean }) {

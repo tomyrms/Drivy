@@ -3,7 +3,7 @@ import { Plus, ReceiptText } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import type { Tariff, TariffType, TextProposalsLite } from '../../formation-api';
-import { BackButton, ChangeList, CommandFeedback, ReviewDialog } from '../formations/catalogue-ui';
+import { BackButton, ChangeList, CommandFeedback, ReviewDialog, useFocusOnMount } from '../formations/catalogue-ui';
 import type { CatalogueCommand } from '../formations/catalogue-command';
 import { civilDate } from '../formations/formation-format';
 import { TariffForm } from './tariff-form';
@@ -45,7 +45,7 @@ export function TariffsPanel(props: TariffsPanelProps) {
     return <>
       <form className="cat-editor" noValidate onSubmit={submit} aria-labelledby="cat-tariff-editor-title">
         <header className="cat-editor-head">
-          <h2 id="cat-tariff-editor-title" tabIndex={-1} ref={node => node?.focus()}>{create ? (categoryCode ? `Nouveau tarif · permis ${categoryCode}` : 'Nouvelle prestation') : `Modifier ${editor.current?.head.label ?? 'le tarif'}`}</h2>
+          <TariffEditorTitle>{create ? (categoryCode ? `Nouveau tarif · permis ${categoryCode}` : 'Nouvelle prestation') : `Modifier ${editor.current?.head.label ?? 'le tarif'}`}</TariffEditorTitle>
           {props.programmeCount > 1 && <p className="cat-muted">Commun aux {props.programmeCount} parcours du permis {categoryCode}.</p>}
         </header>
         {!editor.reviewing && <CommandFeedback runner={command.runner} />}
@@ -77,6 +77,11 @@ export function TariffsPanel(props: TariffsPanelProps) {
       : <TariffList current={groups.current} archived={groups.archived} onOpen={tariff => props.onSelect(tariff.head.id)} />}
     {review}
   </section>;
+}
+
+function TariffEditorTitle({ children }: { children: string }) {
+  const ref = useFocusOnMount<HTMLHeadingElement>();
+  return <h2 id="cat-tariff-editor-title" tabIndex={-1} ref={ref}>{children}</h2>;
 }
 
 function TariffReviewDialog({ editor, command, today }: { editor: TariffEditor; command: CatalogueCommand; today: string }) {

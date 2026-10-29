@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
@@ -32,6 +32,13 @@ export function CommandFeedback({ runner, onDismiss, children }: { runner: Retur
       </div></Alert>}
     {runner.blockedReason && <Alert><AlertTitle>Confirmation en attente</AlertTitle><AlertDescription>{runner.blockedReason}</AlertDescription></Alert>}
   </>;
+}
+
+/** Titre d'une édition : reçoit le focus une seule fois à l'ouverture, jamais pendant la saisie. */
+export function useFocusOnMount<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => { ref.current?.focus(); }, []);
+  return ref;
 }
 
 export function BackButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
