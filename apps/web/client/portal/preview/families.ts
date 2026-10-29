@@ -5,6 +5,7 @@ import { catalogueFamily } from './families/catalogue';
 import { signalsFamily } from './families/signals';
 import { tripsFamily } from './families/trips';
 import { overviewFamily } from './families/overview';
+import { settingsFamily } from './families/settings';
 
 /** Rebuilt families add their synthetic behaviour here, one import per family. Pilots stay in transport.ts. */
-export const previewFamilies: readonly PreviewFamily[] = [teamFamily, planningFamily, catalogueFamily, signalsFamily, tripsFamily, overviewFamily];
+export const previewFamilies: readonly PreviewFamily[] = [teamFamily, planningFamily, catalogueFamily, signalsFamily, tripsFamily, overviewFamily, settingsFamily];

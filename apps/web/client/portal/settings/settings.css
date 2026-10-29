@@ -1,0 +1,24 @@
+.settings-page { width: min(100%, 880px); margin-inline: auto; display: grid; gap: 22px; }
+.settings-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.settings-heading h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.settings-card { display: grid; gap: 18px; padding: 22px 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.settings-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.settings-card-heading h2 { font-size: 1.05rem; font-weight: 650; }
+.settings-values { display: grid; margin: 0; }
+.settings-values > div { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding-block: 12px; border-top: 1px solid var(--border); }
+.settings-values > div:first-child { border-top: 0; padding-top: 0; }
+.settings-values dt { color: var(--muted-foreground); }
+.settings-values dd { margin: 0; overflow-wrap: anywhere; }
+.settings-school-name { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+.settings-school-name svg { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
+.settings-muted { color: var(--muted-foreground); font-weight: 400; }
+.settings-form { display: grid; gap: 18px; }
+.settings-readonly { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--muted); font-size: .9rem; }
+.settings-readonly span { color: var(--muted-foreground); }
+.settings-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 640px) {
+  .settings-heading h1 { font-size: 1.6rem; }
+  .settings-card { padding: 18px 16px; }
+  .settings-values > div { grid-template-columns: 1fr; gap: 4px; }
+  .settings-form-actions > * { flex: 1; }
+}
