@@ -25,6 +25,7 @@ final class SchoolInvitationWorkspace: Identifiable {
     let roles: [String]
     private(set) var school: SchoolDetails?
     private(set) var invitations: [SchoolInvitation] = []
+    private(set) var invitationReferences: [UUID: String] = [:]
     private(set) var nextCursor: String?
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
@@ -62,6 +63,7 @@ final class SchoolInvitationWorkspace: Identifiable {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var pageRequest = UUID()
     @ObservationIgnored private var seenCursors: Set<String> = []
+    @ObservationIgnored private var loadedPageCount = 1
     @ObservationIgnored private var storageAccessible = false
     @ObservationIgnored private var isInvalidated = false
 
@@ -105,12 +107,24 @@ final class SchoolInvitationWorkspace: Identifiable {
         return invitation.trainingCategoryCode.map { "Permis \($0)" }
     }
 
+    func reference(_ invitation: SchoolInvitation) -> String {
+        invitationReferences[invitation.id] ?? SchoolInvitationListPresentation.shortReference(invitation.id)
+    }
+
+    func matchingInvitations(query: String, filter: SchoolInvitationListFilter, now: Date) -> [SchoolInvitation] {
+        invitations.filter {
+            filter.includes(SchoolInvitationListPresentation.status($0, now: now))
+                && SchoolInvitationListPresentation.matches($0, training: trainingLabel($0), reference: reference($0), query: query)
+        }
+    }
+
     func dismissIssuedCode() { issuedCode = nil }
 
     func invalidate() {
         generation = UUID(); pageRequest = UUID(); isInvalidated = true
         issuedCode = nil; codeRecovery = nil
         school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []; instructors = []
+        invitationReferences = [:]; loadedPageCount = 1
         selectedOfferingIDs = []; selectedInstructorID = nil; creationOptionsError = nil
         email = ""; selectedRoles = [.learner]; errorMessage = nil; successMessage = nil
         isLoading = false; isLoadingMore = false; isBusy = false; storageAccessible = false
@@ -121,6 +135,7 @@ final class SchoolInvitationWorkspace: Identifiable {
         guard !allowedRoles.isEmpty else { fail(SchoolInvitationFailure.forbidden); return }
         generation = UUID(); pageRequest = UUID()
         let request = generation
+        let pagesToReload = loadedPageCount
         isLoading = true; isLoadingMore = false; storageAccessible = false; errorMessage = nil
         needsReload = true
         var storageError: String?
@@ -139,12 +154,36 @@ final class SchoolInvitationWorkspace: Identifiable {
             self.school = school
             guard school.status == "ACTIVE" else {
                 invitations = []; nextCursor = nil; selectedID = nil
+                invitationReferences = [:]; loadedPageCount = 1
                 throw SchoolInvitationFailure.schoolInactive
             }
             let page = try await api.invitations(schoolID: scope.schoolID, cursor: nil)
             guard request == generation else { return }
             try validate(page)
-            invitations = page.items.map(\.withoutCode); nextCursor = page.nextCursor; seenCursors = []
+            var refreshed = page.items.map(\.withoutCode)
+            var cursor = page.nextCursor
+            var refreshedCursors: Set<String> = []
+            var pageCount = 1
+            // Revalidate only pages already requested by the person. Search never starts a request.
+            // Publish the refreshed window atomically so a selected item on page 2 does not disappear.
+            while pageCount < pagesToReload, let next = cursor {
+                let following = try await api.invitations(schoolID: scope.schoolID, cursor: next)
+                guard request == generation else { return }
+                try validate(following)
+                guard following.nextCursor != next,
+                      following.nextCursor.map({ !refreshedCursors.contains($0) }) ?? true else {
+                    throw SchoolInvitationFailure.invalidCursor
+                }
+                refreshedCursors.insert(next)
+                for item in following.items.map(\.withoutCode) {
+                    if let index = refreshed.firstIndex(where: { $0.id == item.id }) {
+                        if item.version >= refreshed[index].version { refreshed[index] = item }
+                    } else { refreshed.append(item) }
+                }
+                cursor = following.nextCursor; pageCount += 1
+            }
+            invitations = refreshed; nextCursor = cursor; seenCursors = refreshedCursors; loadedPageCount = pageCount
+            invitationReferences = SchoolInvitationListPresentation.references(invitations, previous: invitationReferences)
             if !invitations.contains(where: { $0.id == selectedID }) { selectedID = nil }
             if canCreateCode {
                 creationOptionsError = nil
@@ -206,7 +245,8 @@ final class SchoolInvitationWorkspace: Identifiable {
                     if item.version >= invitations[index].version { invitations[index] = item }
                 } else { invitations.append(item) }
             }
-            nextCursor = page.nextCursor; isLoadingMore = false
+            nextCursor = page.nextCursor; isLoadingMore = false; loadedPageCount += 1
+            invitationReferences = SchoolInvitationListPresentation.references(invitations, previous: invitationReferences)
         } catch {
             guard request == generation, pageID == pageRequest else { return }
             isLoadingMore = false
@@ -354,6 +394,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             let listed = result.withoutCode
             if let index = invitations.firstIndex(where: { $0.id == result.id }) { invitations[index] = listed }
             else { invitations.insert(listed, at: 0) }
+            invitationReferences = SchoolInvitationListPresentation.references(invitations, previous: invitationReferences)
             if result.isCode {
                 successMessage = command.kind == .revokeInvitation ? "Code révoqué." : nil
                 receiveCode(result, command: command)
@@ -438,6 +479,7 @@ final class SchoolInvitationWorkspace: Identifiable {
             errorMessage = failure.localizedDescription
             if failure == .unauthorized || failure == .forbidden {
                 school = nil; invitations = []; nextCursor = nil; selectedID = nil
+                invitationReferences = [:]; loadedPageCount = 1
                 offerings = []; instructors = []; selectedOfferingIDs = []; selectedInstructorID = nil
                 creationOptionsError = nil
                 email = ""; selectedRoles = [.learner]; successMessage = nil; issuedCode = nil; codeRecovery = nil
