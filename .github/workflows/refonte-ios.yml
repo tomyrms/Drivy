@@ -37,9 +37,9 @@ on:
         type: boolean
         default: false
       unit_test_scope:
-        description: 'Avec unit_only : gps, agenda, reports, reactivity ou messaging pour un parcours ciblé, all pour toute la suite métier'
+        description: 'Avec unit_only : gps, agenda, reports, reactivity, messaging ou consent pour un parcours ciblé, all pour toute la suite métier'
         type: choice
-        options: [gps, agenda, reports, reactivity, messaging, all]
+        options: [gps, agenda, reports, reactivity, messaging, consent, all]
         default: gps
       ui_test_suite:
         description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), iPhone et iPad sans IPA ; vide pour tout'

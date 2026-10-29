@@ -14,7 +14,7 @@ ui_test_options=()
 [[ "$ui_iphone_only" == 0 || "$ui_iphone_only" == 1 ]] || { echo 'Mode iPhone seul invalide (0 ou 1).' >&2; exit 1; }
 # iPhone seul reste un contrôle intermédiaire ciblé : jamais pour la campagne complète ou finale.
 [[ "$ui_iphone_only" == 0 || -n "$ui_test_suite" ]] || { echo 'Le mode iPhone seul exige une sélection UI.' >&2; exit 1; }
-[[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging ou all).' >&2; exit 1; }
+[[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == consent || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging, consent ou all).' >&2; exit 1; }
 [[ "$visual_only" != 1 || ( "$unit_only" == 0 && -z "$ui_test_suite" ) ]] || { echo 'Choisir les captures visuelles ou les tests, pas les deux.' >&2; exit 1; }
 
 if [[ -n "$ui_test_suite" ]]; then
@@ -36,6 +36,8 @@ if [[ -n "$ui_test_suite" ]]; then
 elif [[ "$unit_only" == 1 ]]; then
   if [[ "$unit_test_scope" == all ]]; then
     test_options=(-only-testing:DrivyTests)
+  elif [[ "$unit_test_scope" == consent ]]; then
+    test_options=(-only-testing:DrivyTests/SchoolStartNowConsentTests)
   elif [[ "$unit_test_scope" == messaging ]]; then
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
       MessagingExyteThreadTests; do

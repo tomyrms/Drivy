@@ -65,7 +65,7 @@ import UIKit
     var answer: SchoolRecordingChoice.Status? { selection ?? recorded }
     /// Aucune demande d’accord en suspens ni droit retiré : sinon aucun trajet ne part d’ici.
     var consentIsClear: Bool {
-        consent.notice != nil && !consent.needsReload && consent.relatedPending.isEmpty && !consent.hasOldScope
+        consent.notice != nil && !consent.needsReload && consent.relatedPending.isEmpty && !consent.hasOldScope && consent.deferredRefusal == nil
             && !consent.accessRevoked
     }
     /// L’accord se lit encore (ni réponse ni erreur), ou se relit : le départ attend, pour ne pas partir sans GPS
@@ -78,7 +78,7 @@ import UIKit
     var display: Display {
         .resolve(hasNotice: consent.notice != nil && (!consent.needsReload || consent.isLoading), isLoading: consent.isLoading,
             hasError: consent.errorMessage != nil,
-            accessRevoked: consent.accessRevoked, hasPendingOrOldScope: !consent.relatedPending.isEmpty || consent.hasOldScope,
+            accessRevoked: consent.accessRevoked, hasPendingOrOldScope: !consent.relatedPending.isEmpty || consent.hasOldScope || consent.deferredRefusal != nil,
             answer: answer, isChanging: isChanging)
     }
     /// Le trajet est voulu et cet appareil peut l’enregistrer (l’autorisation d’iOS peut encore être demandée).
