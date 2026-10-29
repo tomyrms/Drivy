@@ -656,6 +656,7 @@ struct SchoolRootView: View {
                 await workspace?.loadPhoto(for: id)
                 return await workspace?.photo(for: id)
             },
+            schoolWorkspace: workspace,
             // Le nom de l’école n’est dit qu’à un compte de plusieurs écoles (#176).
             schoolName: person.memberships.count > 1 ? membership.schoolName : nil,
             currentScope: {
