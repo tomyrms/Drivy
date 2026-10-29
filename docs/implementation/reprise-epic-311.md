@@ -59,6 +59,15 @@ En cours : Planning → #329 participants, attente, appel, règlements, validati
 
 La branche coordinatrice est envoyée sur `origin/codex/epic-311-rebuild` pour sauvegarde, avec `[skip ci]` en tête : aucun workflow lancé. Pas de PR à ce stade.
 
+### Vague du 29 octobre, 17 h
+
+Modèles des agents : Opus pour le complexe, Sonnet pour le simple, jamais Fable (consigne du porteur).
+- Entrée #319 : agent Opus, worktree `Drivy-claude-311-entry`, branche `claude/311-entry`, port 5194.
+- Ouverture et guide #320 : agent Opus, worktree `Drivy-claude-311-setup`, branche `claude/311-setup`, port 5195.
+- Participants #329 : agent Planning (Sonnet) repris sur `claude/311-planning` (instantanés wip 4551b9f1, 5b2f68de).
+- En attente : fin de Formations et tarifs (agent Catalogue, Sonnet, branche `claude/311-catalogue`, notes wip dd37e256 non relues).
+Déjà fait par le coordinateur depuis midi : Signalements #331, Trajets #332, Préférences #333, Accueil #321, Réglages #330 (sauf recherche), crochet `bff` du transport d’aperçu ; publication `ce3b3559`.
+
 ## Vagues suivantes prévues
 
 - Vague 2 : école (#320 ouverture/guide, #321 accueil, #330 réglages/confidentialité/GPS, #331 signalements), trajets (#332), participants et appel des cours (#329, même propriétaire que #328), entrée et compte (#319, #333).
