@@ -77,7 +77,7 @@ export async function verifySchoolCodeEntry(options:{browser:Browser;origin:stri
       const preview=page.getByRole('region',{name:school.name,exact:true});
       await preview.getByRole('heading',{name:school.name,exact:true}).waitFor();
       step('identité présentée avant confirmation');
-      assert(await preview.locator('.invitation-facts').getByText(`${firstName} ${lastName}`,{exact:true}).isVisible()
+      assert(await preview.locator('.entry-facts').getByText(`${firstName} ${lastName}`,{exact:true}).isVisible()
         &&await page.getByLabel('Code ou lien reçu',{exact:true}).count()===0,
         `Le code du ${fresh?'nouveau compte':'compte existant'} est conservé jusqu’à l’aperçu de l’école et de l’identité, sans nouvelle saisie`);
       const join=preview.getByRole('button',{name:'Rejoindre cette école',exact:true});
@@ -129,7 +129,7 @@ export async function verifySchoolCodeEntry(options:{browser:Browser;origin:stri
       // Ne jamais conserver le code, les identifiants, les champs saisis, l'URL ou le message brut d'exception.
       const ui=await page?.evaluate(()=>({
         codeField:!!document.querySelector('input[name="code"]'),accountFields:!!document.querySelector('input[name="password"]'),
-        preview:!!document.querySelector('.invitation-facts'),identityPresented:!!document.querySelector('.invitation-facts dd'),
+        preview:!!document.querySelector('.entry-facts'),identityPresented:!!document.querySelector('.entry-facts dd'),
         alerts:document.querySelectorAll('[role="alert"]').length,confirmationControls:document.querySelectorAll('[role="checkbox"],input[type="checkbox"]').length,
       })).catch(()=>null);
       await writeFile(resolve(artifactDirectory,`99-code-${entry}-diagnostic.json`),JSON.stringify({stage,failure,ui:ui??null},null,2)).catch(()=>undefined);
