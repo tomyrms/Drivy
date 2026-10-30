@@ -1,0 +1,103 @@
+name: Métadonnées · Classement du backlog
+on:
+  push:
+    branches: ['metadata/labels-colors-20261030']
+    paths: ['.github/workflows/roadmap-issue-labels-once.yml']
+permissions:
+  issues: write
+concurrency:
+  group: drivy-roadmap-labels-once
+  cancel-in-progress: false
+jobs:
+  labels:
+    if: github.repository == 'tomyrms/Drivy' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ajouter les labels relus, sans changer les priorités ni les états
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json, os, urllib.request, urllib.error
+          repo = os.environ['GITHUB_REPOSITORY']
+          if repo != 'tomyrms/Drivy':
+              raise SystemExit('Dépôt inattendu')
+          # Classification à partir des descriptions des 59 issues ouvertes relues.
+          # Ces labels ne constituent ni un feu vert de développement ni une priorité.
+          groups = [
+              ('type:feature area:ios area:web area:backend', [37, 43, 44, 45, 50, 54]),
+              ('type:feature area:ios area:backend', [52, 63, 65, 70, 72, 73, 74, 76, 77, 97]),
+              ('type:feature area:ios', [71, 205]),
+              ('type:ux area:ios', [66, 111, 194]),
+              ('type:security area:ios area:backend', [67, 69]),
+              ('type:security area:infra area:backend', [68]),
+              ('type:qa area:ios', [55]),
+              ('type:qa area:ios area:backend', [78]),
+              ('type:qa area:ios area:web area:backend', [83, 131]),
+              ('type:qa area:infra area:ios area:web area:backend', [84]),
+              ('type:ux area:ios area:web', [99, 107, 108, 109, 110, 112, 114, 115, 116, 119, 120, 121, 122, 123, 124, 126, 127, 128, 129, 130, 132, 192]),
+              ('type:ux area:ios area:web area:backend', [105]),
+              ('type:refactor area:ios area:web area:backend', [106]),
+              ('type:bug area:ios', [193]),
+              ('type:qa area:web', [248]),
+              ('type:feature area:web', [249, 251]),
+              ('type:ux area:web', [250, 252]),
+          ]
+          plan = {}
+          for text, numbers in groups:
+              for number in numbers:
+                  if number in plan:
+                      raise SystemExit('Doublon dans le plan')
+                  plan[number] = text.split()
+          excluded = {340, *range(341, 347), *range(348, 370)}
+          if excluded.intersection(plan) or 347 in plan:
+              raise SystemExit('Le plan contient un ticket exclu')
+          headers = {'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Drivy-backlog-labels'}
+          def api(path, method='GET', payload=None):
+              body = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request('https://api.github.com/repos/' + repo + '/' + path, data=body, headers=headers, method=method)
+              if body is not None:
+                  req.add_header('Content-Type', 'application/json')
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  raise RuntimeError('GitHub HTTP ' + str(exc.code) + '; aucune réponse privée journalisée') from None
+          available = set()
+          page = 1
+          while True:
+              batch = api('labels?per_page=100&page=' + str(page))
+              available.update(item['name'] for item in batch)
+              if len(batch) < 100:
+                  break
+              page += 1
+          missing = set(label for labels in plan.values() for label in labels) - available
+          if missing:
+              raise SystemExit('Labels absents : ' + ', '.join(sorted(missing)))
+          verified, changed, skipped = [], [], []
+          try:
+              for number, desired in sorted(plan.items()):
+                  issue = api('issues/' + str(number))
+                  if 'pull_request' in issue or issue.get('state') != 'open':
+                      skipped.append(number)
+                      continue
+                  old = {x['name'] for x in issue['labels']}
+                  additions = sorted(set(desired) - old)
+                  if additions:
+                      api('issues/' + str(number) + '/labels', 'POST', {'labels': additions})
+                      changed.append(number)
+                  actual = api('issues/' + str(number))
+                  actual_labels = {x['name'] for x in actual['labels']}
+                  if not set(desired).issubset(actual_labels):
+                      raise RuntimeError('Vérification incomplète pour #' + str(number))
+                  verified.append(number)
+                  print('#' + str(number) + ' : labels vérifiés' + (' (ajout)' if additions else ' (déjà présents)'))
+          finally:
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+                  out.write('## Classement du backlog\n\n')
+                  out.write(f'{len(verified)} issues ouvertes vérifiées ; {len(changed)} complétées ; {len(skipped)} ignorées car fermées ou non applicables.\n\n')
+                  out.write('Vérifiées : ' + ', '.join('#' + str(n) for n in verified) + '\n\n')
+                  out.write('Types et zones uniquement. Aucun état, priorité, description, couleur, assignation, branche de produit ou déploiement modifié. Les initiatives #45 et #63 restent exploratoires.\n')
+          if len(verified) + len(skipped) != len(plan):
+              raise SystemExit('Classement partiel')
