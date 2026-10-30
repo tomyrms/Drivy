@@ -235,7 +235,7 @@ async function run(options:FormationsOptions):Promise<void> {
   await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
   await page.getByRole('heading',{name:'Vérifier la formation',exact:true}).waitFor();
   const beforeCreation=await counts();
-  const acknowledgement=page.getByLabel('J’ai relu les formations et tarifs sélectionnés. Je confirme leur mise à disposition.',{exact:true});
+  const acknowledgement=page.getByRole('checkbox',{name:'J’ai relu les formations et tarifs sélectionnés. Je confirme leur mise à disposition.',exact:true});
   await acknowledgement.waitFor();
   assert(!(await acknowledgement.isChecked())&&beforeCreation.offerings===afterCompetencies.offerings,'La formation reste un brouillon sans confirmation précochée ni publication anticipée');
   await acknowledgement.check();await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).click();
