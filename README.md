@@ -77,7 +77,7 @@ apps/
   api/                 API métier et persistance
 infra/                 Environnements et configuration d'exploitation
 scripts/               Développement, builds et déploiement
- docs/
+docs/
   implementation/      Décisions, livraisons et état vérifiable
   qa/                  Rapports et qualification
   product/             Roadmap, fiches d'idées et organisation du suivi
