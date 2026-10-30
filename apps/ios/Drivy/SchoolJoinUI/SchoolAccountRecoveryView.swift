@@ -26,8 +26,11 @@ struct SchoolAccountRecoveryView: View {
                             .buttonStyle(DrivyPrimaryButtonStyle())
                             .accessibilityIdentifier("account-recovery-open")
                         } else {
-                            SchoolErrorNotice(message: "La récupération par e-mail n’est pas encore disponible.", retry: reload)
+                            SchoolErrorNotice(message: "La récupération par e-mail n’est pas activée pour le moment.")
                                 .accessibilityIdentifier("account-recovery-unavailable")
+                            Button("Revenir à la connexion") { dismiss() }
+                                .buttonStyle(DrivyPrimaryButtonStyle())
+                                .accessibilityIdentifier("account-recovery-return")
                         }
                     } else {
                         ProgressView("Vérification de la récupération…")

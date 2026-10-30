@@ -11,14 +11,16 @@ struct SchoolSignInLanding: View {
     let joinWithCode: () -> Void
     var clearError: () -> Void = {}
     var recoveryClient: SchoolAccountRecoveryClient? = nil
+    var credentialsRejected = false
     @State private var email = ""
     @State private var password = ""
     @State private var showsRecovery = false
+    @State private var checkedFields: Set<SchoolAccountFieldID> = []
     @FocusState private var focus: SchoolAccountFieldID?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var canSubmit: Bool {
-        isConfigured && !isWorking && email.contains("@") && !password.isEmpty
+        isConfigured && !isWorking && SchoolSignInValidation.canSubmit(email: email, password: password)
     }
 
     var body: some View {
@@ -58,6 +60,8 @@ struct SchoolSignInLanding: View {
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!canSubmit)
+                    .accessibilityHint(isWorking ? "Connexion en cours." : (SchoolSignInValidation.emailIssue(email)
+                        ?? SchoolSignInValidation.passwordIssue(password) ?? ""))
                     .accessibilityIdentifier("school-sign-in")
                     Button(action: joinWithCode) { Label("J’ai un code", systemImage: "number") }
                         .buttonStyle(DrivySecondaryButtonStyle())
@@ -66,8 +70,14 @@ struct SchoolSignInLanding: View {
                 }
             }
         }
-        .onChange(of: email) { _, _ in if errorMessage != nil { clearError() } }
-        .onChange(of: password) { _, _ in if errorMessage != nil { clearError() } }
+        .onChange(of: email) { _, _ in if credentialsRejected { clearError() } }
+        .onChange(of: password) { _, _ in if credentialsRejected { clearError() } }
+        .onChange(of: focus) { previous, _ in
+            if let previous { checkedFields.insert(previous) }
+        }
+        .onChange(of: errorMessage) { _, message in
+            if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+        }
         .sheet(isPresented: $showsRecovery) {
             if let recoveryClient { SchoolAccountRecoveryView(client: recoveryClient) }
         }
@@ -75,10 +85,16 @@ struct SchoolSignInLanding: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            if !isWorking, let errorMessage {
+                SchoolErrorNotice(message: errorMessage)
+                    .accessibilityIdentifier("school-sign-in-error")
+            }
             SchoolAccountField(label: "E-mail", text: $email, kind: .email, id: .email, focus: $focus,
+                               error: checkedFields.contains(.email) ? SchoolSignInValidation.emailIssue(email) : nil,
                                identifier: "school-sign-in-email", onSubmit: { focus = .password })
             SchoolAccountField(label: "Mot de passe", text: $password, kind: .currentPassword, id: .password, focus: $focus,
-                               error: isWorking ? nil : errorMessage, identifier: "school-sign-in-password",
+                               error: checkedFields.contains(.password) ? SchoolSignInValidation.passwordIssue(password) : nil,
+                               identifier: "school-sign-in-password",
                                submitLabel: .go, onSubmit: submit)
             if recoveryClient != nil {
                 Button("Mot de passe oublié") {
@@ -92,7 +108,12 @@ struct SchoolSignInLanding: View {
     }
 
     private func submit() {
-        guard canSubmit else { return }
+        guard isConfigured, !isWorking else { return }
+        checkedFields.formUnion([.email, .password])
+        guard canSubmit else {
+            focus = SchoolSignInValidation.emailIssue(email) != nil ? .email : .password
+            return
+        }
         focus = nil
         signIn(email, password)
     }

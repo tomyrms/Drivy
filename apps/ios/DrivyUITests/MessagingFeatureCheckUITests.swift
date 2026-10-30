@@ -194,6 +194,27 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         capture("08-epingle")
     }
 
+    func testOpeningAPinKeepsItsPreviewAndNextIsAnExplicitAction() {
+        let app = launch(["-messaging-ui-two-pins"])
+        openGeneral(app)
+        let pinned = app.buttons["messaging.pinned"]
+        let next = app.buttons["messaging.pinned.next"]
+        XCTAssertTrue(waitFor(pinned, "label CONTAINS 'Pensez aux papiers du permis'"))
+        XCTAssertTrue(next.exists)
+        let firstPreview = pinned.label
+        pinned.tap()
+        XCTAssertTrue(waitFor(text(app, "Pensez aux papiers du permis"), "hittable == true"))
+        XCTAssertEqual(pinned.label, firstPreview, "Ouvrir le message ne doit pas afficher une autre épingle")
+        next.tap()
+        XCTAssertTrue(waitFor(pinned, "label CONTAINS 'Rendez-vous à 14 h'"))
+        let secondPreview = pinned.label
+        pinned.tap()
+        XCTAssertTrue(waitFor(text(app, "Rendez-vous à 14 h devant l'auto-école"), "hittable == true"))
+        XCTAssertEqual(pinned.label, secondPreview)
+        next.tap()
+        XCTAssertEqual(pinned.label, firstPreview, "Le parcours explicite boucle sans ouvrir de message")
+    }
+
     func testSearchInsideConversationFindsMessage() {
         let app = launch()
         openGeneral(app)
