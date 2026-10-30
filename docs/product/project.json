@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "owner": "tomyrms",
+  "repository": "tomyrms/Drivy",
+  "title": "Drivy — Product Roadmap",
+  "private": true,
+  "description": "Vision produit sans issues prématurées ; suivi des développements existants et validation utilisateur.",
+  "roadmap_file": "ROADMAP.md",
+  "initiatives": [
+    {"id": "R01", "title": "Vision R01 — Administration de la plateforme Drivy", "maturity": "Idée"},
+    {"id": "R02", "title": "Vision R02 — Accès d'assistance autorisé", "maturity": "À étudier"},
+    {"id": "R03", "title": "Vision R03 — Application modulaire et offres commerciales", "maturity": "Idée"},
+    {"id": "R04", "title": "Vision R04 — Abonnements et facturation SaaS de Drivy", "maturity": "Idée"},
+    {"id": "R05", "title": "Vision R05 — Site vitrine et commercialisation", "maturity": "Idée"}
+  ],
+  "status_options": ["Backlog", "Prêt", "En cours", "À tester par Tomas", "Tests et validation", "Bloqué", "Terminé"],
+  "fields": [
+    {"name": "Nature", "type": "SINGLE_SELECT", "options": ["Initiative", "Issue"]},
+    {"name": "Maturité", "type": "SINGLE_SELECT", "options": ["Idée", "À étudier", "Cadré", "Prêt à découper", "En développement"]},
+    {"name": "Horizon", "type": "SINGLE_SELECT", "options": ["Maintenant", "Ensuite", "Plus tard", "À définir"]},
+    {"name": "Priorité", "type": "SINGLE_SELECT", "options": ["P0", "P1", "P2", "P3"]},
+    {"name": "Effort", "type": "SINGLE_SELECT", "options": ["À estimer", "XS", "S", "M", "L", "XL"]},
+    {"name": "Début cible", "type": "DATE"},
+    {"name": "Fin cible", "type": "DATE"}
+  ],
+  "views": [
+    {"name": "Vision produit", "layout": "TABLE_LAYOUT", "filter": "nature:Initiative"},
+    {"name": "Développement", "layout": "BOARD_LAYOUT", "filter": "nature:Issue is:open"},
+    {"name": "Backlog", "layout": "TABLE_LAYOUT", "filter": "nature:Issue"},
+    {"name": "Roadmap", "layout": "ROADMAP_LAYOUT", "filter": "nature:Initiative"}
+  ],
+  "labels": [
+    {"name": "type:bug", "color": "D73A4A", "description": "Dysfonctionnement décrit ; reproduction actuelle à vérifier"},
+    {"name": "type:feature", "color": "0E8A16", "description": "Fonctionnalité à construire ou compléter"},
+    {"name": "type:ux", "color": "A371F7", "description": "Interface, navigation et expérience utilisateur"},
+    {"name": "type:refactor", "color": "5319E7", "description": "Organisation du code sans changement fonctionnel visé"},
+    {"name": "type:qa", "color": "FBCA04", "description": "Tests, vérifications et qualification"},
+    {"name": "type:security", "color": "B60205", "description": "Sécurité, confidentialité et protections"},
+    {"name": "area:ios", "color": "1D76DB", "description": "Application native iPhone et iPad"},
+    {"name": "area:web", "color": "245BD6", "description": "Portail web et web app mobile"},
+    {"name": "area:backend", "color": "006B75", "description": "API, services et données"},
+    {"name": "area:infra", "color": "6F42C1", "description": "Infrastructure, CI et exploitation"}
+  ],
+  "seed_issue_labels": {
+    "37": ["type:feature", "area:ios", "area:web", "area:backend"],
+    "50": ["type:feature", "area:ios", "area:web", "area:backend"],
+    "55": ["type:qa", "area:ios"],
+    "65": ["type:feature", "area:ios", "area:backend"],
+    "68": ["type:security", "area:infra", "area:backend"],
+    "78": ["type:qa", "area:ios", "area:backend"],
+    "84": ["type:qa", "area:infra", "area:ios", "area:web", "area:backend"],
+    "99": ["type:ux", "area:ios", "area:web"],
+    "106": ["type:refactor", "area:ios", "area:web", "area:backend"],
+    "193": ["type:bug", "area:ios"],
+    "194": ["type:ux", "area:ios"],
+    "205": ["type:feature", "area:ios"]
+  },
+  "excluded_issue_numbers": [340, 341, 342, 343, 344, 345, 346, 348, 349, 350, 351, 352, 353, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 369],
+  "notes": [
+    "Les cinq initiatives restent des brouillons Projects : aucune issue de dépôt n'est créée.",
+    "Ne pas écraser les brouillons, priorités ou statuts déjà modifiés par un utilisateur.",
+    "Importer seulement les issues existantes encore ouvertes, sans en déduire qu'elles restent intégralement à coder.",
+    "La liste d'exclusion protège le lot de finition annulé, sans toucher à la refonte #311 ou à la PR #347.",
+    "Ne pas inventer de dates ni activer une clôture automatique après fusion.",
+    "Contrôler le regroupement du Kanban par Status et les champs de dates de la Roadmap dans l'interface GitHub."
+  ]
+}
