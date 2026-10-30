@@ -21,6 +21,16 @@ Accord explicite du porteur sur `f0aa7dce17372ece43e7626346db21ae79221230`. Mast
 - PASS après bascule : SHA servi, HTML exact sur sept adresses, 104 fichiers statiques à l'empreinte, CSP `default-src 'none'` sans `unsafe-eval`, session anonyme `no-store`, 401 sur `/app/bff/me`, plan de rollback valide, zéro erreur `journalctl` du web sur dix minutes, Edge 1440 et 390 sans débordement ni erreur JavaScript sur quatre pages publiques. Seul 401 console : préférences sans connexion, comportement documenté.
 - NOT_EXECUTED : parcours connecté, données réelles, essai du porteur, suites `--extended`, restauration de la sauvegarde. Rollback non exécuté.
 
+### 30 octobre 2026, 18:30 Europe/Zurich — essai web validé, trois suites étendues vertes
+
+Essai web validé par le porteur sur `f0aa7dce`. Suites `--extended` exécutées après ce retour, sur la PR #384.
+
+- PASS : [run 41098462805](https://github.com/tomyrms/Drivy/actions/runs/41098462805), `fca6a78e`, 164 contrôles, Chromium, OIDC, BFF, API et PostgreSQL isolés, données synthétiques. Formations et tarifs, saisie par code, récupération de compte réunis dans le même run. Le code applicatif est identique à `f0aa7dce`, la version déployée.
+- Saisie par code et récupération n'ont demandé aucune adaptation : la limite notée le 30 octobre était fausse pour ces deux suites. Formations et tarifs a été réaligné sur le portail : 29 assertions conservées, dont quatre adaptées à des comportements changés par #311 et listées dans la PR. Aucun défaut applicatif trouvé.
+- Les trois suites sont raccordées à `validation-finale.yml`. Le parcours de base reste inchangé par défaut.
+- Typage du harnais sans erreur dans les fichiers modifiés ; 3 erreurs préexistantes sur master dans d'autres scripts.
+- NOT_EXECUTED : navigateur physique, lecteur d'écran, compte réel. Récupération par e-mail toujours désactivée en production.
+
 <!-- ios-batch-15-20261029 -->
 ## 29 octobre 2026 — IPA 447 : 15 issues supplémentaires, 40 réalisées et fermées
 
