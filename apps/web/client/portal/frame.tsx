@@ -7,7 +7,7 @@ import type { SectionKey } from '../console/sections';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
-import { availableWorkspaces, currentWorkspace, isNavItemCurrent, type PortalWorkspaceKey } from './destinations';
+import { availableWorkspaces, currentWorkspace, isNavItemCurrent, navigationQueryFor, type PortalWorkspaceKey } from './destinations';
 
 export type PortalDestination = SectionKey;
 export interface PortalFrameProps {
@@ -111,7 +111,7 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
               const Icon = workspaceIcons[item.key], target = item.items[0]!, current = item.key === workspace?.key;
               return <li key={item.key}>
                 <Button variant="ghost" className="portal-nav-item" aria-current={current ? 'page' : undefined} aria-label={item.label}
-                  onClick={() => { if (!current || currentItem !== target) onNavigate(target.section, target.query); }}>
+                  onClick={() => { if (!current || currentItem !== target) onNavigate(target.section, navigationQueryFor(item, target, activeQuery)); }}>
                   <Icon aria-hidden="true" /><span className="portal-nav-label" aria-hidden="true">{item.label}</span><span className="portal-nav-short" aria-hidden="true">{item.shortLabel}</span>
                 </Button>
               </li>;
@@ -123,7 +123,7 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
         {workspace && workspace.items.length > 1 && <nav className="portal-local-nav" aria-label={workspace.label}>
           <ul>{workspace.items.map(item => <li key={`${item.section}:${item.query?.audience ?? ''}`}>
             <Button variant="ghost" className="portal-local-item" aria-current={item === currentItem ? 'page' : undefined}
-              onClick={() => { if (item !== currentItem) onNavigate(item.section, item.query); }}>{item.label}</Button>
+              onClick={() => { if (item !== currentItem) onNavigate(item.section, navigationQueryFor(workspace, item, activeQuery)); }}>{item.label}</Button>
           </li>)}</ul>
         </nav>}
         <main id="portal-content" ref={content} tabIndex={-1} className="portal-content" aria-label={currentItem?.label ?? workspace?.label}>{children}</main>

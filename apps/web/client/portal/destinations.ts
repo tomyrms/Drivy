@@ -27,7 +27,11 @@ export const portalWorkspaces: readonly PortalWorkspace[] = [
 ];
 
 /** Sections reached from a parent page (versioned records, references) keep the parent's workspace. */
-const contextual: Partial<Record<SectionKey, SectionKey>> = { offres: 'formations', referentiels: 'formations', procedures: 'formations', conditions: 'prestations' };
+const contextual: Partial<Record<SectionKey, SectionKey>> = { offres: 'formations', referentiels: 'formations', procedures: 'formations', conditions: 'formations' };
+
+/** A formation preparation started from Formations or Prestations keeps that workspace; school preparation stays in Réglages. */
+const cataloguePreparation = (section: SectionKey, query: NavigationQuery): SectionKey | null =>
+  section === 'apercu' && (query.from === 'formations' || query.from === 'prestations') ? query.from : null;
 
 export function availableWorkspaces(available: ReadonlySet<SectionKey>) {
   return portalWorkspaces.map(workspace => ({ ...workspace, items: workspace.items.filter(item => available.has(item.section)) }))
@@ -35,9 +39,24 @@ export function availableWorkspaces(available: ReadonlySet<SectionKey>) {
 }
 
 export function isNavItemCurrent(item: PortalNavItem, section: SectionKey, query: NavigationQuery = {}) {
-  const resolved = contextual[section] ?? section;
+  const resolved = cataloguePreparation(section, query) ?? contextual[section] ?? section;
   if (item.section !== resolved) return false;
   return item.query?.audience === undefined || item.query.audience === (query.audience ?? 'learners');
+}
+
+/**
+ * Query carried when a local destination is opened. Planning shares its monitor and displayed period;
+ * other spaces only keep their own public. A selection from another page never follows the change.
+ */
+export function navigationQueryFor(workspace: PortalWorkspace, item: PortalNavItem, query: NavigationQuery = {}): NavigationQuery {
+  if (workspace.key === 'planning') return {
+    ...(query.instructor ? { instructor: query.instructor } : {}),
+    ...(query.week ? { week: query.week } : {}),
+    ...(query.day ? { day: query.day } : {}),
+    ...(query.from === 'equipe' && item.section !== 'agenda' ? { from: 'equipe' as const } : {}),
+    ...item.query,
+  };
+  return { ...item.query };
 }
 
 export function currentWorkspace(workspaces: ReturnType<typeof availableWorkspaces>, section: SectionKey, query: NavigationQuery = {}) {
