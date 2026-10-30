@@ -1,5 +1,16 @@
 # État de la réalisation
 
+<!-- reprise-372-20261030 -->
+## 30 octobre 2026 — reprise #372 : pile iOS à jour de master, IPA 447 retenue, plan web prêt
+
+Master `f0aa7dce17372ece43e7626346db21ae79221230` contient #347. Chaîne iOS vérifiée linéaire (#337 ⊂ #338 ⊂ #339) ; `master` intégré par fusions additives sans force-push : `74436ffd` (#337), `35ed4546` (#338), `0f8e33c7` (#339). Seul conflit : ce fichier, deux historiques conservés, contrôle automatique des lignes. Master avait remplacé un octet invalide de la ligne « alerte de mention » par un caractère valide : édition acceptée.
+
+**IPA candidate : Drivy 0.7.0 (447), non signée**, [artefact](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882) valable jusqu'au 12 novembre 2026, run 40959499844 sur `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`, SHA-256 `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`. Réutilisée sans recompilation : aucune différence entre `633f20d3` et `0f8e33c7` sur `apps/ios/Drivy`, `project.yml`, `Package.resolved`, `build-ipa.sh`, `messaging-qualification.sh`, `ipa-essai.yml` ; seuls deux fichiers de `DrivyTests` diffèrent. Essai du porteur attendu : `NOT_EXECUTED`. Fusions #337 → #338 → #339 et tests iOS en attente de ce retour.
+
+**Web : candidat `f0aa7dce`**, servi `4af4b0e6` (lu publiquement). Delta de 10 fichiers sous `apps/web/client`, trois de test compris ; aucun changement de BFF, dépendances, API, contrat, migration ni infra. Typage et 16 tests des fichiers modifiés réussis ; build Node 24.22.1, 105 fichiers, identité de build contrôlée. Plan `deploy-web-311.py` exécuté en lecture seule : `deployment-plan`, frontend seul, sans migration, cinq services sains. **Aucune écriture sur le serveur** ; `--execute` attend l'accord du porteur. Depuis Windows, lancer ce script en PowerShell : Git Bash réécrit `/opt/...`.
+
+**Suites `--extended` : non exécutées**, après l'essai web. Sélecteurs recoupés au portail sans exécution : récupération de compte 6/6 présents ; saisie par code 15/16, le seizième étant un gabarit dynamique bien présent dans `.entry-facts` ; formations et tarifs à réécrire en partie (onglets au lieu de la navigation par liens, `.cat-competency-*`, déplacement par menu, messages de tarif et de reprise changés). Ce recoupement ne vaut pas résultat de test. La note précédente surestimait donc l'écart des deux premières.
+
 <!-- ios-batch-15-20261029 -->
 ## 29 octobre 2026 — IPA 447 : 15 issues supplémentaires, 40 réalisées et fermées
 
