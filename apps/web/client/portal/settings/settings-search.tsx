@@ -32,7 +32,9 @@ export function PortalSettingsSearch() {
         <ul className="portal-search-results">{results.map(result => {
           const next: NavigationQuery = result.target ? { focus: result.target } : {};
           if (result.section === 'apercu') next.from = 'configuration';
-          const href = result.section ? consolePath(schoolId, result.section, next) : `/app/preferences?returnTo=${encodeURIComponent(window.location.pathname)}`;
+          // Leaving for personal preferences must bring the person back to the same page and context.
+          const href = result.section ? consolePath(schoolId, result.section, next)
+            : `/app/preferences?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`;
           return <li key={result.id}><a href={href} onClick={event => {
             if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
             event.preventDefault(); navigated.current = true; close();
