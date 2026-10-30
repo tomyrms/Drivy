@@ -40,17 +40,17 @@ export async function verifySchoolFormations(options:FormationsOptions):Promise<
       :error instanceof Error&&error.message.includes('strict mode violation')?'UI_SELECTOR_NOT_UNIQUE'
       :error instanceof Error&&['FORMATIONS_READ_FAILED','FORMATIONS_FIRST_LESSON_MISSING'].includes(error.message)?error.message:'CHECK_OR_BROWSER_FAILED';
     const ui=await options.page.evaluate(()=>({
-      formationVisible:!!document.querySelector('.formation-studio'),
-      competencyRows:document.querySelectorAll('.competency-row').length,
-      competencyInputs:document.querySelectorAll('.competency-row input').length,
-      competencyDescriptions:document.querySelectorAll('.competency-row textarea').length,
+      formationVisible:!!document.querySelector('.cat-page'),
+      competencyRows:document.querySelectorAll('.cat-competency').length,
+      competencyInputs:document.querySelectorAll('.cat-competency input').length,
+      competencyDescriptions:document.querySelectorAll('.cat-competency textarea').length,
       invalidFields:document.querySelectorAll('[aria-invalid="true"]').length,
       alerts:document.querySelectorAll('[role="alert"]').length,
       newCompetencyHasFocus:document.activeElement?.getAttribute('aria-label')?.includes('Conduite de nuit')??false,
     })).catch(()=>null);
     await writeFile(resolve(options.artifactDirectory,'99-formations-diagnostic.json'),JSON.stringify({stage,failure,ui},null,2)).catch(()=>undefined);
     // Cette recette utilise seulement une école synthétique. Cadrer la fiche exclut compte, navigation et secrets de connexion.
-    const sheet=options.page.locator('.formation-studio');
+    const sheet=options.page.locator('.cat-page');
     if(await sheet.count().catch(()=>0)===1)await sheet.screenshot({path:resolve(options.artifactDirectory,'99-formations-echec-synthetic.png')}).catch(()=>undefined);
     throw error;
   }
@@ -73,14 +73,15 @@ async function run(options:FormationsOptions):Promise<void> {
 
   setStage('formations : liste des permis puis fiche du permis B');
   await page.setViewportSize({width:1440,height:1000});
-  await page.goto(`${schoolPath}/formations`);await page.getByRole('heading',{name:'Formations et tarifs',exact:true}).waitFor();
+  await page.goto(`${schoolPath}/formations`);await page.getByRole('heading',{name:'Formations',exact:true}).waitFor();
+  const permits=page.getByRole('list',{name:'Permis préparés par l’école',exact:true});
   const documentOrigin=await page.evaluate(()=>performance.timeOrigin);
-  await page.getByRole('link',{name:'Permis B',exact:true}).click();
+  await permits.getByRole('button',{name:/Permis B/}).click();
   await page.getByRole('heading',{level:1,name:'Permis B'}).waitFor();
   assert(new URL(page.url()).searchParams.get('category')==='B'&&await page.evaluate(()=>performance.timeOrigin)===documentOrigin,'Permis B s’ouvre directement dans sa fiche, sans catalogue intermédiaire');
-  const tabs=page.getByRole('navigation',{name:'Rubriques du permis B'});
-  for(const name of ['Général','Compétences','Déroulement et annulation','Tarifs'])await tabs.getByRole('link',{name,exact:true}).waitFor();
-  assert(true,'La fiche présente Général, Compétences, Déroulement et annulation et Tarifs');
+  const tabs=page.getByRole('tablist',{name:'Rubriques du permis B',exact:true});
+  for(const name of ['Général','Compétences','Règles','Tarifs'])await tabs.getByRole('tab',{name,exact:true}).waitFor();
+  assert(true,'La fiche présente Général, Compétences, Règles et Tarifs');
   await page.screenshot({path:resolve(artifactDirectory,'09-formation-fiche-synthetic.png'),fullPage:true});
 
   setStage('formations : comptage des versions avant modification');
@@ -88,14 +89,14 @@ async function run(options:FormationsOptions):Promise<void> {
   setStage('formations : lecture serveur du programme avant modification');
   const initial=await sheet('B');
   setStage('formations : ouverture de la rubrique Compétences');
-  await tabs.getByRole('link',{name:'Compétences',exact:true}).click();
+  await tabs.getByRole('tab',{name:'Compétences',exact:true}).click();
   setStage('formations : affichage du titre Compétences');
   await page.getByRole('heading',{name:'Compétences',exact:true}).waitFor();
   setStage('formations : ouverture de l’éditeur de compétences');
   await page.getByRole('button',{name:'Modifier les compétences',exact:true}).click();
   setStage('formations : ajout d’une ligne de compétence');
   const count=initial.programmes[0]!.curriculum!.competencies.length;
-  const added=page.locator('.competency-row').nth(count);
+  const added=page.locator('.cat-competency').nth(count);
   const releaseFrames=await deferAnimationCallbacks(page);
   try {
     await page.getByRole('button',{name:'Ajouter une compétence',exact:true}).click();
@@ -111,16 +112,22 @@ async function run(options:FormationsOptions):Promise<void> {
     &&await added.locator('textarea').evaluate(element=>document.activeElement===element),
     'L’ajout conserve chaque saisie dans son champ, sans déplacement de focus tardif');
   setStage('formations : déplacement de la compétence au clavier');
-  const up=page.getByRole('button',{name:'Monter Conduite de nuit',exact:true});await up.focus();await page.keyboard.press('Enter');
+  await page.getByRole('button',{name:'Actions pour Conduite de nuit',exact:true}).focus();await page.keyboard.press('Enter');
+  const up=page.getByRole('menuitem',{name:'Monter',exact:true});await up.waitFor();
+  for(let step=0;step<4&&!await up.evaluate(element=>document.activeElement===element);step++)await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
   setStage('formations : ordre et focus après le déplacement clavier');
-  assert(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')?.includes('Conduite de nuit')),'Le déplacement au clavier garde le focus sur la compétence déplacée');
-  setStage('formations : changer de rubrique conserve la saisie en cours');
-  await tabs.getByRole('link',{name:'Tarifs',exact:true}).click();await page.getByRole('heading',{name:'Tarifs',exact:true}).waitFor();
-  assert(await tabs.getByRole('link',{name:/Compétences.*modification en cours/}).count()===1,'La rubrique Compétences signale la modification en cours');
-  await tabs.getByRole('link',{name:/Compétences/}).click();
-  assert(await page.getByLabel(`Compétence ${count}`,{exact:true}).inputValue()==='Conduite de nuit','Revenir à Compétences retrouve la saisie non enregistrée, dans l’ordre choisi');
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Actions pour Conduite de nuit');
+  assert(await page.getByLabel(`Compétence ${count}`,{exact:true}).inputValue()==='Conduite de nuit','Le déplacement au clavier garde le focus sur la compétence déplacée, à la position choisie');
+  setStage('formations : quitter la page protège la saisie en cours');
+  assert(await tabs.count()===0,'L’édition occupe la page : aucune rubrique ne peut remplacer la saisie');
+  await page.getByRole('navigation',{name:'Navigation principale',exact:true}).locator('.portal-nav-item').first().click();
+  const departure=page.getByRole('dialog',{name:'Quitter sans enregistrer ?',exact:true});
+  await departure.getByRole('button',{name:'Continuer la saisie',exact:true}).click();await departure.waitFor({state:'hidden'});
+  assert(await page.getByLabel(`Compétence ${count}`,{exact:true}).inputValue()==='Conduite de nuit','Quitter demande confirmation ; continuer retrouve la saisie non enregistrée, dans l’ordre choisi');
   assert(await page.evaluate(()=>localStorage.length)===0,'Aucune saisie n’est placée dans le stockage local');
-  await page.getByRole('button',{name:'Enregistrer les compétences',exact:true}).click();
+  await page.getByRole('button',{name:'Relire les changements',exact:true}).click();
+  await page.getByRole('dialog',{name:'Enregistrer les compétences ?',exact:true}).getByRole('button',{name:'Enregistrer les compétences',exact:true}).click();
   await page.getByText('Les compétences sont enregistrées pour les nouvelles inscriptions.',{exact:true}).waitFor();
   const afterCompetencies=await counts(),edited=await sheet('B');
   assert(afterCompetencies.curricula===before.curricula+1&&afterCompetencies.offerings===before.offerings+1&&afterCompetencies.policies===before.policies,
@@ -134,11 +141,12 @@ async function run(options:FormationsOptions):Promise<void> {
   assert(new URL(page.url()).searchParams.get('view')==='competences','Après rechargement, la même rubrique relit exactement les compétences confirmées');
 
   setStage('formations : ajout d’un tarif, réponse perdue après commit et reçu AP72');
-  await tabs.getByRole('link',{name:'Tarifs',exact:true}).click();await page.getByRole('heading',{name:'Tarifs',exact:true}).waitFor();
+  await tabs.getByRole('tab',{name:'Tarifs',exact:true}).click();await page.getByRole('heading',{name:'Tarifs',exact:true}).waitFor();
   await page.getByRole('button',{name:'Ajouter un tarif',exact:true}).click();
   await page.getByLabel('Nom du tarif',{exact:true}).fill('Leçon de 90 minutes');
   await page.getByLabel('Durée (minutes)',{exact:true}).fill('90');
   await page.getByLabel('Prix (CHF)',{exact:true}).fill('170');
+  await page.getByRole('button',{name:'Autres options',exact:true}).click();
   await page.getByLabel('Conditions commerciales',{exact:true}).fill('Tarif synthétique de 90 minutes, réservé à cette recette.');
   const tariffEndpoint=`${bff}/formations/tariffs`;let writes=0,lostOperation='',lostStatus=0;
   await page.route(tariffEndpoint,async route=>{
@@ -146,12 +154,15 @@ async function run(options:FormationsOptions):Promise<void> {
     writes++;if(writes!==1){await route.continue();return;}
     lostOperation=route.request().headers()['idempotency-key']??'';const committed=await route.fetch();lostStatus=committed.status();await route.abort('failed');
   });
-  await page.getByRole('button',{name:'Ajouter le tarif',exact:true}).click();
-  await page.getByRole('heading',{name:'Demande à vérifier',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Relire les changements',exact:true}).click();
+  await page.getByRole('dialog',{name:'Ajouter ce tarif ?',exact:true}).getByRole('button',{name:'Ajouter le tarif',exact:true}).click();
+  const requests=page.getByRole('region',{name:'Demandes en cours',exact:true});
+  await requests.getByText('Résultat à vérifier',{exact:true}).waitFor();
   assert(lostStatus===201&&z.uuid().safeParse(lostOperation).success,'Le tarif est durable avant la perte de la réponse');
-  assert(await page.getByRole('button',{name:'Ajouter le tarif',exact:true}).isDisabled(),'Le formulaire reste visible et bloqué tant que le résultat est inconnu');
+  assert(await page.getByRole('button',{name:'Relire les changements',exact:true}).isDisabled()&&await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='170',
+    'Le formulaire reste visible, avec sa saisie, et bloqué tant que le résultat est inconnu');
   const recovery=page.waitForResponse(response=>new URL(response.url()).pathname===`/app/bff/schools/${schoolId}/operations/${lostOperation}`);
-  await page.getByRole('button',{name:'Vérifier auprès de l’école',exact:true}).click();const recovered=await recovery;
+  await requests.getByRole('button',{name:'Vérifier le résultat',exact:true}).click();const recovered=await recovery;
   const receipt=z.object({data:z.object({operationId:z.uuid(),commandType:z.literal('SAVE_TARIFF'),resourceType:z.literal('ServiceProductVersion'),resourceId:z.uuid()})}).parse(await recovered.json()).data;
   await page.getByText('Leçon de 90 minutes',{exact:true}).waitFor();
   const afterTariff=await counts();
@@ -163,10 +174,11 @@ async function run(options:FormationsOptions):Promise<void> {
 
   setStage('formations : modification du prix concurrente puis conflit explicite');
   const lessonTariff=(await sheet('B')).tariffs.find(item=>item.head.unitPriceCents===9500&&item.head.durationMinutes===50)!;
+  await page.getByRole('button',{name:`Ouvrir le tarif ${lessonTariff.head.label}`,exact:true}).click();
   const releaseTariffFrames=await deferAnimationCallbacks(page);
   const priceInput=page.getByLabel('Prix (CHF)',{exact:true});
   try {
-    await page.getByRole('button',{name:`Modifier ${lessonTariff.head.label}`,exact:true}).click();
+    await page.getByRole('button',{name:'Modifier le tarif',exact:true}).click();
     await priceInput.focus();await page.keyboard.press('ControlOrMeta+A');
     await releaseTariffFrames();
     await page.keyboard.insertText('99');
@@ -182,13 +194,16 @@ async function run(options:FormationsOptions):Promise<void> {
   },{path:`/app/bff/schools/${schoolId}/formations/tariffs`,body:{operationId:randomUUID(),mode:'UPDATE',productKey:lessonTariff.productKey,expectedProductVersionId:lessonTariff.head.id,
     type:'INDIVIDUAL_LESSON',label:lessonTariff.head.label,durationMinutes:50,unitLabel:'leçon',priceCents:9800,validUntil:null,enabled:true,terms:{mode:'KEEP'}}});
   assert(concurrent===201,'Une autre session enregistre d’abord un prix de 98 CHF');
-  await page.getByRole('button',{name:'Enregistrer le tarif',exact:true}).click();
+  const priceReview=page.getByRole('dialog',{name:'Enregistrer ces changements ?',exact:true});
+  await page.getByRole('button',{name:'Relire les changements',exact:true}).click();
+  await priceReview.getByRole('button',{name:'Enregistrer le tarif',exact:true}).click();
   await page.getByText(/Ce tarif a été modifié entre-temps/).first().waitFor();
-  assert(await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='99','Le conflit conserve la saisie, sans écraser la version concurrente');
-  await page.getByRole('button',{name:'Recharger la fiche',exact:true}).click();
   await page.getByText('Ce tarif a changé pendant votre modification',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Enregistrer le tarif',exact:true}).click();
-  await page.getByText('Le tarif est enregistré. Les réservations existantes gardent leur prix et leurs conditions.',{exact:true}).waitFor();
+  assert(await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='99','Le conflit relit la fiche et conserve la saisie, sans écraser la version concurrente');
+  await page.getByRole('button',{name:'Relire les changements',exact:true}).click();
+  await priceReview.getByText(/Les réservations déjà confirmées gardent leur prix et leurs conditions\./).waitFor();
+  await priceReview.getByRole('button',{name:'Enregistrer le tarif',exact:true}).click();
+  await page.getByText('Le tarif est enregistré.',{exact:true}).waitFor();
   const prices=(await administration.query('SELECT version,unit_price_cents FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2 ORDER BY version',[schoolId,lessonTariff.productKey])).rows;
   assert(JSON.stringify(prices.map(row=>Number(row.unit_price_cents)))==='[9500,9800,9900]','Les deux modifications sont conservées comme versions successives, sans écrasement silencieux');
   const lesson=(await administration.query('SELECT price_cents_snapshot,commercial_selection,policy_version_id FROM drivy.lesson WHERE id=$1',[existing.lesson])).rows[0];
@@ -196,37 +211,36 @@ async function run(options:FormationsOptions):Promise<void> {
     &&lesson.policy_version_id===existing.policy_version_id,'La réservation existante garde son prix, ses conditions et sa procédure photographiés');
 
   setStage('formations : guide unique de création du permis A');
-  await page.getByRole('link',{name:'Formations et tarifs',exact:true}).first().click();
-  await page.getByRole('heading',{name:'Formations et tarifs',exact:true}).waitFor();
-  await page.getByRole('link',{name:'Ajouter une formation',exact:true}).click();
+  await page.goto(`${schoolPath}/formations`);await page.getByRole('heading',{name:'Formations',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Préparer un permis',exact:true}).click();
   await page.getByRole('heading',{name:'Préparer une formation',exact:true,level:1}).waitFor();
   await page.getByRole('heading',{name:'Permis enseignés',exact:true}).waitFor();
   await page.getByRole('button',{name:'Permis A',exact:true}).click();
-  const reference=page.locator('details').filter({has:page.getByText('À relire par l’école ; ce programme ne certifie pas les prérequis de l’élève.',{exact:true})});
-  await reference.locator('summary').click();
+  await page.getByRole('button',{name:'Référence du programme',exact:true}).click();
+  const reference=page.locator('.setup-reference');
   assert(await reference.getByText(/^Proposition Drivy · /).isVisible()
     &&await reference.getByText('À relire par l’école ; ce programme ne certifie pas les prérequis de l’élève.',{exact:true}).isVisible(),
     'Les modèles Drivy sont présentés comme une proposition à relire, pas comme un texte adopté');
   await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
   await page.getByRole('heading',{name:'Prix et règles de l’école',exact:true}).waitFor();
-  assert(await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='','Le prix n’est jamais prérempli');
-  await page.getByLabel('Durée (minutes)',{exact:true}).fill('50');
+  assert(await page.getByLabel('Prix de la leçon',{exact:true}).inputValue()==='','Le prix n’est jamais prérempli');
+  await page.getByLabel('Durée',{exact:true}).fill('50');
   await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
   await page.getByRole('heading',{name:'Vérifier la formation',exact:true}).waitFor();
   assert(await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).isDisabled(),'Un prix absent bloque la confirmation, sans être remplacé par zéro');
   await page.getByRole('button',{name:'Saisissez le prix réel de la leçon.',exact:true}).click();
   await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='formations.0.priceCents');
-  assert(await page.getByLabel('Prix (CHF)',{exact:true}).getAttribute('aria-invalid')==='true','L’erreur de prix retrouve le champ exact et lui associe son explication');
-  await page.getByLabel('Prix (CHF)',{exact:true}).fill('110');
+  assert(await page.getByLabel('Prix de la leçon',{exact:true}).getAttribute('aria-invalid')==='true','L’erreur de prix retrouve le champ exact et lui associe son explication');
+  await page.getByLabel('Prix de la leçon',{exact:true}).fill('110');
   await page.getByRole('button',{name:'Enregistrer et continuer',exact:true}).click();
   await page.getByRole('heading',{name:'Vérifier la formation',exact:true}).waitFor();
   const beforeCreation=await counts();
-  const acknowledgement=page.getByLabel('J’ai relu les formations et tarifs sélectionnés. Je confirme leur mise à disposition.',{exact:true});
+  const acknowledgement=page.getByRole('checkbox',{name:'J’ai relu les formations et tarifs sélectionnés. Je confirme leur mise à disposition.',exact:true});
   await acknowledgement.waitFor();
   assert(!(await acknowledgement.isChecked())&&beforeCreation.offerings===afterCompetencies.offerings,'La formation reste un brouillon sans confirmation précochée ni publication anticipée');
   await acknowledgement.check();await page.getByRole('button',{name:'Confirmer la préparation',exact:true}).click();
-  await page.getByRole('heading',{name:'Formations et tarifs',exact:true}).waitFor();
-  await page.getByRole('link',{name:'Permis A',exact:true}).click();
+  await page.getByRole('heading',{name:'Formations',exact:true}).waitFor();
+  await permits.getByRole('button',{name:/Permis A/}).click();
   await page.getByRole('heading',{level:1,name:'Permis A'}).waitFor();
   const created=await sheet('A'),afterCreation=await counts();
   assert(created.programmes.length===1&&created.tariffs.length===1&&created.tariffs[0]!.head.unitPriceCents===11000&&afterCreation.notices===beforeCreation.notices
@@ -236,13 +250,13 @@ async function run(options:FormationsOptions):Promise<void> {
 
   setStage('formations : ancienne adresse d’une version précédente, historique et navigation');
   await page.goto(`${schoolPath}/offres?selection=${existing.offering_id}&category=B&from=formations`);
-  await page.getByRole('heading',{level:1,name:'Permis B'}).waitFor();
+  await page.getByRole('heading',{level:1,name:'Historique'}).waitFor();
   await page.getByText('Version précédente',{exact:true}).first().waitFor();
   const target=new URL(page.url());
   assert(target.pathname.endsWith('/formations')&&target.searchParams.get('view')==='historique'&&target.searchParams.get('selection')===existing.offering_id,
     'Une ancienne URL retrouve la version exacte demandée, sans redirection silencieuse vers la dernière');
   await page.goBack();await page.getByRole('heading',{level:1,name:'Permis A'}).waitFor();
-  await page.goForward();await page.getByRole('heading',{level:1,name:'Permis B'}).waitFor();
+  await page.goForward();await page.getByRole('heading',{level:1,name:'Historique'}).waitFor();
   assert(true,'Précédent et suivant traversent la fiche et l’historique');
 
   setStage('formations : petit écran et thème sombre');
