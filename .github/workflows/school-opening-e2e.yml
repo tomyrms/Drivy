@@ -5,6 +5,9 @@ on:
       qualification_sha:
         required: true
         type: string
+      extended_suites:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       extended_suites:
