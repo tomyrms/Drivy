@@ -1,148 +1,106 @@
-# Drivy — Product Roadmap
+# Drivy — Roadmap produit
 
-Dernière mise à jour : 30 octobre 2026.
+[← Présentation du projet](../../README.md) · [Organisation du suivi](SETUP.md)
 
-## Mandat et statut
+Dernière mise à jour : **30 octobre 2026**.
 
-Cette roadmap conserve les grandes idées du porteur **sans créer immédiatement d'epic ni d'issues de développement**. Une initiative n'est ni une fonctionnalité livrée, ni une décision d'architecture validée, ni une autorisation de commencer à coder.
+**Conserver les idées aujourd'hui. Créer les issues lorsqu'elles sont prêtes.**
 
-Les cinq initiatives ci-dessous sont exploratoires. Aucun prix, date de livraison, prestataire de paiement, mécanisme juridique ou accès aux données n'est arrêté par ce document. Les questions ouvertes seront traitées au moment du cadrage.
+Cette page est la référence de la vision produit. Chaque grande idée possède une fiche dans [`initiatives/`](initiatives). On peut enrichir, déplacer ou abandonner ces idées sans ouvrir d'epic et sans dépendre de GitHub Projects.
 
-**Aux agents :** travailler sur les issues effectivement ouvertes et autorisées. Ne pas transformer automatiquement les initiatives de cette page en tâches, ne pas réouvrir le lot annulé #340 / #341–#346 / #348–#369 et ne pas lancer une nouvelle refonte graphique.
+Une initiative n'est ni une fonctionnalité livrée, ni un cahier des charges validé, ni une autorisation de développement. Aucun prix, date de livraison, prestataire ou dispositif juridique n'est fixé par cette roadmap.
 
-Pour examiner le produit actuel, retrouver le code réellement intégré et déployé. Au relevé du 30 octobre, la PR #347 est ouverte : `codex/epic-311-rebuild` à `85482ee1a80483a776eb16022f9ef5e8e6f3ced6`, base `master` à `c94ec2bba979874c7539e960a2ec5c617ec1955d`. Ces SHA sont historiques, pas des versions à restaurer. Ne pas auditer l'ancien master en ignorant la refonte #311. Ce document ne constitue pas un nouvel audit des fonctionnalités manquantes.
+## Vue d'ensemble
 
-## Vision produit : cinq initiatives à garder, pas cinq epics à lancer
-
-| ID | Initiative | Maturité initiale | Horizon | Prochaine décision utile |
+| ID | Initiative | Maturité | Horizon | Prochaine décision utile |
 | --- | --- | --- | --- | --- |
-| R01 | Administration de la plateforme Drivy | Idée | À définir | Définir les opérations minimales de gestion des écoles et les métadonnées accessibles |
-| R02 | Accès d'assistance autorisé par une école | À étudier | À définir | Cadrer finalités, autorisations, périmètre juridique et sécurité avant tout accès |
-| R03 | Application modulaire et offres commerciales | Idée | À définir | Choisir le socle et les modules optionnels sans fixer encore les prix |
-| R04 | Abonnements et facturation SaaS de Drivy | Idée | À définir | Définir ce qui est vendu, facturé et considéré comme payé |
-| R05 | Site vitrine et commercialisation | Idée | À définir | Définir le public, les promesses démontrables et le parcours de demande de démo |
+| R01 | [Administration de la plateforme](initiatives/R01-administration-plateforme.md) | Idée | À définir | Choisir les opérations indispensables et les métadonnées accessibles. |
+| R02 | [Assistance autorisée](initiatives/R02-assistance-autorisee.md) | À étudier | À définir | Cadrer la finalité, les autorisations et les garanties juridiques et de sécurité. |
+| R03 | [Modules et offres commerciales](initiatives/R03-modules-et-offres.md) | Idée | À définir | Définir le socle et les fonctions optionnelles, avant les prix. |
+| R04 | [Abonnements et facturation SaaS](initiatives/R04-facturation-saas.md) | Idée | À définir | Définir ce que Drivy vend, facture et considère comme payé. |
+| R05 | [Site vitrine et commercialisation](initiatives/R05-site-vitrine.md) | Idée | À définir | Définir le public, les preuves et le parcours de demande de démonstration. |
 
-Les IDs R01–R05 sont des identifiants de vision produit, pas les anciens tickets R01–R25 de l'epic frontend #311. Aucun numéro d'issue n'est attribué aux cinq initiatives.
+**R01–R05 sont des identifiants de vision produit**, pas des numéros d'issues ni les anciens lots R01–R25 de la refonte #311.
 
 ## R01 — Administration de la plateforme Drivy
 
-**Intention.** Un espace réservé à l'exploitant de Drivy pour retrouver les auto-écoles clientes et administrer la relation commerciale, distinct du portail d'administration de chaque école.
+Un espace réservé à l'exploitant pour gérer les auto-écoles clientes, leurs offres, leurs modules et leur relation commerciale avec Drivy.
 
-**Périmètre à explorer.** Répertoire des écoles, état du compte client, interlocuteurs autorisés, offre souscrite, modules disponibles, échéances et état des paiements de l'abonnement. Des indicateurs utiles peuvent être envisagés lorsqu'ils ont une finalité définie et une source fiable ; aucune collecte supplémentaire n'est décidée ici.
+À cadrer : opérations minimales, rôles, métadonnées nécessaires, traçabilité et traitement des écoles pilotes ou archivées. L'accès commercial ne donne pas automatiquement accès aux élèves, aux trajets ou aux messages. Le revenu de Drivy reste distinct du chiffre d'affaires propre d'une auto-école.
 
-**Décisions ouvertes.** Quels rôles pour l'équipe Drivy ? Quelles opérations nécessitent une confirmation renforcée ? Quelles métadonnées sont réellement utiles ? Comment traiter une école pilote, archivée ou en litige ? Où tracer les actions de l'opérateur ? Quel périmètre minimal peut fonctionner avant la facturation automatisée ?
+**Fiche : [Administration de la plateforme](initiatives/R01-administration-plateforme.md).**
 
-**Limites.** Voir une école cliente ne signifie pas accéder à ses élèves, trajets, notes ou messages. R02 traite séparément l'assistance. Distinguer le revenu mensuel de Drivy et le chiffre d'affaires propre de l'école ; ce dernier n'est ni une donnée automatiquement disponible ni une métrique autorisée par cette roadmap.
+## R02 — Accès d'assistance autorisé
 
-**Relations.** Réutiliser les notions d'école et d'opérateur déjà présentes après vérification du code. R03 fournit les droits aux modules ; R04 fournit les états commerciaux. Un panneau minimal peut précéder leur version complète.
+Aider une école dans son contexte avec une autorisation explicite, limitée et révocable, sans accès permanent par défaut à ses données.
 
-## R02 — Accès d'assistance autorisé par une école
+À étudier avant développement : finalité, personne habilitée, périmètre, durée, journal d'accès, responsabilités, information et cadre applicable. L'accord de l'école ne suffit pas à lui seul à qualifier toute l'opération. Pas d'usurpation invisible ni de contournement du chiffrement de bout en bout.
 
-**Intention.** Aider une école à résoudre un problème dans son contexte sans donner par défaut un accès permanent à ses données à l'opérateur Drivy.
-
-**Périmètre à étudier.** Demande d'assistance explicite, personne habilitée à l'approuver, périmètre minimal, durée limitée, révocation, traçabilité visible et actions permises. Une consultation en lecture seule serait un point de départ à évaluer, pas une décision d'implémentation définitive.
-
-**Questions préalables.** Finalité exacte ; répartition des responsabilités ; information des personnes concernées ; cadre contractuel et juridique applicable ; preuve et conservation des autorisations ; actions interdites ; données masquées ; comportement hors connexion et après révocation ; traitement des incidents.
-
-**Limites.** L'accord d'un administrateur scolaire n'est pas présenté comme une garantie juridique suffisante à lui seul. Ne pas créer de porte dérobée ni de contournement du chiffrement de bout en bout. Distinguer accès d'assistance, usurpation de session et action réellement effectuée par l'élève ou le moniteur. Aucun accès réel n'est autorisé par cette initiative.
-
-**Condition de passage au développement.** Décisions produit, juridique et sécurité explicites, puis seulement découpage en epic et critères vérifiables.
+**Fiche : [Assistance autorisée](initiatives/R02-assistance-autorisee.md).**
 
 ## R03 — Application modulaire et offres commerciales
 
-**Intention.** Permettre à une école d'utiliser une offre adaptée à ses besoins et à son budget, sans lui imposer toutes les fonctions.
+Permettre aux écoles de choisir une offre adaptée à leurs besoins, notamment sans messagerie ou sans cours collectifs lorsqu'elles ne les utilisent pas.
 
-**Exemples à examiner.** Messagerie et cours collectifs comme modules optionnels. Le contenu du socle, les autres regroupements, les noms des offres, les prix et les limites ne sont pas encore décidés. Cette piste ne réintroduit pas automatiquement un mode de séance sans GPS et ne modifie pas les décisions existantes sur les leçons.
+À cadrer : socle, modules, droits commerciaux côté serveur, choix de l'école et permissions des utilisateurs. Définir aussi les effets d'une montée ou baisse de gamme sur les engagements, l'historique et la réactivation. Aucune suppression silencieuse des données et aucun prix adopté ici.
 
-**Distinctions nécessaires.** (1) Ce que le contrat de l'école donne le droit d'utiliser ; (2) ce que l'école choisit d'activer parmi ces fonctions ; (3) ce que le rôle de chaque utilisateur lui permet de faire. Un interrupteur de lancement technique n'est pas, à lui seul, un droit commercial.
-
-**Questions ouvertes.** Granularité des modules ; droits serveur et clients iOS/web ; essais ; montée ou baisse de gamme ; effet sur les cours et réservations en cours ; lecture des historiques ; réactivation ; délais de conservation ; export ; anciens clients mobiles ; information des utilisateurs.
-
-**Limites.** Cacher une entrée de navigation ne suffit pas à contrôler un accès. Désactiver un module ne doit pas supprimer silencieusement les données ni les engagements existants. Aucune règle de suppression ou suspension automatique n'est arrêtée ici.
+**Fiche : [Modules et offres](initiatives/R03-modules-et-offres.md).**
 
 ## R04 — Abonnements et facturation SaaS de Drivy
 
-**Intention.** Gérer ce que les auto-écoles paient à Drivy : offre, abonnement, factures, règlement, renouvellement et changement de plan.
+Gérer les abonnements que les écoles paient à Drivy : factures, règlement confirmé, renouvellement, changement d'offre et incidents.
 
-**Périmètre à examiner.** Périodicité mensuelle/annuelle, essais éventuels, statut fiable des paiements, facture et avoir, renouvellement, annulation, incident de paiement et rapprochement des événements du prestataire retenu. Aucun fournisseur n'est sélectionné.
+À cadrer : unité de prix, périodicité, prestataire, essais, taxes à faire vérifier, prorata, résiliation et délais de grâce. Ne pas confondre ce chantier avec les règlements des élèves auprès de leur école ou la finance future #45.
 
-**Questions ouvertes.** Unité de prix (école, moniteur, modules ou autre), monnaie et taxes à faire vérifier, délais de grâce, prorata, période d'essai, litiges/remboursements, conséquences d'un impayé, conservation des documents et droits aux modules pendant les transitions.
-
-**Limites.** Un retour de page de paiement ne prouve pas un paiement reçu. Ne pas retirer brutalement l'accès aux données ou aux leçons à cause d'un événement non confirmé. La facturation SaaS de Drivy est distincte des règlements que l'école reçoit de ses élèves et du chantier historique #45.
-
-**Relations.** R03 cadre ce qui est vendu ; R01 consulte et administre les états ; R05 présente les offres une fois validées. Les indicateurs de revenu doivent reposer sur les faits disponibles, pas sur des compteurs de démonstration.
+**Fiche : [Facturation SaaS](initiatives/R04-facturation-saas.md).**
 
 ## R05 — Site vitrine et commercialisation
 
-**Intention.** Un site public qui présente Drivy et permet à une auto-école intéressée de comprendre l'offre puis de demander une démonstration.
+Présenter publiquement Drivy, ses usages et les fonctionnalités réellement disponibles, puis permettre à une auto-école de demander une démonstration.
 
-**Périmètre à examiner.** Présentation du produit, bénéfices démontrables pour les moniteurs et écoles, fonctionnalités réellement disponibles, captures autorisées, questions fréquentes, contact/démo et offres une fois cadrées. Identité visuelle cohérente avec Drivy, mais parcours distinct du portail métier.
+À cadrer : public, langues, contenus, captures autorisées, contact et offres commerciales. Une présentation avec demande de démo peut précéder la facturation automatisée. L'essai gratuit avec quelques vrais élèves reste une hypothèse à étudier, pas une offre déjà décidée.
 
-**Questions ouvertes.** Public initial, langues, domaine et navigation, contenu et preuves, forme du contact, tarifs publics ou sur demande, responsabilité de mise à jour, accessibilité, données du formulaire et mesure d'audience proportionnée.
+**Fiche : [Site vitrine](initiatives/R05-site-vitrine.md).**
 
-**Limites.** Pas de témoignages inventés, promesses réglementaires non vérifiées ou fonctionnalités futures annoncées comme disponibles. Un essai gratuit avec deux ou trois vrais élèves et une durée indicative d'une semaine reste une hypothèse ultérieure, pas un engagement commercial adopté.
+## Ordre de réflexion proposé
 
-**Relations.** Une présentation et une demande de démo peuvent précéder R04. Les prix, comparaisons d'offres et paiement autonome attendent les décisions R03/R04. L'essai réel nécessite un cadrage distinct des accès, de l'accompagnement et de la fin d'essai.
+**Maintenant :** poursuivre et stabiliser le périmètre déjà autorisé. Examiner le code récent, les PR et les preuves avant d'assimiler une issue ouverte à une fonctionnalité absente.
 
-## Ordre de réflexion proposé, pas calendrier imposé
+**Ensuite, lorsque le porteur décide d'ouvrir ces sujets :** cadrer les modules et les offres (R03), envisager un panneau opérateur minimal (R01) et étudier séparément l'assistance (R02).
 
-1. Préserver et stabiliser le produit actuel ; vérifier les issues existantes contre le code et les preuves, sans considérer une issue ouverte comme une fonction forcément absente.
-2. Cadrer R03 (socle et modules) en parallèle d'un R01 minimal et de l'étude R02.
-3. Concevoir R04 sur les offres réellement retenues ; préparer le contenu R05 sans attendre un paiement automatisé pour proposer une démo.
-4. Étendre seulement après décision et essai : panneau complet, vente autonome, assistance autorisée, éventuellement essai gratuit.
+**Puis :** concevoir la facturation sur les offres retenues (R04) et préparer la présentation commerciale (R05). Le contenu du site vitrine peut avancer sans attendre un système de paiement complet.
 
-Aucune date n'est inventée pour remplir une frise. Aucun de ces points n'autorise un agent à développer toutes les idées sans validation.
+Cet ordre est une proposition de dépendances, pas un calendrier approuvé. Les horizons restent « À définir » jusqu'à décision.
 
-## Organisation cible dans GitHub Projects
+## De l'idée à la réalisation
 
-Nom : **Drivy — Product Roadmap**. Projet privé recommandé ; la documentation de ce dépôt reste soumise à la visibilité actuelle du dépôt.
-
-| Vue | Présentation | Contenu |
+| Maturité | Signification | Issue nécessaire ? |
 | --- | --- | --- |
-| Vision produit | Tableau | Les cinq initiatives en brouillon ; maturité, horizon, décisions ouvertes |
-| Développement | Kanban | Les issues existantes et autorisées, regroupées par Status |
-| Backlog | Tableau | Les issues existantes à trier, avec labels, priorité et effort quand connus |
-| Roadmap | Chronologie | Initiatives ; dates cibles seulement lorsqu'elles sont réellement décidées |
+| **Idée** | Intention conservée, avec son contexte. | Non. |
+| **À étudier** | Questions produit, technique, juridique ou sécurité à éclaircir. | Non, pas automatiquement. |
+| **Cadré** | Objectif, limites et décisions principales documentés. | Pas encore obligatoire. |
+| **Prêt à découper** | Le porteur a validé le lancement et le périmètre. | L'epic peut être créée. |
+| **En développement** | Les tickets autorisés sont suivis avec leurs preuves. | Oui, avec les liens vers l'epic et les PR. |
 
-**Champs.** Nature (Initiative / Issue), Maturité (Idée / À étudier / Cadré / Prêt à découper / En développement), Horizon (Maintenant / Ensuite / Plus tard / À définir), Priorité (P0 / P1 / P2 / P3), Effort (XS / S / M / L / XL / À estimer), Début cible et Fin cible. Laisser priorité, effort et dates non déterminés plutôt que les inventer.
+Pour ajouter une idée, créer une fiche et une ligne dans le tableau. Décrire l'objectif, les questions ouvertes, les limites et la prochaine décision utile. Ne pas imposer dès maintenant des fichiers à modifier ou une architecture conçue pour un code qui aura évolué.
 
-**Status pour le Kanban.** Backlog → Prêt → En cours → À tester par Tomas → Tests et validation → Terminé ; Bloqué lorsqu'une dépendance empêche réellement d'avancer. Le statut d'une carte ne doit pas être déduit de la simple présence d'une branche.
+Pour lancer un sujet, relire la fiche avec le porteur, vérifier l'existant, décider ce qui entre dans le lot, puis créer les issues. Mettre ensuite le lien de l'epic dans la fiche plutôt que dupliquer tous ses tickets dans cette roadmap.
 
-**Règles.** Une initiative reste un brouillon Projects, pas une issue du dépôt. Sa maturité ne remplace pas l'état de développement. La transition « Prêt à découper » requiert l'accord du porteur et un cadrage suffisant. Convertir ensuite seulement en epic avec périmètre, dépendances et critères ; éviter les doublons existants. Les issues annulées ne sont pas importées dans le backlog actif.
+## Sources de vérité et suivi
 
-**Flux de livraison.** Agent : petit lot cohérent, branche isolée, build et contrôles indispensables, IPA si iOS ou aperçu si web. Tomas essaie ; les tests pertinents, la revue et la fusion suivent selon le mandat. Un build ou une validation visuelle ne suffit pas à fermer une issue dont d'autres critères restent manquants. Déploiement homelab sur autorisation distincte ; aucune automatisation ne doit marquer tout travail fusionné « Terminé » sans vérifier ce flux.
+- **Vision future :** cette roadmap et ses fiches.
+- **Travail autorisé :** les [issues du dépôt](https://github.com/tomyrms/Drivy/issues), leurs décisions et les PR.
+- **Réalisation et qualification :** le [suivi d'implémentation](../implementation/STATUS.md) et les preuves associées au commit.
+- **Kanban facultatif :** le [Project privé n°2](https://github.com/users/tomyrms/projects/2), conservé comme vue de travail. Il n'est pas nécessaire pour lire ou modifier les idées en fichiers.
 
-## Labels du dépôt
+Le Project et ces fichiers ne sont **pas synchronisés automatiquement**. La création du Project a été rapportée par le porteur après exécution dans son terminal ; cette organisation documentaire n'en modifie ni les cartes ni les vues. Voir [SETUP.md](SETUP.md).
 
-Les labels indiquent le type et la zone, pas le statut du Kanban. Conserver les labels existants lors de l'ajout. Ne pas ajouter de labels todo/in-progress/done qui dupliqueraient Status.
+Le dépôt est public : les documents suivis y sont publics également. Garder les secrets, données personnelles et informations commerciales confidentielles dans un espace privé autorisé, pas dans ces fiches.
 
-| Label | Sens |
-| --- | --- |
-| type:bug | Correction d'un dysfonctionnement décrit ; sa reproduction actuelle reste à vérifier |
-| type:feature | Fonctionnalité à construire ou compléter |
-| type:ux | Interface, navigation et expérience utilisateur |
-| type:refactor | Organisation ou simplification du code sans changement fonctionnel visé |
-| type:qa | Tests et qualification |
-| type:security | Sécurité, confidentialité et protections |
-| area:ios | Application iPhone/iPad |
-| area:web | Portail et web app |
-| area:backend | API, services et données |
-| area:infra | Infrastructure, CI et exploitation |
+## Consignes aux agents
 
-Une issue peut concerner plusieurs zones. Les labels ne certifient pas son avancement ni sa priorité. Les brouillons Projects utilisent les champs personnalisés ; les labels du dépôt s'appliquent aux issues lorsqu'elles existent.
+Ne pas développer automatiquement les initiatives R01–R05, ni les convertir en issues sans décision du porteur. Les idées historiques [#45](https://github.com/tomyrms/Drivy/issues/45) et [#63](https://github.com/tomyrms/Drivy/issues/63) restent elles aussi différées tant que leur cadrage n'a pas changé.
 
-## Mise en place et limites
+Ne pas rouvrir le lot de finition annulé **#340, #341–#346 et #348–#369**. Ne pas lancer une nouvelle refonte graphique au prétexte d'organiser la roadmap.
 
-Cette documentation et le manifeste voisin `project.json` conservent la vision sans nouvelles issues. Le script `setup_project.py` prépare l'activation du projet via GitHub CLI depuis un environnement authentifié disposant des droits Projects : exécuter d'abord sans `--apply` pour voir le plan.
-
-La publication de ces fichiers **ne signifie pas que le Project, ses brouillons ou ses vues sont créés**. Leur création distante doit être confirmée par les réponses GitHub et une relecture. Le connecteur utilisé pour rédiger cette roadmap ne fournit pas les mutations Projects. Ne pas demander à l'utilisateur de coller un jeton dans la conversation.
-
-Les paramètres visuels non exposés par l'API (notamment le choix du regroupement et des champs de dates selon la version) doivent être vérifiés dans l'interface du Project. Aucun déploiement du produit n'est nécessaire pour cette organisation.
-
-### Références de fonctionnement GitHub
-
-- https://docs.github.com/en/issues/planning-and-tracking-with-projects/creating-projects/creating-a-project
-- https://docs.github.com/en/graphql/reference/projects
-- https://cli.github.com/manual/gh_project
-
-Les besoins produit proviennent des décisions et idées du porteur ; ces références décrivent GitHub, pas une validation juridique ou commerciale de Drivy.
+Pour le web, partir de la version récente issue de **#311** et de ses corrections, pas automatiquement d'un ancien `master`. Vérifier la [PR #347](https://github.com/tomyrms/Drivy/pull/347), sa continuation éventuelle et le commit réellement utilisé. Cette roadmap n'est pas un audit des fonctionnalités manquantes ni une autorisation de déploiement.
