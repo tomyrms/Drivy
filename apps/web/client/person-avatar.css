@@ -1,3 +1,0 @@
-.person-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 2rem; inline-size: 2rem; block-size: 2rem; border-radius: 50%; color: var(--muted); background: var(--surface-muted); font: 500 .75rem / 1 var(--font); letter-spacing: .01em; user-select: none; }
-.person-avatar-large { flex-basis: 2.75rem; inline-size: 2.75rem; block-size: 2.75rem; font-size: .9375rem; }
-@media (forced-colors: active) { .person-avatar { border: 1px solid CanvasText; } }

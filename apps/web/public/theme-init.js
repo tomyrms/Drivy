@@ -10,6 +10,6 @@
   document.documentElement.dataset.themePreference = preference;
   document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
     meta.removeAttribute('media');
-    meta.content = dark ? '#191b1e' : '#f2f4f7';
+    meta.content = dark ? '#191b1e' : '#f7f8fa';
   });
 })();

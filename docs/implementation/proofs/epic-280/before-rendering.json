@@ -1,0 +1,94 @@
+{
+  "kind": "synthetic Chromium rendering, not real mobile or acceptance",
+  "origin": "http://127.0.0.1:5186",
+  "results": [
+    {
+      "name": "before-overview-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Préparation de l’école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-agenda-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Agenda"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-learners-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Élèves"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-learner-detail-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-overview-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Préparation de l’école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-agenda-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Agenda"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-learners-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Élèves"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "before-learner-detail-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    }
+  ]
+}

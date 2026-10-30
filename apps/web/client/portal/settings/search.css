@@ -1,0 +1,9 @@
+.portal-search-trigger { gap: .5rem; }
+.portal-search-results { list-style: none; margin: 0; padding: 0; overflow-y: auto; max-height: min(55dvh, 30rem); }
+.portal-search-results a { display: flex; gap: 1rem; align-items: center; justify-content: space-between; min-height: 44px; padding: .75rem; border-radius: var(--radius); color: var(--foreground); text-decoration: none; }
+.portal-search-results a:hover { background: var(--accent); }
+.portal-search-results a:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.portal-search-results a > span { display: grid; gap: .2rem; min-width: 0; overflow-wrap: anywhere; }
+.portal-search-results a > span > span { color: var(--muted-foreground); font-size: .8125rem; }
+.portal-search-results svg { flex-shrink: 0; width: 1rem; height: 1rem; }
+@media (max-width: 767px) { .portal-search-trigger > span { display: none; } .portal-search-trigger { width: 44px; flex-shrink: 0; padding-inline: 0; } }

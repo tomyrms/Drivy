@@ -1,0 +1,26 @@
+.trips-page { width: min(100%, 1120px); margin-inline: auto; display: grid; gap: 20px; }
+.trips-back { justify-self: start; margin-left: -10px; }
+.trips-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.trips-heading h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.trips-heading p { margin-top: 6px; }
+.trips-muted { color: var(--muted-foreground); font-size: .9rem; }
+.trips-search { max-width: 420px; }
+.trips-table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.trips-table th, .trips-table td { text-align: left; padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: middle; font-weight: 400; }
+.trips-table thead th { border-top: 0; background: var(--muted); color: var(--muted-foreground); font-size: .8rem; font-weight: 550; }
+.trips-person { height: auto; min-height: 44px; margin-left: -10px; padding-inline: 10px; gap: 12px; font-weight: 600; justify-content: flex-start; }
+.trips-pages { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 720px) {
+  .trips-heading h1 { font-size: 1.6rem; }
+  .trips-search { max-width: none; }
+  .trips-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .trips-table tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .trips-table tbody tr:first-child { border-top: 0; }
+  .trips-table th, .trips-table td { display: block; padding: 0; border: 0; }
+  .trips-table th { grid-column: 1 / -1; }
+  .trips-table td[data-label="Moniteur"] { grid-column: 1 / -1; color: var(--muted-foreground); font-size: .9rem; padding-left: 52px; }
+  .trips-table td[data-label="Date"] { padding-left: 52px; font-size: .9rem; }
+  .trips-table td[data-label="Durée"] { text-align: right; font-size: .9rem; }
+  .trips-pages > * { flex: 1; }
+}
+.trips-search input::-webkit-search-cancel-button { appearance: none; display: none; }
