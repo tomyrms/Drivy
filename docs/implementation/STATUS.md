@@ -11,6 +11,16 @@ Master `f0aa7dce17372ece43e7626346db21ae79221230` contient #347. Chaîne iOS vé
 
 **Suites `--extended` : non exécutées**, après l'essai web. Sélecteurs recoupés au portail sans exécution : récupération de compte 6/6 présents ; saisie par code 15/16, le seizième étant un gabarit dynamique bien présent dans `.entry-facts` ; formations et tarifs à réécrire en partie (onglets au lieu de la navigation par liens, `.cat-competency-*`, déplacement par menu, messages de tarif et de reprise changés). Ce recoupement ne vaut pas résultat de test. La note précédente surestimait donc l'écart des deux premières.
 
+### 30 octobre 2026, 18:05 Europe/Zurich — web `f0aa7dce` déployé après accord du porteur
+
+Accord explicite du porteur sur `f0aa7dce17372ece43e7626346db21ae79221230`. Master était entre-temps à `028211d6` (#383), documentation de la roadmap seulement : code web identique, SHA autorisé conservé.
+
+- URL : <https://drivy.shulker.ch/app/>. Reçu et identifiant de rollback : `20261030T170449Z-f0aa7dce1737`. Release précédente conservée : `4af4b0e6`.
+- Sauvegarde CT113 : `/root/drivy_refonte-before-web311-20261030T170449Z.dump`, 2 232 328 octets, catalogue et blocs relus. Aucune restauration réelle : l'archive lisible n'est pas une répétition de restauration.
+- Seul `drivy-refonte-web` a redémarré ; API, worker et identité gardent leur PID, ingress inchangé. Aucune migration, BFF compilée identique entre les deux releases (`diff -rq`), configuration privée inchangée selon le contrôle du script.
+- PASS après bascule : SHA servi, HTML exact sur sept adresses, 104 fichiers statiques à l'empreinte, CSP `default-src 'none'` sans `unsafe-eval`, session anonyme `no-store`, 401 sur `/app/bff/me`, plan de rollback valide, zéro erreur `journalctl` du web sur dix minutes, Edge 1440 et 390 sans débordement ni erreur JavaScript sur quatre pages publiques. Seul 401 console : préférences sans connexion, comportement documenté.
+- NOT_EXECUTED : parcours connecté, données réelles, essai du porteur, suites `--extended`, restauration de la sauvegarde. Rollback non exécuté.
+
 <!-- ios-batch-15-20261029 -->
 ## 29 octobre 2026 — IPA 447 : 15 issues supplémentaires, 40 réalisées et fermées
 
