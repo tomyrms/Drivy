@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { newTariffDraft, tariffDraft } from '../../console/formation-model';
 import type { Tariff } from '../../formation-api';
+import { consultedTariff } from './pricing-controllers';
 import { tariffDifferences, tariffSummary } from './tariff-diff';
 import { tariffGroups } from './tariff-groups';
 
@@ -42,6 +43,19 @@ describe('récapitulatif d’un tarif modifié', () => {
     expect(rows.find(row => row.label === 'Prix')?.after).toMatch(/^Offert par leçon$/);
     expect(rows.find(row => row.label === 'Durée')?.after).toBe('45 min');
     expect(rows.some(row => row.label === 'Jusqu’au')).toBe(false);
+  });
+});
+
+describe('consultation d’une version de prestation', () => {
+  test('la version actuelle ouvre la fiche, une version ancienne reste dans le bloc de référence', () => {
+    const current = tariff();
+    const old = { ...current.head, id: id(9), version: 1, validUntil: '2026-08-31' };
+    const withHistory = { ...current, history: [current.head, old] };
+    expect(consultedTariff([withHistory], current.head.id)).toEqual({ owner: withHistory, consulting: false });
+    expect(consultedTariff([withHistory], old.id)).toEqual({ owner: withHistory, consulting: true });
+    expect(consultedTariff([withHistory], id(99))).toEqual({ owner: undefined, consulting: true });
+    // Avant la lecture de la liste, aucune version n'est ouverte par le panneau.
+    expect(consultedTariff(undefined, current.head.id).consulting).toBe(false);
   });
 });
 

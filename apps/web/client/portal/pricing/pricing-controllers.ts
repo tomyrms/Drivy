@@ -8,6 +8,15 @@ import { useListState } from '../../console/list-state';
 import { createTariffBody, newTariffDraft, tariffChanged, tariffDraft, tariffProblems, updateTariffBody, updatedValidFrom, type TariffDraft } from '../../console/formation-model';
 import { changedCodes, createdId, unchangedCodes, type CatalogueCommand } from '../formations/catalogue-command';
 
+/**
+ * La fiche principale ouvre la version actuelle ; une version ancienne se lit dans son propre bloc de référence.
+ * `consulting` couvre aussi un identifiant absent de la liste : le panneau ne doit jamais ouvrir un autre tarif.
+ */
+export function consultedTariff(tariffs: readonly Tariff[] | undefined, selection: string | undefined) {
+  const owner = selection && tariffs ? tariffs.find(item => item.history.some(version => version.id === selection)) : undefined;
+  return { owner, consulting: !!selection && !!tariffs && owner?.head.id !== selection };
+}
+
 /** Prestations sans permis : mêmes tarifs, même éditeur, sans catégorie. */
 export function useUncategorizedTariffs() {
   const { schoolId } = useConsole();

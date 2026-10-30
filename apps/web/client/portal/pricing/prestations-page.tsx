@@ -7,7 +7,7 @@ import { useCatalogueCommand } from '../formations/catalogue-command';
 import type { TariffType } from '../../formation-api';
 import { TariffReference } from './tariff-reference';
 import { TariffsPanel } from './tariffs-panel';
-import { useReference, useUncategorizedTariffs } from './pricing-controllers';
+import { consultedTariff, useReference, useUncategorizedTariffs } from './pricing-controllers';
 import { Badge } from '../../components/ui/badge';
 import '../formations/formations.css';
 import './pricing.css';
@@ -23,9 +23,8 @@ export function PrestationsPage() {
   // Une référence d'un tarif rattaché à un permis ouvre la fiche de ce permis.
   useEffect(() => { if (routeQuery.category) navigate('formations', { category: routeQuery.category, view: 'tarifs', ...(selection ? { selection } : {}) }, { replace: true }); }, [routeQuery.category]);
   const data = loaded.data;
-  const owner = selection && data ? data.tariffs.find(item => item.history.some(version => version.id === selection)) : undefined;
   // Une version ancienne (ou absente de la liste) est relue telle quelle, en lecture seule.
-  const consult = !!selection && !!data && owner?.head.id !== selection;
+  const { consulting: consult } = consultedTariff(data?.tariffs, selection);
   const reference = useReference(consult ? selection : undefined);
   useEffect(() => {
     const value = reference.data;
@@ -44,7 +43,7 @@ export function PrestationsPage() {
           badge={<Badge variant="secondary" className="cat-badge" data-tone="neutral">{reference.data.current ? 'Version actuelle' : 'Version précédente'}</Badge>} />}
       </div>}
       <TariffsPanel tariffs={data.tariffs} categoryCode={null} today={data.today} canConfigure={data.canConfigureCatalog} types={types} proposals={proposals.data} command={command}
-        reload={loaded.reload} programmeCount={0} selection={selection} listLabel="Prestations sans permis"
+        reload={loaded.reload} programmeCount={0} selection={consult ? undefined : selection} listLabel="Prestations sans permis"
         actions={<Button variant="ghost" onClick={() => navigate('conditions', {})}>Conditions commerciales<ArrowRight data-icon="inline-end" /></Button>} onSelect={select} onConsultVersion={id => select(id)} onOpenTerms={id => navigate('conditions', { selection: id })} />
     </>}
   </section>;
