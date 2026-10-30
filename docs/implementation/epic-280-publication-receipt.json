@@ -1,0 +1,34 @@
+{
+  "result": "DEPLOYED",
+  "sha": "be8a02457ef2c8877117e9a13557b288738fc4bf",
+  "previous": "a41cf64d153252dc133a60f29755f0685516be8f",
+  "archiveSHA256": "61c0b4340d970b14635e526b57173ccd9b3cc42702f7d22486d1f897ec4b5fd2",
+  "backup": {
+    "path": "/root/drivy-epic280-backups/be8a02457ef2c8877117e9a13557b288738fc4bf-20261028T192028Z-33966785a15f.dump",
+    "bytes": 1805023,
+    "catalogAndBlocksVerified": true,
+    "restoreTrialExecuted": false
+  },
+  "migrationsBefore": 56,
+  "migrationsAfter": 57,
+  "configurationUnchanged": true,
+  "verification": {
+    "current": "/opt/drivy-refonte/releases/be8a02457ef2c8877117e9a13557b288738fc4bf",
+    "serviceDirectories": {
+      "drivy-refonte-api": "/opt/drivy-refonte/releases/be8a02457ef2c8877117e9a13557b288738fc4bf/apps/api",
+      "drivy-refonte-course-worker": "/opt/drivy-refonte/releases/be8a02457ef2c8877117e9a13557b288738fc4bf/apps/api",
+      "drivy-refonte-web": "/opt/drivy-refonte/releases/be8a02457ef2c8877117e9a13557b288738fc4bf/apps/web"
+    },
+    "readiness": "ready",
+    "publicChecks": {
+      "/app/": "MATCH",
+      "/app/gestion": "MATCH",
+      "/app/preferences": "MATCH",
+      "/app/recover": "MATCH",
+      "/app/ouvrir": "MATCH",
+      "/app/assets/index-BlSMYv9h.js": "MATCH",
+      "/app/assets/index-CZnPAVFO.css": "MATCH"
+    },
+    "anonymousApiStatus": 401
+  }
+}
