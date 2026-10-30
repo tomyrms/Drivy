@@ -1,0 +1,277 @@
+{
+  "observedAt": "2026-10-28T19:00:25.789443+00:00",
+  "current": "/opt/drivy-refonte/releases/a41cf64d153252dc133a60f29755f0685516be8f",
+  "services": {
+    "api": {
+      "MainPID": "81558",
+      "NRestarts": "0",
+      "UMask": "0077",
+      "LimitCORE": "0",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "User": "drivy-refonte",
+      "Group": "drivy-refonte",
+      "NoNewPrivileges": "yes",
+      "RestrictSUIDSGID": "yes",
+      "Id": "drivy-refonte-api.service",
+      "ActiveState": "active",
+      "SubState": "running",
+      "DropInPaths": "",
+      "processDirectory": "/opt/drivy-refonte/releases/a41cf64d153252dc133a60f29755f0685516be8f/apps/api"
+    },
+    "web": {
+      "MainPID": "81560",
+      "NRestarts": "0",
+      "UMask": "0077",
+      "LimitCORE": "0",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/web",
+      "User": "drivy-web",
+      "Group": "drivy-web",
+      "NoNewPrivileges": "yes",
+      "RestrictSUIDSGID": "yes",
+      "Id": "drivy-refonte-web.service",
+      "ActiveState": "active",
+      "SubState": "running",
+      "DropInPaths": "",
+      "processDirectory": "/opt/drivy-refonte/releases/a41cf64d153252dc133a60f29755f0685516be8f/apps/web"
+    },
+    "course-worker": {
+      "MainPID": "81559",
+      "NRestarts": "0",
+      "UMask": "0077",
+      "LimitCORE": "0",
+      "WorkingDirectory": "/opt/drivy-refonte/current/apps/api",
+      "User": "drivy-course-worker",
+      "Group": "drivy-course-worker",
+      "NoNewPrivileges": "yes",
+      "RestrictSUIDSGID": "yes",
+      "Id": "drivy-refonte-course-worker.service",
+      "ActiveState": "active",
+      "SubState": "running",
+      "DropInPaths": "",
+      "processDirectory": "/opt/drivy-refonte/releases/a41cf64d153252dc133a60f29755f0685516be8f/apps/api"
+    },
+    "identity": {
+      "MainPID": "81361",
+      "NRestarts": "0",
+      "UMask": "0077",
+      "LimitCORE": "0",
+      "WorkingDirectory": "/opt/drivy-refonte/runtime/keycloak",
+      "User": "drivy-identity",
+      "Group": "drivy-identity",
+      "NoNewPrivileges": "yes",
+      "RestrictSUIDSGID": "yes",
+      "Id": "drivy-refonte-identity.service",
+      "ActiveState": "active",
+      "SubState": "running",
+      "DropInPaths": "",
+      "processDirectory": "/opt/drivy-refonte/runtime/keycloak"
+    }
+  },
+  "nodeVersion": "v24.21.0",
+  "diskAvailableKiB": 11949736,
+  "configFiles": {
+    "api.env": {
+      "present": true,
+      "mode": "0o600",
+      "owner": "root",
+      "group": "root"
+    },
+    "web.env": {
+      "present": true,
+      "mode": "0o600",
+      "owner": "root",
+      "group": "root"
+    },
+    "course-worker.env": {
+      "present": true,
+      "mode": "0o600",
+      "owner": "root",
+      "group": "root"
+    },
+    "course-push.env": {
+      "present": true,
+      "mode": "0o600",
+      "owner": "root",
+      "group": "root"
+    },
+    "migration.env": {
+      "present": true,
+      "mode": "0o600",
+      "owner": "root",
+      "group": "root"
+    },
+    "identity.env": {
+      "present": true,
+      "mode": "0o600",
+      "owner": "root",
+      "group": "root"
+    }
+  },
+  "configuration": {
+    "apiSchemaValid": true,
+    "webSchemaValid": true,
+    "api": {
+      "NODE_ENV": "production",
+      "HOST": "192.168.1.153",
+      "PORT": "3001",
+      "MESSAGING_MODE": "qualification",
+      "REAUTH_MAX_AGE_SECONDS": "<default>"
+    },
+    "web": {
+      "NODE_ENV": "production",
+      "WEB_DEVELOPMENT": "false",
+      "WEB_HOST": "192.168.1.153",
+      "WEB_PORT": "3002",
+      "WEB_TRUST_PROXY": "true",
+      "WEB_SESSION_IDLE_MINUTES": "<default>",
+      "WEB_SESSION_MAX_MINUTES": "<default>",
+      "REAUTH_MAX_AGE_SECONDS": "<default>",
+      "ACCOUNT_RECOVERY_ENABLED": "<default>",
+      "WEB_ORIGIN": "https://drivy.shulker.ch",
+      "API_BASE_URL": "https://drivy.shulker.ch/refonte",
+      "OIDC_ISSUER": "https://drivy.shulker.ch/identity/realms/drivy"
+    },
+    "gpsQualificationDisabled": true,
+    "messagingQualificationConfigured": true,
+    "webOriginExpected": true,
+    "webApiExpected": true,
+    "oidcIssuerMatches": true,
+    "oidcClientSecretPresent": true,
+    "cursorSecretPresent": true,
+    "runtimeDatabase": {
+      "present": true,
+      "expectedHost": true,
+      "expectedDatabase": true,
+      "expectedRole": true,
+      "tlsMode": "verify-full",
+      "credentialsPresent": true
+    },
+    "migrationDatabase": {
+      "present": true,
+      "expectedHost": true,
+      "expectedDatabase": true,
+      "expectedRole": true,
+      "tlsMode": "verify-full",
+      "credentialsPresent": true
+    },
+    "workerDatabase": {
+      "present": true,
+      "expectedHost": true,
+      "expectedDatabase": true,
+      "expectedRole": true,
+      "tlsMode": "verify-full",
+      "credentialsPresent": true
+    },
+    "webJournalConfigured": false
+  },
+  "readiness": "ready",
+  "anonymousHttp": {
+    "/app/": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "2062fd900880eb081ad1dd3d92a269cdcc9d36bcdd21b39046ed75a73fea9871",
+      "matchesActiveBuild": true
+    },
+    "/app/gestion": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "2062fd900880eb081ad1dd3d92a269cdcc9d36bcdd21b39046ed75a73fea9871",
+      "matchesActiveBuild": true
+    },
+    "/app/preferences": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "2062fd900880eb081ad1dd3d92a269cdcc9d36bcdd21b39046ed75a73fea9871",
+      "matchesActiveBuild": true
+    },
+    "/app/recover": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "2062fd900880eb081ad1dd3d92a269cdcc9d36bcdd21b39046ed75a73fea9871",
+      "matchesActiveBuild": true
+    },
+    "/app/ouvrir": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "2062fd900880eb081ad1dd3d92a269cdcc9d36bcdd21b39046ed75a73fea9871",
+      "matchesActiveBuild": true
+    },
+    "/refonte/v1/me": {
+      "statusLine": "HTTP/2 401 ",
+      "headers": {
+        "content-type": "application/problem+json; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "984fc897b23ecdc74d0bd361ee92a2f50fb0934f4130199352b7ff57c31f265e"
+    },
+    "/app/assets/index-4lZS3WuM.js": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "application/javascript; charset=utf-8",
+        "cache-control": "public, max-age=31536000, immutable",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "9a7e0b4af9862a137705b1b12805fa4695db6c44cabcb6311cc3143fded06e7c",
+      "matchesActiveBuild": true
+    },
+    "/app/assets/index-Cmuz9aFS.css": {
+      "statusLine": "HTTP/2 200 ",
+      "headers": {
+        "content-type": "text/css; charset=utf-8",
+        "cache-control": "public, max-age=31536000, immutable",
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        "x-content-type-options": "nosniff"
+      },
+      "bodySha256": "a57f37872db957f00ae3747db80d5c4174f60f0c394e97146348794be8c40f1a",
+      "matchesActiveBuild": true
+    }
+  },
+  "database": {
+    "database": "drivy_refonte",
+    "gpsAuditPolicyPresent": false,
+    "webDatabaseExists": false,
+    "rlsTables": 91,
+    "allTablesForceRls": true,
+    "runtimeRolesSafe": true,
+    "runtimeRolesPresent": true,
+    "appliedMigrationCount": 56,
+    "expectedMigrationCount": 57,
+    "checksumMismatch": [],
+    "unexpectedMigrations": [],
+    "pendingMigrations": [
+      "20261028b_lesson_gps_preparation_audit.sql"
+    ]
+  },
+  "identity": {
+    "webClientPresent": true,
+    "exactCallbackAllowed": true,
+    "wildcardCallbackPresent": false
+  }
+}

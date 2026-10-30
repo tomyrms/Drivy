@@ -21,7 +21,7 @@ function apply() {
   document.documentElement.dataset.theme = effective;
   document.documentElement.dataset.themePreference = preference;
   document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach(meta => {
-    meta.removeAttribute('media'); meta.content = effective === 'dark' ? '#191b1e' : '#f2f4f7';
+    meta.removeAttribute('media'); meta.content = effective === 'dark' ? '#191b1e' : '#f7f8fa';
   });
 }
 function emit() { apply(); listeners.forEach(listener => listener()); }

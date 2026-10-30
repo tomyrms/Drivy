@@ -103,8 +103,8 @@ Avant de relancer, relire le script, la configuration et l'état distant. Prése
 
 ## Confidentialité et périmètre
 
-Le Project est privé d'après le compte rendu, mais **le dépôt et ses fichiers sont publics**. Le lien vers un espace privé ne rend pas confidentiel le contenu des fichiers. Ne pas y consigner de secret, donnée d'élève ou stratégie commerciale confidentielle.
+Le Project est privé (vérifié le 30 octobre 2026), mais **le dépôt et ses fichiers sont publics**. Le lien vers un espace privé ne rend pas confidentiel le contenu des fichiers. Ne pas y consigner de secret, donnée d'élève ou stratégie commerciale confidentielle.
 
 Les tickets de finition annulés **#340, #341–#346 et #348–#369** restent exclus. Les idées #45 et #63 ne deviennent pas des développements autorisés du fait de leur classement.
 
-La présente mise à jour concerne uniquement la documentation : aucun développement applicatif, modification du Project, changement de labels, création d'issue ou déploiement. La branche documentaire n'est pas fusionnée automatiquement avec la refonte ou `master`.
+Cette organisation documentaire ne modifie ni le Project, ni les labels, ni les issues, et n'implique aucun déploiement. La roadmap en fichiers est publiée sur `master` ; le Project reste une vue facultative et n'est pas synchronisé automatiquement.

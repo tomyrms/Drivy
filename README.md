@@ -20,7 +20,7 @@
 
 **Drivy accompagne le suivi pédagogique des auto-écoles suisses**, de la préparation d'un rendez-vous aux observations de conduite et au bilan de l'élève. Les usages du moniteur, de l'élève et de l'administration partagent les mêmes données, sans imposer la même interface à tous.
 
-> **Projet en développement.** Ce README décrit le dépôt et son produit, pas une certification de disponibilité en production. Les livraisons, résultats de tests et limites sont consignés dans le [suivi d'implémentation](docs/implementation/STATUS.md). La refonte du portail web est proposée dans la [PR #347](https://github.com/tomyrms/Drivy/pull/347), encore ouverte à la date de cette mise à jour ; la branche par défaut ne la contient pas encore.
+> **Projet en développement.** Ce README décrit le dépôt et son produit, pas une certification de disponibilité en production. Les livraisons, résultats de tests et limites sont consignés dans le [suivi d'implémentation](docs/implementation/STATUS.md). La refonte du portail web a été intégrée à la branche par défaut par la [PR #347](https://github.com/tomyrms/Drivy/pull/347), à partir de `85482ee1`.
 
 ## Le produit
 
@@ -44,16 +44,16 @@ Ces parcours décrivent le périmètre fonctionnel travaillé dans le dépôt ; 
 
 ## Refonte du portail web
 
-La refonte [#311](https://github.com/tomyrms/Drivy/issues/311) renouvelle la présentation du portail : **shadcn/ui avec Base UI**, une composition inspirée de **Cal.com et Untitled UI**, et l'identité Drivy — cobalt, Manrope et thème sombre Soft Charcoal. Elle est proposée dans la [PR #347](https://github.com/tomyrms/Drivy/pull/347), **encore ouverte à la date de cette mise à jour** ; la branche par défaut ne la contient pas encore.
+La refonte [#311](https://github.com/tomyrms/Drivy/issues/311) renouvelle la présentation du portail : **shadcn/ui avec Base UI**, une composition inspirée de **Cal.com et Untitled UI**, et l'identité Drivy — cobalt, Manrope et thème sombre Soft Charcoal. Elle a été intégrée à la branche par défaut par la [PR #347](https://github.com/tomyrms/Drivy/pull/347). Le portail vit sous `apps/web/client/portal` ; l'ancien client (`App.tsx`, `console/*`, `styles.css`) est retiré.
 
-Un aperçu isolé, alimenté par des **données synthétiques**, existe sur la branche de la refonte (`apps/web/preview-311.html`). Il ne remplace ni une session authentifiée, ni les droits serveur, ni les données d'une école. Les choix visuels et les limites de cette refonte sont décrits dans la [direction artistique](DESIGN.md) et le [guide web/BFF](apps/web/README.md).
+Un aperçu isolé, alimenté par des **données synthétiques**, existe dans le portail (`apps/web/preview-311.html`). Il ne remplace ni une session authentifiée, ni les droits serveur, ni les données d'une école. Les choix visuels et les limites de cette refonte sont décrits dans la [direction artistique](DESIGN.md) et le [guide web/BFF](apps/web/README.md).
 
 ## Architecture
 
 | Composant | Technologies et rôle | Sources |
 | --- | --- | --- |
 | **Application native** | Swift 6, SwiftUI ; interfaces iPhone/iPad, leçons, GPS, bilans et messagerie. SQLCipher pour le stockage local concerné. | [`apps/ios`](apps/ios) |
-| **Portail et BFF** | React, TypeScript, Vite et Base UI ; serveur Fastify de même origine pour la session web. La refonte #311 (PR #347) introduit shadcn/ui et Tailwind CSS. | [`apps/web`](apps/web) |
+| **Portail et BFF** | React, TypeScript, Vite et Base UI ; serveur Fastify de même origine pour la session web. La refonte #311, intégrée par la PR #347, a introduit shadcn/ui et Tailwind CSS ; le portail vit dans `apps/web/client/portal`. | [`apps/web`](apps/web) |
 | **API métier** | TypeScript, Fastify et PostgreSQL ; droits scolaires, contrats, versions et commandes idempotentes. | [`apps/api`](apps/api) |
 | **Identité et exploitation** | OpenID Connect avec Keycloak ; configurations locales, déploiement et outils de construction. | [`infra`](infra) · [`scripts`](scripts) |
 
@@ -80,7 +80,7 @@ La [conception de référence](Drivy_Conception_v3_17_2026-09-20/COMMENCER_ICI.m
 
 ### Choisir la bonne base
 
-Avant de travailler, vérifier la branche, son commit et les PR actives. Ne pas repartir automatiquement d'un ancien `master` si la fonctionnalité étudiée a évolué ailleurs. L'intégration de la refonte web se suit dans la [PR #347](https://github.com/tomyrms/Drivy/pull/347) ; son état doit être relu au moment de l'intervention.
+Avant de travailler, vérifier la branche, son commit et les PR actives. Ne pas repartir automatiquement d'un ancien `master` si la fonctionnalité étudiée a évolué ailleurs. La refonte web est intégrée dans `master` depuis la [PR #347](https://github.com/tomyrms/Drivy/pull/347) (`85482ee1`) ; vérifier l'état réel du dépôt avant de repartir d'une branche ancienne.
 
 Lire d'abord [AGENTS.md](AGENTS.md) et [DESIGN.md](DESIGN.md). Conserver les travaux des autres agents et utiliser une branche ou un worktree séparé.
 
