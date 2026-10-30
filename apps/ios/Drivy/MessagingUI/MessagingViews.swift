@@ -11,6 +11,7 @@ struct MessagingInboxView: View {
     @State private var opening = false
     @State private var initialPeerAttempted = false
     @State private var query = ""
+    @State private var filter: MessagingInboxFilter = .all
     @State private var choosesContact = false
     @State private var showsSettings = false
 
@@ -76,7 +77,17 @@ struct MessagingInboxView: View {
     /// L’absence est une ligne de la liste, comme dans Élèves (#140) : sous le général s’il est là, jamais par-dessus.
     @ViewBuilder private var inboxEmptyState: some View {
         Group {
-            if searchFoundNothing {
+            if filter == .unread && visibleConversations.isEmpty && !showsGeneralShortcut && workspace.error == nil {
+                if workspace.canLoadMoreConversations {
+                    DrivyEmptyState(title: "Aucun non-lu parmi les conversations chargées", symbol: "envelope.open",
+                        actionTitle: "Charger d’autres conversations", action: { loadMoreConversations() })
+                        .accessibilityIdentifier("messaging.unread.partial")
+                } else {
+                    DrivyEmptyState(title: query.isEmpty ? "Aucune conversation non lue" : "Aucun non-lu pour cette recherche",
+                        symbol: "envelope.open", actionTitle: "Afficher toutes les conversations", action: { filter = .all })
+                        .accessibilityIdentifier("messaging.unread.empty")
+                }
+            } else if searchFoundNothing {
                 if workspace.canLoadMoreConversations {
                     // La recherche ne lit que les conversations chargées (#167) : jamais un « aucun résultat » définitif.
                     DrivyEmptyState(title: "Aucun résultat parmi les conversations chargées", symbol: "magnifyingglass",
@@ -86,7 +97,7 @@ struct MessagingInboxView: View {
                     DrivyEmptyState(title: "Aucun résultat", symbol: "magnifyingglass",
                         actionTitle: "Effacer la recherche", action: { query = "" })
                 }
-            } else if workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
+            } else if filter == .all && workspace.hasLoadedConversations && query.isEmpty && privateConversations.isEmpty
                         && workspace.error == nil {
                 if hasGeneral {
                     // Le général est là : il n’est pas « aucune conversation », seulement aucune conversation privée (#166).
@@ -105,7 +116,7 @@ struct MessagingInboxView: View {
         .drivyPlainRows()
     }
 
-    private var searchFoundNothing: Bool { !query.isEmpty && visibleConversations.isEmpty && !generalMatchesQuery }
+    private var searchFoundNothing: Bool { !query.isEmpty && visibleConversations.isEmpty && !showsGeneralShortcut }
     private var hasGeneral: Bool { showsGeneralShortcut || workspace.conversations.contains { $0.kind == .schoolGeneral } }
 
     private func loadMoreConversations() {
@@ -114,6 +125,13 @@ struct MessagingInboxView: View {
 
     private var inbox: some View {
         List {
+            Picker("Conversations affichées", selection: $filter) {
+                ForEach(MessagingInboxFilter.allCases) { value in Text(value.title).tag(value) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("messaging.inbox.filter")
+            .listRowSeparator(.hidden)
+            .listRowBackground(DrivyTheme.surface)
             if let error = workspace.error {
                 Section {
                     VStack(alignment: .leading, spacing: DrivySpacing.s) {
@@ -125,37 +143,28 @@ struct MessagingInboxView: View {
                     .accessibilityIdentifier("messaging.error")
                 }
             }
-            if showsGeneralShortcut {
-                Button { Task { await openGeneral() } } label: {
-                    MessagingInboxRow(title: "Général", preview: nil, unread: 0, muted: false,
-                                      photo: nil, isGeneral: true)
+            if filter == .unread {
+                Section {
+                    conversationRows(visibleConversations.filter { readCategory($0) == .unread })
+                } header: {
+                    if workspace.canLoadMoreConversations { Text("Parmi les conversations chargées") }
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(DrivyTheme.surface)
-                .disabled(opening)
-                .accessibilityIdentifier("messaging.general.open")
-            }
-            ForEach(visibleConversations) { item in
-                Button { open(item) } label: {
-                    MessagingInboxRow(title: item.kind == .schoolGeneral ? "Général" : item.title,
-                        preview: workspace.preview(for: item.id),
-                        unread: item.unreadCount ?? 0,
-                        muted: (workspace.displayedMutedUntil(item.id, fallback: item.mutedUntil) ?? .distantPast) > Date(),
-                        photo: item.peerPersonID.flatMap { workspace.photos[$0] },
-                        isGeneral: item.kind == .schoolGeneral)
+                if showsGeneralShortcut || visibleConversations.contains(where: { readCategory($0) == .unknown }) {
+                    Section("Lecture à vérifier") {
+                        if showsGeneralShortcut { generalShortcut }
+                        conversationRows(visibleConversations.filter { readCategory($0) == .unknown })
+                    }
                 }
-                .task(id: item.peerPersonID) {
-                    if let peer = item.peerPersonID { await workspace.loadPhoto(peer) }
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(route?.id == item.id && horizontalSizeClass == .regular
-                    ? DrivyTheme.accent.opacity(0.12) : DrivyTheme.surface)
-                .accessibilityIdentifier(item.kind == .schoolGeneral ? "messaging.general.open" : "messaging.conversation.\(item.id)")
+            } else {
+                if showsGeneralShortcut { generalShortcut }
+                conversationRows(visibleConversations)
             }
             // En recherche aussi : la conversation cherchée peut être sur une page suivante (#167).
-            if workspace.canLoadMoreConversations && !searchFoundNothing {
+            if workspace.canLoadMoreConversations && !searchFoundNothing
+                && !(filter == .unread && visibleConversations.isEmpty && !showsGeneralShortcut) {
                 Button(query.isEmpty ? "Charger plus" : "Chercher dans plus de conversations") { loadMoreConversations() }
                     .frame(minHeight: 44)
+                    .disabled(workspace.loading)
                     .accessibilityIdentifier("messaging.inbox.more-conversations")
             }
             if !(workspace.loading && !workspace.hasLoadedConversations) { inboxEmptyState }
@@ -200,6 +209,39 @@ struct MessagingInboxView: View {
         }
     }
 
+    private var generalShortcut: some View {
+        Button { Task { await openGeneral() } } label: {
+            MessagingInboxRow(title: "Général", preview: nil, unread: nil, muted: false,
+                              photo: nil, isGeneral: true)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(DrivyTheme.surface)
+        .disabled(opening)
+        .accessibilityIdentifier("messaging.general.open")
+    }
+
+    private func readCategory(_ item: MessagingConversation) -> MessagingInboxReadCategory {
+        MessagingInboxReadCategory(serverUnreadCount: item.unreadCount)
+    }
+
+    private func conversationRows(_ items: [MessagingConversation]) -> some View {
+        ForEach(items) { item in
+            Button { open(item) } label: {
+                MessagingInboxRow(title: item.kind == .schoolGeneral ? "Général" : item.title,
+                    preview: workspace.preview(for: item.id), unread: item.unreadCount,
+                    muted: (workspace.displayedMutedUntil(item.id, fallback: item.mutedUntil) ?? .distantPast) > Date(),
+                    photo: item.peerPersonID.flatMap { workspace.photos[$0] }, isGeneral: item.kind == .schoolGeneral)
+            }
+            .task(id: item.peerPersonID) {
+                if let peer = item.peerPersonID { await workspace.loadPhoto(peer) }
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(route?.id == item.id && horizontalSizeClass == .regular
+                ? DrivyTheme.accent.opacity(0.12) : DrivyTheme.surface)
+            .accessibilityIdentifier(item.kind == .schoolGeneral ? "messaging.general.open" : "messaging.conversation.\(item.id)")
+        }
+    }
+
     private var privateConversations: [MessagingConversation] {
         workspace.conversations.filter { $0.kind != .schoolGeneral }
     }
@@ -210,7 +252,7 @@ struct MessagingInboxView: View {
     }
 
     private var generalMatchesQuery: Bool {
-        query.isEmpty || "Général".range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        MessagingInboxFilter.matches(query: query, title: "Général", preview: nil)
     }
 
     /// Le serveur trie par identifiant : la vue range par dernier message connu, puis garde l'ordre reçu.
@@ -218,10 +260,9 @@ struct MessagingInboxView: View {
         let indexed = workspace.conversations.enumerated().map { (offset: $0.offset, item: $0.element,
                                                                     preview: workspace.preview(for: $0.element.id)) }
         let filtered = indexed.filter { entry in
-            guard !query.isEmpty else { return true }
             let title = entry.item.kind == .schoolGeneral ? "Général" : entry.item.title
-            let haystack = [title, entry.preview?.text ?? ""]
-            return haystack.contains { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+            return filter.includes(serverUnreadCount: entry.item.unreadCount)
+                && MessagingInboxFilter.matches(query: query, title: title, preview: entry.preview?.text)
         }
         return filtered.sorted { lhs, rhs in
             switch (lhs.preview?.date, rhs.preview?.date) {
@@ -309,7 +350,7 @@ struct MessagingInboxView: View {
 private struct MessagingInboxRow: View {
     let title: String
     let preview: MessagingInboxPreview?
-    let unread: Int
+    let unread: Int?
     let muted: Bool
     let photo: Data?
     let isGeneral: Bool
@@ -324,7 +365,7 @@ private struct MessagingInboxRow: View {
                     if let date = preview?.date {
                         Text(MessagingInboxDate.compact(date))
                             .font(.caption)
-                            .foregroundStyle(unread > 0 ? DrivyTheme.accent : DrivyTheme.muted)
+                            .foregroundStyle((unread ?? 0) > 0 ? DrivyTheme.accent : DrivyTheme.muted)
                     }
                 }
                 HStack(alignment: .top, spacing: DrivySpacing.xs) {
@@ -336,7 +377,7 @@ private struct MessagingInboxRow: View {
                     if muted {
                         Image(systemName: "bell.slash.fill").font(.caption).foregroundStyle(DrivyTheme.muted)
                     }
-                    if unread > 0 {
+                    if let unread, unread > 0 {
                         Text(unread > 99 ? "99+" : unread.formatted())
                             .font(.caption.weight(.semibold))
                             .monospacedDigit()
@@ -344,6 +385,9 @@ private struct MessagingInboxRow: View {
                             .padding(.horizontal, 6)
                             .frame(minWidth: 20, minHeight: 20)
                             .background(muted ? DrivyTheme.muted : DrivyTheme.accent, in: Capsule())
+                    } else if unread == nil {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundStyle(DrivyTheme.muted)
                     }
                 }
             }
@@ -379,7 +423,8 @@ private struct MessagingInboxRow: View {
 
     private var accessibilityText: String {
         var parts = [title]
-        if unread > 0 { parts.append(unread == 1 ? "1 message non lu" : "\(unread) messages non lus") }
+        if let unread, unread > 0 { parts.append(unread == 1 ? "1 message non lu" : "\(unread) messages non lus") }
+        else if unread == nil { parts.append("État de lecture à vérifier") }
         if !previewText.isEmpty { parts.append(previewText) }
         if let date = preview?.date { parts.append(date.formatted(.relative(presentation: .named))) }
         if muted { parts.append("en sourdine") }

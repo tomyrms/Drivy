@@ -26,6 +26,7 @@ struct SchoolMyProfileView: View {
     @State private var confirmsDiscard = false
     @State private var showsGuidedWelcome = false
     @State private var savedOnce = false
+    @State private var showsAccountScope = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -87,6 +88,22 @@ struct SchoolMyProfileView: View {
 
     private var form: some View {
         Form {
+            Section {
+                Button { showsAccountScope = true } label: {
+                    Label("Profil commun à tes écoles", systemImage: "info.circle")
+                }
+                .accessibilityIdentifier("my-profile-account-scope")
+                .popover(isPresented: $showsAccountScope) {
+                    Text("Ton identité et tes coordonnées appartiennent à ton compte Drivy, même sans école. Les écoles autorisées consultent ces mêmes informations. Les demandes et la notice de l’école ouverte restent propres à cette école.")
+                        .font(.subheadline)
+                        .foregroundStyle(DrivyTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(idealWidth: 300, alignment: .leading)
+                        .padding(DrivySpacing.m)
+                        .presentationCompactAdaptation(.popover)
+                }
+            }
+            .drivyFormRows()
             photoSection
             messages
             identitySection
@@ -200,7 +217,7 @@ struct SchoolMyProfileView: View {
             field("Nom", text: $editor.edit.lastName, identifier: "self-last-name", field: .lastName)
                 .textContentType(.familyName).textInputAutocapitalization(.words).autocorrectionDisabled()
             DrivyFormField(label: "Nom affiché", text: $editor.edit.displayName, identifier: "self-display-name",
-                info: "Le nom que voient les membres de ton école, dans les listes et Messages. Ton prénom et ton nom ne changent pas.")
+                info: "Le nom affiché dans tes écoles, dans les listes et Messages selon les droits de chacun. Ton prénom et ton nom ne changent pas.")
                 .textContentType(.name).textInputAutocapitalization(.words).autocorrectionDisabled()
             if editor.hasEdits, !editor.displayNameValid {
                 DrivyFormMessage(text: editor.trimmed.displayName.isEmpty ? "Renseigne le nom affiché."
@@ -214,7 +231,7 @@ struct SchoolMyProfileView: View {
         Section {
             // L’adresse où l’école peut écrire, distincte de celle de la connexion (#158).
             field("E-mail de contact", text: $editor.edit.contactEmail, prompt: "nom@exemple.ch", identifier: "self-email",
-                  field: .contactEmail, info: "L’adresse où ton école peut t’écrire. L’adresse de connexion ne change pas.")
+                  field: .contactEmail, info: "L’adresse où les écoles autorisées peuvent t’écrire. Elle est commune à ton compte ; l’adresse de connexion ne change pas.")
                 .textContentType(.emailAddress).keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
             if !editor.emailValid { DrivyFormMessage(text: "Vérifie le format de l’e-mail de contact.", tone: .danger) }

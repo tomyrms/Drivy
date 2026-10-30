@@ -28,6 +28,7 @@ struct SchoolMessagingEntry: Sendable {
     let scopeID: String
     var isQualification: Bool = false
     let makeView: @MainActor @Sendable (UUID?) -> AnyView
+    var makeSettingsView: (@MainActor @Sendable () -> AnyView)? = nil
 }
 
 private struct SchoolMessagingEntryKey: EnvironmentKey {
