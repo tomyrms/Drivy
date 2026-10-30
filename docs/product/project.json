@@ -25,7 +25,7 @@
   ],
   "views": [
     {"name": "Vision produit", "layout": "TABLE_LAYOUT", "filter": "nature:Initiative"},
-    {"name": "Développement", "layout": "BOARD_LAYOUT", "filter": "nature:Issue is:open"},
+    {"name": "Développement", "layout": "BOARD_LAYOUT", "filter": "nature:Issue"},
     {"name": "Backlog", "layout": "TABLE_LAYOUT", "filter": "nature:Issue"},
     {"name": "Roadmap", "layout": "ROADMAP_LAYOUT", "filter": "nature:Initiative"}
   ],
@@ -62,6 +62,7 @@
     "Importer seulement les issues existantes encore ouvertes, sans en déduire qu'elles restent intégralement à coder.",
     "La liste d'exclusion protège le lot de finition annulé, sans toucher à la refonte #311 ou à la PR #347.",
     "Ne pas inventer de dates ni activer une clôture automatique après fusion.",
-    "Contrôler le regroupement du Kanban par Status et les champs de dates de la Roadmap dans l'interface GitHub."
+    "Contrôler le regroupement du Kanban par Status et les champs de dates de la Roadmap dans l'interface GitHub.",
+    "La vue Développement ne filtre pas is:open : une carte fermée doit rester visible dans Terminé tant qu'elle n'est pas archivée."
   ]
 }
