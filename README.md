@@ -20,7 +20,7 @@
 
 **Drivy accompagne le suivi pédagogique des auto-écoles suisses**, de la préparation d'un rendez-vous aux observations de conduite et au bilan de l'élève. Les usages du moniteur, de l'élève et de l'administration partagent les mêmes données, sans imposer la même interface à tous.
 
-> **Projet en développement.** Ce README décrit le dépôt et son produit, pas une certification de disponibilité en production. Les livraisons, résultats de tests et limites sont consignés dans le [suivi d'implémentation](docs/implementation/STATUS.md). La refonte du portail web a été intégrée à la branche par défaut par la [PR #347](https://github.com/tomyrms/Drivy/pull/347), à partir de `85482ee1` ; l'état vérifiable se lit dans le [suivi d'implémentation](docs/implementation/STATUS.md).
+> **Projet en développement.** Ce README décrit le dépôt et son produit, pas une certification de disponibilité en production. Les livraisons, résultats de tests et limites sont consignés dans le [suivi d'implémentation](docs/implementation/STATUS.md). La refonte du portail web a été intégrée à la branche par défaut par la [PR #347](https://github.com/tomyrms/Drivy/pull/347), à partir de `85482ee1`.
 
 ## Le produit
 

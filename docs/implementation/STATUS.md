@@ -1,5 +1,14 @@
 # État de la réalisation
 
+## 30 octobre 2026 — intégration de la refonte, corrections et limites de recette
+
+- Fusion de `origin/master` (README, roadmap et organisation du Project issus de #371) dans `codex/epic-311-rebuild` : aucun conflit ; les fichiers documentaires sont conservés et l'ancien frontend reste retiré.
+- Entrée : après un refus de création de compte (adresse différente de l'invitation), le mot de passe saisi n'est plus effacé ; une seule alerte est affichée et la saisie reste corrigeable.
+- Portail : le moniteur et la période sont conservés entre Agenda, Disponibilités et Absences ; la préparation d'une formation reste dans son espace ; l'onglet parent d'une fiche reste navigable ; une version ancienne de prestation n'ouvre plus le tarif courant ; le retour des préférences conserve la requête d'origine.
+- Harnais navigateur « ouverture école » aligné sur l'éditeur de disponibilités et les parcours reconstruits, sans retirer d'assertion.
+- **Exécuté** : typage API/web, builds, 523 tests web, vérificateur documentaire, 106 contrôles navigateur (ouverture d'école, invitations, préparation, disponibilités, première leçon, agenda, confirmation d'identité et réglage GPS), contrôles GitHub du dépôt.
+- **Limites** : les suites navigateur étendues « formations/tarifs », « saisie par code » et « récupération de compte » ciblent encore l'ancienne présentation ; elles restent dans le dépôt et s'exécutent avec `--extended`, mais ne sont pas déclarées vertes par ce parcours. Déploiement homelab non effectué (build servi `4af4b0e6748081f90201169132cccd5c9fd6cfdb`), tests iOS et campagne exhaustive non exécutés. Project, labels et issues inchangés.
+
 ## 29 octobre 2026 — refonte web acceptée et tickets clôturés à la demande du porteur
 
 - Retour explicite du porteur : « c’est parfait », puis demande de fermer tous les tickets concernant la refonte web. Les 56 tickets des deux epics sont CLOSED, état relu sur GitHub : #311 et #312–#336 ; #280 et #281–#309. #247/#255 étaient déjà fermés.
@@ -1211,7 +1220,7 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 
 - PASS : tests metier iOS complets (runs 40236644565, 40237951212), verifications API/PostgreSQL (40237952137), IPA avec acces Messages (40239305741).
 - NOT_EXECUTED : controle UI fonctionnel MessagingFeatureCheckUITests sur le dernier SHA, recette reseau 1/5/15 s, essai iPhone, push reel.
-- BLOCKED : alerte de mention (migration 20261025 non deployee) ; aucune alerte � nouveau message � cote serveur.
+- BLOCKED : alerte de mention (migration 20261025 non deployee) ; aucune alerte � nouveau message � cote serveur.
 
 ## Retours porteur 25 octobre soir (6bfea69)
 
