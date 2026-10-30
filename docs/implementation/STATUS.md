@@ -29,6 +29,7 @@ Essai web validé par le porteur sur `f0aa7dce`. Suites `--extended` exécutées
 - Saisie par code et récupération n'ont demandé aucune adaptation : la limite notée le 30 octobre était fausse pour ces deux suites. Formations et tarifs a été réaligné sur le portail : 29 assertions conservées, dont quatre adaptées à des comportements changés par #311 et listées dans la PR. Aucun défaut applicatif trouvé.
 - Les trois suites sont raccordées à `validation-finale.yml`. Le parcours de base reste inchangé par défaut.
 - Typage du harnais sans erreur dans les fichiers modifiés ; 3 erreurs préexistantes sur master dans d'autres scripts.
+- PR #384 fusionnée sur décision du porteur : master `2a376c39`, identique à `fca6a78e`. Sur ce SHA, `Refonte · ouverture école navigateur` (41100489556, parcours de base) et `Refonte · vérifications` (41100488932) réussis. Code applicatif toujours identique à `f0aa7dce`, aucun redéploiement.
 - NOT_EXECUTED : navigateur physique, lecteur d'écran, compte réel. Récupération par e-mail toujours désactivée en production.
 
 <!-- ios-batch-15-20261029 -->
