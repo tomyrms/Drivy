@@ -1,0 +1,2840 @@
+{
+  "schemaVersion": 1,
+  "epic": 311,
+  "resumedFrom": "332324166ff8",
+  "date": "2026-10-29",
+  "inventorySource": "epic-280-inventory.json",
+  "scope": "All inventoried web tasks; no native changes",
+  "status": "Preview delivery before owner trial; no issue closed",
+  "stateProfiles": {
+    "read": [
+      "initial",
+      "loading",
+      "loaded",
+      "empty",
+      "partial",
+      "unavailable",
+      "forbidden",
+      "stale_context"
+    ],
+    "write": [
+      "editing",
+      "invalid_input",
+      "review",
+      "cancelled_before_send",
+      "sending",
+      "confirmed",
+      "rejected",
+      "version_conflict",
+      "uncertain",
+      "session_expired",
+      "context_changed"
+    ],
+    "navigation": [
+      "deep_link",
+      "back",
+      "forward",
+      "new_tab",
+      "dirty_guard",
+      "bfcache_return",
+      "chunk_unavailable"
+    ],
+    "display": [
+      "light",
+      "dark",
+      "narrow_320",
+      "mobile_390",
+      "tablet_768",
+      "desktop_1440",
+      "long_text",
+      "zoom_200",
+      "reflow_400",
+      "keyboard",
+      "reduced_motion"
+    ]
+  },
+  "views": [
+    {
+      "id": "entry.login",
+      "route": "/app",
+      "label": "Connexion",
+      "actions": [
+        "Saisir e-mail et mot de passe",
+        "ouvrir récupération",
+        "choisir code"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/account-entry.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "PUBLIC",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.code",
+      "route": "/app",
+      "label": "Code d’accès",
+      "actions": [
+        "Saisir code",
+        "vérifier type",
+        "revenir connexion"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/account-entry.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "PUBLIC",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.register",
+      "route": "/app",
+      "label": "Inscription après code/lien",
+      "actions": [
+        "Saisir prénom, nom, e-mail, mot de passe",
+        "créer compte",
+        "compte existant"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/account-entry.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "PUBLIC",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.schools",
+      "route": "/app",
+      "label": "Écoles liées",
+      "actions": [
+        "Actualiser",
+        "choisir école",
+        "saisir code",
+        "se déconnecter"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/App.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.no-school",
+      "route": "/app",
+      "label": "Compte sans école",
+      "actions": [
+        "Saisir code",
+        "actualiser",
+        "ouvrir invitation existante"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/App.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.invitation",
+      "route": "/app/invitation",
+      "label": "Aperçu invitation",
+      "actions": [
+        "Lire école, rôles, confidentialité, conservation",
+        "confirmer",
+        "changer compte"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/App.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.invitation-result",
+      "route": "/app/invitation",
+      "label": "Acceptation et résultat incertain",
+      "actions": [
+        "Rejoindre",
+        "vérifier même opération",
+        "annuler avant envoi",
+        "ouvrir école"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/App.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.recover",
+      "route": "/app/recover",
+      "label": "Récupération du compte",
+      "actions": [
+        "Vérifier disponibilité",
+        "réessayer",
+        "ouvrir fournisseur identité",
+        "revenir"
+      ],
+      "previousOwner": "W08",
+      "issue": 319,
+      "retiredSource": "apps/web/client/account-recovery.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/entry-page.tsx",
+      "permissionProfile": "PUBLIC",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.opening",
+      "route": "/app/ouvrir",
+      "label": "Ouverture école",
+      "actions": [
+        "Nom école, coordonnées, responsable, fuseau, rôle moniteur",
+        "créer",
+        "vérifier résultat"
+      ],
+      "previousOwner": "W09",
+      "issue": 320,
+      "retiredSource": "apps/web/client/school-opening.tsx",
+      "presentationEntry": "apps/web/client/portal/opening/opening-page.tsx",
+      "permissionProfile": "OPENING_LINK",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=ouverture",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.opening-result",
+      "route": "/app/ouvrir",
+      "label": "Reçu ouverture",
+      "actions": [
+        "Ouvrir préparation",
+        "reprendre résultat incertain",
+        "changer compte"
+      ],
+      "previousOwner": "W09",
+      "issue": 320,
+      "retiredSource": "apps/web/client/school-opening.tsx",
+      "presentationEntry": "apps/web/client/portal/opening/opening-page.tsx",
+      "permissionProfile": "OPENING_LINK",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=ouverture",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "entry.operator",
+      "route": "/app/operateur",
+      "label": "Liens d’ouverture",
+      "actions": [
+        "Créer lien/code",
+        "copier",
+        "lister",
+        "révoquer lien disponible"
+      ],
+      "previousOwner": "W09",
+      "issue": 320,
+      "retiredSource": "apps/web/client/school-opening.tsx",
+      "presentationEntry": "apps/web/client/portal/opening/opening-page.tsx",
+      "permissionProfile": "OPERATOR",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=ouverture",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "account.menu",
+      "route": "all",
+      "label": "Menu du compte",
+      "actions": [
+        "Écoles",
+        "préférences",
+        "déconnexion avec garde"
+      ],
+      "previousOwner": "W27",
+      "issue": 333,
+      "retiredSource": "apps/web/client/preferences.tsx",
+      "presentationEntry": "apps/web/client/portal/account/preferences-page.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preferences",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "account.theme",
+      "route": "/app/preferences",
+      "label": "Apparence personnelle",
+      "actions": [
+        "Système, clair, sombre",
+        "conserver seulement préférence neutre"
+      ],
+      "previousOwner": "W27",
+      "issue": 333,
+      "retiredSource": "apps/web/client/preferences.tsx",
+      "presentationEntry": "apps/web/client/portal/account/preferences-page.tsx",
+      "permissionProfile": "PUBLIC",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preferences",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "account.notifications",
+      "route": "/app/preferences",
+      "label": "Préférences notifications",
+      "actions": [
+        "Modifier choix",
+        "vérifier incertitude",
+        "renvoyer mêmes choix",
+        "gérer conflit"
+      ],
+      "previousOwner": "W27",
+      "issue": 333,
+      "retiredSource": "apps/web/client/notification-preferences.tsx",
+      "presentationEntry": "apps/web/client/portal/account/preferences-page.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preferences",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "account.identity",
+      "route": "all",
+      "label": "Confirmation identité",
+      "actions": [
+        "Confirmer identité courante",
+        "reconnexion",
+        "annuler"
+      ],
+      "previousOwner": "W06",
+      "issue": 317,
+      "retiredSource": "apps/web/client/identity-confirmation.tsx",
+      "presentationEntry": "apps/web/client/portal/runtime/identity-dialog.tsx",
+      "permissionProfile": "ACCOUNT",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.choose",
+      "route": "/app/gestion",
+      "label": "Choix école administrée",
+      "actions": [
+        "Choisir école parmi adhésions ADMIN courantes"
+      ],
+      "previousOwner": "W04",
+      "issue": 316,
+      "retiredSource": "apps/web/client/console/Console.tsx",
+      "presentationEntry": "apps/web/client/portal/portal-console.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.denied",
+      "route": "/app/gestion",
+      "label": "Accès gestion refusé",
+      "actions": [
+        "Retour écoles",
+        "reconnexion",
+        "pas de droit admin ajouté"
+      ],
+      "previousOwner": "W04",
+      "issue": 316,
+      "retiredSource": "apps/web/client/console/Console.tsx",
+      "presentationEntry": "apps/web/client/portal/portal-console.tsx",
+      "permissionProfile": "DENIED",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.navigation",
+      "route": "/app/gestion/:schoolId/:section",
+      "label": "Navigation scolaire",
+      "actions": [
+        "5 espaces nommés",
+        "sous-destinations",
+        "recherche réglages",
+        "changer école"
+      ],
+      "previousOwner": "W04",
+      "issue": 316,
+      "retiredSource": "apps/web/client/console/Console.tsx",
+      "presentationEntry": "apps/web/client/portal/portal-console.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.pending",
+      "route": "all-console",
+      "label": "Demandes à vérifier",
+      "actions": [
+        "Vérifier reçu",
+        "renvoyer même demande",
+        "revenir ressource",
+        "reconnexion"
+      ],
+      "previousOwner": "W07",
+      "issue": 317,
+      "retiredSource": "apps/web/client/console/Console.tsx",
+      "presentationEntry": "apps/web/client/portal/runtime/pending-requests.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.departure",
+      "route": "all-console",
+      "label": "Sortie avec saisie",
+      "actions": [
+        "Rester",
+        "quitter sans enregistrer",
+        "garder protection retour navigateur"
+      ],
+      "previousOwner": "W06",
+      "issue": 317,
+      "retiredSource": "apps/web/client/console/Console.tsx",
+      "presentationEntry": "apps/web/client/portal/runtime/identity-dialog.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.load-failed",
+      "route": "all",
+      "label": "Module non chargé",
+      "actions": [
+        "Réessayer import",
+        "garder lien invitation en mémoire"
+      ],
+      "previousOwner": "W07",
+      "issue": 317,
+      "retiredSource": "apps/web/client/main.tsx",
+      "presentationEntry": "apps/web/client/portal/runtime/pending-requests.tsx",
+      "permissionProfile": "PUBLIC",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.legacy",
+      "route": "offres,referentiels,procedures",
+      "label": "Ancien lien",
+      "actions": [
+        "Résoudre référence",
+        "remplacer historique URL",
+        "retour permis",
+        "refus référence"
+      ],
+      "previousOwner": "W30",
+      "issue": 334,
+      "retiredSource": "apps/web/client/console/formation-references.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/not-found-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "shell.unknown",
+      "route": "unknown",
+      "label": "Route inconnue",
+      "actions": [
+        "Page introuvable explicite pour URL inconnue",
+        "Retour aux écoles"
+      ],
+      "previousOwner": "W30",
+      "issue": 334,
+      "retiredSource": "apps/web/client/main.tsx",
+      "presentationEntry": "apps/web/client/portal/entry/not-found-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=connexion",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "overview.active",
+      "route": "apercu",
+      "label": "Accueil école active",
+      "actions": [
+        "Planning quotidien",
+        "prochaines actions réelles",
+        "accès préparation distinct"
+      ],
+      "previousOwner": "W10",
+      "issue": 321,
+      "retiredSource": "apps/web/client/console/overview.tsx",
+      "presentationEntry": "apps/web/client/portal/overview/overview-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=apercu",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "overview.archived",
+      "route": "apercu",
+      "label": "École inactive",
+      "actions": [
+        "Lire état réel",
+        "conserver refus des écritures"
+      ],
+      "previousOwner": "W10",
+      "issue": 321,
+      "retiredSource": "apps/web/client/console/overview.tsx",
+      "presentationEntry": "apps/web/client/portal/overview/overview-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=apercu",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "overview.readiness",
+      "route": "agenda",
+      "label": "Première leçon",
+      "actions": [
+        "Lire prochaine action serveur",
+        "réduire",
+        "ouvrir élève/invitation/planning"
+      ],
+      "previousOwner": "W10",
+      "issue": 321,
+      "retiredSource": "apps/web/client/console/overview.tsx",
+      "presentationEntry": "apps/web/client/portal/overview/overview-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=apercu",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.identity",
+      "route": "apercu",
+      "label": "Préparation identité",
+      "actions": [
+        "Nom école",
+        "contacts",
+        "fuseau",
+        "sauvegarder brouillon",
+        "suivant"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.privacy",
+      "route": "apercu",
+      "label": "Préparation confidentialité",
+      "actions": [
+        "Textes",
+        "contact",
+        "proposition adaptée",
+        "précédent/suivant"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.profile",
+      "route": "apercu",
+      "label": "Préparation informations élèves",
+      "actions": [
+        "Choisir demandes et stade",
+        "aperçu",
+        "continuer"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.formations",
+      "route": "apercu",
+      "label": "Préparation formations",
+      "actions": [
+        "Choisir permis/programme",
+        "adapter compétences/règles",
+        "différer"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.pricing",
+      "route": "apercu",
+      "label": "Préparation tarifs",
+      "actions": [
+        "Durée",
+        "prix réels",
+        "conditions",
+        "formations différées"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.review",
+      "route": "apercu",
+      "label": "Revue et activation",
+      "actions": [
+        "Relire effets",
+        "retourner champ en erreur",
+        "enregistrer",
+        "activer explicitement"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "setup.catalogue",
+      "route": "apercu?from=formations",
+      "label": "Guide catalogue seul",
+      "actions": [
+        "Formations/tarifs/revue",
+        "retour catalogue sans réadopter textes"
+      ],
+      "previousOwner": "W11",
+      "issue": 320,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/setup/setup-guide.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=preparation",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "agenda.week",
+      "route": "agenda",
+      "label": "Planning semaine",
+      "actions": [
+        "Changer période",
+        "aujourd’hui",
+        "filtre moniteur",
+        "recherche",
+        "lire leçons/cours"
+      ],
+      "previousOwner": "W12",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/agenda.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/agenda-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "agenda.day",
+      "route": "agenda",
+      "label": "Planning jour/mobile",
+      "actions": [
+        "Choisir jour",
+        "lire rendez-vous",
+        "conserver filtres",
+        "ouvrir détail"
+      ],
+      "previousOwner": "W12",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/agenda.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/agenda-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "agenda.sources",
+      "route": "agenda",
+      "label": "Sources partielles",
+      "actions": [
+        "Recharger source en erreur",
+        "ne pas confondre absence et indisponibilité"
+      ],
+      "previousOwner": "W12",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/agenda.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/agenda-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "lesson.detail",
+      "route": "agenda?lesson=:id",
+      "label": "Fiche leçon",
+      "actions": [
+        "Horaire",
+        "moniteur",
+        "lieu",
+        "préparation",
+        "dossier",
+        "retour contexte"
+      ],
+      "previousOwner": "W13",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/lesson-planning.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/lesson-workspace.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "lesson.create",
+      "route": "agenda?view=nouvelle",
+      "label": "Planification leçon",
+      "actions": [
+        "Élève/formation",
+        "moniteur",
+        "créneau",
+        "durée",
+        "lieu",
+        "vérifier disponibilité",
+        "confirmer"
+      ],
+      "previousOwner": "W13",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/lesson-planning.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/lesson-workspace.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "lesson.edit",
+      "route": "agenda?lesson=:id",
+      "label": "Déplacement leçon",
+      "actions": [
+        "Modifier horaire/lieu/moniteur",
+        "disponibilité",
+        "relire et confirmer"
+      ],
+      "previousOwner": "W13",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/lesson-planning.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/lesson-workspace.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "lesson.cancel",
+      "route": "agenda?lesson=:id",
+      "label": "Annulation leçon",
+      "actions": [
+        "Motif",
+        "effets et confirmation",
+        "garder conflit/refus dans contexte"
+      ],
+      "previousOwner": "W13",
+      "issue": 322,
+      "retiredSource": "apps/web/client/console/lesson-planning.tsx",
+      "presentationEntry": "apps/web/client/portal/agenda/lesson-workspace.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "availability.list",
+      "route": "disponibilites",
+      "label": "Horaires hebdomadaires",
+      "actions": [
+        "Filtrer moniteur",
+        "lire jours/périodes",
+        "retour membre"
+      ],
+      "previousOwner": "W14",
+      "issue": 323,
+      "retiredSource": "apps/web/client/console/availability.tsx",
+      "presentationEntry": "apps/web/client/portal/availability/schedule-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=disponibilites",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "availability.create",
+      "route": "disponibilites",
+      "label": "Ajouter horaire",
+      "actions": [
+        "Jours multiples",
+        "heures",
+        "validité",
+        "enregistrer"
+      ],
+      "previousOwner": "W14",
+      "issue": 323,
+      "retiredSource": "apps/web/client/console/availability.tsx",
+      "presentationEntry": "apps/web/client/portal/availability/schedule-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=disponibilites",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "availability.remove",
+      "route": "disponibilites",
+      "label": "Retirer horaire",
+      "actions": [
+        "Confirmer suppression versionnée",
+        "garder engagements existants"
+      ],
+      "previousOwner": "W14",
+      "issue": 323,
+      "retiredSource": "apps/web/client/console/availability.tsx",
+      "presentationEntry": "apps/web/client/portal/availability/schedule-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=disponibilites",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "absence.list",
+      "route": "absences",
+      "label": "Absences prévues",
+      "actions": [
+        "Filtre moniteur",
+        "lire intervalle fuseau école",
+        "retour membre"
+      ],
+      "previousOwner": "W14",
+      "issue": 323,
+      "retiredSource": "apps/web/client/console/availability.tsx",
+      "presentationEntry": "apps/web/client/portal/availability/schedule-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=disponibilites",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "absence.create",
+      "route": "absences",
+      "label": "Ajouter absence",
+      "actions": [
+        "Début/fin",
+        "motif",
+        "enregistrer",
+        "conflit planning"
+      ],
+      "previousOwner": "W14",
+      "issue": 323,
+      "retiredSource": "apps/web/client/console/availability.tsx",
+      "presentationEntry": "apps/web/client/portal/availability/schedule-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=disponibilites",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "absence.remove",
+      "route": "absences",
+      "label": "Retirer absence",
+      "actions": [
+        "Relire période",
+        "confirmer retrait"
+      ],
+      "previousOwner": "W14",
+      "issue": 323,
+      "retiredSource": "apps/web/client/console/availability.tsx",
+      "presentationEntry": "apps/web/client/portal/availability/schedule-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=disponibilites",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "learners.list",
+      "route": "eleves",
+      "label": "Annuaire élèves",
+      "actions": [
+        "Actifs/archives/tous",
+        "recherche nom/contact",
+        "profil",
+        "tri",
+        "pagination"
+      ],
+      "previousOwner": "W15",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "learners.detail",
+      "route": "eleves?selection=:id",
+      "label": "Fiche élève",
+      "actions": [
+        "Identité distincte/homonymes",
+        "coordonnées",
+        "résumé",
+        "retour liste/agenda/trajets"
+      ],
+      "previousOwner": "W15",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "learners.missing",
+      "route": "eleves?selection=:id",
+      "label": "Sélection hors liste/absente",
+      "actions": [
+        "Lire directement sélection autorisée",
+        "réessayer",
+        "retour sans faux dossier"
+      ],
+      "previousOwner": "W15",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "learners.profile",
+      "route": "eleves?selection=:id",
+      "label": "Compléter profil",
+      "actions": [
+        "Champs manquants selon politique",
+        "pays/adresse",
+        "revue",
+        "enregistrement versionné"
+      ],
+      "previousOwner": "W15",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/profile-completion.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "learners.archive",
+      "route": "eleves?selection=:id",
+      "label": "Archiver/restaurer dossier",
+      "actions": [
+        "Motif",
+        "avertissement",
+        "confirmation",
+        "retour état confirmé"
+      ],
+      "previousOwner": "W15",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.list",
+      "route": "eleves?selection=:id",
+      "label": "Formations suivies",
+      "actions": [
+        "Lire catégorie/statut/moniteurs/permis",
+        "ouvrir suivi"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.create",
+      "route": "eleves?selection=:id",
+      "label": "Ouvrir formation",
+      "actions": [
+        "Offre active admissible",
+        "date début",
+        "créer"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.transition",
+      "route": "eleves?selection=:id",
+      "label": "Changer état formation",
+      "actions": [
+        "Pause/reprise/fin/annulation",
+        "motif",
+        "confirmer"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.assignment",
+      "route": "eleves?selection=:id",
+      "label": "Affectations moniteur",
+      "actions": [
+        "Affecter moniteur actif",
+        "terminer affectation",
+        "confirmation versionnée"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.permit",
+      "route": "eleves?selection=:id",
+      "label": "Contrôle du permis",
+      "actions": [
+        "Approuver/refuser",
+        "catégorie et validité",
+        "attestation/motif",
+        "relire"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/learners.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN_PEDAGOGY",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.progress",
+      "route": "eleves?selection=:id",
+      "label": "Progression compétences",
+      "actions": [
+        "Lire niveaux présents",
+        "données absentes explicites"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/dossier.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN_PEDAGOGY",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.reports",
+      "route": "eleves?selection=:id",
+      "label": "Bilans et leçon sélectionnée",
+      "actions": [
+        "Filtrer année/mois",
+        "développer bilan",
+        "travail/observations/objectifs/compétences"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/dossier.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN_PEDAGOGY",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.gps",
+      "route": "eleves?selection=:id",
+      "label": "État accord GPS",
+      "actions": [
+        "Lire accord/avis courant/refus",
+        "pas d’activation implicite"
+      ],
+      "previousOwner": "W25",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/gps-consent.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-information.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "team.list",
+      "route": "equipe",
+      "label": "Annuaire équipe",
+      "actions": [
+        "Actifs/inactifs",
+        "recherche",
+        "tri",
+        "pagination",
+        "identité/homonymes"
+      ],
+      "previousOwner": "W17",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/team/team-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=equipe",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "team.detail",
+      "route": "equipe?selection=:id",
+      "label": "Fiche membre",
+      "actions": [
+        "Lire rôles",
+        "disponibilités",
+        "absences",
+        "statut"
+      ],
+      "previousOwner": "W17",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/team/team-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=equipe",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "team.access",
+      "route": "equipe?selection=:id",
+      "label": "Changer accès",
+      "actions": [
+        "Rôles",
+        "grants secondaires",
+        "motif",
+        "revue diff",
+        "confirmer identité"
+      ],
+      "previousOwner": "W17",
+      "issue": 318,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/access/access-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=equipe",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "team.revoke",
+      "route": "equipe?selection=:id",
+      "label": "Retirer accès",
+      "actions": [
+        "Motif",
+        "confirmation explicite",
+        "protection dernier ADMIN/soi conservée"
+      ],
+      "previousOwner": "W17",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/team/team-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=equipe",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.learners",
+      "route": "invitations?audience=learners",
+      "label": "Invitations élèves",
+      "actions": [
+        "Recherche",
+        "état",
+        "sélection",
+        "création permise selon options serveur"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.team",
+      "route": "invitations?audience=team",
+      "label": "Invitations équipe",
+      "actions": [
+        "Recherche",
+        "état",
+        "détail",
+        "droits",
+        "disponibilité e-mail"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.code",
+      "route": "invitations",
+      "label": "Code élève",
+      "actions": [
+        "Permis multiples",
+        "moniteur",
+        "revue",
+        "créer code"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.email",
+      "route": "invitations",
+      "label": "Invitation par e-mail",
+      "actions": [
+        "Adresse",
+        "rôle(s) autorisés",
+        "relire",
+        "enregistrer pour envoi"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.share",
+      "route": "invitations?selection=:id",
+      "label": "Code/lien émis",
+      "actions": [
+        "Afficher secret seulement réponse",
+        "copier",
+        "erreur copie",
+        "code absent"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.renew",
+      "route": "invitations?selection=:id",
+      "label": "Renouvellement",
+      "actions": [
+        "Relire invalidation ancien code/lien",
+        "confirmer",
+        "nouveau code"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "invitations.revoke",
+      "route": "invitations?selection=:id",
+      "label": "Révocation",
+      "actions": [
+        "Motif",
+        "confirmer",
+        "conserver statut/expirée/acceptée"
+      ],
+      "previousOwner": "W18",
+      "issue": 325,
+      "retiredSource": "apps/web/client/console/people.tsx",
+      "presentationEntry": "apps/web/client/portal/invitations/invitations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=invitations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.list",
+      "route": "formations",
+      "label": "Catalogue permis",
+      "actions": [
+        "Liste permis",
+        "programmes",
+        "prestations sans permis",
+        "nouveau permis"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/formation-sheet.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.general",
+      "route": "formations?category=:code&view=general",
+      "label": "Fiche permis/programme",
+      "actions": [
+        "Choisir programme",
+        "infos",
+        "modifier nom/durée/activation"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/formation-sheet.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.competencies",
+      "route": "formations?category=:code&view=competences",
+      "label": "Compétences",
+      "actions": [
+        "Lire",
+        "créer/modifier/réordonner",
+        "enregistrer nouvelle version"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/formation-editors.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.rules",
+      "route": "formations?category=:code&view=deroulement",
+      "label": "Déroulement et annulation",
+      "actions": [
+        "Lire règles/sources",
+        "adapter proposition",
+        "modifier et relire"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/formation-editors.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.wizard",
+      "route": "formations?view=nouvelle",
+      "label": "Préparer un permis avec le guide unique",
+      "actions": [
+        "Guide existant Permis/Prix et règles/Résumé",
+        "Reprendre initialCategory",
+        "Revue et création sans deuxième assistant"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/school-setup.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.history",
+      "route": "formations?category=:code&view=historique",
+      "label": "Historique versions",
+      "actions": [
+        "Programme/référentiel/procédure/tarif",
+        "ouvrir ancienne référence"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/formation-sheet.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "formations.reference",
+      "route": "offres,referentiels,procedures?selection=:id",
+      "label": "Référence historique",
+      "actions": [
+        "Lire contenu/version/usages",
+        "retrouver contexte courant sans réécrire historique"
+      ],
+      "previousOwner": "W19",
+      "issue": 326,
+      "retiredSource": "apps/web/client/console/formation-references.tsx",
+      "presentationEntry": "apps/web/client/portal/formations/catalogue-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=formations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "pricing.list",
+      "route": "formations?category=:code&view=tarifs",
+      "label": "Tarifs liés au permis",
+      "actions": [
+        "Lire durée/prix/validité/état",
+        "sélectionner version"
+      ],
+      "previousOwner": "W20",
+      "issue": 327,
+      "retiredSource": "apps/web/client/console/formation-sheet.tsx",
+      "presentationEntry": "apps/web/client/portal/pricing/prestations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=prestations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "pricing.editor",
+      "route": "formations?category=:code&view=tarifs",
+      "label": "Créer/modifier tarif",
+      "actions": [
+        "Type, label, montant CHF, validité, conditions communes/spécifiques",
+        "relire"
+      ],
+      "previousOwner": "W20",
+      "issue": 327,
+      "retiredSource": "apps/web/client/console/formation-editors.tsx",
+      "presentationEntry": "apps/web/client/portal/pricing/prestations-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=prestations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "pricing.unscoped",
+      "route": "prestations",
+      "label": "Prestations sans permis",
+      "actions": [
+        "Liste",
+        "création",
+        "modification",
+        "activation",
+        "historique"
+      ],
+      "previousOwner": "W20",
+      "issue": 327,
+      "retiredSource": "apps/web/client/console/formation-references.tsx",
+      "presentationEntry": "apps/web/client/portal/pricing/prestations-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=prestations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "pricing.terms",
+      "route": "conditions",
+      "label": "Conditions commerciales",
+      "actions": [
+        "Archives versions",
+        "lecture",
+        "tarifs concernés",
+        "nouvelle version via éditeur"
+      ],
+      "previousOwner": "W20",
+      "issue": 327,
+      "retiredSource": "apps/web/client/console/formation-references.tsx",
+      "presentationEntry": "apps/web/client/portal/pricing/prestations-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=prestations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.add",
+      "route": "agenda",
+      "label": "Ajouter leçon/cours",
+      "actions": [
+        "Menu ajouter selon capacités",
+        "type de cours",
+        "paramètres annulation"
+      ],
+      "previousOwner": "W21",
+      "issue": 328,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/course-workspace.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.editor",
+      "route": "agenda?view=nouveau-cours",
+      "label": "Éditeur cours/série",
+      "actions": [
+        "Type/titre/description/public/moniteur/lieu/capacité/séances",
+        "revue"
+      ],
+      "previousOwner": "W21",
+      "issue": 328,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/course-workspace.tsx",
+      "permissionProfile": "ADMIN_COURSE_MANAGE",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.publish",
+      "route": "agenda",
+      "label": "Publication cours",
+      "actions": [
+        "Résumé séances",
+        "conditions",
+        "capacité",
+        "publier ou garder brouillon"
+      ],
+      "previousOwner": "W21",
+      "issue": 328,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/course-workspace.tsx",
+      "permissionProfile": "ADMIN_COURSE_MANAGE",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.sheet",
+      "route": "agenda",
+      "label": "Fiche cours publié",
+      "actions": [
+        "Séances",
+        "places",
+        "horaires",
+        "moniteurs",
+        "sélection séance",
+        "capacité"
+      ],
+      "previousOwner": "W21",
+      "issue": 328,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/course-workspace.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.changes",
+      "route": "agenda",
+      "label": "Reports et annulations",
+      "actions": [
+        "Reporter séance",
+        "annuler séance/série",
+        "motif",
+        "confirmer"
+      ],
+      "previousOwner": "W21",
+      "issue": 328,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/course-workspace.tsx",
+      "permissionProfile": "ADMIN_COURSE_MANAGE",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.policy",
+      "route": "agenda",
+      "label": "Politique cours",
+      "actions": [
+        "Adapter règle d’annulation",
+        "confirmation et version"
+      ],
+      "previousOwner": "W21",
+      "issue": 328,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/course-workspace.tsx",
+      "permissionProfile": "ADMIN_COURSE_MANAGE",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.roster",
+      "route": "agenda",
+      "label": "Inscrits",
+      "actions": [
+        "Lire participants",
+        "ajouter élève",
+        "annuler inscription",
+        "raison"
+      ],
+      "previousOwner": "W22",
+      "issue": 329,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/participants-view.tsx",
+      "permissionProfile": "ADMIN_COURSE_MANAGE",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.waitlist",
+      "route": "agenda",
+      "label": "Liste d’attente",
+      "actions": [
+        "Lire rang/offre/expiration",
+        "gérer entrée existante selon commande"
+      ],
+      "previousOwner": "W22",
+      "issue": 329,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/participants-view.tsx",
+      "permissionProfile": "ADMIN_COURSE_MANAGE",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.attendance",
+      "route": "agenda",
+      "label": "Appel par séance",
+      "actions": [
+        "Lire présence",
+        "consigner/corriger",
+        "provenance et état"
+      ],
+      "previousOwner": "W22",
+      "issue": 329,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/participants-view.tsx",
+      "permissionProfile": "ADMIN_COURSE_FACTS",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.settlements",
+      "route": "agenda",
+      "label": "Règlements",
+      "actions": [
+        "Consigner paiement/retrait/correction append-only",
+        "total vrai"
+      ],
+      "previousOwner": "W22",
+      "issue": 329,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/participants-view.tsx",
+      "permissionProfile": "ADMIN_COURSE_FACTS",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "course.completion",
+      "route": "agenda",
+      "label": "Validation cours",
+      "actions": [
+        "Admissibilité",
+        "validation motivée/correction",
+        "historique conservé"
+      ],
+      "previousOwner": "W22",
+      "issue": 329,
+      "retiredSource": "apps/web/client/console/courses.tsx",
+      "presentationEntry": "apps/web/client/portal/courses/participants-view.tsx",
+      "permissionProfile": "ADMIN_COURSE_FACTS",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=agenda",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "trips.global",
+      "route": "trajets",
+      "label": "Inventaire trajets",
+      "actions": [
+        "Liste autorisée",
+        "recherche page",
+        "filtres",
+        "pagination curseur",
+        "date/durée"
+      ],
+      "previousOwner": "W23",
+      "issue": 332,
+      "retiredSource": "apps/web/client/console/trips.tsx",
+      "presentationEntry": "apps/web/client/portal/trips/trips-page.tsx",
+      "permissionProfile": "ADMIN_WITH_TRIP_ACCESS",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=trajets",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "trips.learner",
+      "route": "trajets?learner=:id",
+      "label": "Trajets élève",
+      "actions": [
+        "Filtre élève",
+        "historique borné explicite",
+        "retour dossier/contexte"
+      ],
+      "previousOwner": "W23",
+      "issue": 332,
+      "retiredSource": "apps/web/client/console/trips.tsx",
+      "presentationEntry": "apps/web/client/portal/trips/trips-page.tsx",
+      "permissionProfile": "ADMIN_WITH_TRIP_ACCESS",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=trajets",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "settings.identity",
+      "route": "configuration",
+      "label": "Coordonnées école",
+      "actions": [
+        "Résumé",
+        "éditer nom/contact",
+        "enregistrer",
+        "annuler"
+      ],
+      "previousOwner": "W24",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/configuration.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/school-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=configuration",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "settings.timezone",
+      "route": "configuration",
+      "label": "Fuseau scolaire",
+      "actions": [
+        "Lire fuseau de référence",
+        "règles formulaire selon existant"
+      ],
+      "previousOwner": "W24",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/configuration.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/school-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=configuration",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "settings.activation",
+      "route": "configuration",
+      "label": "Préparation école",
+      "actions": [
+        "État",
+        "ouvrir préparation",
+        "pas de nouvelle readiness inventée"
+      ],
+      "previousOwner": "W24",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/configuration.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/school-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=configuration",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "settings.fields",
+      "route": "champs-profil",
+      "label": "Informations élèves",
+      "actions": [
+        "Résumé puis politique des champs",
+        "exigence/stade/raison/explication"
+      ],
+      "previousOwner": "W24",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/privacy.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=champs-profil",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "settings.fields-preview",
+      "route": "champs-profil",
+      "label": "Aperçu élève",
+      "actions": [
+        "Lire rendu demandé à l’élève avant adoption"
+      ],
+      "previousOwner": "W24",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/profile-fields-preview.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=champs-profil",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "settings.fields-adopt",
+      "route": "champs-profil",
+      "label": "Publication des demandes",
+      "actions": [
+        "Revue effets sur profils",
+        "date d’effet",
+        "confirmer"
+      ],
+      "previousOwner": "W24",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/privacy.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=champs-profil",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "privacy.texts",
+      "route": "confidentialite",
+      "label": "Textes de l’école",
+      "actions": [
+        "Notice, conservation, contact",
+        "modifier",
+        "réutiliser proposition"
+      ],
+      "previousOwner": "W25",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/privacy.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=confidentialite",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "privacy.impact",
+      "route": "confidentialite",
+      "label": "Adopter textes",
+      "actions": [
+        "Lire effet GPS et captures",
+        "confirmer",
+        "refus lecture impact",
+        "conflit"
+      ],
+      "previousOwner": "W25",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/privacy.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=confidentialite",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "privacy.gps",
+      "route": "confidentialite",
+      "label": "Option GPS scolaire",
+      "actions": [
+        "Lire activé/désactivé",
+        "identité",
+        "effets",
+        "confirmer bascule"
+      ],
+      "previousOwner": "W25",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/gps-settings.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=confidentialite",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "privacy.conditions",
+      "route": "confidentialite",
+      "label": "Conditions versionnées",
+      "actions": [
+        "Lire conditions/reçus selon surface présente",
+        "conserver accès historique"
+      ],
+      "previousOwner": "W25",
+      "issue": 330,
+      "retiredSource": "apps/web/client/console/privacy.tsx",
+      "presentationEntry": "apps/web/client/portal/settings/privacy-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=confidentialite",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "signals.list",
+      "route": "signalements",
+      "label": "Ordre et visibilité",
+      "actions": [
+        "Lire thèmes",
+        "déplacer poignée/flèches",
+        "masquer/afficher",
+        "au moins un visible"
+      ],
+      "previousOwner": "W26",
+      "issue": 331,
+      "retiredSource": "apps/web/client/console/observation-themes.tsx",
+      "presentationEntry": "apps/web/client/portal/signals/signals-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=signalements",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "signals.preview",
+      "route": "signalements",
+      "label": "Aperçu moniteur",
+      "actions": [
+        "Lire ordre/visibilité",
+        "pas de capture GPS depuis navigateur"
+      ],
+      "previousOwner": "W26",
+      "issue": 331,
+      "retiredSource": "apps/web/client/console/observation-themes.tsx",
+      "presentationEntry": "apps/web/client/portal/signals/signals-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=signalements",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "signals.reset",
+      "route": "signalements",
+      "label": "Réinitialisation",
+      "actions": [
+        "Ordre seul ou configuration",
+        "annuler brouillon",
+        "enregistrer explicitement"
+      ],
+      "previousOwner": "W26",
+      "issue": 331,
+      "retiredSource": "apps/web/client/console/observation-themes.tsx",
+      "presentationEntry": "apps/web/client/portal/signals/signals-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=signalements",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "signals.conflict",
+      "route": "signalements",
+      "label": "Conflit/refus",
+      "actions": [
+        "Recharger version",
+        "conserver explication",
+        "lecture seule"
+      ],
+      "previousOwner": "W26",
+      "issue": 331,
+      "retiredSource": "apps/web/client/console/observation-themes.tsx",
+      "presentationEntry": "apps/web/client/portal/signals/signals-page.tsx",
+      "permissionProfile": "ADMIN",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=signalements",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "training.prerequisites",
+      "route": "eleves?selection=:id",
+      "label": "Prérequis et faits de cours",
+      "actions": [
+        "Lire sources et limites du référentiel suisse",
+        "Distinguer validation interne, inscription et présence",
+        "Lire facts selon droits sans déduire attestation ni date de fin"
+      ],
+      "previousOwner": "W16",
+      "issue": 324,
+      "retiredSource": "apps/web/client/console/prerequisite-help.tsx",
+      "presentationEntry": "apps/web/client/portal/learners/learner-page.tsx",
+      "permissionProfile": "ADMIN_COURSE_FACTS",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=eleves",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    },
+    {
+      "id": "pricing.shared-terms",
+      "route": "conditions?selection=:id",
+      "label": "Réviser les conditions communes",
+      "actions": [
+        "Lire les tarifs concernés",
+        "Modifier texte",
+        "Confirmer portée",
+        "Préserver versions historiques et engagements"
+      ],
+      "previousOwner": "W20",
+      "issue": 327,
+      "retiredSource": "apps/web/client/console/shared-terms-editor.tsx",
+      "presentationEntry": "apps/web/client/portal/pricing/prestations-page.tsx",
+      "permissionProfile": "ADMIN_CATALOG",
+      "stateProfiles": [
+        "read",
+        "write",
+        "navigation",
+        "display"
+      ],
+      "fixture": "preview-311.html?page=prestations",
+      "implementation": "INTEGRATED_AWAITING_TRIAL",
+      "qualification": "DEFERRED_USER_TRIAL",
+      "fullStateMatrix": "NOT_EXECUTED"
+    }
+  ]
+}

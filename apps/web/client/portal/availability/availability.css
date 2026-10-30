@@ -1,0 +1,81 @@
+.schedule-page { display: grid; gap: 24px; min-width: 0; }
+.schedule-page h1 { margin: 0; font-size: clamp(26px, 3vw, 32px); font-weight: 650; line-height: 1.25; letter-spacing: -.035em; }
+.schedule-page h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.schedule-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.schedule-eyebrow { display: block; font-size: 12px; font-weight: 550; color: var(--muted-foreground); margin-bottom: 8px; }
+.schedule-muted { color: var(--muted-foreground); font-size: 14px; }
+.schedule-back { justify-self: start; margin-inline-start: -12px; }
+.schedule-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.schedule-instructor { min-width: min(100%, 280px); flex: 0 1 320px; }
+.schedule-instructor > strong { font-size: 16px; font-weight: 600; }
+.schedule-instructor .schedule-eyebrow { margin-bottom: 4px; }
+.schedule-section { display: grid; gap: 12px; }
+.schedule-empty { padding: 56px 24px; border: 1px dashed var(--border); border-radius: 12px; }
+.schedule-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+
+/* Ordinary week: day, ranges as text, and a proportional bar when there is room for it. */
+.schedule-week { display: grid; gap: 12px; }
+.schedule-week-rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: clip; }
+.schedule-week-row, .schedule-week-scale { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 4px 16px; padding: 14px 20px; }
+.schedule-week-row + .schedule-week-row { border-top: 1px solid var(--border); }
+.schedule-week-scale { display: none; }
+.schedule-week-day { font-weight: 550; font-size: 14px; }
+.schedule-week-row[data-empty=true] .schedule-week-day { color: var(--muted-foreground); font-weight: 450; }
+.schedule-week-ranges { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.schedule-range { display: inline-flex; align-items: center; min-height: 28px; padding: 2px 10px; border-radius: 6px; background: var(--accent); color: var(--accent-foreground); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.schedule-bar { display: none; }
+
+/* Hours and absences, one divided list, no card per row. */
+.schedule-rules { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: clip; }
+.schedule-rule { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; }
+.schedule-rule + .schedule-rule { border-top: 1px solid var(--border); }
+.schedule-rule-main { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; min-width: 0; }
+.schedule-rule-days { font-weight: 600; font-size: 15px; }
+.schedule-rule-hours { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.schedule-rule-hours svg { width: 15px; height: 15px; color: var(--muted-foreground); }
+.schedule-rule-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.schedule-reason { flex-basis: 100%; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; white-space: pre-wrap; }
+.schedule-absence-main { flex-direction: column; align-items: flex-start; gap: 2px; }
+.schedule-ended-trigger { justify-self: start; }
+.schedule-ended-trigger svg { transition: transform 140ms; }
+.schedule-ended-trigger[data-panel-open] svg { transform: rotate(180deg); }
+.schedule-ended [data-slot=collapsible-content] { margin-top: 8px; }
+
+/* Editor: a page, not a modal. */
+.schedule-form { display: grid; gap: 24px; max-width: 640px; }
+.schedule-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.schedule-days-toggle { width: 100%; }
+.schedule-days-toggle > [data-slot=toggle-group-item] { flex: 1; min-width: 0; padding-inline: 0; }
+.schedule-days-toggle > [data-slot=toggle-group-item][aria-pressed=true] { background: var(--accent); color: var(--accent-foreground); border-color: var(--primary); font-weight: 650; }
+.schedule-footer { display: flex; justify-content: flex-end; gap: 12px; padding-top: 4px; }
+.schedule-review-title { font-size: 19px; }
+.schedule-review { margin: 0; display: grid; border-top: 1px solid var(--border); }
+.schedule-review > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.schedule-review dt { color: var(--muted-foreground); }
+.schedule-review dd { margin: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.schedule-review del { color: var(--muted-foreground); font-size: 13px; }
+.schedule-consequence { margin: 0; color: var(--muted-foreground); font-size: 14px; }
+
+@media (min-width: 768px) {
+  .schedule-week-scale { display: grid; padding-block: 10px 0; }
+  .schedule-week-row, .schedule-week-scale { grid-template-columns: 104px 210px minmax(0, 1fr); }
+  .schedule-week-hours { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .schedule-bar { display: block; position: relative; height: 10px; border-radius: 5px; background: var(--muted); }
+  .schedule-bar-range { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--primary); }
+}
+@media (max-width: 767px) {
+  .schedule-page { gap: 20px; }
+  .schedule-heading { align-items: flex-start; flex-wrap: wrap; gap: 18px; }
+  .schedule-week-row { padding: 14px 16px; grid-template-columns: 92px minmax(0, 1fr); }
+  .schedule-rule { flex-direction: column; align-items: stretch; gap: 10px; padding: 16px; }
+  .schedule-rule-actions { justify-content: flex-start; }
+  .schedule-rule-actions > button { flex: 1; }
+  .schedule-toolbar { align-items: stretch; flex-direction: column; }
+  .schedule-instructor { flex-basis: auto; }
+  .schedule-toolbar > button { width: 100%; }
+  .schedule-field-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .schedule-footer { flex-direction: column-reverse; }
+  .schedule-footer > button { width: 100%; }
+  .schedule-review > div { grid-template-columns: 88px minmax(0, 1fr); gap: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .schedule-ended-trigger svg { transition: none; } }

@@ -1,0 +1,573 @@
+{
+  "kind": "synthetic Chromium rendering, not real mobile or acceptance",
+  "origin": "http://127.0.0.1:5187",
+  "results": [
+    {
+      "name": "after-agenda-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Agenda"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learner-detail-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-signin-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Se connecter à Drivy"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-formation-pricing-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Permis B"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-pricing-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-review-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-draft-390-light",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "light",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-agenda-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Agenda"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-signin-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Se connecter à Drivy"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-formation-pricing-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Permis B"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-pricing-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-review-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-draft-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-agenda-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [
+        "Agenda"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learner-detail-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-signin-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [
+        "Se connecter à Drivy"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-formation-pricing-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [
+        "Permis B"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-pricing-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-review-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-draft-390-dark",
+      "viewport": 390,
+      "scroll": 390,
+      "theme": "dark",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-agenda-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [
+        "Agenda"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learner-detail-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-signin-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [
+        "Se connecter à Drivy"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-formation-pricing-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [
+        "Permis B"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-pricing-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-setup-review-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-course-draft-1440-dark",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "dark",
+      "headings": [],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learner-detail-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-trips-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Trajets"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-availability-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Disponibilités"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-privacy-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Confidentialité"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-preferences-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Préférences personnelles"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-opening-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-operator-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Liens d’ouverture"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-account-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Vos écoles"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-invitation-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Rejoindre une école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learner-detail-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Éloïse Müller"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-trips-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Trajets"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-availability-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Disponibilités"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-privacy-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Confidentialité"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-preferences-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Préférences personnelles"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-opening-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Préparer votre école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-operator-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Liens d’ouverture"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-account-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Vos écoles"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-invitation-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Rejoindre une école"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-team-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Équipe et accès"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learners-1440-light",
+      "viewport": 1440,
+      "scroll": 1440,
+      "theme": "light",
+      "headings": [
+        "Élèves"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-team-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Équipe et accès"
+      ],
+      "errors": [],
+      "captured": true
+    },
+    {
+      "name": "after-learners-320-light",
+      "viewport": 320,
+      "scroll": 320,
+      "theme": "light",
+      "headings": [
+        "Élèves"
+      ],
+      "errors": [],
+      "captured": true
+    }
+  ]
+}

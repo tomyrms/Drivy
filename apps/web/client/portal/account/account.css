@@ -1,0 +1,29 @@
+.account-page { width: min(640px, 100%); margin: 0 auto; padding: 32px 24px 64px; display: grid; gap: 28px; }
+.account-page h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.account-back { justify-self: start; margin-left: -10px; }
+.account-section { display: grid; gap: 14px; }
+.account-section h2 { font-size: 1.05rem; font-weight: 650; }
+.account-muted { color: var(--muted-foreground); font-size: .9rem; }
+.account-themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.account-theme { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); cursor: pointer; font-weight: 550; }
+.account-theme:has([data-checked]) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.account-theme svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.account-switches, .account-links { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.account-switches li { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 8px 16px; }
+.account-switches li + li, .account-links li + li { border-top: 1px solid var(--border); }
+.account-switches label { flex: 1; font-weight: 500; cursor: pointer; }
+.account-links a { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; font-weight: 500; color: inherit; text-decoration: none; }
+.account-links a > span { flex: 1; }
+.account-links svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+.account-disclosure { display: grid; gap: 4px; }
+.account-disclosure-trigger { justify-self: start; margin-left: -10px; }
+.account-disclosure-trigger svg { transition: transform 150ms ease; }
+.account-disclosure-trigger[data-panel-open] svg { transform: rotate(90deg); }
+.account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+@media (hover: hover) { .account-links a:hover { background: var(--muted); } }
+@media (max-width: 520px) {
+  .account-page { padding: 24px 20px 48px; }
+  .account-page h1 { font-size: 1.6rem; }
+  .account-themes { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .account-disclosure-trigger svg { transition: none; } }

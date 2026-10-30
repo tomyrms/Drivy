@@ -2,6 +2,8 @@
 
 Client React/TypeScript distinct du client Swift ; serveur Fastify avec session de même origine. Il sert la connexion, la liste des écoles du compte, la lecture/acceptation d’une invitation et le **web de gestion** de l’administration (`/app/gestion/{schoolId}/…`).
 
+La refonte **#311** sert toutes les routes avec les nouveaux rendus `client/portal`, le socle shadcn/ui Base UI et les tokens Drivy, selon la direction Cal.com × Untitled UI. L’ancien frontend #280 et sa galerie `test/visual.html` sont retirés : [frontière et inventaire du retrait R23](../../docs/implementation/epic-311-retirement.md). L’aperçu fictif distinct utilise `preview-311.html` et `vite.preview-311.config.ts` ; la vérification ciblée correspondante est `scripts/dev/check-portal-311.mjs`. Aucune fixture d’aperçu n’est importée par l’entrée de production.
+
 ## Développement local
 
 Depuis la racine, après le provisionnement de l’identité décrit dans `docs/implementation/dev-identity.md` :

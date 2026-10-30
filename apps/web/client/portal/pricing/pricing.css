@@ -1,0 +1,29 @@
+/* Tarifs et conditions (#327) : s'appuie sur les classes cat-* de formations.css. */
+.cat-tariff-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, auto) minmax(120px, .8fr) 20px; }
+.cat-tariff-row > .cat-row-offer { text-align: right; justify-items: end; }
+.cat-tariff-row[data-archived] .cat-row-main strong, .cat-tariff-row[data-archived] .cat-row-offer strong { color: var(--muted-foreground); }
+.cat-terms-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, auto) 120px 20px; }
+.cat-archives { margin-top: 4px; }
+.cat-archives .cat-list { margin-top: 4px; }
+.cat-tariff-detail { display: grid; gap: 24px; padding: 28px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; min-width: 0; }
+.cat-tariff-detail h2:focus { outline: none; }
+.cat-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.cat-detail-head > div { min-width: 0; flex: 1 1 240px; }
+.cat-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cat-detail-section { display: grid; gap: 10px; padding-top: 24px; border-top: 1px solid var(--border); }
+.cat-price { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cat-price strong { font-size: 2rem; font-weight: 650; letter-spacing: -.03em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.cat-price span { color: var(--muted-foreground); font-size: .9375rem; }
+.cat-tariff-form { gap: 20px; }
+@media (max-width: 900px) {
+  .cat-tariff-row, .cat-terms-row { grid-template-columns: minmax(0, 1fr) auto 20px; gap: 6px 14px; }
+  .cat-tariff-row > .cat-row-main, .cat-terms-row > .cat-row-main { grid-column: 1; grid-row: 1; }
+  .cat-tariff-row > .cat-row-offer { grid-column: 2; grid-row: 1; display: grid; gap: 2px; }
+  .cat-tariff-row > .cat-row-state, .cat-terms-row > .cat-row-state { grid-column: 1 / span 2; grid-row: 2; }
+  .cat-terms-row > .cat-row-count { grid-column: 2; grid-row: 1; text-align: right; }
+  .cat-tariff-row > .cat-chevron, .cat-terms-row > .cat-chevron { grid-column: 3; grid-row: 1 / span 2; }
+}
+@media (max-width: 640px) {
+  .cat-tariff-detail { padding: 20px 16px; }
+  .cat-price strong { font-size: 1.75rem; }
+}

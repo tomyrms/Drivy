@@ -52,19 +52,33 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   async function agenda() {await page.goto(`${schoolPath}/agenda`);await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();}
   async function addAvailability(instructorId:string) {
     await page.getByRole('heading',{name:'Disponibilités',exact:true}).waitFor();
+    await page.locator('.schedule-toolbar').waitFor();
     const instructor=members.find(member=>member.id===instructorId);
     if(!instructor)throw new Error('FIRST_LESSON_INSTRUCTOR_MISSING');
-    await page.getByLabel('Moniteur',{exact:true}).click();
-    await page.getByRole('combobox',{name:'Rechercher : Moniteur',exact:true}).fill(instructor.displayName);
-    await page.getByRole('option',{name:instructor.displayName,exact:true}).click();
-    await page.getByText('Ajouter un horaire',{exact:true}).click();
-    const form=page.locator('details.schedule-add');
-    for(const day of ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'])await form.getByLabel(day,{exact:true}).check();
-    await form.getByLabel('De',{exact:true}).fill('08:00');await form.getByLabel('À',{exact:true}).fill('18:00');
+    const instructorChoice=page.locator('#schedule-instructor');
+    if(await instructorChoice.count()) {
+      const current=(await instructorChoice.innerText()).trim();
+      if(!current.includes(instructor.displayName)) {
+        await instructorChoice.click();
+        await page.getByRole('option',{name:instructor.displayName,exact:true}).click();
+      }
+    } else {
+      await page.getByText(instructor.displayName,{exact:true}).waitFor();
+    }
+    await page.locator('.schedule-heading').getByRole('button',{name:'Ajouter un horaire',exact:true}).click();
+    await page.getByRole('heading',{name:'Nouvel horaire',exact:true}).waitFor();
+    for(const day of ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche']) {
+      const toggle=page.getByRole('button',{name:day,exact:true});
+      if(await toggle.getAttribute('aria-pressed')!=='true')await toggle.click();
+    }
+    await page.getByLabel('Début',{exact:true}).fill('08:00');
+    await page.getByLabel('Fin',{exact:true}).fill('18:00');
+    await page.getByRole('button',{name:'Relire',exact:true}).click();
+    await page.getByRole('heading',{name:'Relire avant d’enregistrer',exact:true}).waitFor();
     const response=page.waitForResponse(value=>value.request().method()==='POST'&&value.url()===`${bff}/availability-rules`);
-    await form.getByRole('button',{name:'Ajouter l’horaire',exact:true}).click();
+    await page.getByRole('button',{name:'Ajouter l’horaire',exact:true}).click();
     if(!(await response).ok())throw new Error('FIRST_LESSON_AVAILABILITY_FAILED');
-    await page.waitForFunction(()=>!document.querySelector<HTMLDetailsElement>('details.schedule-add')?.open);
+    await page.getByRole('heading',{name:'Disponibilités',exact:true}).waitFor();
   }
 
   setStage('première leçon : disponibilités depuis l’action du planning');
@@ -76,27 +90,28 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   const initial=await read('setup-draft/next-actions',nextSchema);
   assert(!initial.planningReady&&initial.actions.some(action=>action.code==='AVAILABILITY_REQUIRED'),'Après activation, les disponibilités encore absentes restent un vrai prérequis');
   await agenda();
-  await page.locator('.blocker-list li').filter({hasText:'Renseignez les disponibilités d’au moins un moniteur actif.'}).getByRole('button',{name:'Ouvrir',exact:true}).click();
+  await page.getByRole('listitem').filter({hasText:'Renseignez les disponibilités d’au moins un moniteur actif.'}).getByRole('button',{name:/Ouvrir le réglage/}).click();
   // La première disponibilité appartient à l’autre moniteur : la suite doit encore vérifier celui affecté à l’élève.
   await addAvailability(colleague.id);
   const firstLearner=await read('setup-draft/next-actions',nextSchema);
   assert(firstLearner.planningReady&&firstLearner.actions[0]?.code==='FIRST_LEARNER_REQUIRED','Une disponibilité confirmée fait proposer l’invitation du premier élève');
 
   setStage('première leçon : invitation élève guidée et acceptation réelle');
-  await agenda();await page.getByRole('link',{name:'Inviter votre premier élève',exact:true}).click();
+  await agenda();await page.getByRole('button',{name:'Inviter votre premier élève',exact:true}).click();
   assert(new URL(page.url()).searchParams.get('audience')==='learners','L’action du planning ouvre les invitations destinées aux élèves');
   const learnerEmail='first-learner@example.invalid';
   const firstName='Élève Camille',lastName='De la Tour-Roux',fullName=`${firstName} ${lastName}`;
   await page.getByRole('button',{name:'Inviter par e-mail',exact:true}).click();
   await page.getByLabel('Adresse e-mail',{exact:true}).fill(learnerEmail);
-  await page.getByRole('button',{name:'Relire l’invitation',exact:true}).click();
-  const invitationDialog=page.getByRole('dialog');
-  await invitationDialog.getByLabel('J’ai vérifié l’adresse et les rôles proposés.',{exact:true}).check();
-  await invitationDialog.getByRole('button',{name:'Envoyer l’invitation',exact:true}).click();await invitationDialog.waitFor({state:'hidden'});
+  await page.getByRole('button',{name:'Relire',exact:true}).click();
+  const invitationDialog=page.getByRole('dialog',{name:'Inviter par e-mail ?',exact:true});
+  await invitationDialog.waitFor();
+  assert(await invitationDialog.getByText(learnerEmail,{exact:true}).isVisible(),'La relecture présente l’adresse invitée avant confirmation');
+  await invitationDialog.getByRole('button',{name:'Enregistrer l’invitation',exact:true}).click();await invitationDialog.waitFor({state:'hidden'});
   const pending=await read('setup-draft/next-actions',nextSchema);
   assert(pending.actions[0]?.code==='LEARNER_INVITATION_PENDING'&&(await read('learners',learnersSchema)).items.length===0,
     'L’invitation envoyée ne crée aucun dossier ni fausse possibilité de planifier');
-  await agenda();await page.getByRole('link',{name:'Consulter l’invitation en attente',exact:true}).click();
+  await agenda();await page.getByRole('button',{name:'Consulter l’invitation en attente',exact:true}).click();
   await page.getByRole('heading',{name:'Invitations élèves',exact:true}).waitFor();
   await deliverInvitation();
   const invitationURL=mailLink(await ownMail(learnerEmail),origin,'/app/invitation');
@@ -113,7 +128,7 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
     const session=await learnerContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await session.json()).success,
       'Le lien reçu à son adresse vaut vérification : le premier élève peut accepter le rattachement');
-    assert(await learnerPage.locator('.invitation-facts').getByText(fullName,{exact:true}).isVisible(),
+    assert(await learnerPage.locator('.entry-facts').getByText(fullName,{exact:true}).isVisible(),
       'L’acceptation présente à l’élève son identité exacte et l’école destinataire avant de créer son dossier');
     await learnerPage.getByRole('checkbox').check();await learnerPage.getByRole('button',{name:'Rejoindre cette école',exact:true}).click();
     await learnerPage.getByText(`Vous avez rejoint ${school.name}`,{exact:true}).waitFor();
@@ -132,14 +147,19 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   assert(withoutTraining.actions[0]?.code==='TRAINING_NOT_ACTIVE'&&withoutTraining.actions[0]?.query?.selection===learner.id
     &&!withoutTraining.actions.some(action=>action.code==='PROFILE_ACTION_REQUIRED'),
     'Après acceptation, le guide propose directement la formation du bon élève et ne redemande pas ses noms');
-  await agenda();await page.getByRole('link',{name:'Ouvrir la formation de l’élève',exact:true}).click();
+  await agenda();await page.getByRole('button',{name:'Ouvrir la formation de l’élève',exact:true}).click();
   assert(new URL(page.url()).searchParams.get('selection')===learner.id&&await page.locator('.profile-completion').count()===0,
     'Le guide ouvre le dossier accepté sans intercaler un formulaire de noms déjà connus');
+  await page.getByRole('tab',{name:'Formations',exact:true}).click();
   await page.getByText('Ouvrir une formation',{exact:true}).click();
-  await page.getByLabel('Nouvelle formation',{exact:true}).click();
-  await page.getByRole('option',{name:'Permis B',exact:true}).click();
+  const offeringField=page.locator('#learner-offering');
+  await offeringField.click();await offeringField.fill('Permis B');
+  await page.getByRole('option',{name:/^Permis B/}).click();
+  await page.getByRole('button',{name:'Relire',exact:true}).click();
+  const trainingDialog=page.getByRole('dialog',{name:'Ouvrir cette formation ?',exact:true});
+  await trainingDialog.waitFor();
   const trainingResponse=page.waitForResponse(response=>response.request().method()==='POST'&&response.url()===`${bff}/trainings`);
-  await page.getByRole('button',{name:'Ouvrir la formation',exact:true}).click();
+  await trainingDialog.getByRole('button',{name:'Ouvrir la formation',exact:true}).click();
   if(!(await trainingResponse).ok())throw new Error('FIRST_LESSON_TRAINING_FAILED');
   const training=(await read('trainings',trainingSchema)).items.find(item=>item.learnerId===learner.id&&item.status==='ACTIVE');
   if(!training)throw new Error('FIRST_LESSON_TRAINING_MISSING');
@@ -150,7 +170,7 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   const assignedAvailability=await read('setup-draft/next-actions',nextSchema);
   assert(assignedAvailability.actions[0]?.code==='AVAILABILITY_REQUIRED'&&assignedAvailability.actions[0]?.section==='disponibilites'&&assignedAvailability.actions[0]?.query?.instructor===founder.id,
     'Les horaires d’un autre moniteur ne rendent pas la formation planifiable : le guide cible celui affecté');
-  await agenda();await page.getByRole('link',{name:'Définir les disponibilités du moniteur affecté',exact:true}).click();
+  await agenda();await page.getByRole('button',{name:'Définir les disponibilités du moniteur affecté',exact:true}).click();
   assert(new URL(page.url()).searchParams.get('instructor')===founder.id,'L’action ouvre les disponibilités avec le moniteur affecté sélectionné');
   await addAvailability(founder.id);
   const ready=await read(`learners/${learner.id}/action-readiness?action=PLAN_LESSON`,readinessSchema);
@@ -201,18 +221,18 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   setStage('première leçon : relecture dans l’agenda et fin des prochaines actions initiales');
   const civilDay=new Intl.DateTimeFormat('en-CA',{timeZone:school.timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(slot.plannedStart));
   await page.goto(`${schoolPath}/agenda?week=${civilDay}`);await page.getByRole('heading',{name:'Agenda',exact:true}).waitFor();
-  await page.locator('.agenda-lesson').waitFor();
+  await page.locator('.agenda-event[data-kind="lesson"]').waitFor();
   const final=await read('setup-draft/next-actions',nextSchema);
-  assert(final.planningReady&&final.actions.length===0&&await page.locator('.agenda-lesson').count()===1,
+  assert(final.planningReady&&final.actions.length===0&&await page.locator('.agenda-event[data-kind="lesson"]').count()===1,
     'L’Agenda relit la première leçon durable et les actions de première utilisation sont terminées');
   await page.screenshot({path:resolve(artifactDirectory,'08-premiere-lecon-planifiee-synthetic.png'),fullPage:true});
   if(process.argv.includes('--v3'))await verifyV3Agenda({page,schoolPath,bff,civilDay,instructorId:founder.id,instructorName:founder.displayName,artifactDirectory,assert,setStage});
   if(process.argv.includes('--v4'))await verifyV4Web({page,schoolPath,bff,artifactDirectory,assert,setStage});
   // #51 : la leçon s'ouvre d'abord dans l'agenda ; sa fiche mène au dossier du bon élève.
   setStage('première leçon : fiche de la leçon depuis l’agenda');
-  await page.locator('.agenda-lesson').click();
+  await page.locator('.agenda-event[data-kind="lesson"]').click();
   await page.waitForURL(url=>url.searchParams.get('lesson')===lesson.id,{waitUntil:'commit'});
-  await page.getByRole('button',{name:'Ouvrir le dossier élève',exact:true}).click();
+  await page.getByRole('button',{name:'Ouvrir la fiche élève',exact:true}).click();
   await page.waitForURL(url=>url.pathname===`/app/gestion/${schoolId}/eleves`,{waitUntil:'commit'});
   assert(new URL(page.url()).searchParams.get('selection')===learner.id,'La leçon de l’Agenda ouvre sa fiche, puis le dossier du bon élève');
 }

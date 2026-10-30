@@ -1,0 +1,73 @@
+.participants-page { max-width: 880px; }
+.participants-tabs { gap: 24px; }
+.participants-tabs > [data-slot="tabs-list"] { border-bottom: 1px solid var(--border); background: transparent; border-radius: 0; width: 100%; padding: 0; height: 44px; gap: 24px; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+.participants-tabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { border-radius: 0; background: transparent; box-shadow: none; flex: 0 0 auto; height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; color: var(--muted-foreground); font-size: 14px; }
+.participants-tabs > [data-slot="tabs-list"] > [data-slot="tabs-trigger"][data-active] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 650; }
+.participants-tab { display: grid; gap: 20px; min-width: 0; }
+.participants-tab > section { display: grid; gap: 12px; }
+.participants-tab h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.participants-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.participants-total { margin: 0; display: grid; justify-items: end; gap: 2px; }
+.participants-total strong { font-size: 19px; font-variant-numeric: tabular-nums; }
+.participants-empty { padding: 40px 24px; border: 1px dashed var(--border); border-radius: 12px; }
+
+/* One divided list, a line per person; the action sits next to the name, never in a grid to scroll. */
+.participants-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: clip; }
+.participants-list > li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; min-width: 0; }
+.participants-list > li + li { border-top: 1px solid var(--border); }
+.participants-list > li[data-muted=true] { color: var(--muted-foreground); }
+.participants-list > li.participants-stack { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; gap: 10px; align-items: stretch; }
+.participants-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.participants-main { display: grid; gap: 3px; min-width: 0; flex: 1; font-size: 14px; }
+.participants-main > strong { font-weight: 600; overflow-wrap: anywhere; }
+.participants-rank { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border: 1px solid var(--border); border-radius: 50%; font-size: 12px; color: var(--muted-foreground); background: var(--background); }
+.participants-waitlist > li { justify-content: flex-start; }
+.participants-waitlist > li > [data-slot=badge] { margin-left: auto; }
+.participants-state { font-size: 13px; color: var(--muted-foreground); }
+.participants-state[data-state=PRESENT], .participants-state[data-state=validated] { color: var(--portal-success); font-weight: 600; }
+.participants-state[data-state=ABSENT] { color: var(--destructive); font-weight: 600; }
+.participants-state[data-state=EXCUSED] { color: var(--portal-warning); font-weight: 600; }
+.participants-feedback { font-size: 13px; color: var(--muted-foreground); }
+.participants-feedback[data-tone=error] { color: var(--destructive); }
+.participants-feedback[data-tone=success] { color: var(--portal-success); }
+.participants-cancelled-trigger { justify-self: start; }
+.participants-cancelled-trigger svg { transition: transform 140ms; }
+.participants-cancelled-trigger[data-panel-open] svg { transform: rotate(180deg); }
+.participants-cancelled [data-slot=collapsible-content] { margin-top: 8px; }
+
+/* The call: the named session, its counts, then one line per person with three choices. */
+.participants-session { display: grid; gap: 6px; }
+.participants-session p { margin: 0; }
+.participants-counts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--muted-foreground); }
+.participants-counts strong { color: var(--foreground); font-variant-numeric: tabular-nums; }
+.participants-choices { flex: 0 0 auto; }
+.participants-choices > [data-slot=toggle-group-item] { min-width: 88px; }
+.participants-choices > [data-slot=toggle-group-item][aria-pressed=true] { background: var(--accent); color: var(--accent-foreground); border-color: var(--primary); font-weight: 650; }
+
+/* Settlements: the records of one person, indented under the name, a voided one struck through but kept. */
+.participants-records { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--border); display: grid; gap: 4px; }
+.participants-records > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.participants-records > li[data-voided=true] .participants-amount { text-decoration: line-through; color: var(--muted-foreground); }
+.participants-amount { font-variant-numeric: tabular-nums; }
+
+/* Dialogs. */
+.participants-facts { margin: 0 0 16px; display: grid; border-top: 1px solid var(--border); }
+.participants-facts > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.participants-facts dt { color: var(--muted-foreground); }
+.participants-facts dd { margin: 0; overflow-wrap: anywhere; }
+.participants-consequence { margin: 12px 0 0; color: var(--muted-foreground); font-size: 14px; }
+.participants-dialog form { display: grid; gap: 16px; }
+
+@media (max-width: 767px) {
+  .participants-list > li { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; }
+  .participants-list > li.participants-waitlist-row, .participants-waitlist > li { flex-direction: row; align-items: center; }
+  .participants-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .participants-row > button, .participants-list > li > button { width: 100%; }
+  .participants-choices { width: 100%; }
+  .participants-choices > [data-slot=toggle-group-item] { flex: 1; min-width: 0; }
+  .participants-records > li { flex-wrap: wrap; }
+  .participants-records > li > button { width: auto; }
+  .participants-total { justify-items: start; }
+  .participants-facts > div { grid-template-columns: 88px minmax(0, 1fr); gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .participants-cancelled-trigger svg { transition: none; } }

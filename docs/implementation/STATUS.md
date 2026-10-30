@@ -7,6 +7,74 @@
 - Exécuté : revue de source, revue indépendante de l’authentification, contrôle de périmètre et `git diff --check`. Compilation Release/IPA réussie : build 445, SHA eb4a5aae, run 40941417787 ; paquet téléchargé et empreintes vérifiées. [IPA et reçu](ios-independent-delivery-20261029.md). Tests ciblés préparés, aucune suite exécutée pendant le développement.
 - Attente du retour du porteur sur l’IPA avant tests pertinents, fusion et clôture. #50 non activée. Rendu/VoiceOver physiques, réseau dégradé réel, GPS/batterie : aucune qualification revendiquée.
 - Entrée additive sur la branche iOS ; documents et worktrees du chantier #311 intacts.
+## 30 octobre 2026 — intégration de la refonte, corrections et limites de recette
+
+- Fusion de `origin/master` (README, roadmap et organisation du Project issus de #371) dans `codex/epic-311-rebuild` : aucun conflit ; les fichiers documentaires sont conservés et l'ancien frontend reste retiré.
+- Entrée : après un refus de création de compte (adresse différente de l'invitation), le mot de passe saisi n'est plus effacé ; une seule alerte est affichée et la saisie reste corrigeable.
+- Portail : le moniteur et la période sont conservés entre Agenda, Disponibilités et Absences ; la préparation d'une formation reste dans son espace ; l'onglet parent d'une fiche reste navigable ; une version ancienne de prestation n'ouvre plus le tarif courant ; le retour des préférences conserve la requête d'origine.
+- Harnais navigateur « ouverture école » aligné sur l'éditeur de disponibilités et les parcours reconstruits, sans retirer d'assertion.
+- **Exécuté** : typage API/web, builds, 523 tests web, vérificateur documentaire, 106 contrôles navigateur (ouverture d'école, invitations, préparation, disponibilités, première leçon, agenda, confirmation d'identité et réglage GPS), contrôles GitHub du dépôt.
+- **Limites** : les suites navigateur étendues « formations/tarifs », « saisie par code » et « récupération de compte » ciblent encore l'ancienne présentation ; elles restent dans le dépôt et s'exécutent avec `--extended`, mais ne sont pas déclarées vertes par ce parcours. Déploiement homelab non effectué (build servi `4af4b0e6748081f90201169132cccd5c9fd6cfdb`), tests iOS et campagne exhaustive non exécutés. Project, labels et issues inchangés.
+
+## 29 octobre 2026 — refonte web acceptée et tickets clôturés à la demande du porteur
+
+- Retour explicite du porteur : « c’est parfait », puis demande de fermer tous les tickets concernant la refonte web. Les 56 tickets des deux epics sont CLOSED, état relu sur GitHub : #311 et #312–#336 ; #280 et #281–#309. #247/#255 étaient déjà fermés.
+- #311 et #312–#334 clôturés sur livraison et acceptation produit. Ancienne direction #280/#281–#309 fermée comme remplacée. #335/#336 fermés administrativement comme non poursuivis dans ce jalon, avec limites de qualification explicites ; aucune case de test cochée sans preuve. L’historique et les critères initiaux sont conservés dans chaque ticket.
+- Build homelab toujours `4af4b0e6748081f90201169132cccd5c9fd6cfdb`, Tomy School remplie. Cette opération de suivi ne réalise ni la campagne exhaustive, ni la fusion dans master ; elles ne sont pas présentées comme exécutées. [Livraison](epic-311-livraison-essai.md), [contenu de l’école](tomy-school-content-20261029.md).
+
+## 29 octobre 2026, 22:47 — Tomy School remplie pour l’essai du porteur
+
+- À sa demande explicite, ajout de 24 élèves et 3 moniteurs, 36 leçons, 16 bilans, 48 observations sans GPS, 8 cours/18 séances, 32 inscriptions, appels et règlements. Catalogue à 4 catégories/14 prestations, disponibilités et absences. Libellés naturels, aucun suffixe test dans l’UI. [Résultat et vérifications](tomy-school-content-20261029.md).
+- Sauvegarde PostgreSQL vérifiée avant population atomique ; contraintes et conservation de l’existant contrôlées avant commit, lecture sous RLS après commit et rejeu annulé sans doublon. Aucun compte OIDC, invitation, message, position ou notification créés. Aucun changement du build web déployé.
+- Essai et retour du porteur attendus ; campagnes complètes, fusion et clôtures restent différées.
+
+## 29 octobre 2026, 22:25 — #311 déployé pour essai du porteur
+
+- Nouvelle web app active sur https://drivy.shulker.ch/app/ au commit `4af4b0e6748081f90201169132cccd5c9fd6cfdb`. Sauvegarde PostgreSQL créée et archive relue avant bascule ; configuration sauvegardée, BFF et autres services inchangés ; plan de rollback vérifié après bascule.
+- 34 contrôles navigateur synthétiques réussis, compilation/typage et tests ciblés réussis ; six routes publiques et 104 assets comparés au build, entrée réelle chargée dans le navigateur. [Reçu, limites et parcours à essayer](epic-311-livraison-essai.md#déploiement-effectif--29-octobre-2225-europezurich).
+- **En attente du retour utilisateur** : essai authentifié personnel, corrections, campagnes complètes et qualification, performances/sécurité, fusion master et clôtures. Récupération e-mail désactivée dans la configuration existante ; fallback 404 hors routes connues reste celui de la BFF. Aucune qualification exhaustive revendiquée.
+
+## 29 octobre 2026, soir — #311, reprise intégrée avant essai homelab
+
+- Reprise de `codex/epic-311-rebuild` à `33232416`, sans réinitialisation. Sauvegardes récupérées dans trois worktrees isolés ; Équipe déjà intégrée vérifiée par équivalence de patch. [Livraison d’essai](epic-311-livraison-essai.md).
+- #319/#320/#326/#327/#329/#330 raccordés : entrée et récupération, ouverture et préparation, catalogue et textes, participants/appel/règlements, recherche et réglages. Pages secondaires et blocages de planification conservés. Nouveau portail rendu unique ; 60 fichiers historiques retirés, garde du graphe d’imports et du bundle renforcée.
+- **Exécuté** : typage client/serveur, compilation de production ; 91 tests ciblés d’intégration et contrôles ciblés des agents documentés. Recette navigateur synthétique 390 sombre/1440 clair avec recherche et focus ; recette finale consignée dans la livraison.
+- **À suivre** : essai personnel sur données réelles après sauvegarde et déploiement web uniquement. Matrices complètes R24, PostgreSQL, performance, sécurité, accessibilité réelle et régression Apple différées au retour du porteur. Aucune fusion dans master, aucune clôture d’issue. L’inventaire des 110 vues indique l’intégration, pas une qualification exhaustive.
+
+## 29 octobre 2026, après-midi — #311, cinq familles de plus, aperçu publié
+
+- Reconstruits par le coordinateur pendant la limite d’usage des agents : Signalements (#331), Trajets (#332), Préférences personnelles (#333), Accueil et préparation (#321), fiche École (#330, coordonnées et fuseau). Retours de page et message « pas encore reconstruite » mutualisés dans `portal/components`. Socle : bouton fantôme désactivé sans bordure, barre basse à cinq espaces.
+- Aperçu publié au SHA `ce3b3559` avec en plus les cours collectifs (#328). **Exécuté** : typage client et serveur, 472 tests web, deux builds, captures 1440/390 par famille, chargement public. **Reste** : #329 (participants, en cours chez Planning), fin de #326/#327, #330 confidentialité/GPS/informations élèves, #319 entrée et invitation, #320 ouverture et guide, puis raccord réel, retrait de l’ancien rendu et qualification. Aucune sous-issue clôturée.
+
+## 29 octobre 2026 — #311, cours collectifs intégrés, branche sauvegardée
+
+- Intégrés : cours collectifs (#328 : ajout depuis l’agenda, brouillon de série, séances, revue et publication, fiche, capacité, dates, annulation de la série, politique) et finitions Formations et tarifs (#326/#327 partiels). Pas encore publiés dans l’aperçu.
+- **Exécuté** sur la branche intégrée : typage client et serveur, 472 tests web, build de production, build d’aperçu ; l’agent a joué Refus, Conflit et Réponse perdue sur les cours à 1440/390 en clair et sombre. **Non exécuté** : module de cours désactivé en navigateur, clavier et lecteur d’écran réels.
+- En cours : #329 (participants), fin de #326/#327. Branche `codex/epic-311-rebuild` envoyée sur GitHub pour sauvegarde, sans CI ni PR. Aucune sous-issue clôturée.
+
+## 28 octobre 2026, soir — #311, trois familles intégrées et publiées en aperçu
+
+- Intégrés : Équipe (#325 annuaire, fiche membre, retrait d’accès, invitations), Disponibilités et Absences (#323), Formations et tarifs (#326/#327, partiels). Publiés sur l’aperçu isolé au SHA `e2a0d5e6`, données fictives. [Publication](epic-311-preview-publication.md#publication-avec-équipe-disponibilitésabsences-formations-et-tarifs).
+- **Exécuté** : typage client et serveur, 465 tests web, deux builds, captures 1440/1024/390 clair/sombre, chargement public. **Non exécuté** : édition, refus et réponse perdue sur ces nouvelles pages par le coordinateur (les agents les ont exercés dans leurs worktrees selon leurs commits), console authentifiée contre une vraie BFF. **Reste** : #328 cours collectifs, fin de #326/#327, vague 2. Aucune sous-issue clôturée.
+
+## 28 octobre 2026 — #311, généralisation lancée et console authentifiée raccordée
+
+- Après « continue » du porteur sur les trois pilotes : shell à cinq espaces (seules les sections reconstruites sont proposées), registre des pages, données fictives par famille, primitives shadcn complémentaires. Correctif dossier élève : formation et affectation restent ouvertes après un refus.
+- Console authentifiée reconstruite (#316) sur le même runtime que la console historique, activable par navigateur (`?presentation=nouvelle`). Défaut inchangé pour tous.
+- **Exécuté** : typage client et serveur, 430 tests web (dont frontière du portail, vérifiée par injection volontaire), build de production, build d’aperçu, captures 1440/390. **Non exécuté** : la console reconstruite contre une vraie BFF. Rien de publié ni déployé dans ce lot.
+- Agents Équipe (#325), Planning (#323/#328), Catalogue (#326/#327) arrêtés par la limite d’usage, travaux partiels non intégrés. [Reprise](reprise-epic-311.md).
+
+## 28 octobre 2026 — #311, aperçu des trois pilotes publié
+
+- À la demande du porteur, Agenda et Élèves intégrés à l’aperçu à côté de « Modifier les accès », navigation commune protégée par la saisie, choix du scénario d’essai. Publié sur l’aperçu isolé au SHA `0688868d`, données fictives. [Publication et retour arrière](epic-311-preview-publication.md#publication-des-trois-pilotes).
+- **Exécuté** : typage client et serveur/tests, build d’aperçu (garde des imports hérités à 0), contrôle navigateur local de l’artefact sur les trois pages en largeur mobile et sombre, puis chargement public d’Élèves et d’Agenda au bon SHA. Corrigé à l’intégration : les onglets Base UI (variantes `data-horizontal`/`data-vertical` absentes du socle) plaçaient la liste et le contenu du dossier élève côte à côte.
+- **Non exécuté** : bureau, thème clair, édition/refus/lenteur/réponse perdue sur Agenda et Élèves, tests du calendrier après intégration. **Connu, non corrigé** : les dialogues de formation et d’affectation se ferment après un refus (saisie conservée, erreur affichée). Inventaire de 125 sous-vues toujours non relu. Aucune sous-issue clôturée ; suite en attente du retour du porteur.
+
+## 28 octobre 2026 — #311, premier aperçu limité à une page
+
+- À la demande du porteur, priorité à « Modifier les accès » pour juger la DA. Nouveau rendu shadcn/Base UI, rôles cumulés, autorisations, relecture/confirmation, lecture, erreur conservant le brouillon, clair/sombre et mobile.
+- Typage et essai navigateur ciblé réussis ; jeu de données fictif et entrée isolée. Compilation et publication consignées après exécution. [Détail et limites](epic-311-access-preview.md).
+- Agents Agenda et Élève arrêtés à ce jalon, travaux conservés séparément. Suite de #311 et grandes campagnes en attente du retour visuel ; aucune sous-issue déclarée terminée sur cet aperçu.
 
 ## 28 octobre 2026 — audit UX, lot 9 : fil de discussion (#142, #168, #177)
 
@@ -1159,7 +1227,7 @@ Les 434 scénarios métier et 68 scénarios mobiles ne changent pas de statut pa
 
 - PASS : tests metier iOS complets (runs 40236644565, 40237951212), verifications API/PostgreSQL (40237952137), IPA avec acces Messages (40239305741).
 - NOT_EXECUTED : controle UI fonctionnel MessagingFeatureCheckUITests sur le dernier SHA, recette reseau 1/5/15 s, essai iPhone, push reel.
-- BLOCKED : alerte de mention (migration 20261025 non deployee) ; aucune alerte � nouveau message � cote serveur.
+- BLOCKED : alerte de mention (migration 20261025 non deployee) ; aucune alerte � nouveau message � cote serveur.
 
 ## Retours porteur 25 octobre soir (6bfea69)
 
@@ -1290,3 +1358,21 @@ Le porteur a accepté l’essai puis demandé tests, corrections et clôtures. L
 - PASS : tests métier `db855a85` (run 40738918926), 864 tests Swift Testing en 79 suites, 202 XCTest, scénario réel du relais exécuté. Les deux premières tentatives ont échoué sur le seul `MatrixMessagingRelayIntegrationTests`, aux étapes READINESS puis CONVERSATION (relais jetable injoignable) ; la troisième est passée sans changement de code.
 - PASS : UI iPhone et iPad (run 40738923088), `SchoolCourseJourneyUITests`, `MessagingThreadUITests`, `MessagingFeatureCheckUITests/testSearchInsideConversationFindsMessage`, 16 tests par appareil.
 - NOT_EXECUTED : VoiceOver physique, réseau dégradé réel. iOS seul, aucun déploiement.
+
+## 28 octobre 2026 — EPIC #280, candidat de refonte web avant essai
+
+Branche isolée `codex/epic-280-web`, base qualifiée #253/#278/#310 intégrée par merge complet (`c94ec2bb` dans `52fe0320`). [Réalisation W01–W31](epic-280-implementation.md), [110 sous-vues](epic-280-inventory.json), [fondation et sécurité](epic-280-foundation.md), [mesures courtes](epic-280-performance.md), [livraison/rollback](epic-280-delivery.md). Composition Untitled UI et primitives officielles shadcn/ui Base UI avec tokens Drivy ; accès hors console, navigation, dossiers, planning/cours, catalogue et réglages recomposés desktop/mobile. Contrats, historique #253, règles commerciales et protections conservés. Aucun changement natif propre à #280.
+
+PASS : typage client/BFF et compilation web/API sous Node24 ; audits dépendances sans vulnérabilité signalée ; contrôles navigateur ciblés6/6 de reprise/isolement/commandes/clavier ; captures synthétiques sans débordement global sur les vues capturées à320/390/1440 selon manifeste, clair/sombre ; comparaison courte12/12 sans erreur JS. Les chiffres exacts et limites sont dans les reçus liés. Ce n'est pas la campagne complète #309/#84 ni une recette physique.
+
+Homelab relu sans mutation : API/web/worker à `a41cf64d`, configuration/OIDC/RLS valides ; 56 migrations concordantes, seule policy additive `20261028b_lesson_gps_preparation_audit.sql` en attente. L'API #253 doit accompagner le web (faits de cours). Aucun reset à répéter ; données existantes à préserver. GPS obligatoire toujours désactivé/#266 BLOCKED. Vitest de développement API/web et Vite corrigés aux versions verrouillées ; aucune protection/CI désactivée.
+
+NOT_EXECUTED : sauvegarde fraîche et bascule #280 (confirmation finale requise), essai personnel, validation du porteur, campagne complète #309/#84, navigateurs/appareils physiques et VoiceOver. W01–W30 sont implémentés avec qualification encore partielle ; W31 préparé et différé selon l'instruction du porteur. Aucune clôture d'issue ni livraison complète revendiquée. Après déploiement autorisé, attendre son retour avant toute campagne exhaustive.
+
+## 28 octobre 2026 — #280 publié pour essai personnel
+
+Après autorisation explicite de déployer directement, release `be8a02457ef2c8877117e9a13557b288738fc4bf` publiée sur [Drivy](https://drivy.shulker.ch/app/) à19:21UTC. [Reçu de publication et rollback](epic-280-publication.md), [preuve homelab](epic-280-publication-homelab-20261028.json). Sauvegarde fraîche privée1805023octets, catalogue/blocs vérifiés (pas de restauration d'essai) ; API/web/course-worker au même SHA, readiness/HTML/assets/401 anonyme vérifiés. Migration additive d'audit appliquée :57/57, empreintes concordantes,91tables FORCE RLS. Aucune purge, restauration de base, modification d'identité/configuration/DNS ; GPS obligatoire désactivé. Ancienne release a41cf64d conservée, rollback logiciel prêt, non exécuté.
+
+Premier staging interrompu avant installation pour incompatibilité Python3.11/tarfile ; extraction confinée corrigée et nouvelle sauvegarde avant reprise réussie. Contrôle du vrai build sous CSP :4gestes popups réussis, probe Zod préexistant bloqué/intercepté, aucune politique assouplie. Entrée publique nouvelle relue dans le navigateur ; aucune opération métier réelle effectuée pour la sonde.
+
+État : DEPLOYED_AWAITING_USER_TRIAL. Essai et validation personnelle NOT_EXECUTED. Campagnes complètes #309/#84 différées ; attendre le retour du porteur. L'épic et les sous-issues ne sont pas déclarés qualifiés/clos par le seul déploiement. Les reçus postérieurs au SHA produit ne modifient pas le build installé.
