@@ -545,8 +545,7 @@ async function main() {
       getAccessToken:accessTokenFor,assert,setStage:value=>{stage=value;},artifactDirectory});
     if(process.argv.includes('--audit-v2')) await verifyAuditV2({page,context:consumerContext,origin,keycloakOrigin,schoolId:school.id,
       operatorPassword,consumerPassword,assert,setStage:value=>{stage=value;}});
-    // Formations et tarifs après une première leçon réelle : harnais distinct, encore écrit pour
-    // l'ancienne présentation. Il reste disponible avec --extended et n'est pas déclaré vert par ce parcours.
+    // Formations et tarifs après une première leçon réelle : harnais distinct, joué avec --extended.
     if(extendedSuites.has('formations')) {
       await verifySchoolFormations({page,consumerContext,schoolId:school.id,origin,administration,artifactDirectory,assert,setStage:value=>{stage=value;}});
     } else {
