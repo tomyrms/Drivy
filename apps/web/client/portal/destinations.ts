@@ -27,7 +27,7 @@ export const portalWorkspaces: readonly PortalWorkspace[] = [
 ];
 
 /** Sections reached from a parent page (versioned records, references) keep the parent's workspace. */
-const contextual: Partial<Record<SectionKey, SectionKey>> = { offres: 'formations', referentiels: 'formations', procedures: 'formations', conditions: 'formations' };
+const contextual: Partial<Record<SectionKey, SectionKey>> = { offres: 'formations', referentiels: 'formations', procedures: 'formations', conditions: 'prestations' };
 
 /** A formation preparation started from Formations or Prestations keeps that workspace; school preparation stays in Réglages. */
 const cataloguePreparation = (section: SectionKey, query: NavigationQuery): SectionKey | null =>
@@ -42,6 +42,11 @@ export function isNavItemCurrent(item: PortalNavItem, section: SectionKey, query
   const resolved = cataloguePreparation(section, query) ?? contextual[section] ?? section;
   if (item.section !== resolved) return false;
   return item.query?.audience === undefined || item.query.audience === (query.audience ?? 'learners');
+}
+
+/** The item's own page is displayed. A parent item kept current for a versioned record still opens its list. */
+export function isActiveDestination(item: PortalNavItem, section: SectionKey, query: NavigationQuery = {}) {
+  return item.section === section && (item.query?.audience === undefined || item.query.audience === (query.audience ?? 'learners'));
 }
 
 /**

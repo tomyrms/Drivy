@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { sectionKeys } from '../console/sections.js';
-import { availableWorkspaces, currentWorkspace, isNavItemCurrent, navigationQueryFor, portalWorkspaces } from './destinations.js';
+import { availableWorkspaces, currentWorkspace, isActiveDestination, isNavItemCurrent, navigationQueryFor, portalWorkspaces } from './destinations.js';
 
 const all = new Set(sectionKeys);
 const spaces = availableWorkspaces(all);
@@ -27,12 +27,25 @@ describe('espaces du portail reconstruit', () => {
   });
 
   test('un enregistrement versionné garde l’espace de sa page porteuse', () => {
-    for (const section of ['offres', 'referentiels', 'procedures', 'conditions'] as const) {
+    for (const section of ['offres', 'referentiels', 'procedures'] as const) {
       expect(current(section), section).toEqual({ workspace: 'formations', item: 'formations' });
     }
-    // Les conditions commerciales se lisent depuis un permis comme depuis les prestations :
-    // elles ne rendent pas « Prestations sans permis » courant, sinon ce lien local ne mènerait nulle part.
-    expect(isNavItemCurrent(itemsOf('formations').find(item => item.section === 'prestations')!, 'conditions')).toBe(false);
+    // Les conditions commerciales restent rattachées aux prestations sans permis,
+    // mais cette page parente ne doit jamais devenir un onglet inerte.
+    expect(current('conditions')).toEqual({ workspace: 'formations', item: 'prestations' });
+    const prestations = itemsOf('formations').find(item => item.section === 'prestations')!;
+    expect(isNavItemCurrent(prestations, 'conditions')).toBe(true);
+    expect(isActiveDestination(prestations, 'conditions')).toBe(false);
+    expect(isActiveDestination(prestations, 'prestations')).toBe(true);
+  });
+
+  test('un onglet dont la page est affichée ne se rejoue pas, un onglet parent reste navigable', () => {
+    const team = itemsOf('team');
+    const invitation = team.find(item => item.section === 'invitations')!;
+    expect(isActiveDestination(invitation, 'invitations', { audience: 'team' })).toBe(true);
+    expect(isActiveDestination(invitation, 'invitations', { audience: 'learners' })).toBe(false);
+    const agenda = itemsOf('planning').find(item => item.section === 'agenda')!;
+    expect(isActiveDestination(agenda, 'agenda')).toBe(true);
   });
 
   test('la préparation d’une formation reste dans Formations et tarifs', () => {
