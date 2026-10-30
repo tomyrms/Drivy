@@ -78,10 +78,10 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
     setShowProblems(true);
     if (hasProblems(signInProblems(signInDraft))) return false;
     void run(async csrf => {
-      try {
-        await request('password-login', okSchema, { csrf, body: { email, password } });
-        if (mounted.current) onSignedIn(kind);
-      } finally { if (mounted.current) setPassword(''); }
+      await request('password-login', okSchema, { csrf, body: { email, password } });
+      if (!mounted.current) return;
+      setPassword('');
+      onSignedIn(kind);
     });
     return true;
   }
@@ -100,8 +100,11 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
       let result;
       try { result = await request('accounts', createdAccountSchema, { csrf, body: { ...named, firstName, lastName, email, password } }); }
       catch (cause) { throw accountCreationFailure(kind, cause); }
-      finally { if (mounted.current) setPassword(''); }
-      if (mounted.current) onSignedIn(result.kind);
+      // A refusal keeps the typed password so the person can correct the other fields;
+      // it is cleared only when this form is left.
+      if (!mounted.current) return;
+      setPassword('');
+      onSignedIn(result.kind);
     });
     return true;
   }
