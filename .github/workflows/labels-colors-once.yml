@@ -1,0 +1,94 @@
+name: Métadonnées · Couleurs des labels
+
+# Opération ponctuelle demandée par le propriétaire. Branche dédiée uniquement.
+# Aucun checkout, aucune dépendance externe, aucun test, aucune issue créée.
+on:
+  push:
+    branches: ['metadata/labels-colors-20261030']
+    paths: ['.github/workflows/labels-colors-once.yml']
+
+permissions: {}
+concurrency:
+  group: drivy-label-colors
+  cancel-in-progress: false
+
+jobs:
+  colors:
+    name: Colorer et relire les dix labels existants
+    if: github.repository == 'tomyrms/Drivy'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      issues: write
+    steps:
+      - name: Modifier uniquement les couleurs, puis vérifier
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repository = os.environ['GITHUB_REPOSITORY']
+          if repository != 'tomyrms/Drivy':
+              raise SystemExit('Dépôt inattendu : aucune modification.')
+          palette = {
+              'type:bug': 'D73A4A',
+              'type:feature': '0E8A16',
+              'type:ux': 'A371F7',
+              'type:refactor': '5319E7',
+              'type:qa': 'FBCA04',
+              'type:security': 'B60205',
+              'area:ios': '1D76DB',
+              'area:web': '245BD6',
+              'area:backend': '006B75',
+              'area:infra': '6F42C1',
+          }
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'Drivy-label-colors',
+          }
+
+          def request(name, method='GET', payload=None):
+              url = 'https://api.github.com/repos/' + repository + '/labels/' + urllib.parse.quote(name, safe='')
+              body = None if payload is None else json.dumps(payload).encode('utf-8')
+              req = urllib.request.Request(url, data=body, headers=headers, method=method)
+              if body is not None:
+                  req.add_header('Content-Type', 'application/json')
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  raise RuntimeError(f'{method} {name}: HTTP {exc.code}; aucun secret journalisé.') from None
+
+          # Vérifier l'existence des dix labels AVANT la première écriture.
+          before = {name: request(name) for name in palette}
+          for name, value in before.items():
+              if value.get('name') != name:
+                  raise RuntimeError(f'Label inattendu : {name}; opération arrêtée.')
+          verified = []
+          try:
+              for name, color in palette.items():
+                  previous = before[name]['color'].upper()
+                  if previous != color:
+                      request(name, 'PATCH', {'color': color})
+                  actual = request(name)
+                  if actual.get('color', '').upper() != color:
+                      raise RuntimeError(f'Couleur non confirmée pour {name}.')
+                  verified.append((name, previous, color))
+                  print(f'{name}: #{previous} -> #{color} vérifié')
+          finally:
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                  summary.write('## Couleurs des labels Drivy\n\n')
+                  summary.write(f'{len(verified)}/{len(palette)} couleurs relues et confirmées.\n\n')
+                  summary.write('| Label | Avant | Après |\n|---|---|---|\n')
+                  for name, previous, color in verified:
+                      summary.write(f'| `{name}` | `#{previous}` | `#{color}` |\n')
+                  summary.write('\nNoms, descriptions, affectations aux issues, code applicatif et déploiements inchangés.\n')
+          if len(verified) != len(palette):
+              raise RuntimeError('Toutes les couleurs ne sont pas confirmées.')
