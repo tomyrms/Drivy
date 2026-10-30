@@ -103,4 +103,4 @@ Ne pas développer automatiquement les initiatives R01–R05, ni les convertir e
 
 Ne pas rouvrir le lot de finition annulé **#340, #341–#346 et #348–#369**. Ne pas lancer une nouvelle refonte graphique au prétexte d'organiser la roadmap.
 
-Pour le web, partir de la version récente issue de **#311** et de ses corrections, pas automatiquement d'un ancien `master`. Vérifier la [PR #347](https://github.com/tomyrms/Drivy/pull/347), sa continuation éventuelle et le commit réellement utilisé. Cette roadmap n'est pas un audit des fonctionnalités manquantes ni une autorisation de déploiement.
+Pour le web, partir de la version récente issue de **#311**, désormais intégrée dans `master` par la [PR #347](https://github.com/tomyrms/Drivy/pull/347). Vérifier le commit réellement utilisé et ses corrections. Cette roadmap n'est pas un audit des fonctionnalités manquantes ni une autorisation de déploiement.
