@@ -145,7 +145,11 @@ import XCTest
             XCTAssertTrue(wasInterrupted, app.debugDescription)
             XCTAssertTrue(networkFailure.label.hasSuffix(retainedDate), app.debugDescription)
             XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
-            XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
+            // Avec la bannière d'erreur, la seconde séance (14:00) passe sous la barre d'onglets et la liste n'expose pas ce qu'elle
+            // n'affiche pas : un compte des boutons dépend de la hauteur d'écran (1 sur iPhone, run 41229249440). La conservation
+            // se lit ici sur la première séance et sur la date de dernière lecture réussie (ci-dessus) ; le compte des deux séances
+            // est contrôlé plus bas, bannière disparue, quand elles tiennent à l'écran.
+            XCTAssertTrue(course(at: "09:00", in: app).exists, app.debugDescription)
             XCTAssertTrue(app.buttons[lessonID].exists, app.debugDescription)
             reveal(retry, in: app)
             retry.tap()
@@ -153,7 +157,7 @@ import XCTest
         XCTAssertTrue(failure.waitForNonExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(loading.waitForNonExistence(timeout: 15), app.debugDescription)
         XCTAssertFalse(failure.exists, app.debugDescription)
-        XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
+        XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2, app.debugDescription)
         XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
     }
 
