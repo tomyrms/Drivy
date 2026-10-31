@@ -4,9 +4,7 @@ Lot T01 (#374) de l'epic #373. 31 octobre 2026. `definitionsVersion` : **`2026-1
 
 Base lue : `master` à `2a376c39` (fusion de #384, qui contient la refonte web #311). Spécification seulement : aucune route, aucune migration, aucun changement du contrat OpenAPI canonique 3.11.0, aucun calcul exécuté sur une école réelle. Les totaux du jeu de référence (section 6) ont été recalculés par un petit script indépendant du produit, avec des données entièrement fictives (codes `M1`, `E1`, `S1`... aucun nom).
 
-> Document livré par sections sur cette branche : cette version contient les sections 1 à 6 (dictionnaire, tableau de couverture, droits, jeu de référence). Les sections 7 et 8 (contrat proposé, décisions à relire) suivent dans le commit suivant.
-
-Plan : 1. conventions communes · 2. ce que le code garantit réellement · 3. dictionnaire · 4. calculable maintenant / à compléter / hors V1 · 5. matrice des droits · 6. jeu de référence · 7. contrat commun proposé · 8. décisions à relire.
+Plan : 1. conventions communes · 2. ce que le code garantit réellement · 3. dictionnaire · 4. calculable maintenant / à compléter / hors V1 · 5. matrice des droits · 6. jeu de référence · 7. contrat commun proposé · 8. décisions à relire · 9. tests de référence préparés · 10. limites.
 
 ## 1. Conventions communes
 
@@ -14,21 +12,21 @@ Elles s'appliquent à chaque indicateur de la section 3 ; le dictionnaire ne les
 
 | Réf. | Règle |
 | --- | --- |
-| C1 Périmètre | Une seule école (`schoolId` de la route). Identité, rattachement, rôles et grants sont relus au serveur à chaque requête (`withActor` relit `membership`). Aucun agrégat inter-écoles. |
-| C2 Fuseau et bornes | Période = dates civiles `from` incluse, `toExclusive` exclue, dans le fuseau **courant** `school.time_zone` (pas celui du navigateur ni UTC). Chaque borne est le premier instant existant du jour civil (même règle que `startOfDay` de `agenda-model.ts`). Un jour dure 23, 24 ou 25 h ; une semaine ou un mois ne se calcule jamais en ajoutant `N × 24 h`. Semaine = lundi à dimanche (comme l'agenda). Période maximale 366 jours. |
-| C3 Instant de calcul | `computedAt` = instant de début de la transaction de lecture. « À venir », « à vérifier », « en cours », « à finaliser » et les places sont évalués à cet instant. Aucun état n'est déduit d'un horaire passé. |
-| C4 Rattachement unique | Chaque leçon a **un seul** instant de rattachement `eventAt` : `actual_start` si la leçon est `COMPLETED` et a un début réel, sinon `planned_start`. Une leçon appartient donc à une seule période et les statuts d'une période se partitionnent : réalisées + à venir + annulées + absences + à vérifier + en cours + à finaliser = toutes les leçons de la période (contrôle de cohérence, indicateur L08). Les séances de cours se rattachent à `starts_at`, les règlements à `recorded_at`, les inscriptions à `created_at`/`cancelled_at`. Rien n'est découpé à minuit : une séance qui traverse minuit appartient au jour de son début. |
-| C5 Confirmé | Seules les lignes serveur comptent. Une commande locale en attente ou incertaine (`command-store`) n'est jamais incluse. Une « réservation confirmée » est une ligne `lesson` au statut `PLANNED`. |
-| C6 Zéro, inconnu, partiel | Trois états distincts, jamais confondus : **zéro connu** (la requête a réussi et rien ne correspond), **inconnu/indisponible** (source absente ou non couverte : `null`, jamais 0), **partiel** (valeur calculée sur une partie seulement, avec la part exclue et sa raison). Un échec réseau n'est jamais un zéro. L'absence de droit **omet** la mesure de la réponse (elle ne devient ni 0 ni « non applicable »). |
-| C7 Unités et arrondis | Compteurs : entiers. Durées : somme en secondes entières (chaque durée = `floor` des secondes), arrondie à la minute (demi vers le haut) **seulement à l'affichage et après sommation**. Montants : centimes entiers (`bigint` côté SQL, entier JSON ≤ 2^53 − 1, dépassement refusé), aucune division ni virgule flottante. Pourcentage : `delta × 1000 / base` arrondi demi à l'écart de zéro, divisé par 10 (une décimale), calculé en entiers côté serveur. Affichage des montants : `Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' })`, jamais de formatage manuel. |
-| C8 Devise | `CHF`, constante. Aucune colonne de devise n'existe (`school`, `lesson`, `service_product_version`) et la projection de compte écrit `currency: 'CHF'` en dur. La réponse porte `currency: 'CHF'` pour que le jour où une autre devise apparaîtrait, les montants ne soient pas additionnés. |
-| C9 Comparaison | Trois modes explicites : **mois complet** (mois civil entier contre mois civil entier, longueurs 28 à 31 jours affichées) ; **mois à date** (du 1er au jour courant inclus, jour entier, contre la même plage de jours du mois précédent, tronquée à la fin de ce mois s'il est plus court, avec `clipped: true`) ; **période équivalente** (même nombre de jours civils immédiatement avant). Le jour courant est compté en entier côté courant : les leçons pas encore réalisées y sont « à venir », donc hors « réalisées ». Le résultat donne `current`, `base`, `delta`, `daysInPeriod`, `daysInBase`. `percent` n'existe que si **base > 0, base connue et les deux côtés complets** ; sinon `percent: null` avec une raison parmi `BASE_ZERO`, `BASE_BEFORE_DATA_START`, `PARTIAL_COVERAGE`. Jamais de pourcentage infini ni de « +100 % » fictif. |
-| C10 Début de couverture | `dataSince` = **date civile** (fuseau de l'école) du plus ancien `created_at` parmi les leçons et séries de cours de l'école (`school` n'a pas de `created_at`) ; `null` si l'école n'a encore rien enregistré. Une période dont `toExclusive <= dataSince` est **inconnue** : ses mesures valent `null` (`BEFORE_DATA_START`), pas 0, et en base d'une comparaison elle donne `BASE_BEFORE_DATA_START`. Une période avec `from < dataSince < toExclusive` est calculée mais marquée partielle (`STARTS_BEFORE_DATA_START`). Une école sans aucune donnée (`dataSince = null`) a des zéros connus et aucune base de comparaison. |
-| C10b Tout exclu | Quand toutes les lignes d'une mesure sont exclues pour une raison de couverture (durée inconnue, mode pack, compte incohérent), la valeur est `null` (`UNAVAILABLE`), pas 0 ; quand une partie seulement est exclue, la valeur est la somme du reste et la mesure est `PARTIAL` avec le nombre exclu. |
-| C11 Filtres | Moniteur (`instructor_membership_id`), permis (`category_code` de l'offre de la formation), prestation (`product_key` de la version de prestation choisie). Tous sont validés côté serveur ; un filtre inapplicable à une mesure la rend `NOT_APPLICABLE` (jamais ignoré silencieusement). Les filtres permis et prestation ne s'appliquent pas aux cours (un cours n'a ni permis ni prestation dans le modèle). |
-| C12 Population | Leçons de l'école, **tous statuts**, y compris celles d'élèves archivés (l'archivage ne réécrit pas le passé) et de moniteurs dont l'accès est révoqué (la ligne `membership` reste). Les chiffres d'une période peuvent bouger après coup (correction d'issue, annulation d'un règlement) : `computedAt` le dit, aucun instantané historique n'est promis. |
-| C13 Granularité | Séries par jour, semaine (lundi) ou mois civil. Un nombre d'élèves **distincts** se recalcule par intervalle, il ne s'additionne jamais d'un intervalle à l'autre. Le premier et le dernier intervalle d'une série sont marqués `partial: true` quand ils débordent de la période. 400 points au plus par série. |
-| C14 Version | Toute modification d'une formule ou d'un statut inclus change `definitionsVersion` (format `AAAA-MM-JJ.n`, comme `swissProgrammeVersion`). Chaque réponse d'agrégat, de série, de détail et chaque CSV la porte. |
+| K1 Périmètre | Une seule école (`schoolId` de la route). Identité, rattachement, rôles et grants sont relus au serveur à chaque requête (`withActor` relit `membership`). Aucun agrégat inter-écoles. |
+| K2 Fuseau et bornes | Période = dates civiles `from` incluse, `toExclusive` exclue, dans le fuseau **courant** `school.time_zone` (pas celui du navigateur ni UTC). Chaque borne est le premier instant existant du jour civil (même règle que `startOfDay` de `agenda-model.ts`). Un jour dure 23, 24 ou 25 h ; une semaine ou un mois ne se calcule jamais en ajoutant `N × 24 h`. Semaine = lundi à dimanche (comme l'agenda). Période maximale 366 jours. |
+| K3 Instant de calcul | `computedAt` = instant de début de la transaction de lecture. « À venir », « à vérifier », « en cours », « à finaliser » et les places sont évalués à cet instant. Aucun état n'est déduit d'un horaire passé. |
+| K4 Rattachement unique | Chaque leçon a **un seul** instant de rattachement `eventAt` : `actual_start` si la leçon est `COMPLETED` et a un début réel, sinon `planned_start`. Une leçon appartient donc à une seule période et les statuts d'une période se partitionnent : réalisées + à venir + annulées + absences + à vérifier + en cours + à finaliser = toutes les leçons de la période (contrôle de cohérence, indicateur L08). Les séances de cours se rattachent à `starts_at`, les règlements à `recorded_at`, les inscriptions à `created_at`/`cancelled_at`. Rien n'est découpé à minuit : une séance qui traverse minuit appartient au jour de son début. |
+| K5 Confirmé | Seules les lignes serveur comptent. Une commande locale en attente ou incertaine (`command-store`) n'est jamais incluse. Une « réservation confirmée » est une ligne `lesson` au statut `PLANNED`. |
+| K6 Zéro, inconnu, partiel | Trois états distincts, jamais confondus : **zéro connu** (la requête a réussi et rien ne correspond), **inconnu/indisponible** (source absente ou non couverte : `null`, jamais 0), **partiel** (valeur calculée sur une partie seulement, avec la part exclue et sa raison). Un échec réseau n'est jamais un zéro. L'absence de droit **omet** la mesure de la réponse (elle ne devient ni 0 ni « non applicable »). |
+| K7 Unités et arrondis | Compteurs : entiers. Durées : somme en secondes entières (chaque durée = `floor` des secondes), arrondie à la minute (demi vers le haut) **seulement à l'affichage et après sommation**. Montants : centimes entiers (`bigint` côté SQL, entier JSON ≤ 2^53 − 1, dépassement refusé), aucune division ni virgule flottante. Pourcentage : `delta × 1000 / base` arrondi demi à l'écart de zéro, divisé par 10 (une décimale), calculé en entiers côté serveur. Affichage des montants : `Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' })`, jamais de formatage manuel. |
+| K8 Devise | `CHF`, constante. Aucune colonne de devise n'existe (`school`, `lesson`, `service_product_version`) et la projection de compte écrit `currency: 'CHF'` en dur. La réponse porte `currency: 'CHF'` pour que le jour où une autre devise apparaîtrait, les montants ne soient pas additionnés. |
+| K9 Comparaison | Trois modes explicites : **mois complet** (mois civil entier contre mois civil entier, longueurs 28 à 31 jours affichées) ; **mois à date** (du 1er au jour courant inclus, jour entier, contre la même plage de jours du mois précédent, tronquée à la fin de ce mois s'il est plus court, avec `clipped: true`) ; **période équivalente** (même nombre de jours civils immédiatement avant). Le jour courant est compté en entier côté courant : les leçons pas encore réalisées y sont « à venir », donc hors « réalisées ». Le résultat donne `current`, `base`, `delta`, `daysInPeriod`, `daysInBase`. `percentTenths` (dixièmes de pour cent, entier) n'existe que si **base > 0, base connue et les deux côtés complets** ; sinon `percentTenths: null` avec une raison parmi `BASE_ZERO`, `BASE_BEFORE_DATA_START`, `PARTIAL_COVERAGE`. Jamais de pourcentage infini ni de « +100 % » fictif. |
+| K10 Début de couverture | `dataSince` = **date civile** (fuseau de l'école) du plus ancien `created_at` parmi les leçons et séries de cours de l'école (`school` n'a pas de `created_at`) ; `null` si l'école n'a encore rien enregistré. Une période dont `toExclusive <= dataSince` est **inconnue** : ses mesures valent `null` (`BEFORE_DATA_START`), pas 0, et en base d'une comparaison elle donne `BASE_BEFORE_DATA_START`. Une période avec `from < dataSince < toExclusive` est calculée mais marquée partielle (`STARTS_BEFORE_DATA_START`). Une école sans aucune donnée (`dataSince = null`) a des zéros connus et aucune base de comparaison. |
+| K10b Tout exclu | Quand toutes les lignes d'une mesure sont exclues pour une raison de couverture (durée inconnue, mode pack, compte incohérent), la valeur est `null` (`UNAVAILABLE`), pas 0 ; quand une partie seulement est exclue, la valeur est la somme du reste et la mesure est `PARTIAL` avec le nombre exclu. |
+| K11 Filtres | Moniteur (`instructor_membership_id`), permis (`category_code` de l'offre de la formation), prestation (`product_key` de la version de prestation choisie). Tous sont validés côté serveur ; un filtre inapplicable à une mesure la rend `NOT_APPLICABLE` (jamais ignoré silencieusement). Les filtres permis et prestation ne s'appliquent pas aux cours (un cours n'a ni permis ni prestation dans le modèle). |
+| K12 Population | Leçons de l'école, **tous statuts**, y compris celles d'élèves archivés (l'archivage ne réécrit pas le passé) et de moniteurs dont l'accès est révoqué (la ligne `membership` reste). Les chiffres d'une période peuvent bouger après coup (correction d'issue, annulation d'un règlement) : `computedAt` le dit, aucun instantané historique n'est promis. |
+| K13 Granularité | Séries par jour, semaine (lundi) ou mois civil. Un nombre d'élèves **distincts** se recalcule par intervalle, il ne s'additionne jamais d'un intervalle à l'autre. Le premier et le dernier intervalle d'une série sont marqués `partial: true` quand ils débordent de la période. 400 points au plus par série. |
+| K14 Version | Toute modification d'une formule ou d'un statut inclus change `definitionsVersion` (format `AAAA-MM-JJ.n`, comme `swissProgrammeVersion`). Chaque réponse d'agrégat, de série, de détail et chaque CSV la porte. |
 
 ## 2. Ce que le code garantit réellement (vérifié sur `master` `2a376c39`)
 
@@ -38,8 +36,8 @@ Chaque ligne a été lue dans le code, pas déduite de listes web paginées.
 | --- | --- | --- | --- |
 | Q1 | `lesson.status` vaut `PLANNED`, `COMPLETED`, `CANCELLED` ou `NO_SHOW`. Colonnes utiles : `planned_start/end`, `actual_start/end` (nullables, CHECK `lesson_actual_interval` : les deux nuls, ou début non nul et fin nulle ou postérieure), `price_cents_snapshot` (bigint ≥ 0, non nul), `commercial_selection` (jsonb : `mode`, `serviceProductVersionId`, `quantity`), `instructor_membership_id`, `learner_id`, `training_id`, `time_zone`, `created_at`. Index `lesson_schedule (school_id, planned_start, id)`. | migrations 006, 007, 023 | Base de L01 à L08. L'index couvre les périodes par `planned_start` ; le rattachement par `actual_start` demandera un index propre (section 7.6). |
 | Q2 | Une leçon commencée reste `PLANNED` avec `actual_start` renseigné. `COMPLETED` n'est posé que par `POST /lessons/{id}/complete`, qui fixe le début réel (déjà enregistré ou fourni) et la fin réelle (obligatoire). La préparation GPS laisse la leçon `PLANNED` sans `actual_start`. | `lessons.ts` (`startLesson`, `start-now`), `lesson-reports.ts`, migration `20261028b` | Ni l'heure prévue ni une trace GPS ne produisent « réalisée ». Équivalent web : `lessonPhase` (`agenda-model.ts`) : `waiting` = L05, `started` = L06, `to-finish` = L07, `planned` = L02. |
-| Q3 | Il n'existe **aucune** date d'annulation ni d'absence sur `lesson` (seulement `cancel_reason_code`, `cancel_comment`, `no_show_reason`). L'annulation remet `actual_start` à `NULL`. | migrations 006, 011 ; `lessons.ts` (`cancel`) | Annulées et absences se rattachent à `planned_start` (C4), jamais à un instant d'annulation inventé. |
-| Q4 | La correction d'issue (ADMIN) ne sait aller que de `COMPLETED` vers `CANCELLED` ou `NO_SHOW` ; le retour vers `COMPLETED` ou `PLANNED` est refusé (`OUTCOME_CORRECTION_NOT_READY`). Elle remet `actual_start/end` à `NULL`, contre-passe la charge (`charge_entry` `REVERSAL`) et écrit `lesson_outcome_correction`. | `lesson-outcomes.ts`, migration 011 | Un total passé peut baisser après coup. Une leçon corrigée retombe sur `planned_start` (C4). |
+| Q3 | Il n'existe **aucune** date d'annulation ni d'absence sur `lesson` (seulement `cancel_reason_code`, `cancel_comment`, `no_show_reason`). L'annulation remet `actual_start` à `NULL`. | migrations 006, 011 ; `lessons.ts` (`cancel`) | Annulées et absences se rattachent à `planned_start` (K4), jamais à un instant d'annulation inventé. |
+| Q4 | La correction d'issue (ADMIN) ne sait aller que de `COMPLETED` vers `CANCELLED` ou `NO_SHOW` ; le retour vers `COMPLETED` ou `PLANNED` est refusé (`OUTCOME_CORRECTION_NOT_READY`). Elle remet `actual_start/end` à `NULL`, contre-passe la charge (`charge_entry` `REVERSAL`) et écrit `lesson_outcome_correction`. | `lesson-outcomes.ts`, migration 011 | Un total passé peut baisser après coup. Une leçon corrigée retombe sur `planned_start` (K4). |
 | Q5 | `price_cents_snapshot` est écrit à l'INSERT : prix unitaire de la version de prestation × quantité (exception ADMIN seulement au déplacement). Il n'est modifié que par `MOVE_LESSON` avec `commercialChange`, sur une leçon `PLANNED` non commencée, avec une ligne `lesson_commercial_revision` (`revision`, `price_cents`, `reason`). `service_product_version` n'accorde à `drivy_app` que SELECT et INSERT : un nouveau tarif est une **nouvelle version**, jamais une réécriture. À la complétion, `lesson_account.planned_price_cents` et une `charge_entry` `INITIAL` égale au snapshot sont créées ; une leçon `COMPLETED` n'est plus déplaçable (`LESSON_CLOSED`). | migration 006, `lessons.ts` (`validateCommercial`, `move`), `lesson-reports.ts` (`complete`) | Le snapshot d'une leçon `COMPLETED` est final. Valeur = snapshot, jamais le tarif courant (le cas de tarif révisé de la section 6 le teste). |
 | Q6 | `lesson_account` existe aussi pour `CANCELLED` et `NO_SHOW` (`openClosedAccount`, backfill de la migration 011) avec `planned_price_cents` égal au prix réservé, **sans charge**. | `lessons.ts`, migration 011 | Piège : `planned_price_cents` ne doit jamais être lu comme une valeur due. Annulations et absences ne valent rien. |
 | Q7 | Aucun paiement de leçon n'est stocké : la projection de compte renvoie `payments: []` et `netReceivedCents: 0` en dur. | `lesson-reports.ts` (`account`) | Les règlements ne couvrent pas les leçons individuelles. « Reste à payer » n'existe pas. |
@@ -51,17 +49,17 @@ Chaque ligne a été lue dans le code, pas déduite de listes web paginées.
 | Q13 | Le grant `membership.grants` accepte déjà `VIEW_SCHOOL_METRICS`, `VIEW_FINANCIAL_METRICS` et `EXPORT_MANAGEMENT` (CHECK de la migration 026, enum zod de `catalogue.ts`, libellés de `access-controller.ts`). Seul un ADMIN les attribue (`PATCH members`, réauthentification, audit). **Aucun code serveur ne les lit aujourd'hui.** À la création d'une école, l'ADMIN reçoit seulement `CONFIGURE_CATALOG`. | `catalogue.ts`, `school-opening.ts` | Aucune nouvelle permission n'est nécessaire (section 5). Le contrôle reste à écrire en T02. |
 | Q14 | Sous RLS, un ADMIN lit toutes les leçons de l'école. Un moniteur lit une leçon s'il en est le moniteur **et** affecté à la formation à l'instant courant (`lesson_access`), ou si la formation lui est actuellement affectée (`report_training_access`). Une affectation terminée retire donc à un moniteur la lecture de ses anciennes leçons. | migrations 006, 007 | Un agrégat « ma propre activité » calculé sous RLS **sous-compterait en silence**. Le périmètre doit être appliqué explicitement par une fonction serveur (section 8, décision D1). |
 | Q15 | `withActor` ouvre `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY`, passe en rôle `drivy_app` et relit `roles`, `grants`, `access_epoch`. Toutes les mesures d'une même requête partagent donc un instantané ; deux requêtes successives n'en partagent pas. `Cache-Control: no-store` est posé sur toutes les réponses. | `database.ts`, `app.ts` | Cohérence carte et série dans une réponse ; entre agrégat et détail, un écart est détecté, pas évité (section 7.5). |
-| Q16 | Aucun export CSV n'existe dans l'API ni dans le web. La conception v3.17 (R96, `statistiques.md`) prévoit `EXPORT_MANAGEMENT`, 10 000 lignes, neutralisation des formules, aucune URL permanente. | recherche dans `apps/` | L'export est entièrement à écrire (T07). |
+| Q16 | Aucun export CSV n'existe dans l'API ni dans le web. La conception v3.17 (R96, `statistiques.md`) prévoit `EXPORT_MANAGEMENT`, 10 000 lignes, neutralisation des formules, aucune URL permanente. | recherche dans `apps/api/src` et `apps/web/client` | L'export est entièrement à écrire (T07). |
 | Q17 | `GET /lessons` plafonne à 100 résultats par page (curseur HMAC lié à la portée). `agenda-model.ts` et `lesson-planning-model.ts` ne servent qu'à l'affichage et au formulaire de planification. | `lessons.ts` | Aucun compteur n'est calculé depuis ces listes. |
 | Q18 | Aucune table de demandes élève vers l'école n'existe (`training_wish` est un texte libre de souhait). Depuis la décision du 28 septembre 2026, le bilan est partagé automatiquement : « bilans à publier » (M09 de la conception) n'a plus d'objet. | migration 007 ; `lesson-reports.ts` (`syncSharedReport`) ; `decisions-2026-09-28.md` | Le bloc « À traiter » ne contient que des obligations démontrées (A01 à A03). |
 
 ## 3. Dictionnaire des indicateurs
 
-Légende : **Source** = table et colonnes réelles. **Pér.** = événement de rattachement (C4). Les droits sont ceux de la section 5 : `ACT` = lecture de l'activité de l'école (ADMIN ou `VIEW_SCHOOL_METRICS`) ou de la sienne (moniteur) ; `FIN` = ADMIN ou `VIEW_FINANCIAL_METRICS`.
+Légende : **Source** = table et colonnes réelles. **Pér.** = événement de rattachement (K4). Les droits sont ceux de la section 5 : `ACT` = lecture de l'activité de l'école (ADMIN ou `VIEW_SCHOOL_METRICS`) ou de la sienne (moniteur) ; `FIN` = ADMIN ou `VIEW_FINANCIAL_METRICS`.
 
 ### 3.1 Leçons individuelles : états
 
-Toutes les lignes portent `school_id = :schoolId`, passent les filtres C11 et se rattachent par `eventAt` (C4). « Planifiée » désigne `status = 'PLANNED'`.
+Toutes les lignes portent `school_id = :schoolId`, passent les filtres K11 et se rattachent par `eventAt` (K4). « Planifiée » désigne `status = 'PLANNED'`.
 
 | ID | Libellé affiché | Unité | Formule et statuts | Inclus / exclus | Droit |
 | --- | --- | --- | --- | --- | --- |
@@ -88,7 +86,7 @@ Les trois restent des grandeurs séparées : aucun total « H01 + H02 ».
 
 | ID | Libellé | Unité | Source et formule | Inclus / exclus |
 | --- | --- | --- | --- | --- |
-| P01 | Élèves ayant eu une activité | élèves | `count(DISTINCT learner_id)` sur l'**union** de (a) `lesson.learner_id` des L01 et (b) `course_enrollment.learner_id` des présences `PRESENT` aux séances de la période. Expose aussi P01a (leçons seules) et P01b (cours seuls). | Distinct par élève sur toute la période (un élève sur deux permis ou deux sources compte une fois). Inclut les élèves archivés depuis. Exclut les élèves seulement inscrits, planifiés, absents ou excusés. Ce n'est pas le nombre de membres actifs. Par intervalle d'une série, recalculé (C13). |
+| P01 | Élèves ayant eu une activité | élèves | `count(DISTINCT learner_id)` sur l'**union** de (a) `lesson.learner_id` des L01 et (b) `course_enrollment.learner_id` des présences `PRESENT` aux séances de la période. Expose aussi P01a (leçons seules) et P01b (cours seuls). | Distinct par élève sur toute la période (un élève sur deux permis ou deux sources compte une fois). Inclut les élèves archivés depuis. Exclut les élèves seulement inscrits, planifiés, absents ou excusés. Ce n'est pas le nombre de membres actifs. Par intervalle d'une série, recalculé (K13). |
 
 ### 3.4 Répartitions
 
@@ -134,7 +132,7 @@ Aucune « demande » d'élève n'est exposée (Q18). Aucun bilan « à publier �
 
 ### 3.7 Valeurs financières
 
-Toutes en centimes CHF (C7, C8). Aucune ne contient de TVA, de marge, de coût, de solde bancaire ou de « reste à payer ».
+Toutes en centimes CHF (K7, K8). Aucune ne contient de TVA, de marge, de coût, de solde bancaire ou de « reste à payer ».
 
 | ID | Libellé affiché | Formule et statuts | Inclus / exclus | Pér. | Droit |
 | --- | --- | --- | --- | --- | --- |
@@ -161,7 +159,7 @@ Règles de non-confusion, vérifiables par test : aucun champ de réponse ne con
 | | Date de règlement effective ou bancaire | Seule la date de saisie existe (Q10). |
 | | Remplissage historique des cours | Places = instantané ; pas d'historique des retenues. Les mouvements d'inscription (C10) sont, eux, datés par des colonnes réelles. |
 | | Date d'annulation ou d'absence d'une leçon | Aucune colonne (Q3). Le rattachement se fait à la date prévue. |
-| | Devise autre que CHF | Aucune colonne de devise (C8). |
+| | Devise autre que CHF | Aucune colonne de devise (K8). |
 | **Hors V1** | Taux d'occupation du planning | Le dénominateur (`availability_rule`) est modifié en place sans historique (Q12) : un taux passé serait inventé. Pourrait revenir pour le futur seulement, ou avec un journal des disponibilités. |
 | | Bénéfice, marge nette, coût d'un moniteur, solde bancaire, TVA, HT/TTC, conformité comptable | Aucune base ; aucune n'est affirmée. |
 | | Frais d'annulation ou d'absence automatiques | Les règles structurées (`cancellationHours`, `lateAction` valant `CONTACT` ou `NO_FEE`) décrivent un délai, jamais un montant. Aucun frais n'est déduit d'un texte libre. |
@@ -270,39 +268,39 @@ Séries :
 | CS3 | FIRST_AID | PUBLISHED | 8 | 20/11 18:00Z–20:00Z (19:00–21:00) |
 | CS4 | FIRST_AID | CANCELLED (le 02/10 à 09:00Z) | 8 | 20/10 18:00Z–20:00Z |
 
-Aucune série n'a de prix.
+Aucune série n'a de prix. Les séries sont créées après le 01/09/2026 : elles ne changent pas `dataSince`.
 
 Inscriptions (`created_at` en UTC) :
 
 | Inscr. | Élève | Série | État | Créée | Annulée |
 | --- | --- | --- | --- | --- | --- |
-| C1 | E1 | CS1 | ACTIVE | 02/10 08:00Z | |
-| C2 | E2 | CS1 | ACTIVE | 02/10 08:05Z | |
-| C3 | E3 | CS1 | CANCELLED (`SELF`) | 03/10 08:00Z | 10/10 08:00Z |
-| C4 | E4 | CS1 | ACTIVE | 04/10 08:00Z | |
-| C5 | E1 | CS2 | ACTIVE | 30/09 21:50Z (23:50 local, septembre) | |
-| C6 | E2 | CS2 | ACTIVE | 20/10 08:00Z | |
-| C7 à C12 | E1 à E6 | CS3 | ACTIVE | 21/10 08:00Z | |
-| C13 | E6 | CS4 | CANCELLED (`SERIES_CANCELLED`) | 01/10 08:00Z | 02/10 09:00Z |
+| I1 | E1 | CS1 | ACTIVE | 02/10 08:00Z | |
+| I2 | E2 | CS1 | ACTIVE | 02/10 08:05Z | |
+| I3 | E3 | CS1 | CANCELLED (`SELF`) | 03/10 08:00Z | 10/10 08:00Z |
+| I4 | E4 | CS1 | ACTIVE | 04/10 08:00Z | |
+| I5 | E1 | CS2 | ACTIVE | 15/09 08:00Z (septembre) | |
+| I6 | E2 | CS2 | ACTIVE | 20/10 08:00Z | |
+| I7 à I12 | E1 à E6 | CS3 | ACTIVE | 21/10 08:00Z | |
+| I13 | E6 | CS4 | CANCELLED (`SERIES_CANCELLED`) | 01/10 08:00Z | 02/10 09:00Z |
 
 Une proposition de place `ACTIVE` pour E5 sur CS2, échéance 29/10 12:00Z (après l'instant de calcul).
 
-Présences : séance 1 de CS1 (12/10) : C1 `PRESENT`, C2 `PRESENT`, C4 `ABSENT`. Séance 2 de CS1 (13/10) : C1 `PRESENT` ; C2 et C4 **non renseignés**. Aucune autre ligne.
+Présences : séance 1 de CS1 (12/10) : I1 `PRESENT`, I2 `PRESENT`, I4 `ABSENT`. Séance 2 de CS1 (13/10) : I1 `PRESENT` ; I2 et I4 **non renseignés**. Aucune autre ligne.
 
 Règlements de cours (`course_payment_record`, centimes) :
 
 | Règl. | Inscr. | Montant | Saisi (UTC) | Annulé (UTC) | Particularité |
 | --- | --- | --- | --- | --- | --- |
-| P1 | C1 | 12 000 | 12/10 09:00Z | | |
-| P2 | C2 | 6 000 | 12/10 09:05Z | | paiement en deux fois |
-| P3 | C2 | 6 000 | 20/10 09:00Z | | seconde échéance |
-| P4 | C4 | 12 000 | 12/10 09:10Z | 13/10 08:00Z | saisie erronée annulée |
-| P5 | C4 | 12 000 | 13/10 08:05Z | | ressaisie |
-| P6 | C3 | 12 000 | 05/10 09:00Z | | inscription annulée ensuite : le règlement reste |
-| P7 | C5 | 3 000 | 30/09 21:30Z (23:30 local) | | septembre |
-| P8 | C6 | 3 000 | 30/09 22:30Z (00:30 local) | | octobre |
-| P9 | C1 | 0 | 14/10 09:00Z | | saisie à zéro |
-| P10 | C4 | 12 000 | 20/09 09:00Z | 09/10 09:00Z | saisie de septembre annulée en octobre |
+| P1 | I1 | 12 000 | 12/10 09:00Z | | |
+| P2 | I2 | 6 000 | 12/10 09:05Z | | paiement en deux fois |
+| P3 | I2 | 6 000 | 20/10 09:00Z | | seconde échéance |
+| P4 | I4 | 12 000 | 12/10 09:10Z | 13/10 08:00Z | saisie erronée annulée |
+| P5 | I4 | 12 000 | 13/10 08:05Z | | ressaisie |
+| P6 | I3 | 12 000 | 05/10 09:00Z | | inscription annulée ensuite : le règlement reste |
+| P7 | I5 | 3 000 | 30/09 21:30Z (23:30 local) | | septembre |
+| P8 | I5 | 3 000 | 30/09 22:30Z (01/10 à 00:30 local) | | octobre |
+| P9 | I1 | 0 | 14/10 09:00Z | | saisie à zéro |
+| P10 | I5 | 12 000 | 20/09 09:00Z | 09/10 09:00Z | saisie de septembre annulée en octobre |
 
 ### 6.4 Résultats attendus (école A, `computedAt` = 2026-10-28T17:00:00Z)
 
@@ -347,9 +345,9 @@ Chaque colonne de groupes se somme au total d'octobre (5, 3, 3, 1, 1, 1, 1).
 | Septembre à date | 38 000 (S1 9 000 + S2 18 000 + S3 11 000) | 0 | 38 000 | 0 | | | | null |
 | Novembre | 0 | 10 000 (N1) | 10 000 | 0 | 0 | 0 | 0 | null |
 
-F01 d'octobre = O1 10 000 + O2 9 000 + O3 17 000 + O5 11 000 + D1 10 000 = 57 000. F01 de septembre = 9 000 + 18 000 + 11 000 + 9 000 + 11 000 = 58 000. Le règlement saisi P6 reste compté malgré l'annulation de C3. P4 est annulé et ressaisi en P5 : un seul compte. P10, saisi en septembre et annulé en octobre, n'est plus dans le total de septembre aujourd'hui (3 000), et c'est la ligne F06 (b) d'octobre qui l'explique. P9 à zéro est une saisie qui ajoute 0.
+F01 d'octobre = O1 10 000 + O2 9 000 + O3 17 000 + O5 11 000 + D1 10 000 = 57 000. F01 de septembre = 9 000 + 18 000 + 11 000 + 9 000 + 11 000 = 58 000. Le règlement saisi P6 reste compté malgré l'annulation de I3. P4 est annulé et ressaisi en P5 : un seul compte. P10, saisi en septembre et annulé en octobre, n'est plus dans le total de septembre aujourd'hui (3 000), et c'est la ligne F06 (b) d'octobre qui l'explique. P9 à zéro est une saisie qui ajoute 0.
 
-**Comparaisons** (règle C9) :
+**Comparaisons** (règle K9) :
 
 | Cas | Courant | Base | Écart | Pourcentage |
 | --- | --- | --- | --- | --- |
@@ -370,13 +368,13 @@ Test de la règle de tronquage sur la fonction pure : « mois à date » le 31/1
 | C01 séances | 2 (CS1, 12 et 13/10). CS4 est exclue. |
 | C02 cours concernés | 1 |
 | C03 séances avec appel renseigné | 2 |
-| C04 appels à renseigner (instantané) | 1 séance (celle du 13/10), `missingMarks = 2` (C2 et C4 ; C3, annulée avant, n'est pas attendue) |
-| C05 présences d'octobre | `PRESENT` 3 (C1 ×2, C2 ×1), `ABSENT` 1 (C4), `EXCUSED` 0 |
+| C04 appels à renseigner (instantané) | 1 séance (celle du 13/10), `missingMarks = 2` (I2 et I4 ; I3, annulée avant, n'est pas attendue) |
+| C05 présences d'octobre | `PRESENT` 3 (I1 ×2, I2 ×1), `ABSENT` 1 (I4), `EXCUSED` 0 |
 | C06 inscriptions actives (instantané) | 11 (CS1 : 3 · CS2 : 2 · CS3 : 6) |
 | C07 places retenues | 1 (E5 sur CS2) |
 | C08 places | CS1 : 3 occupées, 5 libres · CS2 : 3 occupées (2 + 1 retenue), 9 libres · CS3 : 6 occupées, 2 libres |
 | C09 remplissage des cours à venir | **45 %** = (3 + 6) / (12 + 8) sur CS2 et CS3. Piège : la moyenne des pourcentages, (25 % + 75 %) / 2, donnerait 50 %. CS1 est commencée, CS4 annulée : exclues. |
-| C10 mouvements d'octobre | créées 12 (C1, C2, C3, C4, C6, C7 à C12, C13), annulées 2 (`SELF` 1 : C3, `SERIES_CANCELLED` 1 : C13). Septembre : créées 1 (C5). |
+| C10 mouvements d'octobre | créées 12 (I1, I2, I3, I4, I6, I7 à I12, I13), annulées 2 (`SELF` 1 : I3, `SERIES_CANCELLED` 1 : I13). Septembre : créées 1 (I5). |
 | C11 cours annulés d'octobre | 1 série (CS4), 1 séance écartée |
 | P01 d'octobre | 4 : leçons E1, E2, E4, E5 ; cours E1, E2 (P01b = 2) ; l'union ne double pas E1 et E2 |
 | F07 | `null`, `COURSE_PRICE_SOURCE_MISSING` : jamais « 3 inscriptions × 2 séances × un prix » |
@@ -437,4 +435,192 @@ Isolation : un utilisateur membre de B seulement obtient 403 sur toute route de 
 | `M4` | export d'activité d'octobre | fichier avec en-tête et métadonnées, 0 ligne : un zéro connu, pas une erreur |
 | `L1` (élève) ou membre de B | n'importe quelle route de l'école A | 403 |
 
-<!-- SUITE-T01-2 -->
+## 7. Contrat commun proposé (agrégat, série, détail, CSV)
+
+**Proposition à relire : rien de ceci n'est écrit.** Ni route, ni schéma, ni modification du contrat OpenAPI canonique 3.11.0. Si elle est validée, T02 la formalise comme extension hors canon, dans un fichier `apps/api/contracts/school-metrics.json` (même pratique que `lesson-next-slot.json` ou `learner-course-facts.json`).
+
+### 7.1 Principes
+
+- Les noms suivent la conception v3.17 quand ils existent (`/metrics`, `/metrics/definitions`, `definitionsVersion`, codes d'erreur `METRIC_SCOPE_FORBIDDEN`, `METRIC_FILTER_UNSUPPORTED`, `PERIOD_TOO_LARGE`, `EXPORT_TOO_LARGE`, `ACCESS_REVOKED`). L'export s'en écarte volontairement (7.7).
+- Enveloppe existante `{ data, requestId, serverTime }`, `Cache-Control: no-store`, query validée en mode strict (un paramètre inconnu est refusé), uuid et dates validés, aucune écriture métier : tout est en lecture seule, y compris l'export.
+- Un seul moteur de calcul : agrégat, série, détail et export appellent les mêmes fonctions de cohorte avec les mêmes bornes, filtres, fuseau et instant. Aucun composant web ne recalcule un chiffre.
+- Les clés de mesure sont les identifiants du dictionnaire (`L01`, `H02`, `F03`...). Leur sens est figé par `definitionsVersion`.
+
+### 7.2 Routes
+
+Préfixe `/v1/schools/{schoolId}`.
+
+| Méthode et chemin | Rôle | Droit minimal |
+| --- | --- | --- |
+| `GET /metrics/definitions` | Version et dictionnaire (identifiant, unité, libellé, formule en clair, couverture connue) pour « Comment est-ce calculé ? ». Contenu statique, sans donnée d'école. | Être membre actif de l'école, rôle ADMIN ou INSTRUCTOR |
+| `GET /metrics?domain=activity` | Cartes d'activité (L, H, P, C, A), comparaison, répartition éventuelle. | Section 5 : activité de l'école ou sa propre activité |
+| `GET /metrics?domain=finance` | Cartes financières (F01 à F07), comparaison, répartition éventuelle. | ADMIN ou `VIEW_FINANCIAL_METRICS` |
+| `GET /metrics/series` | Séries temporelles de 1 à 5 mesures. | Celui de chaque mesure |
+| `GET /metrics/details` | Lignes qui composent une mesure, paginées. | Celui de la mesure |
+| `POST /metrics/exports` | CSV de la même sélection, sur action explicite. | `EXPORT_MANAGEMENT` + droit de la mesure |
+
+Deux domaines distincts plutôt qu'une route unique : une réponse « finances » ne contient aucune clé d'activité et inversement, ce qui rend l'omission par droit triviale à tester et à mettre en cache sans fuite.
+
+### 7.3 Paramètres communs (query pour les GET, corps JSON pour l'export)
+
+| Paramètre | Règle |
+| --- | --- |
+| `from`, `toExclusive` | Dates civiles `AAAA-MM-JJ` de l'école, `from < toExclusive`, 366 jours au plus (`PERIOD_TOO_LARGE`), date valide (`INVALID_PERIOD`). Les raccourcis « Ce mois », « Mois dernier », « Cette année » sont calculés par le client avec la date civile de l'école et envoyés comme dates ; le serveur ne les devine pas. |
+| `compare` | `none` (défaut), `previous-month` ou `equivalent-period`. Le serveur déduit le mode (`FULL_MONTH`, `MONTH_TO_DATE` ou `EQUIVALENT_PERIOD`) de `from` et `toExclusive` et le renvoie. `previous-month` exige un mois complet ou un mois du 1er à aujourd'hui, sinon `INVALID_PERIOD`. |
+| `scope` | `school` ou `self`. Défaut : `school` si le droit existe, sinon `self`. Un `school` non autorisé donne `403 METRIC_SCOPE_FORBIDDEN`. |
+| `instructorMembershipId`, `categoryCode`, `productKey` | Filtres K11. Un filtre inapplicable à une mesure la rend `NOT_APPLICABLE` dans la réponse, jamais ignoré. Un `instructorMembershipId` autre que le sien en portée `self` donne `403`. |
+| `breakdown` | Un seul parmi `instructor`, `category`, `product` (borne la taille de la réponse). Refusé pour `instructor` sur les finances sans droit financier. |
+| `granularity` (séries) | `day`, `week` ou `month` ; 400 intervalles au plus. |
+| `measures` (séries) | 1 à 5 identifiants. Les mesures de nature instantanée (C06 à C09, A01 à A03) et P01 additionné n'ont pas de série. |
+| `measure`, `limit`, `cursor` (détail) | `limit` de 1 à 100 (50 par défaut) ; curseur signé lié à la personne, à l'école, à `accessEpoch`, à la mesure, aux bornes, aux filtres et à `definitionsVersion` (mécanisme `Cursors` existant). Option : `bucketFrom`, `bucketToExclusive` ou `groupKey` pour ouvrir une barre ou un groupe précis. |
+| `expectedLineCount`, `expectedAmountCents` (détail, export) | Valeurs lues sur la carte, pour détecter un écart (7.5). Facultatifs. |
+
+### 7.4 Forme des réponses
+
+Agrégat (`GET /metrics?domain=...`) :
+
+```
+data: {
+  definitionsVersion: "2026-10-31.1",
+  schoolId, timeZone: "Europe/Zurich", currency: "CHF",
+  computedAt: "2026-10-28T17:00:00.000Z",      // instant de la transaction, référence de « à venir »
+  dataSince: "2026-09-01" | null,
+  period: { from, toExclusive, days, fromInstant, toInstant },
+  scope: { kind: "school" | "self", filters: { instructorMembershipId, categoryCode, productKey } },
+  coverageNotes: {                               // ce que la page ne peut pas sur-promettre
+    lessons: "INDIVIDUAL_UNIT_PRICE_ONLY",
+    payments: "COURSE_ON_SITE_ENTRIES_ONLY",
+    paymentDate: "ENTRY_DATE"
+  },
+  measures: {
+    L01: { value: 5, unit: "count", coverage: { status: "COMPLETE", reasons: [] }, lineCount: 5 },
+    H02: { value: 13080, unit: "seconds", knownCount: 4, unknownDurationCount: 1,
+           coverage: { status: "PARTIAL", reasons: [{ code: "DURATION_UNKNOWN", count: 1 }] } },
+    F01: { value: 57000, unit: "cents", coverage: { status: "COMPLETE", reasons: [] }, lineCount: 5 },
+    C09: { value: 450, unit: "permille", numerator: 9, denominator: 20, coverage: { status: "COMPLETE", reasons: [] } },
+    F07: { value: null, unit: "cents", coverage: { status: "UNAVAILABLE", reasons: [{ code: "COURSE_PRICE_SOURCE_MISSING" }] } }
+  },
+  comparison?: { mode: "MONTH_TO_DATE", base: { from, toExclusive, days, clipped },
+                 measures: { L01: { current: 5, base: 3, delta: 2, percentTenths: 667, percentReason: null } } },
+  breakdown?: { by: "instructor", groups: [{ key, label, measures: { ... } }], unresolved: { ... } }
+}
+```
+
+Les valeurs de l'exemple sont celles du jeu A (octobre, section 6). Le contrat n'impose que la forme.
+
+Règles de forme :
+
+- `value` est un entier ou `null`. Jamais de flottant : pourcentage d'écart en dixièmes de pour cent (`percentTenths: 667` s'affiche « +66,7 % »), remplissage en pour mille (`450` s'affiche « 45 % »).
+- `coverage.status` : `COMPLETE` (toutes les lignes admissibles sont comptées), `PARTIAL` (une partie exclue, avec ses raisons et leur nombre), `UNAVAILABLE` (`value: null`), `NOT_APPLICABLE` (filtre incompatible). Une mesure sans droit est **absente**.
+- Codes de raison : `DURATION_UNKNOWN`, `ACTUAL_START_MISSING`, `ENTITLEMENT_NOT_VALUED`, `CHARGE_MISMATCH`, `COURSE_PRICE_SOURCE_MISSING`, `BEFORE_DATA_START`, `STARTS_BEFORE_DATA_START`, `SNAPSHOT_ONLY`, `TIME_ZONE_MIXED`.
+- `percentReason` quand `percentTenths` est nul : `BASE_ZERO`, `BASE_BEFORE_DATA_START`, `PARTIAL_COVERAGE`.
+- `lineCount` d'une mesure financière est le nombre de lignes de son détail, pas un indicateur d'activité (D3).
+
+Série (`GET /metrics/series`) : mêmes en-têtes que l'agrégat, plus `granularity` et `buckets: [{ from, toExclusive, partial, measures: { L01: { value, coverage? } } }]` (`coverage` n'est répété que s'il n'est pas `COMPLETE`). Invariant testé : la somme des intervalles d'une mesure additive (L, H01, H02, H03, F01 à F06) égale l'agrégat de la même période ; P01 est recalculé par intervalle et n'est pas additif.
+
+Détail (`GET /metrics/details`) :
+
+```
+data: {
+  definitionsVersion, computedAt, measure, period, scope,
+  total: { lineCount, amountCents?, durationSeconds? },      // somme TOTALE du périmètre
+  pageSum: { amountCents?, durationSeconds? },               // somme de CETTE page seulement
+  drift: null | { lineCount: { expected, actual }, amountCents?: { expected, actual } },
+  lines: [ ... ], page: { limit, nextCursor }
+}
+```
+
+Lignes : `LESSON` (`lessonId`, `eventAt`, `status`, `state`, `instructorMembershipId`, `instructorLabel`, `learnerLabel`, `categoryCode`, `productKey`, `quantity`, `durationSeconds`, `amountCents`), `COURSE_OCCURRENCE` (`occurrenceId`, `seriesId`, `startsAt`, `courseTypeLabel`, `markedCount`, `missingMarks`), `COURSE_PAYMENT` (`paymentId`, `enrollmentId`, `recordedAt`, `amountCents`, `voidedAt`, `learnerLabel`). `amountCents` n'existe que pour qui a le droit financier ; `learnerLabel` est vide hors lecture déjà permise ; `instructorLabel` utilise la fonction de nom d'équipe existante. Aucun contenu de bilan, aucune position, aucune note personnelle.
+
+### 7.5 Couverture, fraîcheur et cohérence
+
+- **Dans une réponse** : une seule transaction `REPEATABLE READ` en lecture seule (`withActor`), donc cartes, comparaison, répartition et séries d'une même requête partagent un instantané. `computedAt` le date.
+- **Entre deux réponses** : aucun instantané n'est promis. Le détail et l'export relisent la base. Pour qu'un écart ne passe pas inaperçu, le client renvoie `expectedLineCount` et `expectedAmountCents` lus sur la carte ; si le recalcul diffère, `drift` est renseigné (détail) ou l'en-tête de réponse `X-Metrics-Drift: true` et la ligne `# driftFromDisplayed;true` du fichier le disent, et l'interface propose de relire. Une donnée modifiée entre deux consultations est donc signalée, jamais masquée.
+- **Réponse périmée** : chaque réponse renvoie `period`, `scope` et `filters` effectifs ; le web ignore toute réponse qui ne correspond plus aux filtres affichés et annule la lecture dépassée (`AbortController`). Aucun repli en zéro sur erreur : 503 `METRICS_UNAVAILABLE`.
+- **Invalidation** : après une commande confirmée, le web revalide les statistiques par le mécanisme de révision de #107. Une commande locale en attente n'est pas intégrée.
+- **Droits retirés** : chaque requête relit les grants ; le détail et l'export ne s'appuient jamais sur une autorisation mémorisée.
+
+### 7.6 Pistes de mise en œuvre pour T02 (hors contrat)
+
+À valider en T02, avec mesure de coût sur un volume représentatif ; aucun objectif de performance n'est affirmé ici.
+
+- **Fonctions de lecture à périmètre explicite** (décision D1) : fonctions SQL `STABLE`, `SECURITY DEFINER`, `SET search_path`, en lecture seule, qui revérifient `current_school_member`, les rôles et grants de l'appelant, puis appliquent le périmètre `soi` ou `école` elles-mêmes. Même convention que `course_seats_taken` ou `lesson_learner_name`. Elles évitent le sous-comptage silencieux d'un moniteur dont l'affectation est terminée (Q14).
+- **Index candidats**, un par mesure à justifier par `EXPLAIN` : `lesson (school_id, actual_start) WHERE status = 'COMPLETED'` (L01, H02, F01) ; l'index existant `lesson_schedule` couvre les autres états ; `course_payment_record (school_id, recorded_at)` (F05, F06) ; `course_enrollment (school_id, created_at)` et `(school_id, cancelled_at)` (C10) ; `course_attendance (occurrence_id)` (C03 à C05). Aucun n'est créé tant que la mesure ne le justifie pas.
+- **Bornes** : période 366 jours, 400 intervalles, détail 100 lignes, export 10 000 lignes, délai maximal de requête à fixer après mesure (échec = 503, jamais zéro).
+- Aucune lecture n'écrit : ni opération, ni audit métier, ni ligne dans une table de travail.
+
+### 7.7 Export CSV
+
+`POST /metrics/exports`, corps `{ measure, from, toExclusive, scope, filters..., expectedLineCount?, expectedAmountCents? }`. Droit : `EXPORT_MANAGEMENT` **et** droit de la mesure ; les deux sont relus à la requête (`403 ACCESS_REVOKED` sinon, sans fichier).
+
+**Écart assumé avec la conception.** AP189 de la v3.17 décrit un export asynchrone (instantané privé, travailleur, jeton de téléchargement, 24 h). Rien de cette infrastructure n'existe dans le code (Q16). La proposition est un téléchargement **synchrone**, produit dans la transaction de lecture, répondu directement (`200 text/csv`, `Content-Disposition: attachment`, `Cache-Control: no-store`), sans fichier conservé, sans URL réutilisable ni stockage de données scolaires. Au-delà de 10 000 lignes : `413 EXPORT_TOO_LARGE` avec `maxLines`.
+
+Format, documenté dans le fichier lui-même et dans `/metrics/definitions` :
+
+- UTF-8 avec BOM, séparateur `;`, fin de ligne CRLF, guillemets doublés, champs entre guillemets dès qu'ils contiennent `;`, guillemet ou saut de ligne.
+- Cellules **texte** commençant par `=`, `+`, `-`, `@`, tabulation ou retour chariot : préfixées d'une apostrophe (neutralisation des formules) ; les colonnes numériques ne contiennent que des chiffres.
+- Montants en centimes entiers (`amount_cents`) et colonne `currency`, durées en secondes entières, dates ISO 8601 avec décalage dans le fuseau de l'école : aucune mise en forme locale, donc aucune dérive de montants ou de dates.
+- Bloc de métadonnées en tête, lignes commençant par `#` : `definitionsVersion`, `computedAt`, `period`, `timeZone`, `currency`, `scope`, `filters`, `measure`, `lineCount`, `totalAmountCents` ou `totalDurationSeconds`, `coverage` (statut et raisons), `complete` (`false` dès que la couverture est partielle : un export partiel n'est jamais annoncé complet), `driftFromDisplayed`, `notAnAccountingDocument;true`.
+- En-têtes de colonnes stables, versionnés avec `definitionsVersion` : `line_kind`, `line_id`, `event_at`, `status`, `instructor_id`, `instructor_name`, `category_code`, `product_key`, `quantity`, `duration_seconds`, `amount_cents`, `currency` (colonnes vides quand non applicables ou non autorisées).
+- Nom de fichier `drivy-<mesure>-<from>_<toExclusive>.csv` : ni nom d'école, ni nom de personne.
+- **Aucun nom d'élève** (D8). Les identifiants de ligne permettent de retrouver la fiche dans l'application.
+- Le fichier n'est ni une facture, ni un bilan comptable, ni un relevé bancaire, et ne le prétend pas.
+
+### 7.8 Erreurs
+
+| Code | HTTP | Cas |
+| --- | --- | --- |
+| `METRIC_SCOPE_FORBIDDEN` | 403 | Portée `école` ou moniteur tiers sans droit |
+| `ACCESS_REVOKED` | 403 | Droit retiré pour le détail ou l'export |
+| `METRIC_FILTER_UNSUPPORTED` | 400 | Filtre refusé pour la mesure demandée (règlements) |
+| `INVALID_PERIOD` | 422 | Dates invalides, ordre inversé, `compare` incompatible |
+| `PERIOD_TOO_LARGE` | 422 | Plus de 366 jours ou plus de 400 intervalles |
+| `EXPORT_TOO_LARGE` | 413 | Plus de 10 000 lignes |
+| `SCHOOL_NOT_ACTIVE` | 409 | École en préparation |
+| `METRICS_UNAVAILABLE` | 503 | Échec ou délai dépassé : jamais un zéro |
+
+Un refus de droit ne contient ni montant, ni compte, ni identifiant de ressource.
+
+## 8. Décisions à relire
+
+Ce que le code ne permet pas de trancher. Chaque ligne a un choix par défaut, retenu pour avancer ; aucune n'attend de réponse. Si l'un des choix ne convient pas, il se change avant T02.
+
+| # | Question | Choix par défaut | Raison |
+| --- | --- | --- | --- |
+| D1 | Comment lire l'activité d'un moniteur dont l'affectation est terminée, et d'où lire les agrégats ? | Une migration **de fonctions et d'index seulement** en T02 (aucune table, aucune donnée, aucun backfill) : fonctions de lecture `SECURITY DEFINER` à périmètre explicite. Elle n'est pas écrite par T01 et aucun déploiement n'est impliqué. | Sous RLS, un moniteur perd la lecture de ses anciennes leçons (Q14) : l'agrégat sous-compterait en silence, ce qui confond zéro et inconnu. L'alternative sans migration (lecture sous RLS) obligerait à marquer `self` comme partiel en permanence. #375 interdit une migration implicite : celle-ci est donc à confirmer explicitement. |
+| D2 | Un ADMIN peut-il exporter sans grant ? | Non : `EXPORT_MANAGEMENT` est requis, même pour un ADMIN ; il l'obtient une fois par `PATCH members` (réauthentification, audit). Lecture des statistiques : ADMIN sans grant. | Un ADMIN lit déjà tous les prix de leçons et tous les règlements de cours ; ses statistiques n'élargissent rien. L'export, lui, produit un fichier hors contrôle ; la conception (R96) demande un droit d'export explicite même pour l'ADMIN. Aucune permission n'est accordée par défaut. |
+| D3 | Qui voit les finances, et par moniteur ? | ADMIN ou `VIEW_FINANCIAL_METRICS`, école entière, avec filtre et répartition par moniteur ; ce grant ne donne pas l'activité de l'école. Le nombre de lignes du détail d'un montant (égal à L01 ou L02 par construction) est visible. Libellé « valeur convenue des leçons », jamais « revenu » ni « paie » du moniteur. Un moniteur sans ce grant ne voit aucun montant agrégé, même sur ses propres leçons. | #373 et #379 prévoient la ventilation « selon droits » ; le grant existe avec ce libellé (Q13). Un montant agrégé par moniteur pourrait être lu comme sa rémunération ; il reste donc réservé à qui gère l'école. Le prix de chaque leçon reste lisible dans sa fiche, inchangé. |
+| D4 | À quelle date rattacher une leçon ? | Réalisée : début réel ; toutes les autres : début prévu (K4). Une leçon `COMPLETED` sans début réel est comptée avec son début prévu et signalée `ACTUAL_START_MISSING`. | Aucune date d'annulation ni d'absence n'existe (Q3). Un rattachement unique garantit que les statuts se partitionnent sans double compte. Le cas `COMPLETED` sans début réel ne peut pas être produit par les routes actuelles ; c'est un filet pour des données plus anciennes. |
+| D5 | Une saisie de règlement annulée, dans quelle période ? | Elle sort du total de sa période d'origine (date de saisie) et apparaît dans F06 : (a) pour sa période d'origine, (b) comme « correction postérieure » dans la période où elle a été annulée. Aucune écriture inverse n'est inventée. | Le modèle conserve la ligne avec `voided_at` et ne contient ni date de paiement ni remboursement (Q10). Annuler une saisie n'est pas un remboursement. C'est la lecture la plus proche de la règle de conception (correction rattachée à la date d'origine). |
+| D6 | Devise | `CHF` constante, portée par chaque réponse. | Aucune colonne de devise n'existe et les comptes affichent déjà CHF (Q7). Ajouter une devise serait un changement de modèle, hors T01. |
+| D7 | Définitions sans état serveur | « Élèves ayant eu une activité » = union des élèves ayant une leçon réalisée et des élèves marqués présents à une séance de cours dans la période. Une séance de cours est dite « avec appel » quand au moins une présence est saisie ; une séance passée sans aucune saisie est « à renseigner », jamais « tenue ». | Aucun état « séance tenue » n'existe. Le cadrage demande « une activité réelle », pas les membres actifs ; l'appel est la seule preuve saisie par une personne. |
+| D8 | Contenu et mécanique du CSV | Synchrone, sans fichier conservé, UTF-8 avec BOM, séparateur `;`, métadonnées en lignes `#`, **sans nom d'élève**, 10 000 lignes au plus. | Le web suisse ouvre ces fichiers dans un tableur francophone. Un fichier téléchargé échappe à toute purge : on n'y met pas de nom d'élève ; la conception distingue d'ailleurs la liste d'élèves comme un autre type d'export. Aucune infrastructure d'export asynchrone n'existe (Q16). |
+| D9 | Trace d'un export | Journal technique sans personne (identifiant de requête, mesure, nombre de lignes, durée). Pas d'`audit_event` métier dans cette tâche. | La lecture s'exécute dans une transaction en lecture seule ; y écrire un audit demanderait une écriture séparée. À arbitrer avec T07 si l'on veut tracer qui exporte. |
+| D10 | Comparaison « mois à date » | Le jour courant est compté en entier côté courant ; la base est la même plage de jours du mois précédent, tronquée si plus courte (`clipped`). | Reste cohérent avec la carte « Ce mois-ci » de l'accueil, où les leçons du jour encore à faire sont « à venir ». Le jour incomplet est signalé, pas masqué. |
+| D11 | Périmètre `soi` pour les cours | Séances qu'on anime (C01 à C05) ; séries dont on est responsable (C06 à C10). Les valeurs ne sont jamais en `soi`. | Une séance a un formateur, une série un responsable (`course_occurrence`, `course_series`). |
+| D12 | Valeur des cours collectifs | Pas d'extension du modèle dans #373 : F07 reste indisponible (`COURSE_PRICE_SOURCE_MISSING`), les finances disent « leçons individuelles », les règlements de cours sont présentés à part. Un prix de cours demandera son propre cadrage. | Aucun prix inventé, aucune reconstruction depuis un règlement ou le tarif courant, et #373 exige qu'une extension indispensable soit cadrée séparément avant écriture (Q9). |
+
+## 9. Tests de référence préparés (cas exigés par #374)
+
+Chaque cas pointe vers la ligne du jeu qui le porte ; T02 en fait des tests contre une vraie PostgreSQL, sans donnée réelle.
+
+| Cas exigé | Où dans le jeu | Ce que le test impose |
+| --- | --- | --- |
+| Changement de mois | S7 / O1, U3 / N1 | O1 en octobre, S7 en septembre, U3 en octobre, N1 en novembre ; échec d'un découpage UTC (47 000 et 68 000) |
+| Fuseau et heure d'hiver | D1, semaine du 19/10 (169 h), octobre (745 h) | D1 dans la semaine du 19 ; bornes de période en instants corrects |
+| Prix révisé | O3 (révision 18 000 vers 17 000), O2 et S1 à 9 000 | Valeurs au snapshot ; échec du tarif courant (62 000 / 61 000) |
+| Multi-séances | CS1 (2 séances, 1 série, 3 inscriptions) ; S2 et O3 (quantité 2) | C01 = 2, C02 = 1, C06 compte chaque inscription une fois, F07 nul, une leçon de quantité 2 compte pour 1 |
+| Règlement annulé | P4 / P5, P6, P10 | Une saisie annulée n'est pas comptée ; la ressaisie l'est ; P6 reste après l'annulation de I3 ; P10 expliqué par F06 (b) |
+| Valeur absente | F07, O5 (durée inconnue), micro-cas école C | `null` et raisons, jamais 0 ; tout exclu donne `null` |
+| Mois précédent vide | Septembre contre août ; M2 semaine du 12/10 | `BASE_BEFORE_DATA_START` et `BASE_ZERO`, jamais de pourcentage |
+| 8 000 + 2 000 = 10 000 CHF avec un règlement de 500 CHF | Jeu B | F03 = 1 000 000 centimes ; aucun champ ne vaut 1 050 000 |
+| Au-delà d'une page | Jeu B, pages de 25 | Total, série, détail et export concordent sur plusieurs pages |
+| Droits, révocation, isolation | 6.7 | Aucun montant ni clé interdits dans les réponses, caches ni erreurs ; 403 inter-écoles |
+
+## 10. Limites de ce document
+
+- Aucun calcul n'a été exécuté sur une école réelle ni sur une base : les totaux viennent d'un jeu fictif et d'un script de contrôle indépendant. Aucune requête SQL n'a été écrite ni mesurée ; les index de 7.6 sont des candidats.
+- Aucune recette authentifiée, aucun résultat de performance, de GPS, de batterie ou d'accessibilité n'est affirmé.
+- Rien n'est affirmé sur la marge, la trésorerie, la TVA ou la conformité comptable : le périmètre financier incomplet est dit dans les titres, la couverture et les fichiers.
+- Le contrat de la section 7 est une proposition ; le contrat OpenAPI 3.11.0 n'est pas modifié et aucune route n'existe.
+- La mise à jour de `docs/implementation/STATUS.md` n'est pas faite dans cette tâche (consigne de ne pas y toucher) ; elle suivra avec T02.
