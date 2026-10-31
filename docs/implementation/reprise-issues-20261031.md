@@ -13,7 +13,7 @@ Document de reprise : ce qu'il faut savoir pour continuer si la session est coup
 
 | Branche | Contenu | État au moment de l'écriture |
 | --- | --- | --- |
-| `codex/ios-batch-15-20261029` (PR #339, empilée sur #338 puis #337) | Candidat iOS : agenda, brouillons protégés, 15 tickets | Tête `80efe4d1`. Tests métier verts (run 41223726701). Parcours UI ciblé relancé (run 41229249440), voir « Décision de fusion » |
+| `codex/ios-batch-15-20261029` (PR #339, empilée sur #338 puis #337) | Candidat iOS : agenda, brouillons protégés, 15 tickets | **Fusionné** dans `master` (tête `b24f2def`), voir « Fusion » |
 | `claude/pilotage-373` (PR #385) | #374 dictionnaire, #375 agrégations API/BFF et export CSV | Terminé et vert (« Refonte · vérifications » run 41224457783 sur `36cc69ef`) |
 | `claude/messagerie-74` | #74 alertes de messages, préférences, ouverture depuis une alerte | Terminé, vert (runs 41200814594 et 41200806812 sur `051a2d37`) |
 | `claude/messagerie-77` | #77 signalements chiffrés, boîte des administrateurs | API verte (run 41225134866), tests métier iPhone `all` verts sur `27b34483` (run 41227477381). Qualification bout en bout jamais faite |
@@ -22,21 +22,25 @@ Document de reprise : ce qu'il faut savoir pour continuer si la session est coup
 
 Les branches #74, #77 et tests sont empilées sur le candidat #339 (elles partent de `1bc67ae1`, avant ses deux derniers commits).
 
-PR ouvertes à 19 h UTC, aucune fusionnée : #385 (pilotage, base `master`), #386 (motif d'absence #251, base `master`), #387 (#74, base `codex/ios-batch-15-20261029`), #388 (#77, base `claude/messagerie-74`). Pas encore de PR pour `claude/tests-83-78` : elle attend le correctif de sélecteur du candidat (`a1a3529a`) pour être verte ; une fois le candidat fusionné, fusionner `master` dans la branche (commit additif), relancer `ui_test_suite=MessagingFeatureCheckUITests`, puis ouvrir la PR vers `master`. Quand #337 à #339 sont fusionnées, changer la base de #387 en `master` (et celle de #388 quand #387 l'est).
+État à 22 h UTC : #337, #338 et #339 sont **fusionnées** dans `master` (`d77acb71`, `3199e6a5`, `f2664a8a`). PR ouvertes, non fusionnées, toutes sur `master` : #385 (pilotage), #386 (motif d'absence #251), #387 (#74), #388 (#77, contient les commits de #74 : fusionner #387 d'abord). `claude/tests-83-78` a reçu `master` par un commit additif (`cca34052`) ; sa PR est ouverte à la suite de ce document.
 
 ## Ce qui a été fait sur `claude/tests-83-78`
 
 - **#83** : cinq fichiers de tests API de cours (concurrence, fuseau et changement d'heure, push en échec, effets d'une validation, absence de paiement en ligne) et un fichier de tests web. Verts dans « Refonte · vérifications » sur `c71fbd06` (run 41201921118). Matrice `docs/qa/cours-collectifs-tracabilite.md` mise à jour : 59 critères, 19 PASS, 34 PARTIAL, 6 NOT_COVERED, complément daté en fin de fichier.
 - **#78** : `MessagingLessonIndependenceTests` (MSG-17, panne ou file pleine de la messagerie, départ, arrêt et « Signaler » continuent), vert dans les tests métier iPhone `all` sur `c71fbd06` (run 41201923959). Matrice `docs/qa/messaging-78-20261023.md` : les 18 états relevés sur ce qui a réellement tourné, relevé daté en fin de fichier.
 - **#73** : test UI du sondage (vote, changement de choix, clôture). L'échec du run 41202131542 avait deux causes : un cadre `{inf, inf}` interrogé pour sa « hittability » avant que la ligne soit posée, et un contrôle de `isEnabled` que ces lignes n'exposent pas sur le simulateur. Corrigé (`e63868aa`) : `waitFor` n'interroge la hittability qu'une fois le cadre posé, et le test vérifie le comportement après la clôture (un appui ne crée aucun vote en attente, totaux et choix inchangés). **Le test passe** dans le run 41224876858, sur iPhone et iPad.
-- Ce même run reste rouge sur un seul test, `testReactionFromLongPressClosesMenuAndUpdatesCapsule`, sur iPhone et iPad. Ce n'est pas le test du sondage : c'est le sélecteur de la palette de réactions, corrigé sur le candidat par `a1a3529a` (« Réagir : Cœur »), que cette branche n'a pas encore. Elle l'aura dès que le candidat est fusionné dans `master` puis `master` dans cette branche.
+- Ce même run restait rouge sur `testReactionFromLongPressClosesMenuAndUpdatesCapsule` (sélecteur de la palette corrigé sur le candidat par `a1a3529a`). Après la fusion de `master` dans la branche (`cca34052`), ce seul test a été rejoué sur iPhone et iPad : **vert** (run 41242976214). Le test du sondage n'a pas été rejoué : il est vert sur `e63868aa` (run 41224876858) et la fusion n'a pas touché son code.
 
-## Décision de fusion #337 → #338 → #339
+## Fusion #337 → #338 → #339 : faite
 
-- Premier échec du candidat (run 41202251576, tête `a1a3529a`) : un seul test, `SchoolAgendaUITests.testRefreshFailureRetainsCoursesAndSelectionUntilRetry`, sur iPhone seulement (iPad vert). La hiérarchie finale du run montre l'agenda chargé, sans erreur de cours ni message de dernière lecture : le geste de tirer pour actualiser n'a jamais déclenché la relecture. Cause : sur iPhone la barre de navigation (titre large et champ de recherche) couvre les ordonnées 62 à 228 sur 874 ; le geste partait de 221, donc de la barre. Ce n'était pas un test instable : même échec sur trois têtes successives. Correctif de test seul, `80efe4d1` (le geste part 10 pt sous la barre), aucun code produit modifié.
-- Tests métier sur `80efe4d1` : verts (run 41223726701).
-- Parcours UI sur `80efe4d1` : run ciblé 41229249440, sept suites (les six du contrôle précédent plus `MessagingLatencyUITests`, modifiée par `a1a3529a`), sans IPA. Une première campagne sans paramètre (run 41223734873) a été annulée parce qu'elle construit une IPA.
-- Tant que ce dernier run n'est pas vert, **ne rien fusionner**. S'il est vert : fusionner #337, #338 puis #339 (merge commit, comme pour #384), en vérifiant avant chaque fusion que la base de la PR est bien la branche précédente ou `master`. Puis fusionner `master` dans chaque branche empilée (#74, #77, tests) par un commit additif, et relancer seulement les contrôles ciblés qui vérifient leur propre travail.
+- Premier échec (run 41202251576, `a1a3529a`) : `SchoolAgendaUITests.testRefreshFailureRetainsCoursesAndSelectionUntilRetry`, iPhone seulement. La barre de navigation (y 62 à 228 sur 874) interceptait le geste parti de y 221. Correctif de test `80efe4d1`.
+- Run 41229249440 (`80efe4d1`) : le geste atteint enfin la fin du test, qui échoue alors sur un compte de boutons (1 au lieu de 2 sur iPhone : la bannière d'erreur repousse la seconde séance sous la barre d'onglets, la liste n'expose pas ce qu'elle n'affiche pas ; vu dans la vidéo du run). Défaut du test, corrigé en `b24f2def` (la conservation est contrôlée sur la première séance et la date de dernière lecture ; le compte des deux séances reste contrôlé bannière disparue). `MessagingLatencyUITests.testFiveSecond…` avait aussi échoué une fois sur iPhone ; il est passé sur iPad et dans tous les runs précédents et suivants : cas connu instable, non modifié.
+- Sur `b24f2def` : tests métier verts (run 41234900088). Parcours UI : iPhone 38 tests sur 38 verts (run 41234908420, première tentative) ; sur iPad deux tests ont échoué au lancement de l'app (`Timed out while launching application via Xcode`, avant tout geste, infrastructure) puis ont passé sur iPhone et iPad dans un run ciblé (41240538959). La tentative complète d'iPad a été annulée sur consigne du porteur (tester uniquement le nécessaire) : **l'iPad des autres suites n'a pas été rejoué sur `b24f2def`** ; il était vert sur `80efe4d1` et seul `SchoolAgendaUITests.swift` a changé (test seul, aucun code produit).
+- Fusion : merge commits, branches conservées ; #338 et #339 repointées vers `master` avant fusion ; #387 et #388 repointées vers `master` après.
+
+## Règle de test (porteur, 31 octobre)
+
+Tester uniquement le nécessaire : jamais de campagne complète, jamais de relance de ce qui est vert, toujours sans IPA. Ne pas modifier `.github/workflows/` (un autre agent y travaille sur sa branche).
 
 ## Ce qui reste, par nature
 
