@@ -7,7 +7,9 @@ struct SchoolNotificationSettingsView: View {
     /// Moniteur ou administration de l’école ouverte : seule condition pour voir les alertes d’équipe.
     let isStaff: Bool
     @State private var push = SchoolPushCenter.shared
+    @State private var showsMessagingSettings = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.schoolMessagingEntry) private var messagingEntry
 
     init(client: SchoolNotificationClient, scope: AccountIntentScope, isStaff: Bool,
          contextIsCurrent: @escaping @MainActor () -> Bool) {
@@ -39,11 +41,15 @@ struct SchoolNotificationSettingsView: View {
                     if isStaff {
                         toggle("Alertes pour l’équipe", .courseStaffAlerts, preferences, id: "notification-course-staff-alerts")
                     }
-                } header: { Text("Cours collectifs").drivyFormSectionHeader() }
+                } header: {
+                    Text("Cours collectifs · Toutes mes écoles").drivyFormSectionHeader()
+                        .accessibilityLabel("Cours collectifs, préférences du compte pour toutes mes écoles")
+                }
                     .drivyFormRows()
             } else if model.errorMessage == nil {
                 Section { DrivyLoadingState(title: "Chargement…") }.drivyFormRows()
             }
+            messagingSection
         }
         .scrollContentBackground(.hidden)
         .frame(maxWidth: DrivyLayout.formColumn)
@@ -51,6 +57,9 @@ struct SchoolNotificationSettingsView: View {
         .background(DrivyTheme.canvas)
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showsMessagingSettings) {
+            if let makeSettingsView = messagingEntry?.makeSettingsView { makeSettingsView() }
+        }
         .task {
             await push.refreshAuthorization()
             await model.load()
@@ -61,6 +70,7 @@ struct SchoolNotificationSettingsView: View {
             if phase == .active { Task { await push.refreshAuthorization(); await model.load() } }
         }
         .onChange(of: model.isCurrent) { _, current in if !current { model.invalidate() } }
+        .onChange(of: messagingEntry?.scopeID) { _, _ in showsMessagingSettings = false }
         .onChange(of: model.errorMessage) { _, message in
             if let message { UIAccessibility.post(notification: .announcement, argument: message) }
         }
@@ -85,19 +95,78 @@ struct SchoolNotificationSettingsView: View {
             case .unknown:
                 DrivyLoadingState(title: "Chargement…")
             }
-        }
+        } header: { Text("Cet appareil").drivyFormSectionHeader() }
+        .drivyFormRows()
+    }
+
+    private var messagingSection: some View {
+        Section {
+            DisclosureGroup("Notifications d’une conversation") {
+                Text("La sourdine se règle dans les options de chaque conversation, dans Messages. L’autorisation de cet appareil reste distincte.")
+                    .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityIdentifier("notification-messaging-help")
+            if messagingEntry?.makeSettingsView != nil {
+                Button { showsMessagingSettings = true } label: {
+                    HStack {
+                        Text("Paramètres de Messages")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).accessibilityHidden(true)
+                    }
+                }
+                .accessibilityHint("Sauvegarde des clés et appareils de messagerie")
+                .accessibilityIdentifier("notification-messaging-settings")
+            } else {
+                Text("Les paramètres de Messages ne sont pas disponibles ici.")
+                    .foregroundStyle(DrivyTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: { Text("Messages").drivyFormSectionHeader() }
         .drivyFormRows()
     }
 
     private func toggle(_ title: String, _ category: SchoolNotificationCategory,
                         _ preferences: SchoolNotificationPreferences, id: String) -> some View {
-        Toggle(title, isOn: Binding(get: { category.value(in: preferences) },
-                                    set: { value in model.set(category, value) }))
-            .drivyControlTint()
-            .disabled(!model.isCurrent)
-            .accessibilityValue((category.value(in: preferences) ? "Activé" : "Désactivé")
-                                + (model.isPending(category) ? ", à synchroniser" : ""))
-            .accessibilityIdentifier(id)
+        SchoolNotificationPreferenceRow(title: title,
+            isOn: Binding(get: { category.value(in: preferences) }, set: { model.set(category, $0) }),
+            status: model.synchronization(category), isCurrent: model.isCurrent, identifier: id)
+    }
+}
+
+/// Le choix reste immédiat ; seul son retour réseau lent ajoute une ligne, sans flash de succès.
+private struct SchoolNotificationPreferenceRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    let status: SchoolNotificationSyncStatus?
+    let isCurrent: Bool
+    let identifier: String
+    @State private var showsPending = false
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(title)
+                if let status, !status.isBriefPending || showsPending {
+                    Label(status.title, systemImage: status.symbol)
+                        .font(.caption)
+                        .foregroundStyle(DrivyTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .drivyControlTint()
+        .disabled(!isCurrent)
+        .accessibilityValue((isOn ? "Activé" : "Désactivé") + (status.map { ", \($0.title)" } ?? ""))
+        .accessibilityIdentifier(identifier)
+        .task(id: status?.isBriefPending == true) {
+            showsPending = false
+            guard status?.isBriefPending == true else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            showsPending = true
+        }
     }
 }
 

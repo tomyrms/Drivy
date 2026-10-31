@@ -88,6 +88,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private let mutationDelay: Int
     private let refuseMutation: Bool
     private let denyMutationAccess: Bool
+    private let unreadFilter: Bool
     /// General page 1 holds sequences 24...9, page 2 holds 8...1.
     private static let generalPageCursor = "fixture-page-2"
     private static let generalPageFloor = 9
@@ -100,10 +101,14 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         mutationDelay = [1, 5, 15].contains(delay) ? delay : 0
         refuseMutation = arguments.contains("-messaging-ui-mutation-refused")
         denyMutationAccess = arguments.contains("-messaging-ui-mutation-access-denied")
+        unreadFilter = arguments.contains("-messaging-ui-unread-filter")
         conversation = rich ? MessagingQualificationIDs.general : UUID()
         member = rich ? MessagingQualificationIDs.leaPerson : UUID()
         guard rich else { return }
         conversations = seed
+        if unreadFilter, let index = conversations.firstIndex(where: { $0.id == MessagingQualificationIDs.general }) {
+            conversations[index].lastRead = conversations[index].lastSequence
+        }
         reactions[MessagingQualificationIDs.message(1, 21)] = ["👍": [MessagingQualificationIDs.leaPerson, scope.accountID],
                                                               "😂": [MessagingQualificationIDs.marcPerson]]
         pinned = [MessagingQualificationIDs.message(1, 20)]
@@ -193,7 +198,9 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         } else if path.hasSuffix("/general"), method == "PUT" {
             data = #"{"conversationId":"\#(conversation)"}"#
         } else if path.hasSuffix("/conversations"), method == "GET" {
-            data = rich ? try conversationList() : #"{"items":[],"nextCursor":null}"#
+            let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "before" }?.value
+            data = rich ? try conversationList(cursor: cursor) : #"{"items":[],"nextCursor":null}"#
         } else if path.hasSuffix("/messages"), method == "GET" {
             if rich, let id = uuid(after: "conversations", in: parts) {
                 let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?
@@ -238,17 +245,21 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self)
     }
 
-    private func conversationList() throws -> String {
-        let items: [[String: Any]] = conversations.map { item in
+    private func conversationList(cursor: String?) throws -> String {
+        let firstPage = cursor == nil
+        let page = unreadFilter ? (firstPage ? Array(conversations.prefix(2)) : Array(conversations.dropFirst(2))) : conversations
+        let items: [[String: Any]] = page.map { item in
             let unread = item.messages.filter { $0.sequence > item.lastRead && $0.sender != scope.accountID }.count
             var row: [String: Any] = ["id": item.id.uuidString.lowercased(), "schoolId": scope.schoolID.uuidString.lowercased(),
                 "kind": item.kind, "title": item.title, "lastSequence": item.lastSequence,
                 "lastReadSequence": item.lastRead, "readStateVersion": item.version,
                 "mutedUntil": NSNull(), "unreadCount": unread]
+            if unreadFilter && item.id == MessagingQualificationIDs.lea { row["unreadCount"] = NSNull() }
             row["peerPersonId"] = item.peer.map { $0.uuidString.lowercased() as Any } ?? NSNull()
             return row
         }
-        return try json(["items": items, "nextCursor": NSNull()])
+        let next: Any = unreadFilter && firstPage ? MessagingQualificationIDs.lea.uuidString.lowercased() : NSNull()
+        return try json(["items": items, "nextCursor": next])
     }
 
     private func messagePage(_ id: UUID, cursor: String?) throws -> String {

@@ -19,8 +19,22 @@ struct SchoolEntryView: View {
         case .waitingForActivation: "L’école se prépare"
         case .management: "Gestion de votre école"
         case .archived: "École archivée"
-        case .loading: "Ouverture de l’école"
+        case .loading: workspace.schoolError == nil ? "Ouverture de l’école" : "École indisponible"
         default: "École indisponible"
+        }
+    }
+    private var explanation: String {
+        switch destination {
+        case .prepareSchool:
+            "L’administration doit terminer la préparation et activer l’école sur le portail web. Votre compte reste accessible."
+        case .waitingForActivation:
+            "L’administration doit encore activer l’école. Votre compte reste accessible en attendant."
+        case .management:
+            "L’administration de l’école se fait sur le portail web. Votre compte reste accessible dans l’app."
+        case .archived:
+            "Cette école n’est plus ouverte dans l’app. Votre compte reste accessible ; contactez son administration pour la suite."
+        default:
+            "Votre compte reste accessible pendant la vérification de l’école."
         }
     }
     private var symbol: String {
@@ -44,7 +58,8 @@ struct SchoolEntryView: View {
                             Label(title, systemImage: symbol)
                                 .accessibilityIdentifier("school-entry-status")
                         } description: {
-                            EmptyView()
+                            Text(explanation)
+                                .accessibilityIdentifier("school-entry-explanation")
                         } actions: {
                             if opensPortal, let portalURL {
                                 Button(destination == .prepareSchool ? "Continuer la préparation sur le web" : "Ouvrir le portail web") {

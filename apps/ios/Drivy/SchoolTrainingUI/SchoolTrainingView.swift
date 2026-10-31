@@ -864,7 +864,8 @@ private struct SchoolTrainingContent: View {
             ForEach([progressModel].compactMap { $0 }.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     if namesPermit && mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, grouped: groupsBlocks) { opened = OpenedLesson(id: $0) }
+                    SchoolTrainingProgressSection(model: model, trainingName: permitName(model, in: names),
+                        schoolTimeZone: zone, grouped: groupsBlocks) { opened = OpenedLesson(id: $0) }
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                 }

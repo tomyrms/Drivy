@@ -2,19 +2,21 @@ import SwiftUI
 
 /// La progression d’une formation : où l’élève en est, en une phrase et une toile (une branche par compétence), la
 /// prochaine étape du dernier bilan, ce qu’il reste à travailler, puis, repliés, ce qui est acquis et ce qui n’a pas
-/// encore été vu. Une ligne dit une compétence et son niveau ; la toucher déplie son détail sur place (niveau en
-/// mots, date, situation), d’où part la leçon.
+/// encore été vu. La recherche traverse ces groupes ; chaque détail s’ouvre indépendamment sur place.
 /// Ni score, ni pourcentage, ni tendance : le serveur ne garde que le dernier niveau publié, la toile le trace tel quel.
 struct SchoolTrainingProgressSection: View {
     let model: SchoolTrainingWorkspace
+    let trainingName: String
     /// Une évaluation est datée sans sa leçon : elle se lit dans le fuseau de l’école.
     let schoolTimeZone: String
     /// Vrai sur la page de l’élève : chaque bloc est une carte posée sur le fond de page, comme dans son Profil.
     /// Faux dans le dossier du moniteur, où la progression se lit à plat sous les leçons.
     var grouped = false
     let open: (UUID) -> Void
-    /// La compétence dont le détail est déplié ; une seule à la fois.
-    @State private var expanded: UUID?
+    /// Plusieurs détails restent lisibles ensemble, y compris après l’effacement d’une recherche.
+    @State private var expanded: Set<UUID> = []
+    @State private var search = ""
+    @FocusState private var searchFocused: Bool
     /// `nil` tant que le lecteur n’a rien choisi : l’acquis ne s’ouvre seul que s’il n’y a rien à travailler.
     @State private var showsIndependent: Bool?
     @State private var showsUnseen = false
@@ -31,7 +33,9 @@ struct SchoolTrainingProgressSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
-            if let value = model.progress {
+            if model.invalidated || model.accessRevoked || !model.hasPedagogicalRole {
+                EmptyView()
+            } else if let value = model.progress {
                 // Une relecture en panne garde la dernière lecture sous son erreur.
                 if let error = model.progressError { notice(error) }
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
@@ -55,13 +59,36 @@ struct SchoolTrainingProgressSection: View {
         .animation(DrivyMotion.reveal(reduceMotion), value: showsIndependent)
         .animation(DrivyMotion.reveal(reduceMotion), value: showsUnseen)
         .animation(DrivyMotion.reveal(reduceMotion), value: expanded)
+        .onChange(of: availableIDs) { _, ids in expanded.formIntersection(ids) }
+        .onChange(of: model.progress?.trainingId) { _, _ in resetReading() }
+        .onChange(of: model.invalidated) { _, invalidated in if invalidated { resetReading() } }
+        .onChange(of: model.accessRevoked) { _, revoked in if revoked { resetReading() } }
+        .onChange(of: model.hasPedagogicalRole) { _, allowed in if !allowed { resetReading() } }
+        .onChange(of: search) { previous, current in
+            if !previous.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { revealExpandedGroups() }
+        }
     }
 
-    private var order: [UUID] { model.competencies.map(\.id) }
+    private var availableIDs: Set<UUID> {
+        guard let value = model.progress else { return [] }
+        return Set(value.items.map(\.id)).union(value.unobservedCompetencyIds)
+    }
 
-    /// Le libellé du référentiel fait foi ; celui de l’évaluation sert tant qu’il n’est pas lu.
-    private func label(_ item: SchoolReportProgressItem) -> String {
-        model.competencies.first { $0.id == item.id }?.displayLabel ?? item.displayLabel
+    private func resetReading() {
+        expanded = []; search = ""; searchFocused = false
+        showsIndependent = nil; showsUnseen = false
+    }
+
+    private func toggle(_ id: UUID) {
+        if !expanded.insert(id).inserted { expanded.remove(id) }
+    }
+
+    /// Un détail choisi dans les résultats reste visible en revenant aux groupes ordinaires.
+    private func revealExpandedGroups() {
+        guard let value = model.progress else { return }
+        if value.items.contains(where: { $0.level == "INDEPENDENT" && expanded.contains($0.id) }) { showsIndependent = true }
+        if !expanded.isDisjoint(with: value.unobservedCompetencyIds) { showsUnseen = true }
     }
 
     private func notice(_ message: String) -> some View {
@@ -69,23 +96,63 @@ struct SchoolTrainingProgressSection: View {
     }
 
     @ViewBuilder private func content(_ value: SchoolReportProgress) -> some View {
-        let toWorkOn = SchoolProgressRules.toWorkOn(value.items)
-        let independent = SchoolProgressRules.independent(value.items, order: order)
+        let reading = SchoolProgressReading(progress: value, curriculum: model.competencies, query: search)
         overview(value)
         lastLesson
-        if !toWorkOn.isEmpty {
-            block("À travailler") { rows(toWorkOn, showsMeter: true) }
-        }
-        if !independent.isEmpty {
-            // Replié quand il reste à travailler : la page tient alors sur un écran.
-            block {
-                fold("En autonomie", count: independent.count,
-                     isExpanded: Binding(get: { showsIndependent ?? toWorkOn.isEmpty }, set: { showsIndependent = $0 })) {
-                    rows(independent, showsMeter: false)
+        DrivySearchField(text: $search, prompt: "Rechercher une compétence", focus: $searchFocused)
+            .onSubmit { searchFocused = false }
+            .accessibilityIdentifier("progress-search")
+        if reading.isSearching {
+            searchResults(reading)
+        } else {
+            if !reading.toWorkOn.isEmpty {
+                block("À travailler") { rows(reading.toWorkOn, reading: reading, showsMeter: true) }
+            }
+            if !reading.independent.isEmpty {
+                // La recherche ne modifie pas le choix de repli du lecteur.
+                block {
+                    fold("En autonomie", count: reading.independent.count,
+                         isExpanded: Binding(get: { showsIndependent ?? reading.toWorkOn.isEmpty }, set: { showsIndependent = $0 })) {
+                        rows(reading.independent, reading: reading, showsMeter: false)
+                    }
+                }
+            }
+            if !reading.unseen.isEmpty {
+                block {
+                    fold("Pas encore vues", count: value.unobservedCompetencyIds.count, isExpanded: $showsUnseen) {
+                        unseenRows(reading.unseen)
+                    }
                 }
             }
         }
-        unseen(count: value.unobservedCompetencyIds.count)
+    }
+
+    @ViewBuilder private func searchResults(_ reading: SchoolProgressReading) -> some View {
+        Text("\(trainingName) · \(reading.resultCount == 1 ? "1 compétence trouvée" : "\(reading.resultCount) compétences trouvées")")
+            .font(.subheadline)
+            .foregroundStyle(DrivyTheme.muted)
+            .accessibilityIdentifier("progress-search-count")
+        if reading.missingReferenceCount > 0 {
+            Text("Référentiel incomplet : recherche limitée aux libellés disponibles.")
+                .font(.subheadline)
+                .foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("progress-search-partial")
+        }
+        if reading.resultCount == 0 {
+            DrivyEmptyState(title: reading.missingReferenceCount > 0
+                ? "Aucun résultat parmi les compétences disponibles" : "Aucune compétence trouvée", symbol: "magnifyingglass")
+        }
+        // Les résultats restent séparés par niveau, mais tous les groupes sont ouverts pendant la recherche.
+        if !reading.toWorkOn.isEmpty {
+            block("À travailler") { rows(reading.toWorkOn, reading: reading, showsMeter: true) }
+        }
+        if !reading.independent.isEmpty {
+            block("En autonomie") { rows(reading.independent, reading: reading, showsMeter: false) }
+        }
+        if !reading.unseen.isEmpty {
+            block("Pas encore vues") { unseenRows(reading.unseen) }
+        }
     }
 
     /// Un bloc de la page : une carte sous son titre sur la page de l’élève, sinon le contenu à plat sous son titre.
@@ -203,16 +270,19 @@ struct SchoolTrainingProgressSection: View {
 
     // MARK: - Compétences
 
-    private func rows(_ items: [SchoolReportProgressItem], showsMeter: Bool) -> some View {
+    private func rows(_ items: [SchoolReportProgressItem], reading: SchoolProgressReading, showsMeter: Bool) -> some View {
         DrivyRowGroup {
             ForEach(items) { item in
-                let isExpanded = expanded == item.id
+                let isExpanded = expanded.contains(item.id)
                 VStack(alignment: .leading, spacing: 0) {
-                    Button { expanded = isExpanded ? nil : item.id } label: {
-                        SchoolProgressRow(label: label(item), level: item.level, showsMeter: showsMeter, isExpanded: isExpanded)
+                    Button { toggle(item.id) } label: {
+                        SchoolProgressRow(label: reading.label(item), level: item.level,
+                            observedDay: SchoolTrainingFormatting.day(item.observedAt, zone: schoolTimeZone),
+                            showsMeter: showsMeter, isExpanded: isExpanded)
                     }
                     .buttonStyle(DrivyRowButtonStyle())
                     .accessibilityHint(isExpanded ? "Masque le détail" : "Affiche le détail")
+                    .accessibilityIdentifier("progress-competency-\(item.id.uuidString)")
                     if isExpanded { detail(item).transition(.opacity) }
                 }
             }
@@ -236,6 +306,7 @@ struct SchoolTrainingProgressSection: View {
             }
             Button("Voir la leçon") { open(item.sourceLessonId) }
                 .buttonStyle(.drivyText)
+                .accessibilityHint("Leçon source, \(trainingName)")
                 .accessibilityIdentifier("progress-open-lesson")
         }
         .multilineTextAlignment(.leading)
@@ -243,17 +314,33 @@ struct SchoolTrainingProgressSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Ce qui n’a pas encore été vu n’appelle aucun geste : replié, et ses lignes n’ouvrent rien.
-    @ViewBuilder private func unseen(count: Int) -> some View {
-        let competencies = model.unobservedCompetencies
-        if !competencies.isEmpty {
-            block {
-                fold("Pas encore vues", count: max(count, competencies.count), isExpanded: $showsUnseen) {
-                    DrivyRowGroup {
-                        ForEach(competencies) { competency in
-                            SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, isExpanded: nil)
+    /// Une compétence non vue peut expliquer le référentiel, sans créer d’observation ni de niveau.
+    private func unseenRows(_ competencies: [SchoolCatalogCompetency]) -> some View {
+        DrivyRowGroup {
+            ForEach(competencies) { competency in
+                if let definition = SchoolProgressReading.definition(competency) {
+                    let isExpanded = expanded.contains(competency.id)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Button { toggle(competency.id) } label: {
+                            SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, isExpanded: isExpanded)
+                        }
+                        .buttonStyle(DrivyRowButtonStyle())
+                        .accessibilityHint(isExpanded ? "Masque la définition" : "Affiche la définition du référentiel")
+                        .accessibilityIdentifier("progress-competency-\(competency.id.uuidString)")
+                        if isExpanded {
+                            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                                Text("Référentiel · \(trainingName)").font(.caption).foregroundStyle(DrivyTheme.muted)
+                                Text(definition).font(.subheadline).foregroundStyle(DrivyTheme.text)
+                            }
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("progress-definition-\(competency.id.uuidString)")
+                            .transition(.opacity)
                         }
                     }
+                } else {
+                    SchoolProgressRow(label: competency.displayLabel, level: "", showsMeter: false, isExpanded: nil)
                 }
             }
         }
@@ -291,9 +378,11 @@ private struct SchoolProgressGroupTitle: View {
 private struct SchoolProgressRow: View {
     let label: String
     let level: String
+    /// Absente pour une compétence pas encore vue ; jamais remplacée par la date du chargement.
+    var observedDay: String? = nil
     /// Inutile sous un titre qui dit déjà le niveau de tout le groupe.
     var showsMeter = true
-    /// `nil` : la ligne n’a aucun détail à déplier (compétence pas encore vue).
+    /// `nil` : la ligne n’a aucun détail à déplier (définition absente du référentiel).
     let isExpanded: Bool?
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -305,12 +394,20 @@ private struct SchoolProgressRow: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: DrivySpacing.xs))
             : AnyLayout(HStackLayout(alignment: .center, spacing: DrivySpacing.m))
         layout {
-            Text(label)
-                .font(.body)
-                .foregroundStyle(DrivyTheme.text)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                Text(label)
+                    .font(.body)
+                    .foregroundStyle(DrivyTheme.text)
+                if let observedDay {
+                    Text(observedDay)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(DrivyTheme.muted)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: DrivySpacing.s) {
                 if showsMeter && !level.isEmpty { DrivyCompetencyMeter(level: level) }
                 if let isExpanded {
@@ -330,7 +427,8 @@ private struct SchoolProgressRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         // L’état déplié se dit aussi quand les indications de VoiceOver sont coupées.
-        .accessibilityValue(isExpanded == true ? "\(levelWords), détail affiché" : levelWords)
+        .accessibilityValue([levelWords, observedDay.map { "Évaluation : \($0)" },
+            isExpanded.map { $0 ? "Détail affiché" : "Détail masqué" }].compactMap { $0 }.joined(separator: ", "))
     }
 }
 

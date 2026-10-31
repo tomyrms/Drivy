@@ -13,9 +13,13 @@ import Testing
         model.set(.courseOffers, false)
         try await until { api.requests.count == 1 }
         #expect(model.preferences?.courseOffers == false)
+        #expect(model.synchronization(.courseOffers) == .sending)
+        #expect(model.synchronization(.courseChanges) == nil)
         model.set(.courseReminders, false)
         model.set(.courseOffers, true)
         #expect(model.preferences?.courseOffers == true && model.preferences?.courseReminders == false)
+        #expect(model.synchronization(.courseOffers) == .queued)
+        #expect(model.synchronization(.courseReminders) == .queued)
         #expect(api.requests.count == 1)
         api.succeed()
         try await until { api.requests.count == 2 }
@@ -25,6 +29,7 @@ import Testing
         try await until { !model.isSaving }
         #expect(!model.hasPendingChanges && model.confirmed?.version == 3)
         #expect(store.value?.intents.isEmpty == true && store.value?.attempt == nil)
+        #expect(SchoolNotificationCategory.allCases.allSatisfy { model.synchronization($0) == nil })
     }
 
     @Test func conflictRebasesOnlyLocalChoicesAndKeepsTheOtherDevicesChanges() async throws {
@@ -63,6 +68,8 @@ import Testing
         api.applyLastWrite(); api.fail(.unavailable)
         try await until { !model.isSaving }
         #expect(model.state == .unconfirmed && model.preferences?.courseOffers == false)
+        #expect(model.synchronization(.courseOffers) == .unconfirmed)
+        #expect(model.synchronization(.courseReminders) == nil)
         #expect(store.value?.attempt != nil)
         await model.retry()
         #expect(!model.hasPendingChanges && model.confirmed?.courseOffers == false)
@@ -94,6 +101,8 @@ import Testing
         await model.load(); store.failWrites = true
         model.set(.courseOffers, false)
         #expect(model.preferences?.courseOffers == false && model.state == .storageUnavailable)
+        #expect(model.synchronization(.courseOffers) == .storageUnavailable)
+        #expect(model.synchronization(.courseChanges) == nil)
         #expect(api.requests.isEmpty)
         store.failWrites = false
         await model.retry()
@@ -129,6 +138,7 @@ import Testing
         model.invalidate(); api.succeed()
         for _ in 0..<50 { await Task.yield() }
         #expect(model.preferences == nil && api.requests.count == 1)
+        #expect(SchoolNotificationCategory.allCases.allSatisfy { model.synchronization($0) == nil })
         #expect(store.value?.attempt != nil)
     }
 
@@ -166,6 +176,34 @@ import Testing
         let model = make(api, store)
         await model.load(); await model.retry()
         #expect(model.state == .storageUnavailable && store.writes == 0 && api.reads == 0)
+    }
+
+    @Test func refusalRemainsVisibleOnItsCategoryAfterTheQueueSettles() async throws {
+        let api = NotificationSettingsTestAPI(), store = NotificationSettingsTestStore()
+        let model = make(api, store)
+        await model.load(); model.set(.courseOffers, false)
+        try await until { api.requests.count == 1 }
+        api.fail(.rejected("Choix refusé pour le test."))
+        try await until { !model.isSaving }
+        #expect(!model.hasPendingChanges && model.preferences?.courseOffers == true)
+        #expect(model.synchronization(.courseOffers) == .rejected)
+        #expect(model.synchronization(.courseReminders) == nil)
+        await model.load()
+        #expect(model.synchronization(.courseOffers) == nil)
+    }
+
+    @Test func refusalOfAnOlderChoiceDoesNotMarkTheNewerChoiceAsRefused() async throws {
+        let api = NotificationSettingsTestAPI(), store = NotificationSettingsTestStore()
+        let model = make(api, store)
+        await model.load(); model.set(.courseOffers, false)
+        try await until { api.requests.count == 1 }
+        model.set(.courseOffers, true)
+        api.fail(.rejected("Ancien choix refusé pour le test."))
+        try await until { !model.isSaving }
+        #expect(model.preferences?.courseOffers == true)
+        #expect(model.synchronization(.courseOffers) == .queued)
+        await model.retry()
+        #expect(model.synchronization(.courseOffers) == nil)
     }
 
     private func make(_ api: NotificationSettingsTestAPI, _ store: NotificationSettingsTestStore) -> SchoolNotificationSettingsModel {

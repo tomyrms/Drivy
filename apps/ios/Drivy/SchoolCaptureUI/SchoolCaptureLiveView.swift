@@ -139,6 +139,12 @@ struct SchoolCaptureLiveView: View {
             Button("Terminer") { finishLesson() }
                 .accessibilityIdentifier("capture-confirm-finish")
             Button("Continuer", role: .cancel) { }
+        } message: {
+            if controller.state == .saved {
+                Text(openLesson == nil ? "Tu pourras terminer la leçon depuis sa fiche." : SchoolLessonCompletionMessage.withoutTrip)
+            } else {
+                Text(openLesson == nil ? SchoolLessonCompletionMessage.stopOnly : SchoolLessonCompletionMessage.withTrip)
+            }
         }
     }
 
