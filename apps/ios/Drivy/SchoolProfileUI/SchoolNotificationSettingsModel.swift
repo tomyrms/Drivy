@@ -3,6 +3,7 @@ import Observation
 
 enum SchoolNotificationCategory: String, Codable, CaseIterable, Sendable {
     case courseOffers, courseReminders, courseChanges, courseStaffAlerts
+    case messagingPrivate, messagingGeneral, messagingMentions
 
     func value(in preferences: SchoolNotificationPreferences) -> Bool {
         switch self {
@@ -10,6 +11,10 @@ enum SchoolNotificationCategory: String, Codable, CaseIterable, Sendable {
         case .courseReminders: preferences.courseReminders
         case .courseChanges: preferences.courseChanges
         case .courseStaffAlerts: preferences.courseStaffAlerts
+        // Valeurs d'une personne sans ligne côté serveur (#74).
+        case .messagingPrivate: preferences.messagingPrivate ?? true
+        case .messagingGeneral: preferences.messagingGeneral ?? false
+        case .messagingMentions: preferences.messagingMentions ?? true
         }
     }
     func apply(_ value: Bool, to preferences: inout SchoolNotificationPreferences) {
@@ -18,6 +23,9 @@ enum SchoolNotificationCategory: String, Codable, CaseIterable, Sendable {
         case .courseReminders: preferences.courseReminders = value
         case .courseChanges: preferences.courseChanges = value
         case .courseStaffAlerts: preferences.courseStaffAlerts = value
+        case .messagingPrivate: preferences.messagingPrivate = value
+        case .messagingGeneral: preferences.messagingGeneral = value
+        case .messagingMentions: preferences.messagingMentions = value
         }
     }
 }
@@ -70,7 +78,7 @@ enum SchoolNotificationSyncStatus: Equatable {
     var symbol: String { isBriefPending ? "arrow.triangle.2.circlepath" : "exclamationmark.circle" }
 }
 
-/// Quatre préférences partagent une version serveur : une seule requête à la fois, mais la saisie reste libre.
+/// Sept préférences (cours puis messagerie) partagent une version serveur : une seule requête à la fois, mais la saisie reste libre.
 /// Le modèle vit au-delà de sa vue ; aucune fermeture d'écran n'annule une requête déjà partie.
 @MainActor @Observable final class SchoolNotificationSettingsModel {
     let scope: AccountIntentScope
@@ -312,7 +320,7 @@ enum SchoolNotificationSyncStatus: Equatable {
     }
 }
 
-/// Un seul compte en mémoire, quatre booléens confirmés, au plus quatre intentions et un PUT.
+/// Un seul compte en mémoire, sept booléens confirmés, au plus sept intentions et un PUT.
 /// Le passage d'une école à l'autre conserve ces préférences personnelles ; une déconnexion les purge.
 @MainActor enum SchoolNotificationSettingsCache {
     private static var cached: SchoolNotificationSettingsModel?

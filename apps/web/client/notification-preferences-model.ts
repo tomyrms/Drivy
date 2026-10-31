@@ -1,14 +1,19 @@
 import { z } from 'zod';
 import { RequestFailure } from './protocol.js';
 
+/** Cours collectifs (#44) puis messagerie (#74) : un seul objet versionné côté serveur, deux groupes à l’écran. */
 export const notificationKeys = [
-  { key: 'courseOffers', label: 'Places et nouvelles sessions' },
-  { key: 'courseReminders', label: 'Rappels de cours' },
-  { key: 'courseChanges', label: 'Changements de cours' },
-  { key: 'courseStaffAlerts', label: 'Alertes pour l’équipe' },
+  { key: 'courseOffers', label: 'Places et nouvelles sessions', group: 'courses' },
+  { key: 'courseReminders', label: 'Rappels de cours', group: 'courses' },
+  { key: 'courseChanges', label: 'Changements de cours', group: 'courses' },
+  { key: 'courseStaffAlerts', label: 'Alertes pour l’équipe', group: 'courses' },
+  { key: 'messagingPrivate', label: 'Messages privés', group: 'messages' },
+  { key: 'messagingGeneral', label: 'Messages du général', group: 'messages' },
+  { key: 'messagingMentions', label: 'Mentions', group: 'messages' },
 ] as const;
 export const notificationSchema = z.object({ data: z.object({ version: z.number().int().positive(),
-  courseOffers: z.boolean(), courseReminders: z.boolean(), courseChanges: z.boolean(), courseStaffAlerts: z.boolean() }) });
+  courseOffers: z.boolean(), courseReminders: z.boolean(), courseChanges: z.boolean(), courseStaffAlerts: z.boolean(),
+  messagingPrivate: z.boolean(), messagingGeneral: z.boolean(), messagingMentions: z.boolean() }) });
 export type NotificationPreferences = z.infer<typeof notificationSchema>['data'];
 export type Choices = Omit<NotificationPreferences, 'version'>;
 const url = '/app/bff/me/notification-preferences';

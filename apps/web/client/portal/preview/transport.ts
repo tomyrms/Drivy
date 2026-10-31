@@ -8,7 +8,8 @@ let scenario: PreviewScenario = 'normal';
 let sequence = 1000;
 const results = new Map<string, { status: number; body: unknown }>();
 // Personal notification choices of the synthetic account (#333).
-const notifications = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: false };
+const notifications = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: false,
+  messagingPrivate: true, messagingGeneral: false, messagingMentions: true };
 const receipts = new Map<string, unknown>();
 const nextId = () => previewId(++sequence);
 const envelope = (data: unknown) => ({ data: structuredClone(data), requestId: nextId(), serverTime: new Date().toISOString() });

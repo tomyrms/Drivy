@@ -37,6 +37,9 @@ struct SchoolHomeView: View {
     /// L’écran du trajet a été quitté par le moniteur : la capture continue, l’app retrouve ses onglets.
     /// « Une capture existe » et « son écran est présenté » restent deux faits distincts.
     @State private var captureMinimized = false
+    /// Alerte de messagerie touchée (#74) : refus expliqué quand elle vient d'une autre école.
+    @State private var push = SchoolPushCenter.shared
+    @State private var messagingRefusal: String?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
 
@@ -116,6 +119,31 @@ struct SchoolHomeView: View {
                let result = captureController.finalizedSyncState, result == .synced || result == .partial {
                 captureController.closeSaved()
             }
+        }
+        // Toucher une alerte de messagerie (#74) : démarrage à froid, app déjà ouverte, école ou Messages prêts plus tard.
+        .onAppear { routeMessagingNotification() }
+        .onChange(of: push.pendingMessagingTarget) { _, _ in routeMessagingNotification() }
+        .onChange(of: messagingEntry?.scopeID) { _, _ in routeMessagingNotification() }
+        .onChange(of: workspace.membership?.schoolId) { _, _ in routeMessagingNotification() }
+        .alert("Alerte de messagerie", isPresented: Binding(get: { messagingRefusal != nil }, set: { if !$0 { messagingRefusal = nil } }),
+               presenting: messagingRefusal) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { Text($0) }
+    }
+
+    /// L'onglet Messages ne s'ouvre que pour l'école courante, hors trajet : il relit ensuite la liste auprès de l'école
+    /// et n'ouvre la conversation que si elle y figure encore. Une alerte d'une autre école est refusée avec sa raison.
+    private func routeMessagingNotification() {
+        guard let target = push.pendingMessagingTarget else { return }
+        let hasMessagesTab = messagingEntry != nil && [.learner, .instructor].contains(workspace.entryDestination)
+        switch MessagingNotificationOpening.outcome(for: target, currentSchoolID: workspace.membership?.schoolId,
+                                                    messagesAvailable: hasMessagesTab, tripInProgress: tripInProgress) {
+        case .open: selectedTab = .messages
+        case .wait: break
+        case .otherSchool:
+            _ = push.consumePendingMessagingTarget()
+            messagingRefusal = MessagingNotificationOpening.otherSchoolMessage
+        case .discard: _ = push.consumePendingMessagingTarget()
         }
     }
 
