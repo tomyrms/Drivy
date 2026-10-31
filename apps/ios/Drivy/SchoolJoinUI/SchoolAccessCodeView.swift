@@ -8,6 +8,7 @@ struct SchoolAccessCodeView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @FocusState private var focus: SchoolAccountFieldID?
     @State private var recovering = false
+    @State private var checkedSignInFields: Set<SchoolAccountFieldID> = []
     @ScaledMetric(relativeTo: .title2) private var codeSize: CGFloat = 28
 
     var body: some View {
@@ -39,11 +40,20 @@ struct SchoolAccessCodeView: View {
         .interactiveDismissDisabled(model.isBusy)
         .onAppear { focus = model.step == .code ? .code : model.step == .register ? .firstName : .email }
         .onChange(of: model.step) { _, step in
+            checkedSignInFields = []
             switch step {
             case .code: focus = .code
             case .register: focus = .firstName
             case .signIn: focus = .email
             }
+        }
+        .onChange(of: model.email) { _, _ in model.credentialsDidChange() }
+        .onChange(of: model.password) { _, _ in model.credentialsDidChange() }
+        .onChange(of: focus) { previous, _ in
+            if model.step == .signIn, let previous { checkedSignInFields.insert(previous) }
+        }
+        .onChange(of: model.codeInputError ?? model.errorMessage) { _, message in
+            if let message { UIAccessibility.post(notification: .announcement, argument: message) }
         }
         .accessibilityIdentifier("access-code")
     }
@@ -61,14 +71,14 @@ struct SchoolAccessCodeView: View {
     private var codeBinding: Binding<String> {
         Binding(get: { model.codeText }, set: { value in
             // Un lien collé reste entier ; un code tapé se met en forme XXXX-XXXX.
-            model.codeText = value.contains("/") ? value : SchoolInvitationCode.formatted(value)
+            model.updateCode(value)
         })
     }
 
     private var codeStep: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             VStack(alignment: .leading, spacing: DrivySpacing.s) {
-                SchoolJoinFieldBlock(label: "Code ou lien reçu", error: model.errorMessage, errorIdentifier: "access-code-error") {
+                SchoolJoinFieldBlock(label: "Code ou lien reçu", error: model.codeInputError ?? model.errorMessage, errorIdentifier: "access-code-error") {
                     TextField("XXXX-XXXX", text: codeBinding,
                               prompt: Text("XXXX-XXXX").fontWeight(.regular).foregroundStyle(DrivyTheme.muted))
                         .font(.system(size: codeSize, weight: .semibold, design: .monospaced))
@@ -81,14 +91,16 @@ struct SchoolAccessCodeView: View {
                         .submitLabel(.go)
                         .onSubmit { Task { await model.inspect() } }
                         .focused($focus, equals: .code)
-                        .schoolJoinFieldChrome(hasError: model.errorMessage != nil, isFocused: focus == .code, minHeight: 64)
+                        .schoolJoinFieldChrome(hasError: model.codeInputError != nil || model.errorMessage != nil, isFocused: focus == .code, minHeight: 64)
                         .accessibilityLabel("Code ou lien reçu")
+                        .accessibilityHint(model.codeInputError ?? model.errorMessage ?? "")
                         .accessibilityIdentifier("access-code-field")
                 }
                 PasteButton(payloadType: String.self) { values in
-                    if let value = values.first, value.utf8.count <= 2_048 { codeBinding.wrappedValue = value }
+                    if let value = values.first { model.pasteCode(value) }
                 }
                 .accessibilityLabel("Coller le code ou le lien")
+                .accessibilityIdentifier("access-code-paste")
                 .frame(minHeight: DrivyLayout.tapTarget)
             }
             SchoolJoinTextLink(title: "J’ai déjà un compte", isBusy: model.isBusy) {
@@ -127,12 +139,16 @@ struct SchoolAccessCodeView: View {
 
     private var signInStep: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.m) {
-            if let message = model.errorMessage { SchoolErrorNotice(message: message) }
+            if let message = model.errorMessage {
+                SchoolErrorNotice(message: message).accessibilityIdentifier("access-sign-in-error")
+            }
             SchoolAccountField(label: "E-mail", text: $model.email, kind: .email, id: .email, focus: $focus,
+                               error: checkedSignInFields.contains(.email) ? SchoolSignInValidation.emailIssue(model.email) : nil,
                                identifier: "access-sign-in-email", onSubmit: { focus = .password })
             SchoolAccountField(label: "Mot de passe", text: $model.password, kind: .currentPassword, id: .password, focus: $focus,
+                               error: checkedSignInFields.contains(.password) ? SchoolSignInValidation.passwordIssue(model.password) : nil,
                                identifier: "access-sign-in-password", submitLabel: .go,
-                               onSubmit: { Task { await model.signIn() } })
+                               onSubmit: submitSignIn)
             SchoolJoinTextLink(title: "Mot de passe oublié", isBusy: model.isBusy) {
                 model.prepareRecovery(); focus = nil; recovering = true
             }
@@ -146,6 +162,17 @@ struct SchoolAccessCodeView: View {
     private var editCode: some View {
         SchoolJoinTextLink(title: "Modifier le code", isBusy: model.isBusy) { model.show(.code) }
             .accessibilityIdentifier("access-edit-code")
+    }
+
+    private func submitSignIn() {
+        guard !model.isBusy else { return }
+        checkedSignInFields.formUnion([.email, .password])
+        guard model.canSignIn else {
+            focus = SchoolSignInValidation.emailIssue(model.email) != nil ? .email : .password
+            return
+        }
+        focus = nil
+        Task { await model.signIn() }
     }
 
     private var actionBar: some View {
@@ -164,10 +191,12 @@ struct SchoolAccessCodeView: View {
                 .disabled(!model.canRegister)
                 .accessibilityIdentifier("access-register")
             case .signIn:
-                Button { Task { await model.signIn() } } label: {
+                Button(action: submitSignIn) {
                     DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: model.isBusy)
                 }
                 .disabled(!model.canSignIn)
+                .accessibilityHint(model.isBusy ? "Connexion en cours." : (SchoolSignInValidation.emailIssue(model.email)
+                    ?? SchoolSignInValidation.passwordIssue(model.password) ?? ""))
                 .accessibilityIdentifier("access-sign-in")
             }
         }
