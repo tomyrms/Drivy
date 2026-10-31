@@ -4,7 +4,7 @@ Lot T01 (#374) de l'epic #373. 31 octobre 2026. `definitionsVersion` : **`2026-1
 
 Base lue : `master` à `2a376c39` (fusion de #384, qui contient la refonte web #311). Spécification seulement : aucune route, aucune migration, aucun changement du contrat OpenAPI canonique 3.11.0, aucun calcul exécuté sur une école réelle. Les totaux du jeu de référence (section 6) ont été recalculés par un petit script indépendant du produit, avec des données entièrement fictives (codes `M1`, `E1`, `S1`... aucun nom).
 
-> Document livré par sections sur cette branche : cette version contient les sections 1 à 3 (dictionnaire complet). Les sections 4 à 8 suivent dans les commits suivants.
+> Document livré par sections sur cette branche : cette version contient les sections 1 à 6 (dictionnaire, tableau de couverture, droits, jeu de référence). Les sections 7 et 8 (contrat proposé, décisions à relire) suivent dans le commit suivant.
 
 Plan : 1. conventions communes · 2. ce que le code garantit réellement · 3. dictionnaire · 4. calculable maintenant / à compléter / hors V1 · 5. matrice des droits · 6. jeu de référence · 7. contrat commun proposé · 8. décisions à relire.
 
@@ -23,7 +23,8 @@ Elles s'appliquent à chaque indicateur de la section 3 ; le dictionnaire ne les
 | C7 Unités et arrondis | Compteurs : entiers. Durées : somme en secondes entières (chaque durée = `floor` des secondes), arrondie à la minute (demi vers le haut) **seulement à l'affichage et après sommation**. Montants : centimes entiers (`bigint` côté SQL, entier JSON ≤ 2^53 − 1, dépassement refusé), aucune division ni virgule flottante. Pourcentage : `delta × 1000 / base` arrondi demi à l'écart de zéro, divisé par 10 (une décimale), calculé en entiers côté serveur. Affichage des montants : `Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' })`, jamais de formatage manuel. |
 | C8 Devise | `CHF`, constante. Aucune colonne de devise n'existe (`school`, `lesson`, `service_product_version`) et la projection de compte écrit `currency: 'CHF'` en dur. La réponse porte `currency: 'CHF'` pour que le jour où une autre devise apparaîtrait, les montants ne soient pas additionnés. |
 | C9 Comparaison | Trois modes explicites : **mois complet** (mois civil entier contre mois civil entier, longueurs 28 à 31 jours affichées) ; **mois à date** (du 1er au jour courant inclus, jour entier, contre la même plage de jours du mois précédent, tronquée à la fin de ce mois s'il est plus court, avec `clipped: true`) ; **période équivalente** (même nombre de jours civils immédiatement avant). Le jour courant est compté en entier côté courant : les leçons pas encore réalisées y sont « à venir », donc hors « réalisées ». Le résultat donne `current`, `base`, `delta`, `daysInPeriod`, `daysInBase`. `percent` n'existe que si **base > 0, base connue et les deux côtés complets** ; sinon `percent: null` avec une raison parmi `BASE_ZERO`, `BASE_BEFORE_DATA_START`, `PARTIAL_COVERAGE`. Jamais de pourcentage infini ni de « +100 % » fictif. |
-| C10 Début de couverture | `dataSince` = plus ancien `created_at` parmi les leçons et séries de cours de l'école (`school` n'a pas de `created_at`). Une base entièrement antérieure à `dataSince` est **inconnue** (`BASE_BEFORE_DATA_START`), pas nulle. |
+| C10 Début de couverture | `dataSince` = **date civile** (fuseau de l'école) du plus ancien `created_at` parmi les leçons et séries de cours de l'école (`school` n'a pas de `created_at`) ; `null` si l'école n'a encore rien enregistré. Une période dont `toExclusive <= dataSince` est **inconnue** : ses mesures valent `null` (`BEFORE_DATA_START`), pas 0, et en base d'une comparaison elle donne `BASE_BEFORE_DATA_START`. Une période avec `from < dataSince < toExclusive` est calculée mais marquée partielle (`STARTS_BEFORE_DATA_START`). Une école sans aucune donnée (`dataSince = null`) a des zéros connus et aucune base de comparaison. |
+| C10b Tout exclu | Quand toutes les lignes d'une mesure sont exclues pour une raison de couverture (durée inconnue, mode pack, compte incohérent), la valeur est `null` (`UNAVAILABLE`), pas 0 ; quand une partie seulement est exclue, la valeur est la somme du reste et la mesure est `PARTIAL` avec le nombre exclu. |
 | C11 Filtres | Moniteur (`instructor_membership_id`), permis (`category_code` de l'offre de la formation), prestation (`product_key` de la version de prestation choisie). Tous sont validés côté serveur ; un filtre inapplicable à une mesure la rend `NOT_APPLICABLE` (jamais ignoré silencieusement). Les filtres permis et prestation ne s'appliquent pas aux cours (un cours n'a ni permis ni prestation dans le modèle). |
 | C12 Population | Leçons de l'école, **tous statuts**, y compris celles d'élèves archivés (l'archivage ne réécrit pas le passé) et de moniteurs dont l'accès est révoqué (la ligne `membership` reste). Les chiffres d'une période peuvent bouger après coup (correction d'issue, annulation d'un règlement) : `computedAt` le dit, aucun instantané historique n'est promis. |
 | C13 Granularité | Séries par jour, semaine (lundi) ou mois civil. Un nombre d'élèves **distincts** se recalcule par intervalle, il ne s'additionne jamais d'un intervalle à l'autre. Le premier et le dernier intervalle d'une série sont marqués `partial: true` quand ils débordent de la période. 400 points au plus par série. |
@@ -147,4 +148,293 @@ Toutes en centimes CHF (C7, C8). Aucune ne contient de TVA, de marge, de coût, 
 
 Règles de non-confusion, vérifiables par test : aucun champ de réponse ne contient `F03 + F05` ; F05 n'est jamais filtrable par moniteur, permis ou prestation (un règlement dépend d'une inscription, pas d'une leçon) : ces filtres rendent F05 et F06 `NOT_APPLICABLE` ; F05 peut se répartir par type de cours (`course_type`) et par série.
 
-<!-- SUITE-T01 -->
+## 4. Calculable maintenant, source à compléter, hors V1
+
+| Statut | Indicateurs | Pourquoi, ou ce qui manque |
+| --- | --- | --- |
+| **Calculable maintenant** | L01 à L08, H01, H03, P01, R01 à R03 (leçons), C01, C02, C03, C05, C06, C07, C08, C10, C11, A01, A02, A03 | Colonnes réelles (section 2). Aucune migration de données ni de saisie nouvelle. |
+| **Calculable maintenant, couverture limitée à afficher** | H02 · C04 · C09 · F01 à F04 · F05, F06 | H02 : durée réelle absente = mesure partielle, jamais 0 ni durée prévue. C04 : instantané sans borne basse. C09 : instantané, indisponible pour une période passée (aucun historique de places). F01 à F04 : leçons individuelles au mode `UNIT_PRICE` seulement (ni packs, ni cours) ; compte incohérent exclu et compté. F05, F06 : règlements de **cours** saisis sur place, par date de **saisie** ; ne couvrent pas l'encaissement des leçons. |
+| **Source à compléter** | F07 valeur des cours collectifs | `course_series` n'a ni prix ni lien produit, `course_enrollment` ne fige aucun prix (Q9). Il faudrait une base contractuelle (référence de la série vers une version de prestation `COLLECTIVE_COURSE` et prix figé), à cadrer et approuver séparément avant toute écriture. Rien n'est reconstitué depuis les règlements ni depuis le tarif courant. |
+| | Règlements de leçons individuelles | Aucune table de paiement de leçon (`payments: []`, Q7). |
+| | Reste à payer, impayés, solde par élève | Aucun lien contractuel fiable entre prestation et règlement : un règlement de cours est un montant libre rattaché à une inscription, pas à un prix. |
+| | Valeur des leçons en pack (`ENTITLEMENT`) | Mode refusé aujourd'hui, registre de consommation absent (Q8). |
+| | Date de règlement effective ou bancaire | Seule la date de saisie existe (Q10). |
+| | Remplissage historique des cours | Places = instantané ; pas d'historique des retenues. Les mouvements d'inscription (C10) sont, eux, datés par des colonnes réelles. |
+| | Date d'annulation ou d'absence d'une leçon | Aucune colonne (Q3). Le rattachement se fait à la date prévue. |
+| | Devise autre que CHF | Aucune colonne de devise (C8). |
+| **Hors V1** | Taux d'occupation du planning | Le dénominateur (`availability_rule`) est modifié en place sans historique (Q12) : un taux passé serait inventé. Pourrait revenir pour le futur seulement, ou avec un journal des disponibilités. |
+| | Bénéfice, marge nette, coût d'un moniteur, solde bancaire, TVA, HT/TTC, conformité comptable | Aucune base ; aucune n'est affirmée. |
+| | Frais d'annulation ou d'absence automatiques | Les règles structurées (`cancellationHours`, `lateAction` valant `CONTACT` ou `NO_FEE`) décrivent un délai, jamais un montant. Aucun frais n'est déduit d'un texte libre. |
+| | Remboursements | Absents du modèle ; annuler une saisie n'en est pas un. |
+| | Paiement en ligne, packs (#45), simulateur financier, extrapolation de créneaux libres, suivi d'examens | Exclus de #373 sans décision distincte. |
+| | Classement ou comparaison de moniteurs, score de conduite, taux de réussite | Exclus par la conception (R94). |
+| | Bilans à publier, demandes d'élèves | Obsolète depuis le partage automatique, ou non démontré (Q18). |
+
+**Inconnues bloquantes.** Aucune ne bloque la V1 telle que décrite dans #373 : les finances s'affichent avec le titre et la couverture « leçons individuelles » et les règlements de cours à part. Elles bloquent seulement, tant qu'une décision distincte n'est pas prise : le chiffre d'affaires des cours (F07), tout « reste à payer » et la valeur des packs. Aucune donnée n'est inventée pour les contourner et aucun logiciel comptable n'est exigé.
+
+## 5. Matrice des droits
+
+**Aucune nouvelle permission.** Les trois grants nécessaires existent déjà dans le schéma et dans l'écran d'accès du web : `VIEW_SCHOOL_METRICS` (« Consulter les indicateurs de l'école »), `VIEW_FINANCIAL_METRICS` (« Consulter les indicateurs financiers »), `EXPORT_MANAGEMENT` (« Exporter les données de gestion ») (Q13). Seul un ADMIN les attribue (`PATCH members`, réauthentification, audit). Ils ne sont accordés à personne par défaut, y compris à l'ADMIN créateur de l'école, et rien ne s'ajoute aux rôles web. Les droits existants des fiches (`MANAGE_COURSES`, `cash_record`, RLS des leçons) ne sont ni élargis ni remplacés par une page de statistiques.
+
+Périmètres : `école` = toute l'école ; `soi` = les leçons dont le moniteur est la personne connectée, et les séances de cours qu'elle anime, résolu côté serveur depuis la session (jamais depuis un paramètre).
+
+| Capacité | ADMIN (sans grant) | ADMIN + `EXPORT_MANAGEMENT` | Moniteur (sans grant) | Moniteur + `VIEW_SCHOOL_METRICS` | Moniteur + `VIEW_FINANCIAL_METRICS` | Moniteur + `EXPORT_MANAGEMENT` | Élève |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Activité de l'école (L, H, P, R, C, A) | Oui, école | Oui, école | Non | Oui, école | Non | Non | Non |
+| Sa propre activité | Oui s'il est aussi moniteur (sinon sans objet) | idem | Oui, `soi` | Oui | Oui, `soi` | Oui, `soi` | Non |
+| Valeurs des leçons (F01 à F04) | Oui, école | Oui, école | Non | Non | Oui, école | Non | Non |
+| Règlements de cours : totaux, corrections (F05, F06) | Oui, école | Oui, école | Non | Non | Oui, école | Non | Non |
+| Filtre ou répartition par moniteur sur les valeurs | Oui | Oui | Non | Non | Oui | Non | Non |
+| Détail d'une mesure d'activité (lignes) | Oui, noms d'élèves compris | Oui | Ses leçons | École entière ; nom d'élève seulement là où la lecture est déjà permise | Ses leçons | Ses leçons | Non |
+| Détail d'une mesure financière (lignes avec montant) | Oui | Oui | Non | Non | Oui, nom d'élève seulement là où la lecture est déjà permise | Non | Non |
+| Ouvrir la fiche liée à une ligne (leçon, cours, règlement) | Droits propres de chaque fiche, inchangés : le droit d'agrégat ne les remplace pas | idem | idem | idem | idem | idem | Non |
+| Export CSV d'activité | Non (grant requis) | Oui, école | Non | Non | Non | Oui, `soi` | Non |
+| Export CSV de finances | Non | Oui, école | Non | Non | Non (sans le grant d'export) | Non | Non |
+
+Un moniteur qui cumule `VIEW_FINANCIAL_METRICS` et `EXPORT_MANAGEMENT` exporte les finances de l'école ; qui cumule `VIEW_SCHOOL_METRICS` et `EXPORT_MANAGEMENT`, l'activité de l'école. Un ADMIN qui est aussi moniteur garde le périmètre `école` par défaut. Un élève, un non-membre, un membre d'une autre école ou une appartenance révoquée n'obtiennent rien (403 générique, sans confirmer l'existence de l'école).
+
+Règles serveur, toutes vérifiées par test (T02, T07) :
+
+1. **Avant tout résultat.** Authentification, rattachement à l'école, rôle et grants sont relus sur `membership` à chaque requête (`withActor`), avant toute requête de mesure. Un montant, un sous-total, une comparaison, un lien de détail ou un message d'erreur n'est jamais produit pour une personne sans le droit financier. Un onglet masqué n'est pas une permission.
+2. **Omission, pas zéro.** Une mesure interdite est absente de la réponse (clé absente), jamais renvoyée à 0, ni `null`, ni `NOT_APPLICABLE`.
+3. **Périmètre explicite.** Sans `VIEW_SCHOOL_METRICS` ni ADMIN, la portée est `soi` ; demander `école` ou le moniteur d'une autre personne donne `403 METRIC_SCOPE_FORBIDDEN`, sans bascule silencieuse. Une vue limitée à un moniteur ne reçoit aucun montant, ni dans une comparaison, ni dans une série, ni dans un export, ni dans un message d'erreur.
+4. **Le filtre ne contourne pas le droit.** Filtrer par moniteur ne donne accès aux valeurs qu'à qui détient le droit financier. Les filtres sur les règlements de cours (moniteur, permis, prestation) sont refusés (`METRIC_FILTER_UNSUPPORTED`), parce qu'un règlement dépend d'une inscription, pas d'une leçon.
+5. **Un agrégat ne ferme pas les fiches.** Les lignes de détail portent des identifiants ; les noms d'élèves passent par les fonctions de lecture existantes (`lesson_learner_name` et équivalents), qui renvoient vide hors droit. Ouvrir une fiche exige le droit propre de la fiche. Le détail d'un règlement (inscrit, note, motif d'annulation) exige `course_can_record_payment`, que `VIEW_FINANCIAL_METRICS` seul ne donne pas.
+6. **Révocation.** Retirer un grant (`access_epoch` augmente) coupe l'accès à la requête suivante. Détail et export relisent le droit à la génération ; un grant retiré entre l'affichage et l'export donne `403 ACCESS_REVOKED`, sans fichier partiel.
+7. **Caches.** `Cache-Control: no-store` déjà global ; côté web, mémoire seulement, clé = personne + école + époque d'accès, aucun stockage persistant de données scolaires ; un changement de personne ou d'école purge (mécanisme #106/#107). Aucun cache serveur partagé entre comptes ou écoles.
+8. **École non active.** `ACTIVE` et `ARCHIVED` sont consultables selon les droits ; `DRAFT` donne `409 SCHOOL_NOT_ACTIVE` (rien à compter, la préparation reste sur sa propre page).
+9. **Télémétrie.** Aucun nom, contenu ni montant personnel dans les logs ou la télémétrie ; seuls l'identifiant de requête, le type de mesure, le nombre de lignes et la durée.
+
+## 6. Jeu synthétique de référence
+
+Toutes les données sont fictives : des codes (`M1`, `E1`, `S1`), aucune personne. Tous les totaux ci-dessous se recalculent à la main ; ils ont aussi été recalculés par un script indépendant, avec des conversions de fuseau vérifiées sur `Europe/Zurich`.
+
+### 6.1 Contexte
+
+- **École A** : fuseau `Europe/Zurich`, `ACTIVE`. Heure d'été jusqu'au dimanche 25 octobre 2026 à 03:00 local (01:00 UTC), puis heure d'hiver : le jour du 25 octobre dure 25 h, la semaine du lundi 19 au dimanche 25 octobre commence le 18/10 à 22:00 UTC et finit le 25/10 à 23:00 UTC (**169 h**), octobre dure **745 h**, septembre 720 h.
+- **Instant de calcul** `computedAt` = **2026-10-28T17:00:00Z** (18:00 local, mercredi 28 octobre).
+- **Catalogue** : prestation `b-45` (permis B, 45 min) version 1 à 9 000 centimes, version 2 à 10 000 centimes créée le 2026-09-30T12:00:00Z ; prestation `a-60` (permis A, 60 min) à 11 000 centimes, une seule version. Une leçon porte le prix figé à sa réservation : S1, S2 (2 × 9 000), S4, S6, O2 et O3 (2 × 9 000, voir plus bas) ont été réservées avant la version 2 ; les autres leçons `b-45` ont été réservées après et valent 10 000. Les tests de T02 insèrent directement les lignes `lesson` avec ces valeurs ; la formation du snapshot par la route de réservation est déjà testée ailleurs.
+- `created_at` d'une leçon = 7 jours avant son début prévu, sauf trois exceptions : O1 (2026-09-30T12:30:00Z, réservée le jour même, après la version 2), O2 (2026-09-25T10:00:00Z) et O3 (2026-09-28T10:00:00Z). Plus ancienne création : S1, 2026-09-01T08:00:00Z, donc `dataSince` = **2026-09-01**.
+- **Acteurs** : `ADM1` (ADMIN, sans grant), `ADM2` (ADMIN + `EXPORT_MANAGEMENT`), `M1` (moniteur, sans grant), `M2` (moniteur + `VIEW_SCHOOL_METRICS`), `M3` (moniteur + `VIEW_FINANCIAL_METRICS`), `M4` (moniteur + `EXPORT_MANAGEMENT`, aucune leçon dans le jeu), `L1` (élève).
+- Toutes les leçons sont de quantité 1 de la prestation, sauf S2 et O3 (quantité 2, soit 90 min).
+
+### 6.2 Leçons de l'école A (23)
+
+Heures locales : CEST (+02:00) jusqu'au 25/10 à 01:00Z, CET (+01:00) ensuite.
+
+| Leçon | Mon. | Élève | Prestation × qté | Statut | Prévu (UTC) | Prévu (local) | Réel (UTC) | Prix (centimes) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S1 | M1 | E1 | b-45 × 1 | COMPLETED | 08/09 08:00Z → 08:45Z | 08/09 10:00 → 10:45 | 08/09 08:02Z → 08:49Z | 9000 |
+| S2 | M1 | E2 | b-45 × 2 | COMPLETED | 15/09 12:00Z → 13:30Z | 15/09 14:00 → 15:30 | 15/09 12:00Z → 13:30Z | 18000 |
+| S3 | M2 | E3 | a-60 × 1 | COMPLETED | 22/09 07:00Z → 08:00Z | 22/09 09:00 → 10:00 | 22/09 07:05Z → 08:03Z | 11000 |
+| S4 | M1 | E1 | b-45 × 1 | CANCELLED | 24/09 08:00Z → 08:45Z | 24/09 10:00 → 10:45 | aucun | 9000 |
+| S5 | M2 | E4 | a-60 × 1 | NO_SHOW | 25/09 13:00Z → 14:00Z | 25/09 15:00 → 16:00 | aucun | 11000 |
+| S6 | M1 | E2 | b-45 × 1 | COMPLETED | 29/09 09:00Z → 09:45Z | 29/09 11:00 → 11:45 | 29/09 09:00Z → 09:45Z | 9000 |
+| S7 | M2 | E3 | a-60 × 1 | COMPLETED | 30/09 21:30Z → 22:30Z | 30/09 23:30 → 00:30 | 30/09 21:30Z → 22:30Z | 11000 |
+| O1 | M1 | E5 | b-45 × 1 | COMPLETED | 30/09 22:30Z → 23:15Z | 01/10 00:30 → 01:15 | 30/09 22:30Z → 23:15Z | 10000 |
+| O2 | M1 | E1 | b-45 × 1 | COMPLETED | 06/10 08:00Z → 08:45Z | 06/10 10:00 → 10:45 | 06/10 08:00Z → 08:40Z | 9000 |
+| O3 | M1 | E2 | b-45 × 2 | COMPLETED | 13/10 12:00Z → 13:30Z | 13/10 14:00 → 15:30 | 13/10 12:03Z → 13:31Z | 17000 |
+| O5 | M2 | E4 | a-60 × 1 | COMPLETED | 15/10 07:00Z → 08:00Z | 15/10 09:00 → 10:00 | aucun | 11000 |
+| O6 | M2 | E3 | a-60 × 1 | CANCELLED | 07/10 08:00Z → 09:00Z | 07/10 10:00 → 11:00 | aucun | 11000 |
+| X1 | M1 | E2 | b-45 × 1 | CANCELLED | 16/10 08:00Z → 08:45Z | 16/10 10:00 → 10:45 | aucun | 10000 |
+| X2 | M2 | E4 | a-60 × 1 | NO_SHOW | 21/10 13:00Z → 14:00Z | 21/10 15:00 → 16:00 | aucun | 11000 |
+| X3 | M1 | E5 | b-45 × 1 | CANCELLED | 23/10 08:00Z → 08:45Z | 23/10 10:00 → 10:45 | aucun | 10000 |
+| V1 | M2 | E4 | a-60 × 1 | PLANNED | 20/10 07:00Z → 08:00Z | 20/10 09:00 → 10:00 | aucun | 11000 |
+| V2 | M1 | E5 | b-45 × 1 | PLANNED | 22/10 08:00Z → 08:45Z | 22/10 10:00 → 10:45 | départ 22/10 08:00Z, pas de fin | 10000 |
+| V3 | M1 | E1 | b-45 × 1 | PLANNED | 28/10 16:30Z → 17:15Z | 28/10 17:30 → 18:15 | départ 28/10 16:30Z, pas de fin | 10000 |
+| D1 | M1 | E1 | b-45 × 1 | COMPLETED | 25/10 22:30Z → 23:15Z | 25/10 23:30 → 00:15 | 25/10 22:30Z → 23:15Z | 10000 |
+| U1 | M1 | E1 | b-45 × 1 | PLANNED | 29/10 09:00Z → 09:45Z | 29/10 10:00 → 10:45 | aucun | 10000 |
+| U2 | M2 | E3 | a-60 × 1 | PLANNED | 30/10 13:00Z → 14:00Z | 30/10 14:00 → 15:00 | aucun | 11000 |
+| U3 | M1 | E2 | b-45 × 1 | PLANNED | 31/10 22:30Z → 23:15Z | 31/10 23:30 → 00:15 | aucun | 10000 |
+| N1 | M1 | E5 | b-45 × 1 | PLANNED | 31/10 23:30Z → 00:15Z | 01/11 00:30 → 01:15 | aucun | 10000 |
+
+Particularités voulues :
+
+- **S7 / O1 (changement de mois).** S7 débute le 30/09 à 23:30 local : septembre. O1 débute le 01/10 à 00:30 local, mais le 30/09 à 22:30 en UTC : octobre. Un découpage en UTC déplace O1 en septembre.
+- **D1 (fuseau, heure d'hiver).** Débute le 25/10 à 23:30 local (22:30Z), après le changement d'heure : semaine du 19 au 25 octobre, jour du 25. Une semaine calculée comme `7 × 24 h` depuis le lundi 19 à 00:00 local finirait le 25/10 à 22:00Z et la placerait dans la semaine suivante.
+- **U3 / N1.** U3 débute le 31/10 à 23:30 local (octobre) ; N1 le 01/11 à 00:30 local (novembre). Les deux traversent ou touchent minuit.
+- **S2, O3 (multi-unités, prix révisé).** Quantité 2, comptées pour **1** leçon. O3 a été réservée 18 000 (2 × 9 000) puis révisée par l'ADMIN à **17 000** (ligne `lesson_commercial_revision` révision 2, motif) : le snapshot courant, 17 000, fait foi ; l'historique reste lisible.
+- **O2 (tarif historique).** Réservée à 9 000 avant la version 2 (10 000), réalisée le 06/10 : elle vaut 9 000.
+- **O6 (correction après coup).** Réalisée puis corrigée en annulée par l'ADMIN : `actual_start`/`actual_end` effacés, charge contre-passée. Elle ne vaut plus rien et se rattache à sa date prévue.
+- **O5 (cas défensif).** `COMPLETED` sans début ni fin réels. Aucune route actuelle ne produit cet état, mais la contrainte de la base le permet (migration 007) et il peut venir de données plus anciennes : durée inconnue, date de rattachement repliée sur le prévu, valeur comptée.
+- **V1, V2, V3.** À vérifier (heure passée, jamais démarrée), à finaliser (démarrée, fin prévue passée), en cours (démarrée, fin prévue 17:15Z, après 17:00Z).
+
+### 6.3 Cours collectifs et règlements (école A)
+
+Séries :
+
+| Série | Type | Statut | Capacité | Séances (UTC → local) |
+| --- | --- | --- | --- | --- |
+| CS1 | FIRST_AID | PUBLISHED | 8 | 12/10 17:00Z–19:00Z (19:00–21:00) ; 13/10 17:00Z–19:00Z (19:00–21:00) |
+| CS2 | AWARENESS | PUBLISHED | 12 | 10/11 18:00Z–20:00Z (19:00–21:00) |
+| CS3 | FIRST_AID | PUBLISHED | 8 | 20/11 18:00Z–20:00Z (19:00–21:00) |
+| CS4 | FIRST_AID | CANCELLED (le 02/10 à 09:00Z) | 8 | 20/10 18:00Z–20:00Z |
+
+Aucune série n'a de prix.
+
+Inscriptions (`created_at` en UTC) :
+
+| Inscr. | Élève | Série | État | Créée | Annulée |
+| --- | --- | --- | --- | --- | --- |
+| C1 | E1 | CS1 | ACTIVE | 02/10 08:00Z | |
+| C2 | E2 | CS1 | ACTIVE | 02/10 08:05Z | |
+| C3 | E3 | CS1 | CANCELLED (`SELF`) | 03/10 08:00Z | 10/10 08:00Z |
+| C4 | E4 | CS1 | ACTIVE | 04/10 08:00Z | |
+| C5 | E1 | CS2 | ACTIVE | 30/09 21:50Z (23:50 local, septembre) | |
+| C6 | E2 | CS2 | ACTIVE | 20/10 08:00Z | |
+| C7 à C12 | E1 à E6 | CS3 | ACTIVE | 21/10 08:00Z | |
+| C13 | E6 | CS4 | CANCELLED (`SERIES_CANCELLED`) | 01/10 08:00Z | 02/10 09:00Z |
+
+Une proposition de place `ACTIVE` pour E5 sur CS2, échéance 29/10 12:00Z (après l'instant de calcul).
+
+Présences : séance 1 de CS1 (12/10) : C1 `PRESENT`, C2 `PRESENT`, C4 `ABSENT`. Séance 2 de CS1 (13/10) : C1 `PRESENT` ; C2 et C4 **non renseignés**. Aucune autre ligne.
+
+Règlements de cours (`course_payment_record`, centimes) :
+
+| Règl. | Inscr. | Montant | Saisi (UTC) | Annulé (UTC) | Particularité |
+| --- | --- | --- | --- | --- | --- |
+| P1 | C1 | 12 000 | 12/10 09:00Z | | |
+| P2 | C2 | 6 000 | 12/10 09:05Z | | paiement en deux fois |
+| P3 | C2 | 6 000 | 20/10 09:00Z | | seconde échéance |
+| P4 | C4 | 12 000 | 12/10 09:10Z | 13/10 08:00Z | saisie erronée annulée |
+| P5 | C4 | 12 000 | 13/10 08:05Z | | ressaisie |
+| P6 | C3 | 12 000 | 05/10 09:00Z | | inscription annulée ensuite : le règlement reste |
+| P7 | C5 | 3 000 | 30/09 21:30Z (23:30 local) | | septembre |
+| P8 | C6 | 3 000 | 30/09 22:30Z (00:30 local) | | octobre |
+| P9 | C1 | 0 | 14/10 09:00Z | | saisie à zéro |
+| P10 | C4 | 12 000 | 20/09 09:00Z | 09/10 09:00Z | saisie de septembre annulée en octobre |
+
+### 6.4 Résultats attendus (école A, `computedAt` = 2026-10-28T17:00:00Z)
+
+**Leçons et durées.** Les bornes sont des dates civiles locales ; `à date` = jusqu'au 28 inclus.
+
+| Période | L01 | L02 | L03 | L04 | L05 | L06 | L07 | L08 | H01 (min) | H02 (min) | H03 (min) | P01 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Août [01/08, 01/09) | null (`BEFORE_DATA_START`) | | | | | | | | | | | |
+| Septembre [01/09, 01/10) | 5 | 0 | 1 | 1 | 0 | 0 | 0 | 7 | 300 | 300 (5 connues, 0 inconnue) | 0 | 3 (E1, E2, E3) |
+| Octobre [01/10, 01/11) | 5 | 3 | 3 | 1 | 1 | 1 | 1 | 15 | 585 | 218 (4 connues, 1 inconnue) | 150 | 4 (E1, E2, E4, E5) |
+| Octobre à date [01/10, 29/10) | 5 | 0 | 3 | 1 | 1 | 1 | 1 | 12 | 435 | 218 (4, 1) | 0 | 4 |
+| Septembre à date [01/09, 29/09) | 3 | 0 | 1 | 1 | 0 | 0 | 0 | 5 | 195 | 195 (3, 0) | 0 | 3 |
+| Novembre [01/11, 01/12) | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 45 | 0 (aucune leçon réalisée) | 45 | 0 |
+| Semaine du 19/10 (169 h) | 1 | 0 | 1 | 1 | 1 | 0 | 1 | 5 | 150 | 45 (1, 0) | 0 | 1 (E1) |
+| Jour 28/10 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 45 | 0 (aucune leçon réalisée) | 0 | 0 |
+
+Octobre : L01 = O1, O2, O3, O5, D1. L02 = U1, U2, U3. L03 = O6, X1, X3. L04 = X2. L05 = V1. L06 = V3. L07 = V2. H01 = durées **prévues** : O1 45 + O2 45 + O3 90 + O5 60 + D1 45 + V1 60 + V2 45 + V3 45 + U1 45 + U2 60 + U3 45 = 585 (dont H03 = U1 + U2 + U3 = 150). H02 = O1 45 + O2 40 + O3 88 + D1 45 = 218 min, O5 non connue. Septembre : H02 = 47 + 90 + 58 + 45 + 60 = 300.
+
+**Répartitions d'octobre.**
+
+| Groupe | L01 | L02 | L03 | L04 | L05 | L06 | L07 | H02 (min) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Moniteur M1 | 4 | 2 | 2 | 0 | 0 | 1 | 1 | 218 (4 connues, 0 inconnue) |
+| Moniteur M2 | 1 | 1 | 1 | 1 | 1 | 0 | 0 | null (0 connue, 1 inconnue : tout exclu) |
+| Permis B | 4 | 2 | 2 | 0 | 0 | 1 | 1 | 218 |
+| Permis A | 1 | 1 | 1 | 1 | 1 | 0 | 0 | null |
+| Prestation `b-45` | 4 | 2 | 2 | 0 | 0 | 1 | 1 | 218 |
+| Prestation `a-60` | 1 | 1 | 1 | 1 | 1 | 0 | 0 | null |
+
+Chaque colonne de groupes se somme au total d'octobre (5, 3, 3, 1, 1, 1, 1).
+
+**Série hebdomadaire d'octobre, leçons réalisées** (semaines du lundi ; les extrémités sont partielles) : semaine du 28/09 (partielle, 01 au 04/10) : 1 (O1) · semaine du 05/10 : 1 (O2) · semaine du 12/10 : 2 (O3, O5) · semaine du 19/10 : 1 (D1) · semaine du 26/10 (partielle, 26 au 31/10) : 0. Somme 5. Leçons à venir : 3 dans la semaine du 26/10 (U1, U2, U3). N1 appartient à novembre bien que sa semaine commence en octobre.
+
+**Valeurs financières** (centimes) :
+
+| Période | F01 réalisée | F02 à venir | F03 total attendu | F04 en attente de constat | F05 règlements de cours | F06 (a) saisies annulées | F06 (b) corrections postérieures | F07 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Août | null (`BEFORE_DATA_START`) | null | null | null | null | null | null | null |
+| Septembre | 58 000 (5 leçons) | 0 | 58 000 | 0 | 3 000 (1 saisie, P7) | 1 saisie, 12 000 (P10) | 0 | null |
+| Octobre | 57 000 (5 leçons) | 31 000 (3) | 88 000 | 31 000 (V1 11 000 + V2 10 000 + V3 10 000) | 51 000 (7 saisies : P1, P2, P3, P5, P6, P8, P9) | 1 saisie, 12 000 (P4) | 1 saisie, 12 000 (P10) | null |
+| Octobre à date | 57 000 | 0 | 57 000 | 31 000 | 51 000 | idem | idem | null |
+| Septembre à date | 38 000 (S1 9 000 + S2 18 000 + S3 11 000) | 0 | 38 000 | 0 | | | | null |
+| Novembre | 0 | 10 000 (N1) | 10 000 | 0 | 0 | 0 | 0 | null |
+
+F01 d'octobre = O1 10 000 + O2 9 000 + O3 17 000 + O5 11 000 + D1 10 000 = 57 000. F01 de septembre = 9 000 + 18 000 + 11 000 + 9 000 + 11 000 = 58 000. Le règlement saisi P6 reste compté malgré l'annulation de C3. P4 est annulé et ressaisi en P5 : un seul compte. P10, saisi en septembre et annulé en octobre, n'est plus dans le total de septembre aujourd'hui (3 000), et c'est la ligne F06 (b) d'octobre qui l'explique. P9 à zéro est une saisie qui ajoute 0.
+
+**Comparaisons** (règle C9) :
+
+| Cas | Courant | Base | Écart | Pourcentage |
+| --- | --- | --- | --- | --- |
+| Mois complet, leçons réalisées : octobre (31 j) contre septembre (30 j) | 5 | 5 | 0 | 0,0 % |
+| Mois complet, F01 | 57 000 | 58 000 | −1 000 | −1,7 % |
+| Mois à date (01 au 28/10) contre (01 au 28/09), leçons réalisées | 5 | 3 | +2 | +66,7 % |
+| Mois à date, F01 | 57 000 | 38 000 | +19 000 | +50,0 % |
+| Mois à date, H02 | 218 (1 inconnue) | 195 | non calculé | `null`, `PARTIAL_COVERAGE` |
+| Septembre contre août (**mois précédent vide**) | 5 | `null` | `null` | `null`, `BASE_BEFORE_DATA_START` |
+| Moniteur M2, semaine du 12/10 contre semaine du 05/10, leçons réalisées | 1 | 0 (connue : une annulation O6, aucune réalisée) | +1 | `null`, `BASE_ZERO` |
+
+Test de la règle de tronquage sur la fonction pure : « mois à date » le 31/10/2026 contre septembre donne la base [01/09, 01/10), `daysInBase = 30`, `clipped = true`.
+
+**Cours collectifs** (école A) :
+
+| Mesure | Octobre (ou instantané à l'instant de calcul) |
+| --- | --- |
+| C01 séances | 2 (CS1, 12 et 13/10). CS4 est exclue. |
+| C02 cours concernés | 1 |
+| C03 séances avec appel renseigné | 2 |
+| C04 appels à renseigner (instantané) | 1 séance (celle du 13/10), `missingMarks = 2` (C2 et C4 ; C3, annulée avant, n'est pas attendue) |
+| C05 présences d'octobre | `PRESENT` 3 (C1 ×2, C2 ×1), `ABSENT` 1 (C4), `EXCUSED` 0 |
+| C06 inscriptions actives (instantané) | 11 (CS1 : 3 · CS2 : 2 · CS3 : 6) |
+| C07 places retenues | 1 (E5 sur CS2) |
+| C08 places | CS1 : 3 occupées, 5 libres · CS2 : 3 occupées (2 + 1 retenue), 9 libres · CS3 : 6 occupées, 2 libres |
+| C09 remplissage des cours à venir | **45 %** = (3 + 6) / (12 + 8) sur CS2 et CS3. Piège : la moyenne des pourcentages, (25 % + 75 %) / 2, donnerait 50 %. CS1 est commencée, CS4 annulée : exclues. |
+| C10 mouvements d'octobre | créées 12 (C1, C2, C3, C4, C6, C7 à C12, C13), annulées 2 (`SELF` 1 : C3, `SERIES_CANCELLED` 1 : C13). Septembre : créées 1 (C5). |
+| C11 cours annulés d'octobre | 1 série (CS4), 1 séance écartée |
+| P01 d'octobre | 4 : leçons E1, E2, E4, E5 ; cours E1, E2 (P01b = 2) ; l'union ne double pas E1 et E2 |
+| F07 | `null`, `COURSE_PRICE_SOURCE_MISSING` : jamais « 3 inscriptions × 2 séances × un prix » |
+
+CS1 compte 2 séances et 1 série ; ses 3 inscriptions actives comptent chacune **une fois** (C06), pas une fois par séance ; chaque règlement porte sur l'inscription, pas sur la séance (P1 = 12 000 une seule fois).
+
+**À traiter** à l'instant de calcul : A01 = 1 (V2), A02 = 1 séance (CS1, 13/10, 2 marques manquantes), A03 = 1 (V1).
+
+**Résultats faux à faire échouer** (un test doit détecter chacun) :
+
+| Erreur | Valeur fautive |
+| --- | --- |
+| Mois découpé en UTC | octobre : 4 leçons, 47 000 ; septembre : 6 leçons, 68 000 |
+| Tarif courant appliqué au passé | septembre 62 000, octobre 61 000 (au lieu de 58 000 et 57 000) |
+| Valeur + règlements additionnés | octobre 88 000 + 51 000 = 139 000 |
+| Semaine en `7 × 24 h` | D1 hors de la semaine du 19/10 |
+| Durée inconnue comptée comme 0 ou comme prévue | H02 d'octobre : 218 + 0 ou 218 + 60 min présentés comme complets |
+| Pourcentage avec base nulle ou inconnue | « +100 % » ou « ∞ » pour les cas `BASE_ZERO` et `BASE_BEFORE_DATA_START` |
+| Remplissage en moyenne de pourcentages | 50 % au lieu de 45 % |
+| Compteurs calculés sur une page de liste | tout total calculé sur 50 ou 100 leçons |
+
+### 6.5 Jeu B : 8 000 + 2 000 = 10 000 CHF, un règlement de 500 CHF n'y change rien
+
+École B, même fuseau, `computedAt` = 2026-10-28T17:00:00Z, générée mécaniquement (4 moniteurs, créneaux sans chevauchement) :
+
+- **80 leçons `COMPLETED`** à 10 000 centimes chacune (100,00 CHF), `actual_start` entre le 01/10 et le 27/10 inclus ;
+- **20 leçons `PLANNED`** futures à 10 000 centimes, début entre le 29/10 et le 31/10 ;
+- **1 règlement de cours** de 50 000 centimes (500,00 CHF) saisi le 15/10, sur une inscription active, sans autre règlement.
+
+Attendus pour octobre : F01 = **800 000** (8 000,00 CHF), F02 = **200 000** (2 000,00 CHF), F03 = **1 000 000** (10 000,00 CHF), F05 = **50 000** (500,00 CHF). Aucun champ de la réponse ne vaut 1 050 000. L01 = 80, L02 = 20. Le test lit les détails par pages de 25 : 4 pages pour F01, 1 pour F02, et le total de pages égale le chiffre de la carte.
+
+Isolation : un utilisateur membre de B seulement obtient 403 sur toute route de l'école A ; une personne membre des deux écoles reçoit, pour chaque école, ses propres totaux sans mélange.
+
+### 6.6 Micro-cas de couverture (école C, une ligne chacun)
+
+| Cas | Attendu |
+| --- | --- |
+| Une leçon `COMPLETED` en mode `ENTITLEMENT` (insérée directement, aucune route ne la produit) | L01 = 1 ; F01 = `null` (`UNAVAILABLE`), `entitlementLessons = 1` |
+| Deux leçons `COMPLETED` à 10 000 dont l'une a une charge initiale de 9 000 | L01 = 2 ; F01 = 10 000, `PARTIAL`, 1 exclue (`CHARGE_MISMATCH`) |
+| Une leçon `COMPLETED` à prix 0 | F01 = 0 connu, `COMPLETE` |
+| École sans aucune donnée | zéros connus, `dataSince = null`, aucune comparaison |
+| Une leçon dont `time_zone` diffère du fuseau courant de l'école | rattachement par le fuseau courant, `TIME_ZONE_MIXED` en couverture |
+| Le grant `VIEW_FINANCIAL_METRICS` retiré entre l'affichage d'un total et son export | `403 ACCESS_REVOKED`, aucun fichier |
+
+### 6.7 Droits, sur le jeu A (octobre)
+
+| Acteur | Demande | Attendu |
+| --- | --- | --- |
+| `M1` | activité, portée par défaut | `soi` : L01 4, L02 2, L03 2, L04 0, L05 0, L06 1, L07 1, H02 218 ; aucune clé financière |
+| `M1` | portée `école` ou moniteur `M2` | 403 `METRIC_SCOPE_FORBIDDEN` |
+| `M2` | activité de l'école | totaux d'octobre de l'école (5, 3, 3, 1, 1, 1, 1) ; aucune clé financière |
+| `M3` | finances de l'école | F01 57 000, F02 31 000, F03 88 000, F04 31 000, F05 51 000 ; aucune clé d'activité de l'école |
+| `M3` | filtre moniteur `M1` sur les valeurs | F01 46 000 (O1 10 000 + O2 9 000 + O3 17 000 + D1 10 000), F02 20 000 (U1, U3) |
+| `M3` | filtre moniteur sur les règlements | 400 `METRIC_FILTER_UNSUPPORTED` |
+| `ADM1` | activité et finances | tout, sans export ; export : 403 |
+| `ADM2` | export d'activité, export de finances | fichiers ; nombre de lignes = total de la carte |
+| `M1` avec `EXPORT_MANAGEMENT` ajouté pour ce cas | export du détail d'octobre | 10 lignes, ses seules leçons (O1, O2, O3, D1, X1, X3, U1, U3, V2, V3) |
+| `M4` | export d'activité d'octobre | fichier avec en-tête et métadonnées, 0 ligne : un zéro connu, pas une erreur |
+| `L1` (élève) ou membre de B | n'importe quelle route de l'école A | 403 |
+
+<!-- SUITE-T01-2 -->
