@@ -209,7 +209,7 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(waitFor(pinned, "label CONTAINS 'Rendez-vous à 14 h'"))
         let secondPreview = pinned.label
         pinned.tap()
-        XCTAssertTrue(waitFor(text(app, "Rendez-vous à 14 h devant l'auto-école"), "hittable == true"))
+        XCTAssertTrue(waitFor(text(app, "Rendez-vous à 14 h devant l'auto-école"), "hittable == true"), app.debugDescription)
         XCTAssertEqual(pinned.label, secondPreview)
         next.tap()
         XCTAssertEqual(pinned.label, firstPreview, "Le parcours explicite boucle sans ouvrir de message")

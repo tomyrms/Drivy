@@ -111,7 +111,9 @@ import XCTest
         XCTAssertTrue(scroll.exists, app.debugDescription)
         let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
         let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-        start.press(forDuration: 0.05, thenDragTo: end)
+        // Geste lent avec maintien : le tirer-pour-actualiser doit dépasser son seuil et s'y tenir ; le geste rapide
+        // précédent ne le déclenchait pas sur iPhone (aucun avis de panne après 15 s).
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
         let failure = element("agenda-courses-error", in: app)
         XCTAssertTrue(failure.waitForExistence(timeout: 15), app.debugDescription)
         let retainedRead = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dernière lecture réussie")).firstMatch

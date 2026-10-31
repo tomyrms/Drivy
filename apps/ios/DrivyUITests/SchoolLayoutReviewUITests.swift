@@ -91,8 +91,11 @@ import UIKit
     func testInvitationSuccessHasOnePrimaryMessage() {
         let app = launch("invitation-success")
         defer { app.terminate() }
-        let message = app.staticTexts.matching(NSPredicate(format: "label == %@", "Code révoqué."))
-        XCTAssertTrue(waitUntil(timeout: 15) { message.count == 1 }, app.debugDescription)
+        // Un Label combiné expose son texte deux fois à XCUITest (l'élément combiné et son enfant) :
+        // l'unicité se vérifie sur le bloc d'avis, présent une seule fois quelle que soit la colonne.
+        let feedback = app.descendants(matching: .any).matching(identifier: "invitations-feedback-success")
+        XCTAssertTrue(waitUntil(timeout: 15) { feedback.count == 1 }, app.debugDescription)
+        XCTAssertTrue(feedback.firstMatch.staticTexts["Code révoqué."].exists, app.debugDescription)
         capture("invitation-success-single-feedback-synthetic")
     }
 
