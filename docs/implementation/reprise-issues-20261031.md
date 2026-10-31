@@ -22,6 +22,8 @@ Document de reprise : ce qu'il faut savoir pour continuer si la session est coup
 
 Les branches #74, #77 et tests sont empilées sur le candidat #339 (elles partent de `1bc67ae1`, avant ses deux derniers commits).
 
+PR ouvertes à 19 h UTC, aucune fusionnée : #385 (pilotage, base `master`), #386 (motif d'absence #251, base `master`), #387 (#74, base `codex/ios-batch-15-20261029`), #388 (#77, base `claude/messagerie-74`). Pas encore de PR pour `claude/tests-83-78` : elle attend le correctif de sélecteur du candidat (`a1a3529a`) pour être verte ; une fois le candidat fusionné, fusionner `master` dans la branche (commit additif), relancer `ui_test_suite=MessagingFeatureCheckUITests`, puis ouvrir la PR vers `master`. Quand #337 à #339 sont fusionnées, changer la base de #387 en `master` (et celle de #388 quand #387 l'est).
+
 ## Ce qui a été fait sur `claude/tests-83-78`
 
 - **#83** : cinq fichiers de tests API de cours (concurrence, fuseau et changement d'heure, push en échec, effets d'une validation, absence de paiement en ligne) et un fichier de tests web. Verts dans « Refonte · vérifications » sur `c71fbd06` (run 41201921118). Matrice `docs/qa/cours-collectifs-tracabilite.md` mise à jour : 59 critères, 19 PASS, 34 PARTIAL, 6 NOT_COVERED, complément daté en fin de fichier.
