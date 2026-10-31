@@ -36,8 +36,14 @@ import XCTest
         capture(app, "Réaction confirmée, saisie conservée — synthétique")
     }
 
+    /// Le nom garde l'ancien délai : la réponse est retardée de `delay` (8 s) et non de 5 s, pour que le retrait parte
+    /// AVANT elle avec de la marge. Avec 5 s, la tape de retrait tombait 4,3 à 8,9 s après l'ajout (XCTest coûte plus d'une
+    /// seconde par requête : capsule, menu fermé, bulle), donc au moment même où la réponse est traitée : sur 14 runs,
+    /// tous les échecs « Retrait local immédiat » sont dans la fenêtre de 5,2 à 5,8 s, aucun en dehors
+    /// (docs/implementation/tests-ui-instables-20261101.md).
     func testFiveSecondResponseCannotReintroduceAQuicklyRemovedReaction() {
-        let app = launch(delay: 5)
+        let delay = 8
+        let app = launch(delay: delay)
         let started = react(in: app)
         let capsule = heart(in: app)
         XCTAssertTrue(capsule.waitForExistence(timeout: 5), app.debugDescription)
@@ -45,8 +51,9 @@ import XCTest
         assertMenuClosed(app)
         target(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 12)).tap()
         XCTAssertTrue(heart(in: app).waitForNonExistence(timeout: 2), "Retrait local immédiat")
-        // Deux réponses de cinq secondes : l'ajout ancien puis le retrait sérialisé.
-        let deadline = Date().addingTimeInterval(12)
+        // Deux réponses retardées : l'ajout ancien (à `delay`), puis le retrait sérialisé (à 2 × `delay`). La fenêtre part de
+        // l'ajout et non du retrait : elle couvre les deux réponses quelle que soit la lenteur du runner avant la tape.
+        let deadline = started.addingTimeInterval(Double(2 * delay) + 4)
         while Date() < deadline {
             XCTAssertFalse(heart(in: app).exists, "L'ancienne confirmation ne réaffiche pas la réaction")
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
@@ -54,7 +61,7 @@ import XCTest
         XCTAssertFalse(app.buttons["messaging.mutation.retry"].firstMatch.exists)
         XCTAssertFalse(app.descendants(matching: .any)["messaging.mutation.slow"].firstMatch.exists)
         XCTAssertFalse(app.buttons["messaging.mutation.rejected"].firstMatch.exists)
-        record(visualSeconds: visualSeconds, confirmationSeconds: nil, injectedDelay: 5)
+        record(visualSeconds: visualSeconds, confirmationSeconds: nil, injectedDelay: delay)
         capture(app, "Retrait conservé après réponses retardées — synthétique")
     }
 

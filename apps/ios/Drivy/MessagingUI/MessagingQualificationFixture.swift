@@ -101,7 +101,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         let arguments = ProcessInfo.processInfo.arguments
         let delay = arguments.first { $0.hasPrefix("-messaging-ui-mutation-delay=") }
             .flatMap { Int($0.dropFirst("-messaging-ui-mutation-delay=".count)) } ?? 0
-        mutationDelay = [1, 5, 15].contains(delay) ? delay : 0
+        mutationDelay = [1, 5, 8, 15].contains(delay) ? delay : 0
         refuseMutation = arguments.contains("-messaging-ui-mutation-refused")
         denyMutationAccess = arguments.contains("-messaging-ui-mutation-access-denied")
         unreadFilter = arguments.contains("-messaging-ui-unread-filter")
