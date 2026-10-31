@@ -7,7 +7,7 @@ import type { WebConfig } from './config.js';
 import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { clientKey, RateLimiter } from './rate-limit.js';
 import { SessionStore, matchesSecret, type Session, type Tokens } from './session.js';
-import { createAnonymousGateway, createGateway, createSchoolGateway, createOpeningGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
@@ -47,7 +47,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
@@ -59,6 +59,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const anonymousCsrf = randomBytes(32).toString('base64url');
   const gateway = options.gateway ?? createGateway(config.apiBaseURL);
   const schoolGateway = options.schoolGateway ?? createSchoolGateway(config.apiBaseURL);
+  const metricsExportGateway = options.metricsExportGateway ?? createMetricsExportGateway(config.apiBaseURL);
   const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
   const anonymousGateway = options.anonymousGateway ?? createAnonymousGateway(config.apiBaseURL);
   const notificationGateway = options.notificationGateway ?? createNotificationGateway(config.apiBaseURL);
@@ -426,6 +427,30 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
       else if (!invitation.uncertain) delete invitation.submitted;
       return sendApi(reply,result);
     } finally { delete invitation.accepting; }
+  });
+  // Pilotage CSV export (#373): CSRF-protected like a write, but a read for the API (no operation, no audit). The answer is a download,
+  // so its file name is rebuilt here from validated fields; nothing the API says reaches a response header.
+  const exportBody = z.object({ measure: z.string().regex(/^[A-Z][0-9]{2}$/), part: z.enum(['a','b']).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), toExclusive: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).passthrough();
+  app.post('/app/bff/schools/:schoolId/metrics/exports', { bodyLimit: 8_192 }, async (request, reply) => {
+    const { schoolId } = z.object({ schoolId: z.string() }).parse(request.params);
+    if (!isUUID(schoolId)) throw new WebError(404,'NOT_FOUND');
+    const session = protect(request);
+    const body = request.body;
+    if (typeof body !== 'object' || body === null || Array.isArray(body) || Buffer.byteLength(JSON.stringify(body)) > 4_096) throw new WebError(400,'INVALID_REQUEST');
+    const fields = exportBody.safeParse(body);
+    if (!fields.success) throw new WebError(400,'INVALID_REQUEST');
+    const result = await metricsExportGateway({ schoolId, body },await accessToken(session));
+    if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
+    if (result.status === 401) {
+      if (z.object({code:z.literal('REAUTH_REQUIRED')}).safeParse((result as {body:unknown}).body).success) throw new WebError(401,'REAUTH_REQUIRED');
+      store.destroy(session); throw new WebError(401,'SESSION_EXPIRED');
+    }
+    if (result.status !== 200) return sendApi(reply,result as ApiResult);
+    const { measure, part, from, toExclusive } = fields.data;
+    reply.header('Content-Disposition',`attachment; filename="drivy-${measure}${part ?? ''}-${from}_${toExclusive}.csv"`);
+    if ('drift' in result && result.drift) reply.header('X-Metrics-Drift','true');
+    return reply.type('text/csv; charset=utf-8').send((result as { csv: string }).csv);
   });
   app.route({ method: ['GET','POST','PATCH','PUT'], url: '/app/bff/schools/*', bodyLimit: MAX_SCHOOL_BODY + 1_024,
     // Refused before the body is read: an unknown path or a missing session costs nothing to serve.
