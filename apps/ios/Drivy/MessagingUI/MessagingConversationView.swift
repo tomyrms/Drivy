@@ -1390,6 +1390,8 @@ private struct MessagingOlderMessagesButton: View {
 private struct MessagingThreadFooter: View {
     let thread: MessagingThreadModel
     let onReported: () -> Void
+    /// Transmettre un signalement est un acte explicite : la personne voit d'abord qui le lira et ce qu'il contient (#77).
+    @State private var confirmingReport = false
 
     private var workspace: MessagingWorkspace { thread.workspace }
 
@@ -1425,7 +1427,16 @@ private struct MessagingThreadFooter: View {
             }
             .frame(minHeight: DrivyLayout.tapTarget)
             Spacer()
-            Button("Transmettre (\(thread.reportSelection.count))") {
+            Button("Transmettre (\(thread.reportSelection.count))") { confirmingReport = true }
+            .bold()
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .disabled(thread.reportSelection.isEmpty)
+            .accessibilityIdentifier("messaging.report.send")
+        }
+        .padding(.horizontal, DrivySpacing.m)
+        .confirmationDialog("Transmettre aux administrateurs de l'école ?", isPresented: $confirmingReport,
+                            titleVisibility: .visible) {
+            Button("Transmettre") {
                 let selected = workspace.visibleMessages(thread.conversationID).filter { thread.reportSelection.contains($0.id) }
                 Task {
                     if await workspace.report(selected, conversationID: thread.conversationID) {
@@ -1433,12 +1444,13 @@ private struct MessagingThreadFooter: View {
                     }
                 }
             }
-            .bold()
-            .frame(minHeight: DrivyLayout.tapTarget)
-            .disabled(thread.reportSelection.isEmpty)
-            .accessibilityIdentifier("messaging.report.send")
+            .accessibilityIdentifier("messaging.report.confirm")
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            let count = thread.reportSelection.count
+            let noun = count == 1 ? "ce message" : "ces \(count) messages"
+            Text("Les administrateurs de l'école pourront lire \(noun), avec leur auteur et leur date. Le reste de la conversation ne leur est pas montré.")
         }
-        .padding(.horizontal, DrivySpacing.m)
     }
 }
 

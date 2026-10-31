@@ -8,7 +8,8 @@ import { rollbackQuietly } from './database.js';
 import { forbidden } from './errors.js';
 import { eligibleContacts, generalMembers, generalRemovedMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
   resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, conversationMembers, deleteMessage, setReaction, setPinned,
-  setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, reinstateGeneralMember, createReport, listReports, reactionPalette, type MessagingActor } from './messaging.js';
+  setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, reinstateGeneralMember, createReport, listReports, setReportStatus, reportStatuses,
+  reactionPalette, type MessagingActor } from './messaging.js';
 import { mapDatabaseError } from './messaging-view.js';
 import { lockCommandOperation } from './commands.js';
 import { executeMessagingMutation, messagingMutation, type MessagingMutation } from './messaging-commands.js';
@@ -176,8 +177,15 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
   });
   app.get(`${path}/reports`, request => {
     const { schoolId } = base.parse(request.params);
-    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), before: id.optional() }).strict().parse(request.query);
-    return execute(request.headers, request.id, schoolId, (db, actor) => listReports(db, actor, query.limit, query.before).then(data => ({ data })));
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), before: id.optional(),
+      status: z.enum(reportStatuses).optional() }).strict().parse(request.query);
+    return execute(request.headers, request.id, schoolId, (db, actor) => listReports(db, actor, query.limit, query.before, query.status).then(data => ({ data })));
+  });
+  // Statut de traitement : administrateurs de l'école seulement, statut attendu comparé sous verrou (409 si périmé).
+  app.put(`${path}/reports/:reportId/status`, request => {
+    const { schoolId, reportId } = base.extend({ reportId: id }).parse(request.params);
+    const body = z.object({ status: z.enum(reportStatuses), expectedStatus: z.enum(reportStatuses) }).strict().parse(request.body);
+    return execute(request.headers, request.id, schoolId, (db, actor) => setReportStatus(db, actor, reportId, body.status, body.expectedStatus).then(data => ({ data })));
   });
   // Pas de temps réel, notifications ni médias avant #67/#66.
 }

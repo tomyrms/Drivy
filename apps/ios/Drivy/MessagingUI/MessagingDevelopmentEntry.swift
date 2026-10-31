@@ -69,7 +69,7 @@ fileprivate final class MessagingDevelopmentResources {
         workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
             cryptography: cryptography, outbox: store, drafts: store, directory: http, actions: http,
             history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
-            reports: store, mutations: store, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
+            reportSealing: cryptography, reports: store, mutations: store, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
     }
 }
 

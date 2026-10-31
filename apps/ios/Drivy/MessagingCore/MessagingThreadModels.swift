@@ -190,12 +190,86 @@ struct UnavailableMessagingReports: MessagingProtectedReports {
 /// Fourni par l'agent crypto (Olm vers les appareils des administrateurs de l'Ã©cole).
 protocol MessagingReportSealing: Sendable {
     func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext
+    /// Tous les messages d'un signalement sous une seule session de groupe, partagée une fois aux appareils des
+    /// administrateurs. L'ordre des enveloppes suit celui des contenus.
+    func sealForSchoolAdmins(_ plaintexts: [Data], scope: MessagingScope, conversationID: UUID) async throws -> [MessagingCiphertext]
+}
+
+extension MessagingReportSealing {
+    /// Sans session partagée : un contenu après l'autre, comme avant le lot #77.
+    func sealForSchoolAdmins(_ plaintexts: [Data], scope: MessagingScope, conversationID: UUID) async throws -> [MessagingCiphertext] {
+        var sealed: [MessagingCiphertext] = []
+        for plaintext in plaintexts {
+            sealed.append(try await sealForSchoolAdmins(plaintext, scope: scope, conversationID: conversationID))
+        }
+        return sealed
+    }
 }
 
 struct UnavailableMessagingReportSealing: MessagingReportSealing {
     func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         throw MessagingFailure.protectionUnavailable
     }
+}
+
+/// Statut de traitement d'un signalement (#77) : ouvert, traité ou classé. Les valeurs sont celles de l'API.
+enum MessagingReportStatus: String, Codable, Sendable, CaseIterable, Equatable {
+    case open = "OPEN", handled = "HANDLED", dismissed = "DISMISSED"
+
+    var title: String {
+        switch self {
+        case .open: "Ouvert"
+        case .handled: "Traité"
+        case .dismissed: "Classé"
+        }
+    }
+}
+
+/// Un message choisi par le signalant : l'enveloppe reste chiffrée, l'auteur et la date viennent du serveur.
+struct MessagingReportEnvelope: Sendable, Equatable, Identifiable {
+    let messageID: UUID
+    let senderID: UUID?
+    let senderName: String?
+    let sequence: Int?
+    let acceptedAt: Date?
+    let ciphertext: MessagingCiphertext
+    var id: UUID { messageID }
+}
+
+struct MessagingReportHistoryEvent: Sendable, Equatable, Identifiable {
+    let actorID: UUID
+    let actorName: String?
+    let from: MessagingReportStatus
+    let to: MessagingReportStatus
+    let at: Date
+    var id: String { "\(actorID.uuidString)-\(at.timeIntervalSince1970)-\(from.rawValue)-\(to.rawValue)" }
+}
+
+struct MessagingReportRecord: Sendable, Equatable, Identifiable {
+    let id: UUID
+    let conversationID: UUID
+    /// `PRIVATE`, `GENERAL` ou nil pour un signalement antérieur à l'enregistrement du type.
+    let conversationKind: String?
+    let reporterID: UUID
+    let reporterName: String?
+    let createdAt: Date
+    var status: MessagingReportStatus
+    var statusUpdatedAt: Date?
+    let items: [MessagingReportEnvelope]
+    var history: [MessagingReportHistoryEvent]
+}
+
+struct MessagingReportPage: Sendable, Equatable {
+    let reports: [MessagingReportRecord]
+    let nextCursor: UUID?
+    let openCount: Int
+}
+
+struct MessagingReportStatusChange: Sendable, Equatable {
+    let reportID: UUID
+    let status: MessagingReportStatus
+    let statusUpdatedAt: Date?
+    let history: [MessagingReportHistoryEvent]
 }
 
 /// Actions de conversation v2. Chaque appel est rÃ©autorisÃ© par le serveur.
@@ -213,11 +287,23 @@ protocol MessagingThreadActions: Sendable {
     /// Retirés du général encore dans l'école (administrateurs du groupe).
     func removedMembers(scope: MessagingScope) async throws -> [MessagingMember]
     func report(scope: MessagingScope, conversationID: UUID, clientReportID: UUID, items: [MessagingReportItem]) async throws
+    /// Boîte des signalements, réservée aux administrateurs de l'école : 403 (donc `accessChanged`) pour les autres.
+    func reports(scope: MessagingScope, status: MessagingReportStatus?, before: UUID?) async throws -> MessagingReportPage
+    /// Le statut attendu est comparé côté serveur sous verrou : un statut périmé donne `stateConflict`.
+    func setReportStatus(scope: MessagingScope, reportID: UUID, status: MessagingReportStatus,
+                         expected: MessagingReportStatus) async throws -> MessagingReportStatusChange
 }
 
 extension MessagingThreadActions {
     /// Une implémentation sans reçus ne peut pas dégrader silencieusement une reprise durable.
     func mutate(scope: MessagingScope, key: MessagingMutationKey, value: MessagingMutationValue, requestID: UUID) async throws {
+        throw MessagingFailure.unavailable
+    }
+    func reports(scope: MessagingScope, status: MessagingReportStatus?, before: UUID?) async throws -> MessagingReportPage {
+        throw MessagingFailure.unavailable
+    }
+    func setReportStatus(scope: MessagingScope, reportID: UUID, status: MessagingReportStatus,
+                         expected: MessagingReportStatus) async throws -> MessagingReportStatusChange {
         throw MessagingFailure.unavailable
     }
 }
