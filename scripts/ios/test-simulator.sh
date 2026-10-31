@@ -31,7 +31,7 @@ xcodebuild test-without-building \
   -destination "platform=iOS Simulator,id=$device_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
   ${test_options[@]+"${test_options[@]}"} \
-  -parallel-testing-enabled NO -enableCodeCoverage NO \
+  -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
   2>&1 | tee artifacts/ios/simulator-test.log || phone_status=$?
@@ -77,7 +77,7 @@ xcodebuild test-without-building \
   "${test_plan_options[@]}" \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
-  "${ipad_test_options[@]}" -parallel-testing-enabled NO -enableCodeCoverage NO \
+  "${ipad_test_options[@]}" -parallel-testing-enabled NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
   2>&1 | tee artifacts/ios/ipad-test.log || ipad_status=$?

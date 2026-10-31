@@ -263,13 +263,6 @@ export -f xcodebuild xcrun python3 sleep
         self.assertIn('<ARCHS=arm64>', visual.stdout)
         self.assertNotIn('<-enableCodeCoverage>', visual.stdout)
 
-    def test_test_runs_skip_the_unused_coverage_on_each_device(self):
-        result = self.run_script(DRIVY_IOS_FULL_CAMPAIGN='1')
-        calls = [line for line in result.stdout.splitlines() if line.startswith('xcodebuild')]
-        self.assertEqual(len(calls), 2)
-        for call in calls:
-            self.assertIn('<-enableCodeCoverage> <NO>', call)
-
     def test_preboot_starts_the_same_iphone_in_the_background_and_never_fails_the_job(self):
         directory = tempfile.TemporaryDirectory(prefix='drivy-preboot-')
         self.addCleanup(directory.cleanup)
