@@ -14,13 +14,8 @@ if [[ "$relay_required" == 1 ]]; then
   relay_plan=$(python3 scripts/ios/configure-relay-tests.py artifacts/ios/DerivedData/Build/Products "$relay_url")
   test_plan_options=(-xctestrun "$relay_plan")
 fi
-device_id=$(xcrun simctl list devices available -j | python3 -c '
-import json,sys
-devices=json.load(sys.stdin)["devices"]
-candidates=[d for runtime,items in devices.items() if "iOS" in runtime for d in items if d.get("isAvailable") and d["name"].startswith("iPhone")]
-if not candidates: raise SystemExit("Aucun simulateur iPhone disponible")
-print(candidates[0]["udid"])
-')
+source scripts/ios/simulator-iphone.sh
+device_id=$(iphone_simulator_id)
 boot_started=$SECONDS
 xcrun simctl boot "$device_id" || true
 xcrun simctl bootstatus "$device_id" -b
@@ -36,7 +31,7 @@ xcodebuild test-without-building \
   -destination "platform=iOS Simulator,id=$device_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
   ${test_options[@]+"${test_options[@]}"} \
-  -parallel-testing-enabled NO \
+  -parallel-testing-enabled NO -enableCodeCoverage NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/Tests.xcresult \
   2>&1 | tee artifacts/ios/simulator-test.log || phone_status=$?
@@ -44,8 +39,8 @@ if [[ "$relay_required" == 1 ]]; then
   relay_mark phone_xcodebuild_status "$phone_status"
   if (( phone_status != 0 )); then relay_probe phone_after_failure; fi
 fi
-if [[ "${DRIVY_IOS_UNIT_ONLY:-0}" == 1 ]]; then exit "$phone_status"; fi
-if [[ "$ui_iphone_only" == 1 ]]; then exit "$phone_status"; fi
+# Métier seul, ou suite UI ciblée sans demande d'iPad : l'iPhone suffit, sans captures de contrôle ni second simulateur.
+if [[ "$run_ipad" != 1 ]]; then exit "$phone_status"; fi
 xcrun simctl launch "$device_id" ch.drivy.qualification || true
 sleep 2
 xcrun simctl io "$device_id" screenshot artifacts/ios/iphone-light.png || true
@@ -82,7 +77,7 @@ xcodebuild test-without-building \
   "${test_plan_options[@]}" \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -skip-testing:DrivyUITests/VisualOrientationTests \
-  "${ipad_test_options[@]}" -parallel-testing-enabled NO \
+  "${ipad_test_options[@]}" -parallel-testing-enabled NO -enableCodeCoverage NO \
   -derivedDataPath artifacts/ios/DerivedData \
   -resultBundlePath artifacts/ios/iPadTests.xcresult \
   2>&1 | tee artifacts/ios/ipad-test.log || ipad_status=$?

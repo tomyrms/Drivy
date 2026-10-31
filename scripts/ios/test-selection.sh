@@ -6,14 +6,34 @@ visual_only=${DRIVY_IOS_VISUAL_ONLY:-0}
 unit_test_scope=${DRIVY_IOS_UNIT_TEST_SCOPE:-gps}
 ui_test_suite=${DRIVY_IOS_UI_TEST_SUITE:-}
 ui_iphone_only=${DRIVY_IOS_UI_IPHONE_ONLY:-0}
+# Campagne complète (toute la suite métier, toute l'UI, puis l'iPad) : jamais implicite, ou imposée par une qualification.
+full_campaign=${DRIVY_IOS_FULL_CAMPAIGN:-0}
+# L'iPad d'une suite UI ciblée est une demande explicite : le contrôle courant tourne sur l'iPhone seul.
+ui_ipad=${DRIVY_IOS_UI_IPAD:-0}
+build_ipa=${DRIVY_IOS_BUILD_IPA:-0}
 test_options=()
 ui_test_options=()
 
 [[ "$unit_only" == 0 || "$unit_only" == 1 ]] || { echo 'Mode métier invalide (0 ou 1).' >&2; exit 1; }
 [[ "$visual_only" == 0 || "$visual_only" == 1 ]] || { echo 'Mode visuel invalide (0 ou 1).' >&2; exit 1; }
 [[ "$ui_iphone_only" == 0 || "$ui_iphone_only" == 1 ]] || { echo 'Mode iPhone seul invalide (0 ou 1).' >&2; exit 1; }
+[[ "$full_campaign" == 0 || "$full_campaign" == 1 ]] || { echo 'Campagne complète invalide (0 ou 1).' >&2; exit 1; }
+[[ "$ui_ipad" == 0 || "$ui_ipad" == 1 ]] || { echo 'Mode iPad invalide (0 ou 1).' >&2; exit 1; }
+[[ "$build_ipa" == 0 || "$build_ipa" == 1 ]] || { echo 'Demande d’IPA invalide (0 ou 1).' >&2; exit 1; }
 # iPhone seul reste un contrôle intermédiaire ciblé : jamais pour la campagne complète ou finale.
 [[ "$ui_iphone_only" == 0 || -n "$ui_test_suite" ]] || { echo 'Le mode iPhone seul exige une sélection UI.' >&2; exit 1; }
+[[ "$ui_ipad" == 0 || -n "$ui_test_suite" ]] || { echo 'L’iPad ne s’ajoute qu’à une sélection UI ; la campagne complète le lance déjà.' >&2; exit 1; }
+[[ "$ui_ipad" == 0 || "$ui_iphone_only" == 0 ]] || { echo 'iPhone seul et iPad s’excluent.' >&2; exit 1; }
+[[ "$build_ipa" == 0 || "$full_campaign" == 1 ]] || { echo 'L’IPA ne se construit qu’avec la campagne complète ; sinon, utiliser le workflow « IPA d’essai · iLoader ».' >&2; exit 1; }
+# Aucun mode implicite : sans choix, un lancement sans paramètre rejouait toute la campagne puis construisait une IPA.
+[[ "$unit_only" == 1 || "$visual_only" == 1 || -n "$ui_test_suite" || "$full_campaign" == 1 ]] || {
+  echo 'Aucun mode choisi. Préciser unit_only=true (avec unit_test_scope), ui_test_suite="Suite ...", visual_only=true ou, pour tout rejouer, full_campaign=true.' >&2
+  exit 1
+}
+[[ "$full_campaign" == 0 || ( "$unit_only" == 0 && "$visual_only" == 0 && -z "$ui_test_suite" ) ]] || { echo 'La campagne complète exclut les modes ciblés.' >&2; exit 1; }
+# iPad : campagne complète, ou suite UI ciblée qui le demande. Jamais pour le métier seul ni les captures.
+run_ipad=0
+if [[ "$full_campaign" == 1 || ( -n "$ui_test_suite" && "$ui_ipad" == 1 ) ]]; then run_ipad=1; fi
 [[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging ou all).' >&2; exit 1; }
 [[ "$visual_only" != 1 || ( "$unit_only" == 0 && -z "$ui_test_suite" ) ]] || { echo 'Choisir les captures visuelles ou les tests, pas les deux.' >&2; exit 1; }
 

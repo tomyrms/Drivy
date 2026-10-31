@@ -20,8 +20,9 @@ on:
       ui_test_suite:
         type: string
         default: ''
-  # Full simulator campaign is run explicitly at the end of implementation.
-  # Every native delivery still builds its device IPA in ipa-essai.yml.
+  # Aucun mode implicite (31 octobre 2026) : un lancement sans paramètre est refusé avant toute compilation.
+  # Le contrôle courant est ciblé (unit_only, ui_test_suite, visual_only) ; la campagne complète se demande avec
+  # full_campaign=true et ne construit plus d'IPA sans build_ipa=true (« IPA d'essai · iLoader » s'en charge).
   workflow_dispatch:
     inputs:
       messaging_qualification:
@@ -37,16 +38,28 @@ on:
         type: boolean
         default: false
       unit_test_scope:
-        description: 'Avec unit_only : gps, agenda, reports, reactivity ou messaging pour un parcours ciblé, all pour toute la suite métier'
+        description: 'Avec unit_only : gps, agenda, reports, reactivity ou messaging pour un parcours ciblé, all pour toute la suite métier (durée quasi identique : la compilation domine)'
         type: choice
         options: [gps, agenda, reports, reactivity, messaging, all]
         default: gps
       ui_test_suite:
-        description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), iPhone et iPad sans IPA ; vide pour tout'
+        description: 'Suites UI ou Classe/testMéthode séparées par des espaces (8 max), sur iPhone sans IPA ; ajouter ui_ipad=true pour l’iPad'
         type: string
         default: ''
+      ui_ipad:
+        description: 'Avec ui_test_suite : rejouer aussi la sélection sur iPad, après l’iPhone (la campagne complète le fait toujours)'
+        type: boolean
+        default: false
       ui_iphone_only:
-        description: 'Avec ui_test_suite : contrôle intermédiaire sur iPhone seul, sans iPad ni captures (pas une preuve finale)'
+        description: 'Obsolète : l’iPhone seul est le comportement par défaut d’une suite UI (incompatible avec ui_ipad)'
+        type: boolean
+        default: false
+      full_campaign:
+        description: 'Campagne complète : toute la suite métier et toute l’UI sur iPhone, puis l’iPad (plus de 90 minutes, relais Matrix compris)'
+        type: boolean
+        default: false
+      build_ipa:
+        description: 'Avec full_campaign : construire aussi l’IPA non signée à la fin (sinon utiliser « IPA d’essai · iLoader »)'
         type: boolean
         default: false
       visual_screens:
@@ -80,13 +93,15 @@ on:
 permissions:
   contents: read
 concurrency:
-  # A long screen matrix must not exceed GitHub's 400-character group limit.
-  # Visual runs are independent; each test scope stays serial on its branch.
-  group: refonte-ios-${{ inputs.qualification_sha || github.ref }}-${{ inputs.visual_only && github.run_id || inputs.unit_only && 'unit' || inputs.ui_test_suite != '' && 'ui' || 'tests' }}
+  # Un lancement explicite n'attend jamais celui d'un autre et n'est jamais annulé par lui. Le groupe par branche
+  # d'avant faisait attendre jusqu'à 51 minutes derrière une exécution déjà dépassée (mesures du 31 octobre 2026).
+  # Seule une qualification, qui fournit son SHA, reste sérialisée sur son candidat. Un nom de groupe ne doit pas
+  # dépasser 400 caractères : aucune sélection n'y figure.
+  group: refonte-ios-${{ inputs.qualification_sha || github.run_id }}-${{ inputs.visual_only && 'visual' || inputs.unit_only && 'unit' || inputs.ui_test_suite != '' && 'ui' || 'tests' }}
   cancel-in-progress: false
 jobs:
   apple:
-    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && inputs.ui_iphone_only && 'Parcours UI iPhone seul' || inputs.ui_test_suite != '' && 'Parcours UI iPhone et iPad' || 'Campagne complète et IPA' }}
+    name: ${{ inputs.visual_only && 'Captures visuelles' || inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && inputs.ui_ipad && 'Parcours UI iPhone et iPad' || inputs.ui_test_suite != '' && 'Parcours UI iPhone seul' || inputs.build_ipa && 'Campagne complète et IPA' || 'Campagne complète' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: macos-26
     # Campagne complète iPhone puis iPad : 94 min le 27 octobre, coupée à 90.
@@ -102,6 +117,10 @@ jobs:
       DRIVY_IOS_UNIT_TEST_SCOPE: ${{ inputs.unit_test_scope || 'gps' }}
       DRIVY_IOS_UI_TEST_SUITE: ${{ inputs.ui_test_suite }}
       DRIVY_IOS_UI_IPHONE_ONLY: ${{ inputs.ui_iphone_only && '1' || '0' }}
+      DRIVY_IOS_UI_IPAD: ${{ inputs.ui_ipad && '1' || '0' }}
+      # Une qualification (SHA fourni) est par définition la campagne complète, iPhone et iPad.
+      DRIVY_IOS_FULL_CAMPAIGN: ${{ (inputs.full_campaign || inputs.qualification_sha != '') && '1' || '0' }}
+      DRIVY_IOS_BUILD_IPA: ${{ inputs.build_ipa && '1' || '0' }}
       DRIVY_IOS_VISUAL_ONLY: ${{ inputs.visual_only && '1' || '0' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -119,7 +138,15 @@ jobs:
           if [[ "$unit_only" == 1 ]]; then
             echo "Tests métier iPhone : $unit_test_scope, sans UI, iPad ni IPA."
             printf '%s\n' "${test_options[@]}"
+          elif [[ -n "$ui_test_suite" ]]; then
+            if [[ "$run_ipad" == 1 ]]; then echo "Parcours UI sur iPhone puis iPad : $ui_test_suite"; else echo "Parcours UI sur iPhone seul : $ui_test_suite"; fi
+          elif [[ "$full_campaign" == 1 ]]; then
+            echo "Campagne complète : suite métier et UI sur iPhone, puis iPad."
           fi
+      - name: Démarrer l'iPhone de test pendant la compilation
+        if: inputs.visual_only != true
+        shell: bash
+        run: bash scripts/ios/preboot-simulator.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: steps.selection.outputs.relay_required == '1'
         with:
@@ -170,7 +197,13 @@ jobs:
           source scripts/ios/messaging-qualification.sh
           action=build-for-testing
           if [[ "$VISUAL_ONLY" == true && -z "$VISUAL_ORIENTATIONS" && ! " $VISUAL_SCREENS " =~ [[:space:]](live-signal|signal-status|lesson-evidence|lesson-permit|planning-details|planning-confirmation)[[:space:]] ]]; then action=build; fi
+          # Le runner et le simulateur sont arm64 : sans ARCHS, la destination générique compilait aussi x86_64
+          # (708 compilations Swift en double, mesuré le 31 octobre 2026). L'index d'éditeur et la couverture de code
+          # (aucun consommateur dans le dépôt) ne servent à aucun contrôle de CI.
+          speed_options=(ARCHS=arm64 ONLY_ACTIVE_ARCH=NO COMPILER_INDEX_STORE_ENABLE=NO)
+          if [[ "$action" == build-for-testing ]]; then speed_options+=(-enableCodeCoverage NO); fi
           xcodebuild "$action" \
+            "${speed_options[@]}" \
             ${test_options[@]+"${test_options[@]}"} \
             ${messaging_build_options[@]+"${messaging_build_options[@]}"} \
             -project apps/ios/Drivy.xcodeproj -scheme Drivy \
@@ -188,7 +221,7 @@ jobs:
               raise SystemExit('Accès au trousseau absent des entitlements du simulateur.')
           shutil.copyfile(matches[0], 'artifacts/ios/simulator-entitlements.plist')
           PY
-      - name: ${{ inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || 'Tests et parcours iPhone puis iPad' }}
+      - name: ${{ inputs.unit_only && format('Tests métier iPhone · {0}', inputs.unit_test_scope || 'gps') || inputs.ui_test_suite != '' && !inputs.ui_ipad && 'Parcours UI iPhone' || 'Tests et parcours iPhone puis iPad' }}
         if: inputs.visual_only != true
         shell: bash
         run: bash scripts/ios/test-simulator.sh
@@ -208,11 +241,11 @@ jobs:
           DRIVY_VISUAL_HOT_SWITCH: ${{ inputs.visual_hot_switch && '1' || '0' }}
         run: bash scripts/ios/capture-screens.sh
       - name: Construire l'IPA pour iLoader
-        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == '' && inputs.qualification_sha == ''
+        if: inputs.build_ipa == true && inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == '' && inputs.qualification_sha == ''
         shell: bash
         run: bash scripts/ios/build-ipa.sh
       - name: Artefact IPA
-        if: inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == '' && inputs.qualification_sha == ''
+        if: inputs.build_ipa == true && inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == '' && inputs.qualification_sha == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Drivy-unsigned-${{ github.sha }}
