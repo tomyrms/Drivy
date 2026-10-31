@@ -44,6 +44,7 @@ import { registerObservationRanking } from './observation-ranking.js';
 import { registerCourses } from './courses.js';
 import { registerCourseEnrollments } from './course-enrollments.js';
 import { registerCourseFacts } from './course-facts.js';
+import { registerSchoolMetrics } from './school-metrics.js';
 import { registerNotificationPreferences } from './notification-preferences.js';
 
 const pagination = { limit: z.coerce.number().int().min(1).max(100).default(50), cursor: z.string().max(6000).optional() };
@@ -108,7 +109,7 @@ const validationCodes = new Set(['INVALID_REQUEST', 'PAYLOAD_TOO_LARGE', 'UNSUPP
 /** Code métier et motif générique d'une réponse refusée : le message est un texte fixe du serveur, jamais une valeur reçue. */
 const responseProblem = new WeakMap<FastifyRequest, { errorCode: string; reason?: string }>();
 
-export function buildApp(options: { gpsOnlyQualificationSchoolIds?:readonly string[]; messaging?: MessagingQualification; accountRecovery?: AccountRecoveryOptions; pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean | FastifyServerOptions['logger']; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
+export function buildApp(options: { metricsClock?: () => Date; gpsOnlyQualificationSchoolIds?:readonly string[]; messaging?: MessagingQualification; accountRecovery?: AccountRecoveryOptions; pool: Pool; verifyToken: TokenVerifier; cursorSecret: string; logger?: boolean | FastifyServerOptions['logger']; schoolOpening?:SchoolOpeningConfig; invitationMail?:InvitationMailConfig;invitationCodeSecret?:string;reauthMaxAgeSeconds?:number;capture?:CaptureConfig;mapMatching?:Pick<MapMatchingConfig,'provider'|'minimumConfidence'>;mapMatcher?:MapMatcher;liveMatcher?:LiveMatcher;provisionAccount?:AccountProvisioner;accessCodeAttempts?:AttemptLimiter;accountCreations?:AttemptLimiter;trustProxy?:string }) {
   // Derrière le proxy public, l'adresse du client sert de clé aux freins des routes sans connexion (codes, création de compte).
   const app = Fastify({ logger: options.logger ?? false, logController: new LogController({ disableRequestLogging: true }), genReqId: () => randomUUID(), bodyLimit: 16_384, ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}) });
   const cursors = new Cursors(options.cursorSecret);
@@ -245,6 +246,7 @@ export function buildApp(options: { gpsOnlyQualificationSchoolIds?:readonly stri
   registerCourseEnrollments(app,options);
   registerCourseFacts(app,options);
   registerNotificationPreferences(app,options);
+  registerSchoolMetrics(app,{pool:options.pool,verifyToken:options.verifyToken,cursorSecret:options.cursorSecret,clock:options.metricsClock});
   // Qualification physique explicite par école, jamais de mode synthétique en composition réelle.
   // Désactivée ou hors liste : aucune connexion base, aucun effet sur les parcours leçon.
   registerMessaging(app, { pool: options.pool, verifyToken: options.verifyToken, ...(options.messaging ? { qualification: options.messaging } : {}) });
