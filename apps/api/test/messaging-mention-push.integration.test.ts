@@ -63,7 +63,7 @@ describe('notification de mention (#101)', () => {
     expect(out[0]!.token).toBe(token(id.alice));
     expect(out[0]!.payload).toEqual({ aps: { alert: { title: "Quelqu'un vous a mentionné" }, sound: 'default',
       'thread-id': `messaging:${id.schoolA}:${conversationId}` }, kind: 'MESSAGING', schoolId: id.schoolA,
-      conversationId, messageId: message.id, sequence: expect.any(Number), category: 'MESSAGE_MENTION' });
+      conversationId, messageId: message.id, sequence: expect.any(Number), category: 'MESSAGING_MENTION' });
     expect(out[0]!.payload.sequence).toBeGreaterThan(0);
     await processPushBatch(worker, collector(out));
     expect(out).toHaveLength(1);
