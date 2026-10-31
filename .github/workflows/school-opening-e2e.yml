@@ -24,7 +24,8 @@ permissions:
   contents: read
 concurrency:
   group: school-opening-e2e-${{ inputs.qualification_sha || github.ref }}
-  cancel-in-progress: false
+  # Seul un push ou une pull request dépassés sont annulés (jamais master, un lancement explicite ou une qualification).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' && github.ref != 'refs/heads/master' }}
 jobs:
   browser:
     name: Chromium · OIDC · BFF · API · PostgreSQL

@@ -5,15 +5,47 @@ on:
       qualification_sha:
         required: true
         type: string
+      # Faux par défaut : une qualification exige toutes les suites. Seul le point d'entrée push/PR le demande.
+      select_by_paths:
+        type: boolean
+        default: false
+      base_sha:
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
   group: qualification-checks-${{ inputs.qualification_sha || github.ref }}
   cancel-in-progress: false
 jobs:
+  # Écarte une suite seulement si tous les fichiers modifiés lui sont étrangers (scripts/qualification/changed_domains.py).
+  # Workflows, dépendances verrouillées, contrat OpenAPI et migrations lancent tout ; au moindre doute, tout tourne.
+  changes:
+    name: Suites concernées par les fichiers modifiés
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.select.outputs.server }}
+      web: ${{ steps.select.outputs.web }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.qualification_sha || github.sha }}
+          # 0 = tout l'historique (nécessaire à la différence) ; l'écriture « && 0 || 1 » donnerait toujours 1, 0 étant faux.
+          fetch-depth: ${{ !inputs.select_by_paths && 1 || 0 }}
+      - run: bash scripts/qualification/verify-checkout.sh
+        env:
+          QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
+      - id: select
+        run: python3 -B scripts/qualification/changed_domains.py
+        env:
+          SELECT_BY_PATHS: ${{ inputs.select_by_paths }}
+          BASE_SHA: ${{ inputs.base_sha }}
   server:
     name: Contrats, droits et PostgreSQL
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.changes.outputs.server == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -63,7 +95,8 @@ jobs:
           retention-days: 14
   web:
     name: Web et BFF
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: changes
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.changes.outputs.web == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:

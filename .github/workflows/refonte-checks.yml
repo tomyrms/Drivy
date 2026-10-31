@@ -22,13 +22,18 @@ permissions:
   contents: read
 concurrency:
   group: refonte-checks-entry-${{ github.ref }}-${{ inputs.final_campaign && 'final' || 'checks' }}
-  cancel-in-progress: false
+  # Une vérification dépassée par un nouveau push de la même branche ne sert plus à rien. Master, les lancements
+  # explicites et la campagne finale ne sont jamais annulés.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/master' }}
 jobs:
   checks:
     if: github.event_name != 'workflow_dispatch' || inputs.final_campaign != true
     uses: ./.github/workflows/qualification-checks.yml
     with:
       qualification_sha: ${{ github.sha }}
+      # Push et pull request : seulement les suites que touchent les fichiers modifiés. Un lancement manuel les exécute toutes.
+      select_by_paths: ${{ github.event_name != 'workflow_dispatch' }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.before }}
   final:
     if: github.event_name == 'workflow_dispatch' && inputs.final_campaign == true
     uses: ./.github/workflows/validation-finale.yml

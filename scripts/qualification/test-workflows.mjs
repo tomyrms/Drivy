@@ -72,7 +72,7 @@ test('finale transmet le SHA figé sans appeler le wrapper', () => {
     assert.equal(final.jobs[name].with.qualification_sha, '${{ needs.resolve.outputs.sha }}');
     assert.equal(final.jobs[name].needs, 'resolve');
   }
-  assert.deepEqual(Object.keys(workflows.get('qualification-checks.yml').jobs).sort(), ['documentation', 'server', 'web']);
+  assert.deepEqual(Object.keys(workflows.get('qualification-checks.yml').jobs).sort(), ['changes', 'documentation', 'server', 'web']);
   assert.deepEqual(Object.keys(workflows.get('qualification-checks.yml').on), ['workflow_call']);
 });
 
@@ -92,4 +92,40 @@ test('accès Messages physique explicite identique dans tests natifs et IPA', ()
     const job = Object.values(workflow.jobs)[0];
     assert.equal(job.env.DRIVY_MESSAGING_QUALIFICATION, "${{ inputs.messaging_qualification && '1' || '0' }}");
   }
+});
+
+test('la sélection par chemins ne dispense jamais une qualification', () => {
+  const wrapper = workflows.get('refonte-checks.yml');
+  const final = workflows.get('validation-finale.yml');
+  const checks = workflows.get('qualification-checks.yml');
+  // Seul le point d'entrée push/PR demande la sélection ; la finale ne la transmet pas : défaut faux, toutes les suites.
+  assert.equal(wrapper.jobs.checks.with.select_by_paths, "${{ github.event_name != 'workflow_dispatch' }}");
+  assert.equal('select_by_paths' in final.jobs.checks.with, false);
+  assert.equal(checks.on.workflow_call.inputs.select_by_paths.default, false);
+  assert.equal(checks.jobs.server.needs, 'changes');
+  assert.equal(checks.jobs.web.needs, 'changes');
+  assert.match(checks.jobs.server.if, /needs\.changes\.outputs\.server == 'true'/);
+  assert.match(checks.jobs.web.if, /needs\.changes\.outputs\.web == 'true'/);
+  // La vérification documentaire reste inconditionnelle.
+  assert.equal(checks.jobs.documentation.needs, undefined);
+});
+
+test('seuls les push et pull requests dépassés sont annulés, jamais master ni un lancement explicite ou une qualification', () => {
+  const cancelling = [['refonte-checks.yml', "github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/master'"],
+    ['ipa-essai.yml', "github.event_name == 'push' && github.ref != 'refs/heads/master'"],
+    ['school-opening-e2e.yml', "github.event_name == 'pull_request' || github.event_name == 'push' && github.ref != 'refs/heads/master'"]];
+  for (const [name, condition] of cancelling) {
+    assert.equal(workflows.get(name).concurrency['cancel-in-progress'], '${{ ' + condition + ' }}', name);
+  }
+  for (const name of ['refonte-ios.yml', 'qualification-checks.yml', 'validation-finale.yml']) {
+    assert.equal(workflows.get(name).concurrency['cancel-in-progress'], false, name);
+  }
+});
+
+test('un lancement iOS explicite ne dépend pas de la branche : ni file d’attente ni annulation', () => {
+  const ios = workflows.get('refonte-ios.yml');
+  assert.doesNotMatch(ios.concurrency.group, /github\.ref/);
+  assert.match(ios.concurrency.group, /inputs\.qualification_sha \|\| github\.run_id/);
+  const ipa = workflows.get('ipa-essai.yml');
+  assert.match(ipa.concurrency.group, /github\.run_id/);
 });
