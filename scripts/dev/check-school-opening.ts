@@ -33,6 +33,11 @@ const keycloakImage='quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab
 const artifactDirectory=fileURLToPath(new URL('../../artifacts/onboarding-web-synthetic/',import.meta.url));
 const containerName=`drivy-opening-e2e-${randomUUID()}`;
 const checks:string[]=[];let stage='initialisation de la recette';
+// Sans option : parcours de base. `--extended` joue les trois suites ; `--extended=code,recovery` rejoue une sélection.
+const allExtendedSuites=['formations','code','recovery'];
+const extendedFlag=process.argv.find(value=>value==='--extended'||value.startsWith('--extended='));
+const extendedSuites=new Set(!extendedFlag?[]:extendedFlag==='--extended'?allExtendedSuites:extendedFlag.slice('--extended='.length).split(','));
+if([...extendedSuites].some(value=>!allExtendedSuites.includes(value)))throw new Error('EXTENDED_SUITE_UNKNOWN');
 const inspectedMessages=new Set<string>();
 const messageSchema=z.object({ID:z.string().regex(/^[a-zA-Z0-9-]+$/),MessageID:z.string(),To:z.array(z.object({Address:z.string()}))});
 async function ownMail(email:string,matches:(message:z.infer<typeof messageSchema>)=>boolean=()=>true) {
@@ -540,14 +545,13 @@ async function main() {
       getAccessToken:accessTokenFor,assert,setStage:value=>{stage=value;},artifactDirectory});
     if(process.argv.includes('--audit-v2')) await verifyAuditV2({page,context:consumerContext,origin,keycloakOrigin,schoolId:school.id,
       operatorPassword,consumerPassword,assert,setStage:value=>{stage=value;}});
-    // Formations et tarifs après une première leçon réelle : harnais distinct, encore écrit pour
-    // l'ancienne présentation. Il reste disponible avec --extended et n'est pas déclaré vert par ce parcours.
-    if(process.argv.includes('--extended')) {
+    // Formations et tarifs après une première leçon réelle : harnais distinct, joué avec --extended.
+    if(extendedSuites.has('formations')) {
       await verifySchoolFormations({page,consumerContext,schoolId:school.id,origin,administration,artifactDirectory,assert,setStage:value=>{stage=value;}});
     } else {
       console.log('Recette étendue formations/tarifs non exécutée : harnais à réaligner sur le portail reconstruit.');
     }
-    if(process.argv.includes('--extended')) {
+    if(extendedSuites.has('code')) {
       await verifySchoolCodeEntry({browser,origin,apiOrigin,keycloakOrigin,schoolId:school.id,administration,getAccessToken:accessTokenFor,
         existingEmail:'school@example.invalid',existingPassword:consumerPassword,assert,setStage:value=>{stage=value;},artifactDirectory});
     } else {
@@ -585,12 +589,12 @@ async function main() {
     assert((await administration.query('SELECT modules FROM drivy.school WHERE id=$1',[school.id])).rows[0].modules.gpsEnabled===true,
       'Le réglage GPS est accepté et durable après confirmation explicite avec la preuve récente');
     await page.screenshot({path:resolve(artifactDirectory,'13-gps-enabled-synthetic.png'),fullPage:true});
-    if(process.argv.includes('--extended')) {
+    if(extendedSuites.has('recovery')) {
       await verifyAccountRecovery({browser,origin,apiOrigin,issuer,keycloakOrigin,realmName,adminPassword,clientId:'drivy-web-e2e',clientSecret,ownMail,mailLink,assert,setStage:value=>{stage=value;}});
     } else {
       console.log('Recette étendue récupération de compte non exécutée : harnais à réaligner sur le portail reconstruit.');
     }
-    await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),checks,
+    await writeFile(resolve(artifactDirectory,'result.json'),JSON.stringify({status:'PASSED',checkedAt:new Date().toISOString(),browser:browser.version(),extendedSuites:[...extendedSuites],checks,
       scope:'Chromium desktop et viewport mobile, Keycloak réel à inscription fermée, ouverture d’école, invitation et première leçon, connexion par formulaire, BFF, API et PostgreSQL isolés ; données synthétiques uniquement. Les suites étendues formations/tarifs, saisie par code et récupération de compte ne sont pas exécutées par ce parcours sans --extended. Aucun appareil, GPS, batterie ou lecteur d’écran physique qualifié.'},null,2));
     console.log(`${checks.length} contrôles de recette réussis : navigateur → OIDC → BFF → API → PostgreSQL.`);
   } finally {

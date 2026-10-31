@@ -5,7 +5,15 @@ on:
       qualification_sha:
         required: true
         type: string
+      extended_suites:
+        type: string
+        default: ''
   workflow_dispatch:
+    inputs:
+      extended_suites:
+        description: 'Suites étendues séparées par des virgules (formations, code, recovery) ; vide pour le parcours de base'
+        type: string
+        default: ''
   push:
     branches: [master, 'codex/**', 'claude/**']
     paths: ['apps/api/**', 'apps/web/**', 'scripts/dev/check-school-*.ts', 'infra/dev/**', 'infra/identity/**', 'infra/deploy/runtime-lock.json', '.github/workflows/school-opening-e2e.yml']
@@ -68,7 +76,9 @@ jobs:
       - run: node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium
       - run: npm run build --prefix apps/web
       - name: Parcours complet sur données synthétiques
-        run: npx tsx scripts/dev/check-school-opening.ts
+        env:
+          EXTENDED_SUITES: ${{ inputs.extended_suites }}
+        run: npx tsx scripts/dev/check-school-opening.ts ${EXTENDED_SUITES:+--extended=$EXTENDED_SUITES}
       - name: Vérifier les contrôles navigateur exécutés
         if: always()
         run: python3 scripts/qualification/evidence.py browser artifacts/onboarding-web-synthetic/result.json
