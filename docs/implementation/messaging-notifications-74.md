@@ -46,6 +46,18 @@ Elle est construite par `messagingPushPayload` (`apps/api/src/messaging-notifica
 La page « Préférences personnelles » du portail (`apps/web/client/portal/account/preferences-page.tsx`) affiche deux groupes dans la même section Notifications : « Cours collectifs » (quatre interrupteurs existants) et « Messages » (Messages privés, Messages du général, Mentions). Le modèle (`notification-preferences-model.ts`) et le magasin à intentions indépendantes par champ (`notification-preferences-store.ts`) traitent les sept champs comme un seul objet versionné : une modification concurrente d'un champ ne réactive pas un autre choix. Le relais web (`/app/bff/me/notification-preferences`) accepte les trois champs de messagerie facultatifs et refuse toute autre clé.
 La messagerie n'a pas de client web : ces choix s'appliquent aux alertes de l'app iPhone/iPad, pour les écoles où Messages est ouvert.
 
+## App iPhone et iPad
+
+- **Réglages** (`SchoolNotificationSettingsView`) : la section « Messages » affiche Messages privés, Messages du général et Mentions quand Messages est ouvert dans cette app et que l'API annonce les trois champs (`supportsMessaging`). Sinon aucun interrupteur de messagerie n'apparaît : pas de bouton pour une alerte inexistante. Les choix passent par le modèle existant (`SchoolNotificationSettingsModel`, intentions chiffrées sur l'appareil, un seul PUT à la fois, `If-Match`), sans second stockage. L'ancien journal et l'ancienne API restent lisibles : les champs de messagerie sont facultatifs en lecture comme en écriture.
+- **Toucher une alerte** : `SchoolPushCenter` lit `kind`, `schoolId` et `conversationId` de la charge `MESSAGING` (`MessagingNotificationTarget`) en plus de `seriesId` pour les cours. L'accueil (`SchoolHomeView`) applique `MessagingNotificationOpening.outcome` :
+  - école courante, hors trajet, Messages disponible : l'onglet Messages s'ouvre ;
+  - alerte d'une autre école : refus expliqué, rien n'est ouvert ;
+  - trajet GPS en cours : rien ne s'ouvre et la demande est oubliée (la consultation reste volontaire, la leçon continue) ;
+  - app pas encore prête (démarrage à froid, connexion) : la demande attend, 120 secondes au plus.
+- **Droits relus** : l'onglet Messages (`MessagingInboxView`) relit la liste des conversations auprès de l'école et n'ouvre que la conversation que l'école liste encore pour cette personne (pages suivantes comprises, 20 au plus). Le général, qui n'est listé qu'une fois ouvert, est ouvert par l'école elle-même et n'est retenu que si l'identifiant correspond. Sinon : « Cette conversation n'est plus accessible. » ; si la liste n'a pas pu être relue : « Impossible d'ouvrir la conversation pour le moment. »
+- **Aucun faux « lu »** : toucher une alerte n'envoie aucune position de lecture ; la lecture suit l'ouverture normale du fil.
+- Hors périmètre : suppression de l'alerte au premier plan et nettoyage des alertes lues restent ceux de #103.
+
 ## Limites connues
 
 - **Pas de regroupement anti-rafale côté serveur** : une alerte par message (une par message mentionnant, une par message privé ou du général activé). Seul `thread-id` regroupe l'affichage sur iOS, et les 15 minutes de validité bornent le rattrapage. Un regroupement (compteur par conversation, fenêtre glissante) demanderait un moteur d'agrégation dans la file ; il n'est pas fait.
