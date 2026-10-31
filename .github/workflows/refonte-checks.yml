@@ -21,10 +21,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refonte-checks-entry-${{ github.ref }}-${{ inputs.final_campaign && 'final' || 'checks' }}
-  # Une vérification dépassée par un nouveau push de la même branche ne sert plus à rien. Master, les lancements
-  # explicites et la campagne finale ne sont jamais annulés.
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/master' }}
+  # Un push ou une pull request dépassé par un plus récent sur la même référence ne sert plus à rien, master compris :
+  # le dernier commit de la rafale porte tout le contenu des précédents. Un lancement manuel a son propre groupe
+  # (jamais annulé par un push) et la campagne finale reste sérialisée sans annulation.
+  group: refonte-checks-entry-${{ github.ref }}-${{ inputs.final_campaign && 'final' || github.event_name == 'workflow_dispatch' && github.run_id || 'auto' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 jobs:
   checks:
     if: github.event_name != 'workflow_dispatch' || inputs.final_campaign != true

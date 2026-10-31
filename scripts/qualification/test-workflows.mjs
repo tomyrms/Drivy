@@ -110,12 +110,14 @@ test('la sélection par chemins ne dispense jamais une qualification', () => {
   assert.equal(checks.jobs.documentation.needs, undefined);
 });
 
-test('seuls les push et pull requests dépassés sont annulés, jamais master ni un lancement explicite ou une qualification', () => {
-  const cancelling = [['refonte-checks.yml', "github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/master'"],
-    ['ipa-essai.yml', "github.event_name == 'push' && github.ref != 'refs/heads/master'"],
-    ['school-opening-e2e.yml', "github.event_name == 'pull_request' || github.event_name == 'push' && github.ref != 'refs/heads/master'"]];
+test('seuls les push et pull requests dépassés sont annulés, jamais un lancement explicite ni une qualification', () => {
+  const cancelling = [['refonte-checks.yml', "github.event_name != 'workflow_dispatch'"],
+    ['ipa-essai.yml', "github.event_name == 'push'"],
+    ['school-opening-e2e.yml', "github.event_name == 'pull_request' || github.event_name == 'push'"]];
   for (const [name, condition] of cancelling) {
     assert.equal(workflows.get(name).concurrency['cancel-in-progress'], '${{ ' + condition + ' }}', name);
+    // Un lancement manuel ne partage jamais le groupe d'un push : sinon un push annulerait un lancement utile.
+    assert.match(workflows.get(name).concurrency.group, /github\.event_name == 'workflow_dispatch' && github\.run_id|github\.event_name == 'push' && 'push' \|\| github\.run_id/, name);
   }
   for (const name of ['refonte-ios.yml', 'qualification-checks.yml', 'validation-finale.yml']) {
     assert.equal(workflows.get(name).concurrency['cancel-in-progress'], false, name);

@@ -263,31 +263,6 @@ export -f xcodebuild xcrun python3 sleep
         self.assertIn('<ARCHS=arm64>', visual.stdout)
         self.assertNotIn('<-enableCodeCoverage>', visual.stdout)
 
-    def test_preboot_starts_the_same_iphone_in_the_background_and_never_fails_the_job(self):
-        directory = tempfile.TemporaryDirectory(prefix='drivy-preboot-')
-        self.addCleanup(directory.cleanup)
-        root = pathlib.Path(directory.name)
-        shutil.copytree(ROOT / 'scripts/ios', root / 'scripts/ios', ignore=shutil.ignore_patterns('__pycache__'))
-        shutil.copytree(ROOT / 'apps/ios/DrivyUITests', root / 'apps/ios/DrivyUITests')
-        harness = r'''
-set -euo pipefail
-xcrun() { printf 'xcrun'; printf ' <%s>' "$@"; printf '\n'; }
-python3() { if [[ "$*" == *'startswith("iPhone")'* ]]; then echo PHONE; else echo IPAD; fi; }
-export -f xcrun python3
-bash scripts/ios/preboot-simulator.sh
-'''
-        for overrides, expected in [({'DRIVY_IOS_UNIT_ONLY': '1'}, 'PHONE'), ({'DRIVY_IOS_UI_TEST_SUITE': 'LaunchTests'}, 'PHONE'),
-                                    ({'DRIVY_IOS_FULL_CAMPAIGN': '1'}, 'PHONE'), ({'DRIVY_IOS_VISUAL_ONLY': '1'}, None)]:
-            with self.subTest(overrides=overrides):
-                marker = root / 'artifacts/ios/preboot-iphone.txt'
-                marker.unlink(missing_ok=True)
-                result = subprocess.run([BASH, '-c', harness], cwd=root, env=environment(**overrides), text=True, capture_output=True, timeout=15)
-                self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-                if expected is None:
-                    self.assertFalse(marker.exists())
-                else:
-                    self.assertEqual(marker.read_text(encoding='utf-8').strip(), expected)
-
     def test_workflow_validates_before_setup_and_prevents_unit_ipa_or_visual_capture(self):
         workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
         self.assertLess(workflow.index('- name: Valider le mode et la sélection des tests'), workflow.index('- name: Installer XcodeGen'))
@@ -297,7 +272,7 @@ bash scripts/ios/preboot-simulator.sh
         self.assertIn("inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''", workflow)
         self.assertIn('if: inputs.visual_only == true', workflow)
 
-    def test_workflow_no_longer_queues_dispatches_builds_no_ipa_by_default_and_boots_before_compiling(self):
+    def test_workflow_no_longer_queues_dispatches_and_builds_no_ipa_by_default(self):
         workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
         group = re.search(r'^  group: (refonte-ios-.*)$', workflow, re.MULTILINE)
         self.assertIsNotNone(group)
@@ -307,10 +282,6 @@ bash scripts/ios/preboot-simulator.sh
         for name in ['full_campaign', 'build_ipa', 'ui_ipad']:
             self.assertRegex(workflow, name + r':\n        description: .*\n        type: boolean\n        default: false')
         self.assertEqual(workflow.count('if: inputs.build_ipa == true && '), 2)
-        self.assertLess(workflow.index('- name: Valider le mode et la sélection des tests'),
-                        workflow.index("- name: Démarrer l'iPhone de test pendant la compilation"))
-        self.assertLess(workflow.index("- name: Démarrer l'iPhone de test pendant la compilation"),
-                        workflow.index("- name: Compiler l'application et les cibles nécessaires"))
         # Une qualification est la campagne complète, sans que la finale ait à le dire.
         self.assertIn("DRIVY_IOS_FULL_CAMPAIGN: ${{ (inputs.full_campaign || inputs.qualification_sha != '') && '1' || '0' }}", workflow)
 

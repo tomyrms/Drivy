@@ -143,10 +143,6 @@ jobs:
           elif [[ "$full_campaign" == 1 ]]; then
             echo "Campagne complète : suite métier et UI sur iPhone, puis iPad."
           fi
-      - name: Démarrer l'iPhone de test pendant la compilation
-        if: inputs.visual_only != true
-        shell: bash
-        run: bash scripts/ios/preboot-simulator.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         if: steps.selection.outputs.relay_required == '1'
         with:
