@@ -109,10 +109,13 @@ import XCTest
         let selectedLabel = element("agenda-selected-date", in: app).label
         let scroll = app.scrollViews.containing(.button, identifier: lessonID).firstMatch
         XCTAssertTrue(scroll.exists, app.debugDescription)
-        let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        // Sur iPhone, 20 % de la hauteur tombe dans le champ de recherche (y 169 à 213 sur 874) : le geste partait du
+        // champ et ne tirait pas la page. Il part donc juste sous le champ, quelle que soit la mise en page.
+        let field = app.searchFields.firstMatch
+        let startY = field.exists ? field.frame.maxY + 8 - scroll.frame.minY : scroll.frame.height * 0.2
+        let start = scroll.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: scroll.frame.width * 0.5, dy: startY))
         let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-        // Geste lent avec maintien : le tirer-pour-actualiser doit dépasser son seuil et s'y tenir ; le geste rapide
-        // précédent ne le déclenchait pas sur iPhone (aucun avis de panne après 15 s).
+        // Geste lent avec maintien : le tirer-pour-actualiser doit dépasser son seuil et s'y tenir.
         start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
         let failure = element("agenda-courses-error", in: app)
         XCTAssertTrue(failure.waitForExistence(timeout: 15), app.debugDescription)
