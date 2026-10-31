@@ -583,7 +583,9 @@ Un refus de droit ne contient ni montant, ni compte, ni identifiant de ressource
 
 ## 8. Décisions à relire
 
-Ce que le code ne permet pas de trancher. Chaque ligne a un choix par défaut, retenu pour avancer ; aucune n'attend de réponse. Si l'un des choix ne convient pas, il se change avant T02.
+Ce que le code ne permet pas de trancher. Chaque ligne a un choix par défaut. **Relues et acceptées le 31 octobre 2026** (coordination du projet), avec la condition de D1 ci-dessous. Le déploiement de ce qui en découle reste soumis à l'accord du porteur.
+
+**Condition attachée à D1 (31 octobre 2026).** Une migration additive de fonctions de lecture et d'index est autorisée pour #375, sans table ni donnée. Toute fonction qui contourne la RLS (`SECURITY DEFINER`) doit : revérifier elle-même l'identité, l'adhésion à l'école, le rôle et le grant propre à la mesure ; fixer `search_path` ; n'être exécutable que par le rôle applicatif (`REVOKE ... FROM PUBLIC`, `GRANT ... TO drivy_app`) ; être couverte par des tests qui prouvent qu'elle refuse une autre école, un autre moniteur et un élève. Pour D3, le libellé reste « valeur convenue », jamais « revenu » ni « paie ».
 
 | # | Question | Choix par défaut | Raison |
 | --- | --- | --- | --- |
