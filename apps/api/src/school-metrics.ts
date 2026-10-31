@@ -380,7 +380,7 @@ async function loadLines(db:PoolClient,c:Ctx,selection:Selection,at:Instants,opt
     (SELECT title FROM drivy.course_type t WHERE t.id=o.type_id) AS type_label,drivy.course_staff_name(${school},instructor_membership_id) AS instructor_label
     ${grouped(pageQ)}${keyset(pageQ,'starts_at','occurrence_id')} ORDER BY starts_at,occurrence_id LIMIT ${pageQ.bind(options.limit+1,'::int')}`,pageQ.params)).rows;
   const lines=rows.slice(0,options.limit).map((r):Line=>({kind:'COURSE_OCCURRENCE',id:String(r.occurrence_id),eventAt:(r.starts_at as Date).toISOString(),eventLocal:String(r.event_local),cursorAt:String(r.cursor_at),
-   status:(r.marked as number)>0?'MARKED':'TO_MARK',instructorMembershipId:r.instructor_membership_id as string,instructorLabel:(r.instructor_label as string|null)??null,learnerLabel:null,categoryCode:null,productKey:null,
+   status:(r.starts_at as Date).getTime()>Date.parse(c.nowIso)?'UPCOMING':(r.missing as number)>0?'TO_MARK':(r.marked as number)>0?'MARKED':'NO_ATTENDEE',instructorMembershipId:r.instructor_membership_id as string,instructorLabel:(r.instructor_label as string|null)??null,learnerLabel:null,categoryCode:null,productKey:null,
    quantity:null,durationSeconds:null,amountCents:null,courseTypeLabel:(r.type_label as string|null)??null,markedCount:r.marked as number,missingMarks:r.missing as number,enrollmentId:null,seriesId:String(r.series_id),voidedAt:null}));
   return {total:{lineCount:t.n,amountCents:null,durationSeconds:null},lines,more:rows.length>options.limit};
  }
@@ -496,12 +496,16 @@ export function registerSchoolMetrics(app:FastifyInstance,options:{pool:Pool;ver
      }
     }
    }
-   const zero=(id:string):Measure=>M.measure(before?null:0,unitOfId(id),before?M.unavailable('BEFORE_DATA_START'):M.complete());
+   const zero=(id:string):Measure=>M.measure(0,unitOfId(id),M.complete());
    const body={...header(c),domain,period:periodBlock(query.from,query.toExclusive,at),scope:scopeBlock(c),granularity:query.granularity,
     buckets:list.map(bucket=>({from:bucket.from,toExclusive:bucket.toExclusive,partial:bucket.partial,
      measures:Object.fromEntries(ids.map(id=>{
+      // Avant le début des données de l'école, un intervalle est inconnu (K10), jamais un zéro.
+      const availability=availabilityOf(c,bucket.from,bucket.toExclusive);
+      if(availability==='BEFORE')return [id,{value:null,coverage:M.unavailable('BEFORE_DATA_START')}];
       const m=perBucket.get(bucket.key)?.[id]??(domain==='activity'&&id.startsWith('L')?lessonMeasures([])[id]:undefined)??zero(id);
-      return [id,{value:m.value,...(m.coverage.status==='COMPLETE'?{}:{coverage:m.coverage})}];
+      const coverage=availability==='STRADDLE'&&m.coverage.status==='COMPLETE'&&m.value!==null?M.partial([...m.coverage.reasons,{code:'STARTS_BEFORE_DATA_START'}]):m.coverage;
+      return [id,{value:m.value,...(coverage.status==='COMPLETE'?{}:{coverage})}];
      }))}))};
    return M.seriesResponse.parse(body);
   });
