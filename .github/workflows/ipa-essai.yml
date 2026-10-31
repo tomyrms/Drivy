@@ -26,8 +26,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ipa-essai-${{ inputs.qualification_sha || github.ref }}
-  cancel-in-progress: false
+  # Un push dépassé par un nouveau push de la même branche est annulé (hors master). Un lancement manuel, ou celui
+  # d'une qualification, n'attend personne et n'est jamais annulé : le groupe unique d'avant les faisait attendre
+  # jusqu'à 10 minutes derrière un push.
+  group: ipa-essai-${{ inputs.qualification_sha || github.ref }}-${{ github.event_name == 'push' && 'push' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref != 'refs/heads/master' }}
 jobs:
   ipa:
     name: Compiler l'IPA d'essai
