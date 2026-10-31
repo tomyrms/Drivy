@@ -19,7 +19,7 @@ L’inventaire initial des 155 issues ouvertes et les exclusions restent dans `i
 
 ## Bilan des 25 issues implémentées
 
-« Implémenté » signifie présent dans la branche d’essai ; les issues restent ouvertes jusqu’à validation, tests pertinents puis fusion.
+« Implémenté » signifie présent dans la branche d’essai. Mise à jour du 29 octobre, après livraison : le porteur a explicitement demandé de fermer les issues réalisées ; les 25 ci-dessous ont été fermées. Cette autorisation de clôture ne vaut ni retour d'essai ni validation des tests ni autorisation de fusion. Les PR #337 et #338 restent en brouillon et master est inchangé.
 
 | Lot | Issues | Résultat |
 | --- | --- | --- |

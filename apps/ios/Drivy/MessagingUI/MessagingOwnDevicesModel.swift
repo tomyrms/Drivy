@@ -17,6 +17,7 @@ final class MessagingOwnDevicesModel {
 
     let scope: MessagingScope
     private let keys: any MessagingKeyManagement
+    private let aliasStore: any MessagingDeviceAliases
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
     private var active = false
     private var generation = 0
@@ -25,13 +26,53 @@ final class MessagingOwnDevicesModel {
     private(set) var verifiedDeviceID: String?
     private(set) var failure: Failure?
     private(set) var working = false
+    private(set) var aliases: [String: String] = [:]
+    private(set) var aliasError: String?
     var compared = false
 
     init(scope: MessagingScope, keys: any MessagingKeyManagement,
+         aliasStore: any MessagingDeviceAliases = MessagingKeychainDeviceAliases(),
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
         self.scope = scope
         self.keys = keys
+        self.aliasStore = aliasStore
         self.currentScope = currentScope
+    }
+
+    func alias(_ device: MessagingOwnDevice) -> String? { aliases[MessagingDeviceAliasRules.identity(device)] }
+    func displayName(_ device: MessagingOwnDevice) -> String { alias(device) ?? "Appareil" }
+    func reference(_ device: MessagingOwnDevice) -> String {
+        let devices = (snapshot?.devices ?? []) + (snapshot.map { [$0.localDevice] } ?? [])
+        var length = min(6, device.id.count)
+        while length < device.id.count,
+              devices.contains(where: { $0.id != device.id && $0.id.suffix(length) == device.id.suffix(length) }) { length += 1 }
+        return String(device.id.suffix(length))
+    }
+    func canRename(_ device: MessagingOwnDevice) -> Bool {
+        let devices = (snapshot?.devices ?? []) + (snapshot.map { [$0.localDevice] } ?? [])
+        return active && currentScope() == scope && !working && !device.fingerprint.isEmpty
+            && devices.contains { $0.id == device.id && $0.fingerprint == device.fingerprint }
+    }
+    func saveAlias(_ text: String, device: MessagingOwnDevice) async -> Bool {
+        guard canRename(device) else { return false }
+        let name = MessagingDeviceAliasRules.normalized(text)
+        guard MessagingDeviceAliasRules.valid(name) else {
+            aliasError = "Choisis un nom de 64 caractères au maximum, sur une seule ligne."; return false
+        }
+        generation += 1
+        let token = generation
+        working = true; aliasError = nil
+        defer { if generation == token { working = false } }
+        do {
+            let saved = try await aliasStore.set(name, device: device, scope: scope)
+            guard accepts(token) else { return false }
+            aliases = saved
+            return true
+        } catch {
+            guard accepts(token) else { return false }
+            aliasError = "Le nom local n’a pas pu être enregistré. Réessaie."
+            return false
+        }
     }
 
     var canConfirm: Bool {
@@ -61,9 +102,19 @@ final class MessagingOwnDevicesModel {
             selected = nil
             compared = false
             verifiedDeviceID = nil
+            do {
+                let names = try await aliasStore.load(scope: scope)
+                guard accepts(token) else { return }
+                aliases = names; aliasError = nil
+            } catch {
+                guard accepts(token) else { return }
+                aliases = [:]
+                aliasError = "Les noms locaux ne sont pas disponibles. Les identifiants et empreintes restent consultables."
+            }
         } catch {
             guard accepts(token) else { return }
             snapshot = nil
+            aliases = [:]
             failure = error is CancellationError ? nil : .loadFailed
         }
     }
@@ -114,6 +165,7 @@ final class MessagingOwnDevicesModel {
         active = false
         cancelComparison()
         snapshot = nil
+        aliases = [:]; aliasError = nil
     }
 
     private func accepts(_ token: Int) -> Bool {

@@ -109,9 +109,17 @@ import XCTest
         let selectedLabel = element("agenda-selected-date", in: app).label
         let scroll = app.scrollViews.containing(.button, identifier: lessonID).firstMatch
         XCTAssertTrue(scroll.exists, app.debugDescription)
-        let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        // Sur iPhone, la barre de navigation (titre large et champ de recherche) couvre y 62 à 228 sur 874 : un geste
+        // parti du champ, ou 8 pt sous lui (y 221), reste dans la barre et ne tire jamais la page. Il part donc sous la
+        // barre elle-même, quelle que soit la mise en page.
+        let field = app.searchFields.firstMatch
+        let bar = app.navigationBars.firstMatch
+        let barBottom = max(field.exists ? field.frame.maxY : 0, bar.exists ? bar.frame.maxY : 0)
+        let startY = barBottom > 0 ? barBottom + 10 - scroll.frame.minY : scroll.frame.height * 0.2
+        let start = scroll.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: scroll.frame.width * 0.5, dy: startY))
         let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-        start.press(forDuration: 0.05, thenDragTo: end)
+        // Geste lent avec maintien : le tirer-pour-actualiser doit dépasser son seuil et s'y tenir.
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
         let failure = element("agenda-courses-error", in: app)
         XCTAssertTrue(failure.waitForExistence(timeout: 15), app.debugDescription)
         let retainedRead = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dernière lecture réussie")).firstMatch
@@ -137,7 +145,11 @@ import XCTest
             XCTAssertTrue(wasInterrupted, app.debugDescription)
             XCTAssertTrue(networkFailure.label.hasSuffix(retainedDate), app.debugDescription)
             XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
-            XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
+            // Avec la bannière d'erreur, la seconde séance (14:00) passe sous la barre d'onglets et la liste n'expose pas ce qu'elle
+            // n'affiche pas : un compte des boutons dépend de la hauteur d'écran (1 sur iPhone, run 41229249440). La conservation
+            // se lit ici sur la première séance et sur la date de dernière lecture réussie (ci-dessus) ; le compte des deux séances
+            // est contrôlé plus bas, bannière disparue, quand elles tiennent à l'écran.
+            XCTAssertTrue(course(at: "09:00", in: app).exists, app.debugDescription)
             XCTAssertTrue(app.buttons[lessonID].exists, app.debugDescription)
             reveal(retry, in: app)
             retry.tap()
@@ -145,7 +157,7 @@ import XCTest
         XCTAssertTrue(failure.waitForNonExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(loading.waitForNonExistence(timeout: 15), app.debugDescription)
         XCTAssertFalse(failure.exists, app.debugDescription)
-        XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2)
+        XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2, app.debugDescription)
         XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
     }
 

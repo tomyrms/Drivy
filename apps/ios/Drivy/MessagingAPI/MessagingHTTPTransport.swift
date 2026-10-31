@@ -42,7 +42,8 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         struct Item: Decodable {
             let id: UUID; let schoolId: UUID; let kind: String; let title: String
             let lastSequence: Int; let lastReadSequence: Int; let readStateVersion: Int; let mutedUntil: String?
-            let peerPersonId: UUID?; let unreadCount: Int
+            // Absent ou nul : état de lecture inconnu, montré « à vérifier », pas zéro ni une liste refusée.
+            let peerPersonId: UUID?; let unreadCount: Int?
         }
         let items: [Item]
         let nextCursor: UUID?

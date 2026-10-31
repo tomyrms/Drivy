@@ -72,6 +72,11 @@ struct SchoolEntryView: View {
                                 .buttonStyle(DrivyPrimaryButtonStyle())
                                 .accessibilityIdentifier("school-open-portal")
                             }
+                            if destination == .management, messagingEntry != nil {
+                                SchoolMessagingEntryButton()
+                                    .labelStyle(.titleAndIcon)
+                                    .buttonStyle(DrivySecondaryButtonStyle())
+                            }
                             Button("Actualiser") { Task { await workspace.refreshEntry() } }
                                 .buttonStyle(DrivySecondaryButtonStyle())
                                 .disabled(isWorking)
@@ -83,6 +88,10 @@ struct SchoolEntryView: View {
                     } else if opensPortal && portalURL == nil {
                         SchoolErrorNotice(message: "Le portail de l’école n’est pas configuré.")
                     }
+                    if destination == .management && messagingEntry == nil {
+                        SchoolErrorNotice(message: "La messagerie n’est pas disponible dans ce contexte.")
+                            .accessibilityIdentifier("school-messages-unavailable")
+                    }
                     if isWorking && destination != .loading { ProgressView("Vérification de l’école…") }
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
@@ -92,9 +101,6 @@ struct SchoolEntryView: View {
             .navigationTitle(workspace.school?.name ?? workspace.membership?.schoolName ?? "Drivy")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if destination == .management, messagingEntry != nil {
-                    ToolbarItem(placement: .primaryAction) { SchoolMessagingEntryButton() }
-                }
                 DrivyAccountToolbarItem(openAccount: openAccount)
                 if let chooseSchool {
                     DrivySchoolToolbarItem(schoolName: workspace.membership?.schoolName, chooseSchool: chooseSchool)

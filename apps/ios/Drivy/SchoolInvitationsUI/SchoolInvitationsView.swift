@@ -6,11 +6,18 @@ struct SchoolInvitationsView: View {
     @Bindable var model: SchoolInvitationWorkspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showsCreation = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var query = ""
     @State private var statusFilter: SchoolInvitationListFilter = .all
     @State private var now = Date()
+    @State private var visibleDetailID: UUID?
+
+    private var feedbackPlacement: SchoolInvitationFeedbackPlacement {
+        .init(visibleDetailID: visibleDetailID,
+            listIsVisible: horizontalSizeClass != .compact && columnVisibility != .detailOnly)
+    }
 
     private var isFiltering: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || statusFilter != .all }
     private var visibleInvitations: [SchoolInvitation] { model.matchingInvitations(query: query, filter: statusFilter, now: now) }
@@ -39,19 +46,8 @@ struct SchoolInvitationsView: View {
                     }
                     .drivyFormRows()
                 }
-                if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
-                if model.pending == nil, model.codeRecovery != nil, !showsCreation {
-                    Section { InvitationCodeRecovery(model: model) }
-                        .drivyFormRows()
-                }
-                if let success = model.successMessage {
-                    Section { DrivyFormMessage(text: success) }
-                        .drivyFormRows()
-                }
-                if let error = model.errorMessage {
-                    Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
-                        .drivyFormRows()
-                }
+                InvitationFeedbackView(model: model, placement: feedbackPlacement, surface: .list,
+                    hidesCodeRecovery: showsCreation)
                 if !model.hasLoaded && model.invitations.isEmpty && model.errorMessage == nil {
                     Section { DrivySkeletonRows(count: 4, leading: .avatar).drivySkeleton("Chargement des invitations…") }
                         .drivyFormRows()
@@ -119,8 +115,10 @@ struct SchoolInvitationsView: View {
                 max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if let invitation = model.selectedInvitation {
-                InvitationDetailView(model: model, invitation: invitation, now: now)
+                InvitationDetailView(model: model, invitation: invitation, now: now, feedbackPlacement: feedbackPlacement)
                     .id(invitation.id)
+                    .onAppear { visibleDetailID = invitation.id }
+                    .onDisappear { if visibleDetailID == invitation.id { visibleDetailID = nil } }
             } else {
                 ContentUnavailableView("Choisis une invitation", systemImage: "envelope.open")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -153,6 +151,50 @@ struct SchoolInvitationsView: View {
                     }
             }
             .tint(DrivyTheme.accent)
+        }
+    }
+}
+
+/// Présentation unique des avis ; la provenance reste distincte de la sélection courante.
+private struct InvitationFeedbackView: View {
+    let model: SchoolInvitationWorkspace
+    let placement: SchoolInvitationFeedbackPlacement
+    let surface: SchoolInvitationFeedbackPlacement.Surface
+    var hidesCodeRecovery = false
+
+    var body: some View {
+        Group {
+            if let error = model.readErrorMessage, placement.reading == surface {
+                block("invitations-feedback-reading") {
+                    SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
+                }
+            }
+            if let error = model.operationErrorMessage, placement.operation(for: model.operationInvitationID) == surface {
+                block("invitations-feedback-operation") { SchoolErrorNotice(message: error) }
+            }
+            if let pending = model.pending, placement.operation(for: pending.resourceID) == surface {
+                block("invitations-feedback-pending") { InvitationPendingNotice(model: model, pending: pending) }
+            }
+            if let success = model.successMessage, placement.operation(for: model.successInvitationID) == surface {
+                block("invitations-feedback-success") { DrivyFormMessage(text: success) }
+            }
+            if model.pending == nil, let recovery = model.codeRecovery, !hidesCodeRecovery,
+               placement.operation(for: recovery.invitationID) == surface {
+                block("invitations-feedback-code-recovery") { InvitationCodeRecovery(model: model) }
+            }
+        }
+    }
+
+    @ViewBuilder private func block<Content: View>(_ identifier: String, @ViewBuilder content: () -> Content) -> some View {
+        if surface == .list {
+            Section { content() }
+                .drivyFormRows()
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(identifier)
+        } else {
+            DrivyPanel { content() }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(identifier)
         }
     }
 }
@@ -256,6 +298,7 @@ private struct InvitationDetailView: View {
     @Bindable var model: SchoolInvitationWorkspace
     let invitation: SchoolInvitation
     let now: Date
+    let feedbackPlacement: SchoolInvitationFeedbackPlacement
     @State private var confirmsResend = false
     @State private var showsRevocation = false
 
@@ -286,11 +329,7 @@ private struct InvitationDetailView: View {
                     DrivyContactRow(title: "Référence complète", value: invitation.id.uuidString, symbol: "number")
                         .textSelection(.enabled)
                 }
-                if let error = model.errorMessage { SchoolErrorNotice(message: error) }
-                if let pending = model.pending { DrivyPanel { InvitationPendingNotice(model: model, pending: pending) } }
-                if let success = model.successMessage {
-                    DrivyInlineMessage(text: success)
-                }
+                InvitationFeedbackView(model: model, placement: feedbackPlacement, surface: .detail(invitation.id))
                 if invitation.status.canBeManaged {
                     VStack(spacing: DrivySpacing.s) {
                         Button { confirmsResend = true } label: {

@@ -29,13 +29,13 @@ struct MessagingMembersView: View {
     private var isAdmin: Bool { workspace.members.first { $0.id == workspace.scope.accountID }?.isGroupAdmin ?? false }
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private func matches(_ member: MessagingMember) -> Bool {
-        trimmedQuery.isEmpty || member.displayName.range(of: trimmedQuery, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        trimmedQuery.isEmpty || workspace.profileDisplayName(member.id, fallback: member.displayName).range(of: trimmedQuery, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
     private var shownMembers: [MessagingMember] { workspace.members.filter(matches) }
     private var shownRemoved: [MessagingMember] { isAdmin ? workspace.removedMembers.filter(matches) : [] }
     /// Repères des homonymes, la fin de l’identifiant : un appui agit toujours sur la bonne personne.
     private var references: [UUID: String] {
-        HomonymReference.references((workspace.members + workspace.removedMembers).map { ($0.id, $0.displayName) })
+        HomonymReference.references((workspace.members + workspace.removedMembers).map { ($0.id, workspace.profileDisplayName($0.id, fallback: $0.displayName)) })
     }
     /// La liste est lue en entier : le total est exact.
     private var countLabel: String {
@@ -60,9 +60,12 @@ struct MessagingMembersView: View {
                 ForEach(shownMembers) { member in
                     Button { profile = member } label: {
                         HStack(spacing: 12) {
-                            DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
+                            DrivyAvatar(name: workspace.profileDisplayName(member.id, fallback: member.displayName), size: 40, photo: workspace.photo(for: member.id))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(member.displayName).foregroundStyle(DrivyTheme.text)
+                                Text(workspace.profileDisplayName(member.id, fallback: member.displayName)).foregroundStyle(DrivyTheme.text)
+                                if workspace.hasPendingProfile(for: member.id) {
+                                    DrivyStatusBadge(title: "Modification en attente", tone: .warning)
+                                }
                                 if let reference = homonyms[member.id] {
                                     Text("Réf. \(reference)").font(.caption).foregroundStyle(DrivyTheme.muted)
                                 }
@@ -77,7 +80,8 @@ struct MessagingMembersView: View {
                         }
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel([member.displayName, homonyms[member.id].map { "Réf. \($0)" },
+                    .accessibilityLabel([workspace.profileDisplayName(member.id, fallback: member.displayName), homonyms[member.id].map { "Réf. \($0)" },
+                                         workspace.hasPendingProfile(for: member.id) ? "Modification en attente" : nil,
                                          member.isGroupAdmin ? "administrateur du groupe" : nil].compactMap { $0 }.joined(separator: ", "))
                     .accessibilityHint("Ouvre le profil")
                     .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
@@ -106,16 +110,16 @@ struct MessagingMembersView: View {
                 Section("Retirés") {
                     ForEach(shownRemoved) { member in
                         HStack(spacing: 12) {
-                            DrivyAvatar(name: member.displayName, size: 40, photo: workspace.photos[member.id])
-                            Text(member.displayName).foregroundStyle(DrivyTheme.muted)
+                            DrivyAvatar(name: workspace.profileDisplayName(member.id, fallback: member.displayName), size: 40, photo: workspace.photo(for: member.id))
+                            Text(workspace.profileDisplayName(member.id, fallback: member.displayName)).foregroundStyle(DrivyTheme.muted)
                             Spacer()
                             Button("Réintégrer") { pending = .reinstate(member) }
                                 .buttonStyle(.borderless)
-                                .accessibilityLabel("Réintégrer \(member.displayName)")
+                                .accessibilityLabel("Réintégrer \(workspace.profileDisplayName(member.id, fallback: member.displayName))")
                                 .accessibilityIdentifier("messaging.members.reinstate")
                         }
                         .accessibilityElement(children: .contain)
-                        .accessibilityLabel("\(member.displayName), retiré du général")
+                        .accessibilityLabel("\(workspace.profileDisplayName(member.id, fallback: member.displayName)), retiré du général")
                         .task { if member.hasPhoto { await workspace.loadPhoto(member.id) } }
                     }
                 }
@@ -127,7 +131,7 @@ struct MessagingMembersView: View {
         .task { await workspace.loadMembers() }
         .refreshable { await workspace.loadMembers() }
         .sheet(item: $profile) { member in
-            MessagingMemberProfileView(member: member, photo: workspace.photos[member.id])
+            MessagingMemberProfileView(workspace: workspace, member: member)
         }
         .confirmationDialog(pending?.title ?? "", isPresented: Binding(get: { pending != nil },
                                                                        set: { if !$0 { pending = nil } }),
@@ -135,12 +139,12 @@ struct MessagingMembersView: View {
                             presenting: pending) { action in
             switch action {
             case .remove(let member):
-                Button("Retirer \(member.displayName)", role: .destructive) {
+                Button("Retirer \(workspace.profileDisplayName(member.id, fallback: member.displayName))", role: .destructive) {
                     Task { await workspace.removeMember(member.id) }
                 }
                 .accessibilityIdentifier("messaging.members.confirmRemove")
             case .reinstate(let member):
-                Button("Réintégrer \(member.displayName)") {
+                Button("Réintégrer \(workspace.profileDisplayName(member.id, fallback: member.displayName))") {
                     Task { await workspace.reinstateMember(member.id) }
                 }
                 .accessibilityIdentifier("messaging.members.confirmReinstate")
@@ -151,15 +155,18 @@ struct MessagingMembersView: View {
 
 /// Profil visible depuis le général : uniquement le nom et la photo (#64, décision 2).
 struct MessagingMemberProfileView: View {
+    let workspace: MessagingWorkspace
     let member: MessagingMember
-    let photo: Data?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                DrivyAvatar(name: member.displayName, size: 120, photo: photo)
-                Text(member.displayName).font(.title2.bold()).multilineTextAlignment(.center)
+                DrivyAvatar(name: workspace.profileDisplayName(member.id, fallback: member.displayName), size: 120, photo: workspace.photo(for: member.id))
+                Text(workspace.profileDisplayName(member.id, fallback: member.displayName)).font(.title2.bold()).multilineTextAlignment(.center)
+                if workspace.hasPendingProfile(for: member.id) {
+                    DrivyStatusBadge(title: "Modification en attente", tone: .warning)
+                }
                 if member.isGroupAdmin { Text("Administrateur du groupe").foregroundStyle(DrivyTheme.muted) }
                 Spacer()
             }
@@ -340,7 +347,7 @@ struct MessagingPollVotersSheet: View {
                     }
                     ForEach(option.voterIDs, id: \.self) { person in
                         HStack {
-                            DrivyAvatar(name: workspace.displayName(person), size: 32, photo: workspace.photos[person])
+                            DrivyAvatar(name: workspace.displayName(person), size: 32, photo: workspace.photo(for: person))
                             Text(workspace.displayName(person))
                         }
                         .accessibilityElement(children: .combine)
@@ -519,7 +526,7 @@ struct MessagingSearchView: View {
                     ForEach(isSearching ? [] : results) { entry in
                         Button { onSelect(entry.messageID); dismiss() } label: {
                             HStack(alignment: .top, spacing: DrivySpacing.s) {
-                                DrivyAvatar(name: workspace.displayName(entry.senderID), size: 32, photo: workspace.photos[entry.senderID])
+                                DrivyAvatar(name: workspace.displayName(entry.senderID), size: 32, photo: workspace.photo(for: entry.senderID))
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack {
                                         Text(workspace.displayName(entry.senderID)).font(.subheadline.weight(.semibold))

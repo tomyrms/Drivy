@@ -29,7 +29,8 @@ struct DrivyApp: App {
             _cover = State(initialValue: AppCoverPresenter(lock: appLock))
             let transport = SchoolURLSessionTransport()
             _workspace = State(initialValue: SchoolWorkspace(api: DrivyAPIClient(
-                baseURL: configuration.apiBaseURL, tokenSource: identity, transport: transport)))
+                baseURL: configuration.apiBaseURL, tokenSource: identity, transport: transport),
+                accountIntentBaseURL: configuration.apiBaseURL))
             _clients = State(initialValue: SchoolHomeClients(
                 configuration: configuration, tokenSource: identity, transport: transport))
             return
@@ -45,7 +46,8 @@ struct DrivyApp: App {
         // One transport (one URLSession) for the account reads and the shell's clients.
         let transport = SchoolURLSessionTransport()
         _workspace = State(initialValue: configuration.map {
-            SchoolWorkspace(api: DrivyAPIClient(baseURL: $0.apiBaseURL, tokenSource: identity, transport: transport))
+            SchoolWorkspace(api: DrivyAPIClient(baseURL: $0.apiBaseURL, tokenSource: identity, transport: transport),
+                accountIntentBaseURL: $0.apiBaseURL)
         })
         _clients = State(initialValue: configuration.map {
             SchoolHomeClients(configuration: $0, tokenSource: identity, transport: transport)

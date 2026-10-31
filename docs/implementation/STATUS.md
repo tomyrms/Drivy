@@ -1,5 +1,50 @@
 # État de la réalisation
 
+<!-- reprise-372-20261030 -->
+## 30 octobre 2026 — reprise #372 : pile iOS à jour de master, IPA 447 retenue, plan web prêt
+
+Master `f0aa7dce17372ece43e7626346db21ae79221230` contient #347. Chaîne iOS vérifiée linéaire (#337 ⊂ #338 ⊂ #339) ; `master` intégré par fusions additives sans force-push : `74436ffd` (#337), `35ed4546` (#338), `0f8e33c7` (#339). Seul conflit : ce fichier, deux historiques conservés, contrôle automatique des lignes. Master avait remplacé un octet invalide de la ligne « alerte de mention » par un caractère valide : édition acceptée.
+
+**IPA candidate : Drivy 0.7.0 (447), non signée**, [artefact](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882) valable jusqu'au 12 novembre 2026, run 40959499844 sur `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`, SHA-256 `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`. Réutilisée sans recompilation : aucune différence entre `633f20d3` et `0f8e33c7` sur `apps/ios/Drivy`, `project.yml`, `Package.resolved`, `build-ipa.sh`, `messaging-qualification.sh`, `ipa-essai.yml` ; seuls deux fichiers de `DrivyTests` diffèrent. Essai du porteur attendu : `NOT_EXECUTED`. Fusions #337 → #338 → #339 et tests iOS en attente de ce retour.
+
+**Web : candidat `f0aa7dce`**, servi `4af4b0e6` (lu publiquement). Delta de 10 fichiers sous `apps/web/client`, trois de test compris ; aucun changement de BFF, dépendances, API, contrat, migration ni infra. Typage et 16 tests des fichiers modifiés réussis ; build Node 24.22.1, 105 fichiers, identité de build contrôlée. Plan `deploy-web-311.py` exécuté en lecture seule : `deployment-plan`, frontend seul, sans migration, cinq services sains. **Aucune écriture sur le serveur** ; `--execute` attend l'accord du porteur. Depuis Windows, lancer ce script en PowerShell : Git Bash réécrit `/opt/...`.
+
+**Suites `--extended` : non exécutées**, après l'essai web. Sélecteurs recoupés au portail sans exécution : récupération de compte 6/6 présents ; saisie par code 15/16, le seizième étant un gabarit dynamique bien présent dans `.entry-facts` ; formations et tarifs à réécrire en partie (onglets au lieu de la navigation par liens, `.cat-competency-*`, déplacement par menu, messages de tarif et de reprise changés). Ce recoupement ne vaut pas résultat de test. La note précédente surestimait donc l'écart des deux premières.
+
+### 30 octobre 2026, 18:05 Europe/Zurich — web `f0aa7dce` déployé après accord du porteur
+
+Accord explicite du porteur sur `f0aa7dce17372ece43e7626346db21ae79221230`. Master était entre-temps à `028211d6` (#383), documentation de la roadmap seulement : code web identique, SHA autorisé conservé.
+
+- URL : <https://drivy.shulker.ch/app/>. Reçu et identifiant de rollback : `20261030T170449Z-f0aa7dce1737`. Release précédente conservée : `4af4b0e6`.
+- Sauvegarde CT113 : `/root/drivy_refonte-before-web311-20261030T170449Z.dump`, 2 232 328 octets, catalogue et blocs relus. Aucune restauration réelle : l'archive lisible n'est pas une répétition de restauration.
+- Seul `drivy-refonte-web` a redémarré ; API, worker et identité gardent leur PID, ingress inchangé. Aucune migration, BFF compilée identique entre les deux releases (`diff -rq`), configuration privée inchangée selon le contrôle du script.
+- PASS après bascule : SHA servi, HTML exact sur sept adresses, 104 fichiers statiques à l'empreinte, CSP `default-src 'none'` sans `unsafe-eval`, session anonyme `no-store`, 401 sur `/app/bff/me`, plan de rollback valide, zéro erreur `journalctl` du web sur dix minutes, Edge 1440 et 390 sans débordement ni erreur JavaScript sur quatre pages publiques. Seul 401 console : préférences sans connexion, comportement documenté.
+- NOT_EXECUTED : parcours connecté, données réelles, essai du porteur, suites `--extended`, restauration de la sauvegarde. Rollback non exécuté.
+
+### 30 octobre 2026, 18:30 Europe/Zurich — essai web validé, trois suites étendues vertes
+
+Essai web validé par le porteur sur `f0aa7dce`. Suites `--extended` exécutées après ce retour, sur la PR #384.
+
+- PASS : [run 41098462805](https://github.com/tomyrms/Drivy/actions/runs/41098462805), `fca6a78e`, 164 contrôles, Chromium, OIDC, BFF, API et PostgreSQL isolés, données synthétiques. Formations et tarifs, saisie par code, récupération de compte réunis dans le même run. Le code applicatif est identique à `f0aa7dce`, la version déployée.
+- Saisie par code et récupération n'ont demandé aucune adaptation : la limite notée le 30 octobre était fausse pour ces deux suites. Formations et tarifs a été réaligné sur le portail : 29 assertions conservées, dont quatre adaptées à des comportements changés par #311 et listées dans la PR. Aucun défaut applicatif trouvé.
+- Les trois suites sont raccordées à `validation-finale.yml`. Le parcours de base reste inchangé par défaut.
+- Typage du harnais sans erreur dans les fichiers modifiés ; 3 erreurs préexistantes sur master dans d'autres scripts.
+- PR #384 fusionnée sur décision du porteur : master `2a376c39`, identique à `fca6a78e`. Sur ce SHA, `Refonte · ouverture école navigateur` (41100489556, parcours de base) et `Refonte · vérifications` (41100488932) réussis. Code applicatif toujours identique à `f0aa7dce`, aucun redéploiement.
+- NOT_EXECUTED : navigateur physique, lecteur d'écran, compte réel. Récupération par e-mail toujours désactivée en production.
+
+<!-- ios-batch-15-20261029 -->
+## 29 octobre 2026 — IPA 447 : 15 issues supplémentaires, 40 réalisées et fermées
+
+Nouveau lot natif : #113, #117, #118, #125, #196, #200, #208, #209, #210, #214, #220, #227, #231, #238, #246. Les 25 issues de l'IPA 446 restent incluses. Les 40 clôtures GitHub sont confirmées sur demande explicite du porteur ; elles ne constituent pas une validation de recette physique. PR #337/#338/#339 en brouillon, retour d'essai attendu avant tests pertinents puis fusion dans master.
+
+Branche `codex/ios-batch-15-20261029`, trois branches spécialisées séparées, base `2d9a5f64`. Les restes des issues déjà partiellement livrées ont été rapprochés de leurs commentaires/PR, sans recompter leurs anciennes réalisations. Aucun changement web/API/contrat/migration/homelab, aucun déploiement. EPIC #311 exclue ; seule cette entrée additive concerne le suivi partagé.
+
+Compilation Release réussie : Drivy 0.7.0 (447), code produit `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`, [IPA](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882). Paquet non signé copié dans `C:/Users/jtoma/Downloads/Drivy-0.7.0-447.ipa` ; manifeste, SHA-256, CRC ZIP, plist, dépendances et copie vérifiés. Empreinte `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`.
+
+Contrôles ciblés Apple réussis : agenda 73 tests (78 exécutions paramétrées, run 40954007339), consentement 20 (40957419205), profil 10 (40960532711), brouillons 49 (40961435005). SHA et limites documentés dans le guide ; les corrections ultérieures de garde d'agenda ne sont pas assimilées au SHA testé. Les échecs intermédiaires profil/brouillon provenaient du code de test et sont corrigés sans changer le produit de l'IPA. Vingt captures comparables avant/après inspectées pour #196/#220/#227/#231. Revues croisées et `git diff --check` effectués. Grandes suites, tests UI préparés, recette physique, GPS/batterie/VoiceOver : non exécutés.
+
+[Livraison, preuves et recette de chacune des 40 issues](ios-batch-15-delivery-20261029.md). Les anciennes mentions d'attente de clôture ci-dessous sont remplacées par la demande explicite du porteur ; l'attente de validation et de fusion demeure.
+
 <!-- ios-suite-19-20261029 -->
 ## 29 octobre 2026 — suite iOS : 19 nouvelles issues, 25 avec le premier lot
 

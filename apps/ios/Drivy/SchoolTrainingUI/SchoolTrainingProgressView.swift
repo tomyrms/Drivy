@@ -38,6 +38,7 @@ struct SchoolTrainingProgressSection: View {
             } else if let value = model.progress {
                 // Une relecture en panne garde la dernière lecture sous son erreur.
                 if let error = model.progressError { notice(error) }
+                freshness
                 if value.items.isEmpty && value.unobservedCompetencyIds.isEmpty {
                     DrivyEmptyState(title: "Aucune compétence", symbol: "list.bullet")
                 } else {
@@ -93,6 +94,19 @@ struct SchoolTrainingProgressSection: View {
 
     private func notice(_ message: String) -> some View {
         SchoolErrorNotice(message: message, retry: { Task { await model.loadProgress() } })
+    }
+
+    @ViewBuilder private var freshness: some View {
+        if model.isRefreshingProgress {
+            ProgressView("Actualisation…")
+                .font(.caption).foregroundStyle(DrivyTheme.muted)
+                .accessibilityIdentifier("progress-refreshing")
+        } else if let date = model.progressReadAt {
+            Text("Lecture du \(SchoolDateFormat.template("dMMMHHmm", date, zone: schoolTimeZone))")
+                .font(.caption).foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("progress-read-at")
+        }
     }
 
     @ViewBuilder private func content(_ value: SchoolReportProgress) -> some View {

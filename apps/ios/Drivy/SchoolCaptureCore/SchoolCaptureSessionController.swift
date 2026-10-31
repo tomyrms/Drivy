@@ -879,12 +879,20 @@ final class SchoolCaptureSessionController {
 
     private func openSegment(_ active: Context, request: UUID, reason: SchoolCaptureChunkBody.StartReason) async throws {
         guard !active.terminalRequested else { throw SchoolCaptureStorageFailure.closed }
+        guard try !SchoolRecordingRefusalStore.shared.blocks(scope: active.scope,
+            learnerID: active.session.serverCapture.learnerId, lessonID: active.session.serverCapture.lessonId) else {
+            throw SchoolCaptureStorageFailure.closed
+        }
         let prepared = try active.source.prepareSegment(authorization: active.authorization, lease: active.lease,
             scope: active.scope, clockReference: active.clock, policy: active.policy)
         let handle = try await active.local.begin(captureID: active.session.id, startedAt: prepared.startedAt, reason: reason)
         guard generation == request, permittedScope == active.scope, state == .preparing,
               !active.terminalRequested else { throw SchoolCaptureStorageFailure.closed }
         active.handle = handle
+        guard try !SchoolRecordingRefusalStore.shared.blocks(scope: active.scope,
+            learnerID: active.session.serverCapture.learnerId, lessonID: active.session.serverCapture.lessonId) else {
+            throw SchoolCaptureStorageFailure.closed
+        }
         try active.source.start(segment: prepared, handle: handle)
         if active.startedAt == nil { active.startedAt = prepared.startedAt }
         if beginning == nil { beginning = .now }

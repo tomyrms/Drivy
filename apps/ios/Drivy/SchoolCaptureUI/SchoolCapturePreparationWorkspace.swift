@@ -131,20 +131,24 @@ struct SchoolCaptureStartReview: Identifiable {
             && pendingAssessments.isEmpty && !hasOldScope
     }
     var mayOpenChoice: Bool { contextIsCurrent && !invalidated && !isLoading && !isBusy && store != nil && storageError == nil }
+    private var hasLocalRefusal: Bool {
+        guard let learnerID = learner?.id ?? lesson?.learnerId else { return true }
+        return (try? SchoolRecordingRefusalStore.shared.blocks(scope: scope, learnerID: learnerID, lessonID: lessonID)) != false
+    }
     var mayReviewStart: Bool {
         mayDiagnose && collectionIsIntegrated && !isSampling && storageError == nil && store != nil && !hasOldScope
-            && pendingAssessments.isEmpty && pendingStarts.isEmpty && choice?.status == .allowed
+            && pendingAssessments.isEmpty && pendingStarts.isEmpty && choice?.status == .allowed && !hasLocalRefusal
             && (notice?.requiresGPS != true || choice?.source == .own)
             && choice?.noticeVersionId == notice?.noticeVersionId && assessment?.status == .qualified
             && snapshot?.permission.permitsLocation == true
             && assessment.flatMap { SchoolLesson.date($0.expiresAt) }.map { $0 > Date() } == true
     }
-    var mayConfirmStart: Bool { mayDiagnose && collectionIsIntegrated && !isSampling && store != nil && storageError == nil }
+    var mayConfirmStart: Bool { mayDiagnose && collectionIsIntegrated && !isSampling && store != nil && storageError == nil && !hasLocalRefusal }
     /// Après lecture : le départ en un geste peut partir sans question à poser (accord valable pour l’information
     /// actuelle de l’école, aucune demande en suspens). Le rideau de marque n’est montré que dans ce cas.
     var readyForOneStepStart: Bool {
         guard !invalidated, contextIsCurrent, isInstructor, let notice, let choice, storageError == nil,
-              pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope else { return false }
+              pendingAssessments.isEmpty, pendingStarts.isEmpty, !hasOldScope, !hasLocalRefusal else { return false }
         return choice.status == .allowed && choice.noticeVersionId == notice.noticeVersionId
             && (!notice.requiresGPS || choice.source == .own)
     }
@@ -364,6 +368,10 @@ struct SchoolCaptureStartReview: Identifiable {
     /// lisait. Le départ en un geste confirme une relecture faite à l’instant : la relire aussitôt coûtait une
     /// douzaine d’allers-retours sans rien protéger, l’école revérifiant elle-même leçon, accord et diagnostic.
     func confirmStart(_ review: SchoolCaptureStartReview, acknowledged: Bool, revalidate: Bool = true) async -> Bool {
+        if hasLocalRefusal {
+            errorMessage = "Un refus du GPS attend encore sa confirmation. Vérifie l’accord GPS avant un nouveau départ."
+            return false
+        }
         guard acknowledged, mayConfirmStart, let store,
               let onCaptureAuthorized else { return false }
         isBusy = true; errorMessage = nil; startMessage = nil

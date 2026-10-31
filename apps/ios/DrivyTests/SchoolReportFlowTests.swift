@@ -270,16 +270,25 @@ import Testing
         #expect(model.reportSaveConfirmed && drafts.values.isEmpty)
     }
 
-    @Test func withoutAVaultTheEntryStaysInMemoryAndTheReportStillSaves() async {
-        let drafts = LocalDraftStub()
-        let model = workspace(LessonFinishServer(), outbox: ConfigurationOutboxStub(), drafts: drafts)
+    @Test func aDurableReportReceiptWaitsForTheLocalVaultBeforeClosingWithoutResending() async {
+        let server = LessonFinishServer(), drafts = LocalDraftStub(), outbox = ConfigurationOutboxStub()
+        await server.storeSaves()
+        let model = workspace(server, outbox: outbox, drafts: drafts)
         await model.load()
         drafts.fails = true
         model.nextStep = "À garder en mémoire"
         model.persistLocalDraft()
         #expect(drafts.values.isEmpty && model.nextStep == "À garder en mémoire" && model.localDraftError != nil)
-        #expect(await model.saveDraft())
-        #expect(model.reportSaveConfirmed)
+        #expect(await model.saveDraft() == false)
+        #expect(model.pending == nil && !model.reportSaveConfirmed && !model.isInvalidated)
+        #expect(model.nextStep == "À garder en mémoire" && model.localDraftError != nil)
+        drafts.fails = false
+        model.retryLocalDraft()
+        await model.load()
+        #expect(model.localDraftError == nil && model.nextStep == "À garder en mémoire" && !model.reportEdited)
+        #expect(model.closeWithoutLocalEdits())
+        let writes = await server.requests().filter { $0.httpMethod == "PUT" && $0.url?.path.contains("/report-drafts/") == true }
+        #expect(writes.count == 1)
     }
 
     @Test func givingUpTheEntryRemovesItFromTheDevice() async {

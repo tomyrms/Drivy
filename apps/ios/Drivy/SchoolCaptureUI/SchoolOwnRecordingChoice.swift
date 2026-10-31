@@ -32,7 +32,7 @@ struct SchoolOwnRecordingChoice: View {
         // l’attente au choix lu annulait la lecture en cours sans la relancer (squelette sans fin, octobre 2026).
         VStack(alignment: .leading, spacing: 0) {
             if let model, matches(model) {
-                SchoolRecordingChoiceInline(model: model, answer: sending ?? model.validAnswer, isEnabled: sending == nil) { status in
+                SchoolRecordingChoiceInline(model: model, answer: model.deferredRefusal == nil ? sending ?? model.validAnswer : .refused, isEnabled: sending == nil) { status in
                     choose(status, with: model)
                 }
             } else {
@@ -97,6 +97,12 @@ struct SchoolOwnRecordingChoice: View {
 
     /// Une réponse explicite, envoyée aussitôt ; la même réponse que le choix enregistré n’envoie rien.
     private func choose(_ status: SchoolRecordingChoice.Status, with model: SchoolRecordingChoiceWorkspace) {
+        if status == .refused && model.mayPrioritizeRefusal {
+            Task {
+                if await model.prioritizeRefusal() { NotificationCenter.default.post(name: .drivyRecordingChoiceDidChange, object: model.id) }
+            }
+            return
+        }
         guard sending == nil, status != model.validAnswer else { return }
         sending = status
         Task {
