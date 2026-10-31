@@ -616,3 +616,28 @@ describe('fonctions SQL : refus propres et empreinte de sécurité (condition de
   expect(issuer).toContain('harness-identity');void id;
  });
 });
+
+describe('coût des lectures : index justifiés par mesure',()=>{
+ it('la somme des écritures d\'une leçon est servie par un index (mesuré : 4,7 s pour 10 064 leçons sans lui)',async()=>{
+  const found=await pool.query("SELECT indexdef FROM pg_indexes WHERE schemaname='drivy' AND indexname='charge_entry_metrics_account'");
+  expect(found.rows).toHaveLength(1);
+  expect(found.rows[0].indexdef).toContain('(school_id, account_id)');
+ });
+ it('un export exactement à la limite est livré en entier, un de plus est refusé',async()=>{
+  const edge=await createSchool(pool,'edge');
+  const exporter=await addActor(pool,edge,'exp-edge',['ADMIN'],['EXPORT_MANAGEMENT']);
+  const instructor=await addActor(pool,edge,'m-edge',['INSTRUCTOR']),learner=await addLearner(pool,edge,'E1','B');
+  const insert=(first:number,last:number)=>pool.query(`INSERT INTO drivy.lesson(school_id,training_id,learner_id,learner_person_id,instructor_membership_id,planned_start,planned_end,time_zone,meeting_point,
+    price_cents_snapshot,buffer_minutes_snapshot,policy_version_id,commercial_selection,created_at)
+   SELECT $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,'2026-10-29T00:00:00Z'::timestamptz+n*interval '1 minute','2026-10-29T00:00:00Z'::timestamptz+n*interval '1 minute'+interval '30 seconds','Europe/Zurich','Gare (synthétique)',
+    10000,0,$6::uuid,$7::jsonb,'2026-09-01T00:00:00Z'::timestamptz FROM generate_series($8::int,$9::int) AS n`,
+   [edge.id,learner.trainingId,learner.learnerId,learner.personId,instructor.membershipId,edge.policy,JSON.stringify({mode:'UNIT_PRICE',serviceProductVersionId:edge.products.b45v2,quantity:1,entitlementLotId:null,acceptedTermsVersionId:edge.terms}),first,last]);
+  await insert(1,10_000);
+  const full=await exportCsv(exporter.subject,{measure:'L02',from:'2026-10-29',toExclusive:'2026-11-12'},edge.id);
+  expect(full.statusCode,full.body.slice(0,200)).toBe(200);
+  expect(full.body).toContain('#lineCount;10000\r\n');
+  await insert(10_001,10_001);
+  const over=await exportCsv(exporter.subject,{measure:'L02',from:'2026-10-29',toExclusive:'2026-11-12'},edge.id);
+  expect(problem(over)).toEqual({status:413,code:'EXPORT_TOO_LARGE'});
+ },90_000);
+});

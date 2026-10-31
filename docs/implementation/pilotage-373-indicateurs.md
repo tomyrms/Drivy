@@ -621,8 +621,56 @@ Chaque cas pointe vers la ligne du jeu qui le porte ; T02 en fait des tests cont
 
 ## 10. Limites de ce document
 
-- Aucun calcul n'a été exécuté sur une école réelle ni sur une base : les totaux viennent d'un jeu fictif et d'un script de contrôle indépendant. Aucune requête SQL n'a été écrite ni mesurée ; les index de 7.6 sont des candidats.
+- Aucun calcul n'a été exécuté sur une école réelle ni sur une base : les totaux viennent d'un jeu fictif et d'un script de contrôle indépendant. Au moment de T01, aucune requête SQL n'avait été écrite ni mesurée ; T02 les a écrites et mesurées en 11.3, les autres index de 7.6 restent des candidats.
 - Aucune recette authentifiée, aucun résultat de performance, de GPS, de batterie ou d'accessibilité n'est affirmé.
 - Rien n'est affirmé sur la marge, la trésorerie, la TVA ou la conformité comptable : le périmètre financier incomplet est dit dans les titres, la couverture et les fichiers.
-- Le contrat de la section 7 est une proposition ; le contrat OpenAPI 3.11.0 n'est pas modifié et aucune route n'existe.
-- La mise à jour de `docs/implementation/STATUS.md` n'est pas faite dans cette tâche (consigne de ne pas y toucher) ; elle suivra avec T02.
+- Le contrat de la section 7 est réalisé par T02 (section 11) ; le contrat OpenAPI 3.11.0 n'est pas modifié.
+- `docs/implementation/STATUS.md` est mis à jour avec T02.
+
+## 11. T02 (#375) : réalisation, limites et mesures
+
+Les sections 1 à 10 sont l'état de T01 (#374). Cette section décrit ce que T02 a réellement livré ; en cas de contradiction avec la section 10, elle prévaut.
+
+### 11.1 Routes
+
+| Couche | Route | Rôle |
+| --- | --- | --- |
+| API | `GET /v1/schools/:schoolId/metrics/definitions` | Dictionnaire versionné et limites, sans donnée d'école |
+| API | `GET /v1/schools/:schoolId/metrics` | Cartes par domaine (`activity` ou `finance`), comparaison et répartition |
+| API | `GET /v1/schools/:schoolId/metrics/series` | Série par jour, semaine ou mois |
+| API | `GET /v1/schools/:schoolId/metrics/details` | Lignes d'une mesure, paginées par curseur lié à la mesure et aux filtres |
+| API | `POST /v1/schools/:schoolId/metrics/exports` | Export CSV synchrone, sans fichier conservé |
+| BFF | `GET /app/bff/schools/:schoolId/metrics…` | Relais en lecture : dates civiles et valeurs énumérées validées avant tout appel amont |
+| BFF | `POST /app/bff/schools/:schoolId/metrics/exports` | Session et jeton CSRF exigés ; le nom du fichier est reconstruit depuis des champs validés, rien de l'API n'atteint un en-tête |
+
+Toutes les lectures passent par des fonctions SQL (`drivy.metrics_*`) qui appellent d'abord `drivy.metrics_gate` : rattachement à l'école, rôle, grants et portée sont relus par la base, sous `drivy_app`, avant toute ligne. Aucune écriture n'est déclenchée par une lecture ; la migration `20261031_pilotage_metrics.sql` ne crée que des fonctions et des index.
+
+### 11.2 Limites appliquées
+
+Période de 366 jours au plus, 400 intervalles de série au plus, 100 lignes par page de détail, 10 000 lignes par export, corps de commande de 4 096 octets, `statement_timeout` de 15 s par lecture (au-delà : `503 METRICS_UNAVAILABLE`, jamais un résultat partiel). Un export de plus de 10 000 lignes est refusé d'après le seul compte (`413 EXPORT_TOO_LARGE`), avant le calcul de la moindre page ; il n'est jamais tronqué.
+
+### 11.3 Mesures sur volume représentatif
+
+Mesure ponctuelle, **non commitée**, sur une PostgreSQL 17 locale (Docker Desktop, Windows), une école synthétique de 10 064 leçons réalisées réparties sur 8 moniteurs, 300 apprenants et 90 jours, une écriture de débit par leçon. Temps de bout en bout d'une requête HTTP de test (un seul passage, base chaude, aucune charge concurrente) :
+
+| Lecture | Avant l'index d'écritures | Après |
+| --- | --- | --- |
+| Carte activité, 1 mois / 3 mois / 1 an | 171 / 190 / 187 ms | 183 / 223 / 126 ms |
+| Carte finance, 1 mois | 2 073 ms | 79 ms |
+| Carte finance, 3 mois ou 1 an | 4 705 ms et 4 717 ms | 86 ms et 89 ms |
+| Carte finance par moniteur, 3 mois ou 1 an | 9 355 ms et 9 281 ms | 169 ms et 164 ms |
+| Série par jour, 3 mois | 102 ms | 66 ms |
+| Série par semaine, 1 an (finance) | 4 668 ms | 85 ms |
+| Détail finance, page de 100 | 9 335 ms | 248 ms |
+| Export de plus de 10 000 lignes | 4 642 ms (refus) | 88 ms (refus) |
+
+Constat : la somme des écritures d'une leçon relisait toute la table des écritures pour chaque ligne (aucun index n'existe sur `account_id` hors des écritures initiales). L'index `charge_entry_metrics_account` règle ce point. Les noms des moniteurs et des apprenants d'une page ne sont plus calculés par ligne mais une fois par moniteur et par apprenant distincts : le test d'export refusé au-delà de 10 000 lignes, qui dépassait le délai de 15 s sur le serveur d'intégration (503 au lieu de 413), passe de 12,2 s à 2,1 s en local, graine de 10 001 leçons comprise.
+
+Ce que ces chiffres ne disent pas : aucun objectif de performance n'est déclaré atteint. Le volume est celui d'une école ; la machine n'est pas celle d'un serveur de production ; la charge concurrente, un cache froid et une école de plus de 10 000 leçons par an ne sont pas mesurés. Les index des autres mesures (section 7.6) restent des candidats : seuls ceux qui servent les requêtes ci-dessus ont été vérifiés par une mesure.
+
+### 11.4 Reste hors de T02
+
+- Le contrat OpenAPI 3.11.0 du dossier de conception n'est pas modifié : les routes ci-dessus existent dans le code et dans leurs tests, pas dans le contrat conservé. À trancher avant tout client autre que le BFF.
+- Les lectures `occurrence` et `paiement` du détail calculent encore leur libellé par ligne ; seul le détail des leçons a été rendu indépendant du nombre de lignes.
+- Aucun écran : T03 à T09 (hors périmètre de cette livraison).
+- Aucun déploiement : la migration n'est appliquée sur aucune base de production.

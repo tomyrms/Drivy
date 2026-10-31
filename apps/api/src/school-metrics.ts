@@ -335,10 +335,11 @@ const domainOfMeasure=(measure:string):M.Domain=>measure.startsWith('F')?'financ
 interface Line {kind:'LESSON'|'COURSE_OCCURRENCE'|'COURSE_PAYMENT';id:string;eventAt:string;eventLocal:string;cursorAt:string;status:string;instructorMembershipId:string|null;instructorLabel:string|null;learnerLabel:string|null;
  categoryCode:string|null;productKey:string|null;quantity:number|null;durationSeconds:number|null;amountCents:number|null;courseTypeLabel:string|null;markedCount:number|null;
  missingMarks:number|null;enrollmentId:string|null;seriesId:string|null;voidedAt:string|null}
+const exportTooLarge=()=>new ApiError(413,'EXPORT_TOO_LARGE','L’export dépasse 10 000 lignes. Réduisez la période ou ajoutez un filtre.');
 interface Loaded {total:{lineCount:number;amountCents:number|null;durationSeconds:number|null};lines:Line[];more:boolean}
 interface Selection {measure:string;part?:'a'|'b'|undefined;from:string;toExclusive:string;bucketFrom?:string|undefined;bucketToExclusive?:string|undefined}
 
-async function loadLines(db:PoolClient,c:Ctx,selection:Selection,at:Instants,options:{cursor?:Position|undefined;limit:number;local:boolean}):Promise<Loaded>{
+async function loadLines(db:PoolClient,c:Ctx,selection:Selection,at:Instants,options:{cursor?:Position|undefined;limit:number;local:boolean;refuseAbove?:number|undefined}):Promise<Loaded>{
  const spec=lineSpec(selection.measure,selection.part);
  const totalQ=new Sql(),pageQ=new Sql();
  const sessionBounds=(q:Sql)=>selection.bucketFrom&&selection.bucketToExclusive?` AND local_day>=${q.bind(selection.bucketFrom,'::date')} AND local_day<${q.bind(selection.bucketToExclusive,'::date')}`:'';
@@ -352,13 +353,26 @@ async function loadLines(db:PoolClient,c:Ctx,selection:Selection,at:Instants,opt
    `SELECT count(*)::int AS n,coalesce(sum(price_cents),0)::bigint AS amount,coalesce(sum(planned_seconds),0)::bigint AS planned,coalesce(sum(actual_seconds),0)::bigint AS actual ${base(totalQ)}`,totalQ.params)).rows[0]!;
   const duration=spec.durationSource==='planned'?num(t.planned):spec.durationSource==='actual'?num(t.actual):null;
   const total={lineCount:t.n,amountCents:spec.money?num(t.amount):null,durationSeconds:duration};
+  // Un export trop grand est refusé d'après le seul compte : aucune page de 10 000 noms n'est calculée pour rien.
+  if(options.refuseAbove!==undefined&&t.n>options.refuseAbove)throw exportTooLarge();
   const school=pageQ.bind(c.schoolId,'::uuid');
+  // Les noms (fonctions d'accès contrôlé) ne sont calculés qu'une fois par moniteur et par apprenant distincts de la page, pas une fois par ligne.
   const rows=(await db.query<Record<string,unknown>>(
-   `SELECT lesson_id,event_at,${cursorAt('event_at')} AS cursor_at,${local('event_at')} AS event_local,state,instructor_membership_id,learner_id,category_code,product_key,quantity,
-    CASE WHEN ${spec.durationSource==='actual'?'true':'false'} OR (${spec.durationSource==='mixed'?'true':'false'} AND state='COMPLETED') THEN actual_seconds ELSE planned_seconds END AS seconds,
-    price_cents,drivy.course_staff_name(${school},instructor_membership_id) AS instructor_label,
-    drivy.lesson_learner_name(${school},training_id,instructor_membership_id,learner_id) AS learner_label
-    ${base(pageQ)}${keyset(pageQ,'event_at','lesson_id')} ORDER BY event_at,lesson_id LIMIT ${pageQ.bind(options.limit+1,'::int')}`,pageQ.params)).rows;
+   `WITH page AS MATERIALIZED (
+     SELECT lesson_id,event_at,${cursorAt('event_at')} AS cursor_at,${local('event_at')} AS event_local,state,instructor_membership_id,training_id,learner_id,category_code,product_key,quantity,
+     CASE WHEN ${spec.durationSource==='actual'?'true':'false'} OR (${spec.durationSource==='mixed'?'true':'false'} AND state='COMPLETED') THEN actual_seconds ELSE planned_seconds END AS seconds,
+     price_cents
+     ${base(pageQ)}${keyset(pageQ,'event_at','lesson_id')} ORDER BY event_at,lesson_id LIMIT ${pageQ.bind(options.limit+1,'::int')}),
+    staff AS MATERIALIZED (SELECT d.m AS instructor_membership_id,drivy.course_staff_name(${school},d.m) AS label
+     FROM (SELECT DISTINCT instructor_membership_id AS m FROM page) d),
+    learner AS MATERIALIZED (SELECT d.t AS training_id,d.l AS learner_id,d.m AS instructor_membership_id,drivy.lesson_learner_name(${school},d.t,d.m,d.l) AS label
+     FROM (SELECT DISTINCT training_id AS t,learner_id AS l,instructor_membership_id AS m FROM page) d)
+    SELECT p.lesson_id,p.event_at,p.cursor_at,p.event_local,p.state,p.instructor_membership_id,p.learner_id,p.category_code,p.product_key,p.quantity,p.seconds,p.price_cents,
+     s.label AS instructor_label,l.label AS learner_label
+    FROM page p
+    LEFT JOIN staff s ON s.instructor_membership_id=p.instructor_membership_id
+    LEFT JOIN learner l ON l.training_id=p.training_id AND l.learner_id=p.learner_id AND l.instructor_membership_id=p.instructor_membership_id
+    ORDER BY p.event_at,p.lesson_id`,pageQ.params)).rows;
   const lines=rows.slice(0,options.limit).map((r):Line=>({kind:'LESSON',id:String(r.lesson_id),eventAt:(r.event_at as Date).toISOString(),eventLocal:String(r.event_local),cursorAt:String(r.cursor_at),status:String(r.state),
    instructorMembershipId:r.instructor_membership_id as string,instructorLabel:(r.instructor_label as string|null)??null,learnerLabel:(r.learner_label as string|null)??null,
    categoryCode:r.category_code as string|null,productKey:r.product_key as string|null,quantity:r.quantity as number|null,durationSeconds:r.seconds===null?null:Number(r.seconds),
@@ -374,6 +388,7 @@ async function loadLines(db:PoolClient,c:Ctx,selection:Selection,at:Instants,opt
     GROUP BY occurrence_id,series_id,type_id,starts_at,instructor_membership_id) o
     WHERE ${spec.mode==='marked'?'marked>0':spec.mode==='missing'?'missing>0':'true'}`;
   const t=(await db.query<{n:number}>(`SELECT count(*)::int AS n ${grouped(totalQ)}`,totalQ.params)).rows[0]!;
+  if(options.refuseAbove!==undefined&&t.n>options.refuseAbove)throw exportTooLarge();
   const school=pageQ.bind(c.schoolId,'::uuid');
   const rows=(await db.query<Record<string,unknown>>(
    `SELECT occurrence_id,series_id,starts_at,${cursorAt('starts_at')} AS cursor_at,${local('starts_at')} AS event_local,marked,missing,instructor_membership_id,
@@ -391,6 +406,7 @@ async function loadLines(db:PoolClient,c:Ctx,selection:Selection,at:Instants,opt
  };
  const base=(q:Sql)=>`FROM ${paymentFn(q,c,selection.from,selection.toExclusive)} WHERE ${pred(q)}${sessionBounds(q)}`;
  const t=(await db.query<{n:number;amount:string}>(`SELECT count(*)::int AS n,coalesce(sum(amount_cents),0)::bigint AS amount ${base(totalQ)}`,totalQ.params)).rows[0]!;
+ if(options.refuseAbove!==undefined&&t.n>options.refuseAbove)throw exportTooLarge();
  const rows=(await db.query<Record<string,unknown>>(
   `SELECT payment_id,enrollment_id,series_id,recorded_at,${cursorAt('recorded_at')} AS cursor_at,${local('recorded_at')} AS event_local,amount_cents,voided_at,
    drivy.lesson_learner_display_name_for_course(enrollment_id) AS learner_label
@@ -542,8 +558,8 @@ export function registerSchoolMetrics(app:FastifyInstance,options:{pool:Pool;ver
    // Le droit d'export et celui de la mesure sont aussi revérifiés par la base, sur le même instantané.
    await db.query('SELECT * FROM drivy.metrics_gate($1::uuid,$2,$3,$4::uuid,true)',[school,domain==='finance'?'FINANCE':'ACTIVITY',c.scope,c.instructor]);
    const at=await instantsOf(db,c,body.from,body.toExclusive);
-   const loaded=await loadLines(db,c,body,at,{limit:M.maxExportLines,local:true});
-   if(loaded.more)throw new ApiError(413,'EXPORT_TOO_LARGE','L’export dépasse 10 000 lignes. Réduisez la période ou ajoutez un filtre.');
+   const loaded=await loadLines(db,c,body,at,{limit:M.maxExportLines,local:true,refuseAbove:M.maxExportLines});
+   if(loaded.more)throw exportTooLarge();
    // Couverture de la mesure exportée, calculée sur le même périmètre : un export partiel n'est jamais annoncé complet.
    const all=domain==='activity'?{...await activityPeriod(db,c,body.from,body.toExclusive,at),...await activitySnapshots(db,c,body.from,body.toExclusive,at)}:await financePeriod(db,c,body.from,body.toExclusive,at);
    const coverage=all[body.measure]?.coverage??M.complete();
