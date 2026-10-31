@@ -11,6 +11,8 @@
 .account-switches, .account-links { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
 .account-switches li { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 8px 16px; }
 .account-switches li + li, .account-links li + li { border-top: 1px solid var(--border); }
+.account-switch-group { display: grid; gap: 8px; }
+.account-switch-group h3 { font-size: .9rem; font-weight: 600; color: var(--muted-foreground); }
 .account-switches label { flex: 1; font-weight: 500; cursor: pointer; }
 .account-links a { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; font-weight: 500; color: inherit; text-decoration: none; }
 .account-links a > span { flex: 1; }

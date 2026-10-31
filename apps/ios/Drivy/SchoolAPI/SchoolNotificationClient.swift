@@ -10,19 +10,42 @@ struct SchoolNotificationPreferences: Codable, Sendable, Equatable {
     var courseReminders: Bool
     var courseChanges: Bool
     var courseStaffAlerts: Bool
+    /// Messagerie (#74). Absents d'une API plus ancienne : l'écran ne propose alors aucun interrupteur de messagerie
+    /// et l'écriture ne les envoie pas. Valeurs d'une personne sans ligne : privés et mentions actifs, général désactivé.
+    var messagingPrivate: Bool? = nil
+    var messagingGeneral: Bool? = nil
+    var messagingMentions: Bool? = nil
+
+    /// Les trois catégories de messagerie sont connues de l'API qui a répondu.
+    var supportsMessaging: Bool { messagingPrivate != nil && messagingGeneral != nil && messagingMentions != nil }
 
     var body: SchoolNotificationPreferencesBody {
         SchoolNotificationPreferencesBody(courseOffers: courseOffers, courseReminders: courseReminders,
-                                          courseChanges: courseChanges, courseStaffAlerts: courseStaffAlerts)
+                                          courseChanges: courseChanges, courseStaffAlerts: courseStaffAlerts,
+                                          messagingPrivate: messagingPrivate, messagingGeneral: messagingGeneral,
+                                          messagingMentions: messagingMentions)
     }
 }
 
 /// Corps de `PUT /v1/me/notification-preferences` : le même que la lecture, sans version (le serveur le refuse strictement).
+/// Les champs de messagerie sont omis quand l'API ne les a pas annoncés ; une écriture en vol enregistrée avant #74 reste lisible.
 struct SchoolNotificationPreferencesBody: Codable, Sendable, Equatable {
     let courseOffers: Bool
     let courseReminders: Bool
     let courseChanges: Bool
     let courseStaffAlerts: Bool
+    var messagingPrivate: Bool? = nil
+    var messagingGeneral: Bool? = nil
+    var messagingMentions: Bool? = nil
+
+    /// La réponse de l'école reflète ce corps : chaque champ envoyé y figure avec la même valeur.
+    func isReflected(in saved: SchoolNotificationPreferencesBody) -> Bool {
+        courseOffers == saved.courseOffers && courseReminders == saved.courseReminders
+            && courseChanges == saved.courseChanges && courseStaffAlerts == saved.courseStaffAlerts
+            && (messagingPrivate == nil || messagingPrivate == saved.messagingPrivate)
+            && (messagingGeneral == nil || messagingGeneral == saved.messagingGeneral)
+            && (messagingMentions == nil || messagingMentions == saved.messagingMentions)
+    }
 }
 
 /// Environnement APNs du jeton : celui du profil qui a signé l’app (iLoader ou Xcode), lu dans
@@ -87,7 +110,7 @@ struct SchoolPushRevokeBody: Encodable, Sendable, Equatable { let token: String 
         let data: Data
         do { data = try JSONEncoder().encode(body) } catch { throw SchoolPlanningFailure.invalidResponse }
         let result: SchoolNotificationPreferences = try await send(["notification-preferences"], method: "PUT", body: data, version: version, contextIsCurrent: contextIsCurrent)
-        guard result.version > version, result.body == body else { throw SchoolPlanningFailure.invalidResponse }
+        guard result.version > version, body.isReflected(in: result.body) else { throw SchoolPlanningFailure.invalidResponse }
         return result
     }
     func register(token: String, environment: SchoolPushEnvironment) async throws {

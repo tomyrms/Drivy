@@ -35,6 +35,36 @@ async function readJSON(response: Response, limit: number): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
 }
 
+/**
+ * Pilotage CSV export (#373): one fixed POST path, a JSON command in, a text/csv document out. Not part of the JSON school relay
+ * because the answer is not JSON. The document is read in memory up to a fixed size and never stored; redirects are refused.
+ */
+export type MetricsExportRequest = { schoolId: string; body: unknown };
+export type MetricsExportResult = { status: 200; csv: string; drift: boolean } | { status: number; body: unknown };
+export type MetricsExportGateway = (request: MetricsExportRequest, accessToken: string) => Promise<MetricsExportResult>;
+const MAX_EXPORT_BYTES = 8 * 1024 * 1024;
+export function createMetricsExportGateway(baseURL: string): MetricsExportGateway {
+  return async (request, accessToken) => {
+    if (!isUUID(request.schoolId)) throw new Error('Route API non autorisée.');
+    const response = await fetch(`${baseURL}/v1/schools/${request.schoolId}/metrics/exports`, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(60_000),
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'text/csv, application/problem+json', 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      body: JSON.stringify(request.body),
+    });
+    if (response.status === 200) {
+      if (!(response.headers.get('content-type') ?? '').toLowerCase().startsWith('text/csv') || !response.body) throw new Error('Réponse API inattendue.');
+      const chunks: Uint8Array[] = []; let size = 0;
+      for await (const chunk of response.body) {
+        size += chunk.byteLength;
+        if (size > MAX_EXPORT_BYTES) throw new Error('Réponse API trop grande.');
+        chunks.push(chunk);
+      }
+      return { status: 200, csv: new TextDecoder('utf-8', { ignoreBOM: true }).decode(Buffer.concat(chunks)), drift: response.headers.get('x-metrics-drift') === 'true' };
+    }
+    return { status: response.status, body: await readJSON(response, 64 * 1024) };
+  };
+}
+
 /** Routes of the API open without sign-in: reading a code and creating an account with it. */
 export type AnonymousPath = '/v1/access-codes/preview' | '/v1/accounts';
 export type AnonymousGateway = (path: AnonymousPath, body: unknown, clientAddress: string) => Promise<ApiResult>;
