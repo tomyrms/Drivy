@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, CalendarOff, Plus } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
-import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/field';
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { useUnsavedChanges } from '../../console/context';
@@ -94,7 +94,7 @@ export function AbsenceEditor({ state, commands }: { state: ScheduleState; comma
           <Field data-invalid={Boolean(showing.start)}><FieldLabel htmlFor="absence-start">Début ({school.timeZone})</FieldLabel><Input id="absence-start" type="datetime-local" value={draft.start} aria-invalid={Boolean(showing.start)} disabled={locked} onChange={event => change({ start: event.target.value })} />{showing.start && <FieldError>{showing.start}</FieldError>}</Field>
           <Field data-invalid={Boolean(showing.end || refusedInterval)}><FieldLabel htmlFor="absence-end">Fin ({school.timeZone})</FieldLabel><Input id="absence-end" type="datetime-local" value={draft.end} aria-invalid={Boolean(showing.end || refusedInterval)} disabled={locked} onChange={event => change({ end: event.target.value })} />{(showing.end || refusedInterval) && <FieldError>{showing.end ?? refusedInterval}</FieldError>}</Field>
         </div>
-        <Field data-invalid={Boolean(showing.reason)}><FieldLabel htmlFor="absence-reason">Motif (facultatif)</FieldLabel><Textarea id="absence-reason" value={draft.reason} maxLength={ABSENCE_REASON_LIMIT} rows={3} aria-invalid={Boolean(showing.reason)} disabled={locked} onChange={event => change({ reason: event.target.value })} />{showing.reason && <FieldError>{showing.reason}</FieldError>}</Field>
+        <Field data-invalid={Boolean(showing.reason)}><FieldLabel htmlFor="absence-reason">Motif (facultatif)</FieldLabel><Textarea id="absence-reason" value={draft.reason} maxLength={ABSENCE_REASON_LIMIT} rows={3} aria-describedby="absence-reason-help" aria-invalid={Boolean(showing.reason)} disabled={locked} onChange={event => change({ reason: event.target.value })} /><FieldDescription id="absence-reason-help">Visible par l’administration et les moniteurs de l’école.</FieldDescription>{showing.reason && <FieldError>{showing.reason}</FieldError>}</Field>
       </FieldGroup>
       <ScheduleRefusal outcome={refusal} blocked={commands.runner.blockedReason} instructorName={state.instructorName} busy={locked} onAgenda={agenda} onReread={() => { commands.runner.clearOutcome(); state.refresh(); }} />
       <div className="schedule-footer"><Button type="button" variant="ghost" disabled={locked} onClick={close}>Annuler</Button>

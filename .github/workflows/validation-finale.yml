@@ -57,6 +57,7 @@ jobs:
     uses: ./.github/workflows/school-opening-e2e.yml
     with:
       qualification_sha: ${{ needs.resolve.outputs.sha }}
+      extended_suites: formations,code,recovery
   ios:
     needs: resolve
     uses: ./.github/workflows/refonte-ios.yml
