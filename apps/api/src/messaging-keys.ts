@@ -347,6 +347,15 @@ export async function listOwnDevices(db: PoolClient, actor: KeyActor) {
   return { devices: rows.rows.map(row => ({ ...row, isCurrent: row.deviceId === actor.deviceId })) };
 }
 
+/**
+ * Destinataires d'un signalement (#77) : administrateurs actifs de l'école, identifiants seulement. Le signalant partage
+ * la clé de son signalement à leurs appareils par to-device Olm ; le serveur ne voit ni la clé ni le contenu.
+ */
+export async function reportRecipients(db: PoolClient, actor: KeyActor) {
+  const rows = await db.query<{ personId: string }>('SELECT person_id AS "personId" FROM drivy.messaging_report_recipients($1) ORDER BY person_id', [actor.schoolId]);
+  return { recipients: rows.rows.map(row => ({ personId: row.personId.toLowerCase() })) };
+}
+
 /** Révocation : l'appareil ne peut plus appeler le relais, ses clés publiques et sa file disparaissent. Idempotent. */
 export async function revokeDevice(db: PoolClient, actor: KeyActor, deviceId: string) {
   if (!deviceIdPattern.test(deviceId)) throw notFound();

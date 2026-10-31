@@ -285,6 +285,9 @@ actor MessagingHTTPTransport: MessagingAPITransport {
                 }
                 throw MessagingFailure.stateConflict
             }
+            if response.status == 429, (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code == "REPORT_RATE_LIMITED" {
+                throw MessagingFailure.reportRateLimited
+            }
             if response.status == 404 { throw MessagingFailure.conversationUnavailable }
             if response.status == 401 || response.status == 403 { throw MessagingFailure.accessChanged }
             guard (200...299).contains(response.status) else { throw MessagingFailure.unavailable }
@@ -422,6 +425,84 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         let body = try JSONEncoder().encode(Body(clientReportId: clientReportID, conversationId: conversationID,
             items: items.map { Item(messageId: $0.messageID, ciphertext: WireCiphertext($0.ciphertext)) }))
         let _: Done = try await request(scope: scope, method: "POST", path: ["reports"], body: body)
+    }
+
+    private struct ReportList: Decodable {
+        struct Item: Decodable {
+            let messageId: UUID; let ciphertext: MessagingCiphertext
+            let senderPersonId: UUID?; let senderDisplayName: String?
+            let sequence: Int?; let acceptedAt: String?
+        }
+        struct Event: Decodable {
+            let actorPersonId: UUID; let actorDisplayName: String?
+            let fromStatus: String; let toStatus: String; let createdAt: String
+        }
+        struct Report: Decodable {
+            let id: UUID; let conversationId: UUID; let conversationKind: String?
+            let reporterPersonId: UUID; let reporterDisplayName: String?
+            let createdAt: String; let status: String; let statusUpdatedAt: String?
+            let items: [Item]; let history: [Event]
+        }
+        let reports: [Report]; let nextCursor: UUID?; let openCount: Int
+    }
+    private struct ReportStatusAnswer: Decodable {
+        let reportId: UUID; let status: String; let statusUpdatedAt: String?; let history: [ReportList.Event]
+    }
+
+    /// PostgreSQL écrit les microsecondes dans un objet JSON assemblé en SQL : on garde les millisecondes.
+    private func reportDate(_ text: String) throws -> Date {
+        if let value = try? date(text) { return value }
+        guard let dot = text.firstIndex(of: "."),
+              let zone = text[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) else {
+            throw MessagingFailure.invalidResponse
+        }
+        let fraction = String(text[text.index(after: dot)..<zone].prefix(3))
+        return try date(String(text[..<dot]) + "." + fraction + String(text[zone...]))
+    }
+
+    private func reportHistory(_ events: [ReportList.Event]) throws -> [MessagingReportHistoryEvent] {
+        guard events.count <= 200 else { throw MessagingFailure.invalidResponse }
+        return try events.map { event in
+            guard let from = MessagingReportStatus(rawValue: event.fromStatus),
+                  let to = MessagingReportStatus(rawValue: event.toStatus) else { throw MessagingFailure.invalidResponse }
+            return MessagingReportHistoryEvent(actorID: event.actorPersonId, actorName: event.actorDisplayName,
+                                               from: from, to: to, at: try reportDate(event.createdAt))
+        }
+    }
+
+    func reports(scope: MessagingScope, status: MessagingReportStatus?, before: UUID?) async throws -> MessagingReportPage {
+        var query = [URLQueryItem(name: "limit", value: "50")]
+        if let status { query.append(URLQueryItem(name: "status", value: status.rawValue)) }
+        if let before { query.append(URLQueryItem(name: "before", value: before.uuidString.lowercased())) }
+        let data: ReportList = try await request(scope: scope, method: "GET", path: ["reports"], query: query)
+        guard data.reports.count <= 50, data.openCount >= 0, before == nil || data.nextCursor != before,
+              Set(data.reports.map(\.id)).count == data.reports.count else { throw MessagingFailure.invalidResponse }
+        let records = try data.reports.map { report -> MessagingReportRecord in
+            guard let state = MessagingReportStatus(rawValue: report.status), (1...50).contains(report.items.count),
+                  Set(report.items.map(\.messageId)).count == report.items.count else { throw MessagingFailure.invalidResponse }
+            let items = try report.items.map { item in
+                MessagingReportEnvelope(messageID: item.messageId, senderID: item.senderPersonId, senderName: item.senderDisplayName,
+                    sequence: item.sequence, acceptedAt: try item.acceptedAt.map(reportDate), ciphertext: item.ciphertext)
+            }
+            return MessagingReportRecord(id: report.id, conversationID: report.conversationId, conversationKind: report.conversationKind,
+                reporterID: report.reporterPersonId, reporterName: report.reporterDisplayName, createdAt: try reportDate(report.createdAt),
+                status: state, statusUpdatedAt: try report.statusUpdatedAt.map(reportDate), items: items,
+                history: try reportHistory(report.history))
+        }
+        return MessagingReportPage(reports: records, nextCursor: data.nextCursor, openCount: data.openCount)
+    }
+
+    func setReportStatus(scope: MessagingScope, reportID: UUID, status: MessagingReportStatus,
+                         expected: MessagingReportStatus) async throws -> MessagingReportStatusChange {
+        struct Body: Encodable { let status: String; let expectedStatus: String }
+        let body = try JSONEncoder().encode(Body(status: status.rawValue, expectedStatus: expected.rawValue))
+        let answer: ReportStatusAnswer = try await request(scope: scope, method: "PUT",
+            path: ["reports", reportID.uuidString.lowercased(), "status"], body: body)
+        guard answer.reportId == reportID, let state = MessagingReportStatus(rawValue: answer.status) else {
+            throw MessagingFailure.invalidResponse
+        }
+        return MessagingReportStatusChange(reportID: reportID, status: state,
+            statusUpdatedAt: try answer.statusUpdatedAt.map(reportDate), history: try reportHistory(answer.history))
     }
 
     private func verifyCurrent(_ scope: MessagingScope) async throws {

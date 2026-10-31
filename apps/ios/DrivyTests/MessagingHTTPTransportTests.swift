@@ -226,3 +226,93 @@ private actor RecordingMessagingHTTP: SchoolHTTPTransport {
     func send(_ request: URLRequest) throws -> SchoolHTTPResponse { count += 1; return try responder(request) }
     func requests() -> Int { count }
 }
+
+/// Signalements (#77) : lecture de la boîte, changement de statut, cadence refusée.
+@MainActor
+final class MessagingReportTransportTests: XCTestCase {
+    private let baseURL = URL(string: "https://api.example.invalid/")!
+
+    func testReportListReadsStatusesAndPostgresMicrosecondDates() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2, apiBaseURL: baseURL.absoluteString)
+        let report = UUID(), conversation = UUID(), reporter = UUID(), author = UUID(), message = UUID(), admin = UUID()
+        let wire = RecordingMessagingHTTP { [scope] request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            XCTAssertEqual(query.first { $0.name == "status" }?.value, "OPEN")
+            XCTAssertEqual(query.first { $0.name == "limit" }?.value, "50")
+            XCTAssertTrue(request.url!.path.hasSuffix("/messaging/reports"))
+            let response = """
+            {"data":{"reports":[{"id":"\(report)","conversationId":"\(conversation)","conversationKind":"PRIVATE","reporterPersonId":"\(reporter)","reporterDisplayName":"Léa Fixture","createdAt":"2026-10-31T12:00:00.123Z","status":"OPEN","statusUpdatedAt":"2026-10-31T12:00:00.123Z","items":[{"messageId":"\(message)","ciphertext":{"scheme":"synthetic","keyId":"fixture","payload":"AQID"},"senderPersonId":"\(author)","senderDisplayName":"Marc Fixture","sequence":4,"acceptedAt":"2026-10-31T13:05:00.123456+01:00"}],"history":[{"actorPersonId":"\(admin)","actorDisplayName":"Admin Fixture","fromStatus":"HANDLED","toStatus":"OPEN","createdAt":"2026-10-31T13:10:00.654321+01:00"}]}],"nextCursor":null,"openCount":1},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":2}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let client = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                  transport: wire, currentScope: { scope })
+        let page = try await client.reports(scope: scope, status: .open, before: nil)
+        XCTAssertEqual(page.openCount, 1)
+        XCTAssertNil(page.nextCursor)
+        let first = try XCTUnwrap(page.reports.first)
+        XCTAssertEqual(first.id, report)
+        XCTAssertEqual(first.status, .open)
+        XCTAssertEqual(first.conversationKind, "PRIVATE")
+        XCTAssertEqual(first.reporterName, "Léa Fixture")
+        let item = try XCTUnwrap(first.items.first)
+        XCTAssertEqual(item.messageID, message)
+        XCTAssertEqual(item.senderName, "Marc Fixture")
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        // Microsecondes ramenées aux millisecondes, fuseau conservé.
+        let accepted = try XCTUnwrap(item.acceptedAt)
+        let expectedAccepted = try XCTUnwrap(fractional.date(from: "2026-10-31T12:05:00.123Z"))
+        XCTAssertEqual(accepted.timeIntervalSince1970, expectedAccepted.timeIntervalSince1970, accuracy: 0.001)
+        XCTAssertEqual(first.history.first?.from, .handled)
+        XCTAssertEqual(first.history.first?.to, .open)
+        let changed = try XCTUnwrap(first.history.first?.at)
+        let expectedChange = try XCTUnwrap(fractional.date(from: "2026-10-31T12:10:00.654Z"))
+        XCTAssertEqual(changed.timeIntervalSince1970, expectedChange.timeIntervalSince1970, accuracy: 0.001)
+    }
+
+    func testStatusChangeSendsTheStatusItExpectsAndReadsTheAnswer() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2, apiBaseURL: baseURL.absoluteString)
+        let report = UUID()
+        let wire = RecordingMessagingHTTP { [scope] request in
+            XCTAssertEqual(request.httpMethod, "PUT")
+            XCTAssertTrue(request.url!.path.hasSuffix("/messaging/reports/\(report.uuidString.lowercased())/status"))
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: String])
+            XCTAssertEqual(body, ["status": "HANDLED", "expectedStatus": "OPEN"])
+            let response = """
+            {"data":{"reportId":"\(report)","status":"HANDLED","statusUpdatedAt":"2026-10-31T13:10:00.000Z","history":[]},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":2}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let client = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                  transport: wire, currentScope: { scope })
+        let change = try await client.setReportStatus(scope: scope, reportID: report, status: .handled, expected: .open)
+        XCTAssertEqual(change.status, .handled)
+        XCTAssertEqual(change.reportID, report)
+    }
+
+    func testRateLimitIsNamedAndOtherRefusalsKeepTheirMeaning() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2, apiBaseURL: baseURL.absoluteString)
+        let cases: [(Int, String, MessagingFailure)] = [
+            (429, "REPORT_RATE_LIMITED", .reportRateLimited),
+            (409, "REPORT_STATUS_CONFLICT", .stateConflict),
+            (403, "METRIC_SCOPE_FORBIDDEN", .accessChanged),
+            (429, "OTHER_LIMIT", .unavailable),
+        ]
+        for (status, code, expected) in cases {
+            let wire = RecordingMessagingHTTP { request in
+                SchoolHTTPResponse(data: Data("{\"code\":\"\(code)\"}".utf8), status: status, url: request.url!,
+                                   contentType: "application/problem+json")
+            }
+            let client = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                      transport: wire, currentScope: { scope })
+            do {
+                _ = try await client.reports(scope: scope, status: nil, before: nil)
+                XCTFail("Un refus n'est jamais une liste")
+            } catch let failure as MessagingFailure {
+                XCTAssertEqual(failure, expected, "\(status) \(code)")
+            }
+        }
+    }
+}

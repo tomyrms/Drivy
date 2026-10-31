@@ -77,6 +77,19 @@ describe('composition réelle de qualification avec JWT signés et PostgreSQL', 
     }
     expect(connects).toBe(0);
   });
+  it('#77 : signalements, statut et destinataires restent fermés hors liste, ouverts dans l’école listée', async () => {
+    const report = randomUUID();
+    const status = { method: 'PUT' as const, payload: { status: 'HANDLED', expectedStatus: 'OPEN' } };
+    for (const [route, options] of [['/reports', {}], [`/reports/${report}/status`, status], ['/crypto/report-recipients', {}]] as const) {
+      const closed = await request(route, { ...options, school: id.schoolB });
+      expect(closed.statusCode, route).toBe(503);
+      expect(closed.json().code, route).toBe('MESSAGING_NOT_ENABLED');
+    }
+    expect(connects).toBe(0);
+    expect((await request('/reports')).statusCode).toBe(200);
+    expect((await request('/crypto/report-recipients')).json().data.recipients).toEqual([{ personId: id.admin }]);
+    expect((await request(`/reports/${report}/status`, status)).statusCode).toBe(404);
+  });
   it('vérifie réellement signature, audience, expiration et absence de token', async () => {
     const valid = await token();
     const parts = valid.split('.'); parts[1] = Buffer.from('{"sub":"demo-admin"}').toString('base64url');

@@ -40,7 +40,7 @@ struct MessagingOwnDevice: Sendable, Hashable, Identifiable {
 
 /// Chiffrement de bout en bout #67 : Olm/Megolm de matrix-sdk-crypto (vodozemac), transport API Drivy.
 /// Aucun chemin ne renvoie ou n'envoie de clair : toute erreur devient `protectionUnavailable`.
-actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement {
+actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement, MessagingReportSealing {
     static let scheme = "megolm.v1"
     static let serverName = "drivy"
     /// Rotation périodique en plus de la rotation à chaque départ.
@@ -173,6 +173,73 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             }
             return try Self.plaintext(from: decrypted)
         }
+    }
+
+    // MARK: MessagingReportSealing (#77)
+
+    /// Salon de signalement de l'école : l'identifiant d'un salon Matrix dérivé de l'école, jamais d'une conversation.
+    static func reportRoomID(_ school: UUID) -> String { roomID(school) }
+
+    func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        let sealed = try await sealForSchoolAdmins([plaintext], scope: scope, conversationID: conversationID)
+        guard sealed.count == 1, let first = sealed.first else { throw MessagingFailure.protectionUnavailable }
+        return first
+    }
+
+    /// Une session de groupe neuve par signalement, partagée par to-device Olm aux appareils des administrateurs,
+    /// puis un chiffrement par message choisi. Sans administrateur joignable, rien n'est chiffré ni envoyé.
+    func sealForSchoolAdmins(_ plaintexts: [Data], scope: MessagingScope, conversationID: UUID) async throws -> [MessagingCiphertext] {
+        try guardScope(scope)
+        diagnostics.clear()
+        guard (1...50).contains(plaintexts.count) else { throw MessagingFailure.invalidResponse }
+        let texts = try plaintexts.map { data -> String in
+            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { throw MessagingFailure.invalidResponse }
+            return text
+        }
+        return try await shielded {
+            let machine = try await open()
+            let room = Self.reportRoomID(scope.schoolID)
+            let recipients = try await reportRecipients(scope: scope)
+            guard !recipients.isEmpty else { throw MessagingFailure.noReportRecipient }
+            let users = Set(recipients).map(Self.userID).sorted()
+            try machine.updateTrackedUsers(users: users)
+            try await sync(machine)
+            try await flush(machine)
+            if let claim = try machine.getMissingSessions(users: users) { try await dispatch(claim, machine) }
+            var devices = 0
+            for user in users { devices += try machine.getUserDevices(userId: user, timeout: 0).count }
+            guard devices > 0 else { throw MessagingFailure.noReportRecipient }
+            // Une session par signalement : un administrateur révoqué ensuite ne lit aucun signalement postérieur.
+            try machine.discardRoomKey(roomId: room)
+            let settings = EncryptionSettings(algorithm: .megolmV1AesSha2, rotationPeriod: Self.rotationSeconds,
+                rotationPeriodMsgs: Self.rotationMessages, historyVisibility: .shared,
+                onlyAllowTrustedDevices: false, errorOnVerifiedUserProblem: true)
+            for request in try machine.shareRoomKey(roomId: room, users: users, settings: settings) {
+                try await dispatch(request, machine)
+            }
+            var sealed: [MessagingCiphertext] = []
+            for text in texts {
+                let content = try Self.messageContent(text: text, mentions: [])
+                let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
+                sealed.append(try Self.envelope(fromEncryptedContent: encrypted))
+            }
+            try await backupOrMarkPending(machine)
+            return sealed
+        }
+    }
+
+    /// Administrateurs actifs de l'école : identifiants seulement, relus par le serveur à chaque demande.
+    private func reportRecipients(scope: MessagingScope) async throws -> [UUID] {
+        struct Recipients: Decodable {
+            struct Person: Decodable { let personId: UUID }
+            let recipients: [Person]
+        }
+        let raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["report-recipients"],
+                                       query: [], body: nil)
+        guard let decoded = try? JSONDecoder().decode(Recipients.self, from: raw), decoded.recipients.count <= 500 else {
+            throw MessagingFailure.invalidResponse
+        }
+        return decoded.recipients.map(\.personId)
     }
 
     // MARK: MessagingKeyManagement
