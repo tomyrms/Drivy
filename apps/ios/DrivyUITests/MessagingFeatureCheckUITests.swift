@@ -44,8 +44,18 @@ final class MessagingFeatureCheckUITests: XCTestCase {
     }
 
     private func waitFor(_ element: XCUIElement, _ format: String, timeout: TimeInterval = 5) -> Bool {
-        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: element)
-        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+        let predicate = NSPredicate(format: format)
+        let needsLayout = format.contains("hittable")
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            // Une ligne de liste pas encore posée a pour cadre {inf, inf} : interroger sa « hittability » fait signaler à XCTest
+            // « Failed to determine hittability » comme un échec du test (run 41202131542). Elle n'est interrogée qu'une fois placée.
+            let frame = needsLayout && element.exists ? element.frame : .zero
+            let placed = !needsLayout || (frame.minX.isFinite && frame.minY.isFinite && !frame.isEmpty)
+            if placed && predicate.evaluate(with: element) { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
     }
 
     @discardableResult
@@ -295,8 +305,14 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(closedNote.waitForExistence(timeout: 10), "Le sondage est annoncé clos")
         XCTAssertTrue(close.waitForNonExistence(timeout: 10), "Plus de bouton Clore")
         XCTAssertTrue(app.buttons["Mardi, 2 votes"].exists && app.buttons["Lundi, 1 vote"].exists, "Les totaux sont conservés")
-        XCTAssertFalse(app.buttons["Mardi, 2 votes"].isEnabled, "Voter n'est plus possible")
-        XCTAssertFalse(app.buttons["Lundi, 1 vote"].isEnabled, "Voter n'est plus possible")
+        // Voter n'est plus possible. Ces lignes n'exposent pas l'état « désactivé » à l'accessibilité (isEnabled reste vrai sur le
+        // simulateur, constat du run 41202131542) : le test vérifie donc le comportement, pas ce trait. Un appui sur l'autre choix
+        // ne crée aucun vote en attente et ne déplace ni les totaux ni le choix retenu.
+        app.buttons["Lundi, 1 vote"].tap()
+        XCTAssertFalse(pendingNote.waitForExistence(timeout: 3), "Aucun vote n'est enregistré sur un sondage clos")
+        XCTAssertTrue(app.buttons["Mardi, 2 votes"].exists && app.buttons["Lundi, 1 vote"].exists, "Les totaux ne bougent pas : \(app.debugDescription)")
+        XCTAssertEqual(app.buttons["Mardi, 2 votes"].value as? String, "Choisi", "Le choix retenu ne change pas")
+        XCTAssertNotEqual(app.buttons["Lundi, 1 vote"].value as? String, "Choisi", "Lundi n'est pas devenu le choix retenu")
         capture("10d-sondage-clos")
     }
 
