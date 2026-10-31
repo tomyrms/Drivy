@@ -70,12 +70,13 @@ BEGIN
  RETURN (first_at AT TIME ZONE g.time_zone)::date;
 END $$;
 
--- Leçons individuelles de la période. Une seule rattachement par leçon (event_at) : début réel si réalisée avec un début réel, sinon début prévu.
+-- Leçons individuelles de la période. Un seul rattachement par leçon (event_at) : début réel si réalisée avec un début réel, sinon début prévu.
 -- Période : dates civiles de l'école, [p_from, p_to), 366 jours au plus ; p_from et p_to nuls = sans borne (états « à traiter »).
 -- state : COMPLETED, CANCELLED, NO_SHOW, UPCOMING, TO_VERIFY, IN_PROGRESS, TO_FINALIZE (jamais déduit d'un horaire passé seul : voir le dictionnaire).
 -- Les montants (price_cents, charge_cents) ne sortent que si p_money, et alors seulement pour ADMIN ou VIEW_FINANCIAL_METRICS.
+-- p_status (facultatif) restreint au statut stocké, ce qui permet à l'index partiel lesson_metrics_open de servir les états « à traiter ».
 CREATE FUNCTION drivy.metrics_lesson_lines(p_school uuid,p_from date,p_to date,p_now timestamptz,p_scope text,p_instructor uuid,
- p_category text,p_product text,p_money boolean)
+ p_category text,p_product text,p_money boolean,p_status text DEFAULT NULL)
 RETURNS TABLE(lesson_id uuid,training_id uuid,event_at timestamptz,local_day date,state text,status text,
  planned_start timestamptz,planned_end timestamptz,actual_start timestamptz,actual_end timestamptz,
  instructor_membership_id uuid,learner_id uuid,category_code text,product_key text,quantity integer,
@@ -114,7 +115,8 @@ BEGIN
  WHERE l.school_id=p_school AND ev.event_at>=from_at AND ev.event_at<to_at
   AND (g.scope_instructor IS NULL OR l.instructor_membership_id=g.scope_instructor)
   AND (p_category IS NULL OR o.category_code=p_category)
-  AND (p_product IS NULL OR sp.product_key=p_product);
+  AND (p_product IS NULL OR sp.product_key=p_product)
+  AND (p_status IS NULL OR l.status=p_status);
 END $$;
 
 -- Séances de cours (séries PUBLISHED ou CLOSED) de la période, une ligne par inscription attendue ; une séance sans inscription donne une ligne
@@ -214,14 +216,14 @@ END $$;
 REVOKE ALL ON FUNCTION drivy.metrics_fail(text),
  drivy.metrics_gate(uuid,text,text,uuid,boolean),
  drivy.metrics_data_since(uuid),
- drivy.metrics_lesson_lines(uuid,date,date,timestamptz,text,uuid,text,text,boolean),
+ drivy.metrics_lesson_lines(uuid,date,date,timestamptz,text,uuid,text,text,boolean,text),
  drivy.metrics_course_session_lines(uuid,date,date,text,uuid),
  drivy.metrics_course_series_lines(uuid,date,date,timestamptz,text,uuid),
  drivy.metrics_course_enrollment_events(uuid,date,date,text),
  drivy.metrics_course_payment_lines(uuid,date,date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION drivy.metrics_gate(uuid,text,text,uuid,boolean),
  drivy.metrics_data_since(uuid),
- drivy.metrics_lesson_lines(uuid,date,date,timestamptz,text,uuid,text,text,boolean),
+ drivy.metrics_lesson_lines(uuid,date,date,timestamptz,text,uuid,text,text,boolean,text),
  drivy.metrics_course_session_lines(uuid,date,date,text,uuid),
  drivy.metrics_course_series_lines(uuid,date,date,timestamptz,text,uuid),
  drivy.metrics_course_enrollment_events(uuid,date,date,text),
