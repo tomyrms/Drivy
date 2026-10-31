@@ -157,6 +157,9 @@ import XCTest
         XCTAssertTrue(failure.waitForNonExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(loading.waitForNonExistence(timeout: 15), app.debugDescription)
         XCTAssertFalse(failure.exists, app.debugDescription)
+        // Sur iPhone la seconde séance (14:00) dépasse à demi sous la barre d'onglets : comme dans le test de la journée mixte,
+        // elle est amenée à l'écran avant que les deux séances ne soient comptées.
+        reveal(course(at: "14:00", in: app), in: app)
         XCTAssertEqual(app.buttons.matching(identifier: "agenda-course-occurrence").count, 2, app.debugDescription)
         XCTAssertEqual(element("agenda-selected-date", in: app).label, selectedLabel)
     }
