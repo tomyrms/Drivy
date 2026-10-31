@@ -19,8 +19,22 @@ struct SchoolEntryView: View {
         case .waitingForActivation: "L’école se prépare"
         case .management: "Gestion de votre école"
         case .archived: "École archivée"
-        case .loading: "Ouverture de l’école"
+        case .loading: workspace.schoolError == nil ? "Ouverture de l’école" : "École indisponible"
         default: "École indisponible"
+        }
+    }
+    private var explanation: String {
+        switch destination {
+        case .prepareSchool:
+            "L’administration doit terminer la préparation et activer l’école sur le portail web. Votre compte reste accessible."
+        case .waitingForActivation:
+            "L’administration doit encore activer l’école. Votre compte reste accessible en attendant."
+        case .management:
+            "L’administration de l’école se fait sur le portail web. Votre compte reste accessible dans l’app."
+        case .archived:
+            "Cette école n’est plus ouverte dans l’app. Votre compte reste accessible ; contactez son administration pour la suite."
+        default:
+            "Votre compte reste accessible pendant la vérification de l’école."
         }
     }
     private var symbol: String {
@@ -44,7 +58,8 @@ struct SchoolEntryView: View {
                             Label(title, systemImage: symbol)
                                 .accessibilityIdentifier("school-entry-status")
                         } description: {
-                            EmptyView()
+                            Text(explanation)
+                                .accessibilityIdentifier("school-entry-explanation")
                         } actions: {
                             if opensPortal, let portalURL {
                                 Button(destination == .prepareSchool ? "Continuer la préparation sur le web" : "Ouvrir le portail web") {
@@ -57,6 +72,11 @@ struct SchoolEntryView: View {
                                 .buttonStyle(DrivyPrimaryButtonStyle())
                                 .accessibilityIdentifier("school-open-portal")
                             }
+                            if destination == .management, messagingEntry != nil {
+                                SchoolMessagingEntryButton()
+                                    .labelStyle(.titleAndIcon)
+                                    .buttonStyle(DrivySecondaryButtonStyle())
+                            }
                             Button("Actualiser") { Task { await workspace.refreshEntry() } }
                                 .buttonStyle(DrivySecondaryButtonStyle())
                                 .disabled(isWorking)
@@ -68,6 +88,10 @@ struct SchoolEntryView: View {
                     } else if opensPortal && portalURL == nil {
                         SchoolErrorNotice(message: "Le portail de l’école n’est pas configuré.")
                     }
+                    if destination == .management && messagingEntry == nil {
+                        SchoolErrorNotice(message: "La messagerie n’est pas disponible dans ce contexte.")
+                            .accessibilityIdentifier("school-messages-unavailable")
+                    }
                     if isWorking && destination != .loading { ProgressView("Vérification de l’école…") }
                 }
                 .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
@@ -77,9 +101,6 @@ struct SchoolEntryView: View {
             .navigationTitle(workspace.school?.name ?? workspace.membership?.schoolName ?? "Drivy")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if destination == .management, messagingEntry != nil {
-                    ToolbarItem(placement: .primaryAction) { SchoolMessagingEntryButton() }
-                }
                 DrivyAccountToolbarItem(openAccount: openAccount)
                 if let chooseSchool {
                     DrivySchoolToolbarItem(schoolName: workspace.membership?.schoolName, chooseSchool: chooseSchool)

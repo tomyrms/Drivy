@@ -33,7 +33,7 @@ une politique garde son choix, y compris « file désactivée ».
 
 ## Préférences et appareils
 
-- `GET/PUT /v1/me/notification-preferences` (If-Match) : 4 interrupteurs par personne, tous actifs par défaut.
+- `GET/PUT /v1/me/notification-preferences` (If-Match) : 4 interrupteurs par personne, tous actifs par défaut. Les trois catégories de messagerie (`messagingPrivate`, `messagingGeneral`, `messagingMentions`) rejoignent le même objet versionné (#74, voir `messaging-notifications-74.md`).
 - `PUT /v1/me/push-devices`, `POST /v1/me/push-devices/revoke` : le jeton n'est jamais relu par l'application.
 - `GET /v1/schools/{id}/course-follows/me`, `PUT …/{typeId}`, `POST …/{typeId}/unfollow` : abonnement volontaire,
   sans inscription ni entrée en file.

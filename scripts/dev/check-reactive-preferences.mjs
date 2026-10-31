@@ -13,7 +13,7 @@ const results = [];
 try {
   for (const colorScheme of ['light', 'dark']) for (const width of [1440, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 }, colorScheme, locale: 'fr-CH' });
-    let preferences = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true };
+    let preferences = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true, messagingPrivate: true, messagingGeneral: false, messagingMentions: true };
     let hold = false, release, loseResponse = false, puts = 0;
     const headers = { 'content-type': 'application/json' };
     await context.route('**/*', async route => {

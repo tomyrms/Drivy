@@ -5,12 +5,16 @@
  */
 export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
 type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action' | 'activate' | 'category'
-  | 'plannedStart' | 'plannedEnd' | 'timeZone' | 'bufferMinutes' | 'excludeLessonId';
+  | 'plannedStart' | 'plannedEnd' | 'timeZone' | 'bufferMinutes' | 'excludeLessonId'
+  | 'domain' | 'toExclusive' | 'compare' | 'breakdown' | 'scope' | 'categoryCode' | 'productKey' | 'granularity' | 'measures' | 'measure' | 'part'
+  | 'bucketFrom' | 'bucketToExclusive' | 'expectedLineCount' | 'expectedAmountCents';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
   readonly segments: readonly string[];
   readonly query?: readonly QueryKey[];
+  /** Rules replacing the shared ones for this route only (the pilotage period is a civil date, not an instant). */
+  readonly queryRules?: Readonly<Partial<Record<QueryKey, RegExp>>>;
   /** Writes whose API contract requires a strong version (If-Match). */
   readonly ifMatch?: boolean;
   /** Maximum JSON body size in bytes for a write. */
@@ -18,6 +22,9 @@ export interface SchoolRoute {
 }
 
 const list = ['limit', 'cursor'] as const;
+const civilDate = /^\d{4}-\d{2}-\d{2}$/;
+const metricsFilters = ['scope', 'instructorMembershipId', 'categoryCode', 'productKey'] as const;
+const metricsRules = { from: civilDate } as const;
 export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: [] },
   { method: 'PATCH', segments: [], ifMatch: true, bodyLimit: 4_096 },
@@ -135,6 +142,11 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['captures'], query: list },
   { method: 'GET', segments: ['lessons', ':id', 'reports'], query: list },
   { method: 'GET', segments: ['trainings', ':id', 'progress'] },
+  // Pilotage de l'école (#373) : lecture seule, droits relus par l'API. L'export CSV a sa propre route (réponse non JSON).
+  { method: 'GET', segments: ['metrics', 'definitions'] },
+  { method: 'GET', segments: ['metrics'], query: ['domain', 'from', 'toExclusive', 'compare', 'breakdown', ...metricsFilters], queryRules: metricsRules },
+  { method: 'GET', segments: ['metrics', 'series'], query: ['from', 'toExclusive', 'granularity', 'measures', ...metricsFilters], queryRules: metricsRules },
+  { method: 'GET', segments: ['metrics', 'details'], query: ['measure', 'part', 'from', 'toExclusive', 'bucketFrom', 'bucketToExclusive', 'limit', 'cursor', 'expectedLineCount', 'expectedAmountCents', ...metricsFilters], queryRules: metricsRules },
 ];
 
 const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -158,6 +170,22 @@ const queryRules: Record<QueryKey, RegExp> = {
   bufferMinutes: /^(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-3][0-9]|240)$/,
   from: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
   to: /^\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:\d{2})$/,
+  // Pilotage : dates civiles de l'école et valeurs énumérées ; l'API relit chaque paramètre.
+  domain: /^(?:activity|finance)$/,
+  toExclusive: civilDate,
+  compare: /^(?:none|previous-month|equivalent-period)$/,
+  breakdown: /^(?:instructor|category|product)$/,
+  scope: /^(?:school|self)$/,
+  categoryCode: /^[^\u0000-\u001f\u007f]{1,30}$/u,
+  productKey: /^[^\u0000-\u001f\u007f]{1,100}$/u,
+  granularity: /^(?:day|week|month)$/,
+  measures: /^[A-Z][0-9]{2}(?:,[A-Z][0-9]{2}){0,4}$/,
+  measure: /^[A-Z][0-9]{2}$/,
+  part: /^[ab]$/,
+  bucketFrom: civilDate,
+  bucketToExclusive: civilDate,
+  expectedLineCount: /^[0-9]{1,16}$/,
+  expectedAmountCents: /^[0-9]{1,16}$/,
 };
 export const MAX_SCHOOL_BODY = Math.max(...schoolRoutes.map(route => route.bodyLimit ?? 0));
 export const isUUID = (value: unknown): value is string => typeof value === 'string' && uuid.test(value);
@@ -183,7 +211,7 @@ export function matchSchoolRoute(method: string, pathname: string, search: strin
   const outgoing = new URLSearchParams();
   const seen = new Set<string>();
   for (const [key, value] of incoming) {
-    if (seen.has(key) || !(allowed as readonly string[]).includes(key) || !queryRules[key as QueryKey].test(value)) return;
+    if (seen.has(key) || !(allowed as readonly string[]).includes(key) || !(route.queryRules?.[key as QueryKey] ?? queryRules[key as QueryKey]).test(value)) return;
     seen.add(key); outgoing.append(key, value);
   }
   const query = outgoing.toString();

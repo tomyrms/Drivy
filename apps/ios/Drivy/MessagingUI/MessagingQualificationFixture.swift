@@ -84,10 +84,14 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private var conversations: [FixtureConversation] = []
     private var reactions: [UUID: [String: [UUID]]] = [:]
     private var pinned: Set<UUID> = []
+    /// Votes et clôture d'un sondage modifiés pendant la session (#73) ; sans eux, les votes de départ de la fixture.
+    private var pollVotesByMessage: [UUID: [[UUID]]] = [:]
+    private var closedPolls: Set<UUID> = []
     private var mutationReceipts: [UUID: (request: URLRequest, response: SchoolHTTPResponse)] = [:]
     private let mutationDelay: Int
     private let refuseMutation: Bool
     private let denyMutationAccess: Bool
+    private let unreadFilter: Bool
     /// General page 1 holds sequences 24...9, page 2 holds 8...1.
     private static let generalPageCursor = "fixture-page-2"
     private static let generalPageFloor = 9
@@ -100,10 +104,14 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         mutationDelay = [1, 5, 15].contains(delay) ? delay : 0
         refuseMutation = arguments.contains("-messaging-ui-mutation-refused")
         denyMutationAccess = arguments.contains("-messaging-ui-mutation-access-denied")
+        unreadFilter = arguments.contains("-messaging-ui-unread-filter")
         conversation = rich ? MessagingQualificationIDs.general : UUID()
         member = rich ? MessagingQualificationIDs.leaPerson : UUID()
         guard rich else { return }
         conversations = seed
+        if unreadFilter, let index = conversations.firstIndex(where: { $0.id == MessagingQualificationIDs.general }) {
+            conversations[index].lastRead = conversations[index].lastSequence
+        }
         reactions[MessagingQualificationIDs.message(1, 21)] = ["👍": [MessagingQualificationIDs.leaPerson, scope.accountID],
                                                               "😂": [MessagingQualificationIDs.marcPerson]]
         pinned = [MessagingQualificationIDs.message(1, 20)]
@@ -193,7 +201,9 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         } else if path.hasSuffix("/general"), method == "PUT" {
             data = #"{"conversationId":"\#(conversation)"}"#
         } else if path.hasSuffix("/conversations"), method == "GET" {
-            data = rich ? try conversationList() : #"{"items":[],"nextCursor":null}"#
+            let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "before" }?.value
+            data = rich ? try conversationList(cursor: cursor) : #"{"items":[],"nextCursor":null}"#
         } else if path.hasSuffix("/messages"), method == "GET" {
             if rich, let id = uuid(after: "conversations", in: parts) {
                 let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?
@@ -218,6 +228,13 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
                   let messageID = uuid(after: "messages", in: parts) {
             if method == "PUT" { pinned.insert(messageID) } else { pinned.remove(messageID) }
             data = #"{"done":true}"#
+        } else if rich, parts.count >= 2, parts[parts.count - 2] == "poll", parts.last == "votes", method == "PUT",
+                  let messageID = uuid(after: "messages", in: parts) {
+            data = try castVote(messageID, body: request.httpBody)
+        } else if rich, parts.count >= 2, parts[parts.count - 2] == "poll", parts.last == "close", method == "POST",
+                  let messageID = uuid(after: "messages", in: parts) {
+            closedPolls.insert(messageID)
+            data = #"{"done":true}"#
         } else {
             // Unspecified mutations (message send included) must fail rather than manufacture acceptance.
             throw MessagingFailure.unavailable
@@ -238,17 +255,21 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self)
     }
 
-    private func conversationList() throws -> String {
-        let items: [[String: Any]] = conversations.map { item in
+    private func conversationList(cursor: String?) throws -> String {
+        let firstPage = cursor == nil
+        let page = unreadFilter ? (firstPage ? Array(conversations.prefix(2)) : Array(conversations.dropFirst(2))) : conversations
+        let items: [[String: Any]] = page.map { item in
             let unread = item.messages.filter { $0.sequence > item.lastRead && $0.sender != scope.accountID }.count
             var row: [String: Any] = ["id": item.id.uuidString.lowercased(), "schoolId": scope.schoolID.uuidString.lowercased(),
                 "kind": item.kind, "title": item.title, "lastSequence": item.lastSequence,
                 "lastReadSequence": item.lastRead, "readStateVersion": item.version,
                 "mutedUntil": NSNull(), "unreadCount": unread]
+            if unreadFilter && item.id == MessagingQualificationIDs.lea { row["unreadCount"] = NSNull() }
             row["peerPersonId"] = item.peer.map { $0.uuidString.lowercased() as Any } ?? NSNull()
             return row
         }
-        return try json(["items": items, "nextCursor": NSNull()])
+        let next: Any = unreadFilter && firstPage ? MessagingQualificationIDs.lea.uuidString.lowercased() : NSNull()
+        return try json(["items": items, "nextCursor": next])
     }
 
     private func messagePage(_ id: UUID, cursor: String?) throws -> String {
@@ -283,10 +304,11 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             ]
             row["replyToMessageId"] = message.replyTo.map { $0.uuidString.lowercased() as Any } ?? NSNull()
             if message.poll != nil {
-                let votes: [[String: Any]] = message.pollVotes.enumerated().map { index, people in
+                let current = pollVotesByMessage[message.id] ?? message.pollVotes
+                let votes: [[String: Any]] = current.enumerated().map { index, people in
                     ["optionIndex": index, "personIds": people.map { $0.uuidString.lowercased() }]
                 }
-                let poll: [String: Any] = ["optionCount": message.pollVotes.count, "multiple": false, "closed": false,
+                let poll: [String: Any] = ["optionCount": current.count, "multiple": false, "closed": closedPolls.contains(message.id),
                                            "creatorId": scope.accountID.uuidString.lowercased(), "votes": votes]
                 row["poll"] = poll
             }
@@ -298,6 +320,23 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
                                           "lastReadSequence": item.lastSequence - 1]]
         let access: [String: Any] = ["canWrite": !readOnly, "readableUntilSequence": limit, "isGroupAdmin": true]
         return try json(["items": items, "nextCursor": next, "access": access, "readStates": receipts])
+    }
+
+    /// Choix unique remplacé, vote retiré si la liste est vide ; refusé une fois le sondage clos, comme le serveur.
+    private func castVote(_ messageID: UUID, body: Data?) throws -> String {
+        struct Body: Decodable { let optionIndexes: [Int] }
+        guard !closedPolls.contains(messageID), let body, let requested = try? JSONDecoder().decode(Body.self, from: body),
+              let original = conversations.flatMap(\.messages).first(where: { $0.id == messageID }), !original.pollVotes.isEmpty else {
+            throw MessagingFailure.invalidResponse
+        }
+        var votes = pollVotesByMessage[messageID] ?? original.pollVotes
+        guard requested.optionIndexes.allSatisfy({ votes.indices.contains($0) }) else { throw MessagingFailure.invalidResponse }
+        for index in votes.indices {
+            votes[index].removeAll { $0 == scope.accountID }
+            if requested.optionIndexes.contains(index) { votes[index].append(scope.accountID) }
+        }
+        pollVotesByMessage[messageID] = votes
+        return #"{"done":true}"#
     }
 
     private func readState(_ id: UUID, body: Data?) throws -> String {

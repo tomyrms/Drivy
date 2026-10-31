@@ -3,6 +3,7 @@ import Observation
 
 enum SchoolNotificationCategory: String, Codable, CaseIterable, Sendable {
     case courseOffers, courseReminders, courseChanges, courseStaffAlerts
+    case messagingPrivate, messagingGeneral, messagingMentions
 
     func value(in preferences: SchoolNotificationPreferences) -> Bool {
         switch self {
@@ -10,6 +11,10 @@ enum SchoolNotificationCategory: String, Codable, CaseIterable, Sendable {
         case .courseReminders: preferences.courseReminders
         case .courseChanges: preferences.courseChanges
         case .courseStaffAlerts: preferences.courseStaffAlerts
+        // Valeurs d'une personne sans ligne côté serveur (#74).
+        case .messagingPrivate: preferences.messagingPrivate ?? true
+        case .messagingGeneral: preferences.messagingGeneral ?? false
+        case .messagingMentions: preferences.messagingMentions ?? true
         }
     }
     func apply(_ value: Bool, to preferences: inout SchoolNotificationPreferences) {
@@ -18,6 +23,9 @@ enum SchoolNotificationCategory: String, Codable, CaseIterable, Sendable {
         case .courseReminders: preferences.courseReminders = value
         case .courseChanges: preferences.courseChanges = value
         case .courseStaffAlerts: preferences.courseStaffAlerts = value
+        case .messagingPrivate: preferences.messagingPrivate = value
+        case .messagingGeneral: preferences.messagingGeneral = value
+        case .messagingMentions: preferences.messagingMentions = value
         }
     }
 }
@@ -51,7 +59,26 @@ extension SchoolNotificationClient: SchoolNotificationPreferencesAPI {}
 }
 extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value == SchoolNotificationIntentJournal {}
 
-/// Quatre préférences partagent une version serveur : une seule requête à la fois, mais la saisie reste libre.
+/// Présentation d’une préférence seulement ; aucun nouvel état durable ni seconde file d’écriture.
+enum SchoolNotificationSyncStatus: Equatable {
+    case queued, sending, slow, unconfirmed, conflict, rejected, storageUnavailable
+
+    var isBriefPending: Bool { self == .queued || self == .sending }
+    var title: String {
+        switch self {
+        case .queued: "À synchroniser"
+        case .sending: "Synchronisation…"
+        case .slow: "Synchronisation lente"
+        case .unconfirmed: "Non confirmé"
+        case .conflict: "À vérifier"
+        case .rejected: "Modification refusée"
+        case .storageUnavailable: "Non conservé sur l’appareil"
+        }
+    }
+    var symbol: String { isBriefPending ? "arrow.triangle.2.circlepath" : "exclamationmark.circle" }
+}
+
+/// Sept préférences (cours puis messagerie) partagent une version serveur : une seule requête à la fois, mais la saisie reste libre.
 /// Le modèle vit au-delà de sa vue ; aucune fermeture d'écran n'annule une requête déjà partie.
 @MainActor @Observable final class SchoolNotificationSettingsModel {
     let scope: AccountIntentScope
@@ -62,6 +89,8 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
     private(set) var errorMessage: String?
     private(set) var refreshedAt: Date?
     private var journal = SchoolNotificationIntentJournal()
+    /// Un refus confirmé retire l’intention ; sa raison visuelle reste attachée à la bonne catégorie.
+    private var rejectedCategories: Set<SchoolNotificationCategory> = []
     @ObservationIgnored private let api: any SchoolNotificationPreferencesAPI
     @ObservationIgnored private let store: any SchoolNotificationIntentStore
     @ObservationIgnored private let contextIsCurrent: @MainActor () -> Bool
@@ -87,6 +116,18 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
     }
     var hasPendingChanges: Bool { !journal.intents.isEmpty || journal.attempt != nil }
     func isPending(_ category: SchoolNotificationCategory) -> Bool { journal.intents[category] != nil }
+
+    func synchronization(_ category: SchoolNotificationCategory) -> SchoolNotificationSyncStatus? {
+        guard isCurrent else { return nil }
+        guard let intent = journal.intents[category] else {
+            return rejectedCategories.contains(category) ? .rejected : nil
+        }
+        if !durable { return .storageUnavailable }
+        if state == .unconfirmed { return isSaving ? .slow : .unconfirmed }
+        if state == .conflict { return .conflict }
+        if isSaving && journal.attempt?.intentIDs[category] == intent.id { return .sending }
+        return .queued
+    }
 
     /// Une lecture simultanée est dédupliquée ; une ancienne lecture ne remplace jamais un PUT confirmé.
     /// Réouvrir la page conserve sa projection en mémoire, puis revalide seulement cet endpoint.
@@ -115,6 +156,7 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
             confirmed = fresh; refreshedAt = Date()
             reconcile(fresh)
             guard persist() else { return }
+            rejectedCategories = []
             errorMessage = nil; state = hasPendingChanges ? .queued : .idle
             schedule()
         } catch {
@@ -126,6 +168,7 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
     /// Le dernier choix apparaît sans attendre le réseau. La barrière chiffrée précède tout envoi.
     func set(_ category: SchoolNotificationCategory, _ value: Bool) {
         guard isCurrent, let preferences, category.value(in: preferences) != value else { return }
+        rejectedCategories.remove(category)
         journal.intents[category] = .init(id: UUID(), value: value)
         // Une intention en vol reste intacte, même si le prochain choix revient à la valeur confirmée.
         if journal.attempt == nil, let confirmed, category.value(in: confirmed) == value {
@@ -148,7 +191,7 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
     func invalidate() {
         invalidated = true; generation = UUID(); readRevision += 1
         work?.cancel(); work = nil; warning?.cancel(); warning = nil
-        confirmed = nil; journal = .init(); isLoading = false; isSaving = false
+        confirmed = nil; journal = .init(); rejectedCategories = []; isLoading = false; isSaving = false
         state = .idle; errorMessage = nil; refreshedAt = nil
     }
 
@@ -210,6 +253,9 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
                     }
                 }
                 if let failure = error as? SchoolPlanningFailure, case .rejected = failure {
+                    for (category, id) in attempt.intentIDs where journal.intents[category]?.id == id {
+                        rejectedCategories.insert(category)
+                    }
                     settle(attempt)
                     guard persist() else { return }
                     state = .rejected
@@ -274,7 +320,7 @@ extension EncryptedAccountIntentStore: SchoolNotificationIntentStore where Value
     }
 }
 
-/// Un seul compte en mémoire, quatre booléens confirmés, au plus quatre intentions et un PUT.
+/// Un seul compte en mémoire, sept booléens confirmés, au plus sept intentions et un PUT.
 /// Le passage d'une école à l'autre conserve ces préférences personnelles ; une déconnexion les purge.
 @MainActor enum SchoolNotificationSettingsCache {
     private static var cached: SchoolNotificationSettingsModel?

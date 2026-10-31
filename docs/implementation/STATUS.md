@@ -1,5 +1,58 @@
 # État de la réalisation
 
+<!-- reprise-372-20261030 -->
+## 30 octobre 2026 — reprise #372 : pile iOS à jour de master, IPA 447 retenue, plan web prêt
+
+Master `f0aa7dce17372ece43e7626346db21ae79221230` contient #347. Chaîne iOS vérifiée linéaire (#337 ⊂ #338 ⊂ #339) ; `master` intégré par fusions additives sans force-push : `74436ffd` (#337), `35ed4546` (#338), `0f8e33c7` (#339). Seul conflit : ce fichier, deux historiques conservés, contrôle automatique des lignes. Master avait remplacé un octet invalide de la ligne « alerte de mention » par un caractère valide : édition acceptée.
+
+**IPA candidate : Drivy 0.7.0 (447), non signée**, [artefact](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882) valable jusqu'au 12 novembre 2026, run 40959499844 sur `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`, SHA-256 `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`. Réutilisée sans recompilation : aucune différence entre `633f20d3` et `0f8e33c7` sur `apps/ios/Drivy`, `project.yml`, `Package.resolved`, `build-ipa.sh`, `messaging-qualification.sh`, `ipa-essai.yml` ; seuls deux fichiers de `DrivyTests` diffèrent. Essai du porteur attendu : `NOT_EXECUTED`. Fusions #337 → #338 → #339 et tests iOS en attente de ce retour.
+
+**Web : candidat `f0aa7dce`**, servi `4af4b0e6` (lu publiquement). Delta de 10 fichiers sous `apps/web/client`, trois de test compris ; aucun changement de BFF, dépendances, API, contrat, migration ni infra. Typage et 16 tests des fichiers modifiés réussis ; build Node 24.22.1, 105 fichiers, identité de build contrôlée. Plan `deploy-web-311.py` exécuté en lecture seule : `deployment-plan`, frontend seul, sans migration, cinq services sains. **Aucune écriture sur le serveur** ; `--execute` attend l'accord du porteur. Depuis Windows, lancer ce script en PowerShell : Git Bash réécrit `/opt/...`.
+
+**Suites `--extended` : non exécutées**, après l'essai web. Sélecteurs recoupés au portail sans exécution : récupération de compte 6/6 présents ; saisie par code 15/16, le seizième étant un gabarit dynamique bien présent dans `.entry-facts` ; formations et tarifs à réécrire en partie (onglets au lieu de la navigation par liens, `.cat-competency-*`, déplacement par menu, messages de tarif et de reprise changés). Ce recoupement ne vaut pas résultat de test. La note précédente surestimait donc l'écart des deux premières.
+
+### 30 octobre 2026, 18:05 Europe/Zurich — web `f0aa7dce` déployé après accord du porteur
+
+Accord explicite du porteur sur `f0aa7dce17372ece43e7626346db21ae79221230`. Master était entre-temps à `028211d6` (#383), documentation de la roadmap seulement : code web identique, SHA autorisé conservé.
+
+- URL : <https://drivy.shulker.ch/app/>. Reçu et identifiant de rollback : `20261030T170449Z-f0aa7dce1737`. Release précédente conservée : `4af4b0e6`.
+- Sauvegarde CT113 : `/root/drivy_refonte-before-web311-20261030T170449Z.dump`, 2 232 328 octets, catalogue et blocs relus. Aucune restauration réelle : l'archive lisible n'est pas une répétition de restauration.
+- Seul `drivy-refonte-web` a redémarré ; API, worker et identité gardent leur PID, ingress inchangé. Aucune migration, BFF compilée identique entre les deux releases (`diff -rq`), configuration privée inchangée selon le contrôle du script.
+- PASS après bascule : SHA servi, HTML exact sur sept adresses, 104 fichiers statiques à l'empreinte, CSP `default-src 'none'` sans `unsafe-eval`, session anonyme `no-store`, 401 sur `/app/bff/me`, plan de rollback valide, zéro erreur `journalctl` du web sur dix minutes, Edge 1440 et 390 sans débordement ni erreur JavaScript sur quatre pages publiques. Seul 401 console : préférences sans connexion, comportement documenté.
+- NOT_EXECUTED : parcours connecté, données réelles, essai du porteur, suites `--extended`, restauration de la sauvegarde. Rollback non exécuté.
+
+### 30 octobre 2026, 18:30 Europe/Zurich — essai web validé, trois suites étendues vertes
+
+Essai web validé par le porteur sur `f0aa7dce`. Suites `--extended` exécutées après ce retour, sur la PR #384.
+
+- PASS : [run 41098462805](https://github.com/tomyrms/Drivy/actions/runs/41098462805), `fca6a78e`, 164 contrôles, Chromium, OIDC, BFF, API et PostgreSQL isolés, données synthétiques. Formations et tarifs, saisie par code, récupération de compte réunis dans le même run. Le code applicatif est identique à `f0aa7dce`, la version déployée.
+- Saisie par code et récupération n'ont demandé aucune adaptation : la limite notée le 30 octobre était fausse pour ces deux suites. Formations et tarifs a été réaligné sur le portail : 29 assertions conservées, dont quatre adaptées à des comportements changés par #311 et listées dans la PR. Aucun défaut applicatif trouvé.
+- Les trois suites sont raccordées à `validation-finale.yml`. Le parcours de base reste inchangé par défaut.
+- Typage du harnais sans erreur dans les fichiers modifiés ; 3 erreurs préexistantes sur master dans d'autres scripts.
+- PR #384 fusionnée sur décision du porteur : master `2a376c39`, identique à `fca6a78e`. Sur ce SHA, `Refonte · ouverture école navigateur` (41100489556, parcours de base) et `Refonte · vérifications` (41100488932) réussis. Code applicatif toujours identique à `f0aa7dce`, aucun redéploiement.
+- NOT_EXECUTED : navigateur physique, lecteur d'écran, compte réel. Récupération par e-mail toujours désactivée en production.
+
+<!-- ios-batch-15-20261029 -->
+## 29 octobre 2026 — IPA 447 : 15 issues supplémentaires, 40 réalisées et fermées
+
+Nouveau lot natif : #113, #117, #118, #125, #196, #200, #208, #209, #210, #214, #220, #227, #231, #238, #246. Les 25 issues de l'IPA 446 restent incluses. Les 40 clôtures GitHub sont confirmées sur demande explicite du porteur ; elles ne constituent pas une validation de recette physique. PR #337/#338/#339 en brouillon, retour d'essai attendu avant tests pertinents puis fusion dans master.
+
+Branche `codex/ios-batch-15-20261029`, trois branches spécialisées séparées, base `2d9a5f64`. Les restes des issues déjà partiellement livrées ont été rapprochés de leurs commentaires/PR, sans recompter leurs anciennes réalisations. Aucun changement web/API/contrat/migration/homelab, aucun déploiement. EPIC #311 exclue ; seule cette entrée additive concerne le suivi partagé.
+
+Compilation Release réussie : Drivy 0.7.0 (447), code produit `633f20d3b6893f66151ea95d266ac0fb5ceef1bf`, [IPA](https://github.com/tomyrms/Drivy/actions/runs/40959499844/artifacts/12935631882). Paquet non signé copié dans `C:/Users/jtoma/Downloads/Drivy-0.7.0-447.ipa` ; manifeste, SHA-256, CRC ZIP, plist, dépendances et copie vérifiés. Empreinte `92be049a68418aea3fc5994e01c23d5c62c1cf2533a5ac7f84c00f41c99ff2cc`.
+
+Contrôles ciblés Apple réussis : agenda 73 tests (78 exécutions paramétrées, run 40954007339), consentement 20 (40957419205), profil 10 (40960532711), brouillons 49 (40961435005). SHA et limites documentés dans le guide ; les corrections ultérieures de garde d'agenda ne sont pas assimilées au SHA testé. Les échecs intermédiaires profil/brouillon provenaient du code de test et sont corrigés sans changer le produit de l'IPA. Vingt captures comparables avant/après inspectées pour #196/#220/#227/#231. Revues croisées et `git diff --check` effectués. Grandes suites, tests UI préparés, recette physique, GPS/batterie/VoiceOver : non exécutés.
+
+[Livraison, preuves et recette de chacune des 40 issues](ios-batch-15-delivery-20261029.md). Les anciennes mentions d'attente de clôture ci-dessous sont remplacées par la demande explicite du porteur ; l'attente de validation et de fusion demeure.
+
+<!-- ios-suite-19-20261029 -->
+## 29 octobre 2026 — suite iOS : 19 nouvelles issues, 25 avec le premier lot
+
+Branche `codex/ios-suite-19-20261029`, hors EPIC #311 et web de Claude. Implémentations : #201, #202, #203, #204, #206, #207, #211, #212, #213, #215, #216, #217, #218, #219, #228, #229, #230, #232, #240. Les six précédentes (#195, #197, #198, #199, #237, #241) sont incluses dans la même candidature.
+
+Relectures croisées et `git diff --check` effectués. Compilation Release/IPA finale PASS : Drivy 0.7.0 (446), SHA `9e1769494f0d55e3eaf6cf9d1a6dca60d9d1cb55`, [IPA](https://github.com/tomyrms/Drivy/actions/runs/40947705309/artifacts/12931460123). Artefact téléchargé : SHA-256, CRC ZIP, plist, plateforme iPhoneOS et paquet non signé vérifiés. Tests ciblés préparés mais non exécutés ; grandes suites et essais physiques NOT_EXECUTED. Aucun déploiement, fusion dans master ou clôture. Retour du porteur attendu avant tests pertinents puis fusion/clôture. Détail et preuves : [livraison des 19 issues](ios-suite-19-delivery-20261029.md).
+
+
 ## 29 octobre 2026 — lot iOS indépendant de #311, avant essai
 
 - Inventaire des 155 issues ouvertes et rapprochement commentaires/branches/commits/PR : [triage](ios-independent-triage-20261029.md). #311, sa reprise de #280 et les disponibilités web #248–252 sont exclus.
@@ -1376,3 +1429,17 @@ Après autorisation explicite de déployer directement, release `be8a02457ef2c88
 Premier staging interrompu avant installation pour incompatibilité Python3.11/tarfile ; extraction confinée corrigée et nouvelle sauvegarde avant reprise réussie. Contrôle du vrai build sous CSP :4gestes popups réussis, probe Zod préexistant bloqué/intercepté, aucune politique assouplie. Entrée publique nouvelle relue dans le navigateur ; aucune opération métier réelle effectuée pour la sonde.
 
 État : DEPLOYED_AWAITING_USER_TRIAL. Essai et validation personnelle NOT_EXECUTED. Campagnes complètes #309/#84 différées ; attendre le retour du porteur. L'épic et les sous-issues ne sont pas déclarés qualifiés/clos par le seul déploiement. Les reçus postérieurs au SHA produit ne modifient pas le build installé.
+
+## 31 octobre 2026 — Pilotage #373 : dictionnaire (#374) et agrégations API/BFF (#375)
+
+T01 (#374) : dictionnaire des indicateurs, matrice des droits, jeu synthétique et 12 décisions acceptées, dans [pilotage-373-indicateurs.md](pilotage-373-indicateurs.md). T02 (#375) : routes `metrics` (définitions, cartes, séries, détails, export CSV) côté API, relais et export côté BFF, migration additive de fonctions et d'index (`20261031_pilotage_metrics.sql`, aucune table, aucune donnée). Exécuté : tests d'intégration contre une vraie PostgreSQL 17 (jeu de référence de T01, jeu de 10 000 CHF au-delà d'une page, droits, export, paramètres) et tests du BFF. Mesure ponctuelle sur 10 064 leçons réalisées : deux défauts de coût trouvés et corrigés (somme des écritures relue pour chaque leçon : 4,7 s à 86 ms ; noms recalculés pour chaque ligne d'une page : export refusé au-delà de 10 000 lignes passé de 12,2 s à 2,1 s), chiffres et réserves en section 11 du document. Reste à qualifier : aucun objectif de performance n'est déclaré atteint (une école, une machine locale, pas de charge concurrente) ; le contrat OpenAPI 3.11.0 n'est pas modifié ; aucun écran (T03 à T09) ; rien n'est déployé et la migration n'est appliquée sur aucune base de production.
+
+## 31 octobre 2026 — Messagerie : alertes de messages et préférences (#74), signalements chiffrés et boîte des administrateurs (#77)
+
+#74 : alertes de messages privés et du général (déclencheur SQL, relecture avant envoi, validité de 15 minutes, titre générique sans contenu), trois préférences par personne dans l'objet versionné existant, portail web et Réglages de l'app, ouverture de la bonne conversation depuis une alerte ([document](messaging-notifications-74.md)). « Refonte · vérifications » verte sur `051a2d37` ([run 41200814594](https://github.com/tomyrms/Drivy/actions/runs/41200814594)), tests métier iPhone « reactivity » verts ([run 41200806812](https://github.com/tomyrms/Drivy/actions/runs/41200806812)). Reste à qualifier : aucune alerte APNs réelle n'a été reçue sur appareil, pas de regroupement anti-rafale côté serveur.
+
+#77 : signalement d'abus chiffré pour les administrateurs de l'école ([document](messaging-reports-77.md)). API : statut `OPEN`, `HANDLED`, `DISMISSED` avec historique, cadence (3 par heure et par conversation, 10 par jour et par école), destinataires de clés, migration additive ; « Refonte · vérifications » verte sur `071401ca` ([run 41225134866](https://github.com/tomyrms/Drivy/actions/runs/41225134866)). iOS : session Megolm par signalement partagée par to-device Olm, boîte « Signalements » réservée aux administrateurs, confirmation avant transmission ; le Swift compile (workflow d'IPA lancé seulement pour vérifier la compilation sur `bd4e3e80`, [run 41225717502](https://github.com/tomyrms/Drivy/actions/runs/41225717502) ; IPA ni téléchargée ni livrée, lancement hors consigne). Reste à qualifier : le partage de clé et le déchiffrement chez l'administrateur n'ont jamais été exercés de bout en bout, aucun parcours d'interface n'est automatisé, et la conservation des preuves attend #68. Aucun déploiement, aucune activation de la messagerie.
+
+## 31 octobre 2026 — Tests de recette #83, #78 et #73, reprise des issues du jour
+
+#83 : cinq fichiers de tests API de cours et un fichier de tests web ajoutés, sans changement de code produit ; « Refonte · vérifications » verte sur `c71fbd06` ([run 41201921118](https://github.com/tomyrms/Drivy/actions/runs/41201921118)). Matrice de traçabilité recomptée : 59 critères, 19 PASS, 34 PARTIAL, 6 NOT_COVERED. #78 : `MessagingLessonIndependenceTests` (MSG-17) vert dans les tests métier iPhone ([run 41201923959](https://github.com/tomyrms/Drivy/actions/runs/41201923959)) ; matrice `messaging-78-20261023.md` relevée sur ce qui a réellement tourné. #73 : le test UI du vote et de la clôture d'un sondage passe sur iPhone et iPad ([run 41224876858](https://github.com/tomyrms/Drivy/actions/runs/41224876858)) après correction de l'attente de « hittability » et du contrôle d'activation. Ce même run était rouge sur `testReactionFromLongPressClosesMenuAndUpdatesCapsule` (sélecteur corrigé sur le candidat #339, fusionné dans `master` le 31 octobre) : après fusion de `master` dans la branche, ce seul test est vert sur iPhone et iPad ([run 41242976214](https://github.com/tomyrms/Drivy/actions/runs/41242976214)). Reste à qualifier : les tests Swift et UI de cours n'ont pas été rejoués ; aucun résultat physique. Reprise détaillée : [reprise-issues-20261031.md](reprise-issues-20261031.md).

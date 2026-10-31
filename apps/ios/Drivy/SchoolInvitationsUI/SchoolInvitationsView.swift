@@ -5,8 +5,27 @@ import UniformTypeIdentifiers
 struct SchoolInvitationsView: View {
     @Bindable var model: SchoolInvitationWorkspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showsCreation = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var query = ""
+    @State private var statusFilter: SchoolInvitationListFilter = .all
+    @State private var now = Date()
+    @State private var visibleDetailID: UUID?
+
+    private var feedbackPlacement: SchoolInvitationFeedbackPlacement {
+        .init(visibleDetailID: visibleDetailID,
+            listIsVisible: horizontalSizeClass != .compact && columnVisibility != .detailOnly)
+    }
+
+    private var isFiltering: Bool { !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || statusFilter != .all }
+    private var visibleInvitations: [SchoolInvitation] { model.matchingInvitations(query: query, filter: statusFilter, now: now) }
+    private var nextDeadline: Date? {
+        guard scenePhase == .active else { return nil }
+        return model.invitations.filter { $0.status == .pending }
+            .compactMap { SchoolInvitation.date($0.expiresAt) }.filter { $0 > now }.min()
+    }
 
     /// A code renewed from the detail opens here; the creation sheet shows its own.
     private var issuedCode: Binding<SchoolIssuedInvitationCode?> {
@@ -14,26 +33,27 @@ struct SchoolInvitationsView: View {
     }
 
     var body: some View {
+        let displayedInvitations = visibleInvitations
         NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $model.selectedID) {
-                if let pending = model.pending { InvitationPendingSection(model: model, pending: pending) }
-                if model.pending == nil, model.codeRecovery != nil, !showsCreation {
-                    Section { InvitationCodeRecovery(model: model) }
-                        .drivyFormRows()
+                if model.school != nil {
+                    Section {
+                        Picker("Statut", selection: $statusFilter) {
+                            ForEach(SchoolInvitationListFilter.allCases) { filter in Text(filter.label).tag(filter) }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("invitations-status-filter")
+                    }
+                    .drivyFormRows()
                 }
-                if let success = model.successMessage {
-                    Section { DrivyFormMessage(text: success) }
-                        .drivyFormRows()
-                }
-                if let error = model.errorMessage {
-                    Section { SchoolErrorNotice(message: error, retry: { Task { await model.load() } }) }
-                        .drivyFormRows()
-                }
+                InvitationFeedbackView(model: model, placement: feedbackPlacement, surface: .list,
+                    hidesCodeRecovery: showsCreation)
                 if !model.hasLoaded && model.invitations.isEmpty && model.errorMessage == nil {
                     Section { DrivySkeletonRows(count: 4, leading: .avatar).drivySkeleton("Chargement des invitations…") }
                         .drivyFormRows()
                 }
-                if model.school != nil && model.invitations.isEmpty && !model.isLoading && model.errorMessage == nil {
+                if model.school != nil && model.invitations.isEmpty && model.nextCursor == nil && !isFiltering
+                    && !model.isLoading && model.errorMessage == nil {
                     Section {
                         DrivyEmptyState(title: "Aucune invitation", symbol: "envelope",
                             actionTitle: model.mayEdit && model.canCreateCode ? "Inviter un élève" : nil,
@@ -43,9 +63,17 @@ struct SchoolInvitationsView: View {
                         .drivyFormRows()
                 }
                 Section {
-                    ForEach(model.invitations) { invitation in
+                    if model.hasLoaded && displayedInvitations.isEmpty && (isFiltering || model.nextCursor != nil) {
+                        DrivyEmptyState(title: model.nextCursor != nil ? "Aucun résultat sur les pages chargées" : "Aucun résultat",
+                            symbol: "magnifyingglass", actionTitle: isFiltering ? "Effacer les filtres" : nil,
+                            action: { query = ""; statusFilter = .all })
+                            .buttonStyle(.borderless)
+                            .drivyFormRows()
+                    }
+                    ForEach(displayedInvitations) { invitation in
                         NavigationLink(value: invitation.id) {
                             InvitationRow(invitation: invitation, training: model.trainingLabel(invitation),
+                                reference: model.reference(invitation), timeZone: model.school?.timeZone, now: now,
                                 isSelected: model.selectedID == invitation.id)
                         }
                         .accessibilityIdentifier("invitation-\(invitation.id.uuidString)")
@@ -62,11 +90,14 @@ struct SchoolInvitationsView: View {
                         .disabled(model.isLoadingMore || model.isLoading || model.isBusy)
                         .accessibilityIdentifier("invitations-more")
                     }
+                } header: {
+                    if model.nextCursor != nil { Text("Résultats parmi les invitations chargées").drivyFormSectionHeader() }
                 }
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(DrivyTheme.canvas)
+            .searchable(text: $query, prompt: "Invitation ou référence")
             .refreshable { await model.load() }
             .navigationTitle("Invitations")
             .navigationBarTitleDisplayMode(.inline)
@@ -84,7 +115,10 @@ struct SchoolInvitationsView: View {
                 max: DrivyLayout.splitListMaxWidth)
         } detail: {
             if let invitation = model.selectedInvitation {
-                InvitationDetailView(model: model, invitation: invitation)
+                InvitationDetailView(model: model, invitation: invitation, now: now, feedbackPlacement: feedbackPlacement)
+                    .id(invitation.id)
+                    .onAppear { visibleDetailID = invitation.id }
+                    .onDisappear { if visibleDetailID == invitation.id { visibleDetailID = nil } }
             } else {
                 ContentUnavailableView("Choisis une invitation", systemImage: "envelope.open")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -95,7 +129,17 @@ struct SchoolInvitationsView: View {
         .presentationSizing(.page)
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy)
-        .task { await model.load() }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            now = Date()
+            await model.load()
+        }
+        .task(id: nextDeadline) {
+            guard let deadline = nextDeadline else { return }
+            do { try await Task.sleep(for: .seconds(max(0.05, deadline.timeIntervalSinceNow))) }
+            catch { return }
+            now = Date()
+        }
         .sheet(isPresented: $showsCreation, onDismiss: { model.dismissIssuedCode() }) { InvitationCreationView(model: model) }
         .sheet(item: issuedCode) { issued in
             NavigationStack {
@@ -107,6 +151,50 @@ struct SchoolInvitationsView: View {
                     }
             }
             .tint(DrivyTheme.accent)
+        }
+    }
+}
+
+/// Présentation unique des avis ; la provenance reste distincte de la sélection courante.
+private struct InvitationFeedbackView: View {
+    let model: SchoolInvitationWorkspace
+    let placement: SchoolInvitationFeedbackPlacement
+    let surface: SchoolInvitationFeedbackPlacement.Surface
+    var hidesCodeRecovery = false
+
+    var body: some View {
+        Group {
+            if let error = model.readErrorMessage, placement.reading == surface {
+                block("invitations-feedback-reading") {
+                    SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
+                }
+            }
+            if let error = model.operationErrorMessage, placement.operation(for: model.operationInvitationID) == surface {
+                block("invitations-feedback-operation") { SchoolErrorNotice(message: error) }
+            }
+            if let pending = model.pending, placement.operation(for: pending.resourceID) == surface {
+                block("invitations-feedback-pending") { InvitationPendingNotice(model: model, pending: pending) }
+            }
+            if let success = model.successMessage, placement.operation(for: model.successInvitationID) == surface {
+                block("invitations-feedback-success") { DrivyFormMessage(text: success) }
+            }
+            if model.pending == nil, let recovery = model.codeRecovery, !hidesCodeRecovery,
+               placement.operation(for: recovery.invitationID) == surface {
+                block("invitations-feedback-code-recovery") { InvitationCodeRecovery(model: model) }
+            }
+        }
+    }
+
+    @ViewBuilder private func block<Content: View>(_ identifier: String, @ViewBuilder content: () -> Content) -> some View {
+        if surface == .list {
+            Section { content() }
+                .drivyFormRows()
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(identifier)
+        } else {
+            DrivyPanel { content() }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(identifier)
         }
     }
 }
@@ -182,33 +270,39 @@ enum InvitationPresentation {
 private struct InvitationRow: View {
     let invitation: SchoolInvitation
     let training: String?
+    let reference: String
+    let timeZone: String?
+    let now: Date
     let isSelected: Bool
+    private var status: SchoolInvitationStatus { SchoolInvitationListPresentation.status(invitation, now: now) }
+    private var deadline: String? { SchoolInvitationListPresentation.activeDeadline(invitation, now: now, timeZone: timeZone) }
+    private var meta: String {
+        let identification = [invitation.isCode ? nil : invitation.roleLabel, "Réf. \(reference)"]
+            .compactMap { $0 }.joined(separator: " · ")
+        return [identification, deadline].compactMap { $0 }.joined(separator: "\n")
+    }
     var body: some View {
-        if invitation.isCode {
-            // A badge only for what is not the usual waiting state.
-            DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), leading: .symbol("number"),
-                badge: invitation.status == .pending ? nil
-                    : DrivyStatusBadge(title: InvitationPresentation.codeStatus(invitation.status),
-                        symbol: InvitationPresentation.symbol(invitation.status), tone: InvitationPresentation.tone(invitation.status)),
-                isSelected: isSelected)
-        } else {
-            DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), meta: invitation.roleLabel,
-                leading: .symbol("envelope"),
-                badge: invitation.status == .pending ? nil : DrivyStatusBadge(title: invitation.status.label, symbol: InvitationPresentation.symbol(invitation.status),
-                    tone: InvitationPresentation.tone(invitation.status)), isSelected: isSelected)
-        }
+        DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), meta: meta,
+            leading: .symbol(invitation.isCode ? "number" : "envelope"),
+            badge: status == .pending ? nil : DrivyStatusBadge(
+                title: SchoolInvitationListPresentation.statusLabel(invitation, now: now),
+                symbol: InvitationPresentation.symbol(status), tone: InvitationPresentation.tone(status)),
+            isSelected: isSelected)
+            .accessibilityLabel([InvitationPresentation.title(invitation, training: training), invitation.roleLabel,
+                "Référence \(reference)", SchoolInvitationListPresentation.statusLabel(invitation, now: now), deadline]
+                .compactMap { $0 }.joined(separator: ", "))
     }
 }
 
 private struct InvitationDetailView: View {
     @Bindable var model: SchoolInvitationWorkspace
     let invitation: SchoolInvitation
+    let now: Date
+    let feedbackPlacement: SchoolInvitationFeedbackPlacement
     @State private var confirmsResend = false
     @State private var showsRevocation = false
 
-    private var statusTitle: String {
-        invitation.isCode ? InvitationPresentation.codeStatus(invitation.status) : invitation.status.label
-    }
+    private var status: SchoolInvitationStatus { SchoolInvitationListPresentation.status(invitation, now: now) }
 
     var body: some View {
         ScrollView {
@@ -218,9 +312,12 @@ private struct InvitationDetailView: View {
                         .font(.drivyTitle).foregroundStyle(DrivyTheme.text)
                         .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                     // Une invitation en attente est l’état ordinaire, qu’elle utilise un code ou un lien.
-                    if invitation.status != .pending {
-                        DrivyStatusBadge(title: statusTitle, symbol: InvitationPresentation.symbol(invitation.status),
-                            tone: InvitationPresentation.tone(invitation.status))
+                    Text("Réf. \(model.reference(invitation))")
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                        .accessibilityLabel("Référence \(model.reference(invitation))")
+                    if status != .pending {
+                        DrivyStatusBadge(title: SchoolInvitationListPresentation.statusLabel(invitation, now: now),
+                            symbol: InvitationPresentation.symbol(status), tone: InvitationPresentation.tone(status))
                     }
                 }
                 DrivyRowGroup {
@@ -228,13 +325,11 @@ private struct InvitationDetailView: View {
                         DrivyContactRow(title: "Rôles", value: invitation.roleLabel, symbol: "person.crop.circle")
                     }
                     DrivyContactRow(title: invitation.isCode ? "Échéance du code" : "Échéance du lien",
-                        value: invitation.expirationLabel(timeZone: model.school?.timeZone ?? "Europe/Zurich"), symbol: "calendar")
+                        value: SchoolInvitationListPresentation.deadline(invitation, timeZone: model.school?.timeZone), symbol: "calendar")
+                    DrivyContactRow(title: "Référence complète", value: invitation.id.uuidString, symbol: "number")
+                        .textSelection(.enabled)
                 }
-                if let error = model.errorMessage { SchoolErrorNotice(message: error) }
-                if let pending = model.pending { DrivyPanel { InvitationPendingNotice(model: model, pending: pending) } }
-                if let success = model.successMessage {
-                    DrivyInlineMessage(text: success)
-                }
+                InvitationFeedbackView(model: model, placement: feedbackPlacement, surface: .detail(invitation.id))
                 if invitation.status.canBeManaged {
                     VStack(spacing: DrivySpacing.s) {
                         Button { confirmsResend = true } label: {
@@ -265,7 +360,8 @@ private struct InvitationDetailView: View {
             Button("Annuler", role: .cancel) {}
             Button(invitation.isCode ? "Nouveau code" : "Renvoyer") { Task { await model.resendAfterConfirmation(invitation) } }
         } message: {
-            Text(invitation.isCode ? "L’ancien code cessera de fonctionner." : "L’ancien lien cessera de fonctionner.")
+            Text("Réf. \(model.reference(invitation))\n\n"
+                + (invitation.isCode ? "L’ancien code cessera de fonctionner." : "L’ancien lien cessera de fonctionner."))
         }
         .sheet(isPresented: $showsRevocation) { InvitationRevocationView(model: model, invitation: invitation) }
     }
@@ -531,7 +627,9 @@ private struct InvitationRevocationView: View {
     @State private var confirms = false
     @State private var didSubmit = false
 
-    private var context: String { InvitationPresentation.title(invitation, training: model.trainingLabel(invitation)) }
+    private var context: String {
+        InvitationPresentation.title(invitation, training: model.trainingLabel(invitation)) + " · Réf. \(model.reference(invitation))"
+    }
 
     var body: some View {
         NavigationStack {

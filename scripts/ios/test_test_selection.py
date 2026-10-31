@@ -267,7 +267,7 @@ export -f xcodebuild xcrun python3 sleep
         workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
         self.assertLess(workflow.index('- name: Valider le mode et la sélection des tests'), workflow.index('- name: Installer XcodeGen'))
         self.assertIn("unit_test_scope:\n", workflow)
-        self.assertIn("options: [gps, agenda, reports, reactivity, messaging, all]", workflow)
+        self.assertIn("options: [gps, agenda, reports, reactivity, messaging, consent, drafts, profile, all]", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
         self.assertIn("inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''", workflow)
         self.assertIn('if: inputs.visual_only == true', workflow)

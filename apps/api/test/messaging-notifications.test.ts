@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { decideMessagingNotification, messagingPushPayload, type MessagingNotificationSnapshot } from '../src/messaging-notifications.js';
+import { decideMessagingNotification, isQueuedMessagingCategory, messagingNotificationInputs, messagingPushPayload, messagingSkipCode,
+  queuedMessagingCategories, type MessagingNotificationSnapshot, type MessagingSnapshotRow } from '../src/messaging-notifications.js';
 
 const snapshot = (): MessagingNotificationSnapshot => ({
   accountId: 'person-a', schoolId: 'school-a', conversationId: 'conversation-a',
   recipientEligible: true, eventAvailable: true, deviceBelongsToAccount: true,
   systemPermission: 'AUTHORIZED', conversationSilenced: false,
-  preferences: { version: 7, pushEnabled: true, categories: { MESSAGING_PRIVATE: true, MESSAGING_GENERAL: true, MESSAGING_MENTION: true, MESSAGING_POLL: true } }
+  preferences: { version: 7, pushEnabled: true, categories: { MESSAGING_PRIVATE: true, MESSAGING_GENERAL: true, MESSAGING_MENTION: true } }
 });
 const event = { accountId: 'person-a', schoolId: 'school-a', conversationId: 'conversation-a', kind: 'GENERAL' as const, mentionsRecipient: false };
 
@@ -39,14 +40,52 @@ describe('messaging notification contract for #44', () => {
     const state = snapshot(); delete state.preferences!.categories.MESSAGING_GENERAL;
     expect(decideMessagingNotification(event, state).allowed).toBe(false);
   });
-  it('payload carries only technical identifiers for per-conversation cleanup', () => {
-    const payload = messagingPushPayload(event, { allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 7 }, 12, { title: 'Drivy', body: 'Nouveau message' });
-    expect(payload).toEqual({ aps: { alert: { title: 'Drivy', body: 'Nouveau message' }, sound: 'default', 'thread-id': 'messaging:school-a:conversation-a' },
-      kind: 'MESSAGING', category: 'MESSAGING_GENERAL', schoolId: 'school-a', conversationId: 'conversation-a', sequence: 12 });
+  it('payload carries only technical identifiers for per-conversation cleanup and opening, with a generic title and no body', () => {
+    const payload = messagingPushPayload({ ...event, messageId: 'message-a' }, { allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 7 }, 12, { title: 'Nouveau message', body: '' });
+    expect(payload).toEqual({ aps: { alert: { title: 'Nouveau message' }, sound: 'default', 'thread-id': 'messaging:school-a:conversation-a' },
+      kind: 'MESSAGING', category: 'MESSAGING_GENERAL', schoolId: 'school-a', conversationId: 'conversation-a', messageId: 'message-a', sequence: 12 });
+    expect(messagingPushPayload(event, { allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 7 }, 12, { title: 'Drivy', body: 'Texte' }).aps.alert)
+      .toEqual({ title: 'Drivy', body: 'Texte' });
     expect(() => messagingPushPayload(event, { allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 7 }, 0, { title: '', body: '' })).toThrow();
   });
-  it('selects private and poll categories without reading message content', () => {
+  it('selects the private category from the conversation kind without reading message content', () => {
     expect(decideMessagingNotification({ ...event, kind: 'PRIVATE' }, snapshot())).toEqual({ allowed: true, category: 'MESSAGING_PRIVATE', preferenceVersion: 7 });
-    expect(decideMessagingNotification({ ...event, kind: 'POLL' }, snapshot())).toEqual({ allowed: true, category: 'MESSAGING_POLL', preferenceVersion: 7 });
+    expect(decideMessagingNotification({ ...event, kind: 'PRIVATE' }, { ...snapshot(), preferences: { version: 7, pushEnabled: true, categories: { MESSAGING_PRIVATE: false } } }))
+      .toEqual({ allowed: false, reason: 'CATEGORY_DISABLED' });
+  });
+});
+
+describe('messaging notification worker inputs (#74)', () => {
+  const queued = { person_id: 'person-a', school_id: 'school-a', conversation_id: 'conversation-a', message_id: 'message-a' };
+  const row = (): MessagingSnapshotRow => ({ conversation_kind: 'GENERAL', mentions_recipient: false, recipient_eligible: true, event_available: true,
+    conversation_silenced: false, preference_version: 3, pref_private: true, pref_general: false, pref_mentions: true });
+  const decide = (overrides: Partial<MessagingSnapshotRow>, device = true) => {
+    const { event, snapshot } = messagingNotificationInputs(queued, { ...row(), ...overrides }, device);
+    return decideMessagingNotification(event, snapshot);
+  };
+  it('applies the defaults: private and mentions on, general off', () => {
+    expect(decide({ conversation_kind: 'PRIVATE' })).toEqual({ allowed: true, category: 'MESSAGING_PRIVATE', preferenceVersion: 3 });
+    expect(decide({ mentions_recipient: true })).toEqual({ allowed: true, category: 'MESSAGING_MENTION', preferenceVersion: 3 });
+    expect(decide({})).toEqual({ allowed: false, reason: 'CATEGORY_DISABLED' });
+    expect(decide({ pref_general: true })).toEqual({ allowed: true, category: 'MESSAGING_GENERAL', preferenceVersion: 3 });
+  });
+  it('a disabled mention never falls back to the general category', () => {
+    expect(decide({ mentions_recipient: true, pref_mentions: false, pref_general: true })).toEqual({ allowed: false, reason: 'CATEGORY_DISABLED' });
+  });
+  it('treats an active registered device as authorized and none as unavailable', () => {
+    expect(decide({ pref_general: true }, false)).toEqual({ allowed: false, reason: 'DEVICE_UNAVAILABLE' });
+  });
+  it('carries the conversation, silence and access facts through unchanged', () => {
+    expect(decide({ conversation_silenced: true })).toEqual({ allowed: false, reason: 'SILENCED' });
+    expect(decide({ recipient_eligible: false })).toEqual({ allowed: false, reason: 'ACCESS_REVOKED' });
+    expect(decide({ event_available: false })).toEqual({ allowed: false, reason: 'EVENT_UNAVAILABLE' });
+  });
+  it('maps every refusal to a stored failure code and every queued category to its contract category', () => {
+    expect(['ACCESS_REVOKED', 'EVENT_UNAVAILABLE', 'DEVICE_UNAVAILABLE', 'PREFERENCES_UNAVAILABLE', 'PUSH_DISABLED', 'SILENCED', 'CATEGORY_DISABLED', 'CONTEXT_MISMATCH']
+      .map(reason => messagingSkipCode(reason as never))).toEqual(['RECIPIENT_INELIGIBLE', 'EVENT_OBSOLETE', 'NO_DEVICE', 'PREFERENCE_UNAVAILABLE',
+      'PREFERENCE_DISABLED', 'SILENCED', 'PREFERENCE_DISABLED', 'EVENT_OBSOLETE']);
+    expect(queuedMessagingCategories).toEqual({ MESSAGE_PRIVATE: 'MESSAGING_PRIVATE', MESSAGE_GENERAL: 'MESSAGING_GENERAL', MESSAGE_MENTION: 'MESSAGING_MENTION' });
+    expect(['MESSAGE_PRIVATE', 'MESSAGE_GENERAL', 'MESSAGE_MENTION'].every(isQueuedMessagingCategory)).toBe(true);
+    expect(['OFFER', 'CHANGE', 'toString', '__proto__'].some(isQueuedMessagingCategory)).toBe(false);
   });
 });

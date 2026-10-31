@@ -24,6 +24,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private let reports: any MessagingProtectedReports
     private let mutationStore: any MessagingProtectedMutations
     private let photoLoader: @Sendable (UUID) async -> Data?
+    private let schoolWorkspace: SchoolWorkspace?
     let outbox: MessagingOutboxCoordinator
     private(set) var members: [MessagingMember] = []
     /// Retirés pendant la session, en mémoire seulement.
@@ -99,6 +100,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
          reports: any MessagingProtectedReports = UnavailableMessagingReports(),
          mutations: any MessagingProtectedMutations = UnavailableMessagingMutations(),
          photoLoader: @escaping @Sendable (UUID) async -> Data? = { _ in nil },
+         schoolWorkspace: SchoolWorkspace? = nil,
          notifications: any MessagingNotificationCleaning = SystemMessagingNotifications(),
          mutationLatency: MessagingMutationLatency = MessagingMutationLatency(),
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil }) {
@@ -110,6 +112,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
         self.reports = reports
         self.mutationStore = mutations
         self.photoLoader = photoLoader
+        self.schoolWorkspace = schoolWorkspace
         self.scope = scope
         self.service = service
         self.crypto = cryptography
@@ -532,16 +535,44 @@ struct MessagingInboxPreview: Equatable, Sendable {
 
     /// Noms affichables connus dans ce contexte, plus longs d'abord (« @Léa Martin » avant « @Léa »).
     var knownDisplayNames: [String] {
-        Array(Set(members.map(\.displayName) + generalMembers.map(\.displayName) + contacts.map(\.displayName)))
+        let ownName = profileDisplayName(scope.accountID, fallback: "")
+        return Array(Set(members.map(\.displayName) + generalMembers.map(\.displayName) + contacts.map(\.displayName) + [ownName]))
             .filter { !$0.isEmpty }.sorted { $0.count > $1.count }
     }
 
     func displayName(_ personID: UUID) -> String {
-        if personID == scope.accountID { return "Moi" }
+        if personID == scope.accountID { return profileDisplayName(personID, fallback: "Moi") }
         return members.first { $0.id == personID }?.displayName
             ?? contacts.first { $0.id == personID }?.displayName
             ?? generalMembers.first { $0.id == personID }?.displayName
             ?? "Membre"
+    }
+
+    /// Le profil personnel peut être projeté localement ; les tiers restent ceux de l'annuaire autorisé.
+    private var currentSelfProfile: SchoolWorkspace? {
+        guard currentScope() == scope, let schoolWorkspace,
+              schoolWorkspace.person?.personId == scope.accountID,
+              schoolWorkspace.membership?.schoolId == scope.schoolID,
+              schoolWorkspace.membership?.accessEpoch == scope.accessEpoch,
+              schoolWorkspace.profileAccountBaseURL?.absoluteString == scope.apiBaseURL else { return nil }
+        return schoolWorkspace
+    }
+
+    func profileDisplayName(_ personID: UUID, fallback: String) -> String {
+        guard personID == scope.accountID, let profile = currentSelfProfile else { return fallback }
+        return profile.displayName(for: personID) ?? fallback
+    }
+
+    func photo(for personID: UUID) -> Data? {
+        if personID == scope.accountID, let profile = currentSelfProfile {
+            // `nil` est aussi le choix explicite de retirer la photo : aucun repli sur l'ancienne image.
+            return profile.photo(for: personID)
+        }
+        return photos[personID]
+    }
+
+    func hasPendingProfile(for personID: UUID) -> Bool {
+        personID == scope.accountID && currentSelfProfile?.hasPendingSelfProfile == true
     }
 
     /// Lu par : personnes autres que l'auteur dont la progression atteint ce message.
@@ -1035,14 +1066,20 @@ struct MessagingInboxPreview: Equatable, Sendable {
             if let existing, existing.messageIDs == ids {
                 pending = existing
             } else {
-                var items: [MessagingReportItem] = []
+                // Tous les contenus d'abord, puis un seul scellement : une session pour tout le signalement.
+                var chosen: [(message: MessagingWireMessage, bytes: Data)] = []
                 for message in selected.sorted(by: { $0.id.uuidString < $1.id.uuidString }) {
                     guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
                     try verifyReportContext()
-                    let sealed = try await reportSealing.sealForSchoolAdmins(try content.encoded(), scope: scope,
-                                                                             conversationID: conversationID)
-                    try verifyReportContext()
-                    items.append(MessagingReportItem(messageID: message.id, ciphertext: sealed))
+                    chosen.append((message: message, bytes: try content.encoded()))
+                }
+                let sealed = try await reportSealing.sealForSchoolAdmins(chosen.map { $0.bytes }, scope: scope,
+                                                                         conversationID: conversationID)
+                try verifyReportContext()
+                guard sealed.count == chosen.count else { throw MessagingFailure.protectionUnavailable }
+                var items: [MessagingReportItem] = []
+                for (index, entry) in chosen.enumerated() {
+                    items.append(MessagingReportItem(messageID: entry.message.id, ciphertext: sealed[index]))
                 }
                 pending = try await reports.prepareReport(MessagingPendingReport(clientReportID: UUID(),
                     conversationID: conversationID, items: items), scope: scope)
@@ -1055,6 +1092,11 @@ struct MessagingInboxPreview: Equatable, Sendable {
             try await reports.removeReport(conversationID: conversationID, clientReportID: pending.clientReportID, scope: scope)
             try verifyReportContext()
         }
+    }
+
+    /// Boîte des signalements de l'école : l'entrée n'est proposée qu'aux administrateurs, jugés par le serveur.
+    func makeReportInbox() -> MessagingReportInboxModel {
+        MessagingReportInboxModel(scope: scope, moderation: actions, cryptography: crypto, currentScope: currentScope)
     }
 
     private func verifyReportContext() throws {

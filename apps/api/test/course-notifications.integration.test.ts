@@ -92,7 +92,7 @@ describe('#44 préférences et #40 abonnement',()=>{
   expect(results.map(result=>result.statusCode).sort()).toEqual([200,412]);
   const winner=results.findIndex(result=>result.statusCode===200);
   const after=(await call('GET','/v1/me/notification-preferences',undefined,null,'demo-bob')).json().data;
-  expect(after).toEqual({...choices[winner],version:before.version+1});
+  expect(after).toEqual({...choices[winner],messagingPrivate:true,messagingGeneral:false,messagingMentions:true,version:before.version+1});
   // Preserve the default fixture for the following notification targeting scenarios.
   expect((await call('PUT','/v1/me/notification-preferences',initial as never,after.version,'demo-bob')).statusCode).toBe(200);
  });

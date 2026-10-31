@@ -7,6 +7,68 @@ import Testing
 @MainActor struct SchoolStartNowConsentTests {
     private typealias Display = SchoolStartNowGPS.Display
 
+    @Test func aRefusalIsDurableWhileThePreviousAgreementIsStillInFlight() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("refusal-\(UUID())")
+        let refusalStore = SchoolRecordingRefusalStore(directory: directory, keyData: Data(repeating: 0x3D, count: 32))
+        var localStops = 0
+        let fixture = try await ConsentFixture.make(.recorded(.unknown), asLearner: true,
+            refusalStore: refusalStore, onRefusal: { _, _ in localStops += 1 })
+        let model = fixture.gps.consent
+        await model.load()
+        await fixture.server.holdChoiceWrites()
+        let agreement = Task { await model.choose(.allowed) }
+        try await HubFixture.wait { await fixture.server.isWaitingForWrite() }
+        #expect(model.isBusy && model.mayPrioritizeRefusal)
+        #expect(!(await model.prioritizeRefusal()))
+        let intent = try #require(model.deferredRefusal)
+        #expect(localStops > 0 && refusalStore.isDurable(intent))
+        let reopened = SchoolRecordingRefusalStore(directory: directory, keyData: Data(repeating: 0x3D, count: 32))
+        #expect(try reopened.blocks(scope: model.scope, learnerID: intent.learnerID, lessonID: nil))
+        #expect(await fixture.server.writes() == 1)
+        await fixture.server.releaseChoiceWrites()
+        #expect(await agreement.value)
+        #expect(await fixture.server.writes() == 2)
+        #expect(model.choice?.status == .refused && model.deferredRefusal == nil)
+        #expect(try !reopened.blocks(scope: model.scope, learnerID: intent.learnerID, lessonID: nil))
+    }
+
+    @Test func aProtectedRefusalStaysRestrictedAcrossEpochsButDoesNotCrossAccountsOrSchools() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("refusal-scope-\(UUID())")
+        let store = SchoolRecordingRefusalStore(directory: directory, keyData: Data(repeating: 0x4D, count: 32))
+        let scope = ConfigurationFixture.scope(), learner = UUID()
+        let intent = SchoolRecordingRefusalIntent(id: UUID(), scope: scope, learnerID: learner, lessonID: nil, noticeVersionID: UUID())
+        try store.save(intent)
+        let newer = SchoolCommandScope(personID: scope.personID, schoolID: scope.schoolID, membershipID: scope.membershipID,
+            accessEpoch: scope.accessEpoch + 1, apiBaseURL: scope.apiBaseURL)
+        #expect(try store.blocks(scope: newer, learnerID: learner, lessonID: UUID()))
+        let other = SchoolCommandScope(personID: UUID(), schoolID: scope.schoolID, membershipID: UUID(), accessEpoch: 1, apiBaseURL: scope.apiBaseURL)
+        #expect(try !store.blocks(scope: other, learnerID: learner, lessonID: nil))
+        let otherSchool = SchoolCommandScope(personID: scope.personID, schoolID: UUID(), membershipID: UUID(), accessEpoch: 1, apiBaseURL: scope.apiBaseURL)
+        #expect(try !store.blocks(scope: otherSchool, learnerID: learner, lessonID: nil))
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        let bytes = try Data(contentsOf: #require(files.first))
+        #expect(bytes.range(of: Data(learner.uuidString.utf8)) == nil)
+        let wrongKey = SchoolRecordingRefusalStore(directory: directory, keyData: Data(repeating: 0x5D, count: 32))
+        #expect(throws: (any Error).self) { try wrongKey.blocks(scope: scope, learnerID: learner, lessonID: nil) }
+    }
+
+    @Test func anUnknownPriorityRefusalCannotBeDiscardedAndRetriesItsOriginalOperation() async throws {
+        let fixture = try await ConsentFixture.make(.recorded(.allowed), asLearner: true)
+        let model = fixture.gps.consent
+        await model.load()
+        await fixture.server.failNextChoiceWrite()
+        #expect(!(await model.prioritizeRefusal()))
+        let intent = try #require(model.deferredRefusal)
+        let queued = try #require(model.relatedPending.first)
+        await model.verify(queued)
+        #expect(model.unknownRequestIDs.contains(queued.id))
+        await model.abandon(queued)
+        #expect(model.relatedPending.first?.id == queued.id && model.deferredRefusal?.id == intent.id)
+        #expect(await model.resend(queued, acknowledged: true))
+        #expect(model.choice?.status == .refused && model.deferredRefusal == nil)
+        #expect(await fixture.server.writes() == 2)
+    }
+
     @Test func anUnverifiedStateIsNeverAKnownChoiceNorAFirstQuestion() {
         // (notice lue, lecture en cours, erreur, droit retiré, demande en attente)
         let cases: [(Bool, Bool, Bool, Bool, Bool)] = [
@@ -212,15 +274,17 @@ import Testing
     let gps: SchoolStartNowGPS
 
     static func make(_ mode: Mode, permission: SchoolCaptureLocationPermission = .foreground,
-                     precise: Bool = true) async throws -> ConsentFixture {
+                     precise: Bool = true, asLearner: Bool = false, refusalStore: SchoolRecordingRefusalStore? = nil,
+                     onRefusal: @escaping @MainActor (UUID, UUID?) -> Void = { _, _ in }) async throws -> ConsentFixture {
         let scope = ConfigurationFixture.scope(), learner = UUID()
-        let server = ConsentServer(scope: scope, learnerID: learner, mode: mode)
+        let server = ConsentServer(scope: scope, learnerID: learner, mode: mode, asLearner: asLearner)
         let agenda = SchoolAgendaClient(baseURL: URL(string: scope.apiBaseURL)!, tokenSource: HubToken(), transport: server)
         let store = try SQLCipherSchoolCaptureStore(
             url: FileManager.default.temporaryDirectory.appendingPathComponent("consent-\(UUID()).sqlite"),
             key: Data(repeating: 0x5A, count: 32), protectFiles: false, installationID: UUID())
         let consent = SchoolRecordingChoiceWorkspace(scope: scope, lessonID: nil, learnerID: learner, client: agenda.captureClient,
-            reader: agenda.reader, agenda: agenda, onRefusalConfirmed: { _, _ in }, store: store)
+            reader: agenda.reader, agenda: agenda, onRefusalConfirmed: onRefusal, store: store,
+            refusalStore: refusalStore ?? SchoolRecordingRefusalStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("refusal-\(UUID())"), keyData: Data(repeating: 0x3D, count: 32)))
         let source = ConsentLocation(permission: permission, precise: precise)
         let gps = SchoolStartNowGPS(learnerID: learner, consent: consent, source: source, scope: scope)
         return ConsentFixture(server: server, gps: gps)
@@ -257,18 +321,28 @@ actor ConsentServer: SchoolHTTPTransport {
     private var mode: ConsentFixture.Mode
     private var failing = false
     private var held = false
+    private let asLearner: Bool
+    private var writesHeld = false
+    private var failsNextWrite = false
+    private var writeWaiters: [CheckedContinuation<Void, Never>] = []
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var writeCount = 0
     private var gpsRequired = false
     private var readSource: SchoolRecordingChoice.Source = .verbal
     private let stamp = "2026-09-29T10:00:00Z"
 
-    init(scope: SchoolCommandScope, learnerID: UUID, mode: ConsentFixture.Mode) {
+    init(scope: SchoolCommandScope, learnerID: UUID, mode: ConsentFixture.Mode, asLearner: Bool = false) {
         self.scope = scope; self.learnerID = learnerID; self.mode = mode
         failing = mode == .failing
+        self.asLearner = asLearner
+        if asLearner { readSource = .own }
     }
 
     func writes() -> Int { writeCount }
+    func holdChoiceWrites() { writesHeld = true }
+    func failNextChoiceWrite() { failsNextWrite = true }
+    func isWaitingForWrite() -> Bool { !writeWaiters.isEmpty }
+    func releaseChoiceWrites() { writesHeld = false; let values = writeWaiters; writeWaiters = []; for item in values { item.resume() } }
     func requireGPS(source: SchoolRecordingChoice.Source) { gpsRequired = true; readSource = source }
     func setMode(_ value: ConsentFixture.Mode) { mode = value }
     func setFailing(_ value: Bool) { failing = value }
@@ -287,14 +361,15 @@ actor ConsentServer: SchoolHTTPTransport {
         }
         func ok<T: Encodable>(_ value: T) throws -> SchoolHTTPResponse { try json(JSONSerialization.jsonObject(with: JSONEncoder().encode(value))) }
         let leaf = url.lastPathComponent
+        if url.path.contains("/operations/") { return problem("OPERATION_UNKNOWN", status: 404) }
         if request.httpMethod == "POST" { writeCount += 1 }
         if leaf == "me" {
             return try ok(SchoolPerson(personId: scope.personID, version: 1, displayName: "Moniteur synthétique", locale: "fr",
                 memberships: [.init(membershipId: scope.membershipID, schoolId: scope.schoolID, schoolName: "École synthétique",
-                    roles: ["INSTRUCTOR"], grants: [], accessEpoch: scope.accessEpoch)]))
+                    roles: [asLearner ? "LEARNER" : "INSTRUCTOR"], grants: [], accessEpoch: scope.accessEpoch)]))
         }
         if leaf.lowercased() == learnerID.uuidString.lowercased() {
-            return try json(["id": learnerID.uuidString, "schoolId": scope.schoolID.uuidString, "personId": UUID().uuidString,
+            return try json(["id": learnerID.uuidString, "schoolId": scope.schoolID.uuidString, "personId": (asLearner ? scope.personID : UUID()).uuidString,
                 "version": 1, "displayName": "Élève synthétique", "contactEmail": NSNull(), "contactPhone": NSNull(),
                 "archivedAt": NSNull(), "profileReadiness": NSNull(), "profilePhotoDocumentId": NSNull()])
         }
@@ -309,8 +384,11 @@ actor ConsentServer: SchoolHTTPTransport {
             if held { await withCheckedContinuation { waiters.append($0) } }
             if failing { return problem("UNAVAILABLE", status: 503) }
             if request.httpMethod == "POST" {
+                if writesHeld { await withCheckedContinuation { writeWaiters.append($0) } }
+                if failsNextWrite { failsNextWrite = false; throw URLError(.networkConnectionLost) }
                 let body = try JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: request.httpBody ?? Data())
                 mode = .recorded(body.status)
+                readSource = body.source
                 return try json(choice(status: body.status, notice: body.noticeVersionId, source: body.source, id: body.operationId))
             }
             switch mode {

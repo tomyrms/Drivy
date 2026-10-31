@@ -287,6 +287,30 @@ private struct TrainingLessonMonth: Identifiable {
     let lessons: [SchoolLesson]
 }
 
+/// Préférences de lecture en mémoire seulement, isolées par dossier et droits.
+/// Changer de compte, d'école ou de droits détruit la mémoire précédente.
+@MainActor private enum TrainingHistoryMemory {
+    struct Selection {
+        var filter: TrainingLessonFilter = .all
+        var order: TrainingLessonOrder = .chronological
+        var month = 0
+        var year = 0
+    }
+    private static var context = ""
+    private static var entries: [UUID: Selection] = [:]
+    private static var recent: [UUID] = []
+    static func read(context wanted: String, learner: UUID) -> Selection {
+        if context != wanted { context = wanted; entries = [:]; recent = [] }
+        return entries[learner] ?? Selection()
+    }
+    static func save(_ selection: Selection, context wanted: String, learner: UUID) {
+        _ = read(context: wanted, learner: learner)
+        entries[learner] = selection
+        recent.removeAll { $0 == learner }; recent.append(learner)
+        while recent.count > 20 { entries.removeValue(forKey: recent.removeFirst()) }
+    }
+}
+
 private struct SchoolTrainingContent: View {
     /// Un modèle par formation de l’élève, dans l’ordre du filtre.
     let models: [SchoolTrainingWorkspace]
@@ -302,11 +326,10 @@ private struct SchoolTrainingContent: View {
     @Binding var permit: UUID?
     @Binding var chosenSection: SchoolTrainingSection
     @Binding var opened: OpenedLesson?
-    /// Le tri et le filtre survivent aux changements d’onglet et de dossier pendant la session de la scène.
-    @SceneStorage("training.lessons.filter") private var filter: TrainingLessonFilter = .all
-    @SceneStorage("training.lessons.order") private var order: TrainingLessonOrder = .chronological
-    @SceneStorage("training.lessons.month") private var selectedMonth = 0
-    @SceneStorage("training.lessons.year") private var selectedYear = 0
+    @State private var filter: TrainingLessonFilter = .all
+    @State private var order: TrainingLessonOrder = .chronological
+    @State private var selectedMonth = 0
+    @State private var selectedYear = 0
     @State private var showsPeriod = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -337,6 +360,22 @@ private struct SchoolTrainingContent: View {
     private var hasTraining: Bool { shown.contains { $0.training != nil } }
     /// Les filtres de statut et de période portent sur l’historique complet, jamais sur les seules pages lues.
     private var needsHistory: Bool { period.isActive || activeFilter != .all }
+    private var historyContext: String {
+        guard let scope = models.first?.scope else { return "" }
+        return "\(scope.apiBaseURL):\(scope.personID):\(scope.schoolID):\(scope.membershipID):\(scope.accessEpoch):\(workspace.membership?.roles.sorted().joined(separator: ",") ?? ""):\(workspace.membership?.grants.sorted().joined(separator: ",") ?? "")"
+    }
+    private var historyChoicesKey: String { "\(filter.rawValue):\(order.rawValue):\(selectedMonth):\(selectedYear)" }
+
+    private func restoreHistoryChoices() {
+        let choices = TrainingHistoryMemory.read(context: historyContext, learner: learner.id)
+        filter = filters.contains(choices.filter) ? choices.filter : .all
+        order = choices.order; selectedMonth = choices.month; selectedYear = choices.year
+    }
+
+    private func saveHistoryChoices() {
+        TrainingHistoryMemory.save(.init(filter: filter, order: order, month: selectedMonth, year: selectedYear),
+                                   context: historyContext, learner: learner.id)
+    }
 
     var body: some View {
         Group {
@@ -349,6 +388,10 @@ private struct SchoolTrainingContent: View {
         }
         .accessibilityIdentifier("training-dossier")
         .sheet(isPresented: $showsPeriod) { periodPicker }
+        .onAppear { restoreHistoryChoices() }
+        .onChange(of: historyContext) { _, _ in restoreHistoryChoices() }
+        .onChange(of: learner.id) { _, _ in restoreHistoryChoices() }
+        .onChange(of: historyChoicesKey) { _, _ in saveHistoryChoices() }
         .task(id: "\(selectedMonth):\(selectedYear):\(filter.rawValue):\(selected?.trainingID.uuidString ?? "")") {
             if needsHistory { await feed.loadHistory() }
         }
@@ -580,6 +623,14 @@ private struct SchoolTrainingContent: View {
         }
         // Le permis d’une leçon n’est nommé que lorsque la liste en mêle plusieurs.
         return VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            if period.isActive || activeFilter != .all || order != .chronological {
+                VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                    Text([activeFilter.title, period.isActive ? period.title : "Toutes les périodes", order.title].joined(separator: " · "))
+                        .font(.subheadline).foregroundStyle(DrivyTheme.muted)
+                    Button("Réinitialiser l’historique") { resetHistoryChoices() }
+                        .accessibilityIdentifier("training-history-reset")
+                }
+            }
             if feed.isLoadingFirstPage {
                 DrivySkeletonRows(count: 4, leading: .time)
                     .drivySkeleton("Chargement des leçons…")
@@ -614,6 +665,12 @@ private struct SchoolTrainingContent: View {
 
     private func showAll() {
         withAnimation(DrivyMotion.reveal(reduceMotion)) { filter = .all; selectedMonth = 0; selectedYear = 0 }
+    }
+
+    private func resetHistoryChoices() {
+        withAnimation(DrivyMotion.reveal(reduceMotion)) {
+            filter = .all; order = .chronological; selectedMonth = 0; selectedYear = 0; permit = nil
+        }
     }
 
     /// L’élève : la leçon qui compte, en tête de ses leçons — celle qui se déroule, sinon la prochaine. Rien quand
@@ -688,6 +745,7 @@ private struct SchoolTrainingContent: View {
             Section {
                 Button("Période…", systemImage: "calendar") { showsPeriod = true }
                 if period.isActive { Button("Toutes les périodes") { selectedMonth = 0; selectedYear = 0 } }
+                Button("Réinitialiser l’historique") { resetHistoryChoices() }
             }
         } label: {
             HStack(spacing: DrivySpacing.xs) {
@@ -864,7 +922,8 @@ private struct SchoolTrainingContent: View {
             ForEach([progressModel].compactMap { $0 }.filter { $0.training != nil || $0.isLoading }, id: \.trainingID) { model in
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     if namesPermit && mixesPermits { permitTitle(model, name: permitName(model, in: names)) }
-                    SchoolTrainingProgressSection(model: model, schoolTimeZone: zone, grouped: groupsBlocks) { opened = OpenedLesson(id: $0) }
+                    SchoolTrainingProgressSection(model: model, trainingName: permitName(model, in: names),
+                        schoolTimeZone: zone, grouped: groupsBlocks) { opened = OpenedLesson(id: $0) }
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                 }

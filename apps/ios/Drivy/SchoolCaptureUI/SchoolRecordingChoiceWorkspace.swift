@@ -34,6 +34,8 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     private(set) var storageError: String?
     private(set) var confirmation: String?
     private(set) var needsReload = true
+    private(set) var deferredRefusal: SchoolRecordingRefusalIntent?
+    @ObservationIgnored private let refusalStore: SchoolRecordingRefusalStore
     @ObservationIgnored private let client: SchoolCaptureClient
     @ObservationIgnored private let reader: any SchoolAPI
     @ObservationIgnored private let agenda: SchoolAgendaClient
@@ -47,10 +49,12 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
          reader: any SchoolAPI, agenda: SchoolAgendaClient,
          onRefusalConfirmed: @escaping @MainActor (UUID, UUID?) -> Void,
          store: SQLCipherSchoolCaptureStore? = nil,
-         journalProvider: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)? = nil) {
+         journalProvider: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)? = nil,
+         refusalStore: SchoolRecordingRefusalStore = .shared) {
         self.scope = scope; self.lessonID = lessonID; self.learnerID = learnerID; self.client = client
         self.reader = reader; self.agenda = agenda; self.store = store; self.journalProvider = journalProvider
         self.onRefusalConfirmed = onRefusalConfirmed
+        self.refusalStore = refusalStore
     }
 
     var relatedPending: [SchoolCaptureQueuedMutation] {
@@ -69,10 +73,80 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     var mayChoose: Bool {
         !invalidated && !accessRevoked && !isLoading && !isBusy && !needsReload
             && store != nil && storageError == nil && source != nil && notice != nil
-            && relatedPending.isEmpty && !hasOldScope
+            && relatedPending.isEmpty && !hasOldScope && deferredRefusal == nil
             && (notice?.requiresGPS != true || source == .own)
     }
     var verbalAgreementIsProtected: Bool { source == .verbal && choice?.source == .own && choice?.status == .refused }
+    var mayPrioritizeRefusal: Bool {
+        !invalidated && !accessRevoked && source == .own && learner != nil && notice != nil
+    }
+
+    /// Stop first, persist the restrictive intention before any network wait, and
+    /// let the earlier operation settle without rewriting its UUID or bytes.
+    func prioritizeRefusal() async -> Bool {
+        guard mayPrioritizeRefusal, let learner, let notice else { return false }
+        onRefusalConfirmed(learner.id, choice?.lessonId)
+        let previous = deferredRefusal
+        let replaces = previous.map { $0.noticeVersionID != notice.noticeVersionId || $0.scope != scope } == true
+            && !isBusy && !isLoading && relatedPending.isEmpty
+        let intent = (replaces ? nil : previous) ?? SchoolRecordingRefusalIntent(id: UUID(), scope: scope,
+            learnerID: learner.id, lessonID: choice?.lessonId, noticeVersionID: notice.noticeVersionId)
+        deferredRefusal = intent; confirmation = nil
+        do {
+            try refusalStore.save(intent)
+            if replaces, let previous { try refusalStore.remove(previous) }
+            storageError = nil
+        }
+        catch {
+            storageError = "Le GPS est arrêté ici, mais le refus n’a pas pu être conservé. Réessaie avant de quitter l’app."
+            return false
+        }
+        guard !isBusy, !isLoading else { return false }
+        return await transmitDeferredRefusal()
+    }
+
+    func transmitDeferredRefusal() async -> Bool {
+        guard !invalidated, !accessRevoked, !isBusy, !isLoading,
+              let intent = deferredRefusal, intent.scope == scope, let store else { return false }
+        let request = generation
+        isBusy = true; confirmation = nil; errorMessage = nil
+        do {
+            try refusalStore.save(intent)
+            let context = try await loadContext()
+            guard request == generation, !invalidated else { return false }
+            apply(context)
+            try await reloadQueue(request: request)
+            guard request == generation, !invalidated else { return false }
+            guard context.source == .own, context.learner.id == intent.learnerID,
+                  context.choice?.lessonId == intent.lessonID, context.notice.noticeVersionId == intent.noticeVersionID else {
+                throw SchoolCaptureFailure.rejected("Les informations de confidentialité ont changé. Le refus local reste actif ; fais vérifier le choix avant un nouveau départ.")
+            }
+            if let queued = relatedPending.first(where: { $0.id == intent.id }) {
+                return await transmit(queued.mutation, request: request)
+            }
+            guard relatedPending.isEmpty, !hasOldScope else {
+                isBusy = false
+                errorMessage = "Le refus est conservé. Vérifie d’abord la réponse à la demande précédente ; elle ne relancera pas le GPS ici."
+                return false
+            }
+            if context.choice?.status == .refused, context.choice?.source == .own {
+                try refusalStore.remove(intent); deferredRefusal = nil; isBusy = false
+                confirmation = "Le refus est enregistré par l’école."
+                return true
+            }
+            var body = SchoolRecordingChoiceBody(operationId: intent.id, lessonId: intent.lessonID,
+                status: .refused, noticeVersionId: intent.noticeVersionID, source: .own)
+            if context.notice.requiresGPS { body.expectedChoiceVersion = context.choice?.version ?? 0 }
+            let command = try SchoolCapturePendingMutation.make(id: intent.id, scope: scope, kind: .recordChoice, targetID: intent.learnerID, body: body)
+            try await store.stage(command)
+            guard request == generation, !invalidated else { return false }
+            return await transmit(command, request: request)
+        } catch {
+            guard request == generation, !invalidated else { return false }
+            await recoverQueueAfterFailure(request: request)
+            isBusy = false; fail(error); return false
+        }
+    }
     /// Choix enregistré qui vaut pour l’information actuelle de l’école ; `nil` : la question est à poser.
     var validAnswer: SchoolRecordingChoice.Status? {
         guard let choice, let notice, choice.noticeVersionId == notice.noticeVersionId, choice.status != .unknown else { return nil }
@@ -90,7 +164,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
 
     func invalidate() {
         invalidated = true; generation = UUID(); lesson = nil; learner = nil; notice = nil
-        choice = nil; source = nil; pending = []; isLoading = false; isBusy = false; needsReload = true
+        choice = nil; source = nil; pending = []; deferredRefusal = nil; isLoading = false; isBusy = false; needsReload = true
     }
 
     func load() async {
@@ -113,6 +187,11 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             let context = try await loadContext()
             guard request == generation, !invalidated else { return }
             apply(context)
+            deferredRefusal = try refusalStore.pending(scope: scope, learnerID: context.learner.id, lessonID: lessonID)
+            if let refusal = deferredRefusal {
+                onRefusalConfirmed(refusal.learnerID, refusal.lessonID)
+                if !refusalStore.isDurable(refusal) { storageError = "Le refus local n’est pas encore conservé. Réessaie avant de quitter l’app." }
+            }
             isLoading = false; needsReload = false
         } catch {
             guard request == generation, !invalidated else { return }
@@ -133,6 +212,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
 
     /// Le bouton exprime le choix et le journalise en une seule action.
     func choose(_ status: SchoolRecordingChoice.Status) async -> Bool {
+        if status == .refused && source == .own { return await prioritizeRefusal() }
         guard let value = review(status) else { return false }
         return await confirm(value, acknowledged: true)
     }
@@ -157,6 +237,10 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             guard !(review.status == .allowed && verbalAgreementIsProtected) else { throw SchoolCaptureFailure.forbidden }
             try await reloadQueue(request: request)
             guard request == generation, !invalidated else { return false }
+            if deferredRefusal != nil {
+                isBusy = false
+                return await transmitDeferredRefusal()
+            }
             guard relatedPending.isEmpty, !hasOldScope else { throw SchoolCaptureStorageFailure.uncertainCommand }
             let operationID = UUID()
             var body = SchoolRecordingChoiceBody(operationId: operationID, lessonId: review.previousChoice?.lessonId,
@@ -179,8 +263,17 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             && queued.mutation.scope == scope && queued.mutation.kind == .recordChoice
             && relatedPending.contains { $0.id == queued.id }
     }
+    func mayResend(_ queued: SchoolCaptureQueuedMutation) -> Bool {
+        mayResume(queued) && !(deferredRefusal != nil &&
+            (try? JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: queued.mutation.body))?.status == .allowed)
+    }
     func resend(_ queued: SchoolCaptureQueuedMutation, acknowledged: Bool) async -> Bool {
         guard mayResume(queued), acknowledged else { return false }
+        if deferredRefusal != nil,
+           (try? JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: queued.mutation.body))?.status == .allowed {
+            errorMessage = "Un refus plus récent est conservé. Vérifie la réponse précédente avant de le transmettre."
+            return false
+        }
         if let body = try? JSONDecoder().decode(SchoolRecordingChoiceBody.self, from: queued.mutation.body), body.status == .refused {
             onRefusalConfirmed(queued.mutation.targetID, body.lessonId)
         }
@@ -205,7 +298,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     }
     /// Retire un accord que l’école n’a jamais reçu : le choix peut être saisi à nouveau.
     func abandon(_ queued: SchoolCaptureQueuedMutation) async {
-        guard mayResume(queued), unknownRequestIDs.contains(queued.id), let store else { return }
+        guard mayResume(queued), unknownRequestIDs.contains(queued.id), deferredRefusal == nil, let store else { return }
         let request = generation; isBusy = true; errorMessage = nil; confirmation = nil
         do {
             try await store.discardUnknown(id: queued.id, scope: scope)
@@ -235,12 +328,19 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
             }
             // Even when the view closes, an admitted result is saved under its ORIGINAL scope.
             try await store.acknowledge(id: durable.id, scope: durable.scope, result: result)
+            if recorded.status == .refused, let intent = deferredRefusal, intent.id == durable.id {
+                try refusalStore.remove(intent)
+                deferredRefusal = nil
+            }
             guard request == generation, !invalidated else { return true }
             try await reloadQueue(request: request)
             guard request == generation, !invalidated else { return true }
             isBusy = false
             confirmation = "Le choix a été enregistré par l’école."
             await load() // AP152 is the current choice, which may have changed since this operation.
+            if deferredRefusal != nil, !invalidated {
+                return await transmitDeferredRefusal()
+            }
             return true
         } catch {
             guard request == generation, !invalidated else { return false }

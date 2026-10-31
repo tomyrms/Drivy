@@ -25,6 +25,7 @@ struct SchoolRootView: View {
     /// Created once by the app; nil only without configuration.
     var clients: SchoolHomeClients? = nil
     @State private var showsAccount = false
+    @State private var messagingSession = MessagingDevelopmentSession()
     @State private var afterAccount: AccountFollowUp?
     @State private var presenter: UIViewController?
     // Les modèles restent disponibles jusqu’à onDismiss pour la réconciliation ;
@@ -650,11 +651,12 @@ struct SchoolRootView: View {
         let scope = MessagingScope(accountID: person.personId, schoolID: membership.schoolId,
             accessEpoch: membership.accessEpoch, apiBaseURL: baseURL.absoluteString)
         return MessagingDevelopmentEntry.make(scope: scope, baseURL: baseURL,
-            tokenSource: identity, transport: clients.messagingTransport,
+            tokenSource: identity, transport: clients.messagingTransport, session: messagingSession,
             photoLoader: { [weak workspace] id in
                 await workspace?.loadPhoto(for: id)
                 return await workspace?.photo(for: id)
             },
+            schoolWorkspace: workspace,
             // Le nom de l’école n’est dit qu’à un compte de plusieurs écoles (#176).
             schoolName: person.memberships.count > 1 ? membership.schoolName : nil,
             currentScope: {

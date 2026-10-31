@@ -34,7 +34,7 @@ ui_test_options=()
 # iPad : campagne complète, ou suite UI ciblée qui le demande. Jamais pour le métier seul ni les captures.
 run_ipad=0
 if [[ "$full_campaign" == 1 || ( -n "$ui_test_suite" && "$ui_ipad" == 1 ) ]]; then run_ipad=1; fi
-[[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging ou all).' >&2; exit 1; }
+[[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == consent || "$unit_test_scope" == drafts || "$unit_test_scope" == profile || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging, consent, drafts, profile ou all).' >&2; exit 1; }
 [[ "$visual_only" != 1 || ( "$unit_only" == 0 && -z "$ui_test_suite" ) ]] || { echo 'Choisir les captures visuelles ou les tests, pas les deux.' >&2; exit 1; }
 
 if [[ -n "$ui_test_suite" ]]; then
@@ -56,6 +56,14 @@ if [[ -n "$ui_test_suite" ]]; then
 elif [[ "$unit_only" == 1 ]]; then
   if [[ "$unit_test_scope" == all ]]; then
     test_options=(-only-testing:DrivyTests)
+  elif [[ "$unit_test_scope" == consent ]]; then
+    test_options=(-only-testing:DrivyTests/SchoolStartNowConsentTests)
+  elif [[ "$unit_test_scope" == profile ]]; then
+    test_options=(-only-testing:DrivyTests/SchoolSelfProfileIntentTests)
+  elif [[ "$unit_test_scope" == drafts ]]; then
+    for suite in SchoolLessonPreparationReactivityTests SchoolLessonWishReactivityTests SchoolReportFlowTests SchoolLessonTextDraftTests; do
+      test_options+=("-only-testing:DrivyTests/$suite")
+    done
   elif [[ "$unit_test_scope" == messaging ]]; then
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
       MessagingExyteThreadTests; do
