@@ -337,6 +337,24 @@ export async function reinstateGeneralMember(db: PoolClient, actor: MessagingAct
 }
 
 export interface ReportItemInput { messageId: string; ciphertext: OpaqueEnvelope }
+export const reportStatuses = ['OPEN', 'HANDLED', 'DISMISSED'] as const;
+export type ReportStatus = typeof reportStatuses[number];
+/** Cadence documentée dans docs/implementation/messaging-reports-77.md, constantes volontairement simples. */
+export const reportLimits = { perConversationPerHour: 3, perSchoolPerDay: 10 } as const;
+export const reportRateLimited = () => new ApiError(429, 'REPORT_RATE_LIMITED',
+  'Trop de signalements envoyés en peu de temps. Réessaie plus tard.');
+
+/** Seuils de cadence, calculés sous le verrou de la personne : un renvoi identique n'arrive jamais jusqu'ici. */
+async function enforceReportCadence(db: PoolClient, actor: MessagingActor, conversationId: string) {
+  const counts = await db.query<{ hour: number; day: number }>(`SELECT
+    count(*) FILTER(WHERE conversation_id=$3 AND created_at>now()-interval '1 hour')::int AS hour,
+    count(*) FILTER(WHERE created_at>now()-interval '24 hours')::int AS day
+    FROM drivy.messaging_report WHERE school_id=$1 AND reporter_person_id=$2 AND created_at>now()-interval '24 hours'`,
+    [actor.schoolId, actor.personId, conversationId]);
+  const row = counts.rows[0];
+  if ((row?.hour ?? 0) >= reportLimits.perConversationPerHour || (row?.day ?? 0) >= reportLimits.perSchoolPerDay) throw reportRateLimited();
+}
+
 /** Signalement idempotent par clientReportId : seuls les messages choisis, rechiffrés pour les administrateurs de l'école. */
 export async function createReport(db: PoolClient, actor: MessagingActor, clientReportId: string, conversationId: string, items: ReportItemInput[]) {
   if (!uuidPattern.test(clientReportId) || items.length < 1 || items.length > 50
@@ -347,40 +365,86 @@ export async function createReport(db: PoolClient, actor: MessagingActor, client
   const normalized = [...items].sort((a, b) => a.messageId.toLowerCase().localeCompare(b.messageId.toLowerCase()));
   const fingerprint = createHash('sha256').update(JSON.stringify([conversationId.toLowerCase(),
     normalized.map(item => [item.messageId.toLowerCase(), item.ciphertext])])).digest('hex');
-  const reportId = randomUUID();
-  const inserted = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_report(id,school_id,conversation_id,reporter_person_id,client_report_id,fingerprint)
-    VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(school_id,reporter_person_id,client_report_id) DO NOTHING RETURNING id`,
-    [reportId, actor.schoolId, conversationId, actor.personId, clientReportId, fingerprint]);
-  if (!inserted.rows[0]) {
-    const prior = await db.query<{ id: string; fingerprint: string }>(`SELECT id,fingerprint FROM drivy.messaging_report
-      WHERE school_id=$1 AND reporter_person_id=$2 AND client_report_id=$3`, [actor.schoolId, actor.personId, clientReportId]);
-    if (!prior.rows[0]) throw notFound();
+  // Un signalant à la fois : l'idempotence et la cadence se lisent sous le même verrou.
+  await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`messaging.report|${actor.schoolId}|${actor.personId}`]);
+  const prior = await db.query<{ id: string; fingerprint: string }>(`SELECT id,fingerprint FROM drivy.messaging_report
+    WHERE school_id=$1 AND reporter_person_id=$2 AND client_report_id=$3`, [actor.schoolId, actor.personId, clientReportId]);
+  if (prior.rows[0]) {
     if (prior.rows[0].fingerprint !== fingerprint) throw new ApiError(409, 'REPORT_CONFLICT', 'Ce signalement a déjà été envoyé avec un autre contenu.');
     return { reportId: prior.rows[0].id, itemCount: items.length };
   }
+  await enforceReportCadence(db, actor, conversationId);
+  const kind = await db.query<{ kind: string }>('SELECT kind FROM drivy.messaging_conversation WHERE school_id=$1 AND id=$2', [actor.schoolId, conversationId]);
+  const reportId = randomUUID();
+  const inserted = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_report(id,school_id,conversation_id,reporter_person_id,client_report_id,fingerprint,conversation_kind)
+    VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(school_id,reporter_person_id,client_report_id) DO NOTHING RETURNING id`,
+    [reportId, actor.schoolId, conversationId, actor.personId, clientReportId, fingerprint, kind.rows[0]?.kind ?? null]);
+  if (!inserted.rows[0]) throw new ApiError(409, 'CONCURRENT_REQUEST', 'Une requête identique est en cours. Réessayez.');
   for (const item of normalized) {
-    // La RLS n'accepte que les messages de la plage lisible du signalant.
-    const result = await db.query(`INSERT INTO drivy.messaging_report_item(school_id,report_id,message_id,envelope)
-      SELECT $1,$2,m.id,$4::jsonb FROM drivy.messaging_message m WHERE m.school_id=$1 AND m.conversation_id=$5 AND m.id=$3`,
+    // La RLS n'accepte que les messages de la plage lisible du signalant. Auteur, rang et date : contexte, jamais le contenu.
+    const result = await db.query(`INSERT INTO drivy.messaging_report_item(school_id,report_id,message_id,envelope,sender_person_id,message_sequence,message_accepted_at)
+      SELECT $1,$2,m.id,$4::jsonb,m.sender_person_id,m.sequence,m.created_at FROM drivy.messaging_message m
+      WHERE m.school_id=$1 AND m.conversation_id=$5 AND m.id=$3`,
       [actor.schoolId, reportId, item.messageId, JSON.stringify(item.ciphertext), conversationId]);
     if (result.rowCount !== 1) throw notFound();
   }
   return { reportId, itemCount: items.length };
 }
-/** Boîte des administrateurs de l'école. Contenu toujours chiffré. */
-export async function listReports(db: PoolClient, actor: MessagingActor, limit = 50, before?: string) {
+
+interface ReportRow { id: string; conversationId: string; conversationKind: string | null; reporterPersonId: string; createdAt: string;
+  status: ReportStatus; statusUpdatedAt: string;
+  items: { messageId: string; ciphertext: OpaqueEnvelope; senderPersonId: string | null; sequence: string | number | null; acceptedAt: string | null }[];
+  history: { actorPersonId: string; fromStatus: ReportStatus; toStatus: ReportStatus; createdAt: string }[] }
+
+async function assertSchoolAdmin(db: PoolClient, actor: MessagingActor) {
   assertContext(actor);
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
   const admin = await db.query<{ admin: boolean }>('SELECT drivy.messaging_actor_school_admin($1) AS admin', [actor.schoolId]);
   if (admin.rows[0]?.admin !== true) throw forbidden();
-  const result = await db.query<{ id: string; conversationId: string; reporterPersonId: string; createdAt: string;
-    items: { messageId: string; ciphertext: OpaqueEnvelope }[] }>(`SELECT r.id,r.conversation_id AS "conversationId",
-    r.reporter_person_id AS "reporterPersonId",r.created_at AS "createdAt",
-    COALESCE((SELECT json_agg(json_build_object('messageId',i.message_id,'ciphertext',i.envelope) ORDER BY i.message_id)
-      FROM drivy.messaging_report_item i WHERE i.school_id=r.school_id AND i.report_id=r.id),'[]'::json) AS items
-    FROM drivy.messaging_report r WHERE r.school_id=$1 AND ($2::uuid IS NULL OR r.id<$2) ORDER BY r.id DESC LIMIT $3`,
-    [actor.schoolId, before ?? null, limit + 1]);
-  return { reports: result.rows.slice(0, limit), nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.id : null };
+}
+
+/** Lignes de la boîte avec noms (signalant, auteurs, personnes ayant changé un statut) ; contenu toujours chiffré. */
+async function reportView(db: PoolClient, actor: MessagingActor, where: string, params: unknown[], limit: number) {
+  const result = await db.query<ReportRow>(`SELECT r.id,r.conversation_id AS "conversationId",r.conversation_kind AS "conversationKind",
+    r.reporter_person_id AS "reporterPersonId",r.created_at AS "createdAt",r.status,r.status_updated_at AS "statusUpdatedAt",
+    COALESCE((SELECT json_agg(json_build_object('messageId',i.message_id,'ciphertext',i.envelope,'senderPersonId',i.sender_person_id,
+      'sequence',i.message_sequence,'acceptedAt',i.message_accepted_at) ORDER BY i.message_sequence NULLS LAST,i.message_id)
+      FROM drivy.messaging_report_item i WHERE i.school_id=r.school_id AND i.report_id=r.id),'[]'::json) AS items,
+    COALESCE((SELECT json_agg(json_build_object('actorPersonId',e.actor_person_id,'fromStatus',e.from_status,'toStatus',e.to_status,
+      'createdAt',e.created_at) ORDER BY e.id) FROM drivy.messaging_report_status_event e
+      WHERE e.school_id=r.school_id AND e.report_id=r.id),'[]'::json) AS history
+    FROM drivy.messaging_report r WHERE r.school_id=$1 AND ${where} ORDER BY r.created_at DESC,r.id DESC LIMIT ${limit}`,
+    [actor.schoolId, ...params]);
+  const names = new Map((await db.query<{ personId: string; displayName: string }>(
+    'SELECT person_id AS "personId",display_name AS "displayName" FROM drivy.messaging_report_people($1)', [actor.schoolId]))
+    .rows.map(row => [row.personId.toLowerCase(), row.displayName]));
+  const name = (person: string | null) => (person ? names.get(person.toLowerCase()) ?? null : null);
+  return result.rows.map(row => ({ ...row,
+    reporterDisplayName: name(row.reporterPersonId),
+    items: row.items.map(item => ({ ...item, sequence: item.sequence === null ? null : safeSequence(item.sequence),
+      senderDisplayName: name(item.senderPersonId) })),
+    history: row.history.map(event => ({ ...event, actorDisplayName: name(event.actorPersonId) })) }));
+}
+
+/** Boîte des administrateurs de l'école. Contenu toujours chiffré ; du plus récent au plus ancien, filtre de statut optionnel. */
+export async function listReports(db: PoolClient, actor: MessagingActor, limit = 50, before?: string, status?: ReportStatus) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ApiError(400, 'INVALID_REQUEST', 'Limite invalide.');
+  await assertSchoolAdmin(db, actor);
+  const rows = await reportView(db, actor,
+    `($2::text IS NULL OR r.status=$2) AND ($3::uuid IS NULL OR (r.created_at,r.id)<(SELECT b.created_at,b.id FROM drivy.messaging_report b
+      WHERE b.school_id=r.school_id AND b.id=$3))`, [status ?? null, before ?? null], limit + 1);
+  const open = await db.query<{ count: number }>("SELECT count(*)::int AS count FROM drivy.messaging_report WHERE school_id=$1 AND status='OPEN'", [actor.schoolId]);
+  return { reports: rows.slice(0, limit), nextCursor: rows.length > limit ? rows[limit - 1]!.id : null, openCount: open.rows[0]?.count ?? 0 };
+}
+
+/** Changement de statut par un administrateur : statut attendu comparé sous verrou, événement écrit avec l'auteur. */
+export async function setReportStatus(db: PoolClient, actor: MessagingActor, reportId: string, status: ReportStatus, expectedStatus: ReportStatus) {
+  if (!uuidPattern.test(reportId) || !reportStatuses.includes(status) || !reportStatuses.includes(expectedStatus))
+    throw new ApiError(400, 'INVALID_REQUEST', 'Statut invalide.');
+  await assertSchoolAdmin(db, actor);
+  await db.query('SELECT drivy.messaging_set_report_status($1,$2,$3,$4)', [actor.schoolId, reportId, status, expectedStatus]);
+  const [report] = await reportView(db, actor, 'r.id=$2', [reportId], 1);
+  if (!report) throw notFound();
+  return { reportId: report.id, status: report.status, statusUpdatedAt: report.statusUpdatedAt, history: report.history };
 }
 
 /** Progression personnelle ; visible des participants via readStates (décision 7), plafonnée à leur propre plage. */

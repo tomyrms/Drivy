@@ -272,9 +272,10 @@ describe('messagerie v2, signalements', () => {
     expect((await req('demo-alice', 'GET', `${path}/reports`)).statusCode).toBe(403);
     const inbox = (await req('demo-admin', 'GET', `${path}/reports`)).json().data.reports;
     expect(inbox).toHaveLength(1);
-    expect(inbox[0].items).toEqual([{ messageId: message.id, ciphertext: ciphertext('BBBB') }]);
+    expect(inbox[0].items).toEqual([expect.objectContaining({ messageId: message.id, ciphertext: ciphertext('BBBB'), senderPersonId: id.instructor })]);
     // Preuve conservée après suppression pour tout le monde.
     expect((await req('demo-instructor', 'DELETE', `${path}/conversations/${conversationId}/messages/${message.id}?scope=everyone`)).statusCode).toBe(200);
-    expect((await req('demo-admin', 'GET', `${path}/reports`)).json().data.reports[0].items).toEqual([{ messageId: message.id, ciphertext: ciphertext('BBBB') }]);
+    expect((await req('demo-admin', 'GET', `${path}/reports`)).json().data.reports[0].items)
+      .toEqual([expect.objectContaining({ messageId: message.id, ciphertext: ciphertext('BBBB') })]);
   });
 });
