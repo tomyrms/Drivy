@@ -109,10 +109,13 @@ import XCTest
         let selectedLabel = element("agenda-selected-date", in: app).label
         let scroll = app.scrollViews.containing(.button, identifier: lessonID).firstMatch
         XCTAssertTrue(scroll.exists, app.debugDescription)
-        // Sur iPhone, 20 % de la hauteur tombe dans le champ de recherche (y 169 à 213 sur 874) : le geste partait du
-        // champ et ne tirait pas la page. Il part donc juste sous le champ, quelle que soit la mise en page.
+        // Sur iPhone, la barre de navigation (titre large et champ de recherche) couvre y 62 à 228 sur 874 : un geste
+        // parti du champ, ou 8 pt sous lui (y 221), reste dans la barre et ne tire jamais la page. Il part donc sous la
+        // barre elle-même, quelle que soit la mise en page.
         let field = app.searchFields.firstMatch
-        let startY = field.exists ? field.frame.maxY + 8 - scroll.frame.minY : scroll.frame.height * 0.2
+        let bar = app.navigationBars.firstMatch
+        let barBottom = max(field.exists ? field.frame.maxY : 0, bar.exists ? bar.frame.maxY : 0)
+        let startY = barBottom > 0 ? barBottom + 10 - scroll.frame.minY : scroll.frame.height * 0.2
         let start = scroll.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: scroll.frame.width * 0.5, dy: startY))
         let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
         // Geste lent avec maintien : le tirer-pour-actualiser doit dépasser son seuil et s'y tenir.
