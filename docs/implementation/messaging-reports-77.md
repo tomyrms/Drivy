@@ -87,3 +87,21 @@ Le général ne s'ouvre pas à de vrais utilisateurs sans ce minimum. L'activati
 ## 9. Ce qui n'est pas vérifiable sans deux appareils réels
 
 Le partage de clé to-device et le déchiffrement chez l'administrateur ne sont exercés en CI que par les tests unitaires du moteur et par le relais synthétique. Restent à qualifier sur deux téléphones : réception réelle de la clé par un administrateur hors ligne puis en ligne, déchiffrement d'un signalement, signalement avec l'administrateur sur un second appareil nouvellement enregistré, comportement après révocation d'un administrateur.
+
+## 10. État de la réalisation (31 octobre 2026)
+
+| Élément | État | Preuve |
+| --- | --- | --- |
+| API : migration `20261031_messaging_report_moderation_77`, routes, statuts, historique, cadence, destinataires de clés | Exécuté sur PostgreSQL réel | « Refonte · vérifications » verte sur `071401ca`, [run 41225134866](https://github.com/tomyrms/Drivy/actions/runs/41225134866) (dont `messaging-reports.integration.test.ts`) |
+| iOS : scellement par session Megolm partagée (`MatrixMessagingCryptography`), forme par lot de `MessagingReportSealing`, refus sans administrateur joignable | Compile | compilation vérifiée par le workflow d'IPA sur `bd4e3e80`, [run 41225717502](https://github.com/tomyrms/Drivy/actions/runs/41225717502) : lancé seulement pour savoir si le Swift compile, l'IPA n'a été ni téléchargée ni livrée (la consigne de la tâche excluait toute IPA, ce lancement était une erreur, il n'a pas été renouvelé) |
+| iOS : boîte « Signalements » (liste, détail avec déchiffrement local, statut, historique), confirmation avant transmission | Compile ; vue jamais affichée sur simulateur ni appareil | idem |
+| Tests Swift : transport, modèle de la boîte, scellement par défaut | Écrits, voir ci-dessous | `MessagingReportTransportTests`, `MessagingReportInboxTests`, `MessagingReportSealingDefaultTests` |
+
+Un défaut trouvé par la CI avant tout le reste : les tests de capture n'appliquent que les migrations numérotées, le compte de tables à RLS reste 67 (le lot l'avait relevé à 68 par erreur). Corrigé et vérifié en local puis en CI.
+
+Ce qui n'est **pas** fait ni vérifié :
+
+- Le partage de clé to-device et le déchiffrement chez l'administrateur n'ont **jamais été exercés de bout en bout** : aucun test n'enchaîne un signalement réel d'un appareil vers l'appareil d'un administrateur (voir section 9). Les tests Swift couvrent le transport, le modèle de la boîte et le contrat par défaut du scellement ; le moteur Matrix lui-même n'est pas rejoué sur ce scénario. La campagne FFI vers Fastify et PostgreSQL existante ne couvre pas ce cas.
+- Aucun parcours d'interface (le signalant confirme, l'administrateur ouvre la boîte) n'est automatisé : la fixture de qualification de Messages n'a pas de compte administrateur ni de signalement.
+- Le critère « preuves protégées, hébergées dans le périmètre suisse et purgées selon la politique validée » reste ouvert : #68.
+- Aucune modération du général (retrait, restriction de chat) n'est ajoutée par ce lot : elle existait déjà (`messaging-v2`), seul le signalement et sa boîte sont nouveaux.

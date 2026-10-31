@@ -102,6 +102,8 @@ struct MessagingReportInboxView: View {
     }
 }
 
+private func sentence(_ text: String) -> String { text.prefix(1).uppercased() + text.dropFirst() }
+
 private func kindTitle(_ kind: String?) -> String {
     switch kind {
     case "GENERAL": "général"
@@ -122,7 +124,7 @@ struct MessagingReportDetailView: View {
             if let report {
                 Section {
                     labeled("Signalé par", report.reporterName ?? "Personne de l'école")
-                    labeled("Conversation", kindTitle(report.conversationKind).capitalized(with: Locale(identifier: "fr_FR")))
+                    labeled("Conversation", sentence(kindTitle(report.conversationKind)))
                     labeled("Date", report.createdAt.formatted(date: .abbreviated, time: .shortened))
                 }
                 .drivyPlainRows()
