@@ -2,7 +2,8 @@ import { describe, expect, test, vi } from 'vitest';
 import { NotificationPreferenceStore, type PreferenceTransport } from '../client/notification-preferences-store.js';
 import { saveNotificationPreferences, type NotificationPreferences, type SaveOutcome } from '../client/notification-preferences-model.js';
 
-const initial: NotificationPreferences = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true };
+const initial: NotificationPreferences = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true,
+  messagingPrivate: true, messagingGeneral: false, messagingMentions: true };
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 
@@ -55,6 +56,17 @@ describe('Préférences : projection locale et réconciliation par catégorie', 
     expect(h.transport.write).toHaveBeenCalledTimes(1);
     await h.store.retry();
     expect(h.server()).toMatchObject({ courseOffers: true, version: 3 });
+  });
+
+  test('les catégories de messagerie sont des choix indépendants du même objet versionné (#74)', async () => {
+    const h = harness(); await h.store.refresh();
+    h.store.choose('messagingGeneral', true); await flush();
+    expect(h.transport.write).toHaveBeenCalledTimes(1);
+    const { version: _version, ...choices } = initial;
+    expect(vi.mocked(h.transport.write).mock.calls[0]![1]).toEqual({ ...choices, messagingGeneral: true });
+    h.store.choose('messagingMentions', false); await flush();
+    expect(h.server()).toMatchObject({ version: 3, courseOffers: true, messagingPrivate: true, messagingGeneral: true, messagingMentions: false });
+    expect(h.store.getSnapshot()).toMatchObject({ phase: 'ready', pendingKeys: [] });
   });
 
   test('commit puis réponse perdue : la lecture confirme les choix sans second PUT', async () => {
@@ -126,6 +138,11 @@ describe('Transport PUT : absence de confirmation distincte du refus', () => {
   ])('%i sans preuve de résultat reste incertain', async (status, body) => {
     const send = vi.fn(async () => new Response(JSON.stringify(body), { status: status as number }));
     expect(await saveNotificationPreferences(initial, 1, 'csrf', send as typeof fetch)).toMatchObject({ ok: false, kind: 'uncertain' });
+  });
+  test('une réponse sans les catégories de messagerie ne prouve pas le résultat (API trop ancienne)', async () => {
+    const { messagingPrivate: _a, messagingGeneral: _b, messagingMentions: _c, ...legacy } = initial;
+    const send = vi.fn(async () => new Response(JSON.stringify({ data: { ...legacy, version: 2 } }), { status: 200 }));
+    expect(await saveNotificationPreferences({ ...initial, courseOffers: false }, 1, 'csrf', send as typeof fetch)).toMatchObject({ ok: false, kind: 'uncertain' });
   });
   test('refus sûr et version en conflit ont des résultats distincts', async () => {
     for (const [status, kind] of [[403, 'rejected'], [412, 'conflict']] as const) {

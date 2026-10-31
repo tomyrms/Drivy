@@ -99,8 +99,20 @@ struct SchoolNotificationSettingsView: View {
         .drivyFormRows()
     }
 
+    /// Les trois catégories de messagerie (#74) : seulement quand Messages est ouvert ici et que l'API les annonce,
+    /// jamais pour des alertes qui n'existent pas.
+    private var messagingPreferences: SchoolNotificationPreferences? {
+        guard messagingEntry != nil, let preferences = model.preferences, preferences.supportsMessaging else { return nil }
+        return preferences
+    }
+
     private var messagingSection: some View {
         Section {
+            if let preferences = messagingPreferences {
+                toggle("Messages privés", .messagingPrivate, preferences, id: "notification-messaging-private")
+                toggle("Messages du général", .messagingGeneral, preferences, id: "notification-messaging-general")
+                toggle("Mentions", .messagingMentions, preferences, id: "notification-messaging-mentions")
+            }
             DisclosureGroup("Notifications d’une conversation") {
                 Text("La sourdine se règle dans les options de chaque conversation, dans Messages. L’autorisation de cet appareil reste distincte.")
                     .foregroundStyle(DrivyTheme.muted)
@@ -122,7 +134,14 @@ struct SchoolNotificationSettingsView: View {
                     .foregroundStyle(DrivyTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        } header: { Text("Messages").drivyFormSectionHeader() }
+        } header: {
+            if messagingPreferences != nil {
+                Text("Messages · Toutes mes écoles").drivyFormSectionHeader()
+                    .accessibilityLabel("Messages, préférences du compte pour toutes mes écoles")
+            } else {
+                Text("Messages").drivyFormSectionHeader()
+            }
+        }
         .drivyFormRows()
     }
 

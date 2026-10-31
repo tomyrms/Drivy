@@ -66,6 +66,8 @@ export function PortalPreferencesPage({ back = preferencesReturn(window.location
   </div>;
 }
 
+const groups = [{ id: 'courses', title: 'Cours collectifs' }, { id: 'messages', title: 'Messages' }] as const;
+
 function NotificationsSection() {
   const uid = useId();
   const [store] = useState(() => new NotificationPreferenceStore({
@@ -115,12 +117,15 @@ function NotificationsSection() {
   return <section className="account-section" aria-labelledby={`${uid}-notifications`}>
     <h2 id={`${uid}-notifications`}>Notifications</h2>
     {state.phase === 'loading' && !state.value && <div className="grid gap-3" role="status" aria-label="Chargement des préférences"><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /></div>}
-    {state.value && <ul className="account-switches">
-      {notificationKeys.map(item => <li key={item.key}>
-        <Label htmlFor={`${uid}-${item.key}`}>{item.label}{state.pendingKeys.includes(item.key) && <span className="sr-only"> · Choix en attente de confirmation</span>}</Label>
-        <Switch id={`${uid}-${item.key}`} checked={state.value![item.key]} onCheckedChange={value => store.choose(item.key, value)} />
-      </li>)}
-    </ul>}
+    {state.value && groups.map(group => <div key={group.id} className="account-switch-group" role="group" aria-labelledby={`${uid}-group-${group.id}`}>
+      <h3 id={`${uid}-group-${group.id}`}>{group.title}</h3>
+      <ul className="account-switches">
+        {notificationKeys.filter(item => item.group === group.id).map(item => <li key={item.key}>
+          <Label htmlFor={`${uid}-${item.key}`}>{item.label}{state.pendingKeys.includes(item.key) && <span className="sr-only"> · Choix en attente de confirmation</span>}</Label>
+          <Switch id={`${uid}-${item.key}`} checked={state.value![item.key]} onCheckedChange={value => store.choose(item.key, value)} />
+        </li>)}
+      </ul>
+    </div>)}
     {state.message && <Alert variant={state.phase === 'uncertain' || state.phase === 'conflict' ? 'default' : 'destructive'}>
       <AlertTitle>{state.message}</AlertTitle>
       {state.phase === 'uncertain' && <AlertDescription><span className="account-actions">

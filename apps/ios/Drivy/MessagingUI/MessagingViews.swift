@@ -14,6 +14,9 @@ struct MessagingInboxView: View {
     @State private var filter: MessagingInboxFilter = .all
     @State private var choosesContact = false
     @State private var showsSettings = false
+    /// Alerte de messagerie touchée (#74) : demande consommée ici, après relecture de la liste auprès de l'école.
+    @State private var push = SchoolPushCenter.shared
+    @State private var notificationFailure: String?
 
     fileprivate struct Route: Identifiable, Hashable {
         let id: UUID
@@ -70,6 +73,7 @@ struct MessagingInboxView: View {
             if available { Task { await refresh() } }
         }
         .task { await initialLoad() }
+        .onChange(of: push.pendingMessagingTarget) { _, _ in Task { await openRequestedConversation() } }
     }
 
     // MARK: Liste
@@ -141,6 +145,13 @@ struct MessagingInboxView: View {
                             .frame(minHeight: 44)
                     }
                     .accessibilityIdentifier("messaging.error")
+                }
+            }
+            if let failure = notificationFailure {
+                Section {
+                    Label(failure, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(DrivyTheme.text)
+                        .accessibilityIdentifier("messaging.notification.refused")
                 }
             }
             if filter == .unread {
@@ -300,6 +311,31 @@ struct MessagingInboxView: View {
                               readStateVersion: known?.readStateVersion ?? 0, isGeneral: false)
             }
         }
+        await openRequestedConversation()
+    }
+
+    /// Toucher une alerte de messagerie (#74). La charge ne porte que l'école et la conversation : les droits sont relus
+    /// auprès de l'école, et seule une conversation qu'elle liste encore pour cette personne s'ouvre. Sinon, un refus clair.
+    /// Rien n'est marqué lu ici : la lecture suit l'ouverture normale du fil.
+    private func openRequestedConversation() async {
+        guard let target = push.pendingMessagingTarget else { return }
+        guard target.isFresh(at: Date()) else { _ = push.consumePendingMessagingTarget(); return }
+        // Une autre école est refusée par l'accueil ; ici seule la messagerie de l'école de l'alerte la consomme.
+        guard target.schoolID == workspace.scope.schoolID else { return }
+        _ = push.consumePendingMessagingTarget()
+        notificationFailure = nil
+        opening = true; defer { opening = false }
+        await workspace.loadConversations()
+        var pages = 0
+        while workspace.error == nil, !workspace.conversations.contains(where: { $0.id == target.conversationID }),
+              workspace.canLoadMoreConversations, pages < 20 {
+            await workspace.loadConversations(more: true); pages += 1
+        }
+        guard workspace.error == nil else { notificationFailure = "Impossible d’ouvrir la conversation pour le moment."; return }
+        if let item = workspace.conversations.first(where: { $0.id == target.conversationID }) { open(item); return }
+        // Le général n'est listé qu'une fois ouvert : l'école l'ouvre elle-même et ne répond que si le droit existe encore.
+        if let general = await workspace.generalConversation(), general == target.conversationID { route = generalRoute(general); return }
+        notificationFailure = MessagingNotificationOpening.unavailableMessage
     }
 
     private func reload() async {
@@ -336,12 +372,14 @@ struct MessagingInboxView: View {
 
     private func openGeneral() async {
         opening = true; defer { opening = false }
-        if let id = await workspace.generalConversation() {
-            let known = workspace.conversations.first { $0.id == id }
-            route = Route(id: id, title: "Général", detail: schoolName, sequence: known?.lastSequence ?? 0,
-                          readSequence: known?.lastReadSequence ?? 0, mutedUntil: known?.mutedUntil,
-                          readStateVersion: known?.readStateVersion ?? 0, isGeneral: true)
-        }
+        if let id = await workspace.generalConversation() { route = generalRoute(id) }
+    }
+
+    private func generalRoute(_ id: UUID) -> Route {
+        let known = workspace.conversations.first { $0.id == id }
+        return Route(id: id, title: "Général", detail: schoolName, sequence: known?.lastSequence ?? 0,
+                     readSequence: known?.lastReadSequence ?? 0, mutedUntil: known?.mutedUntil,
+                     readStateVersion: known?.readStateVersion ?? 0, isGeneral: true)
     }
 }
 

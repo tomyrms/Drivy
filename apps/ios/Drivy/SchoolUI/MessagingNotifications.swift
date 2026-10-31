@@ -39,6 +39,56 @@ struct SystemMessagingNotifications: MessagingNotificationCleaning {
     }
 }
 
+/// Alerte de messagerie touchée (#74) : l'école et la conversation de la charge `MESSAGING`, rien d'autre.
+/// La charge ne transporte aucun contenu ; ouvrir la conversation relit les droits auprès de l'école.
+struct MessagingNotificationTarget: Equatable, Sendable {
+    let schoolID: UUID
+    let conversationID: UUID
+    let receivedAt: Date
+
+    /// Délai pendant lequel un toucher peut encore attendre que l'app soit prête (démarrage à froid, connexion).
+    static let validity: TimeInterval = 120
+
+    /// `nil` hors d'une alerte `MESSAGING` complète : les alertes de cours gardent leur propre chemin.
+    init?(userInfo: [AnyHashable: Any], receivedAt: Date = Date()) {
+        guard userInfo["kind"] as? String == "MESSAGING",
+              let school = (userInfo["schoolId"] as? String).flatMap(UUID.init(uuidString:)),
+              let conversation = (userInfo["conversationId"] as? String).flatMap(UUID.init(uuidString:)) else { return nil }
+        self.schoolID = school; self.conversationID = conversation; self.receivedAt = receivedAt
+    }
+
+    init(schoolID: UUID, conversationID: UUID, receivedAt: Date = Date()) {
+        self.schoolID = schoolID; self.conversationID = conversationID; self.receivedAt = receivedAt
+    }
+
+    func isFresh(at now: Date) -> Bool { now.timeIntervalSince(receivedAt) <= Self.validity }
+}
+
+/// Ce que l'app fait d'un toucher sur une alerte de messagerie, avant toute lecture du serveur.
+/// Le droit de voir la conversation n'est jamais décidé ici : l'onglet Messages ne l'ouvre que si l'école la liste.
+enum MessagingNotificationOpening {
+    enum Outcome: Equatable {
+        /// Passer sur l'onglet Messages, qui relit la liste auprès de l'école avant d'ouvrir la conversation.
+        case open
+        /// Messages ou l'école courante ne sont pas encore prêts : la demande attend, dans la limite de sa validité.
+        case wait
+        /// Alerte d'une autre école que celle ouverte : refus expliqué, rien n'est ouvert.
+        case otherSchool
+        /// Trajet en cours, ou demande trop ancienne : rien ne s'ouvre et la demande est oubliée.
+        case discard
+    }
+
+    static func outcome(for target: MessagingNotificationTarget, currentSchoolID: UUID?, messagesAvailable: Bool,
+                        tripInProgress: Bool, now: Date = Date()) -> Outcome {
+        guard target.isFresh(at: now), !tripInProgress else { return .discard }
+        guard messagesAvailable, let currentSchoolID else { return .wait }
+        return currentSchoolID == target.schoolID ? .open : .otherSchool
+    }
+
+    static let unavailableMessage = "Cette conversation n’est plus accessible."
+    static let otherSchoolMessage = "Cette alerte concerne une autre école. Choisis cette école pour ouvrir la conversation."
+}
+
 /// Conversation affichée au premier plan, lue par le délégué de notifications (#103) :
 /// pas de seconde bannière pour un message de cette conversation quand son bas est visible.
 enum MessagingActiveConversation {

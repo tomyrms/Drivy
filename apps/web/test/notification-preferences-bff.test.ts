@@ -13,6 +13,7 @@ const secret = () => randomBytes(32).toString('base64url');
 const apps: { close(): Promise<unknown> }[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 const prefs = {courseOffers:true,courseReminders:false,courseChanges:true,courseStaffAlerts:true};
+const messagingPrefs = {...prefs,messagingPrivate:false,messagingGeneral:true,messagingMentions:true};
 
 async function harness(notificationGateway: NotificationGateway) {
   const now = Date.now();
@@ -58,6 +59,19 @@ test('GET et PUT relaient la version et le corps, et exigent If-Match et CSRF', 
   expect((await h.app.inject({ method: 'PUT', url: '/app/bff/me/push-devices', payload: {}, headers: { cookie: h.cookie } })).statusCode).toBe(404);
 });
 
+test('les catégories de messagerie sont relayées telles quelles, sans clé inconnue (#74)', async () => {
+  const gateway = vi.fn<NotificationGateway>(async request => request.method === 'GET'
+    ? { status: 200, body: { data: { version: 3, ...messagingPrefs } }, etag: '"3"' }
+    : { status: 200, body: { data: { version: 4, ...(request.body as object) } }, etag: '"4"' });
+  const h = await harness(gateway);
+  const saved = await h.put(messagingPrefs, { 'if-match': '"3"' });
+  expect(saved.statusCode).toBe(200);
+  expect(gateway).toHaveBeenLastCalledWith({ method: 'PUT', body: messagingPrefs, ifMatch: '"3"' }, h.tokens.accessToken);
+  expect((await h.put({ ...messagingPrefs, messagingEverything: true }, { 'if-match': '"3"' })).statusCode).toBe(400);
+  expect((await h.put({ ...messagingPrefs, messagingGeneral: 'oui' }, { 'if-match': '"3"' })).statusCode).toBe(400);
+  expect(gateway).toHaveBeenCalledTimes(1);
+});
+
 test('un conflit de version API reste un 412', async () => {
   const h = await harness(async () => ({ status: 412, body: { code: 'VERSION_CONFLICT' } }));
   const response = await h.put(prefs, { 'if-match': '"2"' });
@@ -80,7 +94,7 @@ test('la passerelle nâ€™envoie que ce chemin, avec Bearer et If-Match', asy
 
 test('le client envoie If-Match et signale un conflit', async () => {
   const send = vi.fn(async () => new Response(JSON.stringify({ code: 'VERSION_CONFLICT' }), { status: 412 }));
-  expect(await saveNotificationPreferences(prefs, 7, 'csrf', send as unknown as typeof fetch)).toEqual({ ok: false, conflict: true, kind: 'conflict' });
+  expect(await saveNotificationPreferences(messagingPrefs, 7, 'csrf', send as unknown as typeof fetch)).toEqual({ ok: false, conflict: true, kind: 'conflict' });
   const init = (send.mock.calls[0] as unknown as [string, RequestInit])[1];
   expect((init.headers as Record<string, string>)['If-Match']).toBe('"7"');
   expect(init.method).toBe('PUT');

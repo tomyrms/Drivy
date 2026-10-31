@@ -13,6 +13,8 @@ import UserNotifications
     private(set) var authorization: Authorization = .unknown
     /// Série à ouvrir après un toucher sur une notification ; consommée par l’entrée des cours de l’élève.
     private(set) var pendingSeriesID: UUID?
+    /// Conversation d’une alerte de messagerie touchée (#74) ; l’accueil change d’onglet, l’onglet Messages la consomme.
+    private(set) var pendingMessagingTarget: MessagingNotificationTarget?
     @ObservationIgnored private(set) var client: SchoolNotificationClient?
     @ObservationIgnored private var deviceToken: String?
     /// Jeton accepté par l’école pour la session ouverte ; réenvoyé seulement s’il change.
@@ -52,6 +54,7 @@ import UserNotifications
         SchoolReplayCache.shared.reset()
         hasSession = false
         pendingSeriesID = nil
+        pendingMessagingTarget = nil
         guard let token = registeredToken ?? deviceToken, let client else { registeredToken = nil; return }
         registeredToken = nil
         // Trois secondes au plus : la déconnexion n’attend pas un réseau absent.
@@ -70,6 +73,12 @@ import UserNotifications
     func didFailToRegister() { deviceToken = nil }
 
     func open(seriesID: UUID) { pendingSeriesID = seriesID }
+    func open(messaging target: MessagingNotificationTarget) { pendingMessagingTarget = target }
+    /// Rend la demande en attente et l’oublie : une seule ouverture par toucher.
+    func consumePendingMessagingTarget() -> MessagingNotificationTarget? {
+        defer { pendingMessagingTarget = nil }
+        return pendingMessagingTarget
+    }
     func consumePendingSeries() -> UUID? {
         defer { pendingSeriesID = nil }
         return pendingSeriesID
@@ -90,6 +99,11 @@ import UserNotifications
         case .authorized, .provisional, .ephemeral: .allowed
         @unknown default: .denied
         }
+    }
+
+    /// École et conversation de la charge `MESSAGING` (apps/api/src/messaging-notifications.ts) ; autre alerte : `nil`.
+    nonisolated static func messagingTarget(in userInfo: [AnyHashable: Any], receivedAt: Date = Date()) -> MessagingNotificationTarget? {
+        MessagingNotificationTarget(userInfo: userInfo, receivedAt: receivedAt)
     }
 
     /// `seriesId` de la charge utile envoyée par apps/api/src/course-push.ts ; absent ou invalide : rien à ouvrir.
@@ -123,8 +137,14 @@ import UserNotifications
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              let seriesID = SchoolPushCenter.seriesID(in: response.notification.request.content.userInfo) else { return }
+        guard response.actionIdentifier == UNNotificationDefaultActionIdentifier else { return }
+        let userInfo = response.notification.request.content.userInfo
+        // Alerte de messagerie (#74) : l’école et la conversation seulement, jamais de contenu.
+        if let target = SchoolPushCenter.messagingTarget(in: userInfo) {
+            await MainActor.run { SchoolPushCenter.shared.open(messaging: target) }
+            return
+        }
+        guard let seriesID = SchoolPushCenter.seriesID(in: userInfo) else { return }
         await MainActor.run { SchoolPushCenter.shared.open(seriesID: seriesID) }
     }
 }
