@@ -21,14 +21,20 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: refonte-checks-entry-${{ github.ref }}-${{ inputs.final_campaign && 'final' || 'checks' }}
-  cancel-in-progress: false
+  # Un push ou une pull request dépassé par un plus récent sur la même référence ne sert plus à rien, master compris :
+  # le dernier commit de la rafale porte tout le contenu des précédents. Un lancement manuel a son propre groupe
+  # (jamais annulé par un push) et la campagne finale reste sérialisée sans annulation.
+  group: refonte-checks-entry-${{ github.ref }}-${{ inputs.final_campaign && 'final' || github.event_name == 'workflow_dispatch' && github.run_id || 'auto' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 jobs:
   checks:
     if: github.event_name != 'workflow_dispatch' || inputs.final_campaign != true
     uses: ./.github/workflows/qualification-checks.yml
     with:
       qualification_sha: ${{ github.sha }}
+      # Push et pull request : seulement les suites que touchent les fichiers modifiés. Un lancement manuel les exécute toutes.
+      select_by_paths: ${{ github.event_name != 'workflow_dispatch' }}
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.before }}
   final:
     if: github.event_name == 'workflow_dispatch' && inputs.final_campaign == true
     uses: ./.github/workflows/validation-finale.yml

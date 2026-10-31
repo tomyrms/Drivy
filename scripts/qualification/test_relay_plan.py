@@ -61,7 +61,7 @@ class RelaySelectionTests(unittest.TestCase):
 
     def test_service_required_for_full_and_all_but_not_gps_visual_or_ui(self):
         root = self.temporary_root()
-        cases = [(1, {}), (1, dict(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='all')),
+        cases = [(1, dict(DRIVY_IOS_FULL_CAMPAIGN='1')), (1, dict(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='all')),
                  (0, dict(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='gps')),
                  (0, dict(DRIVY_IOS_VISUAL_ONLY='1')),
                  (0, dict(DRIVY_IOS_UI_TEST_SUITE='VisualOrientationTests'))]
@@ -70,7 +70,7 @@ class RelaySelectionTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), str(expected))
         (root / 'apps/ios/DrivyTests/MatrixMessagingRelayIntegrationTests.swift').unlink()
-        result = self.run_bash(root, 'source scripts/ios/test-selection.sh; echo "$relay_required"')
+        result = self.run_bash(root, 'source scripts/ios/test-selection.sh; echo "$relay_required"', DRIVY_IOS_FULL_CAMPAIGN='1')
         self.assertEqual(result.stdout.strip(), '0')
 
     def test_real_tls_fixture_chain_hostname_and_usage(self):
@@ -107,7 +107,7 @@ sleep() { :; }
 export -f xcodebuild xcrun python3 node postgres openssl sleep
 bash scripts/ios/test-simulator.sh
 '''
-        result = self.run_bash(root, harness)
+        result = self.run_bash(root, harness, DRIVY_IOS_FULL_CAMPAIGN='1')
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn('RELAY_START', result.stdout)
         self.assertIn('TRUST_PHONE', result.stdout)

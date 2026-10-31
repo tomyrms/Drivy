@@ -77,8 +77,29 @@ class TestSelection(unittest.TestCase):
         self.assertEqual(result.stdout, '0')
 
     def test_full_campaign_and_visual_mode_remain_unfiltered(self):
-        self.assert_options([])
+        self.assert_options([], DRIVY_IOS_FULL_CAMPAIGN='1')
+        self.assert_options([], DRIVY_IOS_FULL_CAMPAIGN='1', DRIVY_IOS_BUILD_IPA='1')
         self.assert_options([], DRIVY_IOS_VISUAL_ONLY='1')
+
+    def run_ipad(self, **overrides):
+        result = subprocess.run([BASH, '-c', 'set -euo pipefail; source scripts/ios/test-selection.sh; printf "%s" "$run_ipad"'],
+                                cwd=ROOT, env=environment(**overrides), text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def test_ipad_only_for_the_full_campaign_or_an_explicit_request(self):
+        suite = 'VisualOrientationTests'
+        self.assertEqual(self.run_ipad(DRIVY_IOS_FULL_CAMPAIGN='1'), '1')
+        self.assertEqual(self.run_ipad(DRIVY_IOS_UI_TEST_SUITE=suite), '0')
+        self.assertEqual(self.run_ipad(DRIVY_IOS_UI_TEST_SUITE=suite, DRIVY_IOS_UI_IPHONE_ONLY='1'), '0')
+        self.assertEqual(self.run_ipad(DRIVY_IOS_UI_TEST_SUITE=suite, DRIVY_IOS_UI_IPAD='1'), '1')
+        self.assertEqual(self.run_ipad(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='all'), '0')
+        self.assertEqual(self.run_ipad(DRIVY_IOS_VISUAL_ONLY='1'), '0')
+
+    def test_no_mode_is_refused_before_any_work(self):
+        result = self.selection()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Aucun mode choisi', result.stderr)
 
     def test_selected_suite_names_exist_in_real_swift_sources(self):
         sources = '\n'.join(path.read_text(encoding='utf-8') for path in (ROOT / 'apps/ios/DrivyTests').glob('*.swift'))
@@ -103,6 +124,18 @@ class TestSelection(unittest.TestCase):
             {'DRIVY_IOS_UI_TEST_SUITE': ' '.join(['VisualOrientationTests'] * 9)},
             {'DRIVY_IOS_UI_IPHONE_ONLY': '1'},
             {'DRIVY_IOS_UI_IPHONE_ONLY': 'yes', 'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests'},
+            {},
+            {'DRIVY_IOS_FULL_CAMPAIGN': '2'},
+            {'DRIVY_IOS_FULL_CAMPAIGN': '1', 'DRIVY_IOS_UNIT_ONLY': '1'},
+            {'DRIVY_IOS_FULL_CAMPAIGN': '1', 'DRIVY_IOS_VISUAL_ONLY': '1'},
+            {'DRIVY_IOS_FULL_CAMPAIGN': '1', 'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests'},
+            {'DRIVY_IOS_UI_IPAD': 'yes', 'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests'},
+            {'DRIVY_IOS_UI_IPAD': '1', 'DRIVY_IOS_FULL_CAMPAIGN': '1'},
+            {'DRIVY_IOS_UI_IPAD': '1', 'DRIVY_IOS_UNIT_ONLY': '1'},
+            {'DRIVY_IOS_UI_IPAD': '1', 'DRIVY_IOS_UI_IPHONE_ONLY': '1', 'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests'},
+            {'DRIVY_IOS_BUILD_IPA': '1', 'DRIVY_IOS_UNIT_ONLY': '1'},
+            {'DRIVY_IOS_BUILD_IPA': '1', 'DRIVY_IOS_UI_TEST_SUITE': 'VisualOrientationTests'},
+            {'DRIVY_IOS_BUILD_IPA': 'yes', 'DRIVY_IOS_FULL_CAMPAIGN': '1'},
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -161,17 +194,22 @@ export -f xcodebuild xcrun python3 sleep
             self.assertNotIn('xcodebuild <', result.stdout)
             self.assertNotIn('xcrun <', result.stdout)
 
-    def test_ui_mode_shares_selection_and_still_runs_both_devices(self):
+    def test_ui_mode_shares_selection_and_adds_the_ipad_only_on_request(self):
         expected = ['-only-testing:DrivyUITests/VisualOrientationTests/testRequestedScreensAtRealOrientations']
-        for build in [True, False]:
-            result = self.run_script(build=build, DRIVY_IOS_UI_TEST_SUITE='VisualOrientationTests/testRequestedScreensAtRealOrientations')
-            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-            calls = [line for line in result.stdout.splitlines() if line.startswith('xcodebuild')]
-            self.assertEqual(len(calls), 1 if build else 2)
-            for call in calls:
-                self.assertEqual(re.findall(r'<(-only-testing:[^>]+)>', call), expected)
-            if not build:
-                self.assertIn('<IPAD>', result.stdout)
+        suite = 'VisualOrientationTests/testRequestedScreensAtRealOrientations'
+        for ipad in [False, True]:
+            for build in [True, False]:
+                with self.subTest(ipad=ipad, build=build):
+                    extra = {'DRIVY_IOS_UI_IPAD': '1'} if ipad else {}
+                    result = self.run_script(build=build, DRIVY_IOS_UI_TEST_SUITE=suite, **extra)
+                    self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                    calls = [line for line in result.stdout.splitlines() if line.startswith('xcodebuild')]
+                    self.assertEqual(len(calls), 1 if build or not ipad else 2)
+                    for call in calls:
+                        self.assertEqual(re.findall(r'<(-only-testing:[^>]+)>', call), expected)
+                    if not build:
+                        self.assertEqual('<IPAD>' in result.stdout, ipad)
+                        self.assertEqual('<screenshot>' in result.stdout, ipad)
 
     def test_ui_iphone_only_runs_selection_once_without_ipad_or_capture(self):
         expected = ['-only-testing:DrivyUITests/VisualOrientationTests/testRequestedScreensAtRealOrientations']
@@ -200,20 +238,52 @@ export -f xcodebuild xcrun python3 sleep
         self.assertNotIn('<screenshot>', result.stdout)
 
     def test_full_campaign_retains_ipad_and_ui_coverage(self):
-        result = self.run_script()
+        result = self.run_script(DRIVY_IOS_FULL_CAMPAIGN='1')
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn('<IPAD>', result.stdout)
         self.assertIn('<-only-testing:DrivyUITests>', result.stdout)
         self.assertIn('<screenshot>', result.stdout)
 
+    def test_no_mode_never_reaches_an_apple_command(self):
+        for build in [True, False]:
+            result = self.run_script(build=build)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn('xcodebuild <', result.stdout)
+            self.assertNotIn('xcrun <', result.stdout)
+
+    def test_simulator_build_compiles_arm64_only_and_skips_unused_coverage(self):
+        result = self.run_script(build=True, DRIVY_IOS_FULL_CAMPAIGN='1')
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        call = [line for line in result.stdout.splitlines() if line.startswith('xcodebuild')][0]
+        for option in ['<ARCHS=arm64>', '<ONLY_ACTIVE_ARCH=NO>', '<COMPILER_INDEX_STORE_ENABLE=NO>', '<-enableCodeCoverage> <NO>']:
+            self.assertIn(option, call)
+        self.assertNotIn('x86_64', call)
+        # Les captures qui ne compilent que l'app n'ont pas d'action de test.
+        visual = self.run_script(build=True, DRIVY_IOS_VISUAL_ONLY='1', VISUAL_ONLY='true')
+        self.assertIn('<ARCHS=arm64>', visual.stdout)
+        self.assertNotIn('<-enableCodeCoverage>', visual.stdout)
+
     def test_workflow_validates_before_setup_and_prevents_unit_ipa_or_visual_capture(self):
         workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
         self.assertLess(workflow.index('- name: Valider le mode et la sélection des tests'), workflow.index('- name: Installer XcodeGen'))
         self.assertIn("unit_test_scope:\n", workflow)
-        self.assertIn("options: [gps, agenda, reports, reactivity, messaging, all]", workflow)
+        self.assertIn("options: [gps, agenda, reports, reactivity, messaging, consent, drafts, profile, all]", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
         self.assertIn("inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''", workflow)
         self.assertIn('if: inputs.visual_only == true', workflow)
+
+    def test_workflow_no_longer_queues_dispatches_and_builds_no_ipa_by_default(self):
+        workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
+        group = re.search(r'^  group: (refonte-ios-.*)$', workflow, re.MULTILINE)
+        self.assertIsNotNone(group)
+        # Un groupe par branche faisait attendre 51 minutes derrière une exécution dépassée.
+        self.assertNotIn('github.ref', group.group(1))
+        self.assertIn('inputs.qualification_sha || github.run_id', group.group(1))
+        for name in ['full_campaign', 'build_ipa', 'ui_ipad']:
+            self.assertRegex(workflow, name + r':\n        description: .*\n        type: boolean\n        default: false')
+        self.assertEqual(workflow.count('if: inputs.build_ipa == true && '), 2)
+        # Une qualification est la campagne complète, sans que la finale ait à le dire.
+        self.assertIn("DRIVY_IOS_FULL_CAMPAIGN: ${{ (inputs.full_campaign || inputs.qualification_sha != '') && '1' || '0' }}", workflow)
 
 
 if __name__ == '__main__':
