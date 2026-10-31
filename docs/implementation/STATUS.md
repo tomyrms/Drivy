@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 31 octobre 2026 — CI allégée (`claude/ci-allegee-20261031`)
+
+- Mesures sur 600 runs (21 au 31 octobre) : 5 235 min macOS, dont 41 % en parcours UI iPhone + iPad (62 % en échec), 20 % en tests métier (compilation 6,3 min pour 959 tests en 77 s) et 19 % en IPA. Les « 59 minutes d'attente » du run 41234908420 sont une relance (tentative 2) ; les vraies attentes (28 runs, 303 min, jusqu'à 51 min) venaient du groupe de concurrence par branche. L'allongement depuis le 11/10 suit le dépôt : code ×1,8, tests UI 13 → 82, paquets Swift 2 → 9.
+- Changé : « Refonte · iOS » refuse un lancement sans mode, ne rejoue l'iPad que sur demande (`ui_ipad=true`) ou en campagne complète (`full_campaign=true`), ne construit plus d'IPA sans `build_ipa=true`, et ne fait plus attendre ni annuler un lancement par un autre ; compilation arm64 seule ; API et web ne tournent que si les fichiers modifiés les concernent (tout tourne pour workflows, dépendances verrouillées, contrat OpenAPI, migrations ou doute) ; push et pull request dépassés annulés, master compris, sans jamais annuler un lancement manuel ni une qualification.
+- **Exécuté** : tests Python (66), tests de structure des workflows (8), actionlint ; vérifications dispensées 41247626704, état final 41249234890, navigateur 41249234791, IPA 41249234793, iOS UI 41247640168 (`LaunchTests`, iPhone seul, sans IPA), iOS métier 41250320040 (`profile`) : tous en succès.
+- **Limites** : gain macOS estimé à ≈ 14 % à usage égal (jambe iPad et IPA de campagne), gain de l'arm64 non établi ; campagne complète et `unit_test_scope=all` non redispatchés ; un démarrage anticipé du simulateur a été essayé et retiré (il bloque `xcodebuild`). Reste à trancher : iPad par défaut, relance des seuls tests en échec, tests UI instables, IPA sur master. Voir `docs/implementation/ci-20261031.md`.
 <!-- reprise-372-20261030 -->
 ## 30 octobre 2026 — reprise #372 : pile iOS à jour de master, IPA 447 retenue, plan web prêt
 
