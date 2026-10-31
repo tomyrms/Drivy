@@ -41,6 +41,11 @@ Elle est construite par `messagingPushPayload` (`apps/api/src/messaging-notifica
 - Les préférences sont par personne, pour toutes ses écoles. L'API refuse la lecture et l'écriture des choix d'un tiers (elle ne connaît que la personne connectée).
 - Il n'existe pas d'interrupteur général « tous les push » : chaque catégorie se refuse seule, et le refus système d'iOS reste le garde-fou global.
 
+## Web
+
+La page « Préférences personnelles » du portail (`apps/web/client/portal/account/preferences-page.tsx`) affiche deux groupes dans la même section Notifications : « Cours collectifs » (quatre interrupteurs existants) et « Messages » (Messages privés, Messages du général, Mentions). Le modèle (`notification-preferences-model.ts`) et le magasin à intentions indépendantes par champ (`notification-preferences-store.ts`) traitent les sept champs comme un seul objet versionné : une modification concurrente d'un champ ne réactive pas un autre choix. Le relais web (`/app/bff/me/notification-preferences`) accepte les trois champs de messagerie facultatifs et refuse toute autre clé.
+La messagerie n'a pas de client web : ces choix s'appliquent aux alertes de l'app iPhone/iPad, pour les écoles où Messages est ouvert.
+
 ## Limites connues
 
 - **Pas de regroupement anti-rafale côté serveur** : une alerte par message (une par message mentionnant, une par message privé ou du général activé). Seul `thread-id` regroupe l'affichage sur iOS, et les 15 minutes de validité bornent le rattrapage. Un regroupement (compteur par conversation, fenêtre glissante) demanderait un moteur d'agrégation dans la file ; il n'est pas fait.
