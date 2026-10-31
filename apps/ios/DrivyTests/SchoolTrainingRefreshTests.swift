@@ -58,14 +58,18 @@ import Testing
         await model.load()
         let before = try #require(model.progress)
         let competencies = model.competencies
+        let readAt = try #require(model.progressReadAt)
+        #expect(!model.isRefreshingProgress)
         await server.setProgressStatus(503)
         await model.loadProgress()
         #expect(model.progress?.items == before.items)
         #expect(model.competencies == competencies)
         #expect(model.progressError != nil)
+        #expect(model.progressReadAt == readAt && !model.isRefreshingProgress)
         await server.setProgressStatus(403)
         await model.loadProgress()
         #expect(model.progress == nil && model.competencies.isEmpty)
+        #expect(model.progressReadAt == nil && !model.isRefreshingProgress)
         #expect(model.progressError != nil)
         #expect(model.training != nil && !model.accessRevoked)
         await server.setProgressStatus(401)
@@ -77,6 +81,7 @@ import Testing
         await model.refreshOnAppear()
         #expect(!model.accessRevoked && model.canOpenPedagogicalContent)
         #expect(model.training != nil && !model.lessons.isEmpty && model.progress != nil)
+        #expect(model.progressReadAt != nil && !model.isRefreshingProgress)
     }
 
     @Test func anUnfinishedPastLessonDoesNotTakeTheNextLearnerWish() async {
@@ -294,6 +299,10 @@ private final class RecordedLessonChanges: @unchecked Sendable {
 
 private actor HistoryServer: SchoolHTTPTransport {
     static let revisionID = UUID(uuidString: "70000000-0000-4000-8000-000000000080")!
+    /// #117 : la progression n'est publiée qu'avec son référentiel (prestation de la formation, puis parcours de cette
+    /// prestation). La formation désigne donc une prestation stable que le catalogue de test sert réellement.
+    static let offeringID = UUID(uuidString: "70000000-0000-4000-8000-000000000081")!
+    static let curriculumID = UUID(uuidString: "70000000-0000-4000-8000-000000000082")!
     private let fallback = LessonFinishServer()
     private var pageUnavailable = false
     private var progressStatus: Int?
@@ -332,6 +341,26 @@ private actor HistoryServer: SchoolHTTPTransport {
         func ok(_ data: [String: Any]) throws -> SchoolHTTPResponse {
             let value: [String: Any] = ["data": data, "requestId": UUID().uuidString, "serverTime": "2026-09-30T10:00:00Z"]
             return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: value), status: 200, url: url, contentType: "application/json")
+        }
+        func page(_ item: some Encodable) throws -> SchoolHTTPResponse {
+            try ok(["items": [try JSONSerialization.jsonObject(with: JSONEncoder().encode(item))], "nextCursor": NSNull()])
+        }
+        // Seule la formation de la fixture est connue : toute autre reste introuvable (voir le test du fil multi-permis).
+        if url.pathComponents.dropLast().last == "trainings", url.lastPathComponent.lowercased() == HubFixture.trainingID.uuidString.lowercased() {
+            return try ok(["id": HubFixture.trainingID.uuidString, "schoolId": HubFixture.schoolID.uuidString,
+                "learnerId": HubFixture.learnerID.uuidString, "offeringId": Self.offeringID.uuidString, "version": 3,
+                "categoryCode": "B", "status": "ACTIVE", "startedOn": NSNull(), "closedOn": NSNull()])
+        }
+        if url.lastPathComponent == "offerings" {
+            return try page(SchoolOffering(id: Self.offeringID, schoolId: HubFixture.schoolID, version: 1, offeringKey: "B",
+                categoryCode: "B", curriculumVersionId: Self.curriculumID, policyVersionId: UUID(), enabled: true,
+                defaultDurationMinutes: 50, defaultPriceCents: 9000))
+        }
+        if url.lastPathComponent == "curricula" {
+            let giratoire = SchoolCatalogCompetency(id: LessonFinishServer.progressCompetency, schoolId: HubFixture.schoolID, version: 1,
+                curriculumVersionId: Self.curriculumID, key: "giratoire", label: "Giratoire", description: "", sortOrder: 1)
+            return try page(SchoolCurriculum(id: Self.curriculumID, schoolId: HubFixture.schoolID, version: 1, categoryCode: "B",
+                revision: 1, approved: true, competencies: [giratoire]))
         }
         if url.lastPathComponent == "progress", evaluated {
             return try ok(["trainingId": HubFixture.trainingID.uuidString, "items": [["competencyId": LessonFinishServer.progressCompetency.uuidString,

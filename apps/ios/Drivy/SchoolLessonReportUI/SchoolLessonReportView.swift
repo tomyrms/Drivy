@@ -153,6 +153,7 @@ struct SchoolLessonReportView: View {
         }
         .onAppear { isOnScreen = true }
         .onDisappear {
+            model?.persistLocalDraft()
             isOnScreen = false
             if closesLessonFlowOnDisappear { capture?.closeLessonFlow(lessonID: lessonID) }
         }

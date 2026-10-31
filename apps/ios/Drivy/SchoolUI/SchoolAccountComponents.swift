@@ -178,13 +178,18 @@ struct SchoolAccountHeading: View {
     private var identity: some View {
         HStack(spacing: DrivySpacing.s) {
             if !typeSize.isAccessibilitySize {
-                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: DrivyAvatar.pageSize, photo: workspace?.selfPhoto?.data)
+                DrivyAvatar(name: workspace?.person?.displayName ?? "Compte", size: DrivyAvatar.pageSize,
+                    photo: workspace?.person.flatMap { workspace?.photo(for: $0.personId) })
             }
             VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
                 Text(workspace?.person?.displayName ?? (isAuthenticated ? "Compte connecté" : "Aucun compte connecté"))
                     .font(.drivyTitle)
                     .foregroundStyle(DrivyTheme.text)
                     .fixedSize(horizontal: false, vertical: true)
+                if workspace?.hasPendingSelfProfile == true {
+                    DrivyStatusBadge(title: "Modification en attente", tone: .warning)
+                        .accessibilityIdentifier("account-profile-pending")
+                }
                 if let membership = workspace?.membership {
                     // École puis rôles, chacun sur sa ligne : jamais un « · » orphelin en début de ligne.
                     Text(membership.schoolName)

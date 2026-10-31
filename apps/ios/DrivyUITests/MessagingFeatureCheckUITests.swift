@@ -160,7 +160,8 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         capture("06-avant-reaction")
         XCTAssertTrue(waitFor(target, "label CONTAINS 'Pouce levé 2, vous avez réagi'"), "Ma réaction existante : \(target.label)")
         target.press(forDuration: 0.6)
-        let heart = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
+        // Le menu natif (77c02b7b) expose chaque réaction sous « Réagir : <nom> », plus sous son seul nom.
+        let heart = app.buttons.matching(NSPredicate(format: "label == 'Réagir : Cœur'")).firstMatch
         XCTAssertTrue(heart.waitForExistence(timeout: 5), "Palette de réactions dans le menu")
         let reply = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Répondre'")).firstMatch
         XCTAssertTrue(reply.exists, "Actions du menu")
@@ -209,7 +210,7 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(waitFor(pinned, "label CONTAINS 'Rendez-vous à 14 h'"))
         let secondPreview = pinned.label
         pinned.tap()
-        XCTAssertTrue(waitFor(text(app, "Rendez-vous à 14 h devant l'auto-école"), "hittable == true"))
+        XCTAssertTrue(waitFor(text(app, "Rendez-vous à 14 h devant l'auto-école"), "hittable == true"), app.debugDescription)
         XCTAssertEqual(pinned.label, secondPreview)
         next.tap()
         XCTAssertEqual(pinned.label, firstPreview, "Le parcours explicite boucle sans ouvrir de message")

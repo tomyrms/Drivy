@@ -28,19 +28,28 @@ struct SchoolAgendaView: View {
     /// Leçons de la fenêtre lue (semaine ou grille du mois) rangées par jour, calculées une fois par lecture.
     @State private var dayIndex: [Date: [SchoolLesson]] = [:]
     /// Administration qui enseigne aussi : ses leçons par défaut, toute l’école sur demande.
-    @State private var wholeSchool = false
+    @State private var instructorSelection = "default"
+    @State private var catalogueError: String?
+    @State private var catalogueRequest = UUID()
+    @State private var searchText = ""
+    @State private var nextSearch = SchoolAgendaNextSearch()
     /// Cours collectifs (#38) : séances de la fenêtre lue, catalogue pour savoir qui peut en créer.
     @State private var courseRead = SchoolAgendaCourses()
     @State private var courseCatalogue: SchoolCourseCatalogue?
     @State private var courseEditor: SchoolCourseEditorWorkspace?
     @State private var courseDetail: SchoolCourseDetailWorkspace?
 
-    private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0)" }
+    private var identityScope: String { "\(workspace.person?.id.uuidString ?? ""):\(workspace.membership?.id.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.sorted().joined(separator: ",") ?? "")" }
     private var mayPlan: Bool { workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true && workspace.school?.status == "ACTIVE" }
     private var isAdmin: Bool { workspace.membership?.roles.contains("ADMIN") == true }
     private var isInstructor: Bool { workspace.membership?.roles.contains("INSTRUCTOR") == true }
     /// Un moniteur voit ses leçons ; l’école entière seulement pour l’administration (filtre relu par le serveur).
-    private var instructorFilter: UUID? { isInstructor && !(isAdmin && wholeSchool) ? workspace.membership?.membershipId : nil }
+    private var instructorFilter: UUID? {
+        guard isAdmin else { return isInstructor ? workspace.membership?.membershipId : nil }
+        if instructorSelection == "all" { return nil }
+        if let id = UUID(uuidString: instructorSelection) { return id }
+        return isInstructor ? workspace.membership?.membershipId : nil
+    }
     private var showsInstructor: Bool { instructorFilter == nil && isAdmin }
 
     /// Lu des dizaines de fois par rendu (bande de la semaine, grille du mois) : un calendrier par fuseau, gardé.
@@ -127,6 +136,7 @@ struct SchoolAgendaView: View {
         .background(DrivyTheme.surface)
         .navigationTitle("Agenda")
         .navigationBarTitleDisplayMode(.large)
+        .searchable(text: $searchText, prompt: "Élève ou cours dans la période")
         // Réapparition de l’onglet : la période affichée reste en place pendant la relecture, et une feuille
         // ouverte n’est jamais refermée par elle. Un changement de compte ou de filtre repart de zéro (`loaded`).
         .task(id: currentScope) { await loadAgenda(keepingCurrent: true, navigating: true) }
@@ -163,7 +173,12 @@ struct SchoolAgendaView: View {
             planningModel?.invalidate(); planningModel = nil; selectedLesson = nil
             courseEditor = nil; courseDetail = nil; courseRead.reset(); courseCatalogue = nil
             planningReturn = SchoolAgendaPlanningReturn(); freshness.reset()
+            instructorSelection = "default"; searchText = ""; catalogueError = nil
+            nextSearch.cancel(clear: true)
         }
+        .onChange(of: currentScope) { _, _ in nextSearch.cancel(clear: true) }
+        .onChange(of: selectedDate) { _, _ in nextSearch.cancel(clear: true) }
+        .onDisappear { nextSearch.cancel() }
         // Retour au premier plan : la période se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
         // relira déjà l’agenda à sa fermeture.
         .onChange(of: scenePhase) { _, phase in
@@ -184,20 +199,136 @@ struct SchoolAgendaView: View {
     /// Le jour : son titre colle à ses leçons.
     private var dayGroup: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            dayHeading
-            // L’état d’une leçon suit l’heure (« En attente » une fois l’horaire passé) sans attendre un autre rendu.
-            TimelineView(.everyMinute) { _ in dayContent }
+            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                dayHeading
+                TimelineView(.everyMinute) { _ in dayContent }
+            } else { searchResults }
         }
     }
 
     @ViewBuilder private var schoolFilter: some View {
-        if isAdmin && isInstructor {
-            Toggle("Toute l’école", isOn: $wholeSchool)
-                .drivyControlTint()
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: DrivyLayout.tapTarget)
-                .accessibilityIdentifier("agenda-whole-school")
+        if isAdmin {
+            let instructors = courseCatalogue?.instructors ?? []
+            let references = HomonymReference.references(instructors.map { ($0.id, $0.displayName) })
+            Picker("Moniteur", selection: $instructorSelection) {
+                Text(isInstructor ? "Mes rendez-vous" : "Toute l’école").tag("default")
+                if isInstructor { Text("Toute l’école").tag("all") }
+                ForEach(instructors) { instructor in
+                    Text(HomonymReference.label(instructor.displayName, reference: references[instructor.id])).tag(instructor.id.uuidString)
+                }
+                if let id = UUID(uuidString: instructorSelection),
+                   courseCatalogue?.instructors.contains(where: { $0.id == id }) != true {
+                    Text("Moniteur indisponible · \(id.uuidString.suffix(4))").tag(instructorSelection)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .accessibilityIdentifier("agenda-instructor-filter")
+            if let catalogueError {
+                SchoolErrorNotice(message: catalogueError, retry: { Task { await loadCourseCatalogue() } })
+            }
         }
+    }
+
+    private func instructorLabel(_ instructor: SchoolCourseInstructor) -> String {
+        let references = HomonymReference.references((courseCatalogue?.instructors ?? []).map { ($0.id, $0.displayName) })
+        return HomonymReference.label(instructor.displayName, reference: references[instructor.id])
+    }
+
+    private var instructorTitle: String {
+        guard let id = instructorFilter else { return "Toute l’école" }
+        if id == workspace.membership?.membershipId { return "Mes rendez-vous" }
+        return courseCatalogue?.instructors.first(where: { $0.id == id }).map(instructorLabel)
+            ?? "Moniteur indisponible · \(id.uuidString.suffix(4))"
+    }
+
+    private func rangeTitle(_ range: SchoolAgendaRange) -> String {
+        "\(formattedDay(range.start, template: "dMMMy")) – \(formattedDay(range.end.addingTimeInterval(-1), template: "dMMMy"))"
+    }
+
+    private var searchEvents: [SchoolAgendaEvent] {
+        let rows = loaded?.prefix == scopePrefix ? lessons : []
+        return SchoolAgendaDiscovery.events(lessons: rows, courses: courseRead.items(in: currentScope),
+            range: currentScope.range, instructorID: instructorFilter).filter { event in
+                switch event {
+                case .lesson(let lesson): SchoolAgendaDiscovery.matches(learnerName(lesson), query: searchText)
+                case .course(let item): SchoolAgendaDiscovery.matches(item.series.title, query: searchText)
+                }
+            }
+    }
+
+    private var searchResults: some View {
+        let results = searchEvents
+        let references = HomonymReference.references(lessons.map { ($0.learnerId, learnerName($0)) })
+        let complete = loaded?.prefix == scopePrefix && loaded?.range.contains(currentScope.range) == true
+            && error == nil && !isLoading && courseRead.isComplete(in: currentScope)
+        return VStack(alignment: .leading, spacing: DrivySpacing.m) {
+            Text("\(rangeTitle(currentScope.range)) · \(instructorTitle)").font(.subheadline)
+                .accessibilityIdentifier("agenda-search-scope")
+            if !complete {
+                Text("Résultats partiels : la période n’est pas entièrement actualisée.").foregroundStyle(DrivyTheme.muted)
+                if isLoading || courseRead.isLoading(in: currentScope) { ProgressView("Chargement…") }
+                if let error { SchoolErrorNotice(message: error, retry: { Task { await refreshSources() } }) }
+                if let courseError { SchoolErrorNotice(message: courseError, retry: { Task { await loadCourses() } }) }
+            }
+            if results.isEmpty && complete { Text("Aucun rendez-vous correspondant dans cette période.") }
+            LazyVStack(spacing: 0) {
+                ForEach(results) { event in
+                    Button {
+                        switch event {
+                        case .lesson(let lesson): selectedLesson = lesson
+                        case .course(let item): open(item.series, occurrenceID: item.occurrence.id)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+                            if let start = event.start { Text(formattedDay(start, template: "EEEEdMMMM")) }
+                            switch event {
+                            case .lesson(let lesson):
+                                Text("Leçon · \(HomonymReference.label(learnerName(lesson), reference: references[lesson.learnerId]))").font(.headline)
+                                Text("\(time(lesson.startsAt)) – \(time(lesson.endsAt))")
+                            case .course(let item):
+                                Text("Cours · \(item.series.title)").font(.headline)
+                                Text("\(time(item.occurrence.start)) – \(time(item.occurrence.end)) · \(item.occurrence.instructorDisplayName)")
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, DrivySpacing.m)
+                    }
+                    .buttonStyle(DrivyRowButtonStyle())
+                    .accessibilityIdentifier("agenda-search-\(event.id)")
+                }
+            }
+        }
+    }
+
+    private var nextAppointment: some View {
+        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+            if let range = nextSearch.searchedRange { Text(rangeTitle(range)).font(.caption).foregroundStyle(DrivyTheme.muted) }
+            if nextSearch.isLoading {
+                ProgressView("Recherche du prochain rendez-vous…")
+                Button("Annuler la recherche") { nextSearch.cancel() }
+            } else {
+                Button("Prochain rendez-vous", systemImage: "calendar.badge.clock") { findNextAppointment() }
+                    .accessibilityIdentifier("agenda-next-appointment")
+            }
+            if let message = nextSearch.message { Text(message).font(.subheadline) }
+        }
+    }
+
+    private func findNextAppointment() {
+        guard let schoolID = workspace.membership?.schoolId else { return }
+        let wanted = currentScope, filter = instructorFilter, anchor = calendar.startOfDay(for: selectedDate)
+        nextSearch.start(after: selectedDate, calendar: calendar, instructorID: filter,
+            isCurrent: { currentScope == wanted && calendar.startOfDay(for: selectedDate) == anchor },
+            lessons: { range in try await fetchLessons(schoolID: schoolID, range: range, filter: filter,
+                stillWanted: { currentScope == wanted && calendar.startOfDay(for: selectedDate) == anchor }) },
+            courses: { range in try await client.courseClient.series(schoolID: schoolID, from: range.start, to: range.end) },
+            onFound: { date in select(date) },
+            onAccessFailure: {
+                lessons = []; dayIndex = [:]; loaded = nil; courseRead.reset(); courseCatalogue = nil
+                freshness.reset(); error = "Ton accès à cet agenda a changé. Actualise ton école."
+                SchoolAgendaMemory.forget()
+                await workspace.refreshAccount(minimumInterval: 0)
+            })
     }
 
     @ViewBuilder private var dayContent: some View {
@@ -232,6 +363,7 @@ struct SchoolAgendaView: View {
                     symbol: "calendar", actionTitle: emptyPresentation.nextDayActionTitle) {
                     if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { select(next) }
                 }
+                nextAppointment
             } else if !dailyEvents.isEmpty {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(dailyEvents.enumerated()), id: \.element.id) { index, event in
@@ -434,6 +566,7 @@ struct SchoolAgendaView: View {
         async let lessonRead: Void = loadAgenda(keepingCurrent: true)
         async let coursesRead: Void = loadCourses()
         _ = await (lessonRead, coursesRead)
+        await loadCourseCatalogue()
     }
     @MainActor private func loadCourses() async {
         let wanted = currentScope
@@ -447,10 +580,24 @@ struct SchoolAgendaView: View {
         }
     }
     @MainActor private func loadCourseCatalogue() async {
+        let request = UUID(); catalogueRequest = request
         guard mayPlan, let schoolID = workspace.membership?.schoolId else { courseCatalogue = nil; return }
         let wanted = identityScope
-        guard let catalogue = try? await client.courseClient.catalogue(schoolID: schoolID), !Task.isCancelled, identityScope == wanted else { return }
-        courseCatalogue = catalogue
+        do {
+            let catalogue = try await client.courseClient.catalogue(schoolID: schoolID)
+            guard !Task.isCancelled, identityScope == wanted, catalogueRequest == request else { return }
+            courseCatalogue = catalogue; catalogueError = nil
+        } catch {
+            guard !Task.isCancelled, identityScope == wanted, catalogueRequest == request else { return }
+            if let failure = error as? SchoolPlanningFailure,
+               failure == .unauthorized || failure == .forbidden || failure == .notFound {
+                courseCatalogue = nil; courseRead.reset(); lessons = []; loaded = nil; dayIndex = [:]
+                nextSearch.cancel(clear: true); SchoolAgendaMemory.forget()
+                await workspace.refreshAccount(minimumInterval: 0)
+                return
+            }
+            catalogueError = "La liste des moniteurs n’a pas pu être actualisée."
+        }
     }
     @ViewBuilder private var dayPicker: some View {
         if typeSize.isAccessibilitySize { compactDayPicker }
@@ -645,7 +792,7 @@ struct SchoolAgendaView: View {
             guard !Task.isCancelled, stillWanted() else { return nil }
             all.append(contentsOf: page.items); cursor = page.nextCursor
             if let cursor, !seen.insert(cursor).inserted { throw SchoolAgendaFailure.invalidResponse }
-            if all.count > 10_000 { throw SchoolAgendaFailure.invalidResponse }
+            if all.count > 10_000 || seen.count > 100 { throw SchoolAgendaFailure.invalidResponse }
         } while cursor != nil
         guard Set(all.map(\.id)).count == all.count else { throw SchoolAgendaFailure.invalidResponse }
         return all

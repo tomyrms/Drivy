@@ -20,6 +20,9 @@ import Observation
     private(set) var lessonsLoaded = false
     private(set) var errorMessage: String?
     private(set) var progressError: String?
+    /// Date de la projection et de son référentiel effectivement relus ; indépendante des leçons.
+    private(set) var progressReadAt: Date?
+    private(set) var isRefreshingProgress = false
     private(set) var accessRevoked = false
     /// Dernière lecture complète de la formation et de ses leçons.
     private(set) var loadedAt: Date?
@@ -93,12 +96,14 @@ import Observation
     private func clear() {
         training = nil; lessons = []; nextCursor = nil; progress = nil; competencies = []; lastEvaluated = nil
         seenCursors = []; lessonsLoaded = false; loadedAt = nil; loadedReadStartedAt = nil
+        progressReadAt = nil; isRefreshingProgress = false
     }
 
     /// `keepingCurrent` : relecture au retour d’une leçon ; ce qui est affiché reste visible jusqu’à la réponse.
     func load(keepingCurrent: Bool = false) async {
         guard !invalidated else { return }
         generation = UUID(); progressRequest = UUID(); let request = generation
+        isRefreshingProgress = false
         let startedAt = Date()
         loadingRequest = request
         defer { finishLoading(request) }
@@ -211,14 +216,15 @@ import Observation
     func loadProgress(keepingCurrent: Bool = true, evaluatingLast: Bool = true) async {
         guard !invalidated, !accessRevoked, hasPedagogicalRole, let training else { return }
         let request = generation; progressRequest = UUID(); let detailRequest = progressRequest
-        progressError = nil
-        if !keepingCurrent { progress = nil; competencies = []; lastEvaluated = nil }
+        progressError = nil; isRefreshingProgress = true
+        defer { if request == generation, detailRequest == progressRequest { isRefreshingProgress = false } }
+        if !keepingCurrent { progress = nil; competencies = []; lastEvaluated = nil; progressReadAt = nil }
         do {
             let value = try await client.reports.progress(schoolID: scope.schoolID, trainingID: trainingID)
             guard Set(value.unobservedCompetencyIds).count == value.unobservedCompetencyIds.count,
                   Set(value.items.map(\.id)).isDisjoint(with: Set(value.unobservedCompetencyIds)) else { throw SchoolAPIError.invalidResponse }
             guard request == generation, detailRequest == progressRequest, !invalidated else { return }
-            progress = value
+            var confirmedCompetencies = competencies
             // Le référentiel ne change pas d’une leçon à l’autre : il n’est relu qu’une fois.
             if competencies.isEmpty {
                 let offerings = try await client.collect { try await self.client.catalog.offerings(schoolID: self.scope.schoolID, cursor: $0) }
@@ -226,8 +232,10 @@ import Observation
                 let curricula = try await client.collect { try await self.client.catalog.curricula(schoolID: self.scope.schoolID, cursor: $0) }
                 guard let curriculum = curricula.first(where: { $0.id == offering.curriculumVersionId }) else { throw SchoolAPIError.notFound }
                 guard request == generation, detailRequest == progressRequest, !invalidated else { return }
-                competencies = curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
+                confirmedCompetencies = curriculum.competencies.sorted { $0.sortOrder < $1.sortOrder }
             }
+            guard request == generation, detailRequest == progressRequest, !invalidated, !Task.isCancelled else { return }
+            progress = value; competencies = confirmedCompetencies; progressReadAt = Date()
         } catch {
             guard request == generation, detailRequest == progressRequest, !invalidated else { return }
             if error is CancellationError { return }
@@ -238,7 +246,7 @@ import Observation
                 // Une panne conserve la lecture ; un refus retire immédiatement la projection concernée.
                 if SchoolTrainingAccess.isRevoked(error) || error as? SchoolAPIError == .notFound
                     || error as? SchoolReportFailure == .notFound {
-                    progress = nil; competencies = []
+                    progress = nil; competencies = []; lastEvaluated = nil; progressReadAt = nil
                 }
                 progressError = SchoolTrainingAccess.message(error)
             }

@@ -48,7 +48,7 @@ struct SchoolMyProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { if editor.hasEdits { confirmsDiscard = true } else { dismiss() } }
+                    Button("Fermer") { if editor.hasEdits || editor.hasUnretainedPhoto { confirmsDiscard = true } else { dismiss() } }
                         .disabled(editor.isBusy || editor.photoIntent != nil)
                         .accessibilityIdentifier("my-profile-close")
                 }
@@ -57,8 +57,11 @@ struct SchoolMyProfileView: View {
                 Button("Quitter sans enregistrer", role: .destructive) { dismiss() }
                 Button("Continuer", role: .cancel) { }
             } message: {
-                // La photo part seule, dès qu’elle est cadrée : la fermeture n’abandonne que le reste (#155).
-                if editor.photoChanged { Text("Ta photo est déjà enregistrée. Seuls les autres changements seront perdus.") }
+                // La photo part seule ; distinguer le dernier choix non conservé des intentions protégées (#118).
+                if editor.hasUnretainedPhoto { Text("Le dernier choix de photo n’a pas été conservé.") }
+                else if workspace.hasPendingSelfProfile {
+                    Text("Les changements conservés resteront disponibles ici. La saisie non enregistrée sera perdue.")
+                } else if editor.photoChanged { Text("Ta photo est déjà enregistrée. Seuls les autres changements seront perdus.") }
             }
             .confirmationDialog("Retirer la photo ?", isPresented: $confirmsPhotoRemoval, titleVisibility: .visible) {
                 Button("Retirer la photo", role: .destructive) { upload(nil) }
@@ -68,7 +71,7 @@ struct SchoolMyProfileView: View {
             }
         }
         .tint(DrivyTheme.accent)
-        .interactiveDismissDisabled(editor.hasEdits || editor.isBusy || editor.photoIntent != nil)
+        .interactiveDismissDisabled(editor.hasEdits || editor.hasUnretainedPhoto || editor.isBusy || editor.photoIntent != nil)
         .onChange(of: editor.photoResult) { _, result in
             if let result { UIAccessibility.post(notification: .announcement, argument: result) }
         }

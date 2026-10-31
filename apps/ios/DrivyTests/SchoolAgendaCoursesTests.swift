@@ -217,6 +217,55 @@ import Testing
         #expect(next.count == 1)
     }
 
+    @Test func discoveryUsesOccurrenceInstructorAndExcludesCancelledAndDraftFromNext() throws {
+        let other = identifier(501)
+        let draft = course(id: 1, status: .draft, occurrences: [occurrence(1, hour: 9, instructor: other)])
+        let cancelled = course(id: 2, status: .cancelled, occurrences: [occurrence(2, hour: 10, instructor: other)])
+        let published = course(id: 3, occurrences: [occurrence(3, hour: 14, instructor: other), occurrence(4, hour: 16)])
+        let result = SchoolAgendaDiscovery.events(lessons: [], courses: [draft, cancelled, published, published], range: scope.range, instructorID: other)
+        #expect(result.count == 3)
+        #expect(SchoolAgendaDiscovery.next(in: result)?.start == SchoolLesson.date("2026-10-26T13:00:00Z"))
+        #expect(SchoolAgendaDiscovery.matches("Émilie  Exemple", query: "exemple emilie"))
+        #expect(!SchoolAgendaDiscovery.matches("Emilie Exemple", query: "autre"))
+    }
+
+    @Test func nextSearchStopsAtThreeWindowsAndDoesNotTreatTruncatedCoursesAsEmpty() async {
+        let model = SchoolAgendaNextSearch()
+        var ranges: [SchoolAgendaRange] = [], didNavigate = false
+        model.start(after: day, calendar: calendar, instructorID: nil, isCurrent: { true },
+            lessons: { range in ranges.append(range); return [] }, courses: { _ in [] },
+            onFound: { _ in didNavigate = true }, onAccessFailure: {})
+        while model.isLoading { await Task.yield() }
+        #expect(ranges.count == 3)
+        #expect(ranges[0].end == ranges[1].start && ranges[1].end == ranges[2].start)
+        #expect(model.message == "Aucun rendez-vous dans les 90 jours recherchés.")
+        #expect(!didNavigate)
+        ranges = []
+        let truncated = Array(repeating: course(), count: 200)
+        model.start(after: day, calendar: calendar, instructorID: nil, isCurrent: { true },
+            lessons: { range in ranges.append(range); return [] }, courses: { _ in truncated },
+            onFound: { _ in didNavigate = true }, onAccessFailure: {})
+        while model.isLoading { await Task.yield() }
+        #expect(ranges.count == 1)
+        #expect(model.message?.hasPrefix("Recherche incomplète") == true)
+        #expect(!didNavigate)
+    }
+
+    @Test func cancelledNextSearchCannotNavigateWhenItsResponseArrivesLate() async {
+        let model = SchoolAgendaNextSearch(), gate = AgendaCourseReadGate()
+        var didNavigate = false
+        let previousDay = calendar.date(byAdding: .day, value: -1, to: day)!
+        model.start(after: previousDay, calendar: calendar, instructorID: nil, isCurrent: { true },
+            lessons: { _ in [] }, courses: { _ in try await gate.fetch(1) },
+            onFound: { _ in didNavigate = true }, onAccessFailure: {})
+        await gate.waitForStart(1)
+        model.cancel()
+        gate.finish(1, with: [course()])
+        await Task.yield()
+        #expect(!model.isLoading && !didNavigate)
+        #expect(model.message == "Recherche interrompue.")
+    }
+
     private func lesson(id: Int, start: String, end: String) throws -> SchoolLesson {
         var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())) as! [String: Any]
         object["id"] = identifier(id).uuidString; object["plannedStart"] = start; object["plannedEnd"] = end

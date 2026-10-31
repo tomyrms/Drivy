@@ -8,7 +8,8 @@ import XCTest
         app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
         app.launch()
 
-        let search = app.textFields["Rechercher une compétence"]
+        // Le champ porte le trait « recherche » : XCUITest le range parmi les searchFields, pas les textFields.
+        let search = app.searchFields["progress-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 20), app.debugDescription)
         reveal(search, in: app)
         search.tap()

@@ -38,15 +38,16 @@ import XCTest
         let email = app.textFields["school-sign-in-email"]
         XCTAssertTrue(email.waitForExistence(timeout: 15))
         XCTAssertFalse(message("Complète ton adresse e-mail avec @.", in: app).exists)
-        email.tap(); email.typeText("camille")
+        // Sur iPhone, clavier ouvert, la barre d'actions couvre le champ mot de passe : on le rejoint par Suivant,
+        // comme au clavier, plutôt que par un appui qui toucherait « Se connecter ».
+        email.tap(); email.typeText("camille\n")
         let password = app.secureTextFields["school-sign-in-password"]
-        password.tap()
-        XCTAssertTrue(message("Complète ton adresse e-mail avec @.", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(message("Complète ton adresse e-mail avec @.", in: app).waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.buttons["school-sign-in"].isEnabled)
-        email.tap(); email.typeText("@example.test")
-        XCTAssertFalse(message("Complète ton adresse e-mail avec @.", in: app).exists)
-        XCTAssertTrue(message("Saisis ton mot de passe.", in: app).waitForExistence(timeout: 5))
-        password.tap(); password.typeText("x")
+        email.tap(); email.typeText("@example.test\n")
+        XCTAssertFalse(message("Complète ton adresse e-mail avec @.", in: app).exists, app.debugDescription)
+        XCTAssertTrue(message("Saisis ton mot de passe.", in: app).waitForExistence(timeout: 5), app.debugDescription)
+        password.typeText("x")
         XCTAssertTrue(app.buttons["school-sign-in"].isEnabled)
     }
 

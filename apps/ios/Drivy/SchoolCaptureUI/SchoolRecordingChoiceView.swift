@@ -77,6 +77,15 @@ struct SchoolRecordingChoiceView: View {
                             retry: model.accessRevoked || model.isBusy || model.isLoading ? nil : { Task { await model.load() } })
                     }
                     if let error = model.storageError { SchoolErrorNotice(message: error) }
+                    if model.mayPrioritizeRefusal {
+                        if model.deferredRefusal != nil {
+                            DrivyInlineMessage(text: "Refus du GPS en attente de confirmation par l’école.", tone: .warning)
+                            Button("Transmettre le refus") { Task { _ = await model.prioritizeRefusal() } }
+                                .disabled(model.isBusy || model.isLoading)
+                        } else if !model.mayChoose {
+                            Button("Refuser le GPS maintenant") { Task { _ = await model.prioritizeRefusal() } }
+                        }
+                    }
                     if model.notice != nil, !model.accessRevoked {
                         if model.relatedPending.isEmpty { choiceControls }
                         else { pendingRequests }
@@ -186,8 +195,8 @@ struct SchoolRecordingChoiceView: View {
                     Button("Réessayer") {
                         Task { if await model.resend(queued, acknowledged: true) { dismiss() } }
                     }
-                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayResume(queued))
-                    if model.unknownRequestIDs.contains(queued.id) {
+                    .buttonStyle(DrivyPrimaryButtonStyle(size: .field)).disabled(!model.mayResend(queued))
+                    if model.unknownRequestIDs.contains(queued.id) && model.deferredRefusal == nil {
                         DrivyInlineMessage(text: "L’école n’a pas reçu ce choix : rien n’a été enregistré.", tone: .warning)
                         Button("Abandonner la demande", role: .destructive) { abandonCandidate = queued; confirmsAbandon = true }
                             .font(.subheadline.weight(.semibold))

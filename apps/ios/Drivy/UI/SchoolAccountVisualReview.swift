@@ -5,7 +5,7 @@ import SwiftUI
 /// Aucune connexion OIDC, requête réseau ou permission GPS n'est demandée.
 struct SchoolAccountVisualReview: View {
     static let screenNames: Set<String> = ["sign-in", "sign-in-error", "sign-in-network-error", "sign-in-attempts", "sign-in-loading", "sign-in-unconfigured", "sign-in-recovery-ready", "sign-in-recovery-error", "account", "app-lock", "app-privacy",
-        "access-code", "access-register", "access-opening", "school-opening",
+        "access-code", "access-register", "access-register-long", "access-register-narrow", "access-opening", "school-opening",
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "profile-instructor", "onboarding-welcome", "onboarding-information",
         "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready", "onboarding-staff", "onboarding-known-identity"]
@@ -47,6 +47,9 @@ struct SchoolAccountVisualReview: View {
                 AppPrivacyShield()
             } else if let accessModel {
                 SchoolAccessCodeView(model: accessModel)
+                    // Fenêtre synthétique étroite, sans prétendre qualifier le multitâche réel d’iPadOS.
+                    .frame(maxWidth: screen == "access-register-narrow" ? 320 : .infinity)
+                    .frame(maxWidth: .infinity)
             } else if let openingModel {
                 SchoolOpeningView(model: openingModel, openSchool: { _ in })
             } else if let codeModel {
@@ -95,9 +98,14 @@ struct SchoolAccountVisualReview: View {
             let model = SchoolAccessWorkspace(client: SchoolAccountClient(configuration: configuration),
                                               identity: IdentitySession(configuration: configuration))
             switch screen {
-            case "access-register":
+            case "access-register", "access-register-long", "access-register-narrow":
                 model.review(SchoolAccessPreview(kind: .learnerInvitation, schoolName: "Auto-école Horizon", expiresAt: "2026-10-22T12:00:00Z"),
                              input: .code("K7Q4-MX2P"))
+                if screen != "access-register" {
+                    model.firstName = "Jean-Baptiste Alexandre"
+                    model.lastName = "De la Roche Montferrand"
+                    model.email = "exemple@example.invalid"
+                }
             case "access-opening":
                 model.review(SchoolAccessPreview(kind: .schoolOpening, schoolName: nil, expiresAt: "2026-10-22T12:00:00Z"), input: .code("K7Q4-MX2P"))
             default:

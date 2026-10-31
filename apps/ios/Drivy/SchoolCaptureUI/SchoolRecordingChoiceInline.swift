@@ -68,6 +68,18 @@ struct SchoolRecordingChoiceInline: View {
                     DrivyInlineMessage(text: error, tone: .warning)
                 }
             }
+            if model.deferredRefusal != nil {
+                DrivyInlineMessage(text: "Refus du GPS en attente de confirmation par l’école.", tone: .warning)
+                if !model.isBusy && !model.isLoading {
+                    Button("Transmettre le refus") { Task { _ = await model.prioritizeRefusal() } }
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .accessibilityIdentifier("gps-priority-refusal-retry")
+                }
+            } else if model.mayPrioritizeRefusal && !model.mayChoose {
+                Button("Refuser le GPS maintenant") { choose(.refused) }
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .accessibilityIdentifier("gps-priority-refusal")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(DrivyMotion.reveal(reduceMotion), value: presentation)

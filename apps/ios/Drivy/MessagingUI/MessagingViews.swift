@@ -230,7 +230,7 @@ struct MessagingInboxView: View {
                 MessagingInboxRow(title: item.kind == .schoolGeneral ? "Général" : item.title,
                     preview: workspace.preview(for: item.id), unread: item.unreadCount,
                     muted: (workspace.displayedMutedUntil(item.id, fallback: item.mutedUntil) ?? .distantPast) > Date(),
-                    photo: item.peerPersonID.flatMap { workspace.photos[$0] }, isGeneral: item.kind == .schoolGeneral)
+                    photo: item.peerPersonID.flatMap { workspace.photo(for: $0) }, isGeneral: item.kind == .schoolGeneral)
             }
             .task(id: item.peerPersonID) {
                 if let peer = item.peerPersonID { await workspace.loadPhoto(peer) }
@@ -469,7 +469,7 @@ private struct MessagingContactPicker: View {
                 ForEach(contacts) { contact in
                     Button { choose(contact) } label: {
                         HStack(spacing: DrivySpacing.m) {
-                            DrivyAvatar(name: contact.displayName, size: 40, photo: workspace.photos[contact.id])
+                            DrivyAvatar(name: contact.displayName, size: 40, photo: workspace.photo(for: contact.id))
                             Text(contact.displayName).foregroundStyle(DrivyTheme.text)
                             Spacer()
                         }
@@ -478,7 +478,7 @@ private struct MessagingContactPicker: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(contact.displayName)
-                    .task { if workspace.photos[contact.id] == nil { await workspace.loadPhoto(contact.id) } }
+                    .task { if workspace.photo(for: contact.id) == nil { await workspace.loadPhoto(contact.id) } }
                 }
                 contactsState
             }

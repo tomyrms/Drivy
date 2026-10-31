@@ -725,6 +725,13 @@ struct SchoolReportNotices: View {
             .drivyClearRow()
             .listRowSeparator(.hidden)
         }
+        if model.textDraftIsStored && model.pending == nil {
+            Section {
+                Label("Brouillon conservé sur cet appareil", systemImage: "internaldrive")
+                    .font(.caption).foregroundStyle(DrivyTheme.muted)
+                    .accessibilityIdentifier("lesson-text-draft-stored")
+            }.drivyFormRows()
+        }
         if model.needsReload && model.hasLocalEdits {
             Section { Text(model.retainedEditsText).textSelection(.enabled) } header: { Text("Saisie conservée").drivyFormSectionHeader() }
                 .drivyFormRows()
