@@ -44,8 +44,18 @@ final class MessagingFeatureCheckUITests: XCTestCase {
     }
 
     private func waitFor(_ element: XCUIElement, _ format: String, timeout: TimeInterval = 5) -> Bool {
-        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: format), object: element)
-        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+        let predicate = NSPredicate(format: format)
+        let needsLayout = format.contains("hittable")
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            // Une ligne de liste pas encore posée a pour cadre {inf, inf} : interroger sa « hittability » fait signaler à XCTest
+            // « Failed to determine hittability » comme un échec du test (run 41202131542). Elle n'est interrogée qu'une fois placée.
+            let frame = needsLayout && element.exists ? element.frame : .zero
+            let placed = !needsLayout || (frame.minX.isFinite && frame.minY.isFinite && !frame.isEmpty)
+            if placed && predicate.evaluate(with: element) { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        } while Date() < deadline
+        return false
     }
 
     @discardableResult
@@ -247,6 +257,74 @@ final class MessagingFeatureCheckUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Lundi, 1 vote"].exists)
         XCTAssertTrue(app.buttons["Mardi, 1 vote"].exists)
         capture("10-sondage")
+    }
+
+    /// #73 : voter, changer de choix, puis clore. La fixture applique vraiment les votes et la clôture (extension DEBUG du
+    /// simulateur) ; le fil est relu après chaque geste, donc un total qui tient prouve l'état renvoyé et pas seulement l'affichage provisoire.
+    func testPollVoteThenCloseKeepsTotalsAndLocksTheChoices() {
+        let app = launch()
+        openGeneral(app)
+        XCTAssertTrue(app.descendants(matching: .any)["messaging.poll"].firstMatch.waitForExistence(timeout: 8), "Sondage déchiffré")
+        let pendingNote = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == 'messaging.poll.pending' OR label CONTAINS 'Vote en cours'")).firstMatch
+
+        // Au départ : Léa a voté Lundi, Marc Mardi, moi aucun choix.
+        let monday = app.buttons["Lundi, 1 vote"]
+        XCTAssertTrue(reveal(monday, in: app), "Option Lundi actionnable")
+        XCTAssertNotEqual(monday.value as? String, "Choisi", "Aucun choix de ma part au départ")
+        capture("10a-sondage-avant-vote")
+
+        // Vote : mon choix s'ajoute au total, puis le serveur le confirme sans le changer.
+        monday.tap()
+        let mondayVoted = app.buttons["Lundi, 2 votes"]
+        XCTAssertTrue(mondayVoted.waitForExistence(timeout: 8), "Mon vote est compté : \(app.debugDescription)")
+        XCTAssertTrue(waitFor(mondayVoted, "value == 'Choisi'", timeout: 8), "Lundi est marqué comme choisi")
+        XCTAssertTrue(pendingNote.waitForNonExistence(timeout: 10), "Le vote n'est plus « en cours d'enregistrement »")
+        XCTAssertTrue(app.buttons["Lundi, 2 votes"].exists, "Le total tient après la confirmation")
+        XCTAssertTrue(app.buttons["Mardi, 1 vote"].exists, "Le vote de Marc n'a pas bougé")
+        capture("10b-sondage-vote")
+
+        // Changement : le sondage est à choix unique, le vote passe de Lundi à Mardi.
+        let tuesday = app.buttons["Mardi, 1 vote"]
+        XCTAssertTrue(reveal(tuesday, in: app), "Option Mardi actionnable")
+        tuesday.tap()
+        XCTAssertTrue(app.buttons["Mardi, 2 votes"].waitForExistence(timeout: 8), "Le vote passe sur Mardi")
+        XCTAssertTrue(app.buttons["Lundi, 1 vote"].waitForExistence(timeout: 8), "Lundi retrouve le seul vote de Léa")
+        XCTAssertTrue(pendingNote.waitForNonExistence(timeout: 10), "Le changement est confirmé")
+        XCTAssertTrue(waitFor(app.buttons["Mardi, 2 votes"], "value == 'Choisi'", timeout: 8), "Mardi est le choix retenu")
+        XCTAssertNotEqual(app.buttons["Lundi, 1 vote"].value as? String, "Choisi")
+
+        // Clôture : confirmation explicite, puis plus de vote ni de bouton « Clore ».
+        let close = app.buttons["Clore"].firstMatch
+        XCTAssertTrue(reveal(close, in: app), "Le créateur du sondage peut le clore")
+        close.tap()
+        let confirm = app.buttons["Clore le sondage"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Confirmation avant la clôture")
+        capture("10c-confirmation-cloture")
+        confirm.tap()
+        let closedNote = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Sondage clos'")).firstMatch
+        XCTAssertTrue(closedNote.waitForExistence(timeout: 10), "Le sondage est annoncé clos")
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10), "Plus de bouton Clore")
+        XCTAssertTrue(app.buttons["Mardi, 2 votes"].exists && app.buttons["Lundi, 1 vote"].exists, "Les totaux sont conservés")
+        // Voter n'est plus possible. Ces lignes n'exposent pas l'état « désactivé » à l'accessibilité (isEnabled reste vrai sur le
+        // simulateur, constat du run 41202131542) : le test vérifie donc le comportement, pas ce trait. Un appui sur l'autre choix
+        // ne crée aucun vote en attente et ne déplace ni les totaux ni le choix retenu.
+        app.buttons["Lundi, 1 vote"].tap()
+        XCTAssertFalse(pendingNote.waitForExistence(timeout: 3), "Aucun vote n'est enregistré sur un sondage clos")
+        XCTAssertTrue(app.buttons["Mardi, 2 votes"].exists && app.buttons["Lundi, 1 vote"].exists, "Les totaux ne bougent pas : \(app.debugDescription)")
+        XCTAssertEqual(app.buttons["Mardi, 2 votes"].value as? String, "Choisi", "Le choix retenu ne change pas")
+        XCTAssertNotEqual(app.buttons["Lundi, 1 vote"].value as? String, "Choisi", "Lundi n'est pas devenu le choix retenu")
+        capture("10d-sondage-clos")
+    }
+
+    /// Amène un élément du fil à l'écran sans jamais glisser depuis le haut : à ce niveau une feuille se ferme (voir la mémoire des tests de Messages).
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        for _ in 0..<4 {
+            if waitFor(element, "exists == true AND hittable == true", timeout: 4) { return true }
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
+        }
+        return element.exists && element.isHittable
     }
 
     func testMentionSuggestionsFilterInsertAndKeepKeyboard() {
