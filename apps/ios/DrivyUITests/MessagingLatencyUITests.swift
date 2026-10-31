@@ -99,7 +99,8 @@ import XCTest
         // Même délai que le contrôle du fil : une lecture de la hiérarchie peut prendre 4 s sur un simulateur chargé.
         XCTAssertTrue(wait(message, "hittable == true", timeout: 15), app.debugDescription)
         message.press(forDuration: 0.6)
-        let action = app.buttons.matching(NSPredicate(format: "label == 'Cœur' OR label == '❤️'")).firstMatch
+        // Le menu natif (77c02b7b) expose chaque réaction sous « Réagir : <nom> ».
+        let action = app.buttons.matching(NSPredicate(format: "label == 'Réagir : Cœur'")).firstMatch
         XCTAssertTrue(action.waitForExistence(timeout: 5), app.debugDescription)
         let start = Date(); action.tap()
         return start
