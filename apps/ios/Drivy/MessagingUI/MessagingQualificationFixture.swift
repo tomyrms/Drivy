@@ -84,6 +84,9 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private var conversations: [FixtureConversation] = []
     private var reactions: [UUID: [String: [UUID]]] = [:]
     private var pinned: Set<UUID> = []
+    /// Votes et clôture d'un sondage modifiés pendant la session (#73) ; sans eux, les votes de départ de la fixture.
+    private var pollVotesByMessage: [UUID: [[UUID]]] = [:]
+    private var closedPolls: Set<UUID> = []
     private var mutationReceipts: [UUID: (request: URLRequest, response: SchoolHTTPResponse)] = [:]
     private let mutationDelay: Int
     private let refuseMutation: Bool
@@ -225,6 +228,13 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
                   let messageID = uuid(after: "messages", in: parts) {
             if method == "PUT" { pinned.insert(messageID) } else { pinned.remove(messageID) }
             data = #"{"done":true}"#
+        } else if rich, parts.count >= 2, parts[parts.count - 2] == "poll", parts.last == "votes", method == "PUT",
+                  let messageID = uuid(after: "messages", in: parts) {
+            data = try castVote(messageID, body: request.httpBody)
+        } else if rich, parts.count >= 2, parts[parts.count - 2] == "poll", parts.last == "close", method == "POST",
+                  let messageID = uuid(after: "messages", in: parts) {
+            closedPolls.insert(messageID)
+            data = #"{"done":true}"#
         } else {
             // Unspecified mutations (message send included) must fail rather than manufacture acceptance.
             throw MessagingFailure.unavailable
@@ -294,10 +304,11 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             ]
             row["replyToMessageId"] = message.replyTo.map { $0.uuidString.lowercased() as Any } ?? NSNull()
             if message.poll != nil {
-                let votes: [[String: Any]] = message.pollVotes.enumerated().map { index, people in
+                let current = pollVotesByMessage[message.id] ?? message.pollVotes
+                let votes: [[String: Any]] = current.enumerated().map { index, people in
                     ["optionIndex": index, "personIds": people.map { $0.uuidString.lowercased() }]
                 }
-                let poll: [String: Any] = ["optionCount": message.pollVotes.count, "multiple": false, "closed": false,
+                let poll: [String: Any] = ["optionCount": current.count, "multiple": false, "closed": closedPolls.contains(message.id),
                                            "creatorId": scope.accountID.uuidString.lowercased(), "votes": votes]
                 row["poll"] = poll
             }
@@ -309,6 +320,23 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
                                           "lastReadSequence": item.lastSequence - 1]]
         let access: [String: Any] = ["canWrite": !readOnly, "readableUntilSequence": limit, "isGroupAdmin": true]
         return try json(["items": items, "nextCursor": next, "access": access, "readStates": receipts])
+    }
+
+    /// Choix unique remplacé, vote retiré si la liste est vide ; refusé une fois le sondage clos, comme le serveur.
+    private func castVote(_ messageID: UUID, body: Data?) throws -> String {
+        struct Body: Decodable { let optionIndexes: [Int] }
+        guard !closedPolls.contains(messageID), let body, let requested = try? JSONDecoder().decode(Body.self, from: body),
+              let original = conversations.flatMap(\.messages).first(where: { $0.id == messageID }), !original.pollVotes.isEmpty else {
+            throw MessagingFailure.invalidResponse
+        }
+        var votes = pollVotesByMessage[messageID] ?? original.pollVotes
+        guard requested.optionIndexes.allSatisfy({ votes.indices.contains($0) }) else { throw MessagingFailure.invalidResponse }
+        for index in votes.indices {
+            votes[index].removeAll { $0 == scope.accountID }
+            if requested.optionIndexes.contains(index) { votes[index].append(scope.accountID) }
+        }
+        pollVotesByMessage[messageID] = votes
+        return #"{"done":true}"#
     }
 
     private func readState(_ id: UUID, body: Data?) throws -> String {
