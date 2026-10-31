@@ -77,6 +77,8 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
     /// Clé de récupération mal formée, étrangère à la sauvegarde ou sauvegarde absente : volontairement indistincts.
     case recoveryKeyRefused
     case mutationReceiptUnavailable
+    /// Signalement : aucun administrateur de l'école n'a d'appareil joignable, ou la cadence autorisée est atteinte (#77).
+    case noReportRecipient, reportRateLimited
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
@@ -90,6 +92,8 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
         case .membersChanged: "Les participants ont changé. Ce message n'a pas été envoyé et reste conservé sur cet appareil."
         case .recoveryKeyRefused: "Clé de récupération refusée. Rien n'a été modifié."
         case .mutationReceiptUnavailable: "Le service doit être mis à jour pour confirmer ces modifications. Tes choix restent conservés."
+        case .noReportRecipient: "Aucun administrateur de l'école n'est joignable pour recevoir ce signalement. Rien n'a été envoyé."
+        case .reportRateLimited: "Trop de signalements envoyés récemment. Réessaie plus tard : le tien reste conservé sur cet appareil."
         }
     }
 }

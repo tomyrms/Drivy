@@ -14,6 +14,9 @@ struct MessagingInboxView: View {
     @State private var filter: MessagingInboxFilter = .all
     @State private var choosesContact = false
     @State private var showsSettings = false
+    /// Boîte des signalements : l'entrée n'existe que si le serveur confirme que la personne administre l'école (#77).
+    @State private var reports: MessagingReportInboxModel
+    @State private var showsReports = false
     /// Alerte de messagerie touchée (#74) : demande consommée ici, après relecture de la liste auprès de l'école.
     @State private var push = SchoolPushCenter.shared
     @State private var notificationFailure: String?
@@ -38,6 +41,7 @@ struct MessagingInboxView: View {
     init(workspace: MessagingWorkspace, initialPeerID: UUID? = nil, keys: (any MessagingKeyManagement)? = nil,
          schoolName: String? = nil, currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) {
         _workspace = State(initialValue: workspace)
+        _reports = State(initialValue: workspace.makeReportInbox())
         self.initialPeerID = initialPeerID
         self.keys = keys
         self.schoolName = schoolName
@@ -73,6 +77,7 @@ struct MessagingInboxView: View {
             if available { Task { await refresh() } }
         }
         .task { await initialLoad() }
+        .task { await reports.probe() }
         .onChange(of: push.pendingMessagingTarget) { _, _ in Task { await openRequestedConversation() } }
     }
 
@@ -154,6 +159,29 @@ struct MessagingInboxView: View {
                         .accessibilityIdentifier("messaging.notification.refused")
                 }
             }
+            if reports.availability == .available {
+                Button { showsReports = true } label: {
+                    HStack(spacing: DrivySpacing.s) {
+                        Label("Signalements", systemImage: "exclamationmark.bubble")
+                            .foregroundStyle(DrivyTheme.text)
+                        Spacer()
+                        if reports.openCount > 0 {
+                            Text(reports.openCount.formatted())
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(DrivyTheme.accent)
+                                .accessibilityLabel("\(reports.openCount) ouverts")
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(DrivyTheme.listChevron)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(DrivyTheme.surface)
+                .accessibilityIdentifier("messaging.reports.open")
+            }
             if filter == .unread {
                 Section {
                     conversationRows(visibleConversations.filter { readCategory($0) == .unread })
@@ -211,6 +239,9 @@ struct MessagingInboxView: View {
         }
         .navigationDestination(isPresented: $showsSettings) {
             MessagingSettingsView(keys: keys, scope: workspace.scope, currentScope: currentScope)
+        }
+        .navigationDestination(isPresented: $showsReports) {
+            MessagingReportInboxView(model: reports)
         }
         .sheet(isPresented: $choosesContact) {
             MessagingContactPicker(workspace: workspace) { contact in

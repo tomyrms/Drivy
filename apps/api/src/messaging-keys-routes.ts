@@ -9,7 +9,7 @@ import { forbidden } from './errors.js';
 import { messagingUnavailable } from './messaging.js';
 import { mapDatabaseError } from './messaging-view.js';
 import { bindDevice, claimKeys, createBackupVersion, deviceIdPattern, getBackupKeys, getBackupVersion, listOwnDevices, queryKeys,
-  revokeDevice, sendToDevice, sync, uploadDeviceSigning, uploadKeys, uploadSignatures, putBackupKeys, type KeyActor } from './messaging-keys.js';
+  reportRecipients, revokeDevice, sendToDevice, sync, uploadDeviceSigning, uploadKeys, uploadSignatures, putBackupKeys, type KeyActor } from './messaging-keys.js';
 
 const id = z.uuid();
 const base = z.object({ schoolId: id });
@@ -77,6 +77,8 @@ export function registerMessagingKeys(app: FastifyInstance, options: { pool: Poo
     const query = z.object({ since: z.string().max(40).optional() }).strict().parse(request.query);
     return execute(request.headers, request.id, school(request.params), (db, actor) => sync(db, actor, query.since));
   });
+  app.get(`${path}/report-recipients`, request =>
+    execute(request.headers, request.id, school(request.params), (db, actor) => reportRecipients(db, actor)));
   app.get(`${path}/devices`, request =>
     execute(request.headers, request.id, school(request.params), (db, actor) => listOwnDevices(db, actor)));
   app.delete(`${path}/devices/:deviceId`, request => {

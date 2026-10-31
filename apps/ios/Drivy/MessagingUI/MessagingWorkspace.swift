@@ -1066,14 +1066,20 @@ struct MessagingInboxPreview: Equatable, Sendable {
             if let existing, existing.messageIDs == ids {
                 pending = existing
             } else {
-                var items: [MessagingReportItem] = []
+                // Tous les contenus d'abord, puis un seul scellement : une session pour tout le signalement.
+                var chosen: [(message: MessagingWireMessage, bytes: Data)] = []
                 for message in selected.sorted(by: { $0.id.uuidString < $1.id.uuidString }) {
                     guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
                     try verifyReportContext()
-                    let sealed = try await reportSealing.sealForSchoolAdmins(try content.encoded(), scope: scope,
-                                                                             conversationID: conversationID)
-                    try verifyReportContext()
-                    items.append(MessagingReportItem(messageID: message.id, ciphertext: sealed))
+                    chosen.append((message: message, bytes: try content.encoded()))
+                }
+                let sealed = try await reportSealing.sealForSchoolAdmins(chosen.map { $0.bytes }, scope: scope,
+                                                                         conversationID: conversationID)
+                try verifyReportContext()
+                guard sealed.count == chosen.count else { throw MessagingFailure.protectionUnavailable }
+                var items: [MessagingReportItem] = []
+                for (index, entry) in chosen.enumerated() {
+                    items.append(MessagingReportItem(messageID: entry.message.id, ciphertext: sealed[index]))
                 }
                 pending = try await reports.prepareReport(MessagingPendingReport(clientReportID: UUID(),
                     conversationID: conversationID, items: items), scope: scope)
@@ -1086,6 +1092,11 @@ struct MessagingInboxPreview: Equatable, Sendable {
             try await reports.removeReport(conversationID: conversationID, clientReportID: pending.clientReportID, scope: scope)
             try verifyReportContext()
         }
+    }
+
+    /// Boîte des signalements de l'école : l'entrée n'est proposée qu'aux administrateurs, jugés par le serveur.
+    func makeReportInbox() -> MessagingReportInboxModel {
+        MessagingReportInboxModel(scope: scope, moderation: actions, cryptography: crypto, currentScope: currentScope)
     }
 
     private func verifyReportContext() throws {
