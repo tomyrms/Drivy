@@ -19,11 +19,13 @@ function keys(value:unknown,path='$'):string[]{
  if(value!==null&&typeof value==='object')return Object.entries(value).flatMap(([key,item])=>[`${path}.${key}`,...keys(item,`${path}.${key}`)]);
  return [];
 }
+let cursor=15;
 async function published(){
+ const day=cursor+=3;
  const type=(await call('POST','/course-types',{operationId:randomUUID(),title:`Type ${randomUUID()}`,description:''},null,'demo-admin')).json().data.id;
  const created=await call('POST','/course-series',{operationId:randomUUID(),typeId:type,title:'Cours de recette',description:'',location:'Salle',conditions:'',teachingLanguage:null,
   responsibleMembershipId:id.adminMember,capacity:5,minParticipants:null,timeZone:'Europe/Zurich',
-  occurrences:[{startsAt:at(15,8),endsAt:at(15,11),instructorMembershipId:id.otherInstructorMember,attendanceRequired:true}]},null,'demo-admin');
+  occurrences:[{startsAt:at(day,8),endsAt:at(day,11),instructorMembershipId:id.otherInstructorMember,attendanceRequired:true}]},null,'demo-admin');
  if(created.statusCode!==201)throw new Error(created.body);
  const res=await call('POST',`/course-series/${created.json().data.id}/publish`,{operationId:randomUUID()},created.json().data.version,'demo-admin');
  if(res.statusCode!==200)throw new Error(res.body);
