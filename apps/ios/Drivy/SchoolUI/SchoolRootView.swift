@@ -680,7 +680,8 @@ struct SchoolRootView: View {
             },
             joinWithCode: { openAccessCode() },
             clearError: { identity.clearError() },
-            recoveryClient: configuration.map { SchoolAccountRecoveryClient(configuration: $0) })
+            recoveryClient: configuration.map { SchoolAccountRecoveryClient(configuration: $0) },
+            credentialsRejected: identity.signInFailure == .invalidCredentials)
     }
 
     @ViewBuilder

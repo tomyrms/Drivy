@@ -33,16 +33,67 @@ struct NativeAccountTests {
         #expect(!session.isAuthenticated)
         #expect(vault.data == nil)
         #expect(session.errorMessage == "E-mail ou mot de passe incorrect.")
+        #expect(session.signInFailure == .invalidCredentials)
         session.clearError()
         #expect(session.errorMessage == nil)
+        #expect(session.signInFailure == nil)
     }
 
-    @Test func providerErrorsMapToCredentialsOrUnavailable() {
-        let refused = NSError(domain: OIDOAuthTokenErrorDomain, code: -10)
+    @Test func onlyInvalidGrantIsPresentedAsRefusedCredentials() {
+        let refused = oauthError("invalid_grant", status: 400)
         let network = NSError(domain: OIDGeneralErrorDomain, code: OIDErrorCode.networkError.rawValue)
         #expect(AppAuthPasswordAuthorization.failure(refused) == .invalidCredentials)
         #expect(AppAuthPasswordAuthorization.failure(network) == .unavailable)
         #expect(AppAuthPasswordAuthorization.failure(nil) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(NSError(domain: OIDOAuthTokenErrorDomain, code: -10)) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("server_error", status: 400)) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("temporarily_unavailable", status: 400)) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("invalid_client", status: 401)) == .invalidProvider)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("unauthorized_client", status: 400)) == .invalidProvider)
+    }
+
+    @Test func rateLimitsAndServerFailuresTakePrecedenceOverAnOAuthBody() {
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("invalid_grant", status: 429)) == .attempts)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("invalid_grant", status: 408)) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("invalid_grant", status: 503)) == .unavailable)
+        let rateLimit = NSError(domain: OIDHTTPErrorDomain, code: 429)
+        let discovery = NSError(domain: OIDGeneralErrorDomain, code: OIDErrorCode.networkError.rawValue,
+                               userInfo: [NSUnderlyingErrorKey: rateLimit])
+        #expect(AppAuthPasswordAuthorization.failure(discovery) == .attempts)
+        #expect(AppAuthPasswordAuthorization.failure(URLError(.timedOut)) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(URLError(.notConnectedToInternet)) == .unavailable)
+    }
+
+    @Test func credentialDescriptionsNeverDriveFailureClassification() {
+        let error = NSError(domain: OIDOAuthTokenErrorDomain, code: -10,
+            userInfo: [NSLocalizedDescriptionKey: "invalid_grant private-provider-detail"])
+        #expect(AppAuthPasswordAuthorization.failure(error) == .unavailable)
+        #expect(AppAuthPasswordAuthorization.failure(oauthError("unrecognized_private_value", status: 400)) == .unavailable)
+    }
+
+    @Test func signInValidationKeepsTheExistingPermissiveAddressRule() {
+        #expect(!SchoolSignInValidation.canSubmit(email: "  ", password: "test"))
+        #expect(!SchoolSignInValidation.canSubmit(email: "camille", password: "test"))
+        #expect(!SchoolSignInValidation.canSubmit(email: "camille@example.test", password: ""))
+        // Aucune regex ni longueur de mot de passe supplémentaire pour les comptes existants.
+        #expect(SchoolSignInValidation.canSubmit(email: " prénom+tag@localhost ", password: "x"))
+        #expect(SchoolSignInValidation.canSubmit(email: "a@", password: "x"))
+    }
+
+    @Test func invitationSignInKeepsServiceFailuresWhileEditingCredentials() async throws {
+        for failure in [IdentityFailure.unavailable, .attempts, .invalidProvider, .invalidCredentials] {
+            let identity = IdentitySession(configuration: configuration, vault: MemoryVault(), authorizer: UnusedAuthorizer(),
+                                           passwordAuthorizer: PasswordStub(state: nil, failure: failure))
+            let model = SchoolAccessWorkspace(client: SchoolAccountClient(configuration: configuration), identity: identity)
+            model.show(.signIn); model.email = "camille@example.test"; model.password = "synthetic-password"
+            await model.signIn()
+            #expect(!model.isFinished && model.outcome == nil)
+            #expect(model.credentialsRejected == (failure == .invalidCredentials))
+            model.email = "new@example.test"
+            model.credentialsDidChange()
+            #expect(model.errorMessage == (failure == .invalidCredentials ? nil : failure.localizedDescription))
+            #expect(identity.errorMessage == nil && identity.signInFailure == nil)
+        }
     }
 
     @Test func accessInputReadsCodesAndLinksOfThisOriginOnly() {
@@ -217,6 +268,46 @@ struct NativeAccountTests {
         #expect(!model.isFinished && model.outcome == nil)
     }
 
+    @Test func rejectedPastePreservesTheCodeAndNeverStartsAnInspection() async throws {
+        let transport = AccessPreviewTransport(kind: .learnerInvitation)
+        let model = try access(transport: transport)
+        model.updateCode("K7Q4MX2P")
+        for value in [String(repeating: "a", count: 2_049), String(repeating: "é", count: 1_025),
+                      "K7Q4-MX2P extra", "https://foreign.example.test/app/ouvrir#token=K7Q4-MX2P", "not a code"] {
+            model.pasteCode(value)
+            #expect(model.codeText == "K7Q4-MX2P")
+            #expect(model.codeInputError != nil)
+            #expect(model.step == .code && model.input == nil && model.preview == nil)
+        }
+        #expect(await transport.codes.isEmpty)
+        model.updateCode("K7Q4")
+        #expect(model.codeInputError == nil && model.codeText == "K7Q4")
+    }
+
+    @Test func acceptedPasteHonorsTheExactByteLimitWithoutTruncating() async throws {
+        let transport = AccessPreviewTransport(kind: .learnerInvitation)
+        let model = try access(transport: transport)
+        let code = "K7Q4-MX2P"
+        model.pasteCode(code + String(repeating: " ", count: 2_048 - code.utf8.count))
+        #expect(model.codeText == code && model.codeInputError == nil)
+        let link = "https://drivy.example.test/app/ouvrir#token=K7Q4-MX2P"
+        model.pasteCode(link)
+        #expect(model.codeText == link && model.codeInputError == nil)
+        #expect(model.parsedInput == .openingLink(code))
+        model.pasteCode(link + String(repeating: " ", count: 2_049 - link.utf8.count))
+        #expect(model.codeText == link && model.codeInputError != nil)
+        #expect(await transport.codes.isEmpty)
+    }
+
+    @Test func systemPasteCannotTurnExcessCharactersIntoAnotherValidCode() throws {
+        let model = try access(transport: AccessPreviewTransport(kind: .learnerInvitation))
+        model.updateCode("K7Q4MX2P")
+        model.updateCode("ABCD-EFGH-more-text")
+        #expect(model.codeText == "K7Q4-MX2P" && model.codeInputError != nil)
+        model.updateCode("ABCD-EFGH")
+        #expect(model.codeText == "ABCD-EFGH" && model.codeInputError == nil)
+    }
+
     @Test func anInvalidCodeKeepsTheExistingAccountOnTheCodeStep() async throws {
         let transport = AccessPreviewTransport(kind: nil)
         let model = try access(transport: transport)
@@ -247,6 +338,14 @@ struct NativeAccountTests {
         let identity = IdentitySession(configuration: configuration, vault: MemoryVault(), authorizer: UnusedAuthorizer(),
             passwordAuthorizer: PasswordStub(state: try passwordState(configuration)))
         return SchoolAccessWorkspace(client: SchoolAccountClient(configuration: configuration, transport: transport), identity: identity)
+    }
+
+    private func oauthError(_ code: String, status: Int) -> NSError {
+        NSError(domain: OIDOAuthTokenErrorDomain, code: -10, userInfo: [
+            OIDOAuthErrorResponseErrorKey: [OIDOAuthErrorFieldError: code,
+                                          OIDOAuthErrorFieldErrorDescription: "private-provider-detail"],
+            NSUnderlyingErrorKey: NSError(domain: OIDHTTPErrorDomain, code: status)
+        ])
     }
 
     private func opening(displayName: String?) -> SchoolOpeningWorkspace {

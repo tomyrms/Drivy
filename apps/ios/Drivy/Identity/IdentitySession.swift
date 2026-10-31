@@ -9,6 +9,8 @@ final class IdentitySession: AccessTokenSource {
     private(set) var isAuthenticated = false
     private(set) var isWorking = false
     private(set) var errorMessage: String?
+    /// La vue ne déduit jamais la nature d’un refus depuis un texte traduit.
+    private(set) var signInFailure: IdentityFailure?
     private var sessionDisplayName: String?
     var suggestedDisplayName: String? { isAuthenticated ? sessionDisplayName : nil }
 
@@ -76,7 +78,7 @@ final class IdentitySession: AccessTokenSource {
         sessionDisplayName = nil
         let expected = generation
         isWorking = true
-        errorMessage = nil
+        clearError()
         defer { if generation == expected { isWorking = false } }
         do {
             try Task.checkCancellation()
@@ -111,7 +113,10 @@ final class IdentitySession: AccessTokenSource {
     @discardableResult
     func signIn(email: String, password: String) async -> Bool {
         guard !isWorking, !isAuthenticated else { return isAuthenticated }
-        guard let configuration else { errorMessage = IdentityFailure.notConfigured.localizedDescription; return false }
+        clearError()
+        guard let configuration else {
+            signInFailure = .notConfigured; errorMessage = IdentityFailure.notConfigured.localizedDescription; return false
+        }
         generation = UUID()
         authorizer.cancel()
         refreshTask?.cancel()
@@ -140,13 +145,16 @@ final class IdentitySession: AccessTokenSource {
             return true
         } catch {
             guard generation == expected else { return false }
-            if !(error is CancellationError) { errorMessage = message(for: error) }
+            if !(error is CancellationError) {
+                signInFailure = error as? IdentityFailure ?? .unavailable
+                errorMessage = message(for: error)
+            }
             return false
         }
     }
 
     /// Efface le message affiché (nouvelle saisie, autre écran).
-    func clearError() { errorMessage = nil }
+    func clearError() { errorMessage = nil; signInFailure = nil }
 
     func accessToken() async throws -> String {
         try Task.checkCancellation()
@@ -267,6 +275,7 @@ final class IdentitySession: AccessTokenSource {
         isAuthenticated = false
         isWorking = false
         errorMessage = nil
+        signInFailure = nil
         do { try vault.clear() }
         catch { errorMessage = "La session est fermée dans l’app, mais son effacement du Trousseau a échoué. Déverrouille l’appareil puis réessaie de te déconnecter." }
     }

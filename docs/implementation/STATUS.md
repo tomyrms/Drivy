@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 29 octobre 2026 — lot iOS indépendant de #311, avant essai
+
+- Inventaire des 155 issues ouvertes et rapprochement commentaires/branches/commits/PR : [triage](ios-independent-triage-20261029.md). #311, sa reprise de #280 et les disponibilités web #248–252 sont exclus.
+- Intégration `codex/ios-independent-20261029` depuis `master c94ec2bb` : connexion/récupération #195/#197/#198/#199 ([détail](ios-auth-195-199.md)), états d’envoi/épingles Messages #237/#241 ([détail](ios-messages-237-241.md)). Aucun changement web, API, contrat, migration, dépendance ou workflow ; aucun déploiement requis.
+- Exécuté : revue de source, revue indépendante de l’authentification, contrôle de périmètre et `git diff --check`. Compilation Release/IPA réussie : build 445, SHA eb4a5aae, run 40941417787 ; paquet téléchargé et empreintes vérifiées. [IPA et reçu](ios-independent-delivery-20261029.md). Tests ciblés préparés, aucune suite exécutée pendant le développement.
+- Attente du retour du porteur sur l’IPA avant tests pertinents, fusion et clôture. #50 non activée. Rendu/VoiceOver physiques, réseau dégradé réel, GPS/batterie : aucune qualification revendiquée.
+- Entrée additive sur la branche iOS ; documents et worktrees du chantier #311 intacts.
 ## 30 octobre 2026 — intégration de la refonte, corrections et limites de recette
 
 - Fusion de `origin/master` (README, roadmap et organisation du Project issus de #371) dans `codex/epic-311-rebuild` : aucun conflit ; les fichiers documentaires sont conservés et l'ancien frontend reste retiré.
