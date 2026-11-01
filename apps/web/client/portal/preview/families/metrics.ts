@@ -33,17 +33,19 @@ const dictionary: readonly Entry[] = [
   ['F03', 'finance', 'cents', 'Total attendu selon le planning', 'Réalisé plus à venir ; ni prévision garantie ni encaissement.'],
   ['F04', 'finance', 'cents', 'Valeur en attente de constat', 'Leçons à vérifier, en cours ou à finaliser ; hors du total attendu.'],
   ['F05', 'finance', 'cents', 'Règlements de cours enregistrés', 'Saisies de règlements de cours sur place non annulées, par date de saisie ; pas un rapprochement bancaire.'],
+  ['F06', 'finance', 'cents', 'Saisies annulées et corrections', 'Saisies annulées et corrections postérieures ; annuler une saisie n’est pas un remboursement.'],
   ['F07', 'finance', 'cents', 'Valeur des cours collectifs', 'Indisponible : un cours n’a ni prix ni lien produit.'],
 ];
 const complete = { status: 'COMPLETE', reasons: [] };
 type Sample = { value: number | null; coverage?: unknown };
+const notApplicableWhenFiltered: ReadonlySet<string> = new Set(['F05', 'F06']);
 /** Une période d'un mois ou plus. */
 const period: Record<string, Sample> = {
   L01: { value: 38 }, L02: { value: 17 }, L03: { value: 3 }, L04: { value: 1 }, L05: { value: 2 }, L06: { value: 0 }, L07: { value: 2 }, L08: { value: 63 },
   H01: { value: 148_500 }, H02: { value: 107_400, coverage: { status: 'PARTIAL', reasons: [{ code: 'DURATION_UNKNOWN', count: 2 }] } }, H03: { value: 45_900 },
   P01: { value: 21 }, C01: { value: 6 }, C06: { value: 14 }, C09: { value: 450 },
   A01: { value: 2 }, A02: { value: 1 }, A03: { value: 0 },
-  F01: { value: 361_000 }, F02: { value: 161_500 }, F03: { value: 522_500 }, F04: { value: 28_500 }, F05: { value: 45_000 },
+  F01: { value: 361_000 }, F02: { value: 161_500 }, F03: { value: 522_500 }, F04: { value: 28_500 }, F05: { value: 45_000 }, F06: { value: 5_000 },
   F07: { value: null, coverage: { status: 'UNAVAILABLE', reasons: [{ code: 'COURSE_PRICE_SOURCE_MISSING' }] } },
 };
 /** Une journée : les mesures non listées reprennent celles de la période. */
@@ -62,6 +64,14 @@ function seriesDay(civil: string, filtered: boolean) {
   return civil < today ? { L01: value, L02: 0 } : civil === today ? { L01: half(value), L02: value - half(value) } : { L01: 0, L02: value };
 }
 
+/** Valeur d'un jour de série : des leçons pour L01 et L02, des centimes pour F01 et F02 (95 CHF la leçon), des règlements les jours de cours. */
+function amountOf(id: string, lessons: { L01: number; L02: number }, civil: string): number {
+  if (id === 'L01' || id === 'L02') return lessons[id];
+  if (id === 'F01') return lessons.L01 * 9_500;
+  if (id === 'F02') return lessons.L02 * 9_500;
+  return new Date(`${civil}T12:00:00Z`).getUTCDay() === 2 ? 15_000 : 0;
+}
+
 export const metricsFamily: PreviewFamily = {
   name: 'metrics',
   read(request, tools) {
@@ -76,13 +86,16 @@ export const metricsFamily: PreviewFamily = {
     if (request.path === 'metrics/series') {
       const requested = request.query.get('granularity');
       const granularity = requested === 'week' || requested === 'month' ? requested : 'day';
-      const buckets: { from: string; toExclusive: string; partial: boolean; measures: { L01: { value: number }; L02: { value: number } } }[] = [];
+      const buckets: { from: string; toExclusive: string; partial: boolean; measures: Record<string, { value: number }> }[] = [];
+      const wanted = (request.query.get('measures') ?? 'L01,L02').split(',');
       for (let civil = from; civil < toExclusive; civil = addDays(civil, 1)) {
         const start = granularity === 'week' ? weekStart(civil) : granularity === 'month' ? `${civil.slice(0, 8)}01` : civil;
         const values = seriesDay(civil, filtered), last = buckets[buckets.length - 1];
+        const point = Object.fromEntries(wanted.map(id => [id, { value: amountOf(id, values, civil) }]));
         if (last && (granularity === 'day' ? false : (granularity === 'week' ? weekStart(last.from) : `${last.from.slice(0, 8)}01`) === start)) {
-          last.toExclusive = addDays(civil, 1); last.measures.L01.value += values.L01; last.measures.L02.value += values.L02;
-        } else buckets.push({ from: civil, toExclusive: addDays(civil, 1), partial: start < from, measures: { L01: { value: values.L01 }, L02: { value: values.L02 } } });
+          last.toExclusive = addDays(civil, 1);
+          for (const id of wanted) last.measures[id]!.value += point[id]!.value;
+        } else buckets.push({ from: civil, toExclusive: addDays(civil, 1), partial: start < from, measures: point });
       }
       return tools.reply(200, tools.envelope({ schoolId: ids.school, period: { from, toExclusive, days: days(from, toExclusive) }, granularity, buckets }));
     }
@@ -93,6 +106,7 @@ export const metricsFamily: PreviewFamily = {
     const scaled = (id: string, unit: Unit, value: number | null) => value === null || !filtered || unit === 'permille' || id.startsWith('A') ? value : half(value);
     const measures = Object.fromEntries(dictionary.filter(entry => entry[1] === domain).map(([id, , unit]) => {
       const { value, coverage } = sample(id);
+      if (filtered && notApplicableWhenFiltered.has(id)) return [id, { value: null, unit, coverage: { status: 'NOT_APPLICABLE', reasons: [] } }];
       return [id, { value: scaled(id, unit, value), unit, coverage: coverage ?? complete }];
     }));
     const answer: Record<string, unknown> = {

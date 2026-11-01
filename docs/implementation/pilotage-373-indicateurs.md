@@ -773,3 +773,37 @@ Chaque barre de l'évolution se lit à la souris, au toucher et au clavier (flè
 - Aperçu `?page=statistiques` (valeurs synthétiques, filtres Permis et Prestation divisent les valeurs par deux) jamais regardé à 390 et 1440 px, clair et sombre ; la lecture au clavier du graphique n'a pas été essayée dans un navigateur.
 - Aucune concordance vérifiée avec le jeu de référence de la section 6 : les tuiles affichent ce que le serveur renvoie, rien n'a été comparé chiffre à chiffre.
 - Non exécuté : aucun test (écrits : `dashboard-models.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 15. T06 (#379) : Statistiques → Finances
+
+Code : `portal/pilotage/finance-panel.tsx`, `measure-groups.tsx` (rendu commun des groupes et de la comparaison), `breakdown-bars.tsx`, `stacked-bars.tsx`. Aucun changement d'API, aucun calcul de montant côté web.
+
+### 15.1 Quatre notions séparées
+
+Chaque tuile porte le libellé du dictionnaire et la couverture que le serveur déclare.
+
+- **Leçons individuelles (tarif à l'unité)** : valeur des leçons réalisées (F01), valeur des leçons à venir (F02), total attendu selon le planning (F03). Le titre dit la couverture : seules les leçons individuelles à prix unitaire sont valorisées.
+- **En attente de constat, hors du total** (F04) : leçons commencées ou dont l'heure est passée, ni réalisées ni réservations certaines. Montrée seulement s'il y en a, ou si le serveur ne garantit pas son zéro.
+- **Règlements enregistrés (par date de saisie)** (F05) et **saisies annulées et corrections** (F06) : le titre dit la date retenue. Aucune tuile, aucun graphique ni aucun libellé n'additionne un règlement à la valeur des leçons ; annuler une saisie n'est pas un remboursement (libellé du serveur).
+- **Cours collectifs** (F07) : indisponible, avec le badge du serveur. Aucun prix de série multiplié par ses séances, aucune valeur reconstruite depuis un règlement.
+
+Un montant absent est un tiret, jamais « CHF 0.00 ». Un filtre moniteur, permis ou prestation rend F05 et F06 « Non applicables » : un règlement dépend d'une inscription, pas d'une leçon.
+
+### 15.2 Graphiques
+
+1. **Valeur des leçons par jour, semaine ou mois** : réalisée en plein, à venir en hachuré ; échelle en francs entiers, valeurs lues au centime près.
+2. **Règlements enregistrés**, à part, avec la mention « date de saisie » : une date de prestation et une date de saisie ne se lisent pas sur le même graphique. Absent dès qu'un filtre est posé (le serveur refuse les filtres sur les règlements).
+3. **Valeur des leçons réalisées par permis, prestation ou moniteur**, rangée par nom ; les valeurs non attribuées en dernier.
+
+Même lecture au clavier et au toucher, même tableau des valeurs qu'en 14.4.
+
+### 15.3 Comparaison
+
+Même règle qu'en 14.3. À date, seules F01 (valeur constatée) et F05 (règlements saisis) sont comparées : ce sont les valeurs qui ne changent pas entre la période entière et la période écoulée.
+
+### 15.4 Reste
+
+- **Détail vérifiable et export** : T07 (#380) ; aucune tuile ne mène encore à ses lignes.
+- L'exemple d'acceptation (8 000 CHF réalisés + 2 000 CHF réservés = 10 000 CHF attendus, un règlement de 500 CHF n'y change rien) est établi par les tests d'intégration de #375 (section 6.5) ; rien ne l'a été à l'écran ici, aucun chiffre n'a été comparé au jeu de référence.
+- L'API ne renvoie que le franc suisse : aucune conversion, aucun hors taxe ou toutes taxes comprises.
+- Aperçu `?page=statistiques&tab=finance` (valeurs inventées) jamais regardé à 390 et 1440 px, clair et sombre. Non exécuté : aucun test (écrits : `pilotage-models.test.ts`, `dashboard-models.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { describeComparison, describeReason, formatDuration, formatMeasure } from './measure-format';
+import { describeComparison, describeReason, formatDuration, formatFrancsShort, formatMeasure } from './measure-format';
 import { canOpenStatistics, metricRights } from './rights';
 import { currentMonth, periodLabel, resolvePeriod } from './period-model';
 
@@ -58,6 +58,8 @@ describe('affichage des mesures', () => {
     expect(formatMeasure(57_000, 'cents')).toMatch(/570/);
     expect(formatMeasure(57_000, 'cents')).toMatch(/CHF/);
     expect(formatMeasure(450, 'permille')).toMatch(/^45\s?%$/);
+    expect(formatFrancsShort(522_500)).toMatch(/5\D?225\sCHF/);
+    expect(formatFrancsShort(49)).toBe('0 CHF');
   });
 
   test('la comparaison dit le pourcentage quand le serveur le donne, sinon l’écart', () => {

@@ -18,7 +18,7 @@ export interface ChartBucket {
 }
 export interface ChartSeries { label: string; pattern: 'solid' | 'hatch' }
 
-const width = 640, height = 150, left = 28, top = 12, bottom = 22;
+const width = 640, height = 150, left = 60, top = 12, bottom = 22;
 
 export interface StackedBar { key: string; x: number; width: number; slotX: number; slotWidth: number; layers: { y: number; height: number }[] }
 /** Géométrie pure : l'échelle part de zéro et le plus haut total remplit la zone ; une barre vide a des couches de hauteur nulle. */
@@ -41,7 +41,7 @@ export function stackLayout(buckets: readonly ChartBucket[]): { bars: StackedBar
 
 const total = (buckets: readonly ChartBucket[], layer: number) => buckets.reduce((sum, bucket) => sum + (bucket.values[layer] ?? 0), 0);
 
-export function StackedBars({ title, periodText, buckets, series, emptyText, format = String }: {
+export function StackedBars({ title, periodText, buckets, series, emptyText, format = String, tickFormat = String }: {
   title: string;
   periodText: string;
   buckets: readonly ChartBucket[];
@@ -49,6 +49,8 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
   emptyText: string;
   /** Écriture d'une valeur avec son unité (« 3 h 40 min ») ; par défaut le nombre brut. */
   format?: (value: number) => string;
+  /** Écriture courte de l'échelle, à gauche du graphique (« 5 225 CHF ») ; par défaut le nombre brut. */
+  tickFormat?: (value: number) => string;
 }) {
   const id = useId().replace(/:/g, '');
   const hatch = `${id}-hatch`;
@@ -88,7 +90,7 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
             </pattern>
           </defs>
           <line x1={left} x2={width} y1={height - bottom} y2={height - bottom} stroke="var(--border)" />
-          <text x={0} y={top + 4} className="pilotage-chart-tick">{layout.max}</text>
+          <text x={0} y={top + 4} className="pilotage-chart-tick">{tickFormat(layout.max)}</text>
           <text x={0} y={height - bottom} className="pilotage-chart-tick">0</text>
           {layout.bars.map((bar, index) => <g key={bar.key} ref={node => { bars.current[index] = node; }} role="img" aria-label={reading(index)}
             tabIndex={index === roving ? 0 : -1} data-active={active === index} className="pilotage-chart-bar"

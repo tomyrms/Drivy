@@ -27,6 +27,10 @@ export function formatMeasure(value: number | null, unit: MeasureUnit): string {
   }
 }
 
+const wholeFrancs = new Intl.NumberFormat('fr-CH', { maximumFractionDigits: 0 });
+/** Montant arrondi au franc pour une échelle de graphique (« 5 225 CHF ») ; les valeurs lues restent exactes. */
+export const formatFrancsShort = (cents: number) => `${wholeFrancs.format(Math.round(cents / 100))} CHF`;
+
 /** Écart absolu avec son signe, dans l'unité de la mesure. */
 export function formatDelta(delta: number, unit: MeasureUnit): string {
   switch (unit) {
