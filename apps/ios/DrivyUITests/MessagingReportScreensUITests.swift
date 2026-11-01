@@ -46,7 +46,7 @@ final class MessagingReportScreensUITests: XCTestCase {
         for _ in 0..<3 {
             for row in candidates.allElementsBoundByIndex where row.exists && row.isHittable {
                 let frame = row.frame
-                guard frame.minY > 230, frame.maxY < 790, frame.height > 40 else { continue }
+                guard frame.minY > 190, frame.maxY < 790, frame.height > 40 else { continue }
                 row.tap()
                 let chosen = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: row)
                 if XCTWaiter.wait(for: [chosen], timeout: 4) == .completed { return }
@@ -117,8 +117,10 @@ final class MessagingReportScreensUITests: XCTestCase {
         // répète le texte du message et ne le sélectionne pas.
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "messaging.report.select."))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 15), app.debugDescription)
-        // Un message des miens (rond à gauche), puis un de l'autre personne (rond à droite).
-        selectVisibleRow(rows.matching(NSPredicate(format: "label BEGINSWITH %@", "Vous,")), "message envoyé", app: app)
+        // Un message des miens (rond à gauche), puis un de l'autre personne (rond à droite). La ligne d'une réponse (citation
+        // et bulle) n'a pas de libellé propre : le texte est dans un élément fils.
+        selectVisibleRow(rows.matching(NSPredicate(format: "label BEGINSWITH %@ OR label == %@", "Vous,", "")), "message envoyé",
+                         app: app)
         selectVisibleRow(rows.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Léa Fixture,", "Marc Fixture,")),
                          "message reçu", app: app)
         let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
