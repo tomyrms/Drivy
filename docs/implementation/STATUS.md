@@ -1,5 +1,16 @@
 # État de la réalisation
 
+## 2 novembre 2026 — Livraison #400, #52 et #54 déployée sur le homelab (`da6dbb74`, API + web)
+
+- **PR #401 fusionnée** (`da6dbb747501d2bab017c0aaeadd6b2c61562d46`, commit de fusion) après sa CI verte ; CI de master verte sur ce commit (vérifications, navigateur, IPA). Issues #400, #52 et #54 laissées ouvertes : leur qualification sur appareil et l'essai du porteur restent à faire.
+- **Déployé vers 00 h 52 (heure suisse), à l'ordre du porteur (« test et déploie »)**, API, web et worker, par `.local/deploy-20261102.py` (copie du script du 1er novembre : mêmes étapes, sauvegarde, installation détachée, retour arrière automatique en cas d'échec). Version précédente : `bdcf1faf` pour l'API et le worker, `6884dcc7` pour le web (drop-in `95-epic311-web.conf` retiré par le script : le web suit de nouveau `current`).
+- **Migrations** : 60 → 62 (`20261101_lesson_change_requests.sql`, `20261101b_exams.sql`), noms et empreintes identiques à la release.
+- **Sauvegarde** : `/root/drivy_refonte-before-da6dbb74-20261101T235125Z.dump` sur CT113 (2 397 266 octets, 93 tables, tous les blocs relus, restauration à blanc réussie), copie locale dans `.local/backups/`.
+- **Vérifié** (25 contrôles, tous réussis) : readiness interne, migrations, répertoires réels de l'API, du web et du worker sur la nouvelle release, quatre services actifs sans redémarrage automatique, journaux sans erreur, configuration privée inchangée, page publique identique au build, assets servis, connexion OIDC (page de login, découverte, clés), et les quatre routes nouvelles répondent 401 sans identité (404 avant la release).
+- **Retour arrière** : `python -I .local/deploy-20261102.py --rollback` (code, drop-in du web et, si une migration l'exige, la base).
+- **IPA d'essai** relancée avec Messages : run 41364218273 sur `da6dbb74`.
+- **Non prouvé** : aucun parcours authentifié en production, aucune vraie école regardée ; les écrans iOS des demandes d'élève et des examens n'ont jamais été vus tourner.
+
 ## 2 novembre 2026 — Livraison #400, #52 et #54 qualifiée (PR #401, `claude/livraison-400-52-54`)
 
 - Les trois lots écrits sans test le 1er novembre ont été réunis puis qualifiés ensemble, à l'ordre du porteur (« test et déploie »). Détail : [pilotage-400-restes.md](pilotage-400-restes.md), [demandes-eleve-lecon-52.md](demandes-eleve-lecon-52.md), [examens-54.md](examens-54.md). #54 est complétée avant la qualification : gestion web (onglet Examens du dossier, examens à renseigner dans l'annuaire), moniteurs d'accompagnement proposés, liste transversale côté API, file chiffrée des gestes sur iOS, « Prochain examen » dans Leçons et examens à renseigner dans la liste d'élèves du personnel.
