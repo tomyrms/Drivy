@@ -17,7 +17,27 @@ describe('espaces du portail reconstruit', () => {
       expect(resolved.workspace, section).toBeDefined();
       expect(resolved.item, section).toBeDefined();
     }
-    expect(spaces.map(workspace => workspace.key)).toEqual(['planning', 'learners', 'team', 'formations', 'settings']);
+    expect(spaces.map(workspace => workspace.key)).toEqual(['pilotage', 'planning', 'learners', 'team', 'formations', 'settings']);
+  });
+
+  test('le tableau de bord et les statistiques partagent l’espace Pilotage', () => {
+    expect(current('tableau-de-bord')).toEqual({ workspace: 'pilotage', item: 'tableau-de-bord' });
+    expect(current('statistiques', { tab: 'finance' })).toEqual({ workspace: 'pilotage', item: 'statistiques' });
+    const pilotage = spaces.find(workspace => workspace.key === 'pilotage')!;
+    const dashboard = pilotage.items.find(item => item.section === 'tableau-de-bord')!;
+    const statistics = pilotage.items.find(item => item.section === 'statistiques')!;
+    expect(isActiveDestination(statistics, 'statistiques', { tab: 'finance' })).toBe(true);
+    expect(isActiveDestination(statistics, 'tableau-de-bord')).toBe(false);
+    // Seul le moniteur suit d’une page à l’autre ; l’onglet, la période et les identifiants d’une autre page restent derrière.
+    const instructor = '33333333-3333-4333-8333-333333333333';
+    const query = { instructor, tab: 'finance' as const, period: 'year' as const, selection: '22222222-2222-4222-8222-222222222222' };
+    expect(navigationQueryFor(pilotage, statistics, query)).toEqual({ instructor });
+    expect(navigationQueryFor(pilotage, dashboard, { tab: 'finance' })).toEqual({});
+  });
+
+  test('sans le droit de lire les statistiques, seul le tableau de bord reste offert', () => {
+    const limited = availableWorkspaces(new Set(sectionKeys.filter(section => section !== 'statistiques')));
+    expect(limited.find(workspace => workspace.key === 'pilotage')!.items.map(item => item.section)).toEqual(['tableau-de-bord']);
   });
 
   test('les invitations restent dans l’espace de leur public', () => {

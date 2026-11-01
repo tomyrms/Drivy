@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
-import { BookOpen, Building2, CalendarDays, Check, ChevronDown, GraduationCap, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun, UsersRound } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun, UsersRound } from 'lucide-react';
 import { BrandSymbol } from '../BrandSymbol';
 import { useTheme, type ThemePreference } from '../theme';
 import type { NavigationQuery } from '../console/route';
@@ -29,7 +29,7 @@ export interface PortalFrameProps {
   search?: ReactNode;
 }
 
-const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
+const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { pilotage: LayoutDashboard, planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
 
 /** One navigation tree and one mounted page at every viewport width. */
 export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, preview, schools = [], currentSchoolId, onSchoolChange, account, search }: PortalFrameProps) {

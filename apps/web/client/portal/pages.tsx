@@ -6,6 +6,9 @@ import type { SectionKey } from '../console/sections';
  * A section absent from this registry is not offered by the rebuilt navigation.
  */
 export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<ComponentType>>> = {
+  // Pilotage de l'école (#373, T03 #376).
+  'tableau-de-bord': lazy(() => import('./pilotage/dashboard-page').then(module => ({ default: module.DashboardPilot }))),
+  statistiques: lazy(() => import('./pilotage/statistics-page').then(module => ({ default: module.StatisticsPilot }))),
   apercu: lazy(() => import('./overview/overview-page').then(module => ({ default: module.OverviewPilot }))),
   agenda: lazy(() => import('./agenda/agenda-page').then(module => ({ default: module.AgendaPilot }))),
   eleves: lazy(() => import('./learners/learner-page').then(module => ({ default: module.LearnerPilot }))),

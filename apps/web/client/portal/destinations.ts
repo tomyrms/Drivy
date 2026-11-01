@@ -2,11 +2,15 @@ import type { NavigationQuery } from '../console/route';
 import type { SectionKey } from '../console/sections';
 
 /** Rebuilt navigation keeps the console's jobs and section keys; only destinations wired to a rebuilt page are shown. */
-export type PortalWorkspaceKey = 'planning' | 'learners' | 'team' | 'formations' | 'settings';
+export type PortalWorkspaceKey = 'pilotage' | 'planning' | 'learners' | 'team' | 'formations' | 'settings';
 export interface PortalNavItem { section: SectionKey; label: string; query?: NavigationQuery }
 export interface PortalWorkspace { key: PortalWorkspaceKey; label: string; shortLabel: string; items: readonly PortalNavItem[] }
 
 export const portalWorkspaces: readonly PortalWorkspace[] = [
+  // Pilotage (#373) : un seul espace pour deux destinations, afin que la barre mobile garde six entrées lisibles.
+  { key: 'pilotage', label: 'Pilotage', shortLabel: 'Pilotage', items: [
+    { section: 'tableau-de-bord', label: 'Tableau de bord' }, { section: 'statistiques', label: 'Statistiques' },
+  ] },
   { key: 'planning', label: 'Planning', shortLabel: 'Planning', items: [
     { section: 'agenda', label: 'Agenda' }, { section: 'disponibilites', label: 'Disponibilités' }, { section: 'absences', label: 'Absences' },
   ] },
@@ -51,9 +55,10 @@ export function isActiveDestination(item: PortalNavItem, section: SectionKey, qu
 
 /**
  * Query carried when a local destination is opened. Planning shares its monitor and displayed period;
- * other spaces only keep their own public. A selection from another page never follows the change.
+ * Pilotage only shares the monitor; other spaces only keep their own public. A selection from another page never follows the change.
  */
 export function navigationQueryFor(workspace: PortalWorkspace, item: PortalNavItem, query: NavigationQuery = {}): NavigationQuery {
+  if (workspace.key === 'pilotage') return { ...(query.instructor ? { instructor: query.instructor } : {}), ...item.query };
   if (workspace.key === 'planning') return {
     ...(query.instructor ? { instructor: query.instructor } : {}),
     ...(query.week ? { week: query.week } : {}),

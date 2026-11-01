@@ -674,3 +674,35 @@ Ce que ces chiffres ne disent pas : aucun objectif de performance n'est déclar�
 - Les lectures `occurrence` et `paiement` du détail calculent encore leur libellé par ligne ; seul le détail des leçons a été rendu indépendant du nombre de lignes.
 - Aucun écran : T03 à T09 (hors périmètre de cette livraison).
 - Aucun déploiement : la migration n'est appliquée sur aucune base de production.
+
+## 12. T03 (#376) : navigation, composition et socle d'affichage
+
+Code : `apps/web/client/portal/pilotage/` (composants, période, formats, droits, lectures), `portal/destinations.ts` (navigation), `console/route.ts` (adresses). Aucun changement d'API ni de contrat.
+
+### 12.1 Navigation (arbitrages à regarder à l'écran)
+
+- **Un espace « Pilotage », deux rubriques** (Tableau de bord, Statistiques), en première place. Avec deux entrées séparées, la barre mobile aurait sept boutons ; elle en a six. Contrepartie : un clic de plus pour atteindre Statistiques depuis une autre page (l'espace s'ouvre sur le tableau de bord).
+- **L'entrée quotidienne d'une école active ouvre toujours l'agenda.** Faire du tableau de bord l'accueil par défaut est un critère de T04 (#377), qui y met le contenu quotidien. Les cas DRAFT, ARCHIVED, la préparation et le catalogue ne sont pas touchés.
+- **Statistiques** n'est offerte qu'à un administrateur ou à qui a `VIEW_SCHOOL_METRICS` ou `VIEW_FINANCIAL_METRICS` ; l'onglet Finances demande le droit financier. C'est un affichage : l'API revérifie à chaque lecture (section 5). Une adresse directe sans droit montre un refus, jamais des chiffres.
+- **Adresses** : `/statistiques?tab=finance&period=custom&start=2026-10-05&end=2026-10-12&instructor=<uuid>&product=<clé>`. Sans `tab`, Activité ; sans `period`, le mois en cours. `end` est la dernière journée comprise ; la fin exclue envoyée au serveur est déduite une seule fois, dans `period-model.ts`. Un paramètre répété, inconnu ou mal formé est ignoré. Changer un filtre remplace l'entrée d'historique ; changer d'onglet en ajoute une. Seul le moniteur suit d'une rubrique à l'autre.
+
+### 12.2 Ce que les pages montrent
+
+Les chiffres viennent de `GET metrics` et `GET metrics/definitions` (relais BFF de T02) ; le web ne recalcule rien.
+
+- **Tableau de bord** : bouton Planifier une leçon ; À traiter (A01, A02, A03, seulement celles dont la valeur est positive ou que le serveur ne peut pas garantir à zéro ; chacune ouvre l'agenda) ; Ce mois-ci (L01, L02, H02) ; une ligne période · portée · heure de calcul.
+- **Statistiques → Activité** : Leçons (L01 à L04), Heures (H02, H03), Élèves (P01), Cours collectifs (C01, C06, C09).
+- **Statistiques → Finances** : Leçons individuelles (F01 à F04), Cours collectifs (F05 et F07, cette dernière indisponible par construction).
+- Une tuile montre la valeur, un badge **seulement** si la couverture est partielle, indisponible ou non applicable, et une aide « Comment ce chiffre est calculé » (formule du dictionnaire et parts exclues). Une valeur absente est un tiret, jamais un zéro.
+- Rien n'est affiché tant que les chiffres et le dictionnaire ne sont pas tous deux lus. La portée de lecture contient école, domaine, période et moniteur : changer un filtre efface les chiffres précédents au lieu de les montrer sous un autre titre. Une réponse dont la période ne correspond pas à la demande est refusée.
+
+### 12.3 Graphiques
+
+Aucun graphique dans T03. Constat : `apps/web` n'a aucune bibliothèque de graphiques ; le composant Chart de shadcn s'appuie sur `recharts`, absent des dépendances. L'ajouter demande une dépendance verrouillée et la mise à jour du verrou. Non vérifié ici : la compatibilité de `recharts` avec React 19.3. À trancher en T05 (#378) avec le premier graphique, en face d'un dessin SVG sans dépendance.
+
+### 12.4 Reste
+
+- Aperçu synthétique (`?page=tableau-de-bord`, `?page=statistiques`) jamais regardé : 390 et 1440 px, clair et sombre, à faire par le porteur. Les valeurs de l'aperçu sont inventées.
+- Filtres prestation et permis : `product` et `category` existent dans l'adresse, aucun contrôle ne les pose encore (T05). La comparaison (`compare`) est prévue dans le lecteur, aucune page ne la demande.
+- Barre mobile à six entrées : l'étiquette « Formations » peut être tronquée à 320 px (déjà le cas à cinq).
+- Non exécuté : aucun test. Seul `tsc --noEmit` a tourné, sans `lucide-react` ni `class-variance-authority` installés sur cette machine ; il ne signale aucune erreur dans les fichiers touchés. Aucun rendu navigateur.

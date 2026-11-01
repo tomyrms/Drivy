@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Skeleton } from '../components/ui/skeleton';
 import { PortalFrame } from './frame';
 import { portalPages, portalSections } from './pages';
+import { canOpenStatistics, metricRights } from './pilotage/rights';
 import { PortalPendingRequests } from './runtime/pending-requests';
 import { PortalIdentityDialog } from './runtime/identity-dialog';
 import { PortalSettingsSearch, PortalSettingsFocus } from './settings/settings-search';
@@ -56,10 +57,12 @@ export function PortalConsole() {
   </EntryLayout>;
 
   const Page = portalPages[route.section];
+  // Statistiques n'est offerte qu'à qui peut lire au moins un domaine ; l'API revérifie à chaque lecture (#375).
+  const available = canOpenStatistics(metricRights(state.membership)) ? portalSections : portalSections.filter(section => section !== 'statistiques');
   const pageKey = `${runtime.draftScope}-${route.section}-${route.section === 'invitations' ? route.query.audience ?? 'learners' : route.section === 'apercu' ? route.query.from ?? '' : ''}`;
   return <UiSuspendedContext.Provider value={resumeGate !== null}>
     <ConsoleContext.Provider value={context}>
-      <PortalFrame active={route.section} activeQuery={route.query} available={portalSections}
+      <PortalFrame active={route.section} activeQuery={route.query} available={available}
         search={<PortalSettingsSearch />}
         onNavigate={(section, query) => context.navigate(section, query)}
         schoolName={state.school.name} userName={runtime.personName ?? 'Mon compte'}

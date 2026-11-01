@@ -1,0 +1,33 @@
+.pilotage-page { width: min(100%, 1040px); margin-inline: auto; display: grid; gap: 24px; }
+.pilotage-page h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pilotage-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pilotage-heading p { margin-top: 4px; color: var(--muted-foreground); }
+.pilotage-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.pilotage-filter { width: auto; min-width: 11rem; }
+.pilotage-filter-error { flex-basis: 100%; }
+.pilotage-scope { color: var(--muted-foreground); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.pilotage-panel { display: grid; gap: 20px; padding-top: 4px; }
+.pilotage-section { display: grid; gap: 12px; }
+.pilotage-section h2 { font-size: 1rem; font-weight: 650; }
+.pilotage-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); }
+.pilotage-tile { min-width: 0; display: grid; align-content: start; justify-items: start; gap: 6px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.pilotage-tile-head { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pilotage-tile-head h3 { margin: 0; font-size: 0.875rem; font-weight: 550; line-height: 1.35; color: var(--muted-foreground); }
+.pilotage-help { flex-shrink: 0; margin: -6px -8px 0 0; color: var(--muted-foreground); }
+.pilotage-help svg { width: 16px; height: 16px; }
+.pilotage-help-content ul { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 4px; }
+.pilotage-value { margin: 0; max-width: 100%; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pilotage-tile[data-coverage="UNAVAILABLE"] .pilotage-value,
+.pilotage-tile[data-coverage="NOT_APPLICABLE"] .pilotage-value { color: var(--muted-foreground); }
+.pilotage-comparison { margin: 0; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.pilotage-comparison span { color: var(--muted-foreground); }
+.pilotage-tile-action { margin: 2px 0 -6px -10px; }
+@media (max-width: 640px) {
+  .pilotage-page { gap: 20px; }
+  .pilotage-page h1 { font-size: 1.6rem; }
+  .pilotage-heading > button { width: 100%; }
+  .pilotage-filter { width: 100%; min-width: 0; }
+  .pilotage-value { font-size: 1.5rem; }
+}
+
+.pilotage-empty { grid-column: 1 / -1; list-style: none; }
