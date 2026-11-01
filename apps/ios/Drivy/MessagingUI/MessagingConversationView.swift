@@ -1237,6 +1237,7 @@ private struct MessagingThreadStateLine: View {
 
     var body: some View {
         if let message = item.message {
+            let mine = item.senderID == workspace.scope.accountID
             VStack(alignment: .leading, spacing: 2) {
                 if message.meta.pinned {
                     Label("Épinglé", systemImage: "pin.fill")
@@ -1245,12 +1246,30 @@ private struct MessagingThreadStateLine: View {
                 }
                 mutationStatus(message)
             }
+            .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+            // « Synchronisation… » est posée en surimpression, sous la ligne, et ne compte pas dans sa hauteur : la liste est
+            // ancrée en bas, une hauteur ajoutée ici faisait monter la bulle de 13 pt à la cinquième seconde, au moment
+            // où un appui sur la bande des réactions pouvait tomber (échecs des 28 et 31 octobre).
+            .overlay(alignment: mine ? .bottomTrailing : .bottomLeading) {
+                syncIndicator(message).alignmentGuide(.bottom) { $0[.top] }
+            }
         } else if let entry = item.pending {
             pendingStatus(entry)
         }
     }
 
-    /// Rien sous 5 s, puis lenteur, puis reprise proposée.
+    /// Lenteur (au-delà de 5 s, sans refus ni reprise à proposer) : indication seule, sans place réservée dans la ligne.
+    @ViewBuilder private func syncIndicator(_ message: MessagingWireMessage) -> some View {
+        if workspace.rejection(for: message.id) == nil, workspace.mutationAttention(for: message) == .slow {
+            Label("Synchronisation…", systemImage: "arrow.triangle.2.circlepath")
+                .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("En cours de synchronisation")
+                .accessibilityIdentifier("messaging.mutation.slow")
+        }
+    }
+
+    /// Rien sous 5 s, puis lenteur (en surimpression, voir `syncIndicator`), puis reprise proposée.
     @ViewBuilder private func mutationStatus(_ message: MessagingWireMessage) -> some View {
         if let rejection = workspace.rejection(for: message.id) {
             // Refus de l’école (#177) : l’intention est déjà retirée, il n’y a rien à renvoyer. L’appui ouvre
@@ -1280,10 +1299,7 @@ private struct MessagingThreadStateLine: View {
         } else if let status = workspace.mutationAttention(for: message) {
             switch status {
             case .slow:
-                Label("Synchronisation…", systemImage: "arrow.triangle.2.circlepath")
-                    .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
-                    .accessibilityLabel("En cours de synchronisation")
-                    .accessibilityIdentifier("messaging.mutation.slow")
+                EmptyView()
             case .offline:
                 Label("En attente de connexion", systemImage: "wifi.slash")
                     .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)

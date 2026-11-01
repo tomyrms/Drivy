@@ -46,7 +46,7 @@ import XCTest
     /// Tant que la page ancienne est attendue, le bouton est en haut du fil : il doit être sous la barre de navigation
     /// et sous la pastille épinglée, donc atteignable au toucher.
     func testOlderMessagesButtonIsReachableAtTheTopOfTheThread() {
-        let app = launch(delay: 0, olderDelay: 8)
+        let app = launch(delay: 0, olderDelay: 30)
         let older = app.buttons["Charger les messages précédents"]
         let list = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 10), app.debugDescription)
