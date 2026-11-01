@@ -10,14 +10,14 @@ import {attemptNumbers,summarize} from '../src/exams.js';
 /** #54 : examens théorique et pratique, tentatives, résultat saisi (jamais déduit d'une date), accompagnement qui occupe le moniteur. */
 let pool:Pool,call:Call,app:Awaited<ReturnType<typeof harness>>['app'];
 let school:Awaited<ReturnType<typeof prepareSchool>>,commercial:Awaited<ReturnType<typeof prepareCommercial>>;
-let validateState:ReturnType<Ajv2020['compile']>,validateRevisions:ReturnType<Ajv2020['compile']>;
+let validateState:ReturnType<Ajv2020['compile']>,validateRevisions:ReturnType<Ajv2020['compile']>,validateList:ReturnType<Ajv2020['compile']>;
 let nextDay=120;
 const alice='demo-alice',staff='demo-instructor',admin='demo-admin';
 beforeAll(async()=>{
  pool=await freshDatabase();({call,app}=await harness(pool));school=await prepareSchool(pool);commercial=await prepareCommercial(call);
  const contract=JSON.parse(await readFile(new URL('../contracts/exams.json',import.meta.url),'utf8')) as {$id:string};
  const ajv=new Ajv2020({strict:false,allErrors:true,formats:fullFormats});ajv.addSchema(contract);
- validateState=ajv.compile({$ref:`${contract.$id}#/$defs/StateEnvelope`});validateRevisions=ajv.compile({$ref:`${contract.$id}#/$defs/RevisionsEnvelope`});
+ validateState=ajv.compile({$ref:`${contract.$id}#/$defs/StateEnvelope`});validateRevisions=ajv.compile({$ref:`${contract.$id}#/$defs/RevisionsEnvelope`});validateList=ajv.compile({$ref:`${contract.$id}#/$defs/ListEnvelope`});
 });
 afterAll(async()=>{await app?.close();await pool?.end();});
 const conforms=(validate:ReturnType<Ajv2020['compile']>,body:unknown)=>{expect(validate(body),JSON.stringify(validate.errors)).toBe(true);};
@@ -187,6 +187,34 @@ describe('accompagnement du moniteur',()=>{
   expect(postponed.statusCode,postponed.body).toBe(200);expect(await heldBy(exam.id)).toBe(0);
   // Un examen sans accompagnement ne bloque rien.
   const nextId=postponed.json().data.exams.find((entry:{status:string})=>entry.status==='SCHEDULED').id;expect(await heldBy(nextId)).toBe(0);
+ });
+});
+
+describe('listes transversales et moniteurs proposables',()=>{
+ it('liste les résultats à renseigner pour le personnel et les examens à venir pour l’élève, chacun dans son périmètre',async()=>{
+  const training=await freshTraining();
+  const future=(await create(training,'THEORY')).json().data.exams[0],passed=(await create(training,'PRACTICAL')).json().data.exams[0];
+  await toPast(passed.id);
+  const waiting=await call('GET','/exams?filter=PENDING_RESULT',undefined,null,staff);expect(waiting.statusCode,waiting.body).toBe(200);conforms(validateList,waiting.json());
+  const waitingIds=waiting.json().data.items.map((item:{exam:{id:string}})=>item.exam.id);
+  expect(waitingIds).toContain(passed.id);expect(waitingIds).not.toContain(future.id);
+  const item=waiting.json().data.items.find((entry:{exam:{id:string}})=>entry.exam.id===passed.id);
+  expect(item.exam).toMatchObject({needsResult:true,attempt:1,kind:'PRACTICAL'});expect(item.learnerDisplayName).toBeTypeOf('string');
+  // L'élève lit ses examens à venir ; la liste est celle de sa lecture.
+  const upcoming=await call('GET','/exams?filter=UPCOMING',undefined,null,alice);expect(upcoming.statusCode,upcoming.body).toBe(200);conforms(validateList,upcoming.json());
+  const upcomingIds=upcoming.json().data.items.map((entry:{exam:{id:string}})=>entry.exam.id);
+  expect(upcomingIds).toContain(future.id);expect(upcomingIds).not.toContain(passed.id);
+  expect((await call('GET','/exams?filter=ALL',undefined,null,alice)).statusCode).toBe(400);
+  expect((await call('GET','/exams',undefined,null,alice)).statusCode).toBe(400);
+ });
+
+ it('propose à l’accompagnement les moniteurs affectés, au personnel seulement',async()=>{
+  const training=await freshTraining();
+  const staffState=await list(training,staff);
+  expect(staffState.escortCandidates).toEqual([expect.objectContaining({membershipId:id.instructorMember})]);
+  expect(staffState.escortCandidates[0].displayName).toBeTypeOf('string');
+  expect((await list(training,alice)).escortCandidates).toEqual([]);
+  expect((await list(training,admin)).escortCandidates.map((entry:{membershipId:string})=>entry.membershipId)).toEqual([id.instructorMember]);
  });
 });
 

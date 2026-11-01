@@ -32,7 +32,8 @@ export interface ExamView {id:string;trainingId:string;kind:Kind;categoryCode:st
  escort:{instructorMembershipId:string;startsAt:string;endsAt:string}|null;resultNote:string;resultRecordedAt:string|null;postponedToExamId:string|null;
  attempt:number|null;needsResult:boolean;version:number;createdAt:string}
 export interface ExamSummary {kind:Kind;passed:boolean;attempts:number;scheduledExamId:string|null}
-export interface ExamState {trainingId:string;canManage:boolean;exams:ExamView[];summary:ExamSummary[]}
+export interface ExamState {trainingId:string;canManage:boolean;escortCandidates:{membershipId:string;displayName:string}[];exams:ExamView[];summary:ExamSummary[]}
+export interface ExamListItem {exam:ExamView;learnerDisplayName:string}
 
 const columns='id,training_id,kind,category_code,status,starts_at,time_zone,location,escort_instructor_membership_id,escort_starts_at,escort_ends_at,result_note,result_recorded_at,postponed_to_exam_id,version,created_at';
 const kinds:Kind[]=['THEORY','PRACTICAL'];
@@ -65,7 +66,19 @@ export async function examState(db:PoolClient,schoolId:string,trainingId:string,
  if(!(await db.query<{ok:boolean}>('SELECT drivy.catalogue_training_visible($1) AS ok',[trainingId])).rows[0]?.ok)throw notFound();
  const rows=(await db.query<ExamRow>(`SELECT ${columns} FROM drivy.exam WHERE school_id=$1 AND training_id=$2 ORDER BY starts_at DESC,created_at DESC,id DESC LIMIT 100`,[schoolId,trainingId])).rows;
  const attempts=attemptNumbers(rows),canManage=(await db.query<{ok:boolean}>('SELECT drivy.exam_manage($1) AS ok',[trainingId])).rows[0]?.ok===true;
- return {trainingId,canManage,exams:rows.map(row=>examView(row,attempts.get(row.id),now)),summary:summarize(rows)};
+ const candidates=canManage?(await db.query<{membership_id:string;display_name:string}>('SELECT membership_id,display_name FROM drivy.exam_escort_candidates($1) ORDER BY display_name,membership_id',[trainingId])).rows:[];
+ return {trainingId,canManage,escortCandidates:candidates.map(row=>({membershipId:row.membership_id,displayName:row.display_name})),
+  exams:rows.map(row=>examView(row,attempts.get(row.id),now)),summary:summarize(rows)};
+}
+/** Examens prévus de l'école dans le périmètre de lecture : ceux dont le résultat reste à renseigner, ou ceux à venir (agenda de l'élève). */
+export async function examList(db:PoolClient,schoolId:string,filter:'PENDING_RESULT'|'UPCOMING',now=new Date()):Promise<ExamListItem[]>{
+ const rows=(await db.query<ExamRow&{learner_display_name:string|null}>(`SELECT ${columns.split(',').map(column=>`e.${column}`).join(',')},drivy.exam_learner_name(e.training_id) AS learner_display_name
+  FROM drivy.exam e WHERE e.school_id=$1 AND e.status='SCHEDULED' AND ${filter==='PENDING_RESULT'?'e.starts_at<=$2':'e.starts_at>$2'}
+  ORDER BY e.starts_at ${filter==='PENDING_RESULT'?'DESC':'ASC'},e.id LIMIT 100`,[schoolId,now])).rows;
+ if(!rows.length)return [];
+ const siblings=(await db.query<ExamRow>(`SELECT ${columns} FROM drivy.exam WHERE school_id=$1 AND training_id=ANY($2::uuid[])`,[schoolId,[...new Set(rows.map(row=>row.training_id))]])).rows;
+ const attempts=attemptNumbers(siblings);
+ return rows.map(row=>({exam:examView(row,attempts.get(row.id),now),learnerDisplayName:row.learner_display_name??''}));
 }
 
 const failures:Record<string,[number,string]>={
@@ -144,6 +157,14 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
  app.get(`${base}/trainings/:trainingId/exams`,async r=>{
   empty.parse(r.query);const {schoolId}=params(r),trainingId=trainingParam(r),identity=await options.verifyToken(r.headers.authorization);
   return envelope(await withActor(options.pool,identity,schoolId,async db=>examState(db,schoolId,trainingId)),r);
+ });
+
+ // Examens prévus de l'école dans le périmètre de lecture de l'appelant : à renseigner (date passée) ou à venir. L'élève lit les siens,
+ // le personnel ceux de ses formations ; la portée est celle de la lecture d'une formation, relue par la base.
+ app.get(`${base}/exams`,async r=>{
+  const {filter}=z.object({filter:z.enum(['PENDING_RESULT','UPCOMING'])}).strict().parse(r.query);
+  const {schoolId}=params(r),identity=await options.verifyToken(r.headers.authorization);
+  return envelope(await withActor(options.pool,identity,schoolId,async db=>({filter,items:await examList(db,schoolId,filter)})),r);
  });
 
  // Historique d'un examen : réservé au personnel de la formation. L'élève lit ses examens, pas qui les a corrigés ni pourquoi.

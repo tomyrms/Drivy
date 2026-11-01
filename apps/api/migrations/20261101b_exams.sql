@@ -86,8 +86,23 @@ CREATE FUNCTION drivy.exam_escort_person(training uuid,instructor uuid) RETURNS 
   WHERE a.school_id=t.school_id AND a.training_id=t.id AND a.instructor_membership_id=m.id
   AND a.valid_from<=statement_timestamp() AND (a.valid_until IS NULL OR a.valid_until>statement_timestamp()))
 $$;
-REVOKE ALL ON FUNCTION drivy.exam_manage(uuid),drivy.exam_manage_exam(uuid),drivy.exam_escort_person(uuid,uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION drivy.exam_manage(uuid),drivy.exam_manage_exam(uuid),drivy.exam_escort_person(uuid,uuid) TO drivy_app;
+-- Nom de l'élève d'une formation lisible par qui lit cette formation (le nom vit dans person depuis la migration 041).
+CREATE FUNCTION drivy.exam_learner_name(training uuid) RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ SELECT p.display_name FROM drivy.training t JOIN drivy.learner_profile l ON l.school_id=t.school_id AND l.id=t.learner_id
+ JOIN drivy.person p ON p.id=l.person_id WHERE t.id=training AND drivy.catalogue_training_visible(training)
+$$;
+-- Moniteurs proposables à l'accompagnement : les moniteurs actifs actuellement affectés à la formation, pour qui peut la gérer.
+CREATE FUNCTION drivy.exam_escort_candidates(training uuid) RETURNS TABLE(membership_id uuid,display_name text)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+ SELECT DISTINCT m.id,p.display_name FROM drivy.training t
+ JOIN drivy.instructor_assignment a ON a.school_id=t.school_id AND a.training_id=t.id
+  AND a.valid_from<=statement_timestamp() AND (a.valid_until IS NULL OR a.valid_until>statement_timestamp())
+ JOIN drivy.membership m ON m.school_id=t.school_id AND m.id=a.instructor_membership_id AND m.status='ACTIVE' AND 'INSTRUCTOR'=ANY(m.roles)
+ JOIN drivy.person p ON p.id=m.person_id AND p.status='ACTIVE'
+ WHERE t.id=training AND drivy.exam_manage(training)
+$$;
+REVOKE ALL ON FUNCTION drivy.exam_manage(uuid),drivy.exam_manage_exam(uuid),drivy.exam_escort_person(uuid,uuid),drivy.exam_escort_candidates(uuid),drivy.exam_learner_name(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION drivy.exam_manage(uuid),drivy.exam_manage_exam(uuid),drivy.exam_escort_person(uuid,uuid),drivy.exam_escort_candidates(uuid),drivy.exam_learner_name(uuid) TO drivy_app;
 
 -- 4. Accès par ligne.
 ALTER TABLE drivy.exam ENABLE ROW LEVEL SECURITY;

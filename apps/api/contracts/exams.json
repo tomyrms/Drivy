@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:exams:1",
-  "$comment": "Extension du 1er novembre 2026 (#54). Routes sous /v1/schools/{schoolId} : GET trainings/{trainingId}/exams, POST trainings/{trainingId}/exams (201), POST exams/{examId}/update, /postpone et /result (If-Match, 200), GET exams/{examId}/revisions (personnel). OpenAPI canonique 3.11.0 conservé. Saisie manuelle du personnel (ADMIN, ou moniteur actuellement affecté à la formation) ; l'élève lit seulement les examens de ses formations. Un examen est une tentative : un report garde la tentative d'origine (POSTPONED) et en ouvre une nouvelle. Une date passée ne devient jamais un résultat : needsResult l'indique, le résultat est saisi, corrigé avec motif obligatoire, et chaque écriture laisse une révision signée. Une seule tentative SCHEDULED et une seule PASSED par formation et épreuve. L'accompagnement (escort) est facultatif ; présent, il occupe le moniteur affecté dans l'agenda commun et un chevauchement est refusé (EXAM_ESCORT_CONFLICT). Aucune inscription officielle, transmission, attestation ni taux de réussite.",
+  "$comment": "Extension du 1er novembre 2026 (#54). Routes sous /v1/schools/{schoolId} : GET trainings/{trainingId}/exams, POST trainings/{trainingId}/exams (201), POST exams/{examId}/update, /postpone et /result (If-Match, 200), GET exams/{examId}/revisions (personnel), GET exams?filter=PENDING_RESULT|UPCOMING (examens prévus de l'école dans le périmètre de lecture : résultat à renseigner, ou à venir pour l'agenda de l'élève). OpenAPI canonique 3.11.0 conservé. Saisie manuelle du personnel (ADMIN, ou moniteur actuellement affecté à la formation) ; l'élève lit seulement les examens de ses formations. Un examen est une tentative : un report garde la tentative d'origine (POSTPONED) et en ouvre une nouvelle. Une date passée ne devient jamais un résultat : needsResult l'indique, le résultat est saisi, corrigé avec motif obligatoire, et chaque écriture laisse une révision signée. Une seule tentative SCHEDULED et une seule PASSED par formation et épreuve. L'accompagnement (escort) est facultatif ; présent, il occupe le moniteur affecté dans l'agenda commun et un chevauchement est refusé (EXAM_ESCORT_CONFLICT). Aucune inscription officielle, transmission, attestation ni taux de réussite.",
   "$defs": {
     "Escort": {
       "type": "object",
@@ -89,10 +89,16 @@
     "State": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["trainingId", "canManage", "exams", "summary"],
+      "required": ["trainingId", "canManage", "escortCandidates", "exams", "summary"],
       "properties": {
         "trainingId": {"type": "string", "format": "uuid"},
         "canManage": {"type": "boolean", "description": "Vrai pour l'administration et le moniteur affecté à la formation."},
+        "escortCandidates": {
+          "type": "array",
+          "maxItems": 50,
+          "description": "Moniteurs actifs actuellement affectés à la formation, proposables à l'accompagnement ; vide pour qui ne peut pas la gérer.",
+          "items": {"type": "object", "additionalProperties": false, "required": ["membershipId", "displayName"], "properties": {"membershipId": {"type": "string", "format": "uuid"}, "displayName": {"type": "string"}}}
+        },
         "exams": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/Exam"}, "description": "Du plus récent au plus ancien."},
         "summary": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/Summary"}}
       }
@@ -101,6 +107,28 @@
       "type": "object",
       "required": ["data", "requestId", "serverTime"],
       "properties": {"data": {"$ref": "#/$defs/State"}, "requestId": {"type": "string"}, "serverTime": {"type": "string", "format": "date-time"}}
+    },
+    "ListEnvelope": {
+      "type": "object",
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filter", "items"],
+          "properties": {
+            "filter": {"type": "string", "enum": ["PENDING_RESULT", "UPCOMING"]},
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {"type": "object", "additionalProperties": false, "required": ["exam", "learnerDisplayName"], "properties": {"exam": {"$ref": "#/$defs/Exam"}, "learnerDisplayName": {"type": "string"}}},
+              "description": "À renseigner : du plus récent au plus ancien. À venir : du plus proche au plus lointain."
+            }
+          }
+        },
+        "requestId": {"type": "string"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
     },
     "RevisionsEnvelope": {
       "type": "object",
