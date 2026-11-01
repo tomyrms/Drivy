@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:lesson-change-requests:1",
+  "$comment": "Extension du 1er novembre 2026 (#52). Routes sous /v1/schools/{schoolId} : GET lessons/{lessonId}/change-requests, POST lessons/{lessonId}/change-requests (201), POST lesson-change-requests/{requestId}/withdraw (If-Match, 200), POST lesson-change-requests/{requestId}/refuse (If-Match, 200), GET lesson-change-requests (boîte du personnel). OpenAPI canonique 3.11.0 conservé. Une demande ne change ni la leçon, ni ses occupations, ni son compte : le personnel accepte en déplaçant ou en annulant la leçon par POST lessons/{lessonId}/move ou /cancel avec le champ facultatif changeRequestId (la demande passe à ACCEPTED dans la même transaction ; une autre demande en attente que le changement rend caduque passe à SUPERSEDED). Création : rôle LEARNER, élève de la leçon seulement ; retrait : son auteur ; refus : ADMIN ou moniteur de la leçon. Aucun délai et aucun frais ne sont inventés : cancellationHours et deadlineAt viennent de la procédure approuvée de la leçon (cancellation_rules) et valent null quand l'école n'en fixe pas. Une demande faite après l'échéance (late=true) reste possible et n'est ni refusée ni facturée automatiquement.",
+  "$defs": {
+    "CreateCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "kind"],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid", "description": "Identique à l'en-tête Idempotency-Key."},
+        "kind": {"type": "string", "enum": ["RESCHEDULE", "CANCEL"]},
+        "note": {"type": "string", "maxLength": 1000, "default": "", "description": "Disponibilités ou proposition (obligatoire, non vide, pour RESCHEDULE) ; motif facultatif pour CANCEL."}
+      }
+    },
+    "WithdrawCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}}
+    },
+    "RefuseCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "note": {"type": ["string", "null"], "maxLength": 1000, "description": "Motif lu par l'élève ; facultatif."}
+      }
+    },
+    "Request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "lessonId", "kind", "status", "note", "mine", "late", "deadlineAt", "cancellationHours", "policyVersionId", "resolvedAt", "resolutionNote", "version", "createdAt"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "lessonId": {"type": "string", "format": "uuid"},
+        "kind": {"type": "string", "enum": ["RESCHEDULE", "CANCEL"]},
+        "status": {"type": "string", "enum": ["PENDING", "ACCEPTED", "REFUSED", "WITHDRAWN", "SUPERSEDED"], "description": "WITHDRAWN : retirée par l'élève. SUPERSEDED : la leçon a changé avant la réponse."},
+        "note": {"type": "string", "maxLength": 1000},
+        "mine": {"type": "boolean", "description": "Vrai pour la demande de l'appelant."},
+        "late": {"type": ["boolean", "null"], "description": "Figé à la création : la demande a été faite après l'échéance de la procédure. null sans échéance connue."},
+        "deadlineAt": {"type": ["string", "null"], "format": "date-time"},
+        "cancellationHours": {"type": ["integer", "null"], "minimum": 0, "maximum": 8760},
+        "policyVersionId": {"type": ["string", "null"], "format": "uuid", "description": "Version de la procédure lue à la création ; les conditions consultées ne changent pas rétroactivement."},
+        "resolvedAt": {"type": ["string", "null"], "format": "date-time"},
+        "resolutionNote": {"type": ["string", "null"], "maxLength": 1000},
+        "version": {"type": "integer", "minimum": 1, "description": "À renvoyer dans If-Match pour retirer ou refuser."},
+        "createdAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "Conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyVersionId", "policyVersion", "cancellationPolicyText", "cancellationHours", "lateAction", "deadlineAt", "late", "canRequest", "blockedReason"],
+      "properties": {
+        "policyVersionId": {"type": ["string", "null"], "format": "uuid"},
+        "policyVersion": {"type": ["integer", "null"], "minimum": 1},
+        "cancellationPolicyText": {"type": "string"},
+        "cancellationHours": {"type": ["integer", "null"], "minimum": 0, "maximum": 8760},
+        "lateAction": {"type": ["string", "null"], "enum": ["CONTACT", "NO_FEE", null]},
+        "deadlineAt": {"type": ["string", "null"], "format": "date-time"},
+        "late": {"type": ["boolean", "null"], "description": "Vrai quand l'échéance est passée à l'instant de la lecture."},
+        "canRequest": {"type": "boolean", "description": "Vrai pour l'élève de la leçon quand elle est planifiée, non commencée, future et sans demande en attente."},
+        "blockedReason": {"type": ["string", "null"], "enum": ["NOT_LEARNER", "LESSON_CLOSED", "LESSON_STARTED", "LESSON_IN_PAST", "REQUEST_PENDING", null]}
+      }
+    },
+    "State": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lessonId", "conditions", "requests"],
+      "properties": {
+        "lessonId": {"type": "string", "format": "uuid"},
+        "conditions": {"$ref": "#/$defs/Conditions"},
+        "requests": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/Request"}, "description": "Les vingt dernières demandes de la leçon, la plus récente d'abord. Une seule peut être PENDING."}
+      }
+    },
+    "StateEnvelope": {
+      "type": "object",
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {"data": {"$ref": "#/$defs/State"}, "requestId": {"type": "string"}, "serverTime": {"type": "string", "format": "date-time"}}
+    },
+    "InboxItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "lesson"],
+      "properties": {
+        "request": {"$ref": "#/$defs/Request"},
+        "lesson": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "plannedStart", "plannedEnd", "timeZone", "version", "instructorMembershipId", "learnerDisplayName"],
+          "properties": {
+            "id": {"type": "string", "format": "uuid"},
+            "plannedStart": {"type": "string", "format": "date-time"},
+            "plannedEnd": {"type": "string", "format": "date-time"},
+            "timeZone": {"type": "string"},
+            "version": {"type": "integer", "minimum": 1},
+            "instructorMembershipId": {"type": "string", "format": "uuid"},
+            "learnerDisplayName": {"type": "string"}
+          }
+        }
+      }
+    },
+    "InboxEnvelope": {
+      "type": "object",
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {"type": "object", "additionalProperties": false, "required": ["items"], "properties": {"items": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/InboxItem"}}}},
+        "requestId": {"type": "string"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

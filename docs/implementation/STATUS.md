@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 1er novembre 2026 — Demandes de l'élève sur sa leçon : déplacement et annulation (#52, `claude/eleve-demande-52`)
+
+- **Écrit, jamais exécuté** (aucun test, typage ni compilation, à la demande du porteur ; rien déployé). Règles par défaut validées par le porteur : une demande ne change rien, le créneau d'origine reste valable jusqu'à la réponse ; déplacement (disponibilités obligatoires) ou annulation (motif facultatif) ; une seule demande en attente, retirable ; échéance lue dans la procédure approuvée, jamais inventée, aucun frais ; le personnel refuse, ou accepte par le déplacement / l'annulation existants (`changeRequestId`). Détail : [demandes-eleve-lecon-52.md](demandes-eleve-lecon-52.md).
+- **Livré dans le code** : migration `20261101_lesson_change_requests.sql` (table à sécurité par ligne forcée, fonctions de portée, reçus et audit), routes `lesson-change-requests.ts`, contrat `lesson-change-requests.json`, client et feuilles iOS (fiche de la leçon, élève et personnel), test d'intégration API et tests Swift écrits.
+- **Reste** : toute la qualification (migration sur PostgreSQL, tests API, compilation et tests Swift, captures, essai sur appareil), la boîte web de l'administration, les notifications (#43/#44), la file locale durable des gestes de l'élève.
+
 ## 1er novembre 2026 — Pilotage #397 déployé sur le homelab (web seulement, `6884dcc7`)
 
 - **PR #398 fusionnée** (`6884dcc7b367de46ecc03c9c6466afdc1966069a`, commit de fusion) après sa CI verte : Web et BFF, contrats documentaires, test navigateur Chromium · OIDC · BFF · API · PostgreSQL (run 41340204335). CI de master sur `6884dcc7` verte (runs 41340497778 et 41340497682). Issue #397 laissée ouverte.

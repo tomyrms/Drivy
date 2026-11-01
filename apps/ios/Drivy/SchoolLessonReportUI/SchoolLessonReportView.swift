@@ -241,6 +241,9 @@ private struct SchoolLessonReportContent: View {
     @State private var planningRoute: PlanningRoute?
     /// Planning présenté, gardé pour lire une annulation confirmée à la fermeture de sa feuille.
     @State private var presentedPlanning: SchoolPlanningWorkspace?
+    /// Demandes de l'élève sur cette leçon (#52) : lues pour toute leçon planifiée, jamais écrites par la fiche elle-même.
+    @State private var changeModel: SchoolLessonChangeModel?
+    @State private var changeSheet: ChangeSheet?
     /// Champ de la fiche planifiée qui tient le clavier : « Terminé », un défilement ou un toucher ailleurs le rend.
     @FocusState private var focusedField: PlannedField?
 
@@ -252,6 +255,17 @@ private struct SchoolLessonReportContent: View {
     private enum LessonSheet: String, Identifiable {
         case permit
         var id: String { rawValue }
+    }
+
+    private enum ChangeSheet: Identifiable {
+        case request(SchoolLessonChangeRequest.Kind)
+        case refuse(SchoolLessonChangeRequest)
+        var id: String {
+            switch self {
+            case .request(let kind): "request-\(kind.rawValue)"
+            case .refuse(let request): "refuse-\(request.id.uuidString)"
+            }
+        }
     }
 
     private struct PlanningRoute: Identifiable {
@@ -320,6 +334,8 @@ private struct SchoolLessonReportContent: View {
             SchoolCapturePreparationView(model: preparation, schoolWorkspace: schoolWorkspace)
         }
         .sheet(item: $planningRoute, onDismiss: { planningClosed() }) { route in planningSheet(route) }
+        .sheet(item: $changeSheet) { sheet in changeSheetView(sheet) }
+        .task(id: model.lesson?.version) { await loadChangeRequests() }
         .navigationDestination(isPresented: $showsLive) {
             if let capture {
                 SchoolCaptureLiveView(controller: capture, learnerName: learnerName, openLesson: { _, completing in
@@ -682,6 +698,7 @@ private struct SchoolLessonReportContent: View {
         Section {
             SchoolLessonHeaderView(model: model, learnerName: learnerName, finishError: finishError)
             if let departureError { SchoolErrorNotice(message: departureError, retry: { Task { await startLesson() } }) }
+            changeSection
         }
         .drivyClearRow()
         .listRowSeparator(.hidden)
@@ -702,7 +719,8 @@ private struct SchoolLessonReportContent: View {
             let cancels = SchoolLessonHubRules.mayCancel(lesson, roles: model.membership.roles, membershipID: model.membership.membershipId)
             let absent = model.mayMarkNoShow(now: now)
             let edits = offersEditInMenu, leaves = offersLeaveInMenu
-            if moves || cancels || absent || edits || leaves {
+            let asks = asksForChange
+            if moves || cancels || absent || edits || leaves || asks {
                 // Menus en texte seul : ces actions sont propres à Drivy, un symbole n’y serait qu’un ornement.
                 Menu {
                     if edits {
@@ -717,6 +735,12 @@ private struct SchoolLessonReportContent: View {
                     if absent {
                         Button("Élève absent") { confirmsNoShow = true }
                             .disabled(!model.canMutate || isFinishing)
+                    }
+                    if asks {
+                        Button("Demander un déplacement") { changeSheet = .request(.reschedule) }
+                            .accessibilityIdentifier("lesson-change-ask-reschedule")
+                        Button("Demander l’annulation", role: .destructive) { changeSheet = .request(.cancel) }
+                            .accessibilityIdentifier("lesson-change-ask-cancel")
                     }
                     if moves {
                         Button("Déplacer") { openPlanning(lesson, cancelling: false) }
@@ -926,13 +950,49 @@ private struct SchoolLessonReportContent: View {
             capture?.closeSaved()
         }
         presentedPlanning = nil
-        Task { await model.load() }
+        Task { await model.load(); await changeModel?.load() }
     }
 
-    private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool) {
+    /// `request` : la demande de l'élève que ce déplacement ou cette annulation accepte ; l'école la ferme avec le changement.
+    private func openPlanning(_ lesson: SchoolLesson, cancelling: Bool, answering request: SchoolLessonChangeRequest? = nil) {
         let planning = SchoolPlanningWorkspace(scope: model.scope, client: agenda.planningClient, lesson: lesson)
+        planning.changeRequestID = request?.id
+        if request != nil && cancelling { planning.cancellationReason = "LEARNER_REQUEST" }
         presentedPlanning = planning
         planningRoute = PlanningRoute(model: planning, cancelling: cancelling)
+    }
+
+    // MARK: Demandes de l'élève (#52)
+
+    /// L'élève de la leçon peut demander un changement tant que l'école le permet (leçon planifiée, non commencée, sans demande en attente).
+    private var asksForChange: Bool { model.isOwnLearner && isPlanned && changeModel?.canRequest == true }
+
+    @ViewBuilder private var changeSection: some View {
+        if isPlanned, let changeModel, let lesson = model.lesson, !lesson.hasStarted {
+            SchoolLessonChangeSection(model: changeModel, isLearner: model.isOwnLearner,
+                accept: { request in
+                    openPlanning(lesson, cancelling: request.requestKind == .cancel, answering: request)
+                },
+                refuse: { request in changeSheet = .refuse(request) })
+        }
+    }
+
+    @ViewBuilder private func changeSheetView(_ sheet: ChangeSheet) -> some View {
+        if let changeModel, let lesson = model.lesson {
+            switch sheet {
+            case .request(let kind): SchoolLessonChangeRequestSheet(model: changeModel, kind: kind, timeZone: lesson.timeZone)
+            case .refuse(let request): SchoolLessonChangeRefuseSheet(model: changeModel, request: request)
+            }
+        }
+    }
+
+    /// Lit les demandes de la leçon dès qu'elle est lue et planifiée ; les autres leçons n'en portent aucune à traiter.
+    private func loadChangeRequests() async {
+        guard isPlanned, let lesson = model.lesson, !lesson.hasStarted else { return }
+        if changeModel == nil || changeModel?.lessonID != model.lessonID {
+            changeModel = SchoolLessonChangeModel(client: agenda.lessonChangeClient, schoolID: model.scope.schoolID, lessonID: model.lessonID)
+        }
+        await changeModel?.load()
     }
 
     // MARK: Avant la leçon
