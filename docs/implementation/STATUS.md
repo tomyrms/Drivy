@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 1er novembre 2026 — défauts Messages (`claude/messages-defauts-20261101`)
+
+- **Code de l'app modifié** : `MessagingConversationView.statusLine` et `MessagingWorkspace.hasPendingMutation`. La ligne d'état sous une bulle garde sa hauteur tant que le message porte ma réaction ou une intention en cours : « Synchronisation… » ne fait plus remonter la bulle de 13 pt à la cinquième seconde. Arbitrage à valider à l'œil : ~16 pt d'espace sous les messages réagis.
+- Bouton « Charger les messages précédents » : défaut absent sur master (vidéo du run 41262108155), aucun correctif ; la branche `claude/cles-messagerie-169-170-141` n'a aucun commit non fusionné.
+- **Exécuté** : contrôle ciblé réussi (runs 41268464654, 41268473463), test des cinq secondes réussi deux fois, tests métier de messagerie réussis (run 41268482749). Détail et limites : [messages-defauts-20261101.md](messages-defauts-20261101.md).
+- **Non prouvé** : le lien direct entre le décalage de 13 pt et l'appui perdu reste une hypothèse ; aucun résultat physique.
+
 ## 1er novembre 2026 — tests UI instables (`claude/tests-ui-stables-20261101`)
 
 - Analyse de 173 runs iOS (journaux, deux artefacts, historique git) : sur les douze tests suivis, dix n'échouent plus depuis leur dernière correction (0 échec sur 8 à 41 exécutions de la version actuelle) ; deux échouaient encore sur master. Notes par test : [tests-ui-instables-20261101.md](tests-ui-instables-20261101.md).
