@@ -834,7 +834,7 @@ Le bouton « Exporter en CSV » n'apparaît que pour une personne qui a `EXPORT_
 
 ### 16.5 Reste
 
-- Le clic d'une barre de graphique vers les lignes de son intervalle (`bucketFrom`, `bucketToExclusive`) n'est pas câblé, bien que le serveur le permette. Les mesures « en parties » (`part`) ne sont pas ouvertes.
+- Le clic d'une barre de graphique vers les lignes de son intervalle (`bucketFrom`, `bucketToExclusive`) n'est pas câblé, bien que le serveur le permette. F06, seule mesure en deux parties (`part`), s'ouvre par partie depuis la section 18.3.
 - Au retour d'une fiche, le détail repart de la première page : les pages déjà chargées, le défilement et le focus ne sont pas restaurés.
 - Non essayé : le téléchargement dans un navigateur, la lecture d'un vrai fichier dans un tableur, la révocation d'un droit pendant l'affichage. Le test de l'export avec texte accentué, guillemets, retours à la ligne et cellules de type formule est celui de l'API (#375) ; le web n'a rien écrit pour le contenu du fichier. L'aperçu fournit un CSV synthétique sans nom d'élève.
 - Aucun test lancé (écrits : `detail-models.test.ts`, une ligne de `console-route.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
@@ -863,3 +863,82 @@ Titre, période, unité, légende, résumé lu et tableau des valeurs pour chaqu
 - Un graphique financier échoué ne bloque pas l'agenda (chaque bloc lit pour lui-même) : établi par la structure du code, non essayé.
 - Le défilement et les pages déjà chargées du détail ne sont pas restaurés au retour d'une fiche (16.5).
 - Non exécuté : aucun test. `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 18. T09 (#382) : qualification du candidat `27a5a4e2`
+
+Cette section **prévaut sur les mentions « non exécuté » des sections 12 à 17**, écrites avant l'exécution. Candidat : `27a5a4e2612d805799fa920ee1206a81be06c9e3`, branche `claude/pilotage-376-navigation`, base `master` `123304df`. Rien n'est fusionné, rien n'est déployé hors l'aperçu synthétique, aucune issue n'est fermée.
+
+### 18.1 Ce qui a été exécuté
+
+| Contrôle | Résultat | Où |
+| --- | --- | --- |
+| Typage de `apps/web` (dépendances réelles, `npm ci`) | PASS, 0 erreur | local |
+| Typage de `apps/api` | PASS, 0 erreur | local |
+| Tests web : 57 fichiers | PASS, 593 réussis, 1 échec attendu préexistant | local |
+| Tests API du pilotage sur PostgreSQL 17 : modèle, intégration de #375, contrat web/API | PASS, 83 / 83 | conteneur local `postgres:17-alpine`, base `drivy_test` |
+| Build de production (`vite build`, qui refuse tout module d'aperçu dans le produit) | PASS | local |
+| Build de l'aperçu synthétique | PASS | local |
+| Parcours dans Edge : détail, retour, focus, pagination, export, filtres, F06, période invalide, clavier du graphique | PASS, 23 / 23, aucune erreur JavaScript | aperçu local puis public |
+| Captures : 5 pages × 5 largeurs (1440, 768, 390, 360, 320) × clair et sombre, 50 images | aucun débordement horizontal, aucun libellé de navigation tronqué, aucun texte de graphique sous 9 px, aucune erreur JavaScript | `.local/captures-373/final-27a5a4e2/` (non versionné) |
+| Aperçu publié : SHA servi, en-têtes, chargement | PASS : `27a5a4e2612d` affiché, CSP, noindex, `no-store` | https://shulker.ch/drivy-preview/ |
+
+Les tests web et API n'ont pas été rejoués par la CI : aucun workflow GitHub n'a été lancé pour ce lot.
+
+### 18.2 Matrice critère → preuve
+
+`PASS` = un test exécuté, nommé, le prouve ; `PARTIAL` = prouvé en partie ; `NOT_EXECUTED` = rien n'a tourné ; `N/A` = sans objet dans le produit actuel.
+
+| Famille | Critère de #382 | Preuve | État |
+| --- | --- | --- | --- |
+| Calculs | zéro connu, valeur inconnue, période partielle | `août précède les données : inconnu, jamais zéro`, `une année qui commence avant les données est partielle`, `un montant exclu rend la mesure partielle ou inconnue, jamais zéro` (API, base réelle) | PASS |
+| Calculs | mois complet, mois à date, février, début et fin de période | `mois à date contre la même plage…`, `mois à date tronqué quand le mois précédent est plus court`, `changement de mois`, modèle des dates (API) ; côté web `période du pilotage` (février 2026) | PASS |
+| Calculs | changement d'heure | `la semaine du 19/10 dure une heure de plus`, `jours : … trois jours sur le changement d'heure` (API) | PASS |
+| Calculs | comparaison de base nulle ou absente | `mois précédent vide : pas de pourcentage`, `base connue et nulle : écart absolu` (API) ; web : `la comparaison dit le pourcentage quand le serveur le donne, sinon l'écart` | PASS |
+| Calculs | somme d'heures, prix historiques | `octobre : états, durées…`, `prix révisé et tarif historique : le snapshot fait foi` (API) | PASS |
+| Activité | terminé, annulé, absent, en cours, non finalisé, leçon déplacée | `octobre : états, durées, élèves, cours et partition des leçons`, `une leçon corrigée en annulée ne vaut plus rien…` (API) | PASS |
+| Activité | élève unique multi-permis, séries multi-séances, places retenues | `un cours sur plusieurs séances compte une série…`, `remplissage des cours à venir : somme des places…`, `instantanés : … places` (API) | PASS |
+| Activité | annuaire paginé | le pilotage ne lit pas d'annuaire paginé pour ses chiffres ; la liste des moniteurs et des élèves passe par `readAll` existant | N/A |
+| Finances | prix révisé, règlements identiques, saisie annulée, dates distinctes | `prix révisé…`, `détail des règlements : saisies actives, annulées et corrections postérieures`, `septembre : règlement d'octobre exclu, saisie annulée en octobre expliquée` (API) | PASS |
+| Finances | exemple de l'acceptation : 8 000 + 2 000 = 10 000 CHF, un règlement de 500 CHF n'y change rien | `jeu B : …` (API) : totaux, séries, pages et export concordent au-delà d'une page | PASS côté API ; **jamais vu à l'écran** |
+| Finances | tarif de cours absent | `F07` indisponible avec `COURSE_PRICE_SOURCE_MISSING` (API), tuile « Indisponible » sur capture | PASS |
+| Finances | devises séparées | l'API ne renvoie que CHF (`currency: z.literal('CHF')`) | N/A |
+| Finances | aucun double compte paiement et valeur d'activité | `octobre : réalisé, à venir, total attendu…`, jeu B | PASS |
+| Droits | deux écoles, rôles et périmètres de moniteur | `une personne membre de deux écoles reçoit les totaux de chaque école, sans mélange`, `moniteur sans grant…`, `VIEW_SCHOOL_METRICS…`, `VIEW_FINANCIAL_METRICS…` (API) | PASS |
+| Droits | activité autorisée, finances interdites | `VIEW_SCHOOL_METRICS : activité de l'école, aucune clé financière` (API) ; web : `droits d'affichage du pilotage` | PASS |
+| Droits | accès direct API, BFF, export | `élève, autre école et personne sans appartenance : refusés`, `fonctions SQL : refus propres` (API) ; `un refus de droit de l'API traverse le relais…`, `exige session et jeton CSRF…` (BFF) | PASS |
+| Droits | révocation | `un droit retiré entre l'affichage et l'export : refus, aucun fichier` (API) | PASS |
+| Droits | changement d'identité en cours de consultation | portée de lecture clé par personne, école et époque d'accès (code) ; aucun test ne change d'identité pendant l'affichage | PARTIAL |
+| Concordance | carte, total, montant, écart signalé | nouveau test `lignes de détail de chaque nature…` : 11 mesures, `lineCount`, `amountCents` et absence d'écart identiques entre la carte et le détail ; `signale un écart avec le total affiché` | PASS |
+| Concordance | détail, CSV | `l'export contient exactement les lignes de la carte`, `même définition que la carte` (API) | PASS |
+| Concordance | accueil → graphique → détail → CSV, de bout en bout | chaque maillon est prouvé séparément ; aucun test ne suit la chaîne sur l'API réelle depuis le navigateur | PARTIAL |
+| CSV | accents, guillemets, sauts de ligne, formules | `accents, guillemets, sauts de ligne et cellules de formule`, `neutralise les formules des cellules texte` ; octets, BOM et CRLF conservés côté web (parcours) | PASS |
+| CSV | plus de 10 000 lignes | `plus de 10 000 lignes : refus explicite, jamais un fichier tronqué` | PASS |
+| Interface | clavier, retour navigateur | parcours : flèches du graphique, focus rendu à la tuile, retour du navigateur rouvre le détail | PASS (Edge émulé) |
+| Interface | desktop, mobile, clair, sombre | 50 captures, mesures automatiques ci-dessus | PASS (Edge émulé) ; **œil du porteur attendu** |
+| Interface | zoom, texte agrandi, paysage | rien n'a été essayé | NOT_EXECUTED |
+| Interface | chargement lent, erreur partielle | structure du code, non provoqué dans le navigateur | NOT_EXECUTED |
+| Interface | filtres rapides (réponses obsolètes) | mécanisme commun des lectures, refus des réponses de mauvaise période ; aucun test de course | PARTIAL |
+| Interface | appareil physique | aucun | NOT_EXECUTED |
+| Non-régression | préparation d'école, agenda, fiches, navigation #311 | les 593 tests web (dont navigation et agenda) passent ; **l'entrée par défaut a changé** (13.1) et n'a pas été essayée avec la vraie session | PARTIAL |
+| Sécurité | confidentialité des caches et logs | `Cache-Control: no-store`, caches en mémoire clés par personne, école et époque d'accès ; revue de code, aucun test dédié | PARTIAL |
+| Performance | agrégats et volume d'export | mesures de 11.3 (une école de 10 064 leçons, machine locale) ; aucun objectif déclaré atteint | PARTIAL |
+
+### 18.3 Défaut trouvé par cette qualification
+
+`F06` (saisies annulées et corrections) n'a pas de liste unique : l'API refuse son détail sans `part` (`a` ou `b`). Le web proposait pourtant « Voir le détail » sans partie, donc la liste se serait ouverte en erreur 400 devant l'utilisateur. Le test de contrat l'a révélé. Corrigé : le détail de F06 propose deux onglets (Saisies annulées, Corrections postérieures), l'adresse porte `part`, l'export envoie la partie et son nom de fichier la reprend. Les valeurs attendues de la carte ne sont pas envoyées pour F06, car le chiffre de la carte additionne les deux listes.
+
+Trois défauts visuels, trouvés sur les captures et corrigés : la barre de navigation mobile à six entrées tronquait « Formations » et débordait dès 320 px ; les onglets de répartition d'un graphique faisaient déborder la page à 320 px ; le dessin du graphique, réduit avec son cadre, rendait les chiffres de l'axe illisibles sur téléphone (il suit maintenant la largeur réelle). Le groupe « À vérifier » de l'onglet Activité contenait une mesure du même nom et s'appelle « Non finalisées ».
+
+### 18.4 Contrôle de contrat web et API
+
+`apps/api/test/school-metrics-web-contract.integration.test.ts` fait lire les **vraies réponses de l'API** (dictionnaire, cartes d'activité et de finances, comparaisons, trois répartitions, séries par jour, semaine et mois, détails de neuf mesures) par les schémas de lecture du web (`portal/pilotage/metrics-schemas.ts`, désormais un module sans React). Une dérive de forme apparaît donc au test et non à l'écran. C'est le premier test de l'API qui importe et exécute du code de `apps/web` (deux autres n'en lisent un fichier que comme texte). Le module n'importe que `zod`, déjà installé à la racine par l'espace de travail de l'API à la même version (4.6.6) que le web : la CI de l'API, qui ne fait `npm ci` qu'à la racine, le résout. Non vérifié dans cette CI, qui n'a pas été lancée.
+
+### 18.5 Reste, par nature
+
+- **Essai du porteur sur l'aperçu** : étape 2 de la séquence de #382. Rien d'autre ne peut la remplacer. Aucune correction ne sera intégrée avant son retour.
+- **Pas de campagne CI** : les workflows GitHub (« Refonte · vérifications », « Refonte · ouverture école navigateur » avec le vrai OIDC et le vrai BFF) n'ont pas été lancés. Ouvrir une PR les lancerait ; à décider avec lui.
+- **Aucun essai sur la vraie pile** : le navigateur n'a jamais parlé au vrai BFF et à la vraie API. L'aperçu est synthétique ; la concordance des formes est prouvée par 18.4, pas le parcours.
+- **Non exécuté** : zoom et texte agrandi, orientation paysage, appareil physique, chargement lent, erreur partielle provoquée, changement d'identité pendant l'affichage, course entre filtres rapides.
+- **Déploiement du produit** : aucun. Le web est dans le delta d'un futur déploiement (aucune migration nouvelle : la 60e, `20261031_pilotage_metrics`, est déjà sur le homelab). Il demandera sauvegarde, retour arrière et son accord.
+- **Clôture** : #373 et ses lots ne sont pas fermés. Les cases de l'index de #373 restent ouvertes tant que l'essai et l'intégration n'ont pas eu lieu.
+- **Retour arrière de l'aperçu** : `python scripts/homelab/deploy-preview-311.py --rollback 20261101T153438Z-27a5a4e2612d` (puis `--execute`) ; la version précédente `ce3b3559` est conservée.
