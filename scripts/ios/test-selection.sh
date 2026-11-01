@@ -65,8 +65,10 @@ elif [[ "$unit_only" == 1 ]]; then
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == messaging ]]; then
+    # Signalements (#77) : scellement pour les administrateurs, boîte, transport, puis le même parcours contre le vrai relais.
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
-      MessagingExyteThreadTests; do
+      MessagingExyteThreadTests MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
+      MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reactivity ]]; then
@@ -98,6 +100,6 @@ fi
 relay_required=0
 if [[ -f apps/ios/DrivyTests/MatrixMessagingRelayIntegrationTests.swift \
       && "$visual_only" == 0 && -z "$ui_test_suite" \
-      && ( "$unit_only" == 0 || "$unit_test_scope" == all ) ]]; then
+      && ( "$unit_only" == 0 || "$unit_test_scope" == all || "$unit_test_scope" == messaging ) ]]; then
   relay_required=1
 fi

@@ -33,7 +33,7 @@ export async function startQualificationRelay() {
   try {
     // Canonical fixture IDs and relationships. Adds this synthetic issuer only.
     await seedFixtures(pool, issuer);
-    const accepted = new Set(['demo-instructor', 'demo-alice']);
+    const accepted = new Set(['demo-instructor', 'demo-alice', 'demo-admin']);
     const verifyToken = async (authorization?: string) => {
       const subject = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
       if (!accepted.has(subject)) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Connexion requise.');
@@ -48,7 +48,7 @@ export async function startQualificationRelay() {
     registerMessagingKeys(app, { pool, verifyToken, mode: 'test-synthetic' });
     app.get('/qualification/ready', async () => ({
       ready: true, fixture: 'drivy-messaging-relay-v1',
-      schoolId: fixtureIds.schoolA, instructorId: fixtureIds.instructor, learnerId: fixtureIds.alice
+      schoolId: fixtureIds.schoolA, adminId: fixtureIds.admin, instructorId: fixtureIds.instructor, learnerId: fixtureIds.alice
     }));
     await app.listen({ host: '127.0.0.1', port: config.port });
   } catch {
