@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 1er novembre 2026 — Pilotage : restes de la passe #397 (`claude/pilotage-400-restes`)
+
+- **Web seulement**, aucune modification d'API, de calcul ni de droit. Trois défauts visibles corrigés : l'icône d'aide reste collée au dernier mot d'un libellé long sur téléphone ; Permis et prestation se replient derrière un bouton sur téléphone (Période et Moniteur restent visibles, bouton ouvert d'office si l'adresse porte un de ces filtres) ; un mois sans donnée n'affiche plus « 0 vs le 1er octobre » (zéro contre zéro, la règle du serveur ne change pas). Détail : [pilotage-400-restes.md](pilotage-400-restes.md).
+- **Ajouts** : relevé du mois qui garde sa demi-largeur sans le droit financier ; `?droits=activite` dans l'aperçu synthétique pour regarder cette vue ; premières règles `prefers-contrast: more` de Pilotage (il n'y en avait pas).
+- **Non exécuté** : aucun test, typage ni capture, à la demande du porteur ; ni déploiement. Les vérifications qui exigent un tiers (production avec une vraie école, lecteur d'écran, appareil physique) restent ouvertes dans l'issue #400, qui n'est pas fermée.
+
 ## 1er novembre 2026 — Pilotage #397 déployé sur le homelab (web seulement, `6884dcc7`)
 
 - **PR #398 fusionnée** (`6884dcc7b367de46ecc03c9c6466afdc1966069a`, commit de fusion) après sa CI verte : Web et BFF, contrats documentaires, test navigateur Chromium · OIDC · BFF · API · PostgreSQL (run 41340204335). CI de master sur `6884dcc7` verte (runs 41340497778 et 41340497682). Issue #397 laissée ouverte.

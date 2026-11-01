@@ -1,5 +1,5 @@
-import { useId, type ReactNode } from 'react';
-import { ArrowRight, ChevronRight, Info } from 'lucide-react';
+import { useId, useState, type ReactNode } from 'react';
+import { ArrowRight, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Field, FieldError, FieldLabel } from '../../components/ui/field';
@@ -42,10 +42,11 @@ export function MeasureRow({ label, measure, definition, comparison, comparisonL
   const status = measure.coverage.status;
   const change = describeComparison(comparison, measure.unit);
   const value = formatMeasure(measure.value, measure.unit);
+  // L'aide reste collée au dernier mot : sur un téléphone, elle ne part jamais seule à la ligne (#400).
+  const cut = label.lastIndexOf(' ');
   return <li className="pilotage-row" data-coverage={status} data-measure={measureId} data-role={position}>
     <div className="pilotage-row-label">
-      <span className="pilotage-row-name">{label}</span>
-      <MeasureHelp label={label} measure={measure} definition={definition} />
+      <span className="pilotage-row-name">{cut > 0 && label.slice(0, cut + 1)}<span className="pilotage-row-tail">{label.slice(cut + 1)}<MeasureHelp label={label} measure={measure} definition={definition} /></span></span>
       {note && <span className="pilotage-row-note">{note}</span>}
       {status !== 'COMPLETE' && <Badge variant="outline">{coverageBadge[status]}</Badge>}
     </div>
@@ -125,7 +126,9 @@ export function InstructorSelect({ value, options, onChange }: { value: string |
 
 /**
  * Filtres communs des statistiques : une même adresse les porte, un lien vers une autre page les conserve.
- * Permis et prestation sont un second niveau : ils n'apparaissent que si le catalogue de l'école en propose.
+ * Permis et prestation sont un second niveau : ils n'apparaissent que si le catalogue de l'école en propose. Sur un téléphone (#400),
+ * ils se replient derrière un bouton qui compte ceux qui sont actifs, ouvert d'office quand l'adresse en porte un ; sur un écran large,
+ * les quatre filtres restent sur une ligne et le bouton n'existe pas.
  */
 export function PilotageFilters({ query, instructors, categories, products, problem, onChange }: {
   query: NavigationQuery;
@@ -136,6 +139,10 @@ export function PilotageFilters({ query, instructors, categories, products, prob
   onChange: (patch: FilterPatch) => void;
 }) {
   const choice = query.period ?? 'month';
+  const [more, setMore] = useState(Boolean(query.category || query.product));
+  const moreId = useId();
+  const secondary = [categories.length > 0 ? 'Permis' : null, products.length > 0 ? 'prestation' : null].filter(Boolean).join(' et ');
+  const active = [query.category, query.product].filter(Boolean).length;
   return <div className="pilotage-filters" role="group" aria-label="Filtres des statistiques">
     <Field className="pilotage-filter">
       <FieldLabel htmlFor="pilotage-period">Période</FieldLabel>
@@ -158,8 +165,17 @@ export function PilotageFilters({ query, instructors, categories, products, prob
       </Field>
     </>}
     <InstructorSelect value={query.instructor} options={instructors} onChange={instructor => onChange({ instructor })} />
-    <FilterSelect id="pilotage-category" label="Permis" allLabel="Tous les permis" value={query.category} options={categories} onChange={category => onChange({ category })} />
-    <FilterSelect id="pilotage-product" label="Prestation" allLabel="Toutes les prestations" value={query.product} options={products} onChange={product => onChange({ product })} />
+    {secondary && <>
+      <Button variant="ghost" size="sm" className="pilotage-filters-toggle" aria-expanded={more} aria-controls={moreId} onClick={() => setMore(open => !open)}>
+        {secondary.charAt(0).toUpperCase() + secondary.slice(1)}
+        {active > 0 && <Badge variant="outline">{active}<span className="sr-only">{active === 1 ? ' filtre actif' : ' filtres actifs'}</span></Badge>}
+        <ChevronDown data-icon="inline-end" aria-hidden="true" />
+      </Button>
+      <div id={moreId} className="pilotage-filters-more" data-open={more}>
+        <FilterSelect id="pilotage-category" label="Permis" allLabel="Tous les permis" value={query.category} options={categories} onChange={category => onChange({ category })} />
+        <FilterSelect id="pilotage-product" label="Prestation" allLabel="Toutes les prestations" value={query.product} options={products} onChange={product => onChange({ product })} />
+      </div>
+    </>}
     {problem && <FieldError className="pilotage-filter-error" role="alert">{periodProblemMessage(problem)}</FieldError>}
   </div>;
 }

@@ -44,9 +44,13 @@ function formatDelta(delta: number, unit: MeasureUnit): string {
 /** Écart relatif en dixièmes de pour cent (667 donne « +66,7 % »). */
 const formatPercentTenths = (tenths: number) => signedPercent.format(tenths / 1000);
 
-/** Texte court d'une comparaison, ou null quand le serveur n'en donne pas une lisible. */
+/**
+ * Texte court d'une comparaison, ou null quand le serveur n'en donne pas une lisible. Zéro contre zéro ne dit rien (#400) :
+ * la ligne garde sa valeur sans écart. La règle du serveur ne change pas, seul l'affichage se tait.
+ */
 export function describeComparison(comparison: MeasureComparison | undefined, unit: MeasureUnit): string | null {
   if (!comparison || comparison.delta === null) return null;
+  if (comparison.current === 0 && comparison.base === 0) return null;
   if (comparison.percentTenths !== null) return formatPercentTenths(comparison.percentTenths);
   return formatDelta(comparison.delta, unit);
 }

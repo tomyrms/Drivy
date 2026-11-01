@@ -70,6 +70,13 @@ describe('affichage des mesures', () => {
     expect(describeComparison(undefined, 'count')).toBeNull();
   });
 
+  test('zéro contre zéro ne s’affiche pas, une valeur égale non nulle reste un écart nul', () => {
+    expect(describeComparison({ current: 0, base: 0, delta: 0, percentTenths: null, percentReason: 'BASE_ZERO' }, 'count')).toBeNull();
+    expect(describeComparison({ current: 0, base: 0, delta: 0, percentTenths: null, percentReason: 'BASE_ZERO' }, 'cents')).toBeNull();
+    expect(describeComparison({ current: 4, base: 4, delta: 0, percentTenths: 0, percentReason: null }, 'count')).toMatch(/^0\s?%$/);
+    expect(describeComparison({ current: 3, base: 0, delta: 3, percentTenths: null, percentReason: 'BASE_ZERO' }, 'count')).toBe('+3');
+  });
+
   test('les raisons de couverture ont un texte, même celles que le web ne connaît pas encore', () => {
     expect(describeReason('DURATION_UNKNOWN', 1)).toBe('1 leçon sans durée réelle connue');
     expect(describeReason('DURATION_UNKNOWN', 2)).toBe('2 leçons sans durée réelle connue');
