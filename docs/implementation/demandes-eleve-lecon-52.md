@@ -1,6 +1,6 @@
 # Demandes de l'élève sur sa leçon : déplacement et annulation (issue #52)
 
-1er novembre 2026, branche `claude/eleve-demande-52`, base `master` `d4257f07`. Extension hors contrat canonique (OpenAPI 3.11.0 conservé) : [contracts/lesson-change-requests.json](../../apps/api/contracts/lesson-change-requests.json). Aucun test, typage ni compilation n'a été lancé pour ce lot, à la demande du porteur ; rien n'est déployé.
+1er novembre 2026, branche `claude/eleve-demande-52`, base `master` `d4257f07`. Extension hors contrat canonique (OpenAPI 3.11.0 conservé) : [contracts/lesson-change-requests.json](../../apps/api/contracts/lesson-change-requests.json). Qualifié avec les lots #400 et #54 dans la PR #401 (voir STATUS.md).
 
 ## 1. Règles retenues
 

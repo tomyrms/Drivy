@@ -36,18 +36,20 @@ Migration `20261101b_exams.sql` (additive) : tables `exam` et `exam_revision` (s
 
 Code : `exams.ts`. Les commandes passent par `schoolCommand` (clé d'idempotence, reçu `GET operations/{id}`, audit).
 
-## 4. iOS
+## 4. Web
 
-- `SchoolExamClient` : lecture, création, modification, report et résultat, sans file locale (sans réseau, rien ne part et l'écran le dit ; le même identifiant d'opération sert à chaque nouvel essai d'un même geste).
-- Section « Examens » sous la progression d'une formation, dans le dossier du moniteur comme sur la page de l'élève : chaque tentative avec sa date, son lieu, son statut et ses points à travailler. Le personnel prévoit un examen (« Prévoir »), puis modifie la date, reporte, renseigne ou corrige le résultat depuis le menu de la ligne. L'élève n'a que la lecture.
-- L'accompagnement se propose au moniteur pour lui-même, ou conserve celui de l'examen modifié ; l'administration le saisit pour un autre moniteur plus tard (web).
+Console de gestion, dossier d'un élève : onglet « Examens ». Une ligne par tentative (épreuve, rang, date, lieu, accompagnement, points à travailler) ; « Prévoir » un examen théorique ou pratique tant que l'épreuve n'est ni réussie ni déjà prévue ; modifier la date, reporter, renseigner le résultat (une fois la date venue) ou le corriger avec son motif. Un moniteur d'accompagnement se choisit parmi les moniteurs affectés à la formation. Dans l'annuaire des élèves, un bloc « Examens à renseigner » liste les examens prévus dont la date est passée et ouvre le dossier. Modèle pur testé : `apps/web/client/exam-model.ts`.
 
-## 5. Non fait, à qualifier
+## 5. iOS
 
-- **Aucune vérification exécutée** : ni typage, ni tests API sur PostgreSQL (`exams.integration.test.ts` écrit, jamais lancé), ni compilation Swift (pas de chaîne Swift sous Windows), ni tests Swift (`SchoolExamTests`), ni captures. La migration, la contrainte d'exclusion étendue et les politiques de sécurité par ligne n'ont jamais tourné.
-- **Web** : aucune gestion des examens dans la console d'administration ; l'administration passe par l'app.
-- **Agenda personnel** : l'issue demande l'examen dans l'agenda de l'élève ; il se lit dans sa progression, pas encore dans son agenda.
-- **Notifications** : aucune alerte (#43/#44, push non activé).
-- **Boîte « à renseigner »** : pas de liste transversale des examens passés sans résultat ; le signal se lit dans la formation.
-- **Accompagnement pour un autre moniteur** : l'API le permet (moniteur affecté), l'app ne propose que le moniteur connecté.
-- **Persistance** : pas de file locale durable pour ces gestes.
+- `SchoolExamClient` : lecture, liste transversale (`filter=PENDING_RESULT|UPCOMING`) et rejeu des commandes de la file.
+- **File chiffrée** : quatre commandes de plus dans `SchoolCommandKind` (`createExam`, `updateExam`, `postponeExam`, `setExamResult`), domaine « pédagogique » comme les leçons. Chaque geste est écrit dans la file avant tout envoi puis rejoué à l'identique (mêmes octets, même clé d'idempotence, même version) tant que l'école n'a pas répondu : une réponse perdue ou un arrêt de l'app ne crée jamais un second effet. Un bandeau « attend la réponse de l'école » propose Réessayer et Abandonner ; un refus définitif retire le geste et relit l'état de l'école. L'écran n'annonce rien avant la réponse.
+- Section « Examens » sous la progression d'une formation, dans le dossier du moniteur comme sur la page de l'élève ; l'accompagnement se choisit parmi les moniteurs affectés (`escortCandidates`).
+- Élève : une ligne « Prochain examen » au-dessus de ses leçons (Leçons), sans action.
+- Personnel : « Examens à renseigner » en tête de la liste d'élèves ; chaque ligne ouvre le dossier.
+
+## 6. Reste, hors périmètre de ce lot
+
+- **Notifications** : aucune alerte à la saisie d'un examen ni de son résultat (#43/#44, le push n'est pas activé).
+- **Agenda de l'élève** : l'examen apparaît dans Leçons (« Prochain examen ») et dans sa progression ; il n'est pas une cellule de l'agenda du personnel.
+- **Qualification sur appareil** : captures, VoiceOver, texte agrandi et essai du porteur avec une vraie école.
