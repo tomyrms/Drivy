@@ -1,6 +1,6 @@
 # Pilotage, Statistiques et Finances : passe UX #397
 
-1er novembre 2026, branche `claude/pilotage-397-ux`, base `master` `ddf9329b` (pilotage #373 déployé en web seul). Web seulement : aucune modification d'API, de contrat OpenAPI, de migration, de calcul ni de droit.
+1er novembre 2026, branche `claude/pilotage-397-ux`, base `master` `ddf9329b` (pilotage #373 déployé en web seul). Fusionné par la PR #398 (`6884dcc7`) et déployé en web seul le même soir (section 8). Web seulement : aucune modification d'API, de contrat OpenAPI, de migration, de calcul ni de droit.
 
 ## 1. Méthode
 
@@ -75,7 +75,14 @@ Auto-évaluation après coup, sur les mêmes heuristiques (ce n'est pas une seco
 
 ## 7. Limites et reste à qualifier
 
-- **Non exécuté** : CI GitHub (commit `[skip ci]`), PR, déploiement ; vraie API et vraies données (aperçu synthétique seulement) ; lecteur d'écran réel (NVDA, VoiceOver), appareil physique, texte agrandi par le système ; `prefers-contrast: more` et `forced-colors` (règles écrites, pas capturées) ; test navigateur `check-school-opening.ts`.
+- **Non exécuté avant la PR** : CI GitHub et déploiement (faits ensuite, section 8) ; vraie API et vraies données (aperçu synthétique seulement) ; lecteur d'écran réel (NVDA, VoiceOver), appareil physique, texte agrandi par le système ; `prefers-contrast: more` et `forced-colors` (règles écrites, pas capturées) ; test navigateur `check-school-opening.ts`.
 - **Droits** : l'aperçu tourne en administrateur, la vue sans droit financier n'a pas été regardée ; le code des droits n'a pas changé.
 - **Restes visibles** : sur téléphone, l'aide d'un libellé long passe à la ligne ; les quatre filtres de Statistiques restent empilés (environ 320 px) ; l'onglet « Tableau de bord » et le titre de page se répètent (cadre commun du portail, hors périmètre) ; le mois sans donnée affiche toujours « 0 vs le 1er octobre » (comparaison zéro contre zéro, remarque du 1er novembre non traitée).
 - **À valider à l'œil par le porteur** : le relevé à la place des cartes ; le signe et le filet de total en Finances ; « Finances du mois » à côté de « Ce mois-ci » ; le contrôle segmenté des répartitions.
+
+## 8. Fusion et déploiement
+
+- PR #398 : CI verte (Web et BFF, contrats documentaires, test navigateur `check-school-opening.ts` sur la vraie pile OIDC · BFF · API · PostgreSQL), fusionnée en `6884dcc7`.
+- Déployé en web seul le 1er novembre 2026 vers 20 h 13, à la demande du porteur : reçu `20261101T191307Z-6884dcc7b367`, sauvegarde `/root/drivy_refonte-before-web311-20261101T191307Z.dump`, précédent `8d6350c5`. SHA servi vérifié sur https://drivy.shulker.ch/app/. Aperçu synthétique republié (`20261101T191425Z-6884dcc7b367`).
+- Retour arrière : `deploy-web-311.py --rollback 20261101T191307Z-6884dcc7b367` puis `--execute`.
+- Reste : l'essai du porteur en production avec une vraie école et ses chiffres réels.
