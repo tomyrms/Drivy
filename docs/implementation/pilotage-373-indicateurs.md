@@ -713,7 +713,7 @@ Code : `portal/pilotage/dashboard-page.tsx` (blocs), `dashboard-appointments.tsx
 
 ### 13.1 Entrée par défaut (changement visible pour tous, à valider à l'écran)
 
-L'entrée nue d'une école active ouvre maintenant le tableau de bord, plus l'agenda. Une adresse qui porte déjà un contexte d'agenda (semaine, jour, moniteur, leçon, élève, cours, séance, vue) garde son agenda, pour que les liens existants ne changent pas de destination. DRAFT, ARCHIVED, préparation de l'école et catalogue sont inchangés.
+L'entrée nue d'une école active ouvre maintenant le tableau de bord, plus l'agenda. Une adresse qui porte déjà un contexte d'agenda (semaine, jour, moniteur, leçon, élève, cours, séance, vue) garde son agenda, pour que les liens existants ne changent pas de destination. DRAFT, ARCHIVED, préparation de l'école et catalogue sont inchangés. Le test navigateur de la CI (`scripts/dev/check-school-opening.ts`) attendait l'agenda pour l'adresse d'entrée nue d'une école active : il a échoué sur la PR #395, ce qui a confirmé le changement. **Son assertion a été remplacée, pas retirée** : l'adresse d'entrée avec contexte d'agenda (`?week=…`) garde l'assertion d'origine (elle retrouve l'agenda), et l'adresse nue doit ouvrir le tableau de bord, qui doit se lire sur la vraie API sans « Lecture impossible » ni débordement mobile. Le changement vient de #376 et #377 (« accueil d'une école active »), pas d'une décision de la CI ; revenir à l'agenda par défaut ne demande que de forcer `agendaLink` dans `overview-page.tsx` et de restaurer l'ancienne assertion.
 
 ### 13.2 Blocs et sources
 
@@ -936,7 +936,8 @@ Trois défauts visuels, trouvés sur les captures et corrigés : la barre de nav
 ### 18.5 Reste, par nature
 
 - **Essai du porteur sur l'aperçu** : fait le 1er novembre 2026 (« c'est bon, j'ai testé, c'est ok »), sans correction demandée. Son retour est oral : ni capture ni liste de ce qu'il a regardé n'a été conservée.
-- **Pas de campagne CI** : les workflows GitHub (« Refonte · vérifications », « Refonte · ouverture école navigateur » avec le vrai OIDC et le vrai BFF) n'ont pas été lancés. Ouvrir une PR les lancerait ; à décider avec lui.
+- **CI de la PR #395 (premier run, `250180fd`)** : « Refonte · vérifications » verte (API sur PostgreSQL, web et BFF, intégrité documentaire, GitGuardian) ; le test navigateur « ouverture école » a échoué sur l'entrée quotidienne (voir 13.1).
+- **Pas de campagne CI (avant la PR)** : les workflows GitHub (« Refonte · vérifications », « Refonte · ouverture école navigateur » avec le vrai OIDC et le vrai BFF) n'ont pas été lancés. Ouvrir une PR les lancerait ; à décider avec lui.
 - **Aucun essai sur la vraie pile** : le navigateur n'a jamais parlé au vrai BFF et à la vraie API. L'aperçu est synthétique ; la concordance des formes est prouvée par 18.4, pas le parcours.
 - **Essais ajoutés après l'essai du porteur** (Edge, aperçu synthétique, 18 contrôles PASS, aucune erreur JavaScript) : défilement horizontal nul à 720 et 360 px de large (équivalent d'un zoom de 200 % et 400 %, obtenu par la taille de la fenêtre, **pas** par le zoom du navigateur) et en paysage 844×390 et 667×375 ; écran de chargement nommé pendant une lecture lente (2,5 s) ; erreur de lecture : message, aucun chiffre ni zéro, reprise par « Réessayer » ; réponse lente d'un ancien filtre ignorée quand un filtre plus récent a déjà répondu.
 - **Toujours non exécuté** : texte agrandi par les réglages du système, appareil physique, échec d'une mise à jour quand des chiffres sont déjà affichés (la conservation des chiffres connus tient au code, elle n'a pas été provoquée), changement d'identité pendant l'affichage.
