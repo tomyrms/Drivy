@@ -36,13 +36,14 @@ import XCTest
         capture(app, "Réaction confirmée, saisie conservée — synthétique")
     }
 
-    /// Le nom garde l'ancien délai : la réponse est retardée de `delay` (8 s) et non de 5 s, pour que le retrait parte
-    /// AVANT elle avec de la marge. Avec 5 s, la tape de retrait tombait 4,3 à 8,9 s après l'ajout (XCTest coûte plus d'une
-    /// seconde par requête : capsule, menu fermé, bulle), donc au moment même où la réponse est traitée : sur 14 runs,
-    /// tous les échecs « Retrait local immédiat » sont dans la fenêtre de 5,2 à 5,8 s, aucun en dehors
-    /// (docs/implementation/tests-ui-instables-20261101.md).
+    /// Le nom garde l'ancien délai de 5 s : la réponse à l'ajout est désormais retardée de 15 s. Avec 5 s, le retrait devait
+    /// partir moins de 5 s après l'ajout, ce que XCTest ne tient pas (capsule, menu fermé et résolution de la bulle coûtent plus
+    /// d'une seconde chacun : écart médian mesuré 5,6 s sur 21 runs). Le retrait tombait donc au moment même où la réponse
+    /// est traitée, et les 7 échecs « Retrait local immédiat » sont tous dans cette fenêtre (5,2 à 5,8 s). À 15 s le retrait
+    /// part plusieurs secondes avant la réponse : le scénario (ancienne confirmation arrivant après le retrait) est celui du nom.
+    /// Détail : docs/implementation/tests-ui-instables-20261101.md.
     func testFiveSecondResponseCannotReintroduceAQuicklyRemovedReaction() {
-        let delay = 8
+        let delay = 15
         let app = launch(delay: delay)
         let started = react(in: app)
         let capsule = heart(in: app)
@@ -50,10 +51,11 @@ import XCTest
         let visualSeconds = Date().timeIntervalSince(started)
         assertMenuClosed(app)
         target(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 12)).tap()
+        let removalSeconds = Date().timeIntervalSince(started)
         XCTAssertTrue(heart(in: app).waitForNonExistence(timeout: 2), "Retrait local immédiat")
         // Deux réponses retardées : l'ajout ancien (à `delay`), puis le retrait sérialisé (à 2 × `delay`). La fenêtre part de
         // l'ajout et non du retrait : elle couvre les deux réponses quelle que soit la lenteur du runner avant la tape.
-        let deadline = started.addingTimeInterval(Double(2 * delay) + 4)
+        let deadline = started.addingTimeInterval(Double(2 * delay) + 8)
         while Date() < deadline {
             XCTAssertFalse(heart(in: app).exists, "L'ancienne confirmation ne réaffiche pas la réaction")
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
@@ -62,6 +64,9 @@ import XCTest
         XCTAssertFalse(app.descendants(matching: .any)["messaging.mutation.slow"].firstMatch.exists)
         XCTAssertFalse(app.buttons["messaging.mutation.rejected"].firstMatch.exists)
         record(visualSeconds: visualSeconds, confirmationSeconds: nil, injectedDelay: delay)
+        // La preuve que le scénario visé a eu lieu : le retrait précède la réponse retardée de l'ajout.
+        let order = XCTAttachment(string: "Retrait envoyé \(removalSeconds) s après l'ajout ; réponse retardée à \(delay) s.")
+        order.name = "Ordre retrait / réponse"; order.lifetime = .keepAlways; add(order)
         capture(app, "Retrait conservé après réponses retardées — synthétique")
     }
 
