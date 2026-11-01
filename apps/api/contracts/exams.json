@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:exams:1",
+  "$comment": "Extension du 1er novembre 2026 (#54). Routes sous /v1/schools/{schoolId} : GET trainings/{trainingId}/exams, POST trainings/{trainingId}/exams (201), POST exams/{examId}/update, /postpone et /result (If-Match, 200), GET exams/{examId}/revisions (personnel), GET exams?filter=PENDING_RESULT|UPCOMING (examens prévus de l'école dans le périmètre de lecture : résultat à renseigner, ou à venir pour l'agenda de l'élève). OpenAPI canonique 3.11.0 conservé. Saisie manuelle du personnel (ADMIN, ou moniteur actuellement affecté à la formation) ; l'élève lit seulement les examens de ses formations. Un examen est une tentative : un report garde la tentative d'origine (POSTPONED) et en ouvre une nouvelle. Une date passée ne devient jamais un résultat : needsResult l'indique, le résultat est saisi, corrigé avec motif obligatoire, et chaque écriture laisse une révision signée. Une seule tentative SCHEDULED et une seule PASSED par formation et épreuve. L'accompagnement (escort) est facultatif ; présent, il occupe le moniteur affecté dans l'agenda commun et un chevauchement est refusé (EXAM_ESCORT_CONFLICT). Aucune inscription officielle, transmission, attestation ni taux de réussite.",
+  "$defs": {
+    "Escort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instructorMembershipId", "startsAt", "endsAt"],
+      "properties": {
+        "instructorMembershipId": {"type": "string", "format": "uuid"},
+        "startsAt": {"type": "string", "format": "date-time"},
+        "endsAt": {"type": "string", "format": "date-time", "description": "Après startsAt, 12 heures au plus."}
+      }
+    },
+    "Schedule": {
+      "type": "object",
+      "required": ["startsAt", "timeZone"],
+      "properties": {
+        "startsAt": {"type": "string", "format": "date-time", "description": "Entre trois ans dans le passé et deux ans dans le futur."},
+        "timeZone": {"type": "string", "description": "Fuseau de l'école ; tout autre fuseau est refusé (INVALID_TIME_ZONE)."},
+        "location": {"type": "string", "maxLength": 200, "default": ""},
+        "escort": {"oneOf": [{"$ref": "#/$defs/Escort"}, {"type": "null"}]}
+      }
+    },
+    "CreateCommand": {
+      "allOf": [{"$ref": "#/$defs/Schedule"}],
+      "type": "object",
+      "required": ["operationId", "kind"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}, "kind": {"type": "string", "enum": ["THEORY", "PRACTICAL"]}}
+    },
+    "UpdateCommand": {
+      "allOf": [{"$ref": "#/$defs/Schedule"}],
+      "type": "object",
+      "required": ["operationId"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}, "reason": {"type": "string", "maxLength": 1000}}
+    },
+    "PostponeCommand": {
+      "allOf": [{"$ref": "#/$defs/Schedule"}],
+      "type": "object",
+      "required": ["operationId"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}, "reason": {"type": "string", "maxLength": 1000}}
+    },
+    "ResultCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "result"],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "result": {"type": "string", "enum": ["PASSED", "FAILED", "ABSENT"]},
+        "note": {"type": "string", "maxLength": 1000, "description": "Points à travailler ; lus par l'élève."},
+        "reason": {"type": "string", "maxLength": 1000, "description": "Obligatoire pour corriger un résultat déjà saisi (EXAM_REASON_REQUIRED)."}
+      }
+    },
+    "Exam": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "trainingId", "kind", "categoryCode", "status", "startsAt", "timeZone", "location", "escort", "resultNote", "resultRecordedAt", "postponedToExamId", "attempt", "needsResult", "version", "createdAt"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "trainingId": {"type": "string", "format": "uuid"},
+        "kind": {"type": "string", "enum": ["THEORY", "PRACTICAL"]},
+        "categoryCode": {"type": "string"},
+        "status": {"type": "string", "enum": ["SCHEDULED", "POSTPONED", "ABSENT", "PASSED", "FAILED"], "description": "ABSENT n'est ni un échec ni une réussite."},
+        "startsAt": {"type": "string", "format": "date-time"},
+        "timeZone": {"type": "string"},
+        "location": {"type": "string"},
+        "escort": {"oneOf": [{"$ref": "#/$defs/Escort"}, {"type": "null"}]},
+        "resultNote": {"type": "string"},
+        "resultRecordedAt": {"type": ["string", "null"], "format": "date-time"},
+        "postponedToExamId": {"type": ["string", "null"], "format": "uuid"},
+        "attempt": {"type": ["integer", "null"], "minimum": 1, "description": "Rang de la tentative dans son épreuve ; null pour un examen reporté."},
+        "needsResult": {"type": "boolean", "description": "Prévu et dont la date est passée : le résultat reste à renseigner, il n'est jamais déduit."},
+        "version": {"type": "integer", "minimum": 1, "description": "À renvoyer dans If-Match."},
+        "createdAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "Summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "passed", "attempts", "scheduledExamId"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["THEORY", "PRACTICAL"]},
+        "passed": {"type": "boolean"},
+        "attempts": {"type": "integer", "minimum": 0},
+        "scheduledExamId": {"type": ["string", "null"], "format": "uuid"}
+      }
+    },
+    "State": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trainingId", "canManage", "escortCandidates", "exams", "summary"],
+      "properties": {
+        "trainingId": {"type": "string", "format": "uuid"},
+        "canManage": {"type": "boolean", "description": "Vrai pour l'administration et le moniteur affecté à la formation."},
+        "escortCandidates": {
+          "type": "array",
+          "maxItems": 50,
+          "description": "Moniteurs actifs actuellement affectés à la formation, proposables à l'accompagnement ; vide pour qui ne peut pas la gérer.",
+          "items": {"type": "object", "additionalProperties": false, "required": ["membershipId", "displayName"], "properties": {"membershipId": {"type": "string", "format": "uuid"}, "displayName": {"type": "string"}}}
+        },
+        "exams": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/Exam"}, "description": "Du plus récent au plus ancien."},
+        "summary": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/Summary"}}
+      }
+    },
+    "StateEnvelope": {
+      "type": "object",
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {"data": {"$ref": "#/$defs/State"}, "requestId": {"type": "string"}, "serverTime": {"type": "string", "format": "date-time"}}
+    },
+    "ListEnvelope": {
+      "type": "object",
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filter", "items"],
+          "properties": {
+            "filter": {"type": "string", "enum": ["PENDING_RESULT", "UPCOMING"]},
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {"type": "object", "additionalProperties": false, "required": ["exam", "learnerId", "learnerDisplayName"], "properties": {"exam": {"$ref": "#/$defs/Exam"}, "learnerId": {"type": "string", "format": "uuid"}, "learnerDisplayName": {"type": "string"}}},
+              "description": "À renseigner : du plus récent au plus ancien. À venir : du plus proche au plus lointain."
+            }
+          }
+        },
+        "requestId": {"type": "string"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    },
+    "RevisionsEnvelope": {
+      "type": "object",
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["examId", "items"],
+          "properties": {
+            "examId": {"type": "string", "format": "uuid"},
+            "items": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["revision", "action", "status", "startsAt", "timeZone", "location", "resultNote", "actorMembershipId", "reason", "createdAt"],
+                "properties": {
+                  "revision": {"type": "integer", "minimum": 1},
+                  "action": {"type": "string", "enum": ["CREATED", "UPDATED", "POSTPONED", "RESULT_RECORDED", "RESULT_CORRECTED"]},
+                  "status": {"type": "string", "enum": ["SCHEDULED", "POSTPONED", "ABSENT", "PASSED", "FAILED"]},
+                  "startsAt": {"type": "string", "format": "date-time"},
+                  "timeZone": {"type": "string"},
+                  "location": {"type": "string"},
+                  "resultNote": {"type": "string"},
+                  "actorMembershipId": {"type": "string", "format": "uuid"},
+                  "reason": {"type": "string"},
+                  "createdAt": {"type": "string", "format": "date-time"}
+                }
+              }
+            }
+          }
+        },
+        "requestId": {"type": "string"},
+        "serverTime": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

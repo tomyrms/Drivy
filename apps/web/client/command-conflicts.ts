@@ -15,6 +15,9 @@ export function commandConflictKeys(command: SchoolCommand): readonly string[] {
   if (['createAvailabilityRule', 'updateAvailabilityRule', 'removeAvailabilityRule', 'createClosure', 'removeClosure',
     'createCourseSeries', 'updateCourseSeries', 'publishCourseSeries', 'changeCourseCapacity', 'staffEnrollCourse',
     'staffCancelCourseEnrollment', 'cancelCourseSeries', 'rescheduleCourseSeries', 'createLesson', 'moveLesson', 'cancelLesson'].includes(kind)) return ['planning'];
+  // Un accompagnement occupe l'agenda du moniteur comme une leçon ; un résultat ne touche que les examens.
+  if (['createExam', 'updateExam', 'postponeExam'].includes(kind)) return ['exams', 'planning'];
+  if (kind === 'setExamResult') return ['exams'];
   if (kind === 'createCourseType') return ['course-types'];
   // Attendance, payment and completion currently return a common roster projection.
   if (['recordCourseAttendance', 'recordCoursePayment', 'voidCoursePayment', 'validateCourse', 'revokeCourseCompletion'].includes(kind)) return ['course-facts'];

@@ -12,7 +12,7 @@ extension SchoolCommandKind {
     var schedulingDomain: SchoolCommandDomain {
         if self == .savePlanningDefaults { return .planningPreferences }
         if isInvitation { return .invitations }
-        if isPlanning || isReport || isObservation { return .teaching }
+        if isPlanning || isReport || isObservation || isExam { return .teaching }
         // Configuration, contrats, catalogue, profils et droits peuvent partager la version de l'école
         // ou modifier les prérequis des autres commandes. Aucun parallélisme supposé entre ces écritures.
         return .school

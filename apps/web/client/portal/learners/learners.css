@@ -201,3 +201,20 @@
   .student-prerequisite-dialog { max-height: calc(100dvh - 24px); }
 }
 @media (prefers-reduced-motion: reduce) { .student-directory-row { transition: none; } }
+
+/* Examens (#54) : une ligne par tentative, l'état à droite, les actions sous lui. */
+.exam-schedule-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.exam-list { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.exam-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.exam-main { display: grid; gap: 2px; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+.exam-main > span { color: var(--muted-foreground); font-size: 0.875rem; }
+.exam-side { display: grid; justify-items: end; gap: 8px; }
+.exam-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.exam-escort-toggle { display: flex; align-items: center; gap: 8px; }
+.exam-pending { margin-bottom: 16px; }
+.exam-pending .exam-row { padding: 0; }
+.exam-pending-open.ui-button { display: flex; width: 100%; justify-content: space-between; height: auto; min-height: 44px; padding-block: 10px; text-align: left; }
+@media (max-width: 640px) {
+  .exam-side { justify-items: start; }
+  .exam-actions { justify-content: flex-start; }
+}

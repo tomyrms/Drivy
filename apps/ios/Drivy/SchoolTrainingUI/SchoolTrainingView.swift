@@ -926,6 +926,9 @@ private struct SchoolTrainingContent: View {
                         schoolTimeZone: zone, grouped: groupsBlocks) { opened = OpenedLesson(id: $0) }
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
+                    // Examens de la formation (#54) : prévus, reportés, résultats saisis par le personnel.
+                    SchoolTrainingExamsSection(training: model, schoolTimeZone: zone)
+                        .id("exams-\(model.trainingID.uuidString)")
                 }
             }
         }

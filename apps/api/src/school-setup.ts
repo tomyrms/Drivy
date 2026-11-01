@@ -10,6 +10,7 @@ import { authorizeOutcomeOperation } from './lesson-outcomes.js';
 import { authorizeSharingOperation } from './sharing.js';
 import { authorizeMessagingOperation } from './messaging-commands.js';
 import { authorizeLessonChangeOperation } from './lesson-change-requests.js';
+import { authorizeExamOperation } from './exams.js';
 import type { TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
 import { ApiError, notFound } from './errors.js';
@@ -154,6 +155,7 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
       const sharingCommand=await authorizeSharingOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
       const messagingCommand=await authorizeMessagingOperation(db,{schoolId,personId:actor.personId,membershipId:member.id},result.rows[0].commandType,result.rows[0].resourceId);
       const lessonChangeCommand=await authorizeLessonChangeOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
+      const examCommand=await authorizeExamOperation(db,schoolId,result.rows[0].commandType,result.rows[0].resourceId);
       const invitationCommand=['CREATE_INVITATION','RESEND_INVITATION','REVOKE_INVITATION'].includes(result.rows[0].commandType);
       const profileCommand=['UPDATE_ADMINISTRATIVE_PROFILE','UPDATE_LEARNER'].includes(result.rows[0].commandType);
       const onboardingCommand=['SAVE_ONBOARDING','COMPLETE_ONBOARDING'].includes(result.rows[0].commandType);
@@ -169,7 +171,7 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
         const progress=(await db.query<{kind:string}>('SELECT kind FROM drivy.onboarding_progress WHERE school_id=$1 AND id=$2',[schoolId,result.rows[0].resourceId])).rows[0];
         if(!progress || !(progress.kind==='STUDENT'?member.roles.includes('LEARNER'):member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role)))) throw notFound();
       }
-      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !observationThemesCommand && !observationRankingCommand && !planningCommand && !reportCommand && !captureCommand && !captureObservationCommand && !permitCommand && !outcomeCommand && !sharingCommand && !messagingCommand && !lessonChangeCommand)
+      if (!member.roles.includes('ADMIN') && !(invitationCommand && member.roles.includes('INSTRUCTOR')) && result.rows[0].commandType!=='ACCEPT_INVITATION' && !profileCommand && !onboardingCommand && !(trainingCommand && member.roles.includes('INSTRUCTOR')) && !ownMemberChange && !observationThemesCommand && !observationRankingCommand && !planningCommand && !reportCommand && !captureCommand && !captureObservationCommand && !permitCommand && !outcomeCommand && !sharingCommand && !messagingCommand && !lessonChangeCommand && !examCommand)
         throw new ApiError(403,'SETUP_ACCESS_REQUIRED','Les droits nécessaires à cette opération ne sont plus disponibles.');
       return {...result.rows[0],committedAt:result.rows[0].committedAt.toISOString()};
     });
