@@ -480,6 +480,9 @@ struct SchoolHomeView: View {
             .schoolLearnerCourses(client: section == .lessons && workspace.school?.status == "ACTIVE" ? agendaClient?.courseClient : nil,
                 schoolID: section == .lessons ? workspace.membership?.schoolId : nil,
                 timeZone: workspace.school?.timeZone ?? "Europe/Zurich")
+            // Examens (#54) : le prochain examen prévu, dans Leçons seulement.
+            .schoolLearnerExams(client: section == .lessons && workspace.school?.status == "ACTIVE" ? agendaClient?.examClient : nil,
+                schoolID: section == .lessons ? workspace.membership?.schoolId : nil)
         }
     }
 

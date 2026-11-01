@@ -39,6 +39,10 @@ extension SchoolCommandKind {
         case .startLessonNow: "Leçon sans rendez-vous"
         case .startLesson: "Début de la leçon"
         case .savePlanningDefaults: "Préférences de planification"
+        case .createExam: "Nouvel examen"
+        case .updateExam: "Date d’un examen"
+        case .postponeExam: "Report d’un examen"
+        case .setExamResult: "Résultat d’un examen"
         }
     }
 }
