@@ -37,7 +37,7 @@ Les commandes passent par `schoolCommand` : clé d'idempotence, reçu `GET opera
 
 ## 4. Non fait, à qualifier
 
-- **Aucune vérification exécutée** : ni typage, ni tests API sur PostgreSQL (`lesson-change-requests.integration.test.ts` écrit, jamais lancé), ni compilation Swift (pas de chaîne Swift sous Windows), ni tests Swift (`SchoolLessonChangeTests`), ni captures. La migration et ses politiques de sécurité par ligne n'ont jamais tourné.
+- **Exécuté** : typage API, 12 tests d'intégration sur PostgreSQL 17 (`lesson-change-requests.integration.test.ts`, contrat compris) dont la migration et ses politiques de sécurité par ligne, compilation de l'app, tests métier Swift (suite complète, `SchoolLessonChangeTests` compris). **Jamais vu tourner** : les écrans iOS (feuilles de demande et de refus, section de la fiche) : ni parcours UI, ni capture, ni appareil, ni VoiceOver.
 - **Web** : aucune boîte de demandes dans la console d'administration ; l'administration répond depuis l'app, ou déplace / annule sans désigner la demande (elle devient alors caduque).
 - **Notifications** : aucune alerte au moniteur à la demande, ni à l'élève à la réponse (#43/#44 : le push n'est pas activé). Les demandes se lisent en ouvrant la leçon.
 - **Persistance** : les trois gestes de l'élève et le refus ne sont pas dans la file locale chiffrée ; la reprise après arrêt forcé n'existe pas pour eux. Accepter passe par la planification, qui a sa propre file.

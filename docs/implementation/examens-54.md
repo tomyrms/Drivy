@@ -1,6 +1,6 @@
 # Suivi des examens théorique et pratique (issue #54)
 
-1er novembre 2026, branche `claude/examens-54`, base `master` `d4257f07`. Extension hors contrat canonique (OpenAPI 3.11.0 conservé) : [contracts/exams.json](../../apps/api/contracts/exams.json). Aucun test, typage ni compilation n'a été lancé pour ce lot, à la demande du porteur ; rien n'est déployé.
+1er novembre 2026, branche `claude/examens-54`, base `master` `d4257f07`. Extension hors contrat canonique (OpenAPI 3.11.0 conservé) : [contracts/exams.json](../../apps/api/contracts/exams.json). Qualifié le 2 novembre 2026 avec les lots #400 et #52 ou #54 dans la PR #401 (entrée de livraison de STATUS.md).
 
 ## 1. Décisions du porteur (1er novembre 2026)
 

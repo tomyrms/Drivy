@@ -14,8 +14,8 @@
 - **Aperçu synthétique** (`access-preview.tsx`) : `?droits=activite` ouvre l'aperçu comme un moniteur qui a le droit d'activité sans l'administration, sans le droit financier et sans l'export. C'est un moyen de regarder la vue, pas un contrôle d'accès : le serveur relit les droits.
 - **Contraste accru** (`pilotage.css`) : il n'y avait aucune règle `prefers-contrast: more` dans Pilotage (seulement `forced-colors`), contrairement à ce que laissait entendre l'issue. Ajout d'un bloc qui donne aux filets décoratifs (relevé, listes, jours, graphiques, onglets) et aux axes la couleur de contrôle `--input`, lisible à 3:1, et un contour à la barre de répartition. Le mouvement du chevron des filtres est coupé avec `prefers-reduced-motion`.
 
-## 3. Non exécuté
+## 3. Vérification
 
-Aucun test, aucun typage, aucune capture n'a été lancé pour ce lot, à la demande du porteur. À qualifier à son ordre : typage et tests web (dont un test du libellé coupé et du bouton de filtres), captures à 390 px et 1440 px, clair et sombre, `?droits=activite`, `prefers-contrast: more` et `forced-colors` émulés dans Edge.
+Exécuté le 2 novembre 2026 : typage web, 603 tests web (dont celui de la comparaison zéro contre zéro), build d'aperçu, puis 16 contrôles dans Edge sur l'aperçu synthétique : filtres repliés sur 390 px et en ligne sur 1440 px, bouton qui les ouvre, aucune icône d'aide seule sur sa ligne (13 libellés), aucune comparaison « 0 vs » au tableau de bord, « Finances du mois » et onglet Finances absents avec `?droits=activite`, filets en couleur de contrôle sous `prefers-contrast: more` émulé. Script : `.local/captures-exams/pilotage-400.py` (non versionné). **Non exécuté** : `forced-colors`, clair/sombre comparés avant/après.
 
 Les vérifications de l'issue qui exigent un tiers restent ouvertes : parcours authentifié en production avec une vraie école, lecteur d'écran réel (NVDA, VoiceOver), appareil physique et texte agrandi par le système. Le jugement à l'œil du porteur (relevé, signe + et filet de total, « Finances du mois » à côté de « Ce mois-ci », contrôle segmenté) lui revient.
