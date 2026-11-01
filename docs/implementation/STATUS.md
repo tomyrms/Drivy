@@ -1,5 +1,28 @@
 # État de la réalisation
 
+## 2 novembre 2026 — Livraison #400, #52 et #54 qualifiée (PR #401, `claude/livraison-400-52-54`)
+
+- Les trois lots écrits sans test le 1er novembre ont été réunis puis qualifiés ensemble, à l'ordre du porteur (« test et déploie »). Détail : [pilotage-400-restes.md](pilotage-400-restes.md), [demandes-eleve-lecon-52.md](demandes-eleve-lecon-52.md), [examens-54.md](examens-54.md). #54 est complétée avant la qualification : gestion web (onglet Examens du dossier, examens à renseigner dans l'annuaire), moniteurs d'accompagnement proposés, liste transversale côté API, file chiffrée des gestes sur iOS, « Prochain examen » dans Leçons et examens à renseigner dans la liste d'élèves du personnel.
+- **Une défaillance trouvée par la CI** : la migration `20261101b_exams` étend la contrainte d'occupation créée par la 042 ; elle doit être différée avec les migrations de cours dans le harnais et dans `course-upgrade.integration.test.ts`. Corrigé, puis CI verte.
+- **Exécuté** : API, typage et suite complète sur PostgreSQL 17 en CI (« Refonte · vérifications » verte sur `f1993908`), dont 12 tests d'examens, 12 de demandes d'élève et le test de montée de version des cours ; en local, régression leçons et cours (57 tests). Web : typage, 603 tests, build d'aperçu, 34 contrôles dans Edge sur l'aperçu synthétique pour les examens (1440 et 390 px : prévoir, reporter, correction avec motif, résultat, annuaire) et 16 pour #400. Test navigateur « ouverture école » vert. iOS : compilation de l'IPA (run 41358510210) et suite complète des tests métier Swift (run 41358526677) réussies sur `02f17cb8`.
+- **Non exécuté** : parcours UI iOS (XCUITest), captures iPhone et iPad, VoiceOver, appareil physique, `forced-colors`, essai avec une vraie école. Les écrans iOS des demandes d'élève et des examens n'ont jamais été vus tourner.
+
+## 1er novembre 2026 — Suivi des examens théorique et pratique (#54, `claude/examens-54`)
+
+- **Qualifié le 2 novembre 2026** (PR #401, voir l'entrée de livraison ci-dessus). Règles validées par le porteur : saisie par l'administration et le moniteur affecté, l'élève lit ; une date passée se lit « Résultat à renseigner » et n'est jamais un résultat ; accompagnement facultatif qui occupe l'agenda du moniteur ; statuts Prévu, Reporté, Absent, Réussi, Échoué. Détail : [examens-54.md](examens-54.md).
+- **Livré dans le code** : migration `20261101b_exams.sql` (tables `exam` et `exam_revision` à sécurité par ligne forcée, occupation d'agenda étendue à l'accompagnement), routes `exams.ts`, contrat `exams.json`, client et section « Examens » iOS, test d'intégration API et tests Swift écrits.
+- **Reste** : toute la qualification (migration sur PostgreSQL, tests API, compilation et tests Swift, captures, essai sur appareil), la gestion web, l'agenda personnel de l'élève, les notifications, la liste transversale des résultats à renseigner.
+## 1er novembre 2026 — Demandes de l'élève sur sa leçon : déplacement et annulation (#52, `claude/eleve-demande-52`)
+
+- **Qualifié le 2 novembre 2026** (PR #401, voir l'entrée de livraison ci-dessus). Règles par défaut validées par le porteur : une demande ne change rien, le créneau d'origine reste valable jusqu'à la réponse ; déplacement (disponibilités obligatoires) ou annulation (motif facultatif) ; une seule demande en attente, retirable ; échéance lue dans la procédure approuvée, jamais inventée, aucun frais ; le personnel refuse, ou accepte par le déplacement / l'annulation existants (`changeRequestId`). Détail : [demandes-eleve-lecon-52.md](demandes-eleve-lecon-52.md).
+- **Livré dans le code** : migration `20261101_lesson_change_requests.sql` (table à sécurité par ligne forcée, fonctions de portée, reçus et audit), routes `lesson-change-requests.ts`, contrat `lesson-change-requests.json`, client et feuilles iOS (fiche de la leçon, élève et personnel), test d'intégration API et tests Swift écrits.
+- **Reste** : toute la qualification (migration sur PostgreSQL, tests API, compilation et tests Swift, captures, essai sur appareil), la boîte web de l'administration, les notifications (#43/#44), la file locale durable des gestes de l'élève.
+## 1er novembre 2026 — Pilotage : restes de la passe #397 (`claude/pilotage-400-restes`)
+
+- **Web seulement**, aucune modification d'API, de calcul ni de droit. Trois défauts visibles corrigés : l'icône d'aide reste collée au dernier mot d'un libellé long sur téléphone ; Permis et prestation se replient derrière un bouton sur téléphone (Période et Moniteur restent visibles, bouton ouvert d'office si l'adresse porte un de ces filtres) ; un mois sans donnée n'affiche plus « 0 vs le 1er octobre » (zéro contre zéro, la règle du serveur ne change pas). Détail : [pilotage-400-restes.md](pilotage-400-restes.md).
+- **Ajouts** : relevé du mois qui garde sa demi-largeur sans le droit financier ; `?droits=activite` dans l'aperçu synthétique pour regarder cette vue ; premières règles `prefers-contrast: more` de Pilotage (il n'y en avait pas).
+- **Qualifié le 2 novembre 2026** (PR #401) : typage, 603 tests web, contrôles dans Edge sur l'aperçu. Les vérifications qui exigent un tiers (production avec une vraie école, lecteur d'écran, appareil physique) restent ouvertes dans l'issue #400, qui n'est pas fermée.
+
 ## 1er novembre 2026 — Pilotage #397 déployé sur le homelab (web seulement, `6884dcc7`)
 
 - **PR #398 fusionnée** (`6884dcc7b367de46ecc03c9c6466afdc1966069a`, commit de fusion) après sa CI verte : Web et BFF, contrats documentaires, test navigateur Chromium · OIDC · BFF · API · PostgreSQL (run 41340204335). CI de master sur `6884dcc7` verte (runs 41340497778 et 41340497682). Issue #397 laissée ouverte.

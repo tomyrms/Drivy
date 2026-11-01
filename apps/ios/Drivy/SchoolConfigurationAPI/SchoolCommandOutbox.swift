@@ -40,6 +40,15 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case recordPermitCheck, markNoShow
     case startLessonNow, startLesson
     case savePlanningDefaults
+    /// Examens théorique et pratique d'une formation (#54).
+    case createExam, updateExam, postponeExam, setExamResult
+
+    var isExam: Bool {
+        switch self {
+        case .createExam, .updateExam, .postponeExam, .setExamResult: true
+        default: false
+        }
+    }
 
     var isObservation: Bool {
         switch self {
@@ -78,7 +87,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
-    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation }
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation && !isExam }
 
     var isInvitation: Bool {
         switch self {
@@ -131,6 +140,10 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .startLessonNow: "START_LESSON_NOW"
         case .startLesson: "START_LESSON"
         case .savePlanningDefaults: "SAVE_PLANNING_DEFAULTS"
+        case .createExam: "CREATE_EXAM"
+        case .updateExam: "UPDATE_EXAM"
+        case .postponeExam: "POSTPONE_EXAM"
+        case .setExamResult: "SET_EXAM_RESULT"
         }
     }
 
@@ -162,6 +175,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .createObservation, .updateObservation, .removeObservation: "GeoObservation"
         case .recordPermitCheck: "PermitCheck"
         case .savePlanningDefaults: "PlanningDefaults"
+        case .createExam, .updateExam, .postponeExam, .setExamResult: "Exam"
         }
     }
 }
@@ -204,8 +218,13 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
 
     var hasValidTarget: Bool {
         if let observationUndoOperationID, kind != .createObservation || observationUndoOperationID == id { return false }
-        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && (routeResourceID != nil || expectedVersion != nil) { return false }
+        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && !kind.isExam && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
+        case .createExam:
+            // La création vise la formation (route) ; l'examen n'a pas encore d'identifiant.
+            return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
+        case .updateExam, .postponeExam, .setExamResult:
+            return (1...2_147_483_647).contains(resourceVersion) && resourceID != nil && routeResourceID != nil && expectedVersion == nil
         case .savePlanningDefaults:
             return resourceVersion > 0 && resourceID == scope.membershipID && routeResourceID == nil && expectedVersion == nil
         case .createObservation:

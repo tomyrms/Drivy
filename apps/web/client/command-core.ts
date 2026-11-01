@@ -21,7 +21,8 @@ export type CommandKind =
   | 'createFormation' | 'saveFormationProgramme' | 'saveTariff' | 'reviseSharedTerms'
   | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity'
   | 'staffEnrollCourse' | 'staffCancelCourseEnrollment' | 'cancelCourseSeries' | 'rescheduleCourseSeries' | 'saveCoursePolicy'
-  | 'recordCourseAttendance' | 'recordCoursePayment' | 'voidCoursePayment' | 'validateCourse' | 'revokeCourseCompletion';
+  | 'recordCourseAttendance' | 'recordCoursePayment' | 'voidCoursePayment' | 'validateCourse' | 'revokeCourseCompletion'
+  | 'createExam' | 'updateExam' | 'postponeExam' | 'setExamResult';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -93,6 +94,11 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   voidCoursePayment: { operationType: 'VOID_COURSE_PAYMENT', resourceType: 'CoursePayment', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Annulation d’un règlement' },
   validateCourse: { operationType: 'VALIDATE_COURSE', resourceType: 'CourseCompletion', target: 'created', method: 'POST', expectedStatus: 201, label: 'Validation d’un cours' },
   revokeCourseCompletion: { operationType: 'REVOKE_COURSE_COMPLETION', resourceType: 'CourseCompletion', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une validation' },
+  // Examens théorique et pratique (#54) : chaque réponse renvoie les examens à jour de la formation.
+  createExam: { operationType: 'CREATE_EXAM', resourceType: 'Exam', target: 'created', method: 'POST', expectedStatus: 201, label: 'Planification d’un examen' },
+  updateExam: { operationType: 'UPDATE_EXAM', resourceType: 'Exam', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Modification d’un examen' },
+  postponeExam: { operationType: 'POSTPONE_EXAM', resourceType: 'Exam', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Report d’un examen' },
+  setExamResult: { operationType: 'SET_EXAM_RESULT', resourceType: 'Exam', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Résultat d’un examen' },
 };
 
 export interface SchoolCommand {

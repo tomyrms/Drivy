@@ -103,6 +103,8 @@ final class SchoolAgendaClient {
     var planningClient: SchoolPlanningClient { SchoolPlanningClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     var reportClient: SchoolLessonReportClient { SchoolLessonReportClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     var courseClient: SchoolCourseClient { SchoolCourseClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    var lessonChangeClient: SchoolLessonChangeClient { SchoolLessonChangeClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
+    var examClient: SchoolExamClient { SchoolExamClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     var captureClient: SchoolCaptureClient { SchoolCaptureClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     var observationClient: SchoolObservationClient { SchoolObservationClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
     var observationThemeClient: SchoolObservationThemeClient { SchoolObservationThemeClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }

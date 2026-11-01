@@ -140,6 +140,8 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     }
     var reason = ""
     var cancellationReason = ""
+    /// Demande de l'élève (#52) que ce déplacement ou cette annulation accepte : l'école la ferme avec le changement.
+    var changeRequestID: UUID?
     var draftSnapshot: SchoolPlanningDraftSnapshot {
         SchoolPlanningDraftSnapshot(learnerID: learnerID, trainingID: trainingID, instructorID: instructorID, productID: productID,
             startsAt: startsAt, duration: duration, meetingPoint: meetingPoint, bufferMinutes: bufferMinutes, quantity: quantity,
@@ -619,6 +621,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             "timeZone": timeZone, "meetingPoint": meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines), "instructorMembershipId": instructorID.uuidString]
         if let lesson = originalLesson {
             body["agreementConfirmed"] = true; body["reason"] = reason
+            if let changeRequestID { body["changeRequestId"] = changeRequestID.uuidString.lowercased() }
             if changesCommercialTerms {
                 guard let selection = commercialSelection, let price = selectedPrice else { return false }
                 body["commercialChange"] = ["commercialSelection": selection, "agreedPriceCents": price,
@@ -635,7 +638,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     func cancel() async -> Bool {
         guard !writeConfirmed, let lesson = originalLesson, lesson.status == "PLANNED", !reasonTooLong,
               ["LEARNER_REQUEST", "INSTRUCTOR_UNAVAILABLE", "SCHOOL_CLOSURE", "OTHER"].contains(cancellationReason) else { return false }
-        return await submit(.cancelLesson, body: ["reasonCode": cancellationReason, "comment": reason], resourceID: lesson.id, version: lesson.version)
+        var body: [String: Any] = ["reasonCode": cancellationReason, "comment": reason]
+        if let changeRequestID { body["changeRequestId"] = changeRequestID.uuidString.lowercased() }
+        return await submit(.cancelLesson, body: body, resourceID: lesson.id, version: lesson.version)
     }
     private var commercialSelection: [String: Any]? {
         guard let product = selectedProduct else { return nil }

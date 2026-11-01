@@ -14,6 +14,8 @@ struct SchoolBrowserView: View {
     var agendaClient: SchoolAgendaClient? = nil
     var captureController: SchoolCaptureSessionController? = nil
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// Examens dont la date est passée et dont le résultat reste à renseigner (#54), pour qui gère des formations.
+    @State private var pendingExams = SchoolPendingExamsModel()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -66,6 +68,11 @@ struct SchoolBrowserView: View {
             learnerList
         }
     }
+
+    private var managesExams: Bool {
+        workspace.school?.status == "ACTIVE" && workspace.membership?.roles.contains { $0 == "ADMIN" || $0 == "INSTRUCTOR" } == true
+    }
+    private var examKey: String { "\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(managesExams)" }
 
     private var trimmedSearch: String { workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -146,6 +153,7 @@ struct SchoolBrowserView: View {
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
+            SchoolPendingExamRows(items: pendingExams.items) { workspace.selectLearner($0) }
             let references = homonymReferences
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
@@ -183,6 +191,7 @@ struct SchoolBrowserView: View {
         }
         // Retour sur l’onglet : un élève qui vient de rejoindre l’école apparaît, sans effacer la liste.
         .task { await workspace.refreshLearners() }
+        .task(id: examKey) { await pendingExams.load(client: managesExams ? agendaClient?.examClient : nil, schoolID: workspace.membership?.schoolId) }
     }
 
     @ViewBuilder private var emptyLearners: some View {

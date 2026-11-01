@@ -36,6 +36,10 @@ commandStore.scopeToPerson(ids.person);
 commandStore.scopeToAccess(ids.school, ids.admin, 1);
 // The first published link (no page parameter) keeps opening the access editor directly.
 const isFirstLink = () => !new URLSearchParams(location.search).has('page') && new URLSearchParams(location.search).get('mode') !== 'read';
+// `?droits=activite` : l'aperçu se lit comme un moniteur qui voit l'activité de l'école sans ses finances ni l'export (#400).
+const initialMembership: typeof previewMembership = new URLSearchParams(location.search).get('droits') === 'activite'
+  ? { ...previewMembership, roles: previewMembership.roles.filter(role => role !== 'ADMIN'), grants: [...previewMembership.grants.filter(grant => grant !== 'EXPORT_MANAGEMENT'), 'VIEW_SCHOOL_METRICS'] }
+  : previewMembership;
 const scenarios = [
   { value: 'normal', label: 'Enregistrement normal' }, { value: 'refused', label: 'Refus de la modification' },
   { value: 'slow', label: 'Enregistrement lent' }, { value: 'lost-reply', label: 'Réponse perdue' }, { value: 'conflict', label: 'Conflit de version' },
@@ -47,7 +51,7 @@ function Preview() {
   const Page = portalPages[route.page] ?? portalPages.equipe!;
   const [scenario, setScenario] = useState<PreviewScenario>('normal');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [membership, setMembership] = useState(previewMembership);
+  const [membership, setMembership] = useState(initialMembership);
   const drafts = useMemo(() => new Map<string, unknown>(), []);
   const cache = useMemo(() => new ScopedReadCache(), []);
   const value: ConsoleContextValue = {
