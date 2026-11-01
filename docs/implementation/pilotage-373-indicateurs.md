@@ -935,10 +935,13 @@ Trois défauts visuels, trouvés sur les captures et corrigés : la barre de nav
 
 ### 18.5 Reste, par nature
 
-- **Essai du porteur sur l'aperçu** : étape 2 de la séquence de #382. Rien d'autre ne peut la remplacer. Aucune correction ne sera intégrée avant son retour.
+- **Essai du porteur sur l'aperçu** : fait le 1er novembre 2026 (« c'est bon, j'ai testé, c'est ok »), sans correction demandée. Son retour est oral : ni capture ni liste de ce qu'il a regardé n'a été conservée.
 - **Pas de campagne CI** : les workflows GitHub (« Refonte · vérifications », « Refonte · ouverture école navigateur » avec le vrai OIDC et le vrai BFF) n'ont pas été lancés. Ouvrir une PR les lancerait ; à décider avec lui.
 - **Aucun essai sur la vraie pile** : le navigateur n'a jamais parlé au vrai BFF et à la vraie API. L'aperçu est synthétique ; la concordance des formes est prouvée par 18.4, pas le parcours.
-- **Non exécuté** : zoom et texte agrandi, orientation paysage, appareil physique, chargement lent, erreur partielle provoquée, changement d'identité pendant l'affichage, course entre filtres rapides.
+- **Essais ajoutés après l'essai du porteur** (Edge, aperçu synthétique, 18 contrôles PASS, aucune erreur JavaScript) : défilement horizontal nul à 720 et 360 px de large (équivalent d'un zoom de 200 % et 400 %, obtenu par la taille de la fenêtre, **pas** par le zoom du navigateur) et en paysage 844×390 et 667×375 ; écran de chargement nommé pendant une lecture lente (2,5 s) ; erreur de lecture : message, aucun chiffre ni zéro, reprise par « Réessayer » ; réponse lente d'un ancien filtre ignorée quand un filtre plus récent a déjà répondu.
+- **Toujours non exécuté** : texte agrandi par les réglages du système, appareil physique, échec d'une mise à jour quand des chiffres sont déjà affichés (la conservation des chiffres connus tient au code, elle n'a pas été provoquée), changement d'identité pendant l'affichage.
 - **Déploiement du produit** : aucun. Le web est dans le delta d'un futur déploiement (aucune migration nouvelle : la 60e, `20261031_pilotage_metrics`, est déjà sur le homelab). Il demandera sauvegarde, retour arrière et son accord.
 - **Clôture** : #373 et ses lots ne sont pas fermés. Les cases de l'index de #373 restent ouvertes tant que l'essai et l'intégration n'ont pas eu lieu.
 - **Retour arrière de l'aperçu** : `python scripts/homelab/deploy-preview-311.py --rollback 20261101T153438Z-27a5a4e2612d` (puis `--execute`) ; la version précédente `ce3b3559` est conservée.
+
+Mode d'emploi destiné à la direction de l'école : [pilotage-373-utilisation.md](pilotage-373-utilisation.md).
