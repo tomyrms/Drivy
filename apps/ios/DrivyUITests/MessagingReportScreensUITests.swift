@@ -86,17 +86,25 @@ final class MessagingReportScreensUITests: XCTestCase {
         general.tap()
         let options = app.buttons["messaging.options"]
         XCTAssertTrue(options.waitForExistence(timeout: 15), app.debugDescription)
+        // Le fil avant la sélection : sert de référence pour juger la mise en page de la sélection.
+        capture("06a-fil-avant-selection")
         options.tap()
         let startReport = app.buttons["Signaler des messages"]
         XCTAssertTrue(startReport.waitForExistence(timeout: 10), app.debugDescription)
         startReport.tap()
 
+        // Les lignes de sélection portent un identifiant propre : un libellé seul vise aussi la pastille épinglée, qui
+        // répète le texte du message et ne le sélectionne pas.
         for text in ["Pensez aux papiers du permis", "Leçon de conduite confirmée"] {
-            let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            let predicate = NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "messaging.report.select.", text)
+            let row = app.buttons.matching(predicate).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 15), text + " : " + app.debugDescription)
             row.tap()
         }
         capture("06-selection-des-messages")
+        let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
+                                                            "messaging.report.select."))
+        XCTAssertEqual(selectedRows.count, 2, "Les deux messages choisis sont sélectionnés : " + app.debugDescription)
 
         let send = app.buttons["messaging.report.send"]
         XCTAssertTrue(send.waitForExistence(timeout: 10), app.debugDescription)
@@ -107,5 +115,26 @@ final class MessagingReportScreensUITests: XCTestCase {
         XCTAssertTrue(shown, "La confirmation doit s'afficher avant tout envoi : " + app.debugDescription)
         // Annuler : rien n'est transmis.
         app.buttons["Annuler"].firstMatch.tap()
+    }
+
+    // MARK: Message illisible
+
+    /// Le troisième signalement de la fixture porte un message qu'aucun appareil ne peut déchiffrer : l'écran le dit au
+    /// lieu d'afficher un texte vide ou inventé.
+    func testUnreadableReportedMessageIsStatedPlainly() {
+        let app = launch()
+        openMessages(app)
+        let entry = app.buttons["messaging.reports.open"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
+        entry.tap()
+        XCTAssertTrue(app.navigationBars["Signalements"].waitForExistence(timeout: 10), app.debugDescription)
+        let row = app.descendants(matching: .any)["messaging.reports.row.d0000000-0000-4000-8000-000000000003"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), app.debugDescription)
+        row.tap()
+        XCTAssertTrue(app.navigationBars["Signalement"].waitForExistence(timeout: 10), app.debugDescription)
+        let line = element("messaging.reports.line.", in: app)
+        XCTAssertTrue(line.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(line.label.contains("ne peut pas être lu"), "Le message illisible est dit : " + line.label)
+        capture("05b-message-illisible")
     }
 }
