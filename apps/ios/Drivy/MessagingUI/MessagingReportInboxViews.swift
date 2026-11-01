@@ -86,6 +86,11 @@ struct MessagingReportInboxView: View {
                 Text(summary(report))
                     .font(.subheadline)
                     .foregroundStyle(DrivyTheme.muted)
+                // La date a sa propre ligne : sur la même ligne que le décompte, elle se coupait au milieu
+                // (« 31 / oct. 2026 à 9:36 ») dès que le statut prenait sa place à droite.
+                Text(report.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.subheadline)
+                    .foregroundStyle(DrivyTheme.muted)
             }
             Spacer(minLength: DrivySpacing.xs)
             DrivyStatusBadge(title: report.status.title, tone: report.status.tone)
@@ -97,8 +102,7 @@ struct MessagingReportInboxView: View {
     private func summary(_ report: MessagingReportRecord) -> String {
         let count = report.items.count
         let messages = count == 1 ? "1 message" : "\(count) messages"
-        let date = report.createdAt.formatted(date: .abbreviated, time: .shortened)
-        return "\(messages) · \(kindTitle(report.conversationKind)) · \(date)"
+        return "\(messages) · \(kindTitle(report.conversationKind))"
     }
 }
 

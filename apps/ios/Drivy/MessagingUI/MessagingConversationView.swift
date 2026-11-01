@@ -930,18 +930,24 @@ private struct MessagingThreadRow: View {
                                                         @ViewBuilder content: () -> Content) -> some View {
         if thread.reporting, let wire = item.message, !wire.meta.deletedForEveryone {
             let selected = thread.reportSelection.contains(wire.id)
+            let mine = item.senderID == workspace.scope.accountID
             Button { thread.toggleReport(wire.id) } label: {
-                HStack(spacing: 0) {
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? DrivyTheme.accent : DrivyTheme.muted)
-                        .font(.title3)
-                        .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
-                        .padding(.leading, DrivySpacing.xs)
-                        .accessibilityHidden(true)
-                    content()
-                }
+                // Le rond se pose dans la marge que la bulle laisse libre (ExyteBubbleMetrics.opposite), du côté opposé à la
+                // bulle : la ligne garde toute sa largeur. Un rond placé à côté de la ligne la rétrécissait, et Exyte, qui
+                // calcule la bulle sur la largeur du fil entier, coupait alors d'une ligne un message court (« Message 17 du
+                // gén… ») et poussait le sondage hors de l'écran.
+                content()
+                    .overlay(alignment: mine ? .leading : .trailing) {
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selected ? DrivyTheme.accent : DrivyTheme.muted)
+                            .font(.title3)
+                            .padding(.horizontal, DrivySpacing.xs)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("messaging.report.select.\(wire.id.uuidString.lowercased())")
             .accessibilityAddTraits(selected ? [.isSelected] : [])
             .accessibilityHint("Sélectionne ce message pour le signalement")
         } else {

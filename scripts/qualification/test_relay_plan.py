@@ -59,9 +59,10 @@ class RelaySelectionTests(unittest.TestCase):
         return subprocess.run([BASH, '-c', command], cwd=root, env=environment,
                               capture_output=True, text=True, encoding='utf-8', timeout=15)
 
-    def test_service_required_for_full_and_all_but_not_gps_visual_or_ui(self):
+    def test_service_required_for_full_all_and_messaging_but_not_gps_visual_or_ui(self):
         root = self.temporary_root()
         cases = [(1, dict(DRIVY_IOS_FULL_CAMPAIGN='1')), (1, dict(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='all')),
+                 (1, dict(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='messaging')),
                  (0, dict(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='gps')),
                  (0, dict(DRIVY_IOS_VISUAL_ONLY='1')),
                  (0, dict(DRIVY_IOS_UI_TEST_SUITE='VisualOrientationTests'))]

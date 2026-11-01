@@ -1,58 +1,51 @@
 # Reprise des issues du 31 octobre 2026
 
-Document de reprise : ce qu'il faut savoir pour continuer si la session est coupée. Écrit le 31 octobre 2026 sur `claude/tests-83-78`. `master` est à `2a376c39` ; **rien n'est déployé, aucune IPA n'a été livrée, aucune nouvelle issue n'a été créée.** Le tri détaillé de départ est dans `.local/triage-20261031/` du clone principal (non versionné).
+Document de reprise : ce qu'il faut savoir pour continuer si la session est coupée. Mis à jour le 1er novembre 2026, `master` à `6c4f37c3`. **Toutes les PR de ce lot sont fusionnées.** Aucune IPA n'a été livrée et aucune nouvelle issue n'a été créée par ce lot ; le déploiement sur le homelab n'est pas décrit ici. Le tri détaillé de départ est dans `.local/triage-20261031/` du clone principal (non versionné).
+
+## PR fusionnées dans `master`
+
+| PR | Contenu | Fusion |
+| --- | --- | --- |
+| #337 | iOS : retours de connexion et états de Messages | `d77acb71` |
+| #338 | iOS : 19 issues indépendantes | `3199e6a5` |
+| #339 | iOS : agenda, brouillons protégés, 15 tickets | `f2664a8a` |
+| #385 | Pilotage #373 : dictionnaire (#374) et agrégations API/BFF avec export CSV (#375) | `a35176f8` |
+| #386 | Disponibilités : qui voit le motif d'une absence (#251) | `4e4e4944` |
+| #387 | Messagerie #74 : alertes de messages, préférences, ouverture depuis une alerte | `5c079a86` |
+| #388 | Messagerie #77 : signalements chiffrés pour les administrateurs, boîte de traitement | `30168a65` |
+| #389 | Tests de recette #83, #78, #73 et matrices de suivi | `3e0b4283` |
+| #390 | CI allégée : mode explicite, iPad sur demande, API et web selon les fichiers | `0974e6f1` |
+| #391 | Tests UI instables : agenda et réaction retirée | `6c4f37c3` |
+
+Les fusions sont des merge commits ; les branches sont conservées.
 
 ## Consignes qui s'appliquent
 
-- Aucun déploiement homelab, aucune « IPA d'essai · iLoader ». Pour vérifier du Swift, passer par « Refonte · iOS » en mode ciblé (`unit_only` avec `unit_test_scope`, ou `ui_test_suite`), **jamais** la campagne sans paramètre : elle se termine par `Construire l'IPA pour iLoader`.
+- Aucun déploiement homelab sans demande, aucune « IPA d'essai · iLoader » pour vérifier du Swift : passer par « Refonte · iOS » en mode ciblé (`unit_only` avec `unit_test_scope`, ou `ui_test_suite`). Depuis #390, un lancement sans mode choisi est refusé.
+- Tester uniquement le nécessaire : jamais de campagne complète, jamais de relance de ce qui est vert. Ne pas modifier `.github/workflows/` quand un autre agent y travaille.
 - Commits additifs seulement : pas de force-push, pas de `reset --soft` suivi de `add -A`, pas de `--no-verify`. Aucune clé GPG sur la machine.
 - Un test n'est vert que si le run est conclu et lu. Aucune preuve physique (GPS, APNs reçu, VoiceOver, batterie) n'est affirmée.
-- Fusionner uniquement #337, #338, #339, dans cet ordre, et seulement quand les tests métier ET les parcours UI sont verts sur la même tête de #339. Les autres PR sont ouvertes, jamais fusionnées par cette reprise.
 
-## Les branches
+## Ce qui a été fait
 
-| Branche | Contenu | État au moment de l'écriture |
-| --- | --- | --- |
-| `codex/ios-batch-15-20261029` (PR #339, empilée sur #338 puis #337) | Candidat iOS : agenda, brouillons protégés, 15 tickets | **Fusionné** dans `master` (tête `b24f2def`), voir « Fusion » |
-| `claude/pilotage-373` (PR #385) | #374 dictionnaire, #375 agrégations API/BFF et export CSV | Terminé et vert (« Refonte · vérifications » run 41224457783 sur `36cc69ef`) |
-| `claude/messagerie-74` | #74 alertes de messages, préférences, ouverture depuis une alerte | Terminé, vert (runs 41200814594 et 41200806812 sur `051a2d37`) |
-| `claude/messagerie-77` | #77 signalements chiffrés, boîte des administrateurs | API verte (run 41225134866), tests métier iPhone `all` verts sur `27b34483` (run 41227477381). Qualification bout en bout jamais faite |
-| `claude/tests-83-78` (cette branche) | #83 tests de cours, #78 test MSG-17, #73 test UI du sondage, matrices de suivi | Voir ci-dessous |
-| `claude/lot-web-20261031` (PR #386) | #251 libellé du motif d'absence | Terminé et vert (run 41203027890) |
-
-Les branches #74, #77 et tests sont empilées sur le candidat #339 (elles partent de `1bc67ae1`, avant ses deux derniers commits).
-
-État à 22 h UTC : #337, #338 et #339 sont **fusionnées** dans `master` (`d77acb71`, `3199e6a5`, `f2664a8a`). PR ouvertes, non fusionnées, toutes sur `master` : #385 (pilotage), #386 (motif d'absence #251), #387 (#74), #388 (#77, contient les commits de #74 : fusionner #387 d'abord). `claude/tests-83-78` a reçu `master` par un commit additif (`cca34052`) ; sa PR est ouverte à la suite de ce document.
-
-## Ce qui a été fait sur `claude/tests-83-78`
-
-- **#83** : cinq fichiers de tests API de cours (concurrence, fuseau et changement d'heure, push en échec, effets d'une validation, absence de paiement en ligne) et un fichier de tests web. Verts dans « Refonte · vérifications » sur `c71fbd06` (run 41201921118). Matrice `docs/qa/cours-collectifs-tracabilite.md` mise à jour : 59 critères, 19 PASS, 34 PARTIAL, 6 NOT_COVERED, complément daté en fin de fichier.
-- **#78** : `MessagingLessonIndependenceTests` (MSG-17, panne ou file pleine de la messagerie, départ, arrêt et « Signaler » continuent), vert dans les tests métier iPhone `all` sur `c71fbd06` (run 41201923959). Matrice `docs/qa/messaging-78-20261023.md` : les 18 états relevés sur ce qui a réellement tourné, relevé daté en fin de fichier.
-- **#73** : test UI du sondage (vote, changement de choix, clôture). L'échec du run 41202131542 avait deux causes : un cadre `{inf, inf}` interrogé pour sa « hittability » avant que la ligne soit posée, et un contrôle de `isEnabled` que ces lignes n'exposent pas sur le simulateur. Corrigé (`e63868aa`) : `waitFor` n'interroge la hittability qu'une fois le cadre posé, et le test vérifie le comportement après la clôture (un appui ne crée aucun vote en attente, totaux et choix inchangés). **Le test passe** dans le run 41224876858, sur iPhone et iPad.
-- Ce même run restait rouge sur `testReactionFromLongPressClosesMenuAndUpdatesCapsule` (sélecteur de la palette corrigé sur le candidat par `a1a3529a`). Après la fusion de `master` dans la branche (`cca34052`), ce seul test a été rejoué sur iPhone et iPad : **vert** (run 41242976214). Le test du sondage n'a pas été rejoué : il est vert sur `e63868aa` (run 41224876858) et la fusion n'a pas touché son code.
-
-## Fusion #337 → #338 → #339 : faite
-
-- Premier échec (run 41202251576, `a1a3529a`) : `SchoolAgendaUITests.testRefreshFailureRetainsCoursesAndSelectionUntilRetry`, iPhone seulement. La barre de navigation (y 62 à 228 sur 874) interceptait le geste parti de y 221. Correctif de test `80efe4d1`.
-- Run 41229249440 (`80efe4d1`) : le geste atteint enfin la fin du test, qui échoue alors sur un compte de boutons (1 au lieu de 2 sur iPhone : la bannière d'erreur repousse la seconde séance sous la barre d'onglets, la liste n'expose pas ce qu'elle n'affiche pas ; vu dans la vidéo du run). Défaut du test, corrigé en `b24f2def` (la conservation est contrôlée sur la première séance et la date de dernière lecture ; le compte des deux séances reste contrôlé bannière disparue). `MessagingLatencyUITests.testFiveSecond…` avait aussi échoué une fois sur iPhone ; il est passé sur iPad et dans tous les runs précédents et suivants : cas connu instable, non modifié.
-- Sur `b24f2def` : tests métier verts (run 41234900088). Parcours UI : iPhone 38 tests sur 38 verts (run 41234908420, première tentative) ; sur iPad deux tests ont échoué au lancement de l'app (`Timed out while launching application via Xcode`, avant tout geste, infrastructure) puis ont passé sur iPhone et iPad dans un run ciblé (41240538959). La tentative complète d'iPad a été annulée sur consigne du porteur (tester uniquement le nécessaire) : **l'iPad des autres suites n'a pas été rejoué sur `b24f2def`** ; il était vert sur `80efe4d1` et seul `SchoolAgendaUITests.swift` a changé (test seul, aucun code produit).
-- Fusion : merge commits, branches conservées ; #338 et #339 repointées vers `master` avant fusion ; #387 et #388 repointées vers `master` après.
-
-## Règle de test (porteur, 31 octobre)
-
-Tester uniquement le nécessaire : jamais de campagne complète, jamais de relance de ce qui est vert, toujours sans IPA. Ne pas modifier `.github/workflows/` (un autre agent y travaille sur sa branche).
+- **#83** : cinq fichiers de tests API de cours (concurrence, fuseau et changement d'heure, push en échec, effets d'une validation, absence de paiement en ligne) et un fichier de tests web. Verts dans « Refonte · vérifications » sur `c71fbd06` (run 41201921118). Matrice `docs/qa/cours-collectifs-tracabilite.md` : 59 critères, 19 PASS, 34 PARTIAL, 6 NOT_COVERED.
+- **#78** : `MessagingLessonIndependenceTests` (MSG-17 : panne ou file pleine de la messagerie, départ, arrêt et « Signaler » continuent), vert dans les tests métier iPhone `all` (run 41201923959). Matrice `docs/qa/messaging-78-20261023.md` relevée sur ce qui a réellement tourné.
+- **#73** : test UI du sondage (vote, changement de choix, clôture), corrigé puis vert sur iPhone et iPad (run 41224876858) : `waitFor` n'interroge la « hittability » qu'une fois le cadre posé, et le test vérifie le comportement après la clôture plutôt que le trait `isEnabled`, que ces lignes n'exposent pas sur le simulateur. Le test de la réaction (`testReactionFromLongPressClosesMenuAndUpdatesCapsule`) est vert après fusion de `master` (run 41242976214).
+- **Fusion #337 à #339** : le premier échec (run 41202251576) était `SchoolAgendaUITests.testRefreshFailureRetainsCoursesAndSelectionUntilRetry` sur iPhone : la barre de navigation (y 62 à 228 sur 874) interceptait le geste parti de y 221 (correctif de test `80efe4d1`). Le test échouait ensuite sur un compte de boutons (la bannière d'erreur repousse la seconde séance sous la barre d'onglets, la liste n'expose pas ce qu'elle n'affiche pas ; `b24f2def`), puis a été repris par #391 (`702865be`). Tests métier verts sur `b24f2def` (run 41234900088) ; deux tests iPad avaient échoué au lancement de l'app (`Timed out while launching application via Xcode`, infrastructure) et sont verts rejoués seuls (run 41240538959). L'iPad des autres suites n'a pas été rejoué sur `b24f2def`.
+- **#375** : mesure sur 10 064 leçons réalisées, un index manquant sur les écritures de débit corrigé (carte finance 4,7 s à 86 ms) ; export de plus de 10 000 lignes refusé d'après le seul compte. Détail en section 11 de `docs/implementation/pilotage-373-indicateurs.md`.
 
 ## Ce qui reste, par nature
 
-- **#77** : le partage de clé to-device vers un administrateur et le déchiffrement chez lui n'ont jamais été exercés de bout en bout ; aucun parcours d'interface (le signalant confirme, l'administrateur ouvre la boîte) n'est automatisé, la fixture de qualification n'a ni compte administrateur ni signalement. La conservation des preuves attend #68.
+- **#77** : voir `docs/implementation/messaging-reports-77.md`, section « Qualification du 1er novembre ». La conservation des preuves attend #68. Rien ne vaut preuve physique.
 - **#74** : aucune alerte APNs réelle reçue sur appareil ; pas de regroupement anti-rafale côté serveur.
-- **#375** : le contrat OpenAPI 3.11.0 n'est pas modifié ; le détail des séances de cours et des règlements calcule encore ses libellés par ligne ; aucun objectif de performance n'est déclaré atteint (une école, une machine locale). La migration n'est appliquée sur aucune base de production.
+- **#375** : le contrat OpenAPI 3.11.0 n'est pas modifié ; le détail des séances de cours et des règlements calcule encore ses libellés par ligne ; aucun objectif de performance n'est déclaré atteint (une école, une machine locale).
 - **#83** : alertes « prochaines sessions » (fonction non livrée), plusieurs places libérées pendant une offre, horloge client fausse, parcours navigateur de bout en bout « série créée sur le web puis inscription » : sans test. Les tests Swift et UI de cours n'ont pas été rejoués dans ce lot.
-- **#78** : tout ce qui demande un appareil (VoiceOver, grandes tailles, deux appareils, APNs réel), l'hébergement et la restauration en Suisse (#68), la revue de sécurité indépendante, la campagne finale #84 (après le retour du porteur sur l'IPA 447).
+- **#78** : tout ce qui demande un appareil (VoiceOver, grandes tailles, deux appareils, APNs réel), l'hébergement et la restauration en Suisse (#68), la revue de sécurité indépendante, la campagne finale #84.
 - Hors périmètre et non touchés : reste de l'optimistic UI, pilotage T03 à T09, #52, #54, #50, #43, #44, #99, décisions de #68, #97 et #109, campagnes #55, #84 et #131.
 
 ## Pièges rencontrés
 
-- Un heredoc bash a mangé des échappements (`\r\n` écrit comme un vrai saut de ligne) dans un fichier de tests : écrire les fichiers contenant des échappements avec l'outil Write ou Edit, relire avec `cat -A`.
+- Un heredoc bash a mangé des échappements (`\r\n` écrit comme un vrai saut de ligne, `\` de fin de ligne retiré) : écrire les fichiers contenant des échappements avec l'outil Write ou Edit, relire avec `cat -A`.
 - Les tests de capture n'appliquent que les migrations numérotées : une migration datée n'y change pas le compte de tables à RLS (resté à 67).
 - Un test d'export refusé au-delà de 10 000 lignes peut dépasser le délai de 15 s sur le serveur d'intégration si les noms sont calculés ligne par ligne ; le refus se fait maintenant d'après le seul compte.
+- Un identifiant d'appareil de messagerie est propre à une personne : un autre compte qui le réutilise obtient sa propre file, jamais celle du premier.

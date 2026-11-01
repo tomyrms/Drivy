@@ -708,6 +708,14 @@ private actor InMemoryRelay {
     private var toDeviceMessages = 0
     func claimCount() -> Int { claims }
     func toDeviceCount() -> Int { toDeviceMessages }
+    /// Administrateurs actifs de l'école, comme `GET crypto/report-recipients` : identifiants seulement.
+    private var reportRecipients: [UUID: [UUID]] = [:]
+    func setReportRecipients(_ school: UUID, _ people: [UUID]) { reportRecipients[school] = people }
+    /// Messages to-device en attente pour une personne, tous appareils confondus.
+    func queuedCount(for person: UUID) -> Int {
+        let prefix = MatrixMessagingCryptography.userID(person) + "|"
+        return inbox.filter { $0.key.hasPrefix(prefix) }.values.reduce(0) { $0 + $1.count }
+    }
     func setBackupUnavailable(_ value: Bool) { backupUnavailable = value }
 
     nonisolated func view(_ person: UUID) -> View { View(relay: self, person: person) }
@@ -746,6 +754,9 @@ private actor InMemoryRelay {
         var output: [String: Any] = [:]
         let backupOwner = "\(school)|\(user)"
         switch path.joined(separator: "/") {
+        case "report-recipients":
+            guard method == "GET" else { throw MessagingFailure.invalidResponse }
+            output = ["recipients": (reportRecipients[school] ?? []).map { ["personId": $0.uuidString.lowercased()] }]
         case "room_keys/version":
             if method == "POST" {
                 guard backups[backupOwner] == nil else { throw MessagingCryptoRelayFailure.backupVersionConflict }
@@ -933,5 +944,195 @@ private actor InMemoryRelay {
         let oldIndex = previous["first_message_index"] as? Int ?? Int.max
         if index != oldIndex { return index < oldIndex }
         return (next["forwarded_count"] as? Int ?? Int.max) < (previous["forwarded_count"] as? Int ?? Int.max)
+    }
+}
+
+/// Signalements (#77) : la clé de session d'un signalement est partagée aux appareils des administrateurs, et à eux seuls.
+/// Deux, trois ou quatre appareils réels du SDK Matrix, relais en mémoire : le texte ne transite jamais en clair.
+final class MatrixMessagingReportSealingTests: XCTestCase {
+    private let school = UUID(uuidString: "22222222-2222-4222-8222-222222222222")!
+    private let conversation = UUID(uuidString: "33333333-3333-4333-8333-333333333333")!
+    private let alice = UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!
+    private let admin = UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")!
+    private let otherAdmin = UUID(uuidString: "cccccccc-cccc-4ccc-8ccc-cccccccccccc")!
+    private let outsider = UUID(uuidString: "dddddddd-dddd-4ddd-8ddd-dddddddddddd")!
+
+    private func scope(_ person: UUID) -> MessagingScope {
+        MessagingScope(accountID: person, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+    }
+
+    private func device(_ person: UUID, relay: InMemoryRelay) throws -> MatrixMessagingCryptography {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        return try MatrixMessagingCryptography(scope: scope(person), relay: relay.view(person),
+            vault: MessagingCryptoVault(scope: scope(person), root: root, keychain: FlakyKeychain()))
+    }
+
+    /// Ce que le serveur renvoie au lecteur : l'enveloppe, l'auteur du signalement, dans le salon de l'école.
+    private func wire(_ sealed: MessagingCiphertext) -> MessagingWireMessage {
+        MessagingWireMessage(id: UUID(), conversationID: school, schoolID: school, senderID: alice,
+                             acceptedAt: Date(), ciphertext: sealed)
+    }
+
+    private func text(_ data: Data) -> String { String(decoding: data, as: UTF8.self) }
+
+    func testSealedReportIsReadableByTheAdministratorDeviceAndNeverByAnOutsider() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let stranger = try device(outsider, relay: relay)
+        let adminReady = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        let strangerReady = await stranger.isAvailable(scope: scope(outsider), conversationID: conversation)
+        XCTAssertTrue(adminReady)
+        XCTAssertTrue(strangerReady)
+
+        let sealed = try await reporter.sealForSchoolAdmins([Data("Premier message".utf8), Data("Second message".utf8)],
+                                                            scope: scope(alice), conversationID: conversation)
+        XCTAssertEqual(sealed.count, 2)
+        XCTAssertEqual(sealed[0].scheme, "megolm.v1")
+        // Une seule session pour tout le signalement, et jamais le texte dans l'enveloppe.
+        XCTAssertEqual(sealed[0].keyID, sealed[1].keyID)
+        XCTAssertFalse(text(sealed[0].payload).contains("Premier message"))
+        XCTAssertFalse(text(sealed[1].payload).contains("Second message"))
+
+        let first = try await administrator.decrypt(wire(sealed[0]), scope: scope(admin))
+        let second = try await administrator.decrypt(wire(sealed[1]), scope: scope(admin))
+        XCTAssertEqual(text(first), "Premier message")
+        XCTAssertEqual(text(second), "Second message")
+
+        // Le tiers n'a reçu aucune clé : le serveur n'a rien mis dans sa file, et il ne déchiffre pas.
+        let queuedForStranger = await relay.queuedCount(for: outsider)
+        XCTAssertEqual(queuedForStranger, 0)
+        do {
+            _ = try await stranger.decrypt(wire(sealed[0]), scope: scope(outsider))
+            XCTFail("Un non-administrateur ne doit pas lire un signalement")
+        } catch let failure as MessagingDecryptionFailure {
+            XCTAssertEqual(failure.code, "D-NOKEY")
+        } catch { XCTFail("Refus attendu avec un code de déchiffrement, reçu \(error)") }
+    }
+
+    func testAdministratorWithoutADeviceMeansNothingIsSealedOrSent() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        // L'administrateur est destinataire mais n'a jamais ouvert Messages : aucune clé d'appareil à utiliser.
+        do {
+            _ = try await reporter.sealForSchoolAdmins([Data("Sans appareil".utf8)], scope: scope(alice), conversationID: conversation)
+            XCTFail("Aucun signalement ne part sans appareil d'administrateur")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .noReportRecipient) }
+        let sent = await relay.toDeviceCount()
+        XCTAssertEqual(sent, 0, "Aucune clé de session ne doit avoir été envoyée")
+
+        // Sans aucun administrateur actif, même refus, sans même chercher de clés.
+        await relay.setReportRecipients(school, [])
+        let claimsBefore = await relay.claimCount()
+        do {
+            _ = try await reporter.sealForSchoolAdmins([Data("Personne".utf8)], scope: scope(alice), conversationID: conversation)
+            XCTFail("Aucun signalement ne part sans administrateur")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .noReportRecipient) }
+        let claimsAfter = await relay.claimCount()
+        XCTAssertEqual(claimsAfter, claimsBefore)
+
+        // Dès que l'administrateur ouvre Messages sur un appareil, le même signalant peut signaler et il lit.
+        await relay.setReportRecipients(school, [admin])
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+        let sealed = try await reporter.sealForSchoolAdmins(Data("Maintenant".utf8), scope: scope(alice), conversationID: conversation)
+        let clear = try await administrator.decrypt(wire(sealed), scope: scope(admin))
+        XCTAssertEqual(text(clear), "Maintenant")
+    }
+
+    func testEachReportHasItsOwnSessionSoALaterRevocationClosesTheNextOnes() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin, otherAdmin])
+        let reporter = try device(alice, relay: relay)
+        let first = try device(admin, relay: relay)
+        let second = try device(otherAdmin, relay: relay)
+        let firstReady = await first.isAvailable(scope: scope(admin), conversationID: conversation)
+        let secondReady = await second.isAvailable(scope: scope(otherAdmin), conversationID: conversation)
+        XCTAssertTrue(firstReady)
+        XCTAssertTrue(secondReady)
+
+        let before = try await reporter.sealForSchoolAdmins(Data("Avant la révocation".utf8), scope: scope(alice), conversationID: conversation)
+        // Le second administrateur perd son rôle : il n'est plus destinataire du signalement suivant.
+        await relay.setReportRecipients(school, [admin])
+        let after = try await reporter.sealForSchoolAdmins(Data("Après la révocation".utf8), scope: scope(alice), conversationID: conversation)
+        XCTAssertNotEqual(before.keyID, after.keyID, "Chaque signalement a sa propre session")
+
+        let beforeByFirst = try await first.decrypt(wire(before), scope: scope(admin))
+        let afterByFirst = try await first.decrypt(wire(after), scope: scope(admin))
+        XCTAssertEqual(text(beforeByFirst), "Avant la révocation")
+        XCTAssertEqual(text(afterByFirst), "Après la révocation")
+        // Il garde ce qu'il avait déjà reçu, et ne lit rien de postérieur.
+        let beforeBySecond = try await second.decrypt(wire(before), scope: scope(otherAdmin))
+        XCTAssertEqual(text(beforeBySecond), "Avant la révocation")
+        do {
+            _ = try await second.decrypt(wire(after), scope: scope(otherAdmin))
+            XCTFail("Un administrateur révoqué ne lit pas les signalements suivants")
+        } catch let failure as MessagingDecryptionFailure { XCTAssertEqual(failure.code, "D-NOKEY") }
+        catch { XCTFail("Refus attendu avec un code de déchiffrement, reçu \(error)") }
+    }
+
+    func testAnAdministratorDeviceRegisteredAfterTheReportDoesNotReadIt() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let early = try device(admin, relay: relay)
+        let earlyReady = await early.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(earlyReady)
+        let sealed = try await reporter.sealForSchoolAdmins(Data("Déjà envoyé".utf8), scope: scope(alice), conversationID: conversation)
+
+        // Limite documentée (messaging-reports-77.md, section 6) : seuls les appareils connus au moment du signalement reçoivent la clé.
+        let late = try device(admin, relay: relay)
+        let lateReady = await late.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(lateReady)
+        let readByEarly = try await early.decrypt(wire(sealed), scope: scope(admin))
+        XCTAssertEqual(text(readByEarly), "Déjà envoyé")
+        do {
+            _ = try await late.decrypt(wire(sealed), scope: scope(admin))
+            XCTFail("Un appareil enregistré après le signalement ne reçoit pas la clé")
+        } catch let failure as MessagingDecryptionFailure { XCTAssertEqual(failure.code, "D-NOKEY") }
+        catch { XCTFail("Refus attendu avec un code de déchiffrement, reçu \(error)") }
+    }
+
+    @MainActor
+    func testTheAdministratorScreenModelReadsASealedReportAndAnOutsiderGetsAnHonestMessage() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let stranger = try device(outsider, relay: relay)
+        let adminReady = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        let strangerReady = await stranger.isAvailable(scope: scope(outsider), conversationID: conversation)
+        XCTAssertTrue(adminReady)
+        XCTAssertTrue(strangerReady)
+
+        // Le même contenu que le fil : une enveloppe JSON versionnée, scellée par le signalant.
+        let content = try MessagingPlainContent(text: "Texte signalé").encoded()
+        let sealed = try await reporter.sealForSchoolAdmins([content], scope: scope(alice), conversationID: conversation)
+        let message = UUID()
+        let record = MessagingReportRecord(id: UUID(), conversationID: conversation, conversationKind: "PRIVATE",
+            reporterID: alice, reporterName: "Alice Fixture", createdAt: Date(), status: .open, statusUpdatedAt: nil,
+            items: [MessagingReportEnvelope(messageID: message, senderID: UUID(), senderName: "Moniteur Fixture",
+                                            sequence: 1, acceptedAt: Date(), ciphertext: sealed[0])],
+            history: [])
+
+        let adminScope = scope(admin)
+        let adminModel = MessagingReportInboxModel(scope: adminScope, moderation: UnavailableMessagingThreadActions(),
+                                                   cryptography: administrator, currentScope: { adminScope })
+        await adminModel.open(record)
+        let line = try XCTUnwrap(adminModel.lines[record.id]?.first)
+        XCTAssertEqual(line.text, "Texte signalé")
+        XCTAssertNil(line.unreadable)
+        XCTAssertEqual(line.senderName, "Moniteur Fixture")
+
+        let strangerScope = scope(outsider)
+        let strangerModel = MessagingReportInboxModel(scope: strangerScope, moderation: UnavailableMessagingThreadActions(),
+                                                      cryptography: stranger, currentScope: { strangerScope })
+        await strangerModel.open(record)
+        let blocked = try XCTUnwrap(strangerModel.lines[record.id]?.first)
+        XCTAssertNil(blocked.text, "Aucun contenu inventé pour un message illisible")
+        XCTAssertEqual(blocked.unreadable, MessagingDecryptionFailure.explanation(for: "D-NOKEY"))
     }
 }

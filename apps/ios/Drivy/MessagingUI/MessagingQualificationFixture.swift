@@ -92,6 +92,8 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private let refuseMutation: Bool
     private let denyMutationAccess: Bool
     private let unreadFilter: Bool
+    /// Boîte des signalements (#77), seulement avec `-messaging-ui-reports`.
+    private let reports: MessagingQualificationReports?
     /// General page 1 holds sequences 24...9, page 2 holds 8...1.
     private static let generalPageCursor = "fixture-page-2"
     private static let generalPageFloor = 9
@@ -107,6 +109,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         unreadFilter = arguments.contains("-messaging-ui-unread-filter")
         conversation = rich ? MessagingQualificationIDs.general : UUID()
         member = rich ? MessagingQualificationIDs.leaPerson : UUID()
+        reports = arguments.contains("-messaging-ui-reports") ? MessagingQualificationReports(admin: scope.accountID) : nil
         guard rich else { return }
         conversations = seed
         if unreadFilter, let index = conversations.firstIndex(where: { $0.id == MessagingQualificationIDs.general }) {
@@ -235,6 +238,8 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
                   let messageID = uuid(after: "messages", in: parts) {
             closedPolls.insert(messageID)
             data = #"{"done":true}"#
+        } else if let reports, let answer = try await reports.answer(method: method, parts: parts, body: request.httpBody) {
+            data = answer
         } else {
             // Unspecified mutations (message send included) must fail rather than manufacture acceptance.
             throw MessagingFailure.unavailable
@@ -444,6 +449,82 @@ private actor MessagingQualificationKeys: MessagingKeyManagement {
     }
     func confirmOwnDevice(deviceID: String, fingerprint: String, scope: MessagingScope) throws {
         throw MessagingFailure.protectionUnavailable
+    }
+}
+
+/// Boîte des signalements de la fixture (#77), sous `-messaging-ui-reports` seulement : sans ce drapeau, `/reports` reste
+/// « indisponible » et l'entrée ne s'affiche pas. Contenus fictifs en mémoire, lisibles par la crypto de la fixture ;
+/// le troisième signalement porte un message qu'aucun appareil de la fixture ne peut lire. Ne qualifie ni droits ni E2EE.
+private actor MessagingQualificationReports {
+    private var reports: [[String: Any]]
+    private let admin: UUID
+    private let formatter = ISO8601DateFormatter()
+
+    init(admin: UUID) {
+        self.admin = admin
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+        let lea = MessagingQualificationIDs.leaPerson, marc = MessagingQualificationIDs.marcPerson
+        func item(_ sequence: Int, _ sender: UUID, _ senderName: String, text: String, readable: Bool) -> [String: Any] {
+            let payload = (try? MessagingPlainContent(text: text).encoded()) ?? Data()
+            return ["messageId": MessagingQualificationIDs.message(1, sequence).uuidString.lowercased(),
+                    "ciphertext": ["scheme": readable ? MessagingQualificationIDs.ciphertextScheme : "megolm.v1", "keyId": "fixture",
+                                   "payload": payload.base64EncodedString()],
+                    "senderPersonId": sender.uuidString.lowercased(), "senderDisplayName": senderName,
+                    "sequence": sequence, "acceptedAt": formatter.string(from: now.addingTimeInterval(-3 * 3600))]
+        }
+        func report(_ number: Int, kind: String, reporter: UUID, reporterName: String, ago: TimeInterval, status: String,
+                    items: [[String: Any]], history: [[String: Any]] = []) -> [String: Any] {
+            ["id": "D0000000-0000-4000-8000-00000000000\(number)".lowercased(),
+             "conversationId": MessagingQualificationIDs.general.uuidString.lowercased(), "conversationKind": kind,
+             "reporterPersonId": reporter.uuidString.lowercased(), "reporterDisplayName": reporterName,
+             "createdAt": formatter.string(from: now.addingTimeInterval(-ago)), "status": status,
+             "statusUpdatedAt": formatter.string(from: now.addingTimeInterval(-ago)), "items": items, "history": history]
+        }
+        reports = [
+            report(1, kind: "GENERAL", reporter: lea, reporterName: "Léa Fixture", ago: 2 * 3600, status: "OPEN", items: [
+                item(19, marc, "Marc Fixture", text: "Premier message signalé (texte fictif)", readable: true),
+                item(20, marc, "Marc Fixture", text: "Second message signalé (texte fictif)", readable: true)]),
+            report(3, kind: "PRIVATE", reporter: marc, reporterName: "Marc Fixture", ago: 26 * 3600, status: "OPEN", items: [
+                item(7, lea, "Léa Fixture", text: "Message d'une conversation privée", readable: false)]),
+            report(2, kind: "GENERAL", reporter: marc, reporterName: "Marc Fixture", ago: 50 * 3600, status: "HANDLED", items: [
+                item(4, lea, "Léa Fixture", text: "Message déjà traité (texte fictif)", readable: true)], history: [
+                ["actorPersonId": admin.uuidString.lowercased(), "actorDisplayName": "Admin Fixture", "fromStatus": "OPEN",
+                 "toStatus": "HANDLED", "createdAt": formatter.string(from: now.addingTimeInterval(-48 * 3600))]]),
+        ]
+    }
+
+    /// nil quand la route n'est pas celle d'un signalement : la fixture garde alors son refus habituel.
+    func answer(method: String, parts: [String], body: Data?) throws -> String? {
+        if parts.last == "reports", method == "GET" { return try list() }
+        if parts.count >= 3, parts.last == "status", parts[parts.count - 3] == "reports", method == "PUT",
+           let id = UUID(uuidString: parts[parts.count - 2]) { return try setStatus(id, body: body) }
+        return nil
+    }
+
+    private func encode(_ value: [String: Any]) throws -> String {
+        String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self)
+    }
+
+    private func list() throws -> String {
+        let open = reports.filter { $0["status"] as? String == "OPEN" }.count
+        return try encode(["reports": reports, "nextCursor": NSNull(), "openCount": open])
+    }
+
+    private func setStatus(_ id: UUID, body: Data?) throws -> String {
+        struct Body: Decodable { let status: String; let expectedStatus: String }
+        guard let body, let change = try? JSONDecoder().decode(Body.self, from: body),
+              let index = reports.firstIndex(where: { ($0["id"] as? String) == id.uuidString.lowercased() }) else {
+            throw MessagingFailure.invalidResponse
+        }
+        let now = formatter.string(from: Date())
+        var history = reports[index]["history"] as? [[String: Any]] ?? []
+        history.append(["actorPersonId": admin.uuidString.lowercased(), "actorDisplayName": "Admin Fixture",
+                        "fromStatus": change.expectedStatus, "toStatus": change.status, "createdAt": now])
+        reports[index]["status"] = change.status
+        reports[index]["statusUpdatedAt"] = now
+        reports[index]["history"] = history
+        return try encode(["reportId": id.uuidString.lowercased(), "status": change.status, "statusUpdatedAt": now, "history": history])
     }
 }
 #endif

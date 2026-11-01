@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 1er novembre 2026 — qualification de la messagerie #77 (`claude/qualif-77-20261101`)
+
+- **Code de l'app modifié** : entrée « Signalements » de Messages (`MessagingViews`, forme de toucher : un appui au centre de la ligne n'ouvrait rien), sélection des messages à signaler (`MessagingConversationView.selectable`, rond superposé dans la marge de la bulle au lieu d'un voisin qui rétrécissait la ligne et faisait couper les messages courts), boîte des signalements (`MessagingReportInboxViews`, date sur sa propre ligne). Aucun changement d'API, de contrat OpenAPI ni de migration ; un fichier de test API ajouté.
+- **Exécuté** : 6 tests API sur PostgreSQL réel (vérifications, run 41260549546) ; scellement et lecture par l'administrateur contre le SDK Matrix réel et le relais jetable, tests métier iPhone « messaging » (runs 41260562839 et 41305480743, 91 tests, 0 échec, sur un code d'app identique à la tête) ; parcours d'interface sur fixture, trois tests (runs 41301709973, 41302920798 pour la boîte, 41309165061 pour la sélection et la confirmation sur la tête `15d8f8fb`). Huit captures iPhone clair, hors dépôt : `.local/captures-77/final/`.
+- **Pourquoi le toucher du run 41260808224 échouait** : défaut de l'app (pas de forme de toucher), non de la fixture ni d'un délai ; corrigé et revérifié (section 11 de [messaging-reports-77.md](messaging-reports-77.md)).
+- **Test de sélection** (`MessagingReportScreensUITests/testConfirmationBeforeSendingAReport`) : vert sur `0991774f`, puis cinq runs rouges (41302920798, 41304132896, 41305459276, 41306677916, 41307996593) quand j'ai voulu choisir des messages hors de la pastille épinglée (lignes sous l'écran, ligne de réponse sans libellé propre), vert sur `15d8f8fb` (41309165061). Il choisit désormais des lignes entièrement visibles ; il peut rester sensible à la position initiale du fil.
+- **Défauts encore vus** : rond d'un message reçu centré sur la ligne entière (auteur compris), environ 25 pt au-dessus de la bulle ; bouton « Revenir en bas » devant le rond du sondage.
+- **Non prouvé** : aucun essai sur deux appareils réels, E2EE réel de la fixture, sombre, iPad, grandes tailles, VoiceOver ; la conservation des preuves attend #68.
 ## 1er novembre 2026 — défauts Messages (`claude/messages-defauts-20261101`)
 
 - **Code de l'app modifié** : `MessagingConversationView.statusLine` et `MessagingWorkspace.hasPendingMutation`. La ligne d'état sous une bulle garde sa hauteur tant que le message porte ma réaction ou une intention en cours : « Synchronisation… » ne fait plus remonter la bulle de 13 pt à la cinquième seconde. Arbitrage à valider à l'œil : ~16 pt d'espace sous les messages réagis.

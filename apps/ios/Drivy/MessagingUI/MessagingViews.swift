@@ -177,6 +177,9 @@ struct MessagingInboxView: View {
                             .accessibilityHidden(true)
                     }
                     .frame(minHeight: DrivyLayout.tapTarget)
+                    // Style .plain : sans forme de toucher, seuls le texte, le nombre et la flèche répondent ; le Spacer, qui
+                    // occupe le milieu de la ligne, ne répondait pas (comme MessagingInboxRow le fait déjà).
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(DrivyTheme.surface)
