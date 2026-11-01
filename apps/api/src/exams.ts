@@ -166,8 +166,10 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
    const training=await writableTraining(db,schoolId,trainingId);validateSchedule(body,school,new Date());
    if((await db.query("SELECT 1 FROM drivy.exam WHERE school_id=$1 AND training_id=$2 AND kind=$3 AND status='PASSED'",[schoolId,trainingId,body.kind])).rowCount)
     throw new ApiError(409,'EXAM_ALREADY_PASSED',failures.exam_one_passed![1]);
-   const row=(await db.query<{id:string;training_id:string}>(`INSERT INTO drivy.exam(school_id,training_id,kind,category_code,starts_at,time_zone,location,created_by)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,training_id`,[schoolId,trainingId,body.kind,training.category_code,body.startsAt,body.timeZone,body.location,actor.membershipId])).rows[0]!;
+   const row=(await db.query<{id:string;training_id:string}>(`INSERT INTO drivy.exam(school_id,training_id,kind,category_code,starts_at,time_zone,location,created_by,
+     escort_instructor_membership_id,escort_starts_at,escort_ends_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,training_id`,
+    [schoolId,trainingId,body.kind,training.category_code,body.startsAt,body.timeZone,body.location,actor.membershipId,
+     body.escort?.instructorMembershipId??null,body.escort?.startsAt??null,body.escort?.endsAt??null])).rows[0]!;
    if(body.escort)await holdEscort(db,schoolId,row,body.escort);
    await revise(db,schoolId,row.id,body.operationId,'CREATED',actor,'');
    return {data:await examState(db,schoolId,trainingId),action:'ExamCreated',resourceType:'Exam',resourceId:row.id,resourceVersion:1,changedFields:['status','startsAt']};
@@ -187,7 +189,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
     WHERE school_id=$1 AND id=$2`,[schoolId,examId,body.startsAt,body.timeZone,body.location,body.escort?.instructorMembershipId??null,body.escort?.startsAt??null,body.escort?.endsAt??null]);
    if(body.escort)await holdEscort(db,schoolId,old,body.escort);
    await revise(db,schoolId,examId,body.operationId,'UPDATED',actor,body.reason);
-   return {data:await examState(db,schoolId,old.training_id),action:'ExamUpdated',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,changedFields:['startsAt','timeZone','location','escort'],reason:body.reason||undefined};
+   return {data:await examState(db,schoolId,old.training_id),action:'ExamUpdated',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,changedFields:['startsAt','timeZone','location','escort'],...(body.reason?{reason:body.reason}:{})};
   }),r);
  });
 
@@ -201,12 +203,14 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
    const next=randomUUID();
    await releaseEscort(db,schoolId,examId);
    await db.query("UPDATE drivy.exam SET status='POSTPONED',postponed_to_exam_id=$3,version=version+1,updated_at=statement_timestamp() WHERE school_id=$1 AND id=$2",[schoolId,examId,next]);
-   await db.query(`INSERT INTO drivy.exam(id,school_id,training_id,kind,category_code,starts_at,time_zone,location,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [next,schoolId,old.training_id,old.kind,training.category_code,body.startsAt,body.timeZone,body.location,actor.membershipId]);
+   await db.query(`INSERT INTO drivy.exam(id,school_id,training_id,kind,category_code,starts_at,time_zone,location,created_by,
+     escort_instructor_membership_id,escort_starts_at,escort_ends_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [next,schoolId,old.training_id,old.kind,training.category_code,body.startsAt,body.timeZone,body.location,actor.membershipId,
+     body.escort?.instructorMembershipId??null,body.escort?.startsAt??null,body.escort?.endsAt??null]);
    if(body.escort)await holdEscort(db,schoolId,{id:next,training_id:old.training_id},body.escort);
    await revise(db,schoolId,examId,body.operationId,'POSTPONED',actor,body.reason);
    await revise(db,schoolId,next,body.operationId,'CREATED',actor,'');
-   return {data:await examState(db,schoolId,old.training_id),action:'ExamPostponed',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,changedFields:['status','postponedToExamId'],reason:body.reason||undefined};
+   return {data:await examState(db,schoolId,old.training_id),action:'ExamPostponed',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,changedFields:['status','postponedToExamId'],...(body.reason?{reason:body.reason}:{})};
   }),r);
  });
 
@@ -223,7 +227,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
     WHERE school_id=$1 AND id=$2`,[schoolId,examId,body.result,body.note]);
    await revise(db,schoolId,examId,body.operationId,correction?'RESULT_CORRECTED':'RESULT_RECORDED',actor,body.reason);
    return {data:await examState(db,schoolId,old.training_id),action:correction?'ExamResultCorrected':'ExamResultRecorded',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,
-    changedFields:['status','resultNote'],reason:body.reason||undefined};
+    changedFields:['status','resultNote'],...(body.reason?{reason:body.reason}:{})};
   }),r);
  });
 }
