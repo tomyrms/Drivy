@@ -23,13 +23,15 @@ export interface MetricTileProps {
   /** Base déjà nommée de la comparaison (« par rapport à septembre 2026 »). */
   comparisonLabel?: string | undefined;
   action?: { label: string; onClick: () => void } | undefined;
+  /** Identifiant du dictionnaire : permet de rendre le focus à la tuile quand on revient de son détail. */
+  measureId?: string | undefined;
 }
 
 /** Une mesure du serveur : valeur lisible, état de couverture, comparaison nommée et accès à sa définition. */
-export function MetricTile({ label, measure, definition, comparison, comparisonLabel, action }: MetricTileProps) {
+export function MetricTile({ label, measure, definition, comparison, comparisonLabel, action, measureId }: MetricTileProps) {
   const status = measure.coverage.status;
   const change = describeComparison(comparison, measure.unit);
-  return <li className="pilotage-tile" data-coverage={status}>
+  return <li className="pilotage-tile" data-coverage={status} data-measure={measureId}>
     <div className="pilotage-tile-head">
       <h3>{label}</h3>
       <MeasureHelp label={label} measure={measure} definition={definition} />

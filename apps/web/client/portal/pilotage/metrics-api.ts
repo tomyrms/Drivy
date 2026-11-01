@@ -71,7 +71,7 @@ export const filterQuery = (filters: MetricFilters) => ({
   ...(filters.category ? { categoryCode: filters.category } : {}),
   ...(filters.product ? { productKey: filters.product } : {}),
 });
-export const filterScope = (filters: MetricFilters) => [filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
+const filterScope = (filters: MetricFilters) => [filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
 
 export interface MetricsRequest extends MetricFilters {
   domain: MetricDomain;

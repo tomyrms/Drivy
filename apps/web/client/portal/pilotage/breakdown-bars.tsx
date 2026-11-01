@@ -6,7 +6,7 @@ import './pilotage.css';
  * Répartition d'une mesure en barres horizontales (#378). La valeur est écrite à côté de chaque barre : la lecture ne dépend ni de la
  * couleur ni du survol. Les lignes arrivent déjà rangées par nom ; la longueur compare la charge, elle ne classe personne.
  */
-export function BreakdownBars({ title, periodText, rows, format, emptyText, action }: {
+export function BreakdownBars({ title, periodText, rows, format, emptyText, action, notice }: {
   title: string;
   periodText: string;
   rows: readonly BreakdownRow[];
@@ -14,11 +14,14 @@ export function BreakdownBars({ title, periodText, rows, format, emptyText, acti
   emptyText: string;
   /** Commande propre au graphique, par exemple le choix de la répartition. */
   action?: ReactNode;
+  /** Erreur d'une mise à jour : les lignes déjà lues restent affichées sous cet avis. */
+  notice?: ReactNode;
 }) {
   const max = Math.max(1, ...rows.map(row => row.value));
   return <figure className="pilotage-chart">
     <figcaption><h3>{title}</h3><span>{periodText}</span></figcaption>
     {action}
+    {notice}
     {rows.length === 0
       ? <p className="pilotage-chart-empty">{emptyText}</p>
       : <ul className="pilotage-breakdown">{rows.map(row => <li key={row.key}>

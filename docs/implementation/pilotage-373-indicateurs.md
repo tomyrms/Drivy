@@ -838,3 +838,28 @@ Le bouton « Exporter en CSV » n'apparaît que pour une personne qui a `EXPORT_
 - Au retour d'une fiche, le détail repart de la première page : les pages déjà chargées, le défilement et le focus ne sont pas restaurés.
 - Non essayé : le téléchargement dans un navigateur, la lecture d'un vrai fichier dans un tableur, la révocation d'un droit pendant l'affichage. Le test de l'export avec texte accentué, guillemets, retours à la ligne et cellules de type formule est celui de l'API (#375) ; le web n'a rien écrit pour le contenu du fichier. L'aperçu fournit un CSV synthétique sans nom d'élève.
 - Aucun test lancé (écrits : `detail-models.test.ts`, une ligne de `console-route.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 17. T08 (#381) : responsive, accessibilité et états réseau
+
+Lot de correction des seules pages de pilotage. Il ne remplace pas la revue globale différée de la roadmap et ne touche aucune autre page.
+
+### 17.1 Fait
+
+- **Données connues conservées en cas d'erreur** : quand une mise à jour échoue alors que des chiffres de la même portée sont déjà affichés (cartes, graphiques, répartitions, rendez-vous), ils restent à l'écran sous un avis « La mise à jour a échoué » qui donne l'heure de leur calcul et propose de réessayer. Ils ne sont jamais remplacés par zéro. Un refus (401, 403, 404) retire ce qui était affiché, comme partout ailleurs. Un changement de période, de moniteur, de permis, de prestation ou d'école repart d'un écran de chargement : les chiffres d'une autre portée ne sont jamais montrés sous le nouveau titre.
+- **Réponses obsolètes** : une réponse qui ne correspond plus à la période ou à la portée demandées est refusée, et une lecture dépassée par une plus récente est ignorée (mécanisme commun des lectures).
+- **Focus** : l'ouverture du détail d'une mesure place le focus sur « Retour aux chiffres » ; en revenant par ce bouton, la tuile d'origine reprend le focus dès qu'elle est affichée.
+- **Cibles tactiles et petits écrans** : listes, champs de date, aides et boutons de tuile à 44 px au moins sur écran tactile ou étroit ; tableau des valeurs d'un graphique confiné dans son propre défilement horizontal (aucun défilement horizontal de la page) ; liste des lignes en lignes verticales.
+- **Contraste forcé** : bordures, barres de répartition et focus des barres du graphique suivent les couleurs système.
+- **Doublon retiré** : la comparaison à date de l'accueil passe par le même composant que les statistiques (`MeasureGroups`) ; cinq exports internes ne sont plus exposés.
+
+### 17.2 Déjà vrai avant ce lot, relu
+
+Titre, période, unité, légende, résumé lu et tableau des valeurs pour chaque graphique ; réalisé et à venir distingués par le plein et le hachuré ; barres lisibles au clavier (flèches, début, fin), au toucher et à la souris ; aucune animation ; formats fr-CH ; libellés longs et grandes valeurs qui passent à la ligne ; valeur absente en tiret.
+
+### 17.3 Non fait, à ne pas tenir pour vérifié
+
+- **Aucune vérification dans un navigateur ni sur appareil** : 320, 390, 768, 1024 et 1440 px, portrait et paysage, clair et sombre, agrandissement du texte et zoom n'ont pas été regardés. Aucune capture avant ou après n'existe. Les règles ci-dessus sont écrites, pas observées.
+- Session expirée pendant une lecture d'accueil, refus de droit en cours de consultation, écran de chargement long : comportement hérité des lectures communes, non essayé.
+- Un graphique financier échoué ne bloque pas l'agenda (chaque bloc lit pour lui-même) : établi par la structure du code, non essayé.
+- Le défilement et les pages déjà chargées du détail ne sont pas restaurés au retour d'une fiche (16.5).
+- Non exécuté : aucun test. `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.

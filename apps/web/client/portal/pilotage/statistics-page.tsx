@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { civilDateIn } from '../../agenda-model';
 import { useConsole } from '../../console/context';
 import type { StatisticsTab } from '../../console/route';
@@ -19,6 +20,7 @@ export function StatisticsPilot() {
   const { school, membership, routeQuery, setRouteQuery } = useConsole();
   const query = routeQuery ?? {};
   const rights = metricRights(membership);
+  const [returnTo, setReturnTo] = useState<string | undefined>(undefined);
   // Moniteurs, permis et prestations servent seulement de filtres : leur lecture ne bloque jamais les chiffres.
   const { instructorOptions: instructors } = useDirectory({ learners: false });
   const { categoryOptions, productOptions } = useCatalogueOptions({ category: query.category, product: query.product });
@@ -39,7 +41,7 @@ export function StatisticsPilot() {
     query.product ? productOptions.find(item => item.value === query.product)?.label ?? query.product : null].filter(Boolean).join(' · ') || 'Toute l’école';
   const change = (patch: FilterPatch) => setRouteQuery?.({ ...query, ...patch }, true);
   const open = (measure: string) => setRouteQuery?.({ ...query, measure, tab: measureDomain(measure) === 'finance' ? 'finance' : undefined });
-  const close = () => setRouteQuery?.({ ...query, measure: undefined });
+  const close = () => { setReturnTo(query.measure); setRouteQuery?.({ ...query, measure: undefined }); };
   const detailPanel = (measure: string, period: NonNullable<typeof resolved.period>, canExport: boolean) =>
     <MeasureDetail measure={measure} period={period} filters={filters} scopeLabel={scopeLabel} canExport={canExport} onBack={close} />;
 
@@ -54,12 +56,12 @@ export function StatisticsPilot() {
       {rights.activity && <TabsContent value="activity"><div className="pilotage-panel">
         {resolved.period && (detail && measureDomain(detail) === 'activity'
           ? detailPanel(detail, resolved.period, rights.export)
-          : <ActivityPanel period={resolved.period} today={today} filters={filters} scopeLabel={scopeLabel} onOpen={open} />)}
+          : <ActivityPanel period={resolved.period} today={today} filters={filters} scopeLabel={scopeLabel} onOpen={open} returnFocus={returnTo} onFocused={() => setReturnTo(undefined)} />)}
       </div></TabsContent>}
       {rights.finance && <TabsContent value="finance"><div className="pilotage-panel">
         {resolved.period && (detail && measureDomain(detail) === 'finance'
           ? detailPanel(detail, resolved.period, rights.export)
-          : <FinancePanel period={resolved.period} today={today} filters={filters} scopeLabel={scopeLabel} onOpen={open} />)}
+          : <FinancePanel period={resolved.period} today={today} filters={filters} scopeLabel={scopeLabel} onOpen={open} returnFocus={returnTo} onFocused={() => setReturnTo(undefined)} />)}
       </div></TabsContent>}
     </Tabs>
   </section>;

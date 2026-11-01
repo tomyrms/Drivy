@@ -28,12 +28,12 @@ const comparableToDate: ReadonlySet<string> = new Set(['F01', 'F05']);
 const money = (value: number) => formatMeasure(value, 'cents');
 const unitName = { day: 'jour', week: 'semaine', month: 'mois' } as const;
 
-export function FinancePanel({ period, today, filters, scopeLabel, onOpen }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void }) {
+export function FinancePanel({ period, today, filters, scopeLabel, onOpen, returnFocus, onFocused }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void; returnFocus?: string | undefined; onFocused?: () => void }) {
   const plan = comparisonPlan(period, today);
   return <MetricsView label="Lecture des finances" request={{ domain: 'finance', from: period.from, toExclusive: period.toExclusive, ...filters, compare: plan.kind === 'direct' ? plan.compare : undefined }}>
     {(answer, definitions) => <>
       <ScopeLine period={periodLabel(period)} scope={answer.scope.kind === 'self' ? 'Vos leçons' : scopeLabel} answer={answer} />
-      <MeasureGroups domain="finance" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} />
+      <MeasureGroups domain="finance" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} returnFocus={returnFocus} onFocused={onFocused} />
       <div className="pilotage-charts">
         <Evolution period={period} filters={filters} />
         <ValueMix period={period} filters={filters} />
@@ -50,10 +50,11 @@ function Evolution({ period, filters }: { period: ResolvedPeriod; filters: Metri
   const granularity = chooseGranularity(period.days);
   const filtered = Boolean(filters.instructor || filters.category || filters.product);
   const series = useMetricSeries({ from: period.from, toExclusive: period.toExclusive, granularity, measures: filtered ? ['F01', 'F02'] : ['F01', 'F02', 'F05'], ...filters });
-  if (series.status !== 'ready' || !series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution" />;
+  if (!series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution" />;
   const year = period.from.slice(0, 4), buckets = series.data.buckets;
   const value = (bucket: (typeof buckets)[number], id: string) => bucket.measures[id]?.value ?? null;
   return <>
+    {series.status === 'error' && <ReadFeedback loaded={series} label="Lecture de l’évolution" />}
     <StackedBars title={`Valeur des leçons par ${unitName[granularity]}`} periodText={periodLabel(period)} emptyText="Aucune valeur de leçon sur cette période."
       series={[{ label: 'Réalisée', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]} format={money} tickFormat={formatFrancsShort}
       buckets={buckets.map(bucket => chartBucket(granularity, bucket, year, [value(bucket, 'F01'), value(bucket, 'F02')]))} />
@@ -76,7 +77,7 @@ function ValueMix({ period, filters }: { period: ResolvedPeriod; filters: Metric
       {!filters.instructor && <TabsTrigger value="instructor">Par moniteur</TabsTrigger>}
     </TabsList>
   </Tabs>;
-  if (loaded.status !== 'ready' || !loaded.data) return <figure className="pilotage-chart">{choice}<ReadFeedback loaded={loaded} label="Lecture de la répartition" /></figure>;
-  return <BreakdownBars title={`Valeur des leçons réalisées ${mixTitle[chosen]}`} periodText={periodLabel(period)} action={choice}
+  if (!loaded.data) return <figure className="pilotage-chart">{choice}<ReadFeedback loaded={loaded} label="Lecture de la répartition" /></figure>;
+  return <BreakdownBars title={`Valeur des leçons réalisées ${mixTitle[chosen]}`} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
     rows={breakdownRows(loaded.data.breakdown, 'F01')} format={money} emptyText="Aucune valeur de leçon réalisée sur cette période." />;
 }

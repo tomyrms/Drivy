@@ -9,8 +9,9 @@ import { chartBucket } from './chart-model';
 import { InstructorSelect, MetricSection, MetricTile, PilotageSection } from './components';
 import { Appointments } from './dashboard-appointments';
 import { MetricsView, ScopeLine } from './metrics-view';
-import { useMetrics, useMetricSeries, type MetricDefinition, type MetricMeasure, type MetricsAnswer } from './metrics-api';
-import { currentMonth, formatCivil, formatSpan, periodLabel, type ResolvedPeriod } from './period-model';
+import { MeasureGroups, type MeasureGroup } from './measure-groups';
+import { useMetricSeries, type MetricDefinition, type MetricMeasure } from './metrics-api';
+import { currentMonth, formatCivil, periodLabel, type ResolvedPeriod } from './period-model';
 import { metricRights } from './rights';
 import { StackedBars } from './stacked-bars';
 import { summarizeToday } from './today-summary';
@@ -76,42 +77,27 @@ function TodayBlock({ today, instructor, navigate }: Scope & { navigate: Navigat
   </MetricsView>;
 }
 
-/** Ce mois-ci : valeurs du mois entier, comparaison à date avec le mois dernier, évolution jour par jour. */
+/** Ce mois-ci : valeurs du mois entier, écart à date avec le mois dernier (voir `MeasureGroups`), évolution jour par jour. */
+const monthGroups: readonly MeasureGroup[] = [{ title: 'Ce mois-ci', ids: ['L01', 'L02', 'H02'] }];
+const monthComparable: ReadonlySet<string> = new Set(['L01', 'H02']);
 function MonthBlock({ today, instructor, scopeLabel }: Scope & { scopeLabel: string }) {
   const month = currentMonth(today);
   return <MetricsView label="Lecture du mois" request={{ domain: 'activity', from: month.from, toExclusive: month.toExclusive, instructor }}>
-    {(answer, definitions) => <PilotageSection title="Ce mois-ci">
-      <MonthTiles answer={answer} definitions={definitions} month={month} today={today} instructor={instructor} />
+    {(answer, definitions) => <>
+      <MeasureGroups domain="activity" groups={monthGroups} answer={answer} definitions={definitions} period={month} today={today} filters={{ instructor }} toDate comparableToDate={monthComparable} />
       <MonthChart month={month} instructor={instructor} />
       <ScopeLine period={periodLabel(month)} scope={scopeLabel} answer={answer} />
-    </PilotageSection>}
+    </>}
   </MetricsView>;
-}
-
-/**
- * Les valeurs viennent du mois entier ; l'écart vient d'une seconde lecture du 1er à aujourd'hui, comparée par le serveur à la même plage du mois précédent.
- * Une leçon réalisée l'est déjà : la valeur réalisée est la même dans les deux lectures. Sans la seconde lecture, les tuiles s'affichent sans écart.
- */
-function MonthTiles({ answer, definitions, month, today, instructor }: { answer: MetricsAnswer; definitions: ReadonlyMap<string, MetricDefinition>; month: ResolvedPeriod; today: string; instructor: string | undefined }) {
-  const compared = useMetrics({ domain: 'activity', from: month.from, toExclusive: addDays(today, 1), compare: 'previous-month', instructor });
-  const comparison = compared.status === 'ready' ? compared.data?.comparison : undefined;
-  const label = comparison ? `vs ${formatSpan(comparison.base.from, addDays(comparison.base.toExclusive, -1), today.slice(0, 4))}` : undefined;
-  return <ul className="pilotage-grid">
-    {(['L01', 'L02', 'H02'] as const).filter(id => answer.measures[id] !== undefined).map(id => {
-      const change = id === 'L02' ? undefined : comparison?.measures[id];
-      return <MetricTile key={id} label={labelOf(definitions, id)} measure={answer.measures[id]!} definition={definitions.get(id)}
-        comparison={change} comparisonLabel={label} />;
-    })}
-  </ul>;
 }
 
 /** Leçons réalisées et à venir, par jour : la part réalisée est pleine, la part à venir hachurée. */
 function MonthChart({ month, instructor }: { month: ResolvedPeriod; instructor: string | undefined }) {
   const series = useMetricSeries({ from: month.from, toExclusive: month.toExclusive, granularity: 'day', measures: ['L01', 'L02'], instructor });
-  if (series.status !== 'ready' || !series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution du mois" />;
-  return <StackedBars title="Leçons par jour" periodText={periodLabel(month)} emptyText="Aucune leçon ce mois-ci."
+  if (!series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution du mois" />;
+  return <>{series.status === 'error' && <ReadFeedback loaded={series} label="Lecture de l’évolution du mois" />}<StackedBars title="Leçons par jour" periodText={periodLabel(month)} emptyText="Aucune leçon ce mois-ci."
     series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]}
-    buckets={series.data.buckets.map(bucket => chartBucket('day', bucket, month.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} />;
+    buckets={series.data.buckets.map(bucket => chartBucket('day', bucket, month.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} /></>;
 }
 
 /** Valeurs financières du mois pour qui y a droit : jamais présentées comme un encaissement ; le lien garde le moniteur filtré. */

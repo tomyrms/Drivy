@@ -32,7 +32,7 @@ const wholeFrancs = new Intl.NumberFormat('fr-CH', { maximumFractionDigits: 0 })
 export const formatFrancsShort = (cents: number) => `${wholeFrancs.format(Math.round(cents / 100))} CHF`;
 
 /** Écart absolu avec son signe, dans l'unité de la mesure. */
-export function formatDelta(delta: number, unit: MeasureUnit): string {
+function formatDelta(delta: number, unit: MeasureUnit): string {
   switch (unit) {
     case 'count': return signedNumbers.format(delta);
     case 'seconds': return delta === 0 ? '0 min' : `${delta > 0 ? '+' : ''}${formatDuration(delta)}`;
@@ -42,7 +42,7 @@ export function formatDelta(delta: number, unit: MeasureUnit): string {
 }
 
 /** Écart relatif en dixièmes de pour cent (667 donne « +66,7 % »). */
-export const formatPercentTenths = (tenths: number) => signedPercent.format(tenths / 1000);
+const formatPercentTenths = (tenths: number) => signedPercent.format(tenths / 1000);
 
 /** Texte court d'une comparaison, ou null quand le serveur n'en donne pas une lisible. */
 export function describeComparison(comparison: MeasureComparison | undefined, unit: MeasureUnit): string | null {

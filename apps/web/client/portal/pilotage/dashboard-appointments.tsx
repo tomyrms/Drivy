@@ -47,7 +47,7 @@ export function Appointments({ today, instructor, learnerName, memberName }: {
     week: weekStart(appointment.day), day: appointment.day, ...(instructor ? { instructor } : {}),
     ...('lesson' in appointment.target ? { lesson: appointment.target.lesson } : { course: appointment.target.course, occurrence: appointment.target.occurrence }),
   });
-  const rows = from && to && lessons.status === 'ready' && lessons.data
+  const rows = from && to && lessons.data
     ? upcomingAppointments(agendaDays(lessons.data.items, courses.data ?? [], { timeZone: school.timeZone, from, to, instructor: instructor ?? '', includeCourses: true }),
       { now, limit, learnerName, memberName })
     : [];
@@ -56,7 +56,7 @@ export function Appointments({ today, instructor, learnerName, memberName }: {
   return <PilotageSection title="Prochains rendez-vous" action={<Button variant="ghost" size="sm" onClick={() => navigate('agenda', instructor ? { instructor } : {})}>Voir l’agenda</Button>}>
     <ReadFeedback loaded={lessons} label="Lecture des rendez-vous" />
     {courses.status === 'error' && <ReadFeedback loaded={courses} label="Lecture des séances collectives" />}
-    {lessons.status === 'ready' && (rows.length === 0
+    {lessons.data !== undefined && (rows.length === 0
       ? <Empty><EmptyHeader><EmptyMedia variant="icon"><CalendarDays aria-hidden="true" /></EmptyMedia><EmptyTitle>Aucun rendez-vous cette semaine</EmptyTitle></EmptyHeader></Empty>
       : groupByDay(rows).map(group => <div key={group.day} className="grid gap-2">
         <h3 className="pilotage-day">{dayHeading(group.day, today)}</h3>

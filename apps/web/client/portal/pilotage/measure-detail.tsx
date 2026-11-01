@@ -25,7 +25,7 @@ export function MeasureDetail({ measure, period, filters, scopeLabel, canExport,
   // Relire remonte les deux lectures : la carte et ses lignes repartent d'un même instant.
   const [reread, setReread] = useState(0);
   return <div className="pilotage-detail">
-    <Button variant="ghost" size="sm" className="pilotage-back" onClick={onBack}><ArrowLeft data-icon="inline-start" aria-hidden="true" />Retour aux chiffres</Button>
+    <Button variant="ghost" size="sm" className="pilotage-back" onClick={onBack} autoFocus><ArrowLeft data-icon="inline-start" aria-hidden="true" />Retour aux chiffres</Button>
     <MetricsView key={reread} label="Lecture du détail" request={{ domain: measureDomain(measure), from: period.from, toExclusive: period.toExclusive, ...filters }}>
       {(answer, definitions) => {
         const card = answer.measures[measure], definition = definitions.get(measure);

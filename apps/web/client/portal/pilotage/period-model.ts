@@ -2,7 +2,7 @@ import { addDays } from '../../agenda-model';
 import type { NavigationQuery, PeriodChoice } from '../../console/route';
 
 /** Pilotage (#373) : la période se choisit en jours civils de l'école ; le serveur reçoit un début inclus et une fin exclue. */
-export const maxPeriodDays = 366;
+const maxPeriodDays = 366;
 export interface ResolvedPeriod { choice: PeriodChoice; from: string; toExclusive: string; lastDay: string; days: number }
 export type PeriodProblem = 'INCOMPLETE' | 'ORDER' | 'TOO_LARGE' | 'OUT_OF_RANGE';
 export type PeriodResult = { period: ResolvedPeriod; problem?: undefined } | { period: null; problem: PeriodProblem };
@@ -13,7 +13,7 @@ function monthStart(civil: string, months: number): string {
   const [year, month] = civil.split('-').map(Number) as [number, number];
   return new Date(Date.UTC(year, month - 1 + months, 1)).toISOString().slice(0, 10);
 }
-export const daysBetween = (from: string, toExclusive: string) => Math.round((Date.parse(`${toExclusive}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+const daysBetween = (from: string, toExclusive: string) => Math.round((Date.parse(`${toExclusive}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 /** Le serveur n'accepte que les années 2000 à 2100. */
 const inRange = (civil: string) => civil >= '2000-01-01' && civil <= '2100-12-31';
 

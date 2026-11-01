@@ -26,7 +26,7 @@ const comparableToDate: ReadonlySet<string> = new Set(['L01', 'H02']);
  * Statistiques → Activité : mesures du serveur, comparaison à période cohérente et trois graphiques (évolution, charge par moniteur,
  * répartition par permis ou prestation). Aucun classement des moniteurs : les lignes sont rangées par nom.
  */
-export function ActivityPanel({ period, today, filters, scopeLabel, onOpen }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void }) {
+export function ActivityPanel({ period, today, filters, scopeLabel, onOpen, returnFocus, onFocused }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void; returnFocus?: string | undefined; onFocused?: () => void }) {
   const plan = comparisonPlan(period, today);
   const request: MetricsRequest = {
     domain: 'activity', from: period.from, toExclusive: period.toExclusive, ...filters,
@@ -37,7 +37,7 @@ export function ActivityPanel({ period, today, filters, scopeLabel, onOpen }: { 
   return <MetricsView label="Lecture de l’activité" request={request}>
     {(answer, definitions) => <>
       <ScopeLine period={periodLabel(period)} scope={answer.scope.kind === 'self' ? 'Vos leçons' : scopeLabel} answer={answer} />
-      <MeasureGroups domain="activity" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} />
+      <MeasureGroups domain="activity" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} returnFocus={returnFocus} onFocused={onFocused} />
       <div className="pilotage-charts">
         <EvolutionChart period={period} filters={filters} />
         {!filters.instructor && <BreakdownBars title="Heures programmées par moniteur" periodText={periodLabel(period)} rows={breakdownRows(answer.breakdown, 'H01')}
@@ -54,10 +54,10 @@ const evolutionTitle = { day: 'Leçons par jour', week: 'Leçons par semaine', m
 function EvolutionChart({ period, filters }: { period: ResolvedPeriod; filters: MetricFilters }) {
   const granularity = chooseGranularity(period.days);
   const series = useMetricSeries({ from: period.from, toExclusive: period.toExclusive, granularity, measures: ['L01', 'L02'], ...filters });
-  if (series.status !== 'ready' || !series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution" />;
-  return <StackedBars title={evolutionTitle[granularity]} periodText={periodLabel(period)} emptyText="Aucune leçon sur cette période."
+  if (!series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution" />;
+  return <>{series.status === 'error' && <ReadFeedback loaded={series} label="Lecture de l’évolution" />}<StackedBars title={evolutionTitle[granularity]} periodText={periodLabel(period)} emptyText="Aucune leçon sur cette période."
     series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]}
-    buckets={series.data.buckets.map(bucket => chartBucket(granularity, bucket, period.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} />;
+    buckets={series.data.buckets.map(bucket => chartBucket(granularity, bucket, period.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} /></>;
 }
 
 type Mix = 'category' | 'product';
@@ -68,7 +68,7 @@ function MixChart({ period, filters }: { period: ResolvedPeriod; filters: Metric
   const choice = <Tabs value={by} onValueChange={value => setBy(value as Mix)}>
     <TabsList aria-label="Répartition des leçons réalisées"><TabsTrigger value="category">Par permis</TabsTrigger><TabsTrigger value="product">Par prestation</TabsTrigger></TabsList>
   </Tabs>;
-  if (loaded.status !== 'ready' || !loaded.data) return <figure className="pilotage-chart">{choice}<ReadFeedback loaded={loaded} label="Lecture de la répartition" /></figure>;
-  return <BreakdownBars title={by === 'category' ? 'Leçons réalisées par permis' : 'Leçons réalisées par prestation'} periodText={periodLabel(period)} action={choice}
+  if (!loaded.data) return <figure className="pilotage-chart">{choice}<ReadFeedback loaded={loaded} label="Lecture de la répartition" /></figure>;
+  return <BreakdownBars title={by === 'category' ? 'Leçons réalisées par permis' : 'Leçons réalisées par prestation'} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
     rows={breakdownRows(loaded.data.breakdown, 'L01')} format={value => formatMeasure(value, 'count')} emptyText="Aucune leçon réalisée sur cette période." />;
 }

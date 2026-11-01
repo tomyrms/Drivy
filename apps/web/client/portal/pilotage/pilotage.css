@@ -83,4 +83,17 @@
   .pilotage-appointment { gap: 12px; padding-inline: 12px; }
   .pilotage-appointment-time { min-width: 5.5rem; }
 }
-
+.pilotage-chart-values { overflow-x: auto; }
+@media (pointer: coarse), (max-width: 640px) {
+  .pilotage-filters [data-slot="select-trigger"], .pilotage-filters input { min-height: 44px; }
+  .pilotage-tile-action, .pilotage-help, .pilotage-section-head > button, .pilotage-back { min-height: 44px; }
+  .pilotage-help { min-width: 44px; }
+  .pilotage-chart-values summary { padding-block: 10px; }
+  .pilotage-lines li > button { min-height: 44px; }
+}
+@media (forced-colors: active) {
+  .pilotage-tile, .pilotage-chart, .pilotage-lines, .pilotage-appointments { border-color: CanvasText; }
+  .pilotage-breakdown-bar { border: 1px solid CanvasText; background: Canvas; }
+  .pilotage-breakdown-bar > span { background: Highlight; }
+  .pilotage-chart-bar:focus-visible .pilotage-chart-hit { stroke: Highlight; }
+}
