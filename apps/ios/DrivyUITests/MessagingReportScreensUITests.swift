@@ -38,29 +38,21 @@ final class MessagingReportScreensUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
     }
 
-    /// Sélectionne la ligne d'un message pour le signalement. Le fil n'est pas toujours calé en bas : on revient d'abord
-    /// en bas par le bouton prévu pour cela (un balayage ne fait pas défiler la liste d'Exyte, et un balayage vers le bas
-    /// fermerait la feuille), puis on appuie et on vérifie que la ligne est bien devenue sélectionnée, sinon on recommence.
-    private func selectReportRow(containing text: String, app: XCUIApplication, rows: XCUIElementQuery) {
+    /// Sélectionne, parmi les lignes proposées, la première qui est entièrement visible (hors de la pastille épinglée en
+    /// haut et de la barre du bas). Le fil n'est pas toujours calé en bas à l'ouverture (il peut rester plus d'un écran
+    /// au-dessus), et un balayage ne fait pas défiler la liste d'Exyte : on prend ce qui est à l'écran, puis on vérifie que
+    /// la ligne est devenue sélectionnée, sinon on essaie la suivante.
+    private func selectVisibleRow(_ candidates: XCUIElementQuery, _ description: String, app: XCUIApplication) {
         for _ in 0..<3 {
-            let bottom = app.buttons["messaging.scroll.bottom"]
-            if bottom.waitForExistence(timeout: 2) {
-                bottom.tap()
-                _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: bottom)],
-                                   timeout: 8)
+            for row in candidates.allElementsBoundByIndex where row.exists && row.isHittable {
+                let frame = row.frame
+                guard frame.minY > 230, frame.maxY < 790, frame.height > 40 else { continue }
+                row.tap()
+                let chosen = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: row)
+                if XCTWaiter.wait(for: [chosen], timeout: 4) == .completed { return }
             }
-            // Une bulle simple porte le texte dans le libellé de sa ligne ; une réponse (citation et bulle) le porte
-            // dans un élément fils, la ligne elle-même n'a alors pas de libellé.
-            let own = rows.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
-            let nested = rows.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
-            let row = own.exists ? own : nested
-            guard row.waitForExistence(timeout: 10) else { continue }
-            if row.isSelected { return }
-            if row.isHittable { row.tap() }
-            let chosen = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: row)
-            if XCTWaiter.wait(for: [chosen], timeout: 4) == .completed { return }
         }
-        XCTFail(text + " : la ligne n'a pas pu être sélectionnée : " + app.debugDescription)
+        XCTFail(description + " : aucune ligne visible n'a pu être sélectionnée : " + app.debugDescription)
     }
 
     private func openMessages(_ app: XCUIApplication) {
@@ -122,12 +114,13 @@ final class MessagingReportScreensUITests: XCTestCase {
         startReport.tap()
 
         // Les lignes de sélection portent un identifiant propre : un libellé seul vise aussi la pastille épinglée, qui
-        // répète le texte du message et ne le sélectionne pas. Deux messages du bas du fil, hors de la pastille : un de
-        // l'autre personne (rond à droite) et un des miens (rond à gauche).
+        // répète le texte du message et ne le sélectionne pas.
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "messaging.report.select."))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 15), app.debugDescription)
-        selectReportRow(containing: "Leçon de conduite confirmée", app: app, rows: rows)
-        selectReportRow(containing: "Merci, je les apporte", app: app, rows: rows)
+        // Un message des miens (rond à gauche), puis un de l'autre personne (rond à droite).
+        selectVisibleRow(rows.matching(NSPredicate(format: "label BEGINSWITH %@", "Vous,")), "message envoyé", app: app)
+        selectVisibleRow(rows.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Léa Fixture,", "Marc Fixture,")),
+                         "message reçu", app: app)
         let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
                                                             "messaging.report.select."))
         // Les deux ronds ont fini leur transition avant la capture ; la capture précède le contrôle pour survivre à un échec.
