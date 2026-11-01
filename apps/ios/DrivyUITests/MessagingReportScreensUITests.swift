@@ -94,10 +94,15 @@ final class MessagingReportScreensUITests: XCTestCase {
         // Les lignes de sélection portent un identifiant propre : un libellé seul vise aussi la pastille épinglée, qui
         // répète le texte du message et ne le sélectionne pas. Deux messages du bas du fil, hors de la pastille : un de
         // l'autre personne (rond à droite) et un des miens (rond à gauche).
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "messaging.report.select."))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 15), app.debugDescription)
         for text in ["Leçon de conduite confirmée", "Merci, je les apporte"] {
-            let predicate = NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "messaging.report.select.", text)
-            let row = app.buttons.matching(predicate).firstMatch
-            XCTAssertTrue(row.waitForExistence(timeout: 15), text + " : " + app.debugDescription)
+            // Une bulle simple porte le texte dans le libellé de sa ligne ; une réponse (citation et bulle) le porte
+            // dans un élément fils, la ligne elle-même n'a alors pas de libellé.
+            let own = rows.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            let nested = rows.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            let row = own.exists ? own : nested
+            XCTAssertTrue(row.waitForExistence(timeout: 10), text + " : " + app.debugDescription)
             row.tap()
         }
         let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
