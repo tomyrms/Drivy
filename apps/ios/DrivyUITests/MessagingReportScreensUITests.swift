@@ -23,6 +23,11 @@ final class MessagingReportScreensUITests: XCTestCase {
     }
 
     private func capture(_ name: String) {
+        // Le simulateur affiche parfois une bannière système (« Ready for Apple Intelligence ») qui masque l'en-tête de
+        // l'app : on attend qu'elle disparaisse avant de photographier.
+        let banner = XCUIApplication(bundleIdentifier: "com.apple.springboard").otherElements["NotificationShortLookView"]
+        _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: banner)],
+                           timeout: 8)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
@@ -31,6 +36,31 @@ final class MessagingReportScreensUITests: XCTestCase {
 
     private func element(_ prefix: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    /// Sélectionne la ligne d'un message pour le signalement. Le fil n'est pas toujours calé en bas : on revient d'abord
+    /// en bas par le bouton prévu pour cela (un balayage ne fait pas défiler la liste d'Exyte, et un balayage vers le bas
+    /// fermerait la feuille), puis on appuie et on vérifie que la ligne est bien devenue sélectionnée, sinon on recommence.
+    private func selectReportRow(containing text: String, app: XCUIApplication, rows: XCUIElementQuery) {
+        for _ in 0..<3 {
+            let bottom = app.buttons["messaging.scroll.bottom"]
+            if bottom.waitForExistence(timeout: 2) {
+                bottom.tap()
+                _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: bottom)],
+                                   timeout: 8)
+            }
+            // Une bulle simple porte le texte dans le libellé de sa ligne ; une réponse (citation et bulle) le porte
+            // dans un élément fils, la ligne elle-même n'a alors pas de libellé.
+            let own = rows.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            let nested = rows.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+            let row = own.exists ? own : nested
+            guard row.waitForExistence(timeout: 10) else { continue }
+            if row.isSelected { return }
+            if row.isHittable { row.tap() }
+            let chosen = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: row)
+            if XCTWaiter.wait(for: [chosen], timeout: 4) == .completed { return }
+        }
+        XCTFail(text + " : la ligne n'a pas pu être sélectionnée : " + app.debugDescription)
     }
 
     private func openMessages(_ app: XCUIApplication) {
@@ -96,20 +126,8 @@ final class MessagingReportScreensUITests: XCTestCase {
         // l'autre personne (rond à droite) et un des miens (rond à gauche).
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "messaging.report.select."))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 15), app.debugDescription)
-        for text in ["Leçon de conduite confirmée", "Merci, je les apporte"] {
-            // Une bulle simple porte le texte dans le libellé de sa ligne ; une réponse (citation et bulle) le porte
-            // dans un élément fils, la ligne elle-même n'a alors pas de libellé.
-            let own = rows.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
-            let nested = rows.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
-            let row = own.exists ? own : nested
-            XCTAssertTrue(row.waitForExistence(timeout: 10), text + " : " + app.debugDescription)
-            // Le fil n'est pas toujours calé en bas à cet instant : la ligne peut être sous l'écran, un appui y tomberait
-            // dans le vide. On fait défiler vers les messages récents (jamais vers le bas : la feuille se fermerait).
-            var swipes = 0
-            while !row.isHittable && swipes < 4 { app.swipeUp(); swipes += 1 }
-            XCTAssertTrue(row.isHittable, text + " : ligne hors d'atteinte : " + app.debugDescription)
-            row.tap()
-        }
+        selectReportRow(containing: "Leçon de conduite confirmée", app: app, rows: rows)
+        selectReportRow(containing: "Merci, je les apporte", app: app, rows: rows)
         let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
                                                             "messaging.report.select."))
         // Les deux ronds ont fini leur transition avant la capture ; la capture précède le contrôle pour survivre à un échec.
