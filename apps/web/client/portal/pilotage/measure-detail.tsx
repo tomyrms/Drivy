@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { ReadFeedback } from '../components/feedback';
-import { PilotageSection } from './components';
+import { coverageBadge, PilotageSection } from './components';
 import { expectedFromCard, exportErrorMessage, lineStatus, lineTitle, measureDomain, measureParts, shownAmount, totalText } from './detail-model';
 import { exportMeasure, readDetails, type DetailLineRecord, type DetailRequest } from './details-api';
 import { describeReason, formatMeasure } from './measure-format';
@@ -82,9 +82,9 @@ function DetailBody({ measure, part, onPart, card, definition, answer, period, f
   return <PilotageSection title={definition.label} action={canExport
     ? <Button variant="outline" size="sm" disabled={file.status === 'busy'} onClick={() => void download()}><Download data-icon="inline-start" aria-hidden="true" />{file.status === 'busy' ? 'Export en cours…' : 'Exporter en CSV'}</Button>
     : undefined}>
-    <div className="pilotage-today-line">
+    <div className="pilotage-detail-value">
       <p className="pilotage-value">{formatMeasure(card.value, card.unit)}</p>
-      {card.coverage.status !== 'COMPLETE' && <Badge variant="outline">{card.coverage.status === 'PARTIAL' ? 'Partiel' : card.coverage.status === 'UNAVAILABLE' ? 'Indisponible' : 'Non applicable'}</Badge>}
+      {card.coverage.status !== 'COMPLETE' && <Badge variant="outline">{coverageBadge[card.coverage.status]}</Badge>}
     </div>
     {card.coverage.reasons.length > 0 && <ul className="pilotage-reasons">{card.coverage.reasons.map(reason => <li key={reason.code}>{describeReason(reason.code, reason.count)}</li>)}</ul>}
     <ScopeLine period={periodLabel(period)} scope={scopeLabel} answer={answer} />
@@ -103,7 +103,7 @@ function DetailBody({ measure, part, onPart, card, definition, answer, period, f
       <p className="pilotage-scope">Total : {totalText(detail.total)} · Affichées : {lines.length} sur {detail.total.lineCount}{!complete && shown !== null ? ` · somme des lignes affichées : ${formatMeasure(shown, 'cents')}` : ''}</p>
       {lines.length === 0
         ? <Empty><EmptyHeader><EmptyMedia variant="icon"><FileSearch aria-hidden="true" /></EmptyMedia><EmptyTitle>Aucune ligne sur cette période</EmptyTitle></EmptyHeader></Empty>
-        : <ul className="pilotage-lines">{lines.map(line => <li key={`${line.kind}:${line.id}`}>
+        : <ul className="pilotage-list pilotage-lines">{lines.map(line => <li key={`${line.kind}:${line.id}`}>
           <div className="pilotage-line-what">
             <strong>{lineTitle(line)}</strong>
             <span>{[time.format(new Date(line.eventAt)), line.instructorLabel?.trim() || null, lineStatus(line),

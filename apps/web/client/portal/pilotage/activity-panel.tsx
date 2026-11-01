@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { ReadFeedback } from '../components/feedback';
 import { breakdownRows, chartBucket, chooseGranularity } from './chart-model';
-import { BreakdownBars } from './breakdown-bars';
+import { BreakdownBars, BreakdownChoice } from './breakdown-bars';
 import { MeasureGroups, type MeasureGroup } from './measure-groups';
 import { formatDuration, formatMeasure } from './measure-format';
 import { MetricsView, ScopeLine } from './metrics-view';
@@ -10,20 +9,23 @@ import { useMetrics, useMetricSeries, type MetricFilters, type MetricsRequest } 
 import { comparisonPlan, periodLabel, type ResolvedPeriod } from './period-model';
 import { StackedBars } from './stacked-bars';
 
-/** Mesures de l'onglet Activité (#378), dans l'ordre de lecture. Heures programmées, réalisées et à venir restent trois grandeurs séparées. */
+/**
+ * Relevé de l'onglet Activité (#378), dans l'ordre de lecture. Heures programmées, réalisées et à venir restent trois grandeurs séparées.
+ * Sur un écran large, leçons et élèves d'un côté, heures et cours collectifs de l'autre.
+ */
 const groups: readonly MeasureGroup[] = [
   { title: 'Leçons', ids: ['L01', 'L02', 'L03', 'L04'] },
   // Les cas non finalisés ne sont jamais comptés comme réalisés : ils ont leur place, et n'apparaissent que s'il y en a.
   { title: 'Non finalisées', ids: ['L05', 'L07'], onlyWhenOpen: true },
-  { title: 'Heures', ids: ['H01', 'H02', 'H03'] },
   { title: 'Élèves', ids: ['P01'] },
-  { title: 'Cours collectifs', ids: ['C02', 'C01', 'C06', 'C07', 'C09'] },
+  { title: 'Heures', ids: ['H01', 'H02', 'H03'], column: 2 },
+  { title: 'Cours collectifs', ids: ['C02', 'C01', 'C06', 'C07', 'C09'], column: 2 },
 ];
 /** À date, seules les mesures déjà réalisées ont la même valeur dans la période entière et dans la période écoulée. */
 const comparableToDate: ReadonlySet<string> = new Set(['L01', 'H02']);
 
 /**
- * Statistiques → Activité : mesures du serveur, comparaison à période cohérente et trois graphiques (évolution, charge par moniteur,
+ * Statistiques → Activité : relevé des mesures du serveur, comparaison à période cohérente et trois graphiques (évolution, charge par moniteur,
  * répartition par permis ou prestation). Aucun classement des moniteurs : les lignes sont rangées par nom.
  */
 export function ActivityPanel({ period, today, filters, scopeLabel, onOpen, returnFocus, onFocused }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void; returnFocus?: string | undefined; onFocused?: () => void }) {
@@ -61,14 +63,14 @@ function EvolutionChart({ period, filters }: { period: ResolvedPeriod; filters: 
 }
 
 type Mix = 'category' | 'product';
+const mixOptions = [{ value: 'category', label: 'Par permis' }, { value: 'product', label: 'Par prestation' }] as const;
 /** Leçons réalisées par permis ou par prestation, au choix. */
 function MixChart({ period, filters }: { period: ResolvedPeriod; filters: MetricFilters }) {
   const [by, setBy] = useState<Mix>('category');
   const loaded = useMetrics({ domain: 'activity', from: period.from, toExclusive: period.toExclusive, ...filters, breakdown: by });
-  const choice = <Tabs value={by} onValueChange={value => setBy(value as Mix)}>
-    <TabsList aria-label="Répartition des leçons réalisées"><TabsTrigger value="category">Par permis</TabsTrigger><TabsTrigger value="product">Par prestation</TabsTrigger></TabsList>
-  </Tabs>;
-  if (!loaded.data) return <figure className="pilotage-chart">{choice}<ReadFeedback loaded={loaded} label="Lecture de la répartition" /></figure>;
-  return <BreakdownBars title={by === 'category' ? 'Leçons réalisées par permis' : 'Leçons réalisées par prestation'} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
+  const title = by === 'category' ? 'Leçons réalisées par permis' : 'Leçons réalisées par prestation';
+  const choice = <BreakdownChoice label="Répartition des leçons réalisées" value={by} options={mixOptions} onChange={setBy} />;
+  if (!loaded.data) return <BreakdownBars title={title} periodText={periodLabel(period)} action={choice} rows={null} format={String} emptyText="" notice={<ReadFeedback loaded={loaded} label="Lecture de la répartition" />} />;
+  return <BreakdownBars title={title} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
     rows={breakdownRows(loaded.data.breakdown, 'L01')} format={value => formatMeasure(value, 'count')} emptyText="Aucune leçon réalisée sur cette période." />;
 }

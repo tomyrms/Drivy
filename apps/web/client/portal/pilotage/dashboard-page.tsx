@@ -3,11 +3,11 @@ import { addDays, civilDateIn } from '../../agenda-model';
 import { useConsole } from '../../console/context';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { ReadFeedback } from '../components/feedback';
 import { chartBucket } from './chart-model';
-import { InstructorSelect, MetricSection, MetricTile, PilotageSection } from './components';
+import { InstructorSelect, MeasureList, MeasureRow, PilotageSection } from './components';
 import { Appointments } from './dashboard-appointments';
+import { lessonValueGroup } from './finance-panel';
 import { MetricsView, ScopeLine } from './metrics-view';
 import { MeasureGroups, type MeasureGroup } from './measure-groups';
 import { useMetricSeries, type MetricDefinition, type MetricMeasure } from './metrics-api';
@@ -28,8 +28,9 @@ interface Scope { today: string; instructor: string | undefined }
 const labelOf = (definitions: ReadonlyMap<string, MetricDefinition>, id: string) => definitions.get(id)?.label ?? id;
 
 /**
- * Tableau de bord (#373, T04 #377) : la journée et ses actions d'abord, puis les rendez-vous, le mois et, pour qui y a droit, les valeurs
- * financières. Chaque bloc lit pour lui-même : l'échec d'un bloc ne retire ni l'accès au planning ni les autres blocs.
+ * Tableau de bord (#373, T04 #377 ; composition #397) : la journée et ses actions d'abord, puis les rendez-vous, puis le mois — son relevé
+ * d'activité et, pour qui y a droit, ses valeurs financières côte à côte, au-dessus de l'évolution jour par jour. Chaque bloc lit pour lui-même :
+ * l'échec d'un bloc ne retire ni l'accès au planning ni les autres blocs.
  */
 export function DashboardPilot() {
   const { school, membership, navigate, routeQuery, setRouteQuery } = useConsole();
@@ -38,6 +39,7 @@ export function DashboardPilot() {
   const instructor = routeQuery?.instructor;
   const { instructorOptions, learnerName, memberName } = useDirectory({ learners: true });
   const scope: Scope = { today, instructor };
+  const scopeLabel = instructorOptions.find(option => option.value === instructor)?.label ?? 'Toute l’école';
   return <section className="pilotage-page">
     <header className="pilotage-heading">
       <div><h1>Tableau de bord</h1><p>{formatCivil(today)}</p></div>
@@ -48,47 +50,53 @@ export function DashboardPilot() {
     </header>
     {rights.activity && <TodayBlock {...scope} navigate={navigate} />}
     <Appointments today={today} instructor={instructor} learnerName={learnerName} memberName={memberName} />
-    {rights.activity && <MonthBlock {...scope} scopeLabel={instructorOptions.find(option => option.value === instructor)?.label ?? 'Toute l’école'} />}
-    {rights.finance && <FinanceBlock {...scope} navigate={navigate} />}
+    {(rights.activity || rights.finance) && <div className="pilotage-month">
+      <div className="pilotage-month-figures">
+        {rights.activity && <MonthBlock {...scope} scopeLabel={scopeLabel} />}
+        {rights.finance && <FinanceBlock {...scope} navigate={navigate} />}
+      </div>
+      {rights.activity && <MonthChart month={currentMonth(today)} instructor={instructor} />}
+    </div>}
   </section>;
 }
 
-/** La journée en une ligne, puis ce qui reste à traiter. */
+/** La journée en une phrase, puis ce qui reste à traiter. */
 function TodayBlock({ today, instructor, navigate }: Scope & { navigate: Navigate }) {
   return <MetricsView label="Lecture de la journée" request={{ domain: 'activity', from: today, toExclusive: addDays(today, 1), instructor }}>
     {(answer, definitions) => {
       const summary = summarizeToday(answer);
       const pending = todo.filter(id => needsAction(answer.measures[id]));
+      const [lead, ...rest] = summary.segments;
       return <>
         <PilotageSection title="Aujourd’hui">
-          <div className="pilotage-today-line">
-            <p className="pilotage-today">{summary.segments.join(' · ')}</p>
-            {summary.incomplete && <Badge variant="outline">Partiel</Badge>}
-          </div>
+          <p className="pilotage-today"><strong>{lead}</strong>{rest.map(segment => <span key={segment}> · {segment}</span>)}
+            {summary.incomplete && <> <Badge variant="outline">Partiel</Badge></>}</p>
         </PilotageSection>
-        <MetricSection title="À traiter">
+        <MeasureList title="À traiter">
           {pending.length === 0
-            ? <li className="pilotage-empty"><Empty><EmptyHeader><EmptyMedia variant="icon"><CircleCheck aria-hidden="true" /></EmptyMedia><EmptyTitle>Rien à traiter</EmptyTitle></EmptyHeader></Empty></li>
-            : pending.map(id => <MetricTile key={id} label={labelOf(definitions, id)} measure={answer.measures[id]!} definition={definitions.get(id)}
+            ? <li className="pilotage-row pilotage-row-done"><CircleCheck aria-hidden="true" />Rien à traiter</li>
+            : pending.map(id => <MeasureRow key={id} label={labelOf(definitions, id)} measure={answer.measures[id]!} definition={definitions.get(id)}
               action={{ label: 'Ouvrir l’agenda', onClick: () => navigate('agenda', instructor ? { instructor } : {}) }} />)}
-        </MetricSection>
+        </MeasureList>
       </>;
     }}
   </MetricsView>;
 }
 
-/** Ce mois-ci : valeurs du mois entier, écart à date avec le mois dernier (voir `MeasureGroups`), évolution jour par jour. */
+/** Ce mois-ci : valeurs du mois entier, écart à date avec le mois dernier (voir `MeasureGroups`). */
 const monthGroups: readonly MeasureGroup[] = [{ title: 'Ce mois-ci', ids: ['L01', 'L02', 'H02'] }];
 const monthComparable: ReadonlySet<string> = new Set(['L01', 'H02']);
+const noComparison: ReadonlySet<string> = new Set();
 function MonthBlock({ today, instructor, scopeLabel }: Scope & { scopeLabel: string }) {
   const month = currentMonth(today);
-  return <MetricsView label="Lecture du mois" request={{ domain: 'activity', from: month.from, toExclusive: month.toExclusive, instructor }}>
-    {(answer, definitions) => <>
-      <MeasureGroups domain="activity" groups={monthGroups} answer={answer} definitions={definitions} period={month} today={today} filters={{ instructor }} toDate comparableToDate={monthComparable} />
-      <MonthChart month={month} instructor={instructor} />
-      <ScopeLine period={periodLabel(month)} scope={scopeLabel} answer={answer} />
-    </>}
-  </MetricsView>;
+  return <div className="pilotage-month-block">
+    <MetricsView label="Lecture du mois" request={{ domain: 'activity', from: month.from, toExclusive: month.toExclusive, instructor }}>
+      {(answer, definitions) => <>
+        <MeasureGroups domain="activity" groups={monthGroups} answer={answer} definitions={definitions} period={month} today={today} filters={{ instructor }} toDate comparableToDate={monthComparable} />
+        <ScopeLine period={periodLabel(month)} scope={scopeLabel} answer={answer} />
+      </>}
+    </MetricsView>
+  </div>;
 }
 
 /** Leçons réalisées et à venir, par jour : la part réalisée est pleine, la part à venir hachurée. */
@@ -100,14 +108,17 @@ function MonthChart({ month, instructor }: { month: ResolvedPeriod; instructor: 
     buckets={series.data.buckets.map(bucket => chartBucket('day', bucket, month.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} /></>;
 }
 
-/** Valeurs financières du mois pour qui y a droit : jamais présentées comme un encaissement ; le lien garde le moniteur filtré. */
+/**
+ * Valeurs financières du mois pour qui y a droit, en relevé : réalisé, à venir et leur total selon le planning, jamais présentés comme un
+ * encaissement. Le lien garde le moniteur filtré.
+ */
 function FinanceBlock({ today, instructor, navigate }: Scope & { navigate: Navigate }) {
   const month = currentMonth(today);
-  return <MetricsView label="Lecture des valeurs du mois" request={{ domain: 'finance', from: month.from, toExclusive: month.toExclusive, instructor }}>
-    {(answer, definitions) => <MetricSection title="Finances du mois"
-      action={<Button variant="ghost" size="sm" onClick={() => navigate('statistiques', { tab: 'finance', ...(instructor ? { instructor } : {}) })}>Voir les finances</Button>}>
-      {(['F01', 'F02', 'F03'] as const).filter(id => answer.measures[id] !== undefined)
-        .map(id => <MetricTile key={id} label={labelOf(definitions, id)} measure={answer.measures[id]!} definition={definitions.get(id)} />)}
-    </MetricSection>}
-  </MetricsView>;
+  const groups: readonly MeasureGroup[] = [{ title: 'Finances du mois', ids: lessonValueGroup.ids, total: lessonValueGroup.total,
+    action: <Button variant="ghost" size="sm" onClick={() => navigate('statistiques', { tab: 'finance', ...(instructor ? { instructor } : {}) })}>Voir les finances</Button> }];
+  return <div className="pilotage-month-block">
+    <MetricsView label="Lecture des valeurs du mois" request={{ domain: 'finance', from: month.from, toExclusive: month.toExclusive, instructor }}>
+      {(answer, definitions) => <MeasureGroups domain="finance" groups={groups} answer={answer} definitions={definitions} period={month} today={today} filters={{ instructor }} toDate={false} comparableToDate={noComparison} />}
+    </MetricsView>
+  </div>;
 }

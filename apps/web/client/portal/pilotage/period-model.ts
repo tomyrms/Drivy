@@ -61,9 +61,11 @@ export function currentMonth(today: string): ResolvedPeriod {
 const dayFormat = new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const monthFormat = new Intl.DateTimeFormat('fr-CH', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const atNoon = (civil: string) => new Date(`${civil}T12:00:00Z`);
-export const formatCivil = (civil: string) => dayFormat.format(atNoon(civil));
+/** Le premier jour du mois s'écrit « 1er » en français ; `Intl` écrit « 1 ». */
+const first = (text: string) => text.replace(/^1(?=\s)/, '1er');
+export const formatCivil = (civil: string) => first(dayFormat.format(atNoon(civil)));
 
-/** Libellé de la période affichée : « octobre 2026 », « 2026 » ou « du 5 octobre 2026 au 12 octobre 2026 ». */
+/** Libellé de la période affichée : « octobre 2026 », « 2026 » ou « du 5 octobre 2026 au 12 octobre 2026 » (« 1er » pour le premier du mois). */
 export function periodLabel(period: ResolvedPeriod): string {
   if (period.choice === 'month' || period.choice === 'previous-month') return monthFormat.format(atNoon(period.from));
   if (period.choice === 'year') return period.from.slice(0, 4);
@@ -72,13 +74,13 @@ export function periodLabel(period: ResolvedPeriod): string {
 
 const shortDay = new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', timeZone: 'UTC' });
 const shortDayYear = new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-/** « du 1 au 12 octobre » ; l'année n'est ajoutée que si la période n'est pas dans l'année de référence. */
+/** « du 1er au 12 octobre » ; l'année n'est ajoutée que si la période n'est pas dans l'année de référence. */
 export function formatSpan(from: string, lastDay: string, referenceYear: string): string {
-  const format = (civil: string, withYear: boolean) => (withYear ? shortDayYear : shortDay).format(atNoon(civil));
+  const format = (civil: string, withYear: boolean) => first((withYear ? shortDayYear : shortDay).format(atNoon(civil)));
   const withYear = from.slice(0, 4) !== referenceYear || lastDay.slice(0, 4) !== referenceYear;
   if (from === lastDay) return `le ${format(lastDay, withYear)}`;
   const sameMonth = from.slice(0, 7) === lastDay.slice(0, 7);
-  const start = sameMonth ? String(Number(from.slice(8))) : format(from, from.slice(0, 4) !== lastDay.slice(0, 4));
+  const start = sameMonth ? first(`${Number(from.slice(8))} `).trimEnd() : format(from, from.slice(0, 4) !== lastDay.slice(0, 4));
   return `du ${start} au ${format(lastDay, withYear)}`;
 }
 

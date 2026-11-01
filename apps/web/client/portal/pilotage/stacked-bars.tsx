@@ -20,11 +20,23 @@ export interface ChartSeries { label: string; pattern: 'solid' | 'hatch' }
 
 const defaultWidth = 640, height = 150, left = 60, top = 12, bottom = 22;
 
+/**
+ * Graduation lisible : au plus quatre intervalles d'un pas rond (1, 2 ou 5 fois une puissance de dix, jamais sous 1),
+ * et un sommet qui couvre la plus haute valeur. Les valeurs étant des entiers (leçons, secondes, centimes), chaque graduation l'est aussi.
+ */
+export function niceScale(peak: number): { max: number; ticks: number[] } {
+  if (peak <= 1) return { max: 1, ticks: [0, 1] };
+  const power = 10 ** Math.floor(Math.log10(peak));
+  const step = [1, 2, 5, 10].map(factor => factor * power).find(candidate => Math.ceil(peak / candidate) <= 4) ?? power * 10;
+  const intervals = Math.ceil(peak / step);
+  return { max: step * intervals, ticks: Array.from({ length: intervals + 1 }, (_, index) => index * step) };
+}
+
 export interface StackedBar { key: string; x: number; width: number; slotX: number; slotWidth: number; layers: { y: number; height: number }[] }
-/** Géométrie pure : l'échelle part de zéro et le plus haut total remplit la zone ; une barre vide a des couches de hauteur nulle. */
-export function stackLayout(buckets: readonly ChartBucket[], width = defaultWidth): { bars: StackedBar[]; max: number } {
+/** Géométrie pure : l'échelle part de zéro et monte à la graduation qui couvre le plus haut total ; une barre vide a des couches de hauteur nulle. */
+export function stackLayout(buckets: readonly ChartBucket[], width = defaultWidth): { bars: StackedBar[]; max: number; ticks: number[] } {
   const totals = buckets.map(bucket => bucket.values.reduce<number>((sum, value) => sum + (value ?? 0), 0));
-  const max = Math.max(1, ...totals);
+  const { max, ticks } = niceScale(Math.max(1, ...totals));
   const slot = (width - left) / Math.max(1, buckets.length), barWidth = Math.max(2, slot * 0.68);
   const scale = (height - top - bottom) / max;
   const bars = buckets.map((bucket, index) => {
@@ -36,13 +48,16 @@ export function stackLayout(buckets: readonly ChartBucket[], width = defaultWidt
     });
     return { key: bucket.key, x: left + index * slot + (slot - barWidth) / 2, width: barWidth, slotX: left + index * slot, slotWidth: slot, layers };
   });
-  return { bars, max };
+  return { bars, max, ticks };
 }
 
 const total = (buckets: readonly ChartBucket[], layer: number) => buckets.reduce((sum, bucket) => sum + (bucket.values[layer] ?? 0), 0);
 
-export function StackedBars({ title, periodText, buckets, series, emptyText, format = String, tickFormat = String }: {
+export function StackedBars({ title, note, periodText, buckets, series, emptyText, format = String, tickFormat = String }: {
   title: string;
+  /** Précision visible sous le titre quand elle change la lecture (« Par date de saisie ») ; la période, elle, est dite une fois par la page. */
+  note?: string;
+  /** Période lue, reprise dans le résumé et le tableau des valeurs. */
   periodText: string;
   buckets: readonly ChartBucket[];
   series: readonly ChartSeries[];
@@ -78,6 +93,7 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
     }).join(', ')}`;
   };
   const fill = (pattern: ChartSeries['pattern']) => pattern === 'solid' ? 'var(--primary)' : `url(#${hatch})`;
+  const yOf = (value: number) => height - bottom - (value / layout.max) * (height - top - bottom);
   const step = Math.max(1, Math.ceil(buckets.length / Math.max(2, Math.floor(width / 64))));
   const move = (to: number) => {
     const next = Math.max(0, Math.min(buckets.length - 1, to));
@@ -88,37 +104,43 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
     if (target === null) return;
     event.preventDefault(); move(target);
   };
+  const swatch = (pattern: ChartSeries['pattern']) => <svg width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="12" height="12" rx="2" fill={fill(pattern)} stroke="var(--primary)" strokeWidth="1" /></svg>;
   return <figure ref={frame} className="pilotage-chart">
-    <figcaption><h3>{title}</h3><span>{periodText}</span></figcaption>
+    <figcaption>
+      <div className="pilotage-chart-title"><h3>{title}</h3>{note && <p>{note}</p>}</div>
+    </figcaption>
     {totals.every(value => value === 0)
       ? <p className="pilotage-chart-empty">{emptyText}</p>
       : <>
-        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="group" aria-label={summary} className="pilotage-chart-svg">
-          <defs>
-            <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="6" height="6" fill="var(--card)" /><line x1="0" y1="0" x2="0" y2="6" stroke="var(--primary)" strokeWidth="2.5" />
-            </pattern>
-          </defs>
-          <line x1={left} x2={width} y1={height - bottom} y2={height - bottom} stroke="var(--border)" />
-          <text x={0} y={top + 4} className="pilotage-chart-tick">{tickFormat(layout.max)}</text>
-          <text x={0} y={height - bottom} className="pilotage-chart-tick">0</text>
-          {layout.bars.map((bar, index) => <g key={bar.key} ref={node => { bars.current[index] = node; }} role="img" aria-label={reading(index)}
-            tabIndex={index === roving ? 0 : -1} data-active={active === index} className="pilotage-chart-bar"
-            onFocus={() => { setRoving(index); setActive(index); }} onBlur={() => setActive(null)}
-            onMouseEnter={() => setActive(index)} onMouseLeave={() => setActive(null)} onClick={() => setActive(index)} onKeyDown={onKeyDown(index)}>
-            <rect className="pilotage-chart-hit" x={bar.slotX} y={top} width={bar.slotWidth} height={height - top - bottom} />
-            {bar.layers.map((layer, layerIndex) => layer.height > 0 && <rect key={layerIndex} x={bar.x} y={layer.y} width={bar.width} height={layer.height}
-              fill={fill(series[layerIndex]!.pattern)} stroke="var(--primary)" strokeWidth="1" />)}
-            {(index % step === 0 || index === layout.bars.length - 1) && <text x={bar.x + bar.width / 2} y={height - 6} textAnchor="middle" className="pilotage-chart-tick">{buckets[index]!.label}</text>}
-          </g>)}
-        </svg>
-        <p className="pilotage-chart-readout" aria-live="polite">{active === null ? ' ' : reading(active)}</p>
-        <ul className="pilotage-legend">
-          {series.map(item => <li key={item.label}>
-            <svg width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="12" height="12" fill={fill(item.pattern)} stroke="var(--primary)" strokeWidth="1" /></svg>
-            {item.label}
-          </li>)}
-        </ul>
+        <div className="pilotage-chart-frame">
+          <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="group" aria-label={summary} className="pilotage-chart-svg">
+            <defs>
+              <pattern id={hatch} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="5" height="5" fill="var(--accent)" /><line x1="0" y1="0" x2="0" y2="5" stroke="var(--primary)" strokeWidth="1.5" />
+              </pattern>
+            </defs>
+            {layout.ticks.map(tick => <g key={tick} aria-hidden="true">
+              <line x1={left} x2={width} y1={yOf(tick)} y2={yOf(tick)} className={tick === 0 ? 'pilotage-chart-axis' : 'pilotage-chart-grid'} />
+              <text x={left - 8} y={yOf(tick) + 4} textAnchor="end" className="pilotage-chart-tick">{tick === 0 ? '0' : tickFormat(tick)}</text>
+            </g>)}
+            {layout.bars.map((bar, index) => <g key={bar.key} ref={node => { bars.current[index] = node; }} role="img" aria-label={reading(index)}
+              tabIndex={index === roving ? 0 : -1} data-active={active === index} className="pilotage-chart-bar"
+              onFocus={() => { setRoving(index); setActive(index); }} onBlur={() => setActive(null)}
+              onMouseEnter={() => setActive(index)} onMouseLeave={() => setActive(null)} onClick={() => setActive(index)} onKeyDown={onKeyDown(index)}>
+              <rect className="pilotage-chart-hit" x={bar.slotX} y={top} width={bar.slotWidth} height={height - top - bottom} />
+              {bar.layers.map((layer, layerIndex) => layer.height > 0 && <rect key={layerIndex} x={bar.x} y={layer.y} width={bar.width} height={layer.height}
+                fill={fill(series[layerIndex]!.pattern)} stroke={series[layerIndex]!.pattern === 'hatch' ? 'var(--primary)' : 'none'} strokeWidth="1" />)}
+              {(index % step === 0 || index === layout.bars.length - 1) && <text x={bar.x + bar.width / 2} y={height - 6} textAnchor="middle" className="pilotage-chart-tick">{buckets[index]!.label}</text>}
+            </g>)}
+          </svg>
+        </div>
+        {/* Une seule ligne sous le dessin : la légende au repos, la lecture de la barre touchée ou survolée, qui nomme elle-même ses séries. */}
+        <div className="pilotage-chart-foot">
+          {active === null
+            ? <ul className="pilotage-legend">{series.map(item => <li key={item.label}>{swatch(item.pattern)}{item.label}</li>)}</ul>
+            : <p className="pilotage-chart-readout" aria-hidden="true">{reading(active)}</p>}
+        </div>
+        <p className="sr-only" aria-live="polite">{active === null ? '' : reading(active)}</p>
         <details className="pilotage-chart-values">
           <summary>Voir les valeurs</summary>
           <Table>

@@ -106,11 +106,13 @@ describe('histogramme empilé', () => {
 
 describe('base de comparaison', () => {
   test('nomme la plage, avec l’année seulement si elle diffère', () => {
-    expect(formatSpan('2026-10-01', '2026-10-12', '2026')).toBe('du 1 au 12 octobre');
+    expect(formatSpan('2026-10-01', '2026-10-12', '2026')).toBe('du 1er au 12 octobre');
     expect(formatSpan('2026-09-28', '2026-10-05', '2026')).toBe('du 28 septembre au 5 octobre');
-    expect(formatSpan('2025-12-01', '2025-12-12', '2026')).toBe('du 1 au 12 décembre 2025');
+    expect(formatSpan('2025-12-01', '2025-12-12', '2026')).toBe('du 1er au 12 décembre 2025');
     expect(formatSpan('2025-12-28', '2026-01-05', '2026')).toBe('du 28 décembre 2025 au 5 janvier 2026');
-    expect(formatSpan('2026-11-01', '2026-11-01', '2026')).toBe('le 1 novembre');
+    expect(formatSpan('2026-11-01', '2026-11-01', '2026')).toBe('le 1er novembre');
+    expect(formatSpan('2026-10-31', '2026-11-01', '2026')).toBe('du 31 octobre au 1er novembre');
+    expect(formatSpan('2026-10-11', '2026-10-21', '2026')).toBe('du 11 au 21 octobre');
   });
 });
 
@@ -143,7 +145,7 @@ describe('graphiques d’activité', () => {
     const week = chartBucket('week', { from: '2026-11-09', toExclusive: '2026-11-16', partial: false }, '2026', [3, null]);
     expect(week.label).toMatch(/^9\snov\.?$/);
     expect(week.title).toBe('Semaine du 9 au 15 novembre');
-    expect(chartBucket('week', { from: '2026-11-01', toExclusive: '2026-11-02', partial: true }, '2026', [0, 0]).title).toBe('Semaine le 1 novembre (partielle)');
+    expect(chartBucket('week', { from: '2026-11-01', toExclusive: '2026-11-02', partial: true }, '2026', [0, 0]).title).toBe('Semaine le 1er novembre (partielle)');
     const month = chartBucket('month', { from: '2026-11-01', toExclusive: '2026-12-01', partial: true }, '2026', [0, 0]);
     expect(month.label).toMatch(/^nov\.?$/);
     expect(month.title).toBe('novembre 2026 (partielle)');
