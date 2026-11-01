@@ -33,7 +33,7 @@ export interface ExamView {id:string;trainingId:string;kind:Kind;categoryCode:st
  attempt:number|null;needsResult:boolean;version:number;createdAt:string}
 export interface ExamSummary {kind:Kind;passed:boolean;attempts:number;scheduledExamId:string|null}
 export interface ExamState {trainingId:string;canManage:boolean;escortCandidates:{membershipId:string;displayName:string}[];exams:ExamView[];summary:ExamSummary[]}
-export interface ExamListItem {exam:ExamView;learnerDisplayName:string}
+export interface ExamListItem {exam:ExamView;learnerId:string;learnerDisplayName:string}
 
 const columns='id,training_id,kind,category_code,status,starts_at,time_zone,location,escort_instructor_membership_id,escort_starts_at,escort_ends_at,result_note,result_recorded_at,postponed_to_exam_id,version,created_at';
 const kinds:Kind[]=['THEORY','PRACTICAL'];
@@ -72,13 +72,14 @@ export async function examState(db:PoolClient,schoolId:string,trainingId:string,
 }
 /** Examens prévus de l'école dans le périmètre de lecture : ceux dont le résultat reste à renseigner, ou ceux à venir (agenda de l'élève). */
 export async function examList(db:PoolClient,schoolId:string,filter:'PENDING_RESULT'|'UPCOMING',now=new Date()):Promise<ExamListItem[]>{
- const rows=(await db.query<ExamRow&{learner_display_name:string|null}>(`SELECT ${columns.split(',').map(column=>`e.${column}`).join(',')},drivy.exam_learner_name(e.training_id) AS learner_display_name
+ const rows=(await db.query<ExamRow&{learner_display_name:string|null;learner_id:string}>(`SELECT ${columns.split(',').map(column=>`e.${column}`).join(',')},drivy.exam_learner_name(e.training_id) AS learner_display_name,
+  (SELECT t.learner_id FROM drivy.training t WHERE t.school_id=e.school_id AND t.id=e.training_id) AS learner_id
   FROM drivy.exam e WHERE e.school_id=$1 AND e.status='SCHEDULED' AND ${filter==='PENDING_RESULT'?'e.starts_at<=$2':'e.starts_at>$2'}
   ORDER BY e.starts_at ${filter==='PENDING_RESULT'?'DESC':'ASC'},e.id LIMIT 100`,[schoolId,now])).rows;
  if(!rows.length)return [];
  const siblings=(await db.query<ExamRow>(`SELECT ${columns} FROM drivy.exam WHERE school_id=$1 AND training_id=ANY($2::uuid[])`,[schoolId,[...new Set(rows.map(row=>row.training_id))]])).rows;
  const attempts=attemptNumbers(siblings);
- return rows.map(row=>({exam:examView(row,attempts.get(row.id),now),learnerDisplayName:row.learner_display_name??''}));
+ return rows.map(row=>({exam:examView(row,attempts.get(row.id),now),learnerId:row.learner_id,learnerDisplayName:row.learner_display_name??''}));
 }
 
 const failures:Record<string,[number,string]>={

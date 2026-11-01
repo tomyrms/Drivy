@@ -121,7 +121,7 @@
             "items": {
               "type": "array",
               "maxItems": 100,
-              "items": {"type": "object", "additionalProperties": false, "required": ["exam", "learnerDisplayName"], "properties": {"exam": {"$ref": "#/$defs/Exam"}, "learnerDisplayName": {"type": "string"}}},
+              "items": {"type": "object", "additionalProperties": false, "required": ["exam", "learnerId", "learnerDisplayName"], "properties": {"exam": {"$ref": "#/$defs/Exam"}, "learnerId": {"type": "string", "format": "uuid"}, "learnerDisplayName": {"type": "string"}}},
               "description": "À renseigner : du plus récent au plus ancien. À venir : du plus proche au plus lointain."
             }
           }

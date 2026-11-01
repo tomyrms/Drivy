@@ -14,6 +14,7 @@ import { CommandFeedback, ReadFeedback } from './learner-feedback';
 import { LearnerFollowUp } from './learner-follow-up';
 import { LearnerFormations, LearnerConfirmation } from './learner-management';
 import { LearnerInformation } from './learner-information';
+import { LearnerExams, PendingExamResults } from './learner-exams';
 import './learners.css';
 
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('');
@@ -41,9 +42,10 @@ export function LearnerPilot() {
     {state.resources.data?.truncated && <Alert><AlertTitle>Références partiellement chargées</AlertTitle><AlertDescription>Les modifications attendent la lecture complète des formations, des moniteurs et des programmes.</AlertDescription></Alert>}
     {state.selectedTrainings.data?.truncated && <Alert><AlertTitle>Formations partiellement chargées</AlertTitle><AlertDescription>Les modifications sont indisponibles tant que la liste complète n’est pas lue.</AlertDescription></Alert>}
     <Tabs value={section} onValueChange={value => selectSection(String(value))} className="student-tabs">
-      <TabsList aria-label="Rubriques du dossier"><TabsTrigger value="follow-up">Suivi</TabsTrigger><TabsTrigger value="formations">Formations</TabsTrigger><TabsTrigger value="information">Informations</TabsTrigger></TabsList>
+      <TabsList aria-label="Rubriques du dossier"><TabsTrigger value="follow-up">Suivi</TabsTrigger><TabsTrigger value="formations">Formations</TabsTrigger><TabsTrigger value="exams">Examens</TabsTrigger><TabsTrigger value="information">Informations</TabsTrigger></TabsList>
       <TabsContent value="follow-up"><LearnerFollowUp state={state} /></TabsContent>
       <TabsContent value="formations"><LearnerFormations state={state} /></TabsContent>
+      <TabsContent value="exams"><LearnerExams state={state} /></TabsContent>
       <TabsContent value="information"><LearnerInformation learner={current} state={state} /></TabsContent>
     </Tabs>
     <LearnerConfirmation state={state} />
@@ -58,6 +60,7 @@ function LearnerDirectory({ state }: { state: LearnerController }) {
       <PortalSelect id="directory-readiness" label="Profil" value={state.readinessFilter} onValueChange={value => { if (value === 'all' || value === 'incomplete') state.setReadinessFilter(value); state.setPage(1); }} options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
       <PortalSelect id="directory-sort" label="Trier" value={state.sort} onValueChange={value => { if (value === 'name-asc' || value === 'name-desc') state.setSort(value); }} options={[{ value: 'name-asc', label: 'Nom A–Z' }, { value: 'name-desc', label: 'Nom Z–A' }]} />
     </div>
+    <PendingExamResults state={state} />
     <ReadFeedback loaded={state.loaded} />
     {state.loaded.data?.truncated && <Alert><AlertTitle>Annuaire partiellement chargé</AlertTitle><AlertDescription>La recherche porte sur les dossiers chargés.</AlertDescription></Alert>}
     <div className="student-directory" role="list" aria-label="Dossiers élèves">{state.pageRows.map(learner => {
