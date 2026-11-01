@@ -89,6 +89,8 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private var closedPolls: Set<UUID> = []
     private var mutationReceipts: [UUID: (request: URLRequest, response: SchoolHTTPResponse)] = [:]
     private let mutationDelay: Int
+    /// Retard de la page ancienne (secondes) : laisse « Charger les messages précédents » visible en haut du fil le temps de le mesurer.
+    private let olderPageDelay: Int
     private let refuseMutation: Bool
     private let denyMutationAccess: Bool
     private let unreadFilter: Bool
@@ -102,6 +104,8 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         let delay = arguments.first { $0.hasPrefix("-messaging-ui-mutation-delay=") }
             .flatMap { Int($0.dropFirst("-messaging-ui-mutation-delay=".count)) } ?? 0
         mutationDelay = [1, 5, 15].contains(delay) ? delay : 0
+        olderPageDelay = arguments.first { $0.hasPrefix("-messaging-ui-older-delay=") }
+            .flatMap { Int($0.dropFirst("-messaging-ui-older-delay=".count)) }.map { min(max($0, 0), 30) } ?? 0
         refuseMutation = arguments.contains("-messaging-ui-mutation-refused")
         denyMutationAccess = arguments.contains("-messaging-ui-mutation-access-denied")
         unreadFilter = arguments.contains("-messaging-ui-unread-filter")
@@ -208,6 +212,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             if rich, let id = uuid(after: "conversations", in: parts) {
                 let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                     .queryItems?.first { $0.name == "cursor" }?.value
+                if cursor == Self.generalPageCursor, olderPageDelay > 0 { try await Task.sleep(for: .seconds(olderPageDelay)) }
                 data = try messagePage(id, cursor: cursor)
             } else {
                 data = #"{"items":[],"nextCursor":null,"access":{"canWrite":\#(!readOnly),"readableUntilSequence":\#(readOnly ? "0" : "null"),"isGroupAdmin":true},"readStates":[]}"#
