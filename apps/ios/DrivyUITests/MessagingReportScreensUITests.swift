@@ -86,25 +86,24 @@ final class MessagingReportScreensUITests: XCTestCase {
         general.tap()
         let options = app.buttons["messaging.options"]
         XCTAssertTrue(options.waitForExistence(timeout: 15), app.debugDescription)
-        // Le fil avant la sélection : sert de référence pour juger la mise en page de la sélection.
-        capture("06a-fil-avant-selection")
         options.tap()
         let startReport = app.buttons["Signaler des messages"]
         XCTAssertTrue(startReport.waitForExistence(timeout: 10), app.debugDescription)
         startReport.tap()
 
         // Les lignes de sélection portent un identifiant propre : un libellé seul vise aussi la pastille épinglée, qui
-        // répète le texte du message et ne le sélectionne pas.
-        for text in ["Pensez aux papiers du permis", "Leçon de conduite confirmée"] {
+        // répète le texte du message et ne le sélectionne pas. Deux messages du bas du fil, hors de la pastille : un de
+        // l'autre personne (rond à droite) et un des miens (rond à gauche).
+        for text in ["Leçon de conduite confirmée", "Merci, je les apporte"] {
             let predicate = NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "messaging.report.select.", text)
             let row = app.buttons.matching(predicate).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 15), text + " : " + app.debugDescription)
             row.tap()
         }
-        capture("06-selection-des-messages")
         let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
                                                             "messaging.report.select."))
         XCTAssertEqual(selectedRows.count, 2, "Les deux messages choisis sont sélectionnés : " + app.debugDescription)
+        capture("06-selection-des-messages")
 
         let send = app.buttons["messaging.report.send"]
         XCTAssertTrue(send.waitForExistence(timeout: 10), app.debugDescription)
