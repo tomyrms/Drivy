@@ -674,3 +674,275 @@ Ce que ces chiffres ne disent pas : aucun objectif de performance n'est déclar�
 - Les lectures `occurrence` et `paiement` du détail calculent encore leur libellé par ligne ; seul le détail des leçons a été rendu indépendant du nombre de lignes.
 - Aucun écran : T03 à T09 (hors périmètre de cette livraison).
 - Aucun déploiement : la migration n'est appliquée sur aucune base de production.
+
+## 12. T03 (#376) : navigation, composition et socle d'affichage
+
+Code : `apps/web/client/portal/pilotage/` (composants, période, formats, droits, lectures), `portal/destinations.ts` (navigation), `console/route.ts` (adresses). Aucun changement d'API ni de contrat.
+
+### 12.1 Navigation (arbitrages à regarder à l'écran)
+
+- **Un espace « Pilotage », deux rubriques** (Tableau de bord, Statistiques), en première place. Avec deux entrées séparées, la barre mobile aurait sept boutons ; elle en a six. Contrepartie : un clic de plus pour atteindre Statistiques depuis une autre page (l'espace s'ouvre sur le tableau de bord).
+- **L'entrée quotidienne d'une école active ouvre toujours l'agenda.** Faire du tableau de bord l'accueil par défaut est un critère de T04 (#377), qui y met le contenu quotidien. Les cas DRAFT, ARCHIVED, la préparation et le catalogue ne sont pas touchés.
+- **Statistiques** n'est offerte qu'à un administrateur ou à qui a `VIEW_SCHOOL_METRICS` ou `VIEW_FINANCIAL_METRICS` ; l'onglet Finances demande le droit financier. C'est un affichage : l'API revérifie à chaque lecture (section 5). Une adresse directe sans droit montre un refus, jamais des chiffres.
+- **Adresses** : `/statistiques?tab=finance&period=custom&start=2026-10-05&end=2026-10-12&instructor=<uuid>&product=<clé>`. Sans `tab`, Activité ; sans `period`, le mois en cours. `end` est la dernière journée comprise ; la fin exclue envoyée au serveur est déduite une seule fois, dans `period-model.ts`. Un paramètre répété, inconnu ou mal formé est ignoré. Changer un filtre remplace l'entrée d'historique ; changer d'onglet en ajoute une. Seul le moniteur suit d'une rubrique à l'autre.
+
+### 12.2 Ce que les pages montrent
+
+Les chiffres viennent de `GET metrics` et `GET metrics/definitions` (relais BFF de T02) ; le web ne recalcule rien.
+
+- **Tableau de bord** : bouton Planifier une leçon ; À traiter (A01, A02, A03, seulement celles dont la valeur est positive ou que le serveur ne peut pas garantir à zéro ; chacune ouvre l'agenda) ; Ce mois-ci (L01, L02, H02) ; une ligne période · portée · heure de calcul.
+- **Statistiques → Activité** : Leçons (L01 à L04), Heures (H02, H03), Élèves (P01), Cours collectifs (C01, C06, C09).
+- **Statistiques → Finances** : Leçons individuelles (F01 à F04), Cours collectifs (F05 et F07, cette dernière indisponible par construction).
+- Une tuile montre la valeur, un badge **seulement** si la couverture est partielle, indisponible ou non applicable, et une aide « Comment ce chiffre est calculé » (formule du dictionnaire et parts exclues). Une valeur absente est un tiret, jamais un zéro.
+- Rien n'est affiché tant que les chiffres et le dictionnaire ne sont pas tous deux lus. La portée de lecture contient école, domaine, période et moniteur : changer un filtre efface les chiffres précédents au lieu de les montrer sous un autre titre. Une réponse dont la période ne correspond pas à la demande est refusée.
+
+### 12.3 Graphiques
+
+Aucun graphique dans T03. Constat : `apps/web` n'a aucune bibliothèque de graphiques ; le composant Chart de shadcn s'appuie sur `recharts`, absent des dépendances. L'ajouter demande une dépendance verrouillée et la mise à jour du verrou. Non vérifié ici : la compatibilité de `recharts` avec React 19.3. À trancher en T05 (#378) avec le premier graphique, en face d'un dessin SVG sans dépendance.
+
+### 12.4 Reste
+
+- Aperçu synthétique (`?page=tableau-de-bord`, `?page=statistiques`) jamais regardé : 390 et 1440 px, clair et sombre, à faire par le porteur. Les valeurs de l'aperçu sont inventées.
+- Filtres prestation et permis : `product` et `category` existent dans l'adresse, aucun contrôle ne les pose encore (T05). La comparaison (`compare`) est prévue dans le lecteur, aucune page ne la demande.
+- Barre mobile à six entrées : l'étiquette « Formations » peut être tronquée à 320 px (déjà le cas à cinq).
+- Non exécuté : aucun test. Seul `tsc --noEmit` a tourné, sans `lucide-react` ni `class-variance-authority` installés sur cette machine ; il ne signale aucune erreur dans les fichiers touchés. Aucun rendu navigateur.
+
+## 13. T04 (#377) : accueil quotidien
+
+Code : `portal/pilotage/dashboard-page.tsx` (blocs), `dashboard-appointments.tsx` (rendez-vous), `appointments.ts` et `today-summary.ts` (règles pures), `stacked-bars.tsx` (graphique), `portal/overview/overview-page.tsx` (entrée). Aucun changement d'API.
+
+### 13.1 Entrée par défaut (changement visible pour tous, à valider à l'écran)
+
+L'entrée nue d'une école active ouvre maintenant le tableau de bord, plus l'agenda. Une adresse qui porte déjà un contexte d'agenda (semaine, jour, moniteur, leçon, élève, cours, séance, vue) garde son agenda, pour que les liens existants ne changent pas de destination. DRAFT, ARCHIVED, préparation de l'école et catalogue sont inchangés. Le test navigateur de la CI (`scripts/dev/check-school-opening.ts`) attendait l'agenda pour l'adresse d'entrée nue d'une école active : il a échoué sur la PR #395, ce qui a confirmé le changement. **Son assertion a été remplacée, pas retirée** : l'adresse d'entrée avec contexte d'agenda (`?week=…`) garde l'assertion d'origine (elle retrouve l'agenda), et l'adresse nue doit ouvrir le tableau de bord, qui doit se lire sur la vraie API sans « Lecture impossible » ni débordement mobile. Le changement vient de #376 et #377 (« accueil d'une école active »), pas d'une décision de la CI ; revenir à l'agenda par défaut ne demande que de forcer `agendaLink` dans `overview-page.tsx` et de restaurer l'ancienne assertion.
+
+### 13.2 Blocs et sources
+
+Chaque bloc lit pour lui-même : l'échec d'un bloc ne retire ni les autres blocs ni l'accès au planning. Le filtre Moniteur (Toute l'équipe par défaut) est l'adresse `instructor`, partagée avec Statistiques.
+
+- **Aujourd'hui** : une lecture d'activité sur le jour civil de l'école. Le total est L08 (le contrôle du serveur), puis seulement les états non nuls (L01, L06, L07, L05, L02, L03, L04), les heures programmées (H01) et les séances collectives (C01). Un badge « Partiel » apparaît si une de ces mesures n'est pas complète ; un total absent se lit « Leçons du jour indisponibles », jamais « Aucune leçon ».
+- **À traiter** : A01, A02, A03 lorsqu'elles sont positives ou que le serveur ne garantit pas leur zéro. Chacune ouvre l'agenda en gardant le moniteur. Sinon « Rien à traiter ». Aucune demande d'élève n'est exposée (Q18).
+- **Prochains rendez-vous** : leçons et séances collectives des sept prochains jours, par la projection de l'agenda (`agendaDays`), huit lignes au plus. Sont exclues les leçons terminées, annulées ou en absence, les séances passées et les cours qui ne sont pas publiés. Un badge n'apparaît que si la leçon sort de l'ordinaire (À démarrer, En cours, À terminer). La ligne ouvre la fiche dans l'agenda, avec semaine, jour et moniteur. Une lecture de séances qui échoue ne cache pas les leçons. La liste se recalcule chaque minute, sans nouvelle lecture.
+- **Ce mois-ci** : L01, L02 et H02 du mois entier. L'écart de L01 et de H02 vient d'une seconde lecture, du 1er à aujourd'hui avec `compare=previous-month` (mode `MONTH_TO_DATE` : la même plage du mois précédent) ; la base est nommée (« vs du 1 au 12 octobre ») et L02 n'a pas d'écart. Si cette seconde lecture échoue, les tuiles s'affichent sans écart. Une leçon réalisée l'est déjà : sa valeur est la même dans les deux lectures.
+- **Graphique** : « Leçons par jour », empilé, réalisées en plein et à venir en hachuré (la distinction ne repose pas sur la couleur), légende, résumé lu par les lecteurs d'écran et tableau des valeurs sous « Voir les valeurs ». Un jour sans valeur laisse un vide.
+- **Finances du mois** (droit financier seulement) : F01, F02, F03 avec leur couverture, jamais présentées comme un encaissement ; « Voir les finances » ouvre Statistiques → Finances avec le moniteur.
+
+### 13.3 Graphique sans dépendance (arbitrage)
+
+Le graphique est un histogramme SVG écrit pour cet usage (`stacked-bars.tsx`), sans bibliothèque ni mise à jour du verrou des dépendances. C'est un choix de T04 pour ne pas bloquer l'accueil ; T05 et T06 peuvent le réutiliser ou décider d'une bibliothèque (section 12.3) si leurs besoins dépassent des barres empilées.
+
+### 13.4 Reste
+
+- Jamais regardé : aperçu `?page=tableau-de-bord` (valeurs synthétiques) à 390 et 1440 px, clair et sombre ; la hachure du graphique en sombre en particulier.
+- Les chiffres de la journée ne se rafraîchissent qu'après une commande confirmée ou une relecture de la page, pas toutes les minutes.
+- Le changement d'école purge l'ancien contexte par la portée de lecture ; non qualifié.
+- Non exécuté : aucun test (écrits : `dashboard-models.test.ts`), aucun rendu navigateur. `tsc --noEmit` sans erreur dans les fichiers touchés, avec les mêmes réserves qu'en 12.4.
+
+## 14. T05 (#378) : Statistiques → Activité
+
+Code : `portal/pilotage/activity-panel.tsx`, `chart-model.ts` (granularité, intervalles, répartitions), `breakdown-bars.tsx`, `stacked-bars.tsx`, filtres dans `components.tsx`, `use-catalogue-options.ts`. Aucun changement d'API.
+
+### 14.1 Filtres
+
+Période (Ce mois, Mois dernier, Cette année, Période libre), moniteur, puis Permis et Prestation en second niveau. Ils sont dans l'adresse (`instructor`, `category`, `product`) et s'appliquent à toutes les mesures, tous les graphiques et à l'onglet Finances. Les choix viennent du catalogue de l'école (offres pour les permis, prestations de leçon individuelle pour les prestations) ; un filtre sans choix n'est pas affiché, et une valeur déjà dans l'adresse reste proposée même si le catalogue ne la connaît plus. Un filtre inapplicable à une mesure (cours collectifs) la rend « Non applicable », comme le serveur le décide.
+
+### 14.2 Mesures
+
+Leçons (L01 à L04 ; L05 « À vérifier » et L07 « À finaliser » seulement s'il y en a, ou si le serveur ne peut pas garantir leur zéro, donc jamais arbitrairement réalisées), Heures (H01 programmées, H02 réalisées aux durées connues, H03 à venir : trois grandeurs jamais additionnées), Élèves (P01 : élèves distincts ayant eu une activité), Cours collectifs (C02 cours, C01 séances, C06 inscriptions actives, C07 places retenues, C09 remplissage : cinq mesures distinctes, une inscription n'est pas multipliée par ses séances). Le taux d'occupation du planning n'est pas montré : aucune mesure du dictionnaire n'a de dénominateur de disponibilité fiable (section 4), et le chantier n'invente pas un moteur de disponibilité.
+
+### 14.3 Comparaison
+
+Calculée par le serveur, jamais par le web, et seulement sur une base équitable (`comparisonPlan`) :
+
+- période écoulée : mois complet contre mois complet, sinon même nombre de jours juste avant (`equivalent-period`) ;
+- mois en cours : à date, par une seconde lecture du 1er à aujourd'hui comparée à la même plage du mois précédent, pour les seules mesures réalisées (L01, H02), dont la valeur est la même dans la période entière et dans la période écoulée ;
+- période encore ouverte (année en cours, période libre jusque dans le futur) : aucune comparaison.
+
+Une base nulle ou partielle n'a pas de pourcentage : le serveur le dit (`percentReason`) et le web affiche l'écart absolu, ou rien.
+
+### 14.4 Trois graphiques
+
+1. **Évolution** : leçons réalisées (plein) et à venir (hachuré) par jour jusqu'à 14 jours, par semaine jusqu'à 93 jours, par mois au-delà ; un intervalle rogné par la période se dit « partielle ».
+2. **Heures programmées par moniteur** : barres horizontales avec la valeur écrite, rangées **par nom**, jamais par valeur (R94 : pas de classement des moniteurs). Absent quand un moniteur est filtré.
+3. **Leçons réalisées par permis ou par prestation**, au choix. Les groupes que le serveur n'a pas pu attribuer passent en dernier (« Non attribué »). Un zéro et une valeur absente ne sont pas dessinés.
+
+Chaque barre de l'évolution se lit à la souris, au toucher et au clavier (flèches, début, fin) : titre complet de l'intervalle, valeur et unité dans une ligne de lecture annoncée aux lecteurs d'écran. Le tableau des valeurs est sous « Voir les valeurs ». Un intervalle sans valeur reste une lacune.
+
+### 14.5 Reste
+
+- **Clic d'une mesure vers le détail** : T07 (#380) ; aucun lien n'est posé ici.
+- Aperçu `?page=statistiques` (valeurs synthétiques, filtres Permis et Prestation divisent les valeurs par deux) jamais regardé à 390 et 1440 px, clair et sombre ; la lecture au clavier du graphique n'a pas été essayée dans un navigateur.
+- Aucune concordance vérifiée avec le jeu de référence de la section 6 : les tuiles affichent ce que le serveur renvoie, rien n'a été comparé chiffre à chiffre.
+- Non exécuté : aucun test (écrits : `dashboard-models.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 15. T06 (#379) : Statistiques → Finances
+
+Code : `portal/pilotage/finance-panel.tsx`, `measure-groups.tsx` (rendu commun des groupes et de la comparaison), `breakdown-bars.tsx`, `stacked-bars.tsx`. Aucun changement d'API, aucun calcul de montant côté web.
+
+### 15.1 Quatre notions séparées
+
+Chaque tuile porte le libellé du dictionnaire et la couverture que le serveur déclare.
+
+- **Leçons individuelles (tarif à l'unité)** : valeur des leçons réalisées (F01), valeur des leçons à venir (F02), total attendu selon le planning (F03). Le titre dit la couverture : seules les leçons individuelles à prix unitaire sont valorisées.
+- **En attente de constat, hors du total** (F04) : leçons commencées ou dont l'heure est passée, ni réalisées ni réservations certaines. Montrée seulement s'il y en a, ou si le serveur ne garantit pas son zéro.
+- **Règlements enregistrés (par date de saisie)** (F05) et **saisies annulées et corrections** (F06) : le titre dit la date retenue. Aucune tuile, aucun graphique ni aucun libellé n'additionne un règlement à la valeur des leçons ; annuler une saisie n'est pas un remboursement (libellé du serveur).
+- **Cours collectifs** (F07) : indisponible, avec le badge du serveur. Aucun prix de série multiplié par ses séances, aucune valeur reconstruite depuis un règlement.
+
+Un montant absent est un tiret, jamais « CHF 0.00 ». Un filtre moniteur, permis ou prestation rend F05 et F06 « Non applicables » : un règlement dépend d'une inscription, pas d'une leçon.
+
+### 15.2 Graphiques
+
+1. **Valeur des leçons par jour, semaine ou mois** : réalisée en plein, à venir en hachuré ; échelle en francs entiers, valeurs lues au centime près.
+2. **Règlements enregistrés**, à part, avec la mention « date de saisie » : une date de prestation et une date de saisie ne se lisent pas sur le même graphique. Absent dès qu'un filtre est posé (le serveur refuse les filtres sur les règlements).
+3. **Valeur des leçons réalisées par permis, prestation ou moniteur**, rangée par nom ; les valeurs non attribuées en dernier.
+
+Même lecture au clavier et au toucher, même tableau des valeurs qu'en 14.4.
+
+### 15.3 Comparaison
+
+Même règle qu'en 14.3. À date, seules F01 (valeur constatée) et F05 (règlements saisis) sont comparées : ce sont les valeurs qui ne changent pas entre la période entière et la période écoulée.
+
+### 15.4 Reste
+
+- **Détail vérifiable et export** : T07 (#380) ; aucune tuile ne mène encore à ses lignes.
+- L'exemple d'acceptation (8 000 CHF réalisés + 2 000 CHF réservés = 10 000 CHF attendus, un règlement de 500 CHF n'y change rien) est établi par les tests d'intégration de #375 (section 6.5) ; rien ne l'a été à l'écran ici, aucun chiffre n'a été comparé au jeu de référence.
+- L'API ne renvoie que le franc suisse : aucune conversion, aucun hors taxe ou toutes taxes comprises.
+- Aperçu `?page=statistiques&tab=finance` (valeurs inventées) jamais regardé à 390 et 1440 px, clair et sombre. Non exécuté : aucun test (écrits : `pilotage-models.test.ts`, `dashboard-models.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 16. T07 (#380) : détail des mesures et export CSV
+
+Code : `portal/pilotage/measure-detail.tsx`, `details-api.ts` (lecture des lignes et téléchargement), `detail-model.ts` (règles pures), `measure-groups.tsx` (accès depuis les tuiles). Aucun changement d'API ni de BFF : les routes `metrics/details` et `metrics/exports` de #375 sont consommées telles quelles.
+
+### 16.1 Du chiffre à ses lignes
+
+Une tuile dont le dictionnaire annonce des lignes (`details`) et dont la valeur est positive propose « Voir le détail ». L'adresse porte alors `measure` (par exemple `?tab=finance&measure=F01`) avec la période, le moniteur, le permis et la prestation de la carte : les lignes sont celles qui composent le chiffre, pas l'agenda non filtré. Changer d'onglet referme le détail. Un identifiant de mesure mal formé, répété ou d'un domaine non lisible est ignoré.
+
+### 16.2 Ce que le détail montre
+
+- Le chiffre de la carte avec sa couverture et les raisons des parts exclues, puis la ligne période · portée · heure de calcul.
+- Les lignes : titre (l'élève seulement si le serveur le renvoie, sinon le fait lui-même), date et heure de l'école, moniteur, statut, durée, et le montant **seulement si le serveur le renvoie** (aucun montant n'est déduit côté web).
+- Le total du serveur (lignes, montant, durée) à côté du nombre de lignes affichées ; quand toutes ne le sont pas, la somme des lignes affichées est écrite à part : somme de la page et somme totale ne se confondent pas.
+- Cinquante lignes par lecture, « Afficher la suite » jusqu'au bout du périmètre (curseur lié par le serveur à la personne, à la mesure et aux filtres). Un curseur périmé propose de relire depuis le début.
+- Les valeurs lues sur la carte repartent au serveur (`expectedLineCount`, `expectedAmountCents`) : si le total a changé depuis l'affichage, le serveur le dit, le web l'écrit et propose « Relire » qui relit la carte et les lignes d'un même instant.
+
+### 16.3 Fiches
+
+« Ouvrir » mène à la fiche existante dans l'agenda : la leçon, la séance de cours, ou le cours d'un règlement (aucune fiche de règlement n'existe seule). Le moniteur filtré est conservé. Le retour du navigateur ramène au détail avec ses filtres.
+
+### 16.4 Export CSV
+
+Le bouton « Exporter en CSV » n'apparaît que pour une personne qui a `EXPORT_MANAGEMENT` ; l'API relit ce droit et celui de la mesure à la génération. L'export reprend la sélection du détail (mesure, période, filtres, valeurs de la carte), pas la seule page affichée. Le web envoie la commande avec le jeton CSRF, lit la réponse comme **octets** (le BOM du serveur est conservé : la décoder puis la réécrire le perdrait) et déclenche le téléchargement ; rien n'est conservé, aucune adresse réutilisable n'est créée. Les refus ont chacun leur message (plus de 10 000 lignes, droit retiré, réseau, reconnexion) et ne produisent aucun fichier ; un écart signalé par l'en-tête du serveur est écrit à côté du nom du fichier. Le contenu du fichier (en-têtes stables, neutralisation des formules, métadonnées de couverture, `complete`) est celui de la section 7.7.
+
+### 16.5 Reste
+
+- Le clic d'une barre de graphique vers les lignes de son intervalle (`bucketFrom`, `bucketToExclusive`) n'est pas câblé, bien que le serveur le permette. F06, seule mesure en deux parties (`part`), s'ouvre par partie depuis la section 18.3.
+- Au retour d'une fiche, le détail repart de la première page : les pages déjà chargées, le défilement et le focus ne sont pas restaurés.
+- Non essayé : le téléchargement dans un navigateur, la lecture d'un vrai fichier dans un tableur, la révocation d'un droit pendant l'affichage. Le test de l'export avec texte accentué, guillemets, retours à la ligne et cellules de type formule est celui de l'API (#375) ; le web n'a rien écrit pour le contenu du fichier. L'aperçu fournit un CSV synthétique sans nom d'élève.
+- Aucun test lancé (écrits : `detail-models.test.ts`, une ligne de `console-route.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 17. T08 (#381) : responsive, accessibilité et états réseau
+
+Lot de correction des seules pages de pilotage. Il ne remplace pas la revue globale différée de la roadmap et ne touche aucune autre page.
+
+### 17.1 Fait
+
+- **Données connues conservées en cas d'erreur** : quand une mise à jour échoue alors que des chiffres de la même portée sont déjà affichés (cartes, graphiques, répartitions, rendez-vous), ils restent à l'écran sous un avis « La mise à jour a échoué » qui donne l'heure de leur calcul et propose de réessayer. Ils ne sont jamais remplacés par zéro. Un refus (401, 403, 404) retire ce qui était affiché, comme partout ailleurs. Un changement de période, de moniteur, de permis, de prestation ou d'école repart d'un écran de chargement : les chiffres d'une autre portée ne sont jamais montrés sous le nouveau titre.
+- **Réponses obsolètes** : une réponse qui ne correspond plus à la période ou à la portée demandées est refusée, et une lecture dépassée par une plus récente est ignorée (mécanisme commun des lectures).
+- **Focus** : l'ouverture du détail d'une mesure place le focus sur « Retour aux chiffres » ; en revenant par ce bouton, la tuile d'origine reprend le focus dès qu'elle est affichée.
+- **Cibles tactiles et petits écrans** : listes, champs de date, aides et boutons de tuile à 44 px au moins sur écran tactile ou étroit ; tableau des valeurs d'un graphique confiné dans son propre défilement horizontal (aucun défilement horizontal de la page) ; liste des lignes en lignes verticales.
+- **Contraste forcé** : bordures, barres de répartition et focus des barres du graphique suivent les couleurs système.
+- **Doublon retiré** : la comparaison à date de l'accueil passe par le même composant que les statistiques (`MeasureGroups`) ; cinq exports internes ne sont plus exposés.
+
+### 17.2 Déjà vrai avant ce lot, relu
+
+Titre, période, unité, légende, résumé lu et tableau des valeurs pour chaque graphique ; réalisé et à venir distingués par le plein et le hachuré ; barres lisibles au clavier (flèches, début, fin), au toucher et à la souris ; aucune animation ; formats fr-CH ; libellés longs et grandes valeurs qui passent à la ligne ; valeur absente en tiret.
+
+### 17.3 Non fait, à ne pas tenir pour vérifié
+
+- **Aucune vérification dans un navigateur ni sur appareil** : 320, 390, 768, 1024 et 1440 px, portrait et paysage, clair et sombre, agrandissement du texte et zoom n'ont pas été regardés. Aucune capture avant ou après n'existe. Les règles ci-dessus sont écrites, pas observées.
+- Session expirée pendant une lecture d'accueil, refus de droit en cours de consultation, écran de chargement long : comportement hérité des lectures communes, non essayé.
+- Un graphique financier échoué ne bloque pas l'agenda (chaque bloc lit pour lui-même) : établi par la structure du code, non essayé.
+- Le défilement et les pages déjà chargées du détail ne sont pas restaurés au retour d'une fiche (16.5).
+- Non exécuté : aucun test. `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 18. T09 (#382) : qualification du candidat `27a5a4e2`
+
+Cette section **prévaut sur les mentions « non exécuté » des sections 12 à 17**, écrites avant l'exécution. Candidat : `27a5a4e2612d805799fa920ee1206a81be06c9e3`, branche `claude/pilotage-376-navigation`, base `master` `123304df`. Rien n'est fusionné, rien n'est déployé hors l'aperçu synthétique, aucune issue n'est fermée.
+
+### 18.1 Ce qui a été exécuté
+
+| Contrôle | Résultat | Où |
+| --- | --- | --- |
+| Typage de `apps/web` (dépendances réelles, `npm ci`) | PASS, 0 erreur | local |
+| Typage de `apps/api` | PASS, 0 erreur | local |
+| Tests web : 57 fichiers | PASS, 593 réussis, 1 échec attendu préexistant | local |
+| Tests API du pilotage sur PostgreSQL 17 : modèle, intégration de #375, contrat web/API | PASS, 83 / 83 | conteneur local `postgres:17-alpine`, base `drivy_test` |
+| Build de production (`vite build`, qui refuse tout module d'aperçu dans le produit) | PASS | local |
+| Build de l'aperçu synthétique | PASS | local |
+| Parcours dans Edge : détail, retour, focus, pagination, export, filtres, F06, période invalide, clavier du graphique | PASS, 23 / 23, aucune erreur JavaScript | aperçu local puis public |
+| Captures : 5 pages × 5 largeurs (1440, 768, 390, 360, 320) × clair et sombre, 50 images | aucun débordement horizontal, aucun libellé de navigation tronqué, aucun texte de graphique sous 9 px, aucune erreur JavaScript | `.local/captures-373/final-27a5a4e2/` (non versionné) |
+| Aperçu publié : SHA servi, en-têtes, chargement | PASS : `27a5a4e2612d` affiché, CSP, noindex, `no-store` | https://shulker.ch/drivy-preview/ |
+
+Les tests web et API n'ont pas été rejoués par la CI : aucun workflow GitHub n'a été lancé pour ce lot.
+
+### 18.2 Matrice critère → preuve
+
+`PASS` = un test exécuté, nommé, le prouve ; `PARTIAL` = prouvé en partie ; `NOT_EXECUTED` = rien n'a tourné ; `N/A` = sans objet dans le produit actuel.
+
+| Famille | Critère de #382 | Preuve | État |
+| --- | --- | --- | --- |
+| Calculs | zéro connu, valeur inconnue, période partielle | `août précède les données : inconnu, jamais zéro`, `une année qui commence avant les données est partielle`, `un montant exclu rend la mesure partielle ou inconnue, jamais zéro` (API, base réelle) | PASS |
+| Calculs | mois complet, mois à date, février, début et fin de période | `mois à date contre la même plage…`, `mois à date tronqué quand le mois précédent est plus court`, `changement de mois`, modèle des dates (API) ; côté web `période du pilotage` (février 2026) | PASS |
+| Calculs | changement d'heure | `la semaine du 19/10 dure une heure de plus`, `jours : … trois jours sur le changement d'heure` (API) | PASS |
+| Calculs | comparaison de base nulle ou absente | `mois précédent vide : pas de pourcentage`, `base connue et nulle : écart absolu` (API) ; web : `la comparaison dit le pourcentage quand le serveur le donne, sinon l'écart` | PASS |
+| Calculs | somme d'heures, prix historiques | `octobre : états, durées…`, `prix révisé et tarif historique : le snapshot fait foi` (API) | PASS |
+| Activité | terminé, annulé, absent, en cours, non finalisé, leçon déplacée | `octobre : états, durées, élèves, cours et partition des leçons`, `une leçon corrigée en annulée ne vaut plus rien…` (API) | PASS |
+| Activité | élève unique multi-permis, séries multi-séances, places retenues | `un cours sur plusieurs séances compte une série…`, `remplissage des cours à venir : somme des places…`, `instantanés : … places` (API) | PASS |
+| Activité | annuaire paginé | le pilotage ne lit pas d'annuaire paginé pour ses chiffres ; la liste des moniteurs et des élèves passe par `readAll` existant | N/A |
+| Finances | prix révisé, règlements identiques, saisie annulée, dates distinctes | `prix révisé…`, `détail des règlements : saisies actives, annulées et corrections postérieures`, `septembre : règlement d'octobre exclu, saisie annulée en octobre expliquée` (API) | PASS |
+| Finances | exemple de l'acceptation : 8 000 + 2 000 = 10 000 CHF, un règlement de 500 CHF n'y change rien | `jeu B : …` (API) : totaux, séries, pages et export concordent au-delà d'une page | PASS côté API ; **jamais vu à l'écran** |
+| Finances | tarif de cours absent | `F07` indisponible avec `COURSE_PRICE_SOURCE_MISSING` (API), tuile « Indisponible » sur capture | PASS |
+| Finances | devises séparées | l'API ne renvoie que CHF (`currency: z.literal('CHF')`) | N/A |
+| Finances | aucun double compte paiement et valeur d'activité | `octobre : réalisé, à venir, total attendu…`, jeu B | PASS |
+| Droits | deux écoles, rôles et périmètres de moniteur | `une personne membre de deux écoles reçoit les totaux de chaque école, sans mélange`, `moniteur sans grant…`, `VIEW_SCHOOL_METRICS…`, `VIEW_FINANCIAL_METRICS…` (API) | PASS |
+| Droits | activité autorisée, finances interdites | `VIEW_SCHOOL_METRICS : activité de l'école, aucune clé financière` (API) ; web : `droits d'affichage du pilotage` | PASS |
+| Droits | accès direct API, BFF, export | `élève, autre école et personne sans appartenance : refusés`, `fonctions SQL : refus propres` (API) ; `un refus de droit de l'API traverse le relais…`, `exige session et jeton CSRF…` (BFF) | PASS |
+| Droits | révocation | `un droit retiré entre l'affichage et l'export : refus, aucun fichier` (API) | PASS |
+| Droits | changement d'identité en cours de consultation | portée de lecture clé par personne, école et époque d'accès (code) ; aucun test ne change d'identité pendant l'affichage | PARTIAL |
+| Concordance | carte, total, montant, écart signalé | nouveau test `lignes de détail de chaque nature…` : 11 mesures, `lineCount`, `amountCents` et absence d'écart identiques entre la carte et le détail ; `signale un écart avec le total affiché` | PASS |
+| Concordance | détail, CSV | `l'export contient exactement les lignes de la carte`, `même définition que la carte` (API) | PASS |
+| Concordance | accueil → graphique → détail → CSV, de bout en bout | chaque maillon est prouvé séparément ; aucun test ne suit la chaîne sur l'API réelle depuis le navigateur | PARTIAL |
+| CSV | accents, guillemets, sauts de ligne, formules | `accents, guillemets, sauts de ligne et cellules de formule`, `neutralise les formules des cellules texte` ; octets, BOM et CRLF conservés côté web (parcours) | PASS |
+| CSV | plus de 10 000 lignes | `plus de 10 000 lignes : refus explicite, jamais un fichier tronqué` | PASS |
+| Interface | clavier, retour navigateur | parcours : flèches du graphique, focus rendu à la tuile, retour du navigateur rouvre le détail | PASS (Edge émulé) |
+| Interface | desktop, mobile, clair, sombre | 50 captures, mesures automatiques ci-dessus | PASS (Edge émulé) ; **œil du porteur attendu** |
+| Interface | zoom, texte agrandi, paysage | rien n'a été essayé | NOT_EXECUTED |
+| Interface | chargement lent, erreur partielle | structure du code, non provoqué dans le navigateur | NOT_EXECUTED |
+| Interface | filtres rapides (réponses obsolètes) | mécanisme commun des lectures, refus des réponses de mauvaise période ; aucun test de course | PARTIAL |
+| Interface | appareil physique | aucun | NOT_EXECUTED |
+| Non-régression | préparation d'école, agenda, fiches, navigation #311 | les 593 tests web (dont navigation et agenda) passent ; **l'entrée par défaut a changé** (13.1) et n'a pas été essayée avec la vraie session | PARTIAL |
+| Sécurité | confidentialité des caches et logs | `Cache-Control: no-store`, caches en mémoire clés par personne, école et époque d'accès ; revue de code, aucun test dédié | PARTIAL |
+| Performance | agrégats et volume d'export | mesures de 11.3 (une école de 10 064 leçons, machine locale) ; aucun objectif déclaré atteint | PARTIAL |
+
+### 18.3 Défaut trouvé par cette qualification
+
+`F06` (saisies annulées et corrections) n'a pas de liste unique : l'API refuse son détail sans `part` (`a` ou `b`). Le web proposait pourtant « Voir le détail » sans partie, donc la liste se serait ouverte en erreur 400 devant l'utilisateur. Le test de contrat l'a révélé. Corrigé : le détail de F06 propose deux onglets (Saisies annulées, Corrections postérieures), l'adresse porte `part`, l'export envoie la partie et son nom de fichier la reprend. Les valeurs attendues de la carte ne sont pas envoyées pour F06, car le chiffre de la carte additionne les deux listes.
+
+Trois défauts visuels, trouvés sur les captures et corrigés : la barre de navigation mobile à six entrées tronquait « Formations » et débordait dès 320 px ; les onglets de répartition d'un graphique faisaient déborder la page à 320 px ; le dessin du graphique, réduit avec son cadre, rendait les chiffres de l'axe illisibles sur téléphone (il suit maintenant la largeur réelle). Le groupe « À vérifier » de l'onglet Activité contenait une mesure du même nom et s'appelle « Non finalisées ».
+
+### 18.4 Contrôle de contrat web et API
+
+`apps/api/test/school-metrics-web-contract.integration.test.ts` fait lire les **vraies réponses de l'API** (dictionnaire, cartes d'activité et de finances, comparaisons, trois répartitions, séries par jour, semaine et mois, détails de neuf mesures) par les schémas de lecture du web (`portal/pilotage/metrics-schemas.ts`, désormais un module sans React). Une dérive de forme apparaît donc au test et non à l'écran. C'est le premier test de l'API qui importe et exécute du code de `apps/web` (deux autres n'en lisent un fichier que comme texte). Le module n'importe que `zod`, déjà installé à la racine par l'espace de travail de l'API à la même version (4.6.6) que le web : la CI de l'API, qui ne fait `npm ci` qu'à la racine, le résout. Non vérifié dans cette CI, qui n'a pas été lancée.
+
+### 18.5 Reste, par nature
+
+- **Essai du porteur sur l'aperçu** : fait le 1er novembre 2026 (« c'est bon, j'ai testé, c'est ok »), sans correction demandée. Son retour est oral : ni capture ni liste de ce qu'il a regardé n'a été conservée.
+- **CI de la PR #395 (premier run, `250180fd`)** : « Refonte · vérifications » verte (API sur PostgreSQL, web et BFF, intégrité documentaire, GitGuardian) ; le test navigateur « ouverture école » a échoué sur l'entrée quotidienne (voir 13.1).
+- **Pas de campagne CI (avant la PR)** : les workflows GitHub (« Refonte · vérifications », « Refonte · ouverture école navigateur » avec le vrai OIDC et le vrai BFF) n'ont pas été lancés. Ouvrir une PR les lancerait ; à décider avec lui.
+- **Aucun essai sur la vraie pile** : le navigateur n'a jamais parlé au vrai BFF et à la vraie API. L'aperçu est synthétique ; la concordance des formes est prouvée par 18.4, pas le parcours.
+- **Essais ajoutés après l'essai du porteur** (Edge, aperçu synthétique, 18 contrôles PASS, aucune erreur JavaScript) : défilement horizontal nul à 720 et 360 px de large (équivalent d'un zoom de 200 % et 400 %, obtenu par la taille de la fenêtre, **pas** par le zoom du navigateur) et en paysage 844×390 et 667×375 ; écran de chargement nommé pendant une lecture lente (2,5 s) ; erreur de lecture : message, aucun chiffre ni zéro, reprise par « Réessayer » ; réponse lente d'un ancien filtre ignorée quand un filtre plus récent a déjà répondu.
+- **Toujours non exécuté** : texte agrandi par les réglages du système, appareil physique, échec d'une mise à jour quand des chiffres sont déjà affichés (la conservation des chiffres connus tient au code, elle n'a pas été provoquée), changement d'identité pendant l'affichage.
+- **Déploiement du produit** : aucun. Le web est dans le delta d'un futur déploiement (aucune migration nouvelle : la 60e, `20261031_pilotage_metrics`, est déjà sur le homelab). Il demandera sauvegarde, retour arrière et son accord.
+- **Clôture** : #373 et ses lots ne sont pas fermés. Les cases de l'index de #373 restent ouvertes tant que l'essai et l'intégration n'ont pas eu lieu.
+- **Retour arrière de l'aperçu** : `python scripts/homelab/deploy-preview-311.py --rollback 20261101T153438Z-27a5a4e2612d` (puis `--execute`) ; la version précédente `ce3b3559` est conservée.
+
+Mode d'emploi destiné à la direction de l'école : [pilotage-373-utilisation.md](pilotage-373-utilisation.md).

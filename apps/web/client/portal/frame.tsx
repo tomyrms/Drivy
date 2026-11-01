@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
-import { BookOpen, Building2, CalendarDays, Check, ChevronDown, GraduationCap, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun, UsersRound } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, Check, ChevronDown, GraduationCap, LayoutDashboard, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun, UsersRound } from 'lucide-react';
 import { BrandSymbol } from '../BrandSymbol';
 import { useTheme, type ThemePreference } from '../theme';
 import type { NavigationQuery } from '../console/route';
@@ -29,7 +29,7 @@ export interface PortalFrameProps {
   search?: ReactNode;
 }
 
-const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
+const workspaceIcons: Record<PortalWorkspaceKey, typeof CalendarDays> = { pilotage: LayoutDashboard, planning: CalendarDays, learners: GraduationCap, team: UsersRound, formations: BookOpen, settings: Settings };
 
 /** One navigation tree and one mounted page at every viewport width. */
 export function PortalFrame({ children, active, activeQuery = {}, available, onNavigate, schoolName, userName, preview, schools = [], currentSchoolId, onSchoolChange, account, search }: PortalFrameProps) {
@@ -105,7 +105,7 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
     </header>
     <div className="portal-workspace">
       <aside className="portal-sidebar">
-        <nav className="portal-navigation" aria-label="Navigation principale" style={{ '--portal-nav-count': workspaces.length } as CSSProperties}>
+        <nav className="portal-navigation" aria-label="Navigation principale" data-dense={workspaces.length > 5 ? 'true' : undefined} style={{ '--portal-nav-count': workspaces.length } as CSSProperties}>
           <ul>
             {workspaces.map(item => {
               const Icon = workspaceIcons[item.key], target = item.items[0]!, current = item.key === workspace?.key;

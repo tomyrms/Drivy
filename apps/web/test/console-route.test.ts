@@ -128,3 +128,23 @@ describe('Navigation entre les tâches de gestion', () => {
     expect(resumableDraft(null)).toBeNull();
   });
 });
+
+describe('Navigation du pilotage', () => {
+  test('les statistiques gardent onglet, période et prestation dans une adresse copiée', () => {
+    const query = { tab: 'finance' as const, period: 'custom' as const, start: '2026-10-05', end: '2026-10-12', instructor, product: 'conduite-b' };
+    const path = consolePath(school, 'statistiques', query);
+    expect(path).toBe(`/app/gestion/${school}/statistiques?instructor=${instructor}&tab=finance&period=custom&product=conduite-b&start=2026-10-05&end=2026-10-12`);
+    expect(restore(path)).toEqual({ schoolId: school, section: 'statistiques', query });
+    expect(restore(`/app/gestion/${school}/tableau-de-bord`).section).toBe('tableau-de-bord');
+  });
+
+  test('un onglet, une période ou des jours étrangers ne deviennent pas du contexte', () => {
+    expect(readNavigationQuery('?tab=export&period=forever&start=2026-02-30&end=demain&product=a%00b')).toEqual({});
+    expect(readNavigationQuery('?tab=finance&tab=activity&period=year&period=month&start=2026-10-05&start=2026-10-06')).toEqual({});
+    expect(readNavigationQuery(`?product=${'x'.repeat(101)}`)).toEqual({});
+    expect(readNavigationQuery('?measure=l03')).toEqual({});
+    expect(readNavigationQuery('?measure=L3')).toEqual({});
+    expect(readNavigationQuery('?measure=L03&measure=F01')).toEqual({});
+    expect(readNavigationQuery('?measure=L03')).toEqual({ measure: 'L03' });
+  });
+});

@@ -28,6 +28,7 @@ export const workspaces: readonly Workspace[] = [
 ];
 
 export const sectionTitles: Record<SectionKey, string> = {
+  'tableau-de-bord': 'Tableau de bord', statistiques: 'Statistiques',
   agenda: 'Agenda', disponibilites: 'Disponibilités', absences: 'Absences', eleves: 'Élèves', invitations: 'Invitations',
   equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations et tarifs',
   referentiels: 'Formations et tarifs', procedures: 'Formations et tarifs', prestations: 'Prestations sans permis',

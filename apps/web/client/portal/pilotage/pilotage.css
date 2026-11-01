@@ -1,0 +1,102 @@
+.pilotage-page { width: min(100%, 1040px); margin-inline: auto; display: grid; gap: 24px; }
+.pilotage-page > *, .pilotage-charts > *, .pilotage-chart { min-width: 0; }
+.pilotage-chart [data-slot="tabs"] { min-width: 0; max-width: 100%; }
+.pilotage-chart [data-slot="tabs-list"] { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.pilotage-page h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.pilotage-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pilotage-heading p { margin-top: 4px; color: var(--muted-foreground); }
+.pilotage-heading-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.pilotage-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.pilotage-filter { width: auto; min-width: 11rem; }
+.pilotage-filter-error { flex-basis: 100%; }
+.pilotage-scope { color: var(--muted-foreground); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.pilotage-panel { display: grid; gap: 20px; padding-top: 4px; }
+.pilotage-section { display: grid; gap: 12px; }
+.pilotage-section h2 { font-size: 1rem; font-weight: 650; }
+.pilotage-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); }
+.pilotage-tile { min-width: 0; display: grid; align-content: start; justify-items: start; gap: 6px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.pilotage-tile-head { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pilotage-tile-head h3 { margin: 0; font-size: 0.875rem; font-weight: 550; line-height: 1.35; color: var(--muted-foreground); }
+.pilotage-help { flex-shrink: 0; margin: -6px -8px 0 0; color: var(--muted-foreground); }
+.pilotage-help svg { width: 16px; height: 16px; }
+.pilotage-help-content ul { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 4px; }
+.pilotage-value { margin: 0; max-width: 100%; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pilotage-tile[data-coverage="UNAVAILABLE"] .pilotage-value,
+.pilotage-tile[data-coverage="NOT_APPLICABLE"] .pilotage-value { color: var(--muted-foreground); }
+.pilotage-comparison { margin: 0; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.pilotage-comparison span { color: var(--muted-foreground); }
+.pilotage-tile-action { margin: 2px 0 -6px -10px; }
+.pilotage-empty { grid-column: 1 / -1; list-style: none; }
+.pilotage-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pilotage-today { margin: 0; font-size: 1.0625rem; font-weight: 550; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.pilotage-today-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pilotage-appointments { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.pilotage-appointments li + li { border-top: 1px solid var(--border); }
+.pilotage-appointment { width: 100%; height: auto; min-height: 56px; justify-content: flex-start; gap: 16px; padding: 10px 16px; border-radius: 0; text-align: left; white-space: normal; font-weight: 400; }
+.pilotage-appointment-time { flex-shrink: 0; min-width: 6.5rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pilotage-appointment-what { flex: 1; min-width: 0; display: grid; }
+.pilotage-appointment-what strong { font-weight: 600; overflow-wrap: anywhere; }
+.pilotage-appointment-what span { color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
+.pilotage-day { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--muted-foreground); }
+.pilotage-chart { margin: 0; display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.pilotage-chart figcaption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.pilotage-chart h3 { margin: 0; font-size: 0.9375rem; font-weight: 650; }
+.pilotage-chart figcaption span, .pilotage-chart-empty { color: var(--muted-foreground); font-size: 0.875rem; }
+.pilotage-chart-empty { margin: 0; }
+.pilotage-chart-svg { width: 100%; height: auto; overflow: visible; }
+.pilotage-chart-tick { fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pilotage-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.875rem; }
+.pilotage-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.pilotage-chart-values summary { cursor: pointer; font-size: 0.875rem; color: var(--muted-foreground); width: fit-content; }
+.pilotage-chart-values summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.pilotage-chart-values table { margin-top: 8px; }
+.pilotage-charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
+.pilotage-charts > :first-child { grid-column: 1 / -1; }
+.pilotage-chart-readout { margin: 0; min-height: 1.5em; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.pilotage-chart-bar { outline: none; cursor: pointer; }
+.pilotage-chart-hit { fill: transparent; stroke: transparent; stroke-width: 2; }
+.pilotage-chart-bar[data-active="true"] .pilotage-chart-hit { fill: var(--muted); fill-opacity: 0.6; }
+.pilotage-chart-bar:focus-visible .pilotage-chart-hit { stroke: var(--ring); }
+.pilotage-breakdown { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pilotage-breakdown li { display: grid; grid-template-columns: minmax(6rem, 10rem) 1fr auto; align-items: center; gap: 10px; font-size: 0.875rem; }
+.pilotage-breakdown-label { overflow-wrap: anywhere; }
+.pilotage-breakdown-bar { height: 10px; border-radius: 5px; background: var(--muted); overflow: hidden; }
+.pilotage-breakdown-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); }
+.pilotage-breakdown-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pilotage-detail { display: grid; gap: 16px; }
+.pilotage-back { justify-self: start; margin-left: -10px; }
+.pilotage-reasons { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 2px; font-size: 0.875rem; color: var(--muted-foreground); }
+.pilotage-lines { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.pilotage-lines li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px 12px; padding: 10px 16px; }
+.pilotage-lines li + li { border-top: 1px solid var(--border); }
+.pilotage-line-what { min-width: 0; display: grid; }
+.pilotage-line-what strong { font-weight: 600; overflow-wrap: anywhere; }
+.pilotage-line-what span { color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
+.pilotage-line-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+@media (max-width: 640px) {
+  .pilotage-page { gap: 20px; }
+  .pilotage-page h1 { font-size: 1.6rem; }
+  .pilotage-heading > button, .pilotage-heading-actions, .pilotage-heading-actions > button { width: 100%; }
+  .pilotage-filter { width: 100%; min-width: 0; }
+  .pilotage-value { font-size: 1.5rem; }
+  .pilotage-lines li { grid-template-columns: 1fr auto; padding-inline: 12px; }
+  .pilotage-line-what { grid-column: 1 / -1; }
+  .pilotage-breakdown li { grid-template-columns: 1fr auto; }
+  .pilotage-breakdown-bar { grid-column: 1 / -1; grid-row: 2; }
+  .pilotage-appointment { gap: 12px; padding-inline: 12px; }
+  .pilotage-appointment-time { min-width: 5.5rem; }
+}
+.pilotage-chart-values { overflow-x: auto; }
+@media (pointer: coarse), (max-width: 640px) {
+  .pilotage-filters [data-slot="select-trigger"], .pilotage-filters input { min-height: 44px; }
+  .pilotage-tile-action, .pilotage-help, .pilotage-section-head > button, .pilotage-back { min-height: 44px; }
+  .pilotage-help { min-width: 44px; }
+  .pilotage-chart-values summary { padding-block: 10px; }
+  .pilotage-lines li > button { min-height: 44px; }
+}
+@media (forced-colors: active) {
+  .pilotage-tile, .pilotage-chart, .pilotage-lines, .pilotage-appointments { border-color: CanvasText; }
+  .pilotage-breakdown-bar { border: 1px solid CanvasText; background: Canvas; }
+  .pilotage-breakdown-bar > span { background: Highlight; }
+  .pilotage-chart-bar:focus-visible .pilotage-chart-hit { stroke: Highlight; }
+}
