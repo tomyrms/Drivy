@@ -37,6 +37,20 @@ export function resolvePeriod(query: Pick<NavigationQuery, 'period' | 'start' | 
   return { period: { choice, from, toExclusive, lastDay: addDays(toExclusive, -1), days } };
 }
 
+/**
+ * Comparaison honnête d'une période (#378). Une période écoulée se compare directement à la précédente (mois complet contre mois complet,
+ * sinon même nombre de jours juste avant). Le mois en cours se compare à date, par une seconde lecture du 1er à aujourd'hui.
+ * Une période encore en cours (année, période libre jusque dans le futur) n'a pas de base équitable : aucune comparaison.
+ */
+export type ComparisonPlan = { kind: 'direct'; compare: 'previous-month' | 'equivalent-period' } | { kind: 'to-date' } | { kind: 'none' };
+export function comparisonPlan(period: ResolvedPeriod, today: string): ComparisonPlan {
+  if (period.toExclusive <= addDays(today, 1)) {
+    const wholeMonth = period.from === firstOfMonth(period.from) && period.toExclusive === monthStart(period.from, 1);
+    return { kind: 'direct', compare: wholeMonth ? 'previous-month' : 'equivalent-period' };
+  }
+  return period.choice === 'month' ? { kind: 'to-date' } : { kind: 'none' };
+}
+
 /** Le mois en cours est toujours une période valide : l'accueil n'a pas de filtre de période. */
 export function currentMonth(today: string): ResolvedPeriod {
   const { period } = resolvePeriod({}, today);
@@ -62,6 +76,7 @@ const shortDayYear = new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: '
 export function formatSpan(from: string, lastDay: string, referenceYear: string): string {
   const format = (civil: string, withYear: boolean) => (withYear ? shortDayYear : shortDay).format(atNoon(civil));
   const withYear = from.slice(0, 4) !== referenceYear || lastDay.slice(0, 4) !== referenceYear;
+  if (from === lastDay) return `le ${format(lastDay, withYear)}`;
   const sameMonth = from.slice(0, 7) === lastDay.slice(0, 7);
   const start = sameMonth ? String(Number(from.slice(8))) : format(from, from.slice(0, 4) !== lastDay.slice(0, 4));
   return `du ${start} au ${format(lastDay, withYear)}`;

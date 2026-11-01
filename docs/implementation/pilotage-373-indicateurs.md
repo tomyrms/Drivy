@@ -736,3 +736,40 @@ Le graphique est un histogramme SVG écrit pour cet usage (`stacked-bars.tsx`), 
 - Les chiffres de la journée ne se rafraîchissent qu'après une commande confirmée ou une relecture de la page, pas toutes les minutes.
 - Le changement d'école purge l'ancien contexte par la portée de lecture ; non qualifié.
 - Non exécuté : aucun test (écrits : `dashboard-models.test.ts`), aucun rendu navigateur. `tsc --noEmit` sans erreur dans les fichiers touchés, avec les mêmes réserves qu'en 12.4.
+
+## 14. T05 (#378) : Statistiques → Activité
+
+Code : `portal/pilotage/activity-panel.tsx`, `chart-model.ts` (granularité, intervalles, répartitions), `breakdown-bars.tsx`, `stacked-bars.tsx`, filtres dans `components.tsx`, `use-catalogue-options.ts`. Aucun changement d'API.
+
+### 14.1 Filtres
+
+Période (Ce mois, Mois dernier, Cette année, Période libre), moniteur, puis Permis et Prestation en second niveau. Ils sont dans l'adresse (`instructor`, `category`, `product`) et s'appliquent à toutes les mesures, tous les graphiques et à l'onglet Finances. Les choix viennent du catalogue de l'école (offres pour les permis, prestations de leçon individuelle pour les prestations) ; un filtre sans choix n'est pas affiché, et une valeur déjà dans l'adresse reste proposée même si le catalogue ne la connaît plus. Un filtre inapplicable à une mesure (cours collectifs) la rend « Non applicable », comme le serveur le décide.
+
+### 14.2 Mesures
+
+Leçons (L01 à L04 ; L05 « À vérifier » et L07 « À finaliser » seulement s'il y en a, ou si le serveur ne peut pas garantir leur zéro, donc jamais arbitrairement réalisées), Heures (H01 programmées, H02 réalisées aux durées connues, H03 à venir : trois grandeurs jamais additionnées), Élèves (P01 : élèves distincts ayant eu une activité), Cours collectifs (C02 cours, C01 séances, C06 inscriptions actives, C07 places retenues, C09 remplissage : cinq mesures distinctes, une inscription n'est pas multipliée par ses séances). Le taux d'occupation du planning n'est pas montré : aucune mesure du dictionnaire n'a de dénominateur de disponibilité fiable (section 4), et le chantier n'invente pas un moteur de disponibilité.
+
+### 14.3 Comparaison
+
+Calculée par le serveur, jamais par le web, et seulement sur une base équitable (`comparisonPlan`) :
+
+- période écoulée : mois complet contre mois complet, sinon même nombre de jours juste avant (`equivalent-period`) ;
+- mois en cours : à date, par une seconde lecture du 1er à aujourd'hui comparée à la même plage du mois précédent, pour les seules mesures réalisées (L01, H02), dont la valeur est la même dans la période entière et dans la période écoulée ;
+- période encore ouverte (année en cours, période libre jusque dans le futur) : aucune comparaison.
+
+Une base nulle ou partielle n'a pas de pourcentage : le serveur le dit (`percentReason`) et le web affiche l'écart absolu, ou rien.
+
+### 14.4 Trois graphiques
+
+1. **Évolution** : leçons réalisées (plein) et à venir (hachuré) par jour jusqu'à 14 jours, par semaine jusqu'à 93 jours, par mois au-delà ; un intervalle rogné par la période se dit « partielle ».
+2. **Heures programmées par moniteur** : barres horizontales avec la valeur écrite, rangées **par nom**, jamais par valeur (R94 : pas de classement des moniteurs). Absent quand un moniteur est filtré.
+3. **Leçons réalisées par permis ou par prestation**, au choix. Les groupes que le serveur n'a pas pu attribuer passent en dernier (« Non attribué »). Un zéro et une valeur absente ne sont pas dessinés.
+
+Chaque barre de l'évolution se lit à la souris, au toucher et au clavier (flèches, début, fin) : titre complet de l'intervalle, valeur et unité dans une ligne de lecture annoncée aux lecteurs d'écran. Le tableau des valeurs est sous « Voir les valeurs ». Un intervalle sans valeur reste une lacune.
+
+### 14.5 Reste
+
+- **Clic d'une mesure vers le détail** : T07 (#380) ; aucun lien n'est posé ici.
+- Aperçu `?page=statistiques` (valeurs synthétiques, filtres Permis et Prestation divisent les valeurs par deux) jamais regardé à 390 et 1440 px, clair et sombre ; la lecture au clavier du graphique n'a pas été essayée dans un navigateur.
+- Aucune concordance vérifiée avec le jeu de référence de la section 6 : les tuiles affichent ce que le serveur renvoie, rien n'a été comparé chiffre à chiffre.
+- Non exécuté : aucun test (écrits : `dashboard-models.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.

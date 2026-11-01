@@ -36,6 +36,10 @@ export const metricsSchema = z.object({
     base: z.object({ from: civil, toExclusive: civil, days: z.number().int().positive(), clipped: z.boolean() }),
     measures: z.record(measureId, comparisonValue),
   }).optional(),
+  breakdown: z.object({
+    by: z.enum(['instructor', 'category', 'product']),
+    groups: z.array(z.object({ key: z.string().max(120), label: z.string().nullable(), measures: z.record(measureId, measure) })).max(500),
+  }).optional(),
 });
 export type MetricsAnswer = z.infer<typeof metricsSchema>;
 export type MetricMeasure = z.infer<typeof measure>;
@@ -58,13 +62,36 @@ export function useMetricDefinitions() {
   return loaded;
 }
 
-export interface MetricsRequest {
+/** Filtres communs des lectures : moniteur, catégorie de permis (code) et prestation (clé). Un filtre inapplicable rend la mesure « non applicable ». */
+export interface MetricFilters { instructor?: string | undefined; category?: string | undefined; product?: string | undefined }
+const filterQuery = (filters: MetricFilters) => ({
+  ...(filters.instructor ? { instructorMembershipId: filters.instructor } : {}),
+  ...(filters.category ? { categoryCode: filters.category } : {}),
+  ...(filters.product ? { productKey: filters.product } : {}),
+});
+const filterScope = (filters: MetricFilters) => [filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
+
+export interface MetricsRequest extends MetricFilters {
   domain: MetricDomain;
   from: string;
   toExclusive: string;
-  instructor?: string | undefined;
   compare?: 'previous-month' | 'equivalent-period' | undefined;
+  breakdown?: 'instructor' | 'category' | 'product' | undefined;
 }
+
+async function readMetrics(schoolId: string, request: MetricsRequest): Promise<MetricsAnswer> {
+  const answer = await readSchool(schoolId, 'metrics', metricsSchema, {
+    domain: request.domain, from: request.from, toExclusive: request.toExclusive, ...filterQuery(request),
+    ...(request.compare ? { compare: request.compare } : {}),
+    ...(request.breakdown ? { breakdown: request.breakdown } : {}),
+  });
+  if (answer.schoolId !== schoolId || answer.domain !== request.domain || answer.period.from !== request.from || answer.period.toExclusive !== request.toExclusive) {
+    throw new RequestFailure('INVALID_RESPONSE');
+  }
+  return answer;
+}
+const requestScope = (schoolId: string, request: MetricsRequest) =>
+  [schoolId, request.domain, request.from, request.toExclusive, filterScope(request), request.compare ?? '', request.breakdown ?? ''].join('/');
 
 /**
  * Cartes d'un domaine pour une période. La portée de lecture inclut les filtres : changer de période ou de moniteur
@@ -73,18 +100,16 @@ export interface MetricsRequest {
 export function useMetrics(request: MetricsRequest) {
   const { schoolId } = useConsole();
   const { revision } = useCommandSnapshot();
-  const scope = [schoolId, request.domain, request.from, request.toExclusive, request.instructor ?? '', request.compare ?? ''].join('/');
-  return useLoad(async () => {
-    const answer = await readSchool(schoolId, 'metrics', metricsSchema, {
-      domain: request.domain, from: request.from, toExclusive: request.toExclusive,
-      ...(request.instructor ? { instructorMembershipId: request.instructor } : {}),
-      ...(request.compare ? { compare: request.compare } : {}),
-    });
-    if (answer.schoolId !== schoolId || answer.domain !== request.domain || answer.period.from !== request.from || answer.period.toExclusive !== request.toExclusive) {
-      throw new RequestFailure('INVALID_RESPONSE');
-    }
-    return answer;
-  }, [schoolId, revision, scope], scope);
+  const scope = requestScope(schoolId, request);
+  return useLoad(() => readMetrics(schoolId, request), [schoolId, revision, scope], scope);
+}
+
+/** Même lecture, déclenchée seulement quand une demande existe : sans demande, aucun appel et aucune donnée. */
+export function useOptionalMetrics(request: MetricsRequest | null) {
+  const { schoolId } = useConsole();
+  const { revision } = useCommandSnapshot();
+  const scope = request ? requestScope(schoolId, request) : 'none';
+  return useLoad(async () => request ? readMetrics(schoolId, request) : null, [schoolId, revision, scope], scope);
 }
 
 export const seriesSchema = z.object({
@@ -98,12 +123,11 @@ export const seriesSchema = z.object({
 });
 export type SeriesAnswer = z.infer<typeof seriesSchema>;
 
-export interface SeriesRequest {
+export interface SeriesRequest extends MetricFilters {
   from: string;
   toExclusive: string;
   granularity: 'day' | 'week' | 'month';
   measures: readonly string[];
-  instructor?: string | undefined;
 }
 
 /** Série d'une ou plusieurs mesures par intervalle ; mêmes règles de portée et de correspondance que les cartes. */
@@ -111,11 +135,10 @@ export function useMetricSeries(request: SeriesRequest) {
   const { schoolId } = useConsole();
   const { revision } = useCommandSnapshot();
   const measures = request.measures.join(',');
-  const scope = ['series', schoolId, request.from, request.toExclusive, request.granularity, measures, request.instructor ?? ''].join('/');
+  const scope = ['series', schoolId, request.from, request.toExclusive, request.granularity, measures, filterScope(request)].join('/');
   return useLoad(async () => {
     const answer = await readSchool(schoolId, 'metrics/series', seriesSchema, {
-      from: request.from, toExclusive: request.toExclusive, granularity: request.granularity, measures,
-      ...(request.instructor ? { instructorMembershipId: request.instructor } : {}),
+      from: request.from, toExclusive: request.toExclusive, granularity: request.granularity, measures, ...filterQuery(request),
     });
     if (answer.schoolId !== schoolId || answer.period.from !== request.from || answer.period.toExclusive !== request.toExclusive || answer.granularity !== request.granularity) {
       throw new RequestFailure('INVALID_RESPONSE');

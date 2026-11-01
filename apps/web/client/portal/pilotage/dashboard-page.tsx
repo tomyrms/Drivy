@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { ReadFeedback } from '../components/feedback';
+import { chartBucket } from './chart-model';
 import { InstructorSelect, MetricSection, MetricTile, PilotageSection } from './components';
 import { Appointments } from './dashboard-appointments';
 import { MetricsView, ScopeLine } from './metrics-view';
@@ -110,8 +111,7 @@ function MonthChart({ month, instructor }: { month: ResolvedPeriod; instructor: 
   if (series.status !== 'ready' || !series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution du mois" />;
   return <StackedBars title="Leçons par jour" periodText={periodLabel(month)} emptyText="Aucune leçon ce mois-ci."
     series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]}
-    buckets={series.data.buckets.map(bucket => ({ key: bucket.from, label: String(Number(bucket.from.slice(8))),
-      values: [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null] }))} />;
+    buckets={series.data.buckets.map(bucket => chartBucket('day', bucket, month.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} />;
 }
 
 /** Valeurs financières du mois pour qui y a droit : jamais présentées comme un encaissement ; le lien garde le moniteur filtré. */

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import type { AgendaEvent } from '../../console/agenda-projection';
 import { dayHeading, groupByDay, upcomingAppointments } from './appointments';
-import { formatSpan } from './period-model';
+import { breakdownRows, chartBucket, chooseGranularity } from './chart-model';
+import { comparisonPlan, formatSpan, resolvePeriod } from './period-model';
 import { stackLayout } from './stacked-bars';
 import { summarizeToday } from './today-summary';
 
@@ -109,5 +110,59 @@ describe('base de comparaison', () => {
     expect(formatSpan('2026-09-28', '2026-10-05', '2026')).toBe('du 28 septembre au 5 octobre');
     expect(formatSpan('2025-12-01', '2025-12-12', '2026')).toBe('du 1 au 12 décembre 2025');
     expect(formatSpan('2025-12-28', '2026-01-05', '2026')).toBe('du 28 décembre 2025 au 5 janvier 2026');
+    expect(formatSpan('2026-11-01', '2026-11-01', '2026')).toBe('le 1 novembre');
+  });
+});
+
+describe('comparaison d’une période', () => {
+  const today = '2026-11-02';
+  const plan = (query: Parameters<typeof resolvePeriod>[0]) => comparisonPlan(resolvePeriod(query, today).period!, today);
+  test('une période écoulée se compare à la précédente, un mois complet à un mois complet', () => {
+    expect(plan({ period: 'previous-month' })).toEqual({ kind: 'direct', compare: 'previous-month' });
+    expect(plan({ period: 'custom', start: '2026-09-01', end: '2026-09-30' })).toEqual({ kind: 'direct', compare: 'previous-month' });
+    expect(plan({ period: 'custom', start: '2026-10-05', end: '2026-10-12' })).toEqual({ kind: 'direct', compare: 'equivalent-period' });
+    expect(plan({ period: 'custom', start: '2026-10-20', end: '2026-11-02' })).toEqual({ kind: 'direct', compare: 'equivalent-period' });
+  });
+
+  test('le mois en cours se compare à date, une période encore ouverte ne se compare pas', () => {
+    expect(plan({})).toEqual({ kind: 'to-date' });
+    expect(plan({ period: 'year' })).toEqual({ kind: 'none' });
+    expect(plan({ period: 'custom', start: '2026-11-01', end: '2026-11-20' })).toEqual({ kind: 'none' });
+  });
+});
+
+describe('graphiques d’activité', () => {
+  test('la granularité suit la durée de la période', () => {
+    expect([7, 14].map(chooseGranularity)).toEqual(['day', 'day']);
+    expect([15, 30, 93].map(chooseGranularity)).toEqual(['week', 'week', 'week']);
+    expect([94, 365].map(chooseGranularity)).toEqual(['month', 'month']);
+  });
+
+  test('chaque intervalle a une étiquette courte et un titre complet, partiel si la période le rogne', () => {
+    expect(chartBucket('day', { from: '2026-11-12', toExclusive: '2026-11-13', partial: false }, '2026', [1, 0])).toMatchObject({ label: '12', title: '12 novembre 2026', values: [1, 0] });
+    const week = chartBucket('week', { from: '2026-11-09', toExclusive: '2026-11-16', partial: false }, '2026', [3, null]);
+    expect(week.label).toMatch(/^9\snov\.?$/);
+    expect(week.title).toBe('Semaine du 9 au 15 novembre');
+    expect(chartBucket('week', { from: '2026-11-01', toExclusive: '2026-11-02', partial: true }, '2026', [0, 0]).title).toBe('Semaine le 1 novembre (partielle)');
+    const month = chartBucket('month', { from: '2026-11-01', toExclusive: '2026-12-01', partial: true }, '2026', [0, 0]);
+    expect(month.label).toMatch(/^nov\.?$/);
+    expect(month.title).toBe('novembre 2026 (partielle)');
+  });
+});
+
+describe('répartitions', () => {
+  const group = (key: string, label: string | null, value: number | null, status = 'COMPLETE') =>
+    ({ key, label, measures: { L01: { value, unit: 'count' as const, coverage: { status: status as 'COMPLETE', reasons: [] } } } });
+  test('rangées par nom, jamais par valeur, sans zéro ni valeur absente, les non attribuées en dernier', () => {
+    const rows = breakdownRows({ by: 'instructor', groups: [
+      group('b', 'Simon Favre', 4), group('x', null, 9), group('a', 'Marie Dupont', 6), group('c', 'Luc Martin', 0), group('d', 'Zoé', null), group('e', 'Éric', 3, 'NOT_APPLICABLE'),
+    ].map(item => item.key === 'x' ? { ...item, key: 'UNRESOLVED' } : item) }, 'L01');
+    expect(rows).toEqual([{ key: 'a', label: 'Marie Dupont', value: 6 }, { key: 'b', label: 'Simon Favre', value: 4 }, { key: 'UNRESOLVED', label: 'Non attribué', value: 9 }]);
+  });
+
+  test('un permis sans libellé se nomme par son code, une mesure absente donne une liste vide', () => {
+    expect(breakdownRows({ by: 'category', groups: [group('B', null, 5)] }, 'L01')).toEqual([{ key: 'B', label: 'Permis B', value: 5 }]);
+    expect(breakdownRows({ by: 'category', groups: [group('B', null, 5)] }, 'H01')).toEqual([]);
+    expect(breakdownRows(undefined, 'L01')).toEqual([]);
   });
 });

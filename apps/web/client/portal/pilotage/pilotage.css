@@ -47,12 +47,27 @@
 .pilotage-chart-values summary { cursor: pointer; font-size: 0.875rem; color: var(--muted-foreground); width: fit-content; }
 .pilotage-chart-values summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 .pilotage-chart-values table { margin-top: 8px; }
+.pilotage-charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.pilotage-charts > :first-child { grid-column: 1 / -1; }
+.pilotage-chart-readout { margin: 0; min-height: 1.5em; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.pilotage-chart-bar { outline: none; cursor: pointer; }
+.pilotage-chart-hit { fill: transparent; stroke: transparent; stroke-width: 2; }
+.pilotage-chart-bar[data-active="true"] .pilotage-chart-hit { fill: var(--muted); fill-opacity: 0.6; }
+.pilotage-chart-bar:focus-visible .pilotage-chart-hit { stroke: var(--ring); }
+.pilotage-breakdown { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pilotage-breakdown li { display: grid; grid-template-columns: minmax(6rem, 10rem) 1fr auto; align-items: center; gap: 10px; font-size: 0.875rem; }
+.pilotage-breakdown-label { overflow-wrap: anywhere; }
+.pilotage-breakdown-bar { height: 10px; border-radius: 5px; background: var(--muted); overflow: hidden; }
+.pilotage-breakdown-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); }
+.pilotage-breakdown-value { font-variant-numeric: tabular-nums; font-weight: 600; }
 @media (max-width: 640px) {
   .pilotage-page { gap: 20px; }
   .pilotage-page h1 { font-size: 1.6rem; }
   .pilotage-heading > button, .pilotage-heading-actions, .pilotage-heading-actions > button { width: 100%; }
   .pilotage-filter { width: 100%; min-width: 0; }
   .pilotage-value { font-size: 1.5rem; }
+  .pilotage-breakdown li { grid-template-columns: 1fr auto; }
+  .pilotage-breakdown-bar { grid-column: 1 / -1; grid-row: 2; }
   .pilotage-appointment { gap: 12px; padding-inline: 12px; }
   .pilotage-appointment-time { min-width: 5.5rem; }
 }

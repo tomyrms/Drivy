@@ -1,5 +1,5 @@
-import { addDays } from '../../../agenda-model';
-import { ids, today } from '../fixtures';
+import { addDays, weekStart } from '../../../agenda-model';
+import { ids, previewId, today } from '../fixtures';
 import type { PreviewFamily } from '../family';
 
 /**
@@ -72,14 +72,19 @@ export const metricsFamily: PreviewFamily = {
       }));
     }
     const from = request.query.get('from') ?? '', toExclusive = request.query.get('toExclusive') ?? '';
-    const filtered = Boolean(request.query.get('instructorMembershipId'));
+    const filtered = ['instructorMembershipId', 'categoryCode', 'productKey'].some(key => Boolean(request.query.get(key)));
     if (request.path === 'metrics/series') {
-      const granularity = request.query.get('granularity') === 'week' || request.query.get('granularity') === 'month' ? request.query.get('granularity') : 'day';
-      const buckets = Array.from({ length: days(from, toExclusive) }, (_, offset) => {
-        const civil = addDays(from, offset), values = seriesDay(civil, filtered);
-        return { from: civil, toExclusive: addDays(civil, 1), partial: false, measures: { L01: { value: values.L01 }, L02: { value: values.L02 } } };
-      });
-      return tools.reply(200, tools.envelope({ schoolId: ids.school, period: { from, toExclusive, days: buckets.length }, granularity, buckets }));
+      const requested = request.query.get('granularity');
+      const granularity = requested === 'week' || requested === 'month' ? requested : 'day';
+      const buckets: { from: string; toExclusive: string; partial: boolean; measures: { L01: { value: number }; L02: { value: number } } }[] = [];
+      for (let civil = from; civil < toExclusive; civil = addDays(civil, 1)) {
+        const start = granularity === 'week' ? weekStart(civil) : granularity === 'month' ? `${civil.slice(0, 8)}01` : civil;
+        const values = seriesDay(civil, filtered), last = buckets[buckets.length - 1];
+        if (last && (granularity === 'day' ? false : (granularity === 'week' ? weekStart(last.from) : `${last.from.slice(0, 8)}01`) === start)) {
+          last.toExclusive = addDays(civil, 1); last.measures.L01.value += values.L01; last.measures.L02.value += values.L02;
+        } else buckets.push({ from: civil, toExclusive: addDays(civil, 1), partial: start < from, measures: { L01: { value: values.L01 }, L02: { value: values.L02 } } });
+      }
+      return tools.reply(200, tools.envelope({ schoolId: ids.school, period: { from, toExclusive, days: days(from, toExclusive) }, granularity, buckets }));
     }
     if (request.path !== 'metrics') return undefined;
     const domain = request.query.get('domain') === 'finance' ? 'finance' : 'activity';
@@ -94,7 +99,18 @@ export const metricsFamily: PreviewFamily = {
       schoolId: ids.school, domain, timeZone: 'Europe/Zurich', computedAt: new Date().toISOString(), dataSince: null,
       period: { from, toExclusive, days: length }, scope: { kind: 'school' }, measures,
     };
-    if (request.query.get('compare') === 'previous-month') {
+    const by = request.query.get('breakdown');
+    if (by === 'instructor' || by === 'category' || by === 'product') {
+      const shares: readonly (readonly [key: string, label: string | null, share: number])[] = by === 'instructor'
+        ? [[ids.instructor, 'Marie Dupont', 0.45], [previewId(6), 'Simon Favre', 0.35], [ids.admin, 'Luc Martin', 0.2]]
+        : by === 'category' ? [['B', 'B', 0.8], ['A1', 'A1', 0.2]] : [['conduite-b', 'Leçon de conduite', 0.9], ['UNRESOLVED', null, 0.1]];
+      answer.breakdown = { by, groups: shares.map(([key, label, share]) => ({ key, label, measures: Object.fromEntries(dictionary.filter(entry => entry[1] === domain).map(([id, , unit]) => {
+        const { value, coverage } = sample(id);
+        const scaledValue = value === null ? null : unit === 'permille' || id.startsWith('A') ? value : Math.round(scaled(id, unit, value)! * share);
+        return [id, { value: scaledValue, unit, coverage: coverage ?? complete }];
+      })) })) };
+    }
+    if (request.query.get('compare') === 'previous-month' || request.query.get('compare') === 'equivalent-period') {
       const previous = new Date(`${from}T12:00:00Z`); previous.setUTCMonth(previous.getUTCMonth() - 1);
       const base = previous.toISOString().slice(0, 8) + '01';
       answer.comparison = {
