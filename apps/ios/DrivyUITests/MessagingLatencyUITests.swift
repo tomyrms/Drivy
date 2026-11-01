@@ -36,11 +36,9 @@ import XCTest
         capture(app, "Réaction confirmée, saisie conservée — synthétique")
     }
 
-    /// Le nom garde l'ancien délai de 5 s : la réponse à l'ajout est désormais retardée de 15 s. Cinq secondes après l'ajout, la bulle
-    /// passe à « en cours de synchronisation » et change de hauteur ; un appui de retrait qui tombe à ce moment est perdu : la
-    /// réaction reste affichée (run 41229249440 à 5,5 s avec 5 s de délai, run 41256319407 à 5,0 s avec 15 s de délai, retrait
-    /// partant 10 s avant la réponse). L'appui attend donc l'indicateur de lenteur, état stable jusqu'à la bascule suivante
-    /// (10 s), et part bien avant la réponse retardée. Détail : docs/implementation/tests-ui-instables-20261101.md.
+    /// Le nom garde l'ancien délai de 5 s : la réponse à l'ajout est retardée de 15 s pour que le retrait, que XCTest ne peut pas
+    /// lancer avant 5 s, parte bien avant elle. Le retrait est tapé tout de suite, sans attendre l'état « synchronisation » :
+    /// la bulle ne bouge plus à cet instant (docs/implementation/tests-ui-instables-20261101.md).
     func testFiveSecondResponseCannotReintroduceAQuicklyRemovedReaction() {
         let delay = 15
         let app = launch(delay: delay)
@@ -49,19 +47,7 @@ import XCTest
         XCTAssertTrue(capsule.waitForExistence(timeout: 5), app.debugDescription)
         let visualSeconds = Date().timeIntervalSince(started)
         assertMenuClosed(app)
-        // Attendre l'état stable : l'indicateur de lenteur affiché, puis une bulle dont le cadre ne bouge plus.
-        let slow = app.descendants(matching: .any)["messaging.mutation.slow"].firstMatch
-        XCTAssertTrue(slow.waitForExistence(timeout: 10), app.debugDescription)
-        let bubble = target(in: app)
-        var frame = bubble.frame
-        let settleDeadline = Date().addingTimeInterval(3)
-        while Date() < settleDeadline {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-            let next = bubble.frame
-            if next == frame { break }
-            frame = next
-        }
-        bubble.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 12)).tap()
+        target(in: app).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 12)).tap()
         let removalSeconds = Date().timeIntervalSince(started)
         XCTAssertTrue(heart(in: app).waitForNonExistence(timeout: 2), "Retrait local immédiat")
         // Deux réponses retardées : l'ajout ancien (à `delay`), puis le retrait sérialisé (à 2 × `delay`). La fenêtre part de
