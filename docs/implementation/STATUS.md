@@ -1,5 +1,15 @@
 # État de la réalisation
 
+## 1er novembre 2026 — Pilotage #397 déployé sur le homelab (web seulement, `6884dcc7`)
+
+- **PR #398 fusionnée** (`6884dcc7b367de46ecc03c9c6466afdc1966069a`, commit de fusion) après sa CI verte : Web et BFF, contrats documentaires, test navigateur Chromium · OIDC · BFF · API · PostgreSQL (run 41340204335). CI de master sur `6884dcc7` verte (runs 41340497778 et 41340497682). Issue #397 laissée ouverte.
+- **Déployé vers 20 h 13 (heure suisse), à la demande du porteur (« deploie tout ça stp »)**, frontal seul, par `scripts/homelab/deploy-web-311.py` (plan puis `--execute`) depuis un worktree détaché sur le commit exact, build Node 24.22.1. Reçu `20261101T191307Z-6884dcc7b367`. Version précédente : `8d6350c5` (répertoire réel lu en SSH avant le plan). API, worker et migrations inchangés (`bdcf1faf`, 60 migrations) ; BFF recopié sans changement.
+- **Sauvegarde** : `/root/drivy_refonte-before-web311-20261101T191307Z.dump` (2 397 220 octets, catalogue vérifié, tous les blocs relus ; restauration non répétée).
+- **Vérifié** : SHA `6884dcc7…` dans le HTML servi par https://drivy.shulker.ch/app/ (HTTP 200), morceaux Tableau de bord et Statistiques servis (200), service web actif dans la nouvelle release.
+- **Aperçu synthétique republié** : https://shulker.ch/drivy-preview/ sur `6884dcc7` (`20261101T191425Z-6884dcc7b367`, précédent `27a5a4e2`).
+- **Retour arrière** : `python scripts/homelab/deploy-web-311.py --rollback 20261101T191307Z-6884dcc7b367` puis `--execute` (en PowerShell) ; aperçu : `python scripts/homelab/deploy-preview-311.py --rollback 20261101T191425Z-6884dcc7b367` puis `--execute`.
+- **Non prouvé** : aucun parcours authentifié en production, aucun chiffre réel regardé ; l'essai du porteur avec une vraie école reste à faire.
+
 ## 1er novembre 2026 — Pilotage, Statistiques et Finances : passe UX #397 (`claude/pilotage-397-ux`)
 
 - **Web seulement**, aucune modification d'API, de calcul ni de droit. Les mesures se lisent en relevé (lignes, valeurs alignées à droite, deux colonnes sur écran large) au lieu d'une mosaïque de cartes ; en Finances, réalisé + à venir mènent au total attendu sous un filet (définition du serveur, rien n'est recalculé), l'attente de constat se lit après le total, les règlements sont à part. Rendez-vous en une liste, graphiques gradués, contrôle segmenté de l'agenda pour les répartitions, « 1er » pour le premier du mois. Méthode Impeccable + Uncodixfy et constat avant/après : [pilotage-397-ux.md](pilotage-397-ux.md).
