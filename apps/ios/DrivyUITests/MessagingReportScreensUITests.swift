@@ -103,12 +103,20 @@ final class MessagingReportScreensUITests: XCTestCase {
             let nested = rows.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
             let row = own.exists ? own : nested
             XCTAssertTrue(row.waitForExistence(timeout: 10), text + " : " + app.debugDescription)
+            // Le fil n'est pas toujours calé en bas à cet instant : la ligne peut être sous l'écran, un appui y tomberait
+            // dans le vide. On fait défiler vers les messages récents (jamais vers le bas : la feuille se fermerait).
+            var swipes = 0
+            while !row.isHittable && swipes < 4 { app.swipeUp(); swipes += 1 }
+            XCTAssertTrue(row.isHittable, text + " : ligne hors d'atteinte : " + app.debugDescription)
             row.tap()
         }
         let selectedRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND isSelected == true",
                                                             "messaging.report.select."))
-        XCTAssertEqual(selectedRows.count, 2, "Les deux messages choisis sont sélectionnés : " + app.debugDescription)
+        // Les deux ronds ont fini leur transition avant la capture ; la capture précède le contrôle pour survivre à un échec.
+        _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == 2"), object: selectedRows)],
+                           timeout: 5)
         capture("06-selection-des-messages")
+        XCTAssertEqual(selectedRows.count, 2, "Les deux messages choisis sont sélectionnés : " + app.debugDescription)
 
         let send = app.buttons["messaging.report.send"]
         XCTAssertTrue(send.waitForExistence(timeout: 10), app.debugDescription)
