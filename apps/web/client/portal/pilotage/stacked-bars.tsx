@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import './pilotage.css';
 
@@ -18,11 +18,11 @@ export interface ChartBucket {
 }
 export interface ChartSeries { label: string; pattern: 'solid' | 'hatch' }
 
-const width = 640, height = 150, left = 60, top = 12, bottom = 22;
+const defaultWidth = 640, height = 150, left = 60, top = 12, bottom = 22;
 
 export interface StackedBar { key: string; x: number; width: number; slotX: number; slotWidth: number; layers: { y: number; height: number }[] }
 /** Géométrie pure : l'échelle part de zéro et le plus haut total remplit la zone ; une barre vide a des couches de hauteur nulle. */
-export function stackLayout(buckets: readonly ChartBucket[]): { bars: StackedBar[]; max: number } {
+export function stackLayout(buckets: readonly ChartBucket[], width = defaultWidth): { bars: StackedBar[]; max: number } {
   const totals = buckets.map(bucket => bucket.values.reduce<number>((sum, value) => sum + (value ?? 0), 0));
   const max = Math.max(1, ...totals);
   const slot = (width - left) / Math.max(1, buckets.length), barWidth = Math.max(2, slot * 0.68);
@@ -57,7 +57,17 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
   const [active, setActive] = useState<number | null>(null);
   const [roving, setRoving] = useState(0);
   const bars = useRef<(SVGGElement | null)[]>([]);
-  const layout = stackLayout(buckets);
+  // Le dessin prend la largeur réelle de son cadre : les chiffres de l'axe gardent leur corps sur un téléphone au lieu d'être réduits avec l'image.
+  const frame = useRef<HTMLElement>(null);
+  const [width, setWidth] = useState(defaultWidth);
+  useEffect(() => {
+    const node = frame.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(entries => { const next = Math.floor(entries[0]?.contentRect.width ?? defaultWidth); if (next >= 200) setWidth(next); });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  const layout = stackLayout(buckets, width);
   const totals = series.map((_, layer) => total(buckets, layer));
   const summary = `${title}, ${periodText} : ${series.map((item, layer) => `${format(totals[layer]!)} ${item.label.toLowerCase()}`).join(', ')}.`;
   const reading = (index: number) => {
@@ -68,7 +78,7 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
     }).join(', ')}`;
   };
   const fill = (pattern: ChartSeries['pattern']) => pattern === 'solid' ? 'var(--primary)' : `url(#${hatch})`;
-  const step = Math.max(1, Math.ceil(buckets.length / 6));
+  const step = Math.max(1, Math.ceil(buckets.length / Math.max(2, Math.floor(width / 64))));
   const move = (to: number) => {
     const next = Math.max(0, Math.min(buckets.length - 1, to));
     setRoving(next); setActive(next); bars.current[next]?.focus();
@@ -78,12 +88,12 @@ export function StackedBars({ title, periodText, buckets, series, emptyText, for
     if (target === null) return;
     event.preventDefault(); move(target);
   };
-  return <figure className="pilotage-chart">
+  return <figure ref={frame} className="pilotage-chart">
     <figcaption><h3>{title}</h3><span>{periodText}</span></figcaption>
     {totals.every(value => value === 0)
       ? <p className="pilotage-chart-empty">{emptyText}</p>
       : <>
-        <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label={summary} className="pilotage-chart-svg">
+        <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="group" aria-label={summary} className="pilotage-chart-svg">
           <defs>
             <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <rect width="6" height="6" fill="var(--card)" /><line x1="0" y1="0" x2="0" y2="6" stroke="var(--primary)" strokeWidth="2.5" />

@@ -1,4 +1,7 @@
 .pilotage-page { width: min(100%, 1040px); margin-inline: auto; display: grid; gap: 24px; }
+.pilotage-page > *, .pilotage-charts > *, .pilotage-chart { min-width: 0; }
+.pilotage-chart [data-slot="tabs"] { min-width: 0; max-width: 100%; }
+.pilotage-chart [data-slot="tabs-list"] { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
 .pilotage-page h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 .pilotage-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .pilotage-heading p { margin-top: 4px; color: var(--muted-foreground); }
@@ -47,7 +50,7 @@
 .pilotage-chart-values summary { cursor: pointer; font-size: 0.875rem; color: var(--muted-foreground); width: fit-content; }
 .pilotage-chart-values summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 .pilotage-chart-values table { margin-top: 8px; }
-.pilotage-charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.pilotage-charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
 .pilotage-charts > :first-child { grid-column: 1 / -1; }
 .pilotage-chart-readout { margin: 0; min-height: 1.5em; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
 .pilotage-chart-bar { outline: none; cursor: pointer; }

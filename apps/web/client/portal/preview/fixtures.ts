@@ -14,7 +14,7 @@ export const stamp = at(-10, '09:00');
 export const previewSchool: ConsoleContextValue['school'] = { id: ids.school, schoolId: ids.school, version: 1, name: 'École du Léman', timeZone: 'Europe/Zurich', status: 'ACTIVE', contactEmail: 'ecole@example.test', contactPhone: null, configurationVersion: 1,
   modules: { gpsEnabled: false, packsEnabled: false, collectiveCoursesEnabled: true, courseOffersVisibleByDefault: false } };
 export const previewMembership: ConsoleContextValue['membership'] = { membershipId: ids.admin, schoolId: ids.school, schoolName: previewSchool.name,
-  roles: ['ADMIN', 'INSTRUCTOR'], grants: ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG', 'REVIEW_REGULATORY_PROFILE', 'MANAGE_COURSES', 'TAKE_ATTENDANCE', 'VALIDATE_REQUIREMENT'], accessEpoch: 1 };
+  roles: ['ADMIN', 'INSTRUCTOR'], grants: ['permit_review', 'MANAGE_LEARNER_ARCHIVES', 'CONFIGURE_CATALOG', 'REVIEW_REGULATORY_PROFILE', 'MANAGE_COURSES', 'TAKE_ATTENDANCE', 'VALIDATE_REQUIREMENT', 'EXPORT_MANAGEMENT'], accessEpoch: 1 };
 export const previewMe: ConsoleContextValue['me'] = { personId: ids.person, displayName: 'Luc Martin', version: 1, memberships: [previewMembership] };
 
 // A JSON-shaped store makes mutations observable across the three pilots, without another production store.

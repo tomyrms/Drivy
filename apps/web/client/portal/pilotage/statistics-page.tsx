@@ -40,14 +40,14 @@ export function StatisticsPilot() {
     query.category ? categoryOptions.find(item => item.value === query.category)?.label ?? `Permis ${query.category}` : null,
     query.product ? productOptions.find(item => item.value === query.product)?.label ?? query.product : null].filter(Boolean).join(' · ') || 'Toute l’école';
   const change = (patch: FilterPatch) => setRouteQuery?.({ ...query, ...patch }, true);
-  const open = (measure: string) => setRouteQuery?.({ ...query, measure, tab: measureDomain(measure) === 'finance' ? 'finance' : undefined });
-  const close = () => { setReturnTo(query.measure); setRouteQuery?.({ ...query, measure: undefined }); };
+  const open = (measure: string) => setRouteQuery?.({ ...query, measure, part: undefined, tab: measureDomain(measure) === 'finance' ? 'finance' : undefined });
+  const close = () => { setReturnTo(query.measure); setRouteQuery?.({ ...query, measure: undefined, part: undefined }); };
   const detailPanel = (measure: string, period: NonNullable<typeof resolved.period>, canExport: boolean) =>
-    <MeasureDetail measure={measure} period={period} filters={filters} scopeLabel={scopeLabel} canExport={canExport} onBack={close} />;
+    <MeasureDetail measure={measure} part={query.part} period={period} filters={filters} scopeLabel={scopeLabel} canExport={canExport} onBack={close} onPart={part => setRouteQuery?.({ ...query, part }, true)} />;
 
   return <section className="pilotage-page">
     <header className="pilotage-heading"><h1>Statistiques</h1></header>
-    <Tabs value={tab} onValueChange={value => setRouteQuery?.({ ...query, measure: undefined, tab: value === 'activity' ? undefined : value as StatisticsTab })}>
+    <Tabs value={tab} onValueChange={value => setRouteQuery?.({ ...query, measure: undefined, part: undefined, tab: value === 'activity' ? undefined : value as StatisticsTab })}>
       <TabsList variant="line" aria-label="Domaine des statistiques">
         {rights.activity && <TabsTrigger value="activity">Activité</TabsTrigger>}
         {rights.finance && <TabsTrigger value="finance">Finances</TabsTrigger>}

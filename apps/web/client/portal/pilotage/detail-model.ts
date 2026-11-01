@@ -62,7 +62,13 @@ export function expectedFromCard(measure: { value: number | null; unit: MeasureU
   };
 }
 
-export const exportFileName = (measure: string, from: string, toExclusive: string) => `drivy-${measure}-${from}_${toExclusive}.csv`;
+/** Nom du fichier tel que le relais le reconstruit : ni école ni personne, la partie à la suite de la mesure. */
+export const exportFileName = (measure: string, part: 'a' | 'b' | undefined, from: string, toExclusive: string) => `drivy-${measure}${part ?? ''}-${from}_${toExclusive}.csv`;
+
+/** Mesures qui se détaillent en plusieurs listes : le serveur refuse le détail sans la partie, et le chiffre de la carte les additionne. */
+export const measureParts: Readonly<Record<string, readonly { part: 'a' | 'b'; label: string }[]>> = {
+  F06: [{ part: 'a', label: 'Saisies annulées' }, { part: 'b', label: 'Corrections postérieures' }],
+};
 
 /** Messages courts des refus de l'export ; aucun n'invente un fichier. */
 export function exportErrorMessage(code: string): string {

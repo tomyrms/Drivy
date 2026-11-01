@@ -244,7 +244,20 @@
   .portal-nav-item { flex-direction: column; justify-content: center; min-height: 56px; padding: 6px 0; gap: 3px; font-size: 12px; line-height: 1.5; letter-spacing: -0.01em; }
   .portal-nav-label { display: none; }
   .portal-nav-short { display: inline; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Six entrées ou plus (Pilotage, #373) : écart et corps réduits pour que « Formations » tienne dès 360 px. */
+  .portal-navigation[data-dense] { padding-inline: max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-left)); }
+  .portal-navigation[data-dense] ul { gap: 2px; }
+  .portal-navigation[data-dense] .portal-nav-item { font-size: 11px; letter-spacing: -0.02em; }
   .portal-surface { flex: 1; }
+}
+@media (max-width: 380px) {
+  .portal-navigation[data-dense] { padding-inline: 4px; }
+  .portal-navigation[data-dense] .portal-nav-item { font-size: 10px; }
+}
+@media (max-width: 340px) {
+  .portal-navigation[data-dense] { padding-inline: 2px; }
+  .portal-navigation[data-dense] ul { gap: 0; }
+  .portal-navigation[data-dense] .portal-nav-item { letter-spacing: -0.04em; }
 }
 @media (max-width: 640px) {
   .portal-topbar { min-height: 68px; padding-inline: 20px; gap: 16px; flex-wrap: wrap; }

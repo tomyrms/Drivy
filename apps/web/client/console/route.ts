@@ -27,6 +27,8 @@ export interface NavigationQuery {
   product?: string | undefined;
   /** Mesure dont les lignes sont affichées (identifiant du dictionnaire, par exemple L03 ou F01). */
   measure?: string | undefined;
+  /** Partie d'une mesure qui se détaille en deux listes (F06 : saisies annulées, corrections postérieures). */
+  part?: 'a' | 'b' | undefined;
 }
 export const statisticsTabs = ['activity', 'finance'] as const;
 export type StatisticsTab = typeof statisticsTabs[number];
@@ -62,6 +64,8 @@ export function readNavigationQuery(search: string): NavigationQuery {
   if (product && product.length <= 100 && !/[\u0000-\u001f\u007f]/.test(product) && params.getAll('product').length === 1) query.product = product;
   const measure = params.get('measure');
   if (measure && /^[A-Z][0-9]{2}$/.test(measure) && params.getAll('measure').length === 1) query.measure = measure;
+  const part = params.get('part');
+  if ((part === 'a' || part === 'b') && params.getAll('part').length === 1) query.part = part;
   const audience = params.get('audience');
   if ((audience === 'learners' || audience === 'team') && params.getAll('audience').length === 1) query.audience = audience;
   for (const key of ['week', 'day', 'start', 'end'] as const) {

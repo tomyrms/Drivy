@@ -6,9 +6,10 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
+import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { ReadFeedback } from '../components/feedback';
 import { PilotageSection } from './components';
-import { expectedFromCard, exportErrorMessage, lineStatus, lineTitle, measureDomain, shownAmount, totalText } from './detail-model';
+import { expectedFromCard, exportErrorMessage, lineStatus, lineTitle, measureDomain, measureParts, shownAmount, totalText } from './detail-model';
 import { exportMeasure, readDetails, type DetailLineRecord, type DetailRequest } from './details-api';
 import { describeReason, formatMeasure } from './measure-format';
 import { MetricsView, ScopeLine } from './metrics-view';
@@ -19,8 +20,8 @@ import { periodLabel, type ResolvedPeriod } from './period-model';
  * Lignes d'une mesure (#380) pour la période, la portée et les filtres de la carte d'origine. Le chiffre de la carte, le total du détail et le
  * fichier exporté sont trois lectures du même périmètre ; un écart entre la carte et le détail est signalé par le serveur, jamais masqué.
  */
-export function MeasureDetail({ measure, period, filters, scopeLabel, canExport, onBack }: {
-  measure: string; period: ResolvedPeriod; filters: MetricFilters; scopeLabel: string; canExport: boolean; onBack: () => void;
+export function MeasureDetail({ measure, part, period, filters, scopeLabel, canExport, onBack, onPart }: {
+  measure: string; part: 'a' | 'b' | undefined; period: ResolvedPeriod; filters: MetricFilters; scopeLabel: string; canExport: boolean; onBack: () => void; onPart: (part: 'a' | 'b') => void;
 }) {
   // Relire remonte les deux lectures : la carte et ses lignes repartent d'un même instant.
   const [reread, setReread] = useState(0);
@@ -30,21 +31,23 @@ export function MeasureDetail({ measure, period, filters, scopeLabel, canExport,
       {(answer, definitions) => {
         const card = answer.measures[measure], definition = definitions.get(measure);
         if (!card || !definition) return <Alert><AlertTitle>Cette mesure n’est pas disponible</AlertTitle><AlertDescription>Elle n’existe pas pour cette portée ou vos accès ne la montrent pas.</AlertDescription></Alert>;
-        return <DetailBody measure={measure} card={card} definition={definition} answer={answer} period={period} filters={filters} scopeLabel={scopeLabel}
+        return <DetailBody measure={measure} part={part} onPart={onPart} card={card} definition={definition} answer={answer} period={period} filters={filters} scopeLabel={scopeLabel}
           canExport={canExport} onReread={() => setReread(value => value + 1)} />;
       }}
     </MetricsView>
   </div>;
 }
 
-function DetailBody({ measure, card, definition, answer, period, filters, scopeLabel, canExport, onReread }: {
-  measure: string; card: MetricMeasure; definition: MetricDefinition; answer: MetricsAnswer; period: ResolvedPeriod; filters: MetricFilters;
+function DetailBody({ measure, part, onPart, card, definition, answer, period, filters, scopeLabel, canExport, onReread }: {
+  measure: string; part: 'a' | 'b' | undefined; onPart: (part: 'a' | 'b') => void; card: MetricMeasure; definition: MetricDefinition; answer: MetricsAnswer; period: ResolvedPeriod; filters: MetricFilters;
   scopeLabel: string; canExport: boolean; onReread: () => void;
 }) {
   const { schoolId, school, csrf, refreshCsrf, login, navigate } = useConsole();
-  const request: DetailRequest = { measure, from: period.from, toExclusive: period.toExclusive, ...filters };
-  const expected = expectedFromCard(card);
-  const scope = [schoolId, measure, period.from, period.toExclusive, filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
+  // Une mesure en deux listes se lit par partie (F06) ; le chiffre de la carte les additionne, il ne peut donc pas servir de valeur attendue pour une seule.
+  const parts = measureParts[measure], shownPart = parts ? part ?? parts[0]?.part : undefined;
+  const request: DetailRequest = { measure, part: shownPart, from: period.from, toExclusive: period.toExclusive, ...filters };
+  const expected = parts ? {} : expectedFromCard(card);
+  const scope = [schoolId, measure, shownPart ?? '', period.from, period.toExclusive, filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
   const first = useLoad(() => readDetails(schoolId, request, null, expected), [schoolId, scope], scope);
   const [more, setMore] = useState<{ lines: DetailLineRecord[]; cursor: string | null | undefined; busy: boolean; error: string | null }>({ lines: [], cursor: undefined, busy: false, error: null });
   const [file, setFile] = useState<{ status: 'idle' | 'busy' | 'done' | 'failed'; message: string; login: boolean }>({ status: 'idle', message: '', login: false });
@@ -85,6 +88,9 @@ function DetailBody({ measure, card, definition, answer, period, filters, scopeL
     </div>
     {card.coverage.reasons.length > 0 && <ul className="pilotage-reasons">{card.coverage.reasons.map(reason => <li key={reason.code}>{describeReason(reason.code, reason.count)}</li>)}</ul>}
     <ScopeLine period={periodLabel(period)} scope={scopeLabel} answer={answer} />
+    {parts && <Tabs value={shownPart} onValueChange={value => onPart(value as 'a' | 'b')}>
+      <TabsList aria-label="Liste affichée">{parts.map(item => <TabsTrigger key={item.part} value={item.part}>{item.label}</TabsTrigger>)}</TabsList>
+    </Tabs>}
     <div role="status" aria-live="polite">
       {file.status === 'done' && <Alert><AlertTitle>Export terminé</AlertTitle><AlertDescription>{file.message}</AlertDescription></Alert>}
       {file.status === 'failed' && <Alert variant="destructive"><AlertTitle>Export impossible</AlertTitle><AlertDescription>{file.message}</AlertDescription>

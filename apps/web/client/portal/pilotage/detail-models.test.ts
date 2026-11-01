@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
-import { expectedFromCard, exportErrorMessage, exportFileName, lineStatus, lineTitle, measureDomain, shownAmount, totalText, type DetailLine } from './detail-model';
-import { detailsSchema, exportBody } from './details-api';
+import { expectedFromCard, exportErrorMessage, exportFileName, lineStatus, lineTitle, measureDomain, measureParts, shownAmount, totalText, type DetailLine } from './detail-model';
+import { exportBody } from './details-api';
+import { detailsSchema } from './metrics-schemas';
 
 const line = (extra: Partial<DetailLine> = {}): DetailLine => ({ kind: 'LESSON', id: 'a', eventAt: '2026-11-02T09:00:00+01:00', status: 'COMPLETED', ...extra });
 
@@ -44,7 +45,13 @@ describe('détail d’une mesure', () => {
   });
 
   test('le nom du fichier ne contient ni école ni personne', () => {
-    expect(exportFileName('F01', '2026-11-01', '2026-12-01')).toBe('drivy-F01-2026-11-01_2026-12-01.csv');
+    expect(exportFileName('F01', undefined, '2026-11-01', '2026-12-01')).toBe('drivy-F01-2026-11-01_2026-12-01.csv');
+    expect(exportFileName('F06', 'a', '2026-11-01', '2026-12-01')).toBe('drivy-F06a-2026-11-01_2026-12-01.csv');
+  });
+
+  test('F06 se détaille en deux listes, qui portent chacune leur partie', () => {
+    expect(measureParts.F06?.map(item => item.part)).toEqual(['a', 'b']);
+    expect(measureParts.F01).toBeUndefined();
   });
 
   test('chaque refus d’export a son message, jamais un fichier partiel', () => {
@@ -57,6 +64,7 @@ describe('détail d’une mesure', () => {
 describe('échanges du détail', () => {
   test('l’export reprend la sélection affichée : mesure, période, filtres posés et valeurs de la carte', () => {
     expect(exportBody({ measure: 'F01', from: '2026-11-01', toExclusive: '2026-12-01' }, {})).toEqual({ measure: 'F01', from: '2026-11-01', toExclusive: '2026-12-01' });
+    expect(exportBody({ measure: 'F06', part: 'b', from: '2026-11-01', toExclusive: '2026-12-01' }, {})).toEqual({ measure: 'F06', part: 'b', from: '2026-11-01', toExclusive: '2026-12-01' });
     expect(exportBody({ measure: 'L03', from: '2026-11-01', toExclusive: '2026-12-01', instructor: 'm1', category: 'B', product: 'conduite-b' }, { lineCount: 3, amountCents: 28_500 }))
       .toEqual({ measure: 'L03', from: '2026-11-01', toExclusive: '2026-12-01', instructorMembershipId: 'm1', categoryCode: 'B', productKey: 'conduite-b', expectedLineCount: 3, expectedAmountCents: 28_500 });
   });

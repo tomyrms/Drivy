@@ -105,7 +105,7 @@ export function PortalFrame({ children, active, activeQuery = {}, available, onN
     </header>
     <div className="portal-workspace">
       <aside className="portal-sidebar">
-        <nav className="portal-navigation" aria-label="Navigation principale" style={{ '--portal-nav-count': workspaces.length } as CSSProperties}>
+        <nav className="portal-navigation" aria-label="Navigation principale" data-dense={workspaces.length > 5 ? 'true' : undefined} style={{ '--portal-nav-count': workspaces.length } as CSSProperties}>
           <ul>
             {workspaces.map(item => {
               const Icon = workspaceIcons[item.key], target = item.items[0]!, current = item.key === workspace?.key;

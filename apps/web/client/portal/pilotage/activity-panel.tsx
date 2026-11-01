@@ -14,7 +14,7 @@ import { StackedBars } from './stacked-bars';
 const groups: readonly MeasureGroup[] = [
   { title: 'Leçons', ids: ['L01', 'L02', 'L03', 'L04'] },
   // Les cas non finalisés ne sont jamais comptés comme réalisés : ils ont leur place, et n'apparaissent que s'il y en a.
-  { title: 'À vérifier', ids: ['L05', 'L07'], onlyWhenOpen: true },
+  { title: 'Non finalisées', ids: ['L05', 'L07'], onlyWhenOpen: true },
   { title: 'Heures', ids: ['H01', 'H02', 'H03'] },
   { title: 'Élèves', ids: ['P01'] },
   { title: 'Cours collectifs', ids: ['C02', 'C01', 'C06', 'C07', 'C09'] },

@@ -3,49 +3,23 @@ import { RequestFailure } from '../../protocol';
 import { readSchool } from '../../school-api';
 import { exportFileName } from './detail-model';
 import { filterQuery, type MetricFilters } from './metrics-api';
+import { detailsSchema, type DetailsAnswer } from './metrics-schemas';
+
+export type { DetailLineRecord, DetailsAnswer } from './metrics-schemas';
 
 /**
  * Lignes d'une mesure et export CSV (#373, T07 #380). Le web montre ce que le serveur liste et renvoie les valeurs lues sur la carte
  * pour qu'un écart soit signalé ; il ne recompte rien et ne fabrique aucun fichier : le CSV est celui du serveur, octet pour octet.
  */
-const optionalText = z.string().nullable().optional();
-const optionalCount = z.number().int().nullable().optional();
-const civil = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export const detailLineSchema = z.object({
-  kind: z.enum(['LESSON', 'COURSE_OCCURRENCE', 'COURSE_PAYMENT']),
-  id: z.string().uuid(),
-  eventAt: z.string().max(40),
-  status: z.string().max(40),
-  instructorMembershipId: optionalText, instructorLabel: optionalText, learnerLabel: optionalText, categoryCode: optionalText, productKey: optionalText,
-  quantity: optionalCount, durationSeconds: optionalCount, amountCents: optionalCount,
-  courseTypeLabel: optionalText, markedCount: optionalCount, missingMarks: optionalCount, enrollmentId: optionalText, seriesId: optionalText, voidedAt: optionalText,
-});
-export type DetailLineRecord = z.infer<typeof detailLineSchema>;
-
-export const detailsSchema = z.object({
-  schoolId: z.string().uuid(),
-  measure: z.string().regex(/^[A-Z][0-9]{2}$/),
-  timeZone: z.string().max(100),
-  computedAt: z.string().max(40),
-  period: z.object({ from: civil, toExclusive: civil }),
-  total: z.object({ lineCount: z.number().int().nonnegative(), amountCents: optionalCount, durationSeconds: optionalCount }),
-  drift: z.object({
-    lineCount: z.object({ expected: z.number().int(), actual: z.number().int() }).optional(),
-    amountCents: z.object({ expected: z.number().int(), actual: z.number().int().nullable() }).optional(),
-  }).nullable().optional(),
-  lines: z.array(detailLineSchema).max(100),
-  page: z.object({ limit: z.number().int(), nextCursor: z.string().nullable() }),
-});
-export type DetailsAnswer = z.infer<typeof detailsSchema>;
-
-export interface DetailRequest extends MetricFilters { measure: string; from: string; toExclusive: string }
+export interface DetailRequest extends MetricFilters { measure: string; part?: 'a' | 'b' | undefined; from: string; toExclusive: string }
 export interface ExpectedFromCard { lineCount?: number; amountCents?: number }
 
 /** Une page de lignes. Le curseur est lié par le serveur à la personne, à la mesure, à la période et aux filtres. */
 export async function readDetails(schoolId: string, request: DetailRequest, cursor: string | null, expected: ExpectedFromCard): Promise<DetailsAnswer> {
   const answer = await readSchool(schoolId, 'metrics/details', detailsSchema, {
     measure: request.measure, from: request.from, toExclusive: request.toExclusive, limit: '50', ...filterQuery(request),
+    ...(request.part ? { part: request.part } : {}),
     ...(cursor ? { cursor } : {}),
     ...(expected.lineCount === undefined ? {} : { expectedLineCount: String(expected.lineCount) }),
     ...(expected.amountCents === undefined ? {} : { expectedAmountCents: String(expected.amountCents) }),
@@ -60,6 +34,7 @@ export async function readDetails(schoolId: string, request: DetailRequest, curs
 export function exportBody(request: DetailRequest, expected: ExpectedFromCard) {
   return {
     measure: request.measure, from: request.from, toExclusive: request.toExclusive,
+    ...(request.part ? { part: request.part } : {}),
     ...(request.instructor ? { instructorMembershipId: request.instructor } : {}),
     ...(request.category ? { categoryCode: request.category } : {}),
     ...(request.product ? { productKey: request.product } : {}),
@@ -94,7 +69,7 @@ export async function exportMeasure(schoolId: string, csrf: string, request: Det
   }
   if (response.headers.get('content-type')?.split(';')[0]?.trim() !== 'text/csv') return { ok: false, code: 'INVALID_RESPONSE' };
   const blob = await response.blob();
-  const fileName = exportFileName(request.measure, request.from, request.toExclusive);
+  const fileName = exportFileName(request.measure, request.part, request.from, request.toExclusive);
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
   link.href = url; link.download = fileName; link.rel = 'noopener'; link.hidden = true;
