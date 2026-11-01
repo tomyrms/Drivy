@@ -11,6 +11,7 @@ import {Cursors} from './cursor.js';
 import {ensureOpen,instructorPermission} from './lesson-setup.js';
 import {missingRules,PLANNING_STAGES,type ProfileValues} from './profile-completeness.js';
 import {findNextSlot,type Candidate} from './next-slot.js';
+import {requireChangeRequest,settleChangeRequests} from './lesson-change-resolution.js';
 const id=z.uuid(),date=z.iso.datetime({offset:true}),amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),empty=z.object({}).strict();
 const selection=z.object({mode:z.enum(['UNIT_PRICE','ENTITLEMENT']),serviceProductVersionId:id,quantity:z.number().int().min(1).max(100),entitlementLotId:id.nullable(),acceptedTermsVersionId:id}).strict()
  .refine(v=>v.mode==='UNIT_PRICE'?v.entitlementLotId===null:v.entitlementLotId!==null);
@@ -20,8 +21,9 @@ const commercialChange=z.object({commercialSelection:selection,agreedPriceCents:
 export const startNowCommand=z.object({operationId:id,trainingId:id,meetingPoint:z.string().trim().max(500).nullable().optional(),prepareForGPS:z.boolean().optional()}).strict();
 /** startedAt (extension facultative, A2-03) : instant du geste « Commencer » sur l'appareil, pour une commande arrivée en retard. */
 const startLessonCommand=z.object({operationId:id,startedAt:date.optional()}).strict();
-const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional()}).strict();
-const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional()}).strict();
+/** changeRequestId (extension #52) : la demande de l'élève que ce déplacement accepte, voir lesson-change-resolution.ts. */
+const moveCommand=z.object({operationId:id,...interval,agreementConfirmed:z.literal(true),reason:z.string().max(1000).nullable().optional(),commercialChange:commercialChange.optional(),changeRequestId:id.optional()}).strict();
+const cancelCommand=z.object({operationId:id,reasonCode:z.enum(['LEARNER_REQUEST','INSTRUCTOR_UNAVAILABLE','SCHOOL_CLOSURE','OTHER']),comment:z.string().max(1000).nullable().optional(),changeRequestId:id.optional()}).strict();
 const availabilityQuery=z.object({trainingId:id,instructorMembershipId:id,plannedStart:date,plannedEnd:date,
  timeZone:z.string().min(1).max(100),bufferMinutes:z.coerce.number().int().min(0).max(240),excludeLessonId:id.optional()}).strict();
 /** Extension hors contrat canonique (12 octobre 2026) : recherche du prochain créneau libre, voir contracts/lesson-next-slot.json. */
@@ -387,6 +389,7 @@ export function registerLessons(app:FastifyInstance,options:PracticalStartOption
   const data=await command(r,'MOVE_LESSON',boundCommand,expected,{lessonId},async(db,actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Seule une leçon planifiée peut être déplacée.');
    if(old.actual_start)throw new ApiError(409,'LESSON_STARTED','Une leçon commencée ne peut plus être déplacée.');
+   if(body.changeRequestId)await requireChangeRequest(db,school.id,lessonId,body.changeRequestId,'MOVED');
    const minutes=validateInterval(body,school),context=await trainingContext(db,school,old.training_id,body.instructorMembershipId,body.plannedStart,body.plannedEnd);
    const changed=minutes!==(old.planned_end.getTime()-old.planned_start.getTime())/60000;
    if(changed&&!body.commercialChange)throw new ApiError(422,'LESSON_COMMERCIAL_CHANGE_REQUIRED','Une nouvelle durée exige un accord commercial explicite.');
@@ -400,21 +403,24 @@ export function registerLessons(app:FastifyInstance,options:PracticalStartOption
     commercial_selection=$8,price_cents_snapshot=$9,commercial_revision_version=commercial_revision_version+$10 WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,
     [school.id,lessonId,body.plannedStart,body.plannedEnd,body.timeZone,body.meetingPoint,body.instructorMembershipId,JSON.stringify(body.commercialChange?.commercialSelection??old.commercial_selection),body.commercialChange?.agreedPriceCents??Number(old.price_cents_snapshot),body.commercialChange?1:0])).rows[0]!;
    await occupations(db,row,context.instructor_person_id);if(body.commercialChange)await revision(db,row,actor,body.operationId,body.commercialChange.reason);await event(db,row,body.operationId,'LessonMoved');
+   await settleChangeRequests(db,{schoolId:school.id,lessonId,membershipId:actor.membershipId,outcome:'MOVED',acceptedId:body.changeRequestId});
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonMoved',changedFields:['plannedStart','plannedEnd','instructorMembershipId','meetingPoint',...(body.commercialChange?['commercialSelection','priceCentsSnapshot']:[])]};
   });reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
  app.post(`${base}/lessons/:lessonId/cancel`,async(r,reply)=>{
   const body=cancelCommand.parse(r.body),lessonId=z.object({lessonId:id}).parse(r.params).lessonId,expected=requireVersion(r.headers['if-match']);
   const boundCommand={...body,lessonId};
-  const data=await command(r,'CANCEL_LESSON',boundCommand,expected,{lessonId},async(db,_actor,school)=>{
+  const data=await command(r,'CANCEL_LESSON',boundCommand,expected,{lessonId},async(db,actor,school)=>{
    const old=await getLesson(db,school.id,lessonId,true);checkVersion(old.version,expected);if(old.status!=='PLANNED')throw new ApiError(409,'LESSON_CLOSED','Cette leçon possède déjà un résultat.');
    // #61 (décision du porteur, 21 octobre 2026) : une leçon commencée mais pas terminée peut être annulée par son moniteur ;
    // elle devient « Annulée » comme si elle n’avait pas eu lieu (début effacé). Un trajet actif est révoqué par le déclencheur
    // capture_lesson_changed ; positions et signalements déjà reçus restent conservés, sans être supprimés. Une leçon terminée
    // garde sa règle (A2-11) : elle se corrige, elle ne s’annule pas.
    if(old.actual_end)throw new ApiError(409,'LESSON_STARTED','Une leçon terminée ne peut pas être annulée. Corrigez son résultat.');
+   if(body.changeRequestId)await requireChangeRequest(db,school.id,lessonId,body.changeRequestId,'CANCELLED');
    const row=(await db.query<LessonRow>(`UPDATE drivy.lesson SET status='CANCELLED',version=version+1,cancel_reason_code=$3,cancel_comment=$4,actual_start=NULL WHERE school_id=$1 AND id=$2 RETURNING ${lessonColumns}`,[school.id,lessonId,body.reasonCode,body.comment??null])).rows[0]!;
    await releaseFutureOccupations(db,school.id,lessonId);await openClosedAccount(db,row);await event(db,row,body.operationId,'LessonCancelled');
+   await settleChangeRequests(db,{schoolId:school.id,lessonId,membershipId:actor.membershipId,outcome:'CANCELLED',acceptedId:body.changeRequestId});
    return {data:lessonProjection(row),resourceId:row.id,resourceType:'Lesson',action:'LessonCancelled',changedFields:['status']};
   });reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
