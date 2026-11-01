@@ -28,12 +28,12 @@ const comparableToDate: ReadonlySet<string> = new Set(['F01', 'F05']);
 const money = (value: number) => formatMeasure(value, 'cents');
 const unitName = { day: 'jour', week: 'semaine', month: 'mois' } as const;
 
-export function FinancePanel({ period, today, filters, scopeLabel }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string }) {
+export function FinancePanel({ period, today, filters, scopeLabel, onOpen }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void }) {
   const plan = comparisonPlan(period, today);
   return <MetricsView label="Lecture des finances" request={{ domain: 'finance', from: period.from, toExclusive: period.toExclusive, ...filters, compare: plan.kind === 'direct' ? plan.compare : undefined }}>
     {(answer, definitions) => <>
       <ScopeLine period={periodLabel(period)} scope={answer.scope.kind === 'self' ? 'Vos leçons' : scopeLabel} answer={answer} />
-      <MeasureGroups domain="finance" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} />
+      <MeasureGroups domain="finance" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} />
       <div className="pilotage-charts">
         <Evolution period={period} filters={filters} />
         <ValueMix period={period} filters={filters} />

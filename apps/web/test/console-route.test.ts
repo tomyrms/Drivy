@@ -142,5 +142,9 @@ describe('Navigation du pilotage', () => {
     expect(readNavigationQuery('?tab=export&period=forever&start=2026-02-30&end=demain&product=a%00b')).toEqual({});
     expect(readNavigationQuery('?tab=finance&tab=activity&period=year&period=month&start=2026-10-05&start=2026-10-06')).toEqual({});
     expect(readNavigationQuery(`?product=${'x'.repeat(101)}`)).toEqual({});
+    expect(readNavigationQuery('?measure=l03')).toEqual({});
+    expect(readNavigationQuery('?measure=L3')).toEqual({});
+    expect(readNavigationQuery('?measure=L03&measure=F01')).toEqual({});
+    expect(readNavigationQuery('?measure=L03')).toEqual({ measure: 'L03' });
   });
 });

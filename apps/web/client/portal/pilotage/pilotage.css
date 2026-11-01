@@ -60,12 +60,24 @@
 .pilotage-breakdown-bar { height: 10px; border-radius: 5px; background: var(--muted); overflow: hidden; }
 .pilotage-breakdown-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); }
 .pilotage-breakdown-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pilotage-detail { display: grid; gap: 16px; }
+.pilotage-back { justify-self: start; margin-left: -10px; }
+.pilotage-reasons { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 2px; font-size: 0.875rem; color: var(--muted-foreground); }
+.pilotage-lines { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.pilotage-lines li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px 12px; padding: 10px 16px; }
+.pilotage-lines li + li { border-top: 1px solid var(--border); }
+.pilotage-line-what { min-width: 0; display: grid; }
+.pilotage-line-what strong { font-weight: 600; overflow-wrap: anywhere; }
+.pilotage-line-what span { color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
+.pilotage-line-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 @media (max-width: 640px) {
   .pilotage-page { gap: 20px; }
   .pilotage-page h1 { font-size: 1.6rem; }
   .pilotage-heading > button, .pilotage-heading-actions, .pilotage-heading-actions > button { width: 100%; }
   .pilotage-filter { width: 100%; min-width: 0; }
   .pilotage-value { font-size: 1.5rem; }
+  .pilotage-lines li { grid-template-columns: 1fr auto; padding-inline: 12px; }
+  .pilotage-line-what { grid-column: 1 / -1; }
   .pilotage-breakdown li { grid-template-columns: 1fr auto; }
   .pilotage-breakdown-bar { grid-column: 1 / -1; grid-row: 2; }
   .pilotage-appointment { gap: 12px; padding-inline: 12px; }

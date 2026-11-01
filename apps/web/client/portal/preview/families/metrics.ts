@@ -72,17 +72,53 @@ function amountOf(id: string, lessons: { L01: number; L02: number }, civil: stri
   return new Date(`${civil}T12:00:00Z`).getUTCDay() === 2 ? 15_000 : 0;
 }
 
+/** Nombre de lignes qui composent chaque mesure listable, égal à la valeur de sa carte pour que le total du détail concorde. */
+const lineCounts: Record<string, number> = { L01: 38, L02: 17, L03: 3, L04: 1, L05: 2, L07: 2, C01: 6, F01: 38, F02: 17, F03: 55, F04: 3, F05: 3, F06: 1 };
+const learnerNames = ['Éloïse Müller', 'Bruno Blanc', 'Jade Perrin', 'Sami Dubois', 'Léa Rochat', 'Noah Meier'];
+const staffNames = [[ids.instructor, 'Marie Dupont'], [previewId(6), 'Simon Favre'], [ids.admin, 'Luc Martin']] as const;
+const lessonStatus: Record<string, string> = { L01: 'COMPLETED', L02: 'PLANNED', L03: 'CANCELLED', L04: 'NO_SHOW', L05: 'PLANNED', L07: 'PLANNED', F01: 'COMPLETED', F02: 'PLANNED', F03: 'COMPLETED', F04: 'PLANNED' };
+const unitCents: Record<string, number> = { F01: 9_500, F02: 9_500, F03: 9_500, F04: 9_500, F05: 15_000, F06: 5_000 };
+
+/** Les lignes synthétiques d'une mesure pour une période : mêmes valeurs à chaque lecture, un filtre en retire la moitié. */
+function syntheticLines(measure: string, from: string, toExclusive: string, filtered: boolean) {
+  const count = filtered ? half(lineCounts[measure] ?? 0) : lineCounts[measure] ?? 0, length = Math.max(1, days(from, toExclusive));
+  return Array.from({ length: count }, (_, index) => {
+    const civil = addDays(from, index % length), [staffId, staffName] = staffNames[index % staffNames.length]!;
+    const course = measure === 'C01', payment = measure === 'F05' || measure === 'F06';
+    return {
+      kind: course ? 'COURSE_OCCURRENCE' : payment ? 'COURSE_PAYMENT' : 'LESSON',
+      id: previewId(5_000 + index + (measure.charCodeAt(0) + Number(measure.slice(1))) * 100), eventAt: `${civil}T${String(8 + (index % 9)).padStart(2, '0')}:00:00+01:00`,
+      status: course || payment ? 'PUBLISHED' : lessonStatus[measure] ?? 'PLANNED', instructorMembershipId: staffId, instructorLabel: staffName,
+      learnerLabel: course ? null : learnerNames[index % learnerNames.length]!, categoryCode: 'B', productKey: 'conduite-b', quantity: course || payment ? null : 1,
+      durationSeconds: course || payment ? null : 2_700, amountCents: unitCents[measure] ?? null,
+      courseTypeLabel: course ? 'Sensibilisation' : null, markedCount: course ? 6 : null, missingMarks: course ? (index === 0 ? 2 : 0) : null,
+      enrollmentId: null, seriesId: course || payment ? previewId(700) : null, voidedAt: measure === 'F06' ? `${civil}T10:00:00+01:00` : null,
+    };
+  });
+}
+
 export const metricsFamily: PreviewFamily = {
   name: 'metrics',
   read(request, tools) {
     if (request.path === 'metrics/definitions') {
       return tools.reply(200, tools.envelope({
         definitionsVersion: '2026-10-31.1',
-        measures: dictionary.map(([id, domain, unit, label, formula, snapshot]) => ({ id, domain, unit, label, formula, snapshot: snapshot ?? false })),
+        measures: dictionary.map(([id, domain, unit, label, formula, snapshot]) => ({ id, domain, unit, label, formula, snapshot: snapshot ?? false, details: lineCounts[id] !== undefined })),
       }));
     }
     const from = request.query.get('from') ?? '', toExclusive = request.query.get('toExclusive') ?? '';
     const filtered = ['instructorMembershipId', 'categoryCode', 'productKey'].some(key => Boolean(request.query.get(key)));
+    if (request.path === 'metrics/details') {
+      const measure = request.query.get('measure') ?? '';
+      const lines = syntheticLines(measure, from, toExclusive, filtered);
+      const offset = request.query.get('cursor') === 'page-2' ? 50 : 0, page = lines.slice(offset, offset + 50);
+      const amounts = lines.flatMap(line => line.amountCents === null ? [] : [line.amountCents]);
+      return tools.reply(200, tools.envelope({
+        schoolId: ids.school, measure, timeZone: 'Europe/Zurich', computedAt: new Date().toISOString(), period: { from, toExclusive },
+        total: { lineCount: lines.length, amountCents: amounts.length ? amounts.reduce((sum, value) => sum + value, 0) : null, durationSeconds: null },
+        drift: null, lines: page, page: { limit: 50, nextCursor: offset + 50 < lines.length ? 'page-2' : null },
+      }));
+    }
     if (request.path === 'metrics/series') {
       const requested = request.query.get('granularity');
       const granularity = requested === 'week' || requested === 'month' ? requested : 'day';
@@ -136,5 +172,16 @@ export const metricsFamily: PreviewFamily = {
       };
     }
     return tools.reply(200, tools.envelope(answer));
+  },
+  /** Fichier CSV synthétique : mêmes lignes que le détail, sans nom d'élève, avec le bloc de métadonnées en tête (7.7). */
+  download(request) {
+    if (request.path !== 'metrics/exports') return undefined;
+    const body = request.body, measure = String(body.measure ?? ''), from = String(body.from ?? ''), toExclusive = String(body.toExclusive ?? '');
+    const lines = syntheticLines(measure, from, toExclusive, Boolean(body.instructorMembershipId || body.categoryCode || body.productKey));
+    const rows = lines.map(line => [line.kind, line.id, line.eventAt, line.status, line.instructorMembershipId, line.instructorLabel, line.categoryCode, line.productKey,
+      line.quantity ?? '', line.durationSeconds ?? '', line.amountCents ?? '', line.amountCents === null ? '' : 'CHF'].join(';'));
+    const csv = ['\ufeff#definitionsVersion;2026-10-31.1', `#measure;${measure}`, `#period;${from}/${toExclusive}`, '#timeZone;Europe/Zurich', '#complete;true', '#notAnAccountingDocument;true',
+      'line_kind;line_id;event_at;status;instructor_id;instructor_name;category_code;product_key;quantity;duration_seconds;amount_cents;currency', ...rows].join('\r\n') + '\r\n';
+    return new Response(csv, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8' } });
   },
 };

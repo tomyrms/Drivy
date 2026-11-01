@@ -15,7 +15,7 @@ const labelOf = (definitions: ReadonlyMap<string, MetricDefinition>, id: string)
  * il vient d'une seconde lecture du 1er à aujourd'hui, comparée par le serveur à la même plage du mois précédent, et ne concerne que les mesures
  * dont la valeur est la même dans la période entière et dans la période écoulée (`comparableToDate`). Sans cette lecture, les tuiles s'affichent sans écart.
  */
-export function MeasureGroups({ domain, groups, answer, definitions, period, today, filters, toDate, comparableToDate }: {
+export function MeasureGroups({ domain, groups, answer, definitions, period, today, filters, toDate, comparableToDate, onOpen }: {
   domain: MetricDomain;
   groups: readonly MeasureGroup[];
   answer: MetricsAnswer;
@@ -25,6 +25,8 @@ export function MeasureGroups({ domain, groups, answer, definitions, period, tod
   filters: MetricFilters;
   toDate: boolean;
   comparableToDate: ReadonlySet<string>;
+  /** Ouvre les lignes d'une mesure (#380) ; sans lui, aucune tuile ne mène au détail. */
+  onOpen?: ((measure: string) => void) | undefined;
 }) {
   const dated = useOptionalMetrics(toDate ? { domain, from: period.from, toExclusive: addDays(today, 1), compare: 'previous-month', ...filters } : null);
   const comparison = toDate ? (dated.status === 'ready' ? dated.data?.comparison : undefined) : answer.comparison;
@@ -38,7 +40,9 @@ export function MeasureGroups({ domain, groups, answer, definitions, period, tod
     return <MetricSection key={group.title} title={group.title}>
       {ids.map(id => {
         const change: MeasureComparison | undefined = toDate && !comparableToDate.has(id) ? undefined : comparison?.measures[id];
-        return <MetricTile key={id} label={labelOf(definitions, id)} measure={answer.measures[id]!} definition={definitions.get(id)} comparison={change} comparisonLabel={label} />;
+        const measure = answer.measures[id]!, openable = onOpen !== undefined && definitions.get(id)?.details === true && measure.value !== null && measure.value > 0;
+        return <MetricTile key={id} label={labelOf(definitions, id)} measure={measure} definition={definitions.get(id)} comparison={change} comparisonLabel={label}
+          action={openable ? { label: 'Voir le détail', onClick: () => onOpen(id) } : undefined} />;
       })}
     </MetricSection>;
   })}</>;

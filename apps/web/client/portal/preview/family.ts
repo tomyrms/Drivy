@@ -52,6 +52,8 @@ export interface PreviewFamily {
   seed?(db: Record<string, FixtureRecord[]>): void;
   read?(request: PreviewRequest, tools: PreviewTools): Response | undefined;
   write?(request: PreviewRequest, tools: PreviewTools): Response | undefined;
+  /** Synthetic file download (POST .../metrics/exports): stateless, no idempotency key, answered with the file itself. */
+  download?(request: PreviewRequest, tools: PreviewTools): Response | undefined;
   /** Domain code returned by the « refus » scenario for this family's writes. */
   refusalCode?(request: PreviewRequest): string | undefined;
 }

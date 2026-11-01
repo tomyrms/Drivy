@@ -98,6 +98,13 @@ export function installPreviewTransport() {
       if (target && !action) return reply(200, envelope(target));
       return reply(404, { code: 'NOT_FOUND' });
     }
+    if (method === 'POST' && path === 'metrics/exports') {
+      let exported: FixtureRecord = {};
+      try { exported = JSON.parse(String(init?.body ?? '{}')); } catch { return reply(400, { code: 'INVALID_REQUEST' }); }
+      for (const family of previewFamilies) {
+        const answer = family.download?.({ ...request(exported), scenario }, tools); if (answer) return answer;
+      }
+    }
     if (!operationId) return reply(400, { code: 'IDEMPOTENCY_KEY_REQUIRED' });
     const prior = results.get(operationId); if (prior) return reply(prior.status, prior.body);
     const submittedScenario = scenario;

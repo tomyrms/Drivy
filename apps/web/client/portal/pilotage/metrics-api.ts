@@ -48,6 +48,8 @@ export const definitionsSchema = z.object({
   definitionsVersion: z.string().max(40),
   measures: z.array(z.object({
     id: measureId, domain: z.enum(['activity', 'finance']), unit, label: z.string().max(200), formula: z.string().max(600), snapshot: z.boolean(),
+    /** Vrai si les lignes qui composent la mesure peuvent être listées. */
+    details: z.boolean().optional(),
   })).max(100),
 });
 export type MetricDefinition = z.infer<typeof definitionsSchema>['measures'][number];
@@ -64,12 +66,12 @@ export function useMetricDefinitions() {
 
 /** Filtres communs des lectures : moniteur, catégorie de permis (code) et prestation (clé). Un filtre inapplicable rend la mesure « non applicable ». */
 export interface MetricFilters { instructor?: string | undefined; category?: string | undefined; product?: string | undefined }
-const filterQuery = (filters: MetricFilters) => ({
+export const filterQuery = (filters: MetricFilters) => ({
   ...(filters.instructor ? { instructorMembershipId: filters.instructor } : {}),
   ...(filters.category ? { categoryCode: filters.category } : {}),
   ...(filters.product ? { productKey: filters.product } : {}),
 });
-const filterScope = (filters: MetricFilters) => [filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
+export const filterScope = (filters: MetricFilters) => [filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
 
 export interface MetricsRequest extends MetricFilters {
   domain: MetricDomain;

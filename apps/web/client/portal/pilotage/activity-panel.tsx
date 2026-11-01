@@ -26,7 +26,7 @@ const comparableToDate: ReadonlySet<string> = new Set(['L01', 'H02']);
  * Statistiques → Activité : mesures du serveur, comparaison à période cohérente et trois graphiques (évolution, charge par moniteur,
  * répartition par permis ou prestation). Aucun classement des moniteurs : les lignes sont rangées par nom.
  */
-export function ActivityPanel({ period, today, filters, scopeLabel }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string }) {
+export function ActivityPanel({ period, today, filters, scopeLabel, onOpen }: { period: ResolvedPeriod; today: string; filters: MetricFilters; scopeLabel: string; onOpen?: (measure: string) => void }) {
   const plan = comparisonPlan(period, today);
   const request: MetricsRequest = {
     domain: 'activity', from: period.from, toExclusive: period.toExclusive, ...filters,
@@ -37,7 +37,7 @@ export function ActivityPanel({ period, today, filters, scopeLabel }: { period: 
   return <MetricsView label="Lecture de l’activité" request={request}>
     {(answer, definitions) => <>
       <ScopeLine period={periodLabel(period)} scope={answer.scope.kind === 'self' ? 'Vos leçons' : scopeLabel} answer={answer} />
-      <MeasureGroups domain="activity" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} />
+      <MeasureGroups domain="activity" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} />
       <div className="pilotage-charts">
         <EvolutionChart period={period} filters={filters} />
         {!filters.instructor && <BreakdownBars title="Heures programmées par moniteur" periodText={periodLabel(period)} rows={breakdownRows(answer.breakdown, 'H01')}

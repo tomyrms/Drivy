@@ -807,3 +807,34 @@ Même règle qu'en 14.3. À date, seules F01 (valeur constatée) et F05 (règlem
 - L'exemple d'acceptation (8 000 CHF réalisés + 2 000 CHF réservés = 10 000 CHF attendus, un règlement de 500 CHF n'y change rien) est établi par les tests d'intégration de #375 (section 6.5) ; rien ne l'a été à l'écran ici, aucun chiffre n'a été comparé au jeu de référence.
 - L'API ne renvoie que le franc suisse : aucune conversion, aucun hors taxe ou toutes taxes comprises.
 - Aperçu `?page=statistiques&tab=finance` (valeurs inventées) jamais regardé à 390 et 1440 px, clair et sombre. Non exécuté : aucun test (écrits : `pilotage-models.test.ts`, `dashboard-models.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
+
+## 16. T07 (#380) : détail des mesures et export CSV
+
+Code : `portal/pilotage/measure-detail.tsx`, `details-api.ts` (lecture des lignes et téléchargement), `detail-model.ts` (règles pures), `measure-groups.tsx` (accès depuis les tuiles). Aucun changement d'API ni de BFF : les routes `metrics/details` et `metrics/exports` de #375 sont consommées telles quelles.
+
+### 16.1 Du chiffre à ses lignes
+
+Une tuile dont le dictionnaire annonce des lignes (`details`) et dont la valeur est positive propose « Voir le détail ». L'adresse porte alors `measure` (par exemple `?tab=finance&measure=F01`) avec la période, le moniteur, le permis et la prestation de la carte : les lignes sont celles qui composent le chiffre, pas l'agenda non filtré. Changer d'onglet referme le détail. Un identifiant de mesure mal formé, répété ou d'un domaine non lisible est ignoré.
+
+### 16.2 Ce que le détail montre
+
+- Le chiffre de la carte avec sa couverture et les raisons des parts exclues, puis la ligne période · portée · heure de calcul.
+- Les lignes : titre (l'élève seulement si le serveur le renvoie, sinon le fait lui-même), date et heure de l'école, moniteur, statut, durée, et le montant **seulement si le serveur le renvoie** (aucun montant n'est déduit côté web).
+- Le total du serveur (lignes, montant, durée) à côté du nombre de lignes affichées ; quand toutes ne le sont pas, la somme des lignes affichées est écrite à part : somme de la page et somme totale ne se confondent pas.
+- Cinquante lignes par lecture, « Afficher la suite » jusqu'au bout du périmètre (curseur lié par le serveur à la personne, à la mesure et aux filtres). Un curseur périmé propose de relire depuis le début.
+- Les valeurs lues sur la carte repartent au serveur (`expectedLineCount`, `expectedAmountCents`) : si le total a changé depuis l'affichage, le serveur le dit, le web l'écrit et propose « Relire » qui relit la carte et les lignes d'un même instant.
+
+### 16.3 Fiches
+
+« Ouvrir » mène à la fiche existante dans l'agenda : la leçon, la séance de cours, ou le cours d'un règlement (aucune fiche de règlement n'existe seule). Le moniteur filtré est conservé. Le retour du navigateur ramène au détail avec ses filtres.
+
+### 16.4 Export CSV
+
+Le bouton « Exporter en CSV » n'apparaît que pour une personne qui a `EXPORT_MANAGEMENT` ; l'API relit ce droit et celui de la mesure à la génération. L'export reprend la sélection du détail (mesure, période, filtres, valeurs de la carte), pas la seule page affichée. Le web envoie la commande avec le jeton CSRF, lit la réponse comme **octets** (le BOM du serveur est conservé : la décoder puis la réécrire le perdrait) et déclenche le téléchargement ; rien n'est conservé, aucune adresse réutilisable n'est créée. Les refus ont chacun leur message (plus de 10 000 lignes, droit retiré, réseau, reconnexion) et ne produisent aucun fichier ; un écart signalé par l'en-tête du serveur est écrit à côté du nom du fichier. Le contenu du fichier (en-têtes stables, neutralisation des formules, métadonnées de couverture, `complete`) est celui de la section 7.7.
+
+### 16.5 Reste
+
+- Le clic d'une barre de graphique vers les lignes de son intervalle (`bucketFrom`, `bucketToExclusive`) n'est pas câblé, bien que le serveur le permette. Les mesures « en parties » (`part`) ne sont pas ouvertes.
+- Au retour d'une fiche, le détail repart de la première page : les pages déjà chargées, le défilement et le focus ne sont pas restaurés.
+- Non essayé : le téléchargement dans un navigateur, la lecture d'un vrai fichier dans un tableur, la révocation d'un droit pendant l'affichage. Le test de l'export avec texte accentué, guillemets, retours à la ligne et cellules de type formule est celui de l'API (#375) ; le web n'a rien écrit pour le contenu du fichier. L'aperçu fournit un CSV synthétique sans nom d'élève.
+- Aucun test lancé (écrits : `detail-models.test.ts`, une ligne de `console-route.test.ts`). `tsc --noEmit` sans erreur dans les fichiers touchés, mêmes réserves qu'en 12.4.
