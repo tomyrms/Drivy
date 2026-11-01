@@ -8,6 +8,8 @@ import Foundation
     let reports: SchoolLessonReportClient
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
+    /// Examens théorique et pratique d'une formation (#54).
+    var examClient: SchoolExamClient { SchoolExamClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport) }
 
     init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
         self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport

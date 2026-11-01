@@ -25,6 +25,7 @@ import { registerSelfProfile } from './self-profile.js';
 import { registerCatalogue } from './catalogue.js';
 import { registerFormations } from './formation-catalogue.js';
 import { registerLessons } from './lessons.js';
+import { registerExams } from './exams.js';
 import { registerLessonSetup } from './lesson-setup.js';
 import { registerLessonReports } from './lesson-reports.js';
 import type { InvitationMailConfig } from './invitation-mail.js';
@@ -233,6 +234,7 @@ export function buildApp(options: { metricsClock?: () => Date; gpsOnlyQualificat
   registerFormations(app,options);
   registerLessonSetup(app,options);
   registerLessons(app,options);
+  registerExams(app,options);
   registerLessonReports(app,options);
   registerCaptures(app,options);
   registerMatchedRoutes(app,options);

@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 1er novembre 2026 — Suivi des examens théorique et pratique (#54, `claude/examens-54`)
+
+- **Écrit, jamais exécuté** (aucun test, typage ni compilation, à la demande du porteur ; rien déployé). Règles validées par le porteur : saisie par l'administration et le moniteur affecté, l'élève lit ; une date passée se lit « Résultat à renseigner » et n'est jamais un résultat ; accompagnement facultatif qui occupe l'agenda du moniteur ; statuts Prévu, Reporté, Absent, Réussi, Échoué. Détail : [examens-54.md](examens-54.md).
+- **Livré dans le code** : migration `20261101b_exams.sql` (tables `exam` et `exam_revision` à sécurité par ligne forcée, occupation d'agenda étendue à l'accompagnement), routes `exams.ts`, contrat `exams.json`, client et section « Examens » iOS, test d'intégration API et tests Swift écrits.
+- **Reste** : toute la qualification (migration sur PostgreSQL, tests API, compilation et tests Swift, captures, essai sur appareil), la gestion web, l'agenda personnel de l'élève, les notifications, la liste transversale des résultats à renseigner.
+
 ## 1er novembre 2026 — Pilotage #397 déployé sur le homelab (web seulement, `6884dcc7`)
 
 - **PR #398 fusionnée** (`6884dcc7b367de46ecc03c9c6466afdc1966069a`, commit de fusion) après sa CI verte : Web et BFF, contrats documentaires, test navigateur Chromium · OIDC · BFF · API · PostgreSQL (run 41340204335). CI de master sur `6884dcc7` verte (runs 41340497778 et 41340497682). Issue #397 laissée ouverte.
