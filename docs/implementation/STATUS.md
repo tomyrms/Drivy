@@ -1,5 +1,11 @@
 # État de la réalisation
 
+## 1er novembre 2026 — Pilotage, Statistiques et Finances : passe UX #397 (`claude/pilotage-397-ux`)
+
+- **Web seulement**, aucune modification d'API, de calcul ni de droit. Les mesures se lisent en relevé (lignes, valeurs alignées à droite, deux colonnes sur écran large) au lieu d'une mosaïque de cartes ; en Finances, réalisé + à venir mènent au total attendu sous un filet (définition du serveur, rien n'est recalculé), l'attente de constat se lit après le total, les règlements sont à part. Rendez-vous en une liste, graphiques gradués, contrôle segmenté de l'agenda pour les répartitions, « 1er » pour le premier du mois. Méthode Impeccable + Uncodixfy et constat avant/après : [pilotage-397-ux.md](pilotage-397-ux.md).
+- **Exécuté (local)** : typecheck web, 593 tests unitaires web, builds de production et d'aperçu, 16 captures (1440/390, clair/sombre), 32 contrôles d'états, de clavier et de zoom dans Edge sur l'aperçu synthétique, détecteur Impeccable sans motif.
+- **Non exécuté** : CI, PR, déploiement, vraie API, lecteur d'écran réel, appareil physique, contraste accru et couleurs forcées, vue sans droit financier.
+
 ## 1er novembre 2026 — release `bdcf1faf` déployée sur le homelab (API + web), IPA d'essai lancée (`claude/deploy-20261101`)
 
 - **Déployé** : `bdcf1fafa676494eac6c02af6ef0cacf7ed68a03` (master après #385 à #393 et le lot iOS #337 à #339), accord du porteur (« si il faut déployer, fais-le »). API, web et course-worker tournent dans `releases/bdcf1faf…` (précédente : `be8a0245`), répertoires réels vérifiés, zéro redémarrage automatique, identité inchangée, fichiers de configuration privés inchangés. Le drop-in `95-epic311-web.conf`, qui figeait le web sur `web-releases/f0aa7dce`, est retiré (copie dans `/root/` sur CT114) : le BFF est recompilé (route d'export du pilotage) et suit `current`.

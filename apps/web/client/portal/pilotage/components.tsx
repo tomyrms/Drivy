@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from 'react';
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight, ChevronRight, Info } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Field, FieldError, FieldLabel } from '../../components/ui/field';
@@ -13,33 +13,52 @@ import { periodProblemMessage, type PeriodProblem } from './period-model';
 import './pilotage.css';
 
 /** Seul l'inhabituel porte un badge : une mesure complète n'en a pas. */
-const coverageBadge = { PARTIAL: 'Partiel', UNAVAILABLE: 'Indisponible', NOT_APPLICABLE: 'Non applicable' } as const;
+export const coverageBadge = { PARTIAL: 'Partiel', UNAVAILABLE: 'Indisponible', NOT_APPLICABLE: 'Non applicable' } as const;
 
-export interface MetricTileProps {
+export interface MeasureRowProps {
   label: string;
   measure: MetricMeasure;
   definition?: MetricDefinition | undefined;
   comparison?: MeasureComparison | undefined;
-  /** Base déjà nommée de la comparaison (« par rapport à septembre 2026 »). */
+  /** Base déjà nommée de la comparaison (« vs le 1er octobre »). */
   comparisonLabel?: string | undefined;
+  /** Ouvre les lignes de la mesure : la valeur devient le bouton, chevron à droite. */
+  onOpen?: (() => void) | undefined;
+  /** Action d'une autre nature (ouvrir l'agenda) : un bouton nommé, la valeur reste du texte. */
   action?: { label: string; onClick: () => void } | undefined;
-  /** Identifiant du dictionnaire : permet de rendre le focus à la tuile quand on revient de son détail. */
+  /** Précision courte après le libellé (« hors du total »). */
+  note?: string | undefined;
+  /** `term` : terme d'une somme, précédé d'un signe ; `total` : la somme, sous un filet ; `outside` : lue à part, après le total. */
+  position?: 'term' | 'total' | 'outside' | undefined;
+  /** Identifiant du dictionnaire : permet de rendre le focus à la ligne quand on revient de son détail. */
   measureId?: string | undefined;
 }
 
-/** Une mesure du serveur : valeur lisible, état de couverture, comparaison nommée et accès à sa définition. */
-export function MetricTile({ label, measure, definition, comparison, comparisonLabel, action, measureId }: MetricTileProps) {
+/**
+ * Une mesure du serveur, en ligne de relevé : libellé à gauche, valeur alignée à droite pour se comparer d'une ligne à l'autre,
+ * comparaison nommée sous la valeur (sous le libellé sur un téléphone). La définition s'ouvre à la demande, le détail depuis la valeur.
+ */
+export function MeasureRow({ label, measure, definition, comparison, comparisonLabel, onOpen, action, note, position, measureId }: MeasureRowProps) {
   const status = measure.coverage.status;
   const change = describeComparison(comparison, measure.unit);
-  return <li className="pilotage-tile" data-coverage={status} data-measure={measureId}>
-    <div className="pilotage-tile-head">
-      <h3>{label}</h3>
+  const value = formatMeasure(measure.value, measure.unit);
+  return <li className="pilotage-row" data-coverage={status} data-measure={measureId} data-role={position}>
+    <div className="pilotage-row-label">
+      <span className="pilotage-row-name">{label}</span>
       <MeasureHelp label={label} measure={measure} definition={definition} />
+      {note && <span className="pilotage-row-note">{note}</span>}
+      {status !== 'COMPLETE' && <Badge variant="outline">{coverageBadge[status]}</Badge>}
     </div>
-    <p className="pilotage-value">{formatMeasure(measure.value, measure.unit)}</p>
-    {status !== 'COMPLETE' && <Badge variant="outline">{coverageBadge[status]}</Badge>}
-    {change && comparisonLabel && <p className="pilotage-comparison">{change} <span>{comparisonLabel}</span></p>}
-    {action && <Button variant="ghost" size="sm" className="pilotage-tile-action" onClick={action.onClick}>{action.label}<ArrowRight data-icon="inline-end" aria-hidden="true" /></Button>}
+    {change && comparisonLabel && <p className="pilotage-row-change">{change} <span>{comparisonLabel}</span></p>}
+    <div className="pilotage-row-value">
+      {position === 'term' && <span className="pilotage-row-sign" aria-hidden="true">+</span>}
+      {onOpen
+        ? <Button variant="ghost" size="sm" className="pilotage-row-open" onClick={onOpen} aria-label={`${label} : ${value}. Voir le détail`}>
+          <span>{value}</span><ChevronRight data-icon="inline-end" aria-hidden="true" />
+        </Button>
+        : <span className="pilotage-row-figure">{value}</span>}
+    </div>
+    {action && <Button variant="ghost" size="sm" className="pilotage-row-action" onClick={action.onClick}>{action.label}<ArrowRight data-icon="inline-end" aria-hidden="true" /></Button>}
   </li>;
 }
 
@@ -48,10 +67,10 @@ function MeasureHelp({ label, measure, definition }: { label: string; measure: M
   const reasons = measure.coverage.reasons;
   if (!definition && reasons.length === 0) return null;
   return <Popover>
-    <PopoverTrigger render={<Button variant="ghost" size="icon-sm" className="pilotage-help" aria-label={`Comment « ${label} » est calculé`} />}>
+    <PopoverTrigger render={<Button variant="ghost" size="icon-xs" className="pilotage-help" aria-label={`Comment « ${label} » est calculé`} />}>
       <Info aria-hidden="true" />
     </PopoverTrigger>
-    <PopoverContent align="end" className="pilotage-help-content">
+    <PopoverContent align="start" className="pilotage-help-content">
       <PopoverHeader>
         <PopoverTitle>{label}</PopoverTitle>
         {definition && <PopoverDescription>{definition.formula}</PopoverDescription>}
@@ -63,17 +82,17 @@ function MeasureHelp({ label, measure, definition }: { label: string; measure: M
 }
 
 /** Un bloc de page sous un titre ; le titre nomme la région pour les lecteurs d'écran. `action` se place à droite du titre. */
-export function PilotageSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+export function PilotageSection({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   const id = useId();
-  return <section className="pilotage-section" aria-labelledby={id}>
-    {action ? <div className="pilotage-section-head"><h2 id={id}>{title}</h2>{action}</div> : <h2 id={id}>{title}</h2>}
+  return <section className={className ? `pilotage-section ${className}` : 'pilotage-section'} aria-labelledby={id}>
+    <div className="pilotage-section-head"><h2 id={id}>{title}</h2>{action}</div>
     {children}
   </section>;
 }
 
-/** Un groupe de mesures sous un titre. */
-export function MetricSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return <PilotageSection title={title} action={action}><ul className="pilotage-grid">{children}</ul></PilotageSection>;
+/** Des lignes de relevé sous un titre. */
+export function MeasureList({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  return <PilotageSection title={title} action={action}><ul className="pilotage-rows">{children}</ul></PilotageSection>;
 }
 
 export interface FilterOption { value: string; label: string }

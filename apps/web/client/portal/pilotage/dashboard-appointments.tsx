@@ -58,15 +58,16 @@ export function Appointments({ today, instructor, learnerName, memberName }: {
     {courses.status === 'error' && <ReadFeedback loaded={courses} label="Lecture des séances collectives" />}
     {lessons.data !== undefined && (rows.length === 0
       ? <Empty><EmptyHeader><EmptyMedia variant="icon"><CalendarDays aria-hidden="true" /></EmptyMedia><EmptyTitle>Aucun rendez-vous cette semaine</EmptyTitle></EmptyHeader></Empty>
-      : groupByDay(rows).map(group => <div key={group.day} className="grid gap-2">
+      // Une seule liste : chaque jour y ouvre son bandeau, les rendez-vous suivent sous des filets.
+      : <div className="pilotage-list">{groupByDay(rows).map(group => <div key={group.day} className="pilotage-list-group">
         <h3 className="pilotage-day">{dayHeading(group.day, today)}</h3>
-        <ul className="pilotage-appointments">{group.items.map(appointment => <li key={appointment.key}>
+        <ul>{group.items.map(appointment => <li key={appointment.key}>
           <Button variant="ghost" className="pilotage-appointment" onClick={() => open(appointment)}>
             <span className="pilotage-appointment-time">{range(appointment)}</span>
             <span className="pilotage-appointment-what"><strong>{appointment.title}</strong><span>{appointment.detail}</span></span>
             {appointment.phase && appointment.phase !== 'planned' && <Badge variant="outline">{phaseLabels[appointment.phase]}</Badge>}
           </Button>
         </li>)}</ul>
-      </div>))}
+      </div>)}</div>)}
   </PilotageSection>;
 }

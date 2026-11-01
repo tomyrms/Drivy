@@ -1,101 +1,176 @@
-.pilotage-page { width: min(100%, 1040px); margin-inline: auto; display: grid; gap: 24px; }
+/*
+ * Pilotage (#373, composition #397) : un relevé plutôt qu'une mosaïque de cartes. Les mesures sont des lignes séparées par des filets,
+ * libellé à gauche et valeur alignée à droite ; seuls les graphiques et les listes de rendez-vous ou de lignes ont un cadre.
+ * Échelle d'espacement 4/8/12/16/24/32 ; plus d'espace au-dessus d'un titre qu'en dessous.
+ */
+.pilotage-page { width: min(100%, 1040px); margin-inline: auto; display: grid; gap: 32px; }
 .pilotage-page > *, .pilotage-charts > *, .pilotage-chart { min-width: 0; }
-.pilotage-chart [data-slot="tabs"] { min-width: 0; max-width: 100%; }
-.pilotage-chart [data-slot="tabs-list"] { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
 .pilotage-page h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
-.pilotage-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.pilotage-heading p { margin-top: 4px; color: var(--muted-foreground); }
+.pilotage-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pilotage-heading p { margin-top: 4px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .pilotage-heading-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+
+/* Statistiques : le choix du domaine est la barre d'onglets de la page, les filtres la suivent. */
+.pilotage-domain { gap: 16px; }
+.pilotage-domain > [data-slot="tabs-list"] { width: 100%; justify-content: flex-start; gap: 20px; border-bottom: 1px solid var(--border); }
+.pilotage-domain > [data-slot="tabs-list"] [data-slot="tabs-trigger"] { flex: none; padding-inline: 2px; font-size: 0.9375rem; font-weight: 600; }
 .pilotage-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
 .pilotage-filter { width: auto; min-width: 11rem; }
 .pilotage-filter-error { flex-basis: 100%; }
-.pilotage-scope { color: var(--muted-foreground); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
-.pilotage-panel { display: grid; gap: 20px; padding-top: 4px; }
-.pilotage-section { display: grid; gap: 12px; }
-.pilotage-section h2 { font-size: 1rem; font-weight: 650; }
-.pilotage-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); }
-.pilotage-tile { min-width: 0; display: grid; align-content: start; justify-items: start; gap: 6px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
-.pilotage-tile-head { width: 100%; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.pilotage-tile-head h3 { margin: 0; font-size: 0.875rem; font-weight: 550; line-height: 1.35; color: var(--muted-foreground); }
-.pilotage-help { flex-shrink: 0; margin: -6px -8px 0 0; color: var(--muted-foreground); }
-.pilotage-help svg { width: 16px; height: 16px; }
+.pilotage-panel { display: grid; gap: 24px; padding-top: 4px; }
+.pilotage-scope { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+
+/* Sections et titres */
+.pilotage-section { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pilotage-section-head { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pilotage-section-head h2 { font-size: 1.0625rem; font-weight: 650; line-height: 1.35; letter-spacing: -0.005em; }
+.pilotage-section-head > .ui-button-ghost { margin-right: -12px; }
+.pilotage-today { margin: 0; font-size: 1.0625rem; line-height: 1.6; font-variant-numeric: tabular-nums; color: var(--muted-foreground); text-wrap: pretty; }
+.pilotage-today strong { font-weight: 650; color: var(--foreground); }
+.pilotage-today [data-slot="badge"] { vertical-align: 2px; }
+
+/* Relevé : groupes de lignes, une ou deux colonnes */
+.pilotage-statement { display: grid; gap: 24px; }
+.pilotage-statement[data-columns="2"] { grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); column-gap: 48px; }
+.pilotage-statement-column { display: grid; gap: 24px; align-content: start; min-width: 0; }
+.pilotage-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.pilotage-row { min-height: 48px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; column-gap: 16px; padding-block: 2px; border-bottom: 1px solid var(--border); }
+.pilotage-row:has(.pilotage-row-action) { grid-template-columns: minmax(0, 1fr) auto auto; }
+/* Libellé, aide, précision et badge coulent comme une phrase : rien ne part seul sur une ligne. */
+.pilotage-row-label { grid-column: 1; grid-row: 1 / span 2; min-width: 0; padding-block: 8px; line-height: 1.4; }
+.pilotage-row-label > * { vertical-align: middle; }
+.pilotage-row-label > * + * { margin-left: 6px; }
+.pilotage-row-label > .pilotage-help { margin-left: 2px; }
+.pilotage-row-name { font-size: 0.9375rem; overflow-wrap: anywhere; }
+.pilotage-row-note { color: var(--muted-foreground); font-size: 0.8125rem; white-space: nowrap; }
+.pilotage-row-value { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 6rem; }
+.pilotage-row-action.ui-button { grid-column: 3; grid-row: 1 / span 2; }
+/* La comparaison se lit sous la valeur qu'elle qualifie. */
+.pilotage-row:has(.pilotage-row-change) .pilotage-row-value { grid-row: 1; align-self: end; padding-top: 4px; }
+.pilotage-row-change { grid-column: 2; grid-row: 2; align-self: start; margin: -4px 0 0; padding-bottom: 8px; font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.pilotage-row-change span { color: var(--muted-foreground); }
+.pilotage-row-figure, .pilotage-row-open { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Dans un groupe où une valeur mène au détail, les autres gardent la place du chevron : toutes tombent sur le même bord. */
+.pilotage-rows:has(.pilotage-row-open) .pilotage-row-figure, .pilotage-rows:has(.pilotage-row-open) .pilotage-row-change { padding-right: 20px; }
+.pilotage-row-open.ui-button { min-height: 40px; margin-right: -4px; padding: 6px 4px 6px 10px; gap: 4px; }
+.pilotage-row-open svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+.pilotage-row-sign { color: var(--muted-foreground); font-weight: 600; font-variant-numeric: tabular-nums; }
+.pilotage-row-action.ui-button { margin-right: -12px; }
+.pilotage-row[data-coverage="UNAVAILABLE"] .pilotage-row-figure,
+.pilotage-row[data-coverage="NOT_APPLICABLE"] .pilotage-row-figure { color: var(--muted-foreground); }
+/* La somme se lit sous un filet plein ; ce qui en est exclu se lit après elle, en retrait de ton. */
+.pilotage-row[data-role="total"] { border-top: 1px solid var(--foreground); }
+.pilotage-row[data-role="total"] .pilotage-row-name { font-weight: 650; }
+.pilotage-row[data-role="total"] .pilotage-row-figure, .pilotage-row[data-role="total"] .pilotage-row-open { font-size: 1.0625rem; font-weight: 700; }
+.pilotage-row[data-role="outside"] .pilotage-row-name, .pilotage-row[data-role="outside"] .pilotage-row-figure, .pilotage-row[data-role="outside"] .pilotage-row-open > span { color: var(--muted-foreground); }
+.pilotage-row-done { display: flex; gap: 8px; color: var(--muted-foreground); font-size: 0.9375rem; }
+.pilotage-row-done svg { width: 18px; height: 18px; color: var(--portal-success); }
+.pilotage-help.ui-button { width: 28px; min-height: 28px; margin-block: -4px; color: var(--muted-foreground); }
+.pilotage-help svg { width: 15px; height: 15px; }
 .pilotage-help-content ul { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 4px; }
-.pilotage-value { margin: 0; max-width: 100%; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.pilotage-tile[data-coverage="UNAVAILABLE"] .pilotage-value,
-.pilotage-tile[data-coverage="NOT_APPLICABLE"] .pilotage-value { color: var(--muted-foreground); }
-.pilotage-comparison { margin: 0; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
-.pilotage-comparison span { color: var(--muted-foreground); }
-.pilotage-tile-action { margin: 2px 0 -6px -10px; }
-.pilotage-empty { grid-column: 1 / -1; list-style: none; }
-.pilotage-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.pilotage-today { margin: 0; font-size: 1.0625rem; font-weight: 550; line-height: 1.5; font-variant-numeric: tabular-nums; }
-.pilotage-today-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.pilotage-appointments { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
-.pilotage-appointments li + li { border-top: 1px solid var(--border); }
-.pilotage-appointment { width: 100%; height: auto; min-height: 56px; justify-content: flex-start; gap: 16px; padding: 10px 16px; border-radius: 0; text-align: left; white-space: normal; font-weight: 400; }
+
+/* Tableau de bord : le mois — activité et finances côte à côte, l'évolution dessous */
+.pilotage-month { display: grid; gap: 24px; }
+.pilotage-month-figures { display: grid; gap: 24px 48px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
+.pilotage-month-block { display: grid; gap: 12px; min-width: 0; }
+
+/* Listes cadrées : rendez-vous, lignes d'une mesure */
+.pilotage-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.pilotage-list ul { list-style: none; margin: 0; padding: 0; }
+.pilotage-list-group + .pilotage-list-group { border-top: 1px solid var(--border); }
+.pilotage-list ul > li + li, .pilotage-lines > li + li { border-top: 1px solid var(--border); }
+.pilotage-day { margin: 0; padding: 8px 16px; font-size: 0.8125rem; font-weight: 600; color: var(--muted-foreground); background: var(--muted); border-bottom: 1px solid var(--border); }
+.pilotage-appointment.ui-button { width: 100%; height: auto; min-height: 56px; justify-content: flex-start; gap: 16px; padding: 10px 16px; border-radius: 0; text-align: left; white-space: normal; font-weight: 400; }
 .pilotage-appointment-time { flex-shrink: 0; min-width: 6.5rem; font-variant-numeric: tabular-nums; font-weight: 600; }
 .pilotage-appointment-what { flex: 1; min-width: 0; display: grid; }
 .pilotage-appointment-what strong { font-weight: 600; overflow-wrap: anywhere; }
 .pilotage-appointment-what span { color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
-.pilotage-day { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--muted-foreground); }
-.pilotage-chart { margin: 0; display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
-.pilotage-chart figcaption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
-.pilotage-chart h3 { margin: 0; font-size: 0.9375rem; font-weight: 650; }
-.pilotage-chart figcaption span, .pilotage-chart-empty { color: var(--muted-foreground); font-size: 0.875rem; }
-.pilotage-chart-empty { margin: 0; }
-.pilotage-chart-svg { width: 100%; height: auto; overflow: visible; }
-.pilotage-chart-tick { fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
-.pilotage-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.875rem; }
-.pilotage-legend li { display: inline-flex; align-items: center; gap: 6px; }
-.pilotage-chart-values summary { cursor: pointer; font-size: 0.875rem; color: var(--muted-foreground); width: fit-content; }
-.pilotage-chart-values summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
-.pilotage-chart-values table { margin-top: 8px; }
-.pilotage-charts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
+
+/* Graphiques */
+.pilotage-charts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); align-items: start; }
 .pilotage-charts > :first-child { grid-column: 1 / -1; }
-.pilotage-chart-readout { margin: 0; min-height: 1.5em; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.pilotage-chart { margin: 0; display: grid; gap: 12px; padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.pilotage-chart figcaption { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.pilotage-chart-title { display: grid; gap: 2px; }
+.pilotage-chart h3 { margin: 0; font-size: 0.9375rem; font-weight: 650; }
+.pilotage-chart-title p, .pilotage-chart-empty { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; }
+.pilotage-chart-empty { font-size: 0.875rem; }
+.pilotage-choice { max-width: 100%; flex-wrap: wrap; }
+.pilotage-choice [data-slot="toggle-group-item"] { min-height: 36px; }
+.pilotage-chart-frame { min-width: 0; }
+.pilotage-chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.pilotage-chart-tick { fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pilotage-chart-axis { stroke: var(--border); }
+.pilotage-chart-grid { stroke: var(--border); stroke-dasharray: 2 4; }
+.pilotage-chart-foot { min-height: 1.5rem; display: flex; align-items: center; }
+.pilotage-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.8125rem; color: var(--muted-foreground); }
+.pilotage-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.pilotage-chart-readout { margin: 0; font-size: 0.8125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pilotage-chart-bar { outline: none; cursor: pointer; }
 .pilotage-chart-hit { fill: transparent; stroke: transparent; stroke-width: 2; }
-.pilotage-chart-bar[data-active="true"] .pilotage-chart-hit { fill: var(--muted); fill-opacity: 0.6; }
+.pilotage-chart-bar[data-active="true"] .pilotage-chart-hit { fill: var(--muted); fill-opacity: 0.8; }
 .pilotage-chart-bar:focus-visible .pilotage-chart-hit { stroke: var(--ring); }
+.pilotage-chart-values { overflow-x: auto; }
+.pilotage-chart-values summary { cursor: pointer; font-size: 0.8125rem; color: var(--muted-foreground); width: fit-content; }
+.pilotage-chart-values summary:hover { color: var(--foreground); }
+.pilotage-chart-values summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.pilotage-chart-values table { margin-top: 8px; font-variant-numeric: tabular-nums; }
 .pilotage-breakdown { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.pilotage-breakdown li { display: grid; grid-template-columns: minmax(6rem, 10rem) 1fr auto; align-items: center; gap: 10px; font-size: 0.875rem; }
+.pilotage-breakdown li { display: grid; grid-template-columns: minmax(6rem, 10rem) 1fr auto; align-items: center; gap: 12px; font-size: 0.875rem; }
 .pilotage-breakdown-label { overflow-wrap: anywhere; }
-.pilotage-breakdown-bar { height: 10px; border-radius: 5px; background: var(--muted); overflow: hidden; }
-.pilotage-breakdown-bar > span { display: block; height: 100%; border-radius: 5px; background: var(--primary); }
-.pilotage-breakdown-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pilotage-breakdown-bar { height: 8px; border-radius: 2px; background: var(--muted); overflow: hidden; }
+.pilotage-breakdown-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--primary); }
+.pilotage-breakdown-value { min-width: 4.5rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+
+/* Détail d'une mesure */
 .pilotage-detail { display: grid; gap: 16px; }
-.pilotage-back { justify-self: start; margin-left: -10px; }
+.pilotage-back { justify-self: start; margin-left: -12px; }
+.pilotage-detail-value { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pilotage-value { margin: 0; max-width: 100%; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .pilotage-reasons { margin: 0; padding-inline-start: 1.1rem; display: grid; gap: 2px; font-size: 0.875rem; color: var(--muted-foreground); }
-.pilotage-lines { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
 .pilotage-lines li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 4px 12px; padding: 10px 16px; }
-.pilotage-lines li + li { border-top: 1px solid var(--border); }
 .pilotage-line-what { min-width: 0; display: grid; }
 .pilotage-line-what strong { font-weight: 600; overflow-wrap: anywhere; }
 .pilotage-line-what span { color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
 .pilotage-line-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+
 @media (max-width: 640px) {
-  .pilotage-page { gap: 20px; }
+  .pilotage-page { gap: 28px; }
   .pilotage-page h1 { font-size: 1.6rem; }
   .pilotage-heading > button, .pilotage-heading-actions, .pilotage-heading-actions > button { width: 100%; }
   .pilotage-filter { width: 100%; min-width: 0; }
   .pilotage-value { font-size: 1.5rem; }
+  /* Sur un téléphone, la comparaison passe sous le libellé : la valeur garde sa colonne, centrée sur la ligne. */
+  .pilotage-row { column-gap: 12px; }
+  .pilotage-row:has(.pilotage-row-change) .pilotage-row-label { grid-row: 1; padding-bottom: 2px; }
+  .pilotage-row:has(.pilotage-row-change) .pilotage-row-value { grid-row: 1 / span 2; align-self: center; padding-top: 0; }
+  .pilotage-row-change, .pilotage-rows:has(.pilotage-row-open) .pilotage-row-change { grid-column: 1; margin-top: 0; padding-right: 0; text-align: left; white-space: normal; }
+  .pilotage-row-value { min-width: 0; }
+  .pilotage-row-action.ui-button { padding-inline: 8px; }
+  .pilotage-chart { padding: 14px 14px 12px; }
+  .pilotage-chart-foot { min-height: 2.6rem; align-items: flex-start; }
   .pilotage-lines li { grid-template-columns: 1fr auto; padding-inline: 12px; }
   .pilotage-line-what { grid-column: 1 / -1; }
-  .pilotage-breakdown li { grid-template-columns: 1fr auto; }
+  .pilotage-breakdown li { grid-template-columns: 1fr auto; row-gap: 6px; }
   .pilotage-breakdown-bar { grid-column: 1 / -1; grid-row: 2; }
-  .pilotage-appointment { gap: 12px; padding-inline: 12px; }
+  .pilotage-appointment.ui-button { gap: 12px; padding-inline: 12px; }
   .pilotage-appointment-time { min-width: 5.5rem; }
+  .pilotage-day { padding-inline: 12px; }
 }
-.pilotage-chart-values { overflow-x: auto; }
 @media (pointer: coarse), (max-width: 640px) {
   .pilotage-filters [data-slot="select-trigger"], .pilotage-filters input { min-height: 44px; }
-  .pilotage-tile-action, .pilotage-help, .pilotage-section-head > button, .pilotage-back { min-height: 44px; }
-  .pilotage-help { min-width: 44px; }
+  .pilotage-row-open.ui-button, .pilotage-row-action.ui-button, .pilotage-section-head > button, .pilotage-back, .pilotage-choice [data-slot="toggle-group-item"] { min-height: 44px; }
+  .pilotage-help.ui-button { width: 44px; min-height: 44px; margin-block: -8px; }
   .pilotage-chart-values summary { padding-block: 10px; }
   .pilotage-lines li > button { min-height: 44px; }
 }
+@media (hover: hover) and (pointer: fine) {
+  .pilotage-row-open.ui-button:hover > span { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .pilotage-row-open.ui-button:hover svg { color: var(--foreground); }
+}
 @media (forced-colors: active) {
-  .pilotage-tile, .pilotage-chart, .pilotage-lines, .pilotage-appointments { border-color: CanvasText; }
+  .pilotage-chart, .pilotage-list { border-color: CanvasText; }
+  .pilotage-rows, .pilotage-row { border-color: CanvasText; }
   .pilotage-breakdown-bar { border: 1px solid CanvasText; background: Canvas; }
   .pilotage-breakdown-bar > span { background: Highlight; }
   .pilotage-chart-bar:focus-visible .pilotage-chart-hit { stroke: Highlight; }

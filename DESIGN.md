@@ -110,6 +110,7 @@ Le jalon immédiat est une page **Modifier les accès** exécutée en clair/somb
 - Couleurs : cobalt #245BD6, fond #F7F8FA, surfaces blanches ; sombre Soft Charcoal #191B1E/#222428. Couleurs sémantiques centralisées, aucune palette propre à chaque page.
 - Manrope variable auto-hébergée, texte de saisie 16 px, contenu 14–16 px, titres de page environ28–32 px selon largeur. Cibles principales44px ; les données longues passent à la ligne sans rétrécir la police.
 - Séparations et espaces structurent l'information. Éviter cartes dans cartes, panneaux repliables imbriqués et tableaux de permissions sans hiérarchie. Sur mobile, lecture verticale et actions accessibles.
+- Chiffres de pilotage (#397) : un relevé, pas une mosaïque de cartes KPI. Lignes à filets, libellé à gauche, valeur tabulaire alignée à droite, comparaison sous la valeur ; une somme définie par le serveur se lit sous un filet plein, ce qui en est exclu après elle. Seuls graphiques et listes cadrées ont un cadre. Détail : [pilotage-397-ux.md](docs/implementation/pilotage-397-ux.md).
 - Formulaires via Field/FieldGroup et contrôles officiels, états via Alert/Empty/Skeleton, confirmation via Dialog. Aucun ancien CheckField/DetailPanel/SplitView importé par la nouvelle présentation.
 - Le thème utilise le contrôleur neutre existant ; les données métier ne sont jamais persistées pour la démo. Les commandes conservent droits, versions, idempotence, refus et saisie.
 

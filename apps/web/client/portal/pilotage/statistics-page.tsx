@@ -47,7 +47,7 @@ export function StatisticsPilot() {
 
   return <section className="pilotage-page">
     <header className="pilotage-heading"><h1>Statistiques</h1></header>
-    <Tabs value={tab} onValueChange={value => setRouteQuery?.({ ...query, measure: undefined, part: undefined, tab: value === 'activity' ? undefined : value as StatisticsTab })}>
+    <Tabs className="pilotage-domain" value={tab} onValueChange={value => setRouteQuery?.({ ...query, measure: undefined, part: undefined, tab: value === 'activity' ? undefined : value as StatisticsTab })}>
       <TabsList variant="line" aria-label="Domaine des statistiques">
         {rights.activity && <TabsTrigger value="activity">Activité</TabsTrigger>}
         {rights.finance && <TabsTrigger value="finance">Finances</TabsTrigger>}
