@@ -1243,10 +1243,27 @@ private struct MessagingThreadStateLine: View {
                         .font(.caption2).foregroundStyle(DrivyTheme.textTertiary)
                         .accessibilityHidden(true)
                 }
-                mutationStatus(message)
+                statusLine(message)
             }
         } else if let entry = item.pending {
             pendingStatus(entry)
+        }
+    }
+
+    /// La ligne d'état garde sa hauteur tant que le message porte ma réaction ou une intention en cours : la liste est ancrée en bas,
+    /// et « Synchronisation… » qui apparaissait à la cinquième seconde ajoutait 15,7 pt, remontant la bulle de 13 pt sous le doigt
+    /// (échecs d'appui des 28 et 31 octobre, tous à 5,0 à 5,8 s de l'ajout). L'emplacement est réservé dès l'ajout, au moment même
+    /// où la capsule de réaction fait déjà bouger la bulle ; le libellé le remplit ensuite sans rien déplacer.
+    @ViewBuilder private func statusLine(_ message: MessagingWireMessage) -> some View {
+        let mine = workspace.scope.accountID
+        if workspace.hasPendingMutation(for: message) || message.meta.reactions.contains(where: { $0.personIDs.contains(mine) }) {
+            ZStack(alignment: .leading) {
+                Label("Synchronisation…", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.caption2).hidden().accessibilityHidden(true)
+                mutationStatus(message)
+            }
+        } else {
+            mutationStatus(message)
         }
     }
 

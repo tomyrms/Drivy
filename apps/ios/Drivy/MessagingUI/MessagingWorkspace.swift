@@ -704,6 +704,11 @@ struct MessagingInboxPreview: Equatable, Sendable {
         return nil
     }
 
+    /// Une intention locale (réaction, épingle, vote…) attend encore sa confirmation pour ce message.
+    func hasPendingMutation(for message: MessagingWireMessage) -> Bool {
+        pendingMutations.keys.contains { $0.messageID == message.id && $0.conversationID == message.conversationID }
+    }
+
     func rejection(for messageID: UUID) -> MessagingMutationRejection? { rejections[messageID] }
     func clearRejection(_ messageID: UUID) { rejections[messageID] = nil }
 
