@@ -56,6 +56,17 @@ export function periodLabel(period: ResolvedPeriod): string {
   return `du ${formatCivil(period.from)} au ${formatCivil(period.lastDay)}`;
 }
 
+const shortDay = new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+const shortDayYear = new Intl.DateTimeFormat('fr-CH', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** « du 1 au 12 octobre » ; l'année n'est ajoutée que si la période n'est pas dans l'année de référence. */
+export function formatSpan(from: string, lastDay: string, referenceYear: string): string {
+  const format = (civil: string, withYear: boolean) => (withYear ? shortDayYear : shortDay).format(atNoon(civil));
+  const withYear = from.slice(0, 4) !== referenceYear || lastDay.slice(0, 4) !== referenceYear;
+  const sameMonth = from.slice(0, 7) === lastDay.slice(0, 7);
+  const start = sameMonth ? String(Number(from.slice(8))) : format(from, from.slice(0, 4) !== lastDay.slice(0, 4));
+  return `du ${start} au ${format(lastDay, withYear)}`;
+}
+
 export function periodProblemMessage(problem: PeriodProblem): string {
   switch (problem) {
     case 'INCOMPLETE': return 'Choisissez le premier et le dernier jour de la période.';

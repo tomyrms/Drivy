@@ -26,17 +26,21 @@ export function OverviewPilot() {
   const { school, routeQuery, navigate } = useConsole();
   const catalogueOnly = routeQuery?.from === 'formations' || routeQuery?.from === 'prestations';
   const dailyEntry = school.status === 'ACTIVE' && !catalogueOnly && routeQuery?.from !== 'configuration';
+  // Une adresse qui porte déjà un contexte d'agenda (semaine, fiche, moniteur...) garde son agenda ; l'entrée nue ouvre le tableau de bord (#377).
+  const agendaLink = Boolean(routeQuery?.week || routeQuery?.day || routeQuery?.instructor || routeQuery?.lesson || routeQuery?.learner || routeQuery?.course || routeQuery?.occurrence || routeQuery?.view);
   useEffect(() => {
-    if (dailyEntry) navigate('agenda', { week: routeQuery?.week, day: routeQuery?.day, instructor: routeQuery?.instructor,
+    if (!dailyEntry) return;
+    if (agendaLink) navigate('agenda', { week: routeQuery?.week, day: routeQuery?.day, instructor: routeQuery?.instructor,
       lesson: routeQuery?.lesson, learner: routeQuery?.learner, course: routeQuery?.course, occurrence: routeQuery?.occurrence, view: routeQuery?.view }, { replace: true });
-  }, [dailyEntry, navigate, routeQuery]);
+    else navigate('tableau-de-bord', {}, { replace: true });
+  }, [dailyEntry, agendaLink, navigate, routeQuery]);
   if (school.status === 'DRAFT' || catalogueOnly) return <SetupGuide catalogueOnly={catalogueOnly} />;
   if (school.status === 'ARCHIVED') return <section className="overview-page">
     <h1>École archivée</h1>
     <Alert><Info aria-hidden="true" /><AlertTitle>La préparation est fermée</AlertTitle><AlertDescription>Le planning et les informations de l’école restent consultables selon vos accès.</AlertDescription></Alert>
     <div className="overview-actions"><Button onClick={() => navigate('agenda')}>Consulter le planning</Button><Button variant="outline" onClick={() => navigate('configuration')}>Informations de l’école</Button></div>
   </section>;
-  if (dailyEntry) return <div className="grid gap-5" role="status" aria-label="Ouverture du planning"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>;
+  if (dailyEntry) return <div className="grid gap-5" role="status" aria-label="Ouverture du tableau de bord"><Skeleton className="h-10 w-56" /><Skeleton className="h-80 w-full" /></div>;
   return <Preparation />;
 }
 

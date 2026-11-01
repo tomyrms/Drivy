@@ -60,13 +60,18 @@ function MeasureHelp({ label, measure, definition }: { label: string; measure: M
   </Popover>;
 }
 
-/** Un groupe de mesures sous un titre ; le titre nomme la liste pour les lecteurs d'écran. */
-export function MetricSection({ title, children }: { title: string; children: ReactNode }) {
+/** Un bloc de page sous un titre ; le titre nomme la région pour les lecteurs d'écran. `action` se place à droite du titre. */
+export function PilotageSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   const id = useId();
   return <section className="pilotage-section" aria-labelledby={id}>
-    <h2 id={id}>{title}</h2>
-    <ul className="pilotage-grid">{children}</ul>
+    {action ? <div className="pilotage-section-head"><h2 id={id}>{title}</h2>{action}</div> : <h2 id={id}>{title}</h2>}
+    {children}
   </section>;
+}
+
+/** Un groupe de mesures sous un titre. */
+export function MetricSection({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  return <PilotageSection title={title} action={action}><ul className="pilotage-grid">{children}</ul></PilotageSection>;
 }
 
 export interface FilterOption { value: string; label: string }
@@ -77,6 +82,19 @@ const periodOptions: readonly FilterOption[] = [
 ];
 const allInstructors = 'all';
 
+/** Filtre « Toute l'équipe / un moniteur » : sans moniteur à proposer, il n'est pas affiché. */
+export function InstructorSelect({ value, options, onChange }: { value: string | undefined; options: readonly FilterOption[]; onChange: (value: string | undefined) => void }) {
+  if (options.length === 0) return null;
+  const items: readonly FilterOption[] = [{ value: allInstructors, label: 'Toute l’équipe' }, ...options];
+  return <Field className="pilotage-filter">
+    <FieldLabel htmlFor="pilotage-instructor">Moniteur</FieldLabel>
+    <Select value={value ?? allInstructors} items={items} onValueChange={next => { if (next) onChange(next === allInstructors ? undefined : next); }}>
+      <SelectTrigger id="pilotage-instructor" aria-label="Moniteur"><SelectValue /></SelectTrigger>
+      <SelectContent>{items.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+    </Select>
+  </Field>;
+}
+
 /** Filtres communs des statistiques : une même adresse les porte, un lien vers une autre page les conserve. */
 export function PilotageFilters({ query, instructors, problem, onChange }: {
   query: NavigationQuery;
@@ -85,7 +103,6 @@ export function PilotageFilters({ query, instructors, problem, onChange }: {
   onChange: (patch: FilterPatch) => void;
 }) {
   const choice = query.period ?? 'month';
-  const instructorItems: readonly FilterOption[] = [{ value: allInstructors, label: 'Toute l’équipe' }, ...instructors];
   return <div className="pilotage-filters" role="group" aria-label="Filtres des statistiques">
     <Field className="pilotage-filter">
       <FieldLabel htmlFor="pilotage-period">Période</FieldLabel>
@@ -107,13 +124,7 @@ export function PilotageFilters({ query, instructors, problem, onChange }: {
         <Input id="pilotage-end" type="date" value={query.end ?? ''} aria-invalid={problem !== null} onChange={event => onChange({ end: event.target.value || undefined })} />
       </Field>
     </>}
-    {instructors.length > 0 && <Field className="pilotage-filter">
-      <FieldLabel htmlFor="pilotage-instructor">Moniteur</FieldLabel>
-      <Select value={query.instructor ?? allInstructors} items={instructorItems} onValueChange={value => { if (value) onChange({ instructor: value === allInstructors ? undefined : value }); }}>
-        <SelectTrigger id="pilotage-instructor" aria-label="Moniteur"><SelectValue /></SelectTrigger>
-        <SelectContent>{instructorItems.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-      </Select>
-    </Field>}
+    <InstructorSelect value={query.instructor} options={instructors} onChange={instructor => onChange({ instructor })} />
     {problem && <FieldError className="pilotage-filter-error" role="alert">{periodProblemMessage(problem)}</FieldError>}
   </div>;
 }

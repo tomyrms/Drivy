@@ -2,6 +2,7 @@
 .pilotage-page h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 .pilotage-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .pilotage-heading p { margin-top: 4px; color: var(--muted-foreground); }
+.pilotage-heading-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .pilotage-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
 .pilotage-filter { width: auto; min-width: 11rem; }
 .pilotage-filter-error { flex-basis: 100%; }
@@ -22,12 +23,37 @@
 .pilotage-comparison { margin: 0; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
 .pilotage-comparison span { color: var(--muted-foreground); }
 .pilotage-tile-action { margin: 2px 0 -6px -10px; }
+.pilotage-empty { grid-column: 1 / -1; list-style: none; }
+.pilotage-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pilotage-today { margin: 0; font-size: 1.0625rem; font-weight: 550; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.pilotage-today-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pilotage-appointments { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.pilotage-appointments li + li { border-top: 1px solid var(--border); }
+.pilotage-appointment { width: 100%; height: auto; min-height: 56px; justify-content: flex-start; gap: 16px; padding: 10px 16px; border-radius: 0; text-align: left; white-space: normal; font-weight: 400; }
+.pilotage-appointment-time { flex-shrink: 0; min-width: 6.5rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pilotage-appointment-what { flex: 1; min-width: 0; display: grid; }
+.pilotage-appointment-what strong { font-weight: 600; overflow-wrap: anywhere; }
+.pilotage-appointment-what span { color: var(--muted-foreground); font-size: 0.875rem; overflow-wrap: anywhere; }
+.pilotage-day { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--muted-foreground); }
+.pilotage-chart { margin: 0; display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.pilotage-chart figcaption { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.pilotage-chart h3 { margin: 0; font-size: 0.9375rem; font-weight: 650; }
+.pilotage-chart figcaption span, .pilotage-chart-empty { color: var(--muted-foreground); font-size: 0.875rem; }
+.pilotage-chart-empty { margin: 0; }
+.pilotage-chart-svg { width: 100%; height: auto; overflow: visible; }
+.pilotage-chart-tick { fill: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pilotage-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.875rem; }
+.pilotage-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.pilotage-chart-values summary { cursor: pointer; font-size: 0.875rem; color: var(--muted-foreground); width: fit-content; }
+.pilotage-chart-values summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.pilotage-chart-values table { margin-top: 8px; }
 @media (max-width: 640px) {
   .pilotage-page { gap: 20px; }
   .pilotage-page h1 { font-size: 1.6rem; }
-  .pilotage-heading > button { width: 100%; }
+  .pilotage-heading > button, .pilotage-heading-actions, .pilotage-heading-actions > button { width: 100%; }
   .pilotage-filter { width: 100%; min-width: 0; }
   .pilotage-value { font-size: 1.5rem; }
+  .pilotage-appointment { gap: 12px; padding-inline: 12px; }
+  .pilotage-appointment-time { min-width: 5.5rem; }
 }
 
-.pilotage-empty { grid-column: 1 / -1; list-style: none; }

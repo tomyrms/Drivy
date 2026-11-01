@@ -1,8 +1,9 @@
-import { ids } from '../fixtures';
+import { addDays } from '../../../agenda-model';
+import { ids, today } from '../fixtures';
 import type { PreviewFamily } from '../family';
 
 /**
- * Pilotage (#373) : lectures synthétiques du dictionnaire et des cartes, pour juger la composition des pages.
+ * Pilotage (#373) : lectures synthétiques du dictionnaire, des cartes et des séries, pour juger la composition des pages.
  * Les valeurs sont inventées pour l'aperçu ; elles suivent la forme de l'API (T02 #375), jamais ses calculs.
  * Un filtre moniteur divise les valeurs par deux, pour que l'effet du filtre se voie ; rien d'autre n'est simulé.
  */
@@ -13,6 +14,11 @@ const dictionary: readonly Entry[] = [
   ['L02', 'activity', 'count', 'Leçons à venir', 'Leçons planifiées dont le début prévu est futur et qui n’ont pas démarré.'],
   ['L03', 'activity', 'count', 'Leçons annulées', 'Leçons annulées, rattachées à leur début prévu.'],
   ['L04', 'activity', 'count', 'Absences', 'Absences constatées, rattachées à leur début prévu.'],
+  ['L05', 'activity', 'count', 'À vérifier', 'Leçons planifiées dont l’heure est passée, sans départ ni constat.'],
+  ['L06', 'activity', 'count', 'En cours', 'Leçons démarrées dont la fin prévue n’est pas atteinte.'],
+  ['L07', 'activity', 'count', 'À finaliser', 'Leçons démarrées dont la fin prévue est passée, sans constat de fin.'],
+  ['L08', 'activity', 'count', 'Total des leçons', 'Somme des états ci-dessus ; contrôle de cohérence.'],
+  ['H01', 'activity', 'seconds', 'Heures programmées', 'Durée prévue des leçons planifiées ou réalisées.'],
   ['H02', 'activity', 'seconds', 'Heures réalisées (durées connues)', 'Somme des durées réelles connues ; une durée manquante n’est ni zéro ni la durée prévue.'],
   ['H03', 'activity', 'seconds', 'Heures à venir', 'Durée prévue des leçons à venir.'],
   ['P01', 'activity', 'count', 'Élèves ayant eu une activité', 'Élèves distincts ayant une leçon réalisée ou une présence à une séance de cours.'],
@@ -30,15 +36,31 @@ const dictionary: readonly Entry[] = [
   ['F07', 'finance', 'cents', 'Valeur des cours collectifs', 'Indisponible : un cours n’a ni prix ni lien produit.'],
 ];
 const complete = { status: 'COMPLETE', reasons: [] };
-const sample: Record<string, { value: number | null; coverage?: unknown }> = {
-  L01: { value: 38 }, L02: { value: 17 }, L03: { value: 3 }, L04: { value: 1 },
-  H02: { value: 107_400, coverage: { status: 'PARTIAL', reasons: [{ code: 'DURATION_UNKNOWN', count: 2 }] } }, H03: { value: 45_900 },
+type Sample = { value: number | null; coverage?: unknown };
+/** Une période d'un mois ou plus. */
+const period: Record<string, Sample> = {
+  L01: { value: 38 }, L02: { value: 17 }, L03: { value: 3 }, L04: { value: 1 }, L05: { value: 2 }, L06: { value: 0 }, L07: { value: 2 }, L08: { value: 63 },
+  H01: { value: 148_500 }, H02: { value: 107_400, coverage: { status: 'PARTIAL', reasons: [{ code: 'DURATION_UNKNOWN', count: 2 }] } }, H03: { value: 45_900 },
   P01: { value: 21 }, C01: { value: 6 }, C06: { value: 14 }, C09: { value: 450 },
   A01: { value: 2 }, A02: { value: 1 }, A03: { value: 0 },
   F01: { value: 361_000 }, F02: { value: 161_500 }, F03: { value: 522_500 }, F04: { value: 28_500 }, F05: { value: 45_000 },
   F07: { value: null, coverage: { status: 'UNAVAILABLE', reasons: [{ code: 'COURSE_PRICE_SOURCE_MISSING' }] } },
 };
+/** Une journée : les mesures non listées reprennent celles de la période. */
+const day: Record<string, Sample> = {
+  L01: { value: 2 }, L02: { value: 3 }, L03: { value: 0 }, L04: { value: 0 }, L05: { value: 0 }, L06: { value: 1 }, L07: { value: 1 }, L08: { value: 7 },
+  H01: { value: 19_800 }, C01: { value: 1 },
+};
 const days = (from: string, toExclusive: string) => Math.round((Date.parse(`${toExclusive}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+const half = (value: number) => Math.round(value / 2);
+
+/** Jour civil de la série : les leçons passées sont réalisées, les autres à venir, avec une variation lisible. */
+function seriesDay(civil: string, filtered: boolean) {
+  const index = Number(civil.slice(8)), weekday = new Date(`${civil}T12:00:00Z`).getUTCDay();
+  const volume = weekday === 0 ? 0 : (index * 7 + weekday * 3) % 5 + 1;
+  const value = filtered ? half(volume) : volume;
+  return civil < today ? { L01: value, L02: 0 } : civil === today ? { L01: half(value), L02: value - half(value) } : { L01: 0, L02: value };
+}
 
 export const metricsFamily: PreviewFamily = {
   name: 'metrics',
@@ -49,18 +71,40 @@ export const metricsFamily: PreviewFamily = {
         measures: dictionary.map(([id, domain, unit, label, formula, snapshot]) => ({ id, domain, unit, label, formula, snapshot: snapshot ?? false })),
       }));
     }
-    if (request.path !== 'metrics') return undefined;
-    const domain = request.query.get('domain') === 'finance' ? 'finance' : 'activity';
     const from = request.query.get('from') ?? '', toExclusive = request.query.get('toExclusive') ?? '';
     const filtered = Boolean(request.query.get('instructorMembershipId'));
+    if (request.path === 'metrics/series') {
+      const granularity = request.query.get('granularity') === 'week' || request.query.get('granularity') === 'month' ? request.query.get('granularity') : 'day';
+      const buckets = Array.from({ length: days(from, toExclusive) }, (_, offset) => {
+        const civil = addDays(from, offset), values = seriesDay(civil, filtered);
+        return { from: civil, toExclusive: addDays(civil, 1), partial: false, measures: { L01: { value: values.L01 }, L02: { value: values.L02 } } };
+      });
+      return tools.reply(200, tools.envelope({ schoolId: ids.school, period: { from, toExclusive, days: buckets.length }, granularity, buckets }));
+    }
+    if (request.path !== 'metrics') return undefined;
+    const domain = request.query.get('domain') === 'finance' ? 'finance' : 'activity';
+    const length = days(from, toExclusive);
+    const sample = (id: string) => (length === 1 ? day[id] : undefined) ?? period[id]!;
+    const scaled = (id: string, unit: Unit, value: number | null) => value === null || !filtered || unit === 'permille' || id.startsWith('A') ? value : half(value);
     const measures = Object.fromEntries(dictionary.filter(entry => entry[1] === domain).map(([id, , unit]) => {
-      const { value, coverage } = sample[id]!;
-      const shown = value === null || !filtered || unit === 'permille' || id.startsWith('A') ? value : Math.round(value / 2);
-      return [id, { value: shown, unit, coverage: coverage ?? complete }];
+      const { value, coverage } = sample(id);
+      return [id, { value: scaled(id, unit, value), unit, coverage: coverage ?? complete }];
     }));
-    return tools.reply(200, tools.envelope({
+    const answer: Record<string, unknown> = {
       schoolId: ids.school, domain, timeZone: 'Europe/Zurich', computedAt: new Date().toISOString(), dataSince: null,
-      period: { from, toExclusive, days: days(from, toExclusive) }, scope: { kind: 'school' }, measures,
-    }));
+      period: { from, toExclusive, days: length }, scope: { kind: 'school' }, measures,
+    };
+    if (request.query.get('compare') === 'previous-month') {
+      const previous = new Date(`${from}T12:00:00Z`); previous.setUTCMonth(previous.getUTCMonth() - 1);
+      const base = previous.toISOString().slice(0, 8) + '01';
+      answer.comparison = {
+        mode: 'MONTH_TO_DATE', base: { from: base, toExclusive: addDays(base, length), days: length, clipped: false },
+        measures: Object.fromEntries(['L01', 'H02'].map(id => {
+          const current = scaled(id, id === 'H02' ? 'seconds' : 'count', period[id]!.value)!, before = Math.round(current * 0.8);
+          return [id, { current, base: before, delta: current - before, percentTenths: before === 0 ? null : Math.round(((current - before) * 1000) / before), percentReason: before === 0 ? 'BASE_ZERO' : null }];
+        })),
+      };
+    }
+    return tools.reply(200, tools.envelope(answer));
   },
 };

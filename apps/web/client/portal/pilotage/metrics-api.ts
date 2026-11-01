@@ -86,3 +86,40 @@ export function useMetrics(request: MetricsRequest) {
     return answer;
   }, [schoolId, revision, scope], scope);
 }
+
+export const seriesSchema = z.object({
+  schoolId: z.string().uuid(),
+  period: z.object({ from: civil, toExclusive: civil, days: z.number().int().positive() }),
+  granularity: z.enum(['day', 'week', 'month']),
+  buckets: z.array(z.object({
+    from: civil, toExclusive: civil, partial: z.boolean(),
+    measures: z.record(measureId, z.object({ value: z.number().int().nullable(), coverage: coverage.optional() })),
+  })).max(400),
+});
+export type SeriesAnswer = z.infer<typeof seriesSchema>;
+
+export interface SeriesRequest {
+  from: string;
+  toExclusive: string;
+  granularity: 'day' | 'week' | 'month';
+  measures: readonly string[];
+  instructor?: string | undefined;
+}
+
+/** Série d'une ou plusieurs mesures par intervalle ; mêmes règles de portée et de correspondance que les cartes. */
+export function useMetricSeries(request: SeriesRequest) {
+  const { schoolId } = useConsole();
+  const { revision } = useCommandSnapshot();
+  const measures = request.measures.join(',');
+  const scope = ['series', schoolId, request.from, request.toExclusive, request.granularity, measures, request.instructor ?? ''].join('/');
+  return useLoad(async () => {
+    const answer = await readSchool(schoolId, 'metrics/series', seriesSchema, {
+      from: request.from, toExclusive: request.toExclusive, granularity: request.granularity, measures,
+      ...(request.instructor ? { instructorMembershipId: request.instructor } : {}),
+    });
+    if (answer.schoolId !== schoolId || answer.period.from !== request.from || answer.period.toExclusive !== request.toExclusive || answer.granularity !== request.granularity) {
+      throw new RequestFailure('INVALID_RESPONSE');
+    }
+    return answer;
+  }, [schoolId, revision, scope], scope);
+}

@@ -706,3 +706,33 @@ Aucun graphique dans T03. Constat : `apps/web` n'a aucune bibliothèque de graph
 - Filtres prestation et permis : `product` et `category` existent dans l'adresse, aucun contrôle ne les pose encore (T05). La comparaison (`compare`) est prévue dans le lecteur, aucune page ne la demande.
 - Barre mobile à six entrées : l'étiquette « Formations » peut être tronquée à 320 px (déjà le cas à cinq).
 - Non exécuté : aucun test. Seul `tsc --noEmit` a tourné, sans `lucide-react` ni `class-variance-authority` installés sur cette machine ; il ne signale aucune erreur dans les fichiers touchés. Aucun rendu navigateur.
+
+## 13. T04 (#377) : accueil quotidien
+
+Code : `portal/pilotage/dashboard-page.tsx` (blocs), `dashboard-appointments.tsx` (rendez-vous), `appointments.ts` et `today-summary.ts` (règles pures), `stacked-bars.tsx` (graphique), `portal/overview/overview-page.tsx` (entrée). Aucun changement d'API.
+
+### 13.1 Entrée par défaut (changement visible pour tous, à valider à l'écran)
+
+L'entrée nue d'une école active ouvre maintenant le tableau de bord, plus l'agenda. Une adresse qui porte déjà un contexte d'agenda (semaine, jour, moniteur, leçon, élève, cours, séance, vue) garde son agenda, pour que les liens existants ne changent pas de destination. DRAFT, ARCHIVED, préparation de l'école et catalogue sont inchangés.
+
+### 13.2 Blocs et sources
+
+Chaque bloc lit pour lui-même : l'échec d'un bloc ne retire ni les autres blocs ni l'accès au planning. Le filtre Moniteur (Toute l'équipe par défaut) est l'adresse `instructor`, partagée avec Statistiques.
+
+- **Aujourd'hui** : une lecture d'activité sur le jour civil de l'école. Le total est L08 (le contrôle du serveur), puis seulement les états non nuls (L01, L06, L07, L05, L02, L03, L04), les heures programmées (H01) et les séances collectives (C01). Un badge « Partiel » apparaît si une de ces mesures n'est pas complète ; un total absent se lit « Leçons du jour indisponibles », jamais « Aucune leçon ».
+- **À traiter** : A01, A02, A03 lorsqu'elles sont positives ou que le serveur ne garantit pas leur zéro. Chacune ouvre l'agenda en gardant le moniteur. Sinon « Rien à traiter ». Aucune demande d'élève n'est exposée (Q18).
+- **Prochains rendez-vous** : leçons et séances collectives des sept prochains jours, par la projection de l'agenda (`agendaDays`), huit lignes au plus. Sont exclues les leçons terminées, annulées ou en absence, les séances passées et les cours qui ne sont pas publiés. Un badge n'apparaît que si la leçon sort de l'ordinaire (À démarrer, En cours, À terminer). La ligne ouvre la fiche dans l'agenda, avec semaine, jour et moniteur. Une lecture de séances qui échoue ne cache pas les leçons. La liste se recalcule chaque minute, sans nouvelle lecture.
+- **Ce mois-ci** : L01, L02 et H02 du mois entier. L'écart de L01 et de H02 vient d'une seconde lecture, du 1er à aujourd'hui avec `compare=previous-month` (mode `MONTH_TO_DATE` : la même plage du mois précédent) ; la base est nommée (« vs du 1 au 12 octobre ») et L02 n'a pas d'écart. Si cette seconde lecture échoue, les tuiles s'affichent sans écart. Une leçon réalisée l'est déjà : sa valeur est la même dans les deux lectures.
+- **Graphique** : « Leçons par jour », empilé, réalisées en plein et à venir en hachuré (la distinction ne repose pas sur la couleur), légende, résumé lu par les lecteurs d'écran et tableau des valeurs sous « Voir les valeurs ». Un jour sans valeur laisse un vide.
+- **Finances du mois** (droit financier seulement) : F01, F02, F03 avec leur couverture, jamais présentées comme un encaissement ; « Voir les finances » ouvre Statistiques → Finances avec le moniteur.
+
+### 13.3 Graphique sans dépendance (arbitrage)
+
+Le graphique est un histogramme SVG écrit pour cet usage (`stacked-bars.tsx`), sans bibliothèque ni mise à jour du verrou des dépendances. C'est un choix de T04 pour ne pas bloquer l'accueil ; T05 et T06 peuvent le réutiliser ou décider d'une bibliothèque (section 12.3) si leurs besoins dépassent des barres empilées.
+
+### 13.4 Reste
+
+- Jamais regardé : aperçu `?page=tableau-de-bord` (valeurs synthétiques) à 390 et 1440 px, clair et sombre ; la hachure du graphique en sombre en particulier.
+- Les chiffres de la journée ne se rafraîchissent qu'après une commande confirmée ou une relecture de la page, pas toutes les minutes.
+- Le changement d'école purge l'ancien contexte par la portée de lecture ; non qualifié.
+- Non exécuté : aucun test (écrits : `dashboard-models.test.ts`), aucun rendu navigateur. `tsc --noEmit` sans erreur dans les fichiers touchés, avec les mêmes réserves qu'en 12.4.

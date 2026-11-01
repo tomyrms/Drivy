@@ -1,16 +1,14 @@
 import { civilDateIn } from '../../agenda-model';
-import { useConsole, useLoad } from '../../console/context';
+import { useConsole } from '../../console/context';
 import type { StatisticsTab } from '../../console/route';
-import { activeInstructors } from '../../invitation-model';
-import { distinctLabel, homonymReferences } from '../../person-reference';
-import { memberSchema, readAll } from '../../school-api';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { MetricSection, MetricTile, PilotageFilters, type FilterOption, type FilterPatch } from './components';
+import { MetricSection, MetricTile, PilotageFilters, type FilterPatch } from './components';
 import { MetricsView, ScopeLine } from './metrics-view';
 import { periodLabel, resolvePeriod, type ResolvedPeriod } from './period-model';
 import { canOpenStatistics, metricRights } from './rights';
 import type { MetricDomain } from './metrics-api';
+import { useDirectory } from './use-directory';
 
 /** Mesures montrées par onglet, dans l'ordre de lecture. Le serveur décide des valeurs et de leur couverture. */
 const groups: Record<MetricDomain, readonly { title: string; ids: readonly string[] }[]> = {
@@ -28,19 +26,16 @@ const groups: Record<MetricDomain, readonly { title: string; ids: readonly strin
 
 /** Statistiques (#373) : deux onglets, Activité et Finances, sous les mêmes filtres portés par l'adresse. */
 export function StatisticsPilot() {
-  const { schoolId, school, membership, routeQuery, setRouteQuery } = useConsole();
+  const { school, membership, routeQuery, setRouteQuery } = useConsole();
   const query = routeQuery ?? {};
   const rights = metricRights(membership);
   // Les moniteurs servent seulement de filtre : leur lecture ne bloque jamais les chiffres.
-  const directory = useLoad(() => readAll(schoolId, 'members', memberSchema), [schoolId]);
+  const { instructorOptions: instructors } = useDirectory({ learners: false });
   if (!canOpenStatistics(rights)) return <section className="pilotage-page">
     <h1>Statistiques</h1>
     <Alert variant="destructive"><AlertTitle>Statistiques non disponibles</AlertTitle><AlertDescription>Vos accès ne permettent pas de consulter les indicateurs de l’école.</AlertDescription></Alert>
   </section>;
 
-  const members = activeInstructors(directory.data?.items ?? []);
-  const references = homonymReferences(members.map(item => ({ id: item.id, label: item.displayName })));
-  const instructors: FilterOption[] = members.map(item => ({ value: item.id, label: distinctLabel(item.displayName, references.get(item.id)) }));
   const wanted: StatisticsTab = query.tab ?? 'activity';
   const tab: StatisticsTab = wanted === 'finance' ? (rights.finance ? 'finance' : 'activity') : (rights.activity ? 'activity' : 'finance');
   const resolved = resolvePeriod(query, civilDateIn(school.timeZone));
