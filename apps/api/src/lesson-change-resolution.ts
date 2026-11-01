@@ -22,7 +22,7 @@ export async function requireChangeRequest(db:PoolClient,schoolId:string,lessonI
  * caduque devient SUPERSEDED (toute demande si la leçon est annulée, les demandes de déplacement si elle est déplacée). Une demande
  * d'annulation survit à un déplacement du personnel : l'élève veut toujours annuler.
  */
-export async function settleChangeRequests(db:PoolClient,value:{schoolId:string;lessonId:string;membershipId:string;outcome:ChangeOutcome;acceptedId?:string|null}){
+export async function settleChangeRequests(db:PoolClient,value:{schoolId:string;lessonId:string;membershipId:string;outcome:ChangeOutcome;acceptedId?:string|null|undefined}){
  await db.query(`UPDATE drivy.lesson_change_request SET status=CASE WHEN id=$3::uuid THEN 'ACCEPTED' ELSE 'SUPERSEDED' END,version=version+1,
    resolved_by_membership_id=$4,resolved_at=statement_timestamp(),updated_at=statement_timestamp()
   WHERE school_id=$1 AND lesson_id=$2 AND status='PENDING' AND ($5::text='CANCELLED' OR kind='RESCHEDULE' OR id=$3::uuid)`,
