@@ -3,10 +3,10 @@
 ## 1er novembre 2026 — tests UI instables (`claude/tests-ui-stables-20261101`)
 
 - Analyse de 173 runs iOS (journaux, deux artefacts, historique git) : sur les douze tests suivis, dix n'échouent plus depuis leur dernière correction (0 échec sur 8 à 41 exécutions de la version actuelle) ; deux échouaient encore sur master. Notes par test : [tests-ui-instables-20261101.md](tests-ui-instables-20261101.md).
-- Corrigés : `SchoolAgendaUITests/testRefreshFailure…` (séance de 14:00 amenée à l'écran avant le compte final, `702865be`) et `MessagingLatencyUITests/testFiveSecond…` (réponse à l'ajout retardée de 15 s au lieu de 5 s : le retrait, 5,6 s après l'ajout en médiane, tombait sur la réponse, `12c4bd2a`). Code de test seul ; aucun fichier produit, aucune assertion retirée.
-- **Exécuté** : run 41254020521 (les deux tests, réussi ; version à 8 s abandonnée pour 1,1 s de marge). **Non conclu** : run 41254915339 (code final). Deuxième passage du test des cinq secondes non lancé.
-- **Défauts de l'app décrits, non corrigés** : bouton « Charger les messages précédents » derrière la barre de navigation sur iPhone ; appui perdu sur les réactions pendant un rechargement (hypothèse).
-- **Limites** : les échecs de lancement du simulateur ne relèvent pas des tests ; un test ayant passé deux fois n'est pas prouvé stable.
+- Corrigés : `SchoolAgendaUITests/testRefreshFailure…` (séance de 14:00 amenée à l'écran avant le compte final, `702865be`) et `MessagingLatencyUITests/testFiveSecond…` (retrait attendu dans l'état stable : un appui tombant sur la bascule « en cours de synchronisation » à 5 s est perdu ; réponse à l'ajout retardée de 15 s, `1dc697f5`). Code de test seul ; aucun fichier produit, aucune assertion retirée.
+- **Exécuté** : agenda, runs 41254020521 et 41254915339, réussis ; cinq secondes sur le code final, runs 41257979928 et 41257987154, réussis. Trois essais intermédiaires abandonnés (8 s, 15 s sans attente : 41256319407 et 41257019945 rouges, appui perdu).
+- **Défauts de l'app décrits, non corrigés** : bouton « Charger les messages précédents » derrière la barre de navigation sur iPhone ; appui perdu sur les réactions pendant la bascule « en cours de synchronisation ».
+- **Limites** : les échecs de lancement du simulateur ne relèvent pas des tests ; deux passages ne prouvent pas une stabilité durable.
 ## 31 octobre 2026 — CI allégée (`claude/ci-allegee-20261031`)
 
 - Mesures sur 600 runs (21 au 31 octobre) : 5 235 min macOS, dont 41 % en parcours UI iPhone + iPad (62 % en échec), 20 % en tests métier (compilation 6,3 min pour 959 tests en 77 s) et 19 % en IPA. Les « 59 minutes d'attente » du run 41234908420 sont une relance (tentative 2) ; les vraies attentes (28 runs, 303 min, jusqu'à 51 min) venaient du groupe de concurrence par branche. L'allongement depuis le 11/10 suit le dépôt : code ×1,8, tests UI 13 → 82, paquets Swift 2 → 9.
