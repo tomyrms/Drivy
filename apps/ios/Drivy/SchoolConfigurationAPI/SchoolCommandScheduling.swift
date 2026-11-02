@@ -12,7 +12,7 @@ extension SchoolCommandKind {
     var schedulingDomain: SchoolCommandDomain {
         if self == .savePlanningDefaults { return .planningPreferences }
         if isInvitation { return .invitations }
-        if isPlanning || isReport || isObservation || isExam { return .teaching }
+        if isPlanning || isReport || isObservation || isExam || isCourse { return .teaching }
         // Configuration, contrats, catalogue, profils et droits peuvent partager la version de l'école
         // ou modifier les prérequis des autres commandes. Aucun parallélisme supposé entre ces écritures.
         return .school
@@ -23,6 +23,9 @@ extension PendingSchoolCommand {
     func conflicts(with other: Self) -> Bool {
         if id == other.id { return true }
         guard scope.belongsToWorkspace(other.scope) else { return false }
+        // Gestes de cours (#126, #128 à #130) : un par élève et par séance, indépendants les uns des autres, y compris d'une époque
+        // d'accès à l'autre ; leur coffre ne contient rien d'autre.
+        if kind.isCourse && other.kind.isCourse { return false }
         // Une commande d'une ancienne époque reste à résoudre avant toute autre émission dans cette école.
         guard scope == other.scope else { return true }
         // Signalements d'une même leçon (#112) : créations indépendantes, envoyées dans l'ordre des gestes par leur

@@ -208,6 +208,8 @@ struct SchoolVisualShell: View {
         // De même pour le classement du moniteur et l’ordre figé d’une leçon.
         SchoolObservationRankingStores.makeCache = { SchoolVisualRankingCache() }
         SchoolLessonSignalOrderStores.make = { _ in SchoolLessonSignalOrderMemoryStore() }
+        // Gestes de cours (#126, #128 à #130) : aucun fichier ni clé sur le simulateur.
+        SchoolCourseIntentStores.shared = SchoolCourseIntentMemoryStore()
         let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations,
             permitCount: permitCount, screen: agendaScenario)
         let transport: any SchoolHTTPTransport

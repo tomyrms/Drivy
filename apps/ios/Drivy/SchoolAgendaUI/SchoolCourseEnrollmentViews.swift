@@ -485,6 +485,8 @@ struct SchoolLearnerCourseEntry: ViewModifier {
     let client: SchoolCourseClient?
     let schoolID: UUID?
     let timeZone: String
+    /// Coffre des demandes de cet appareil (#126) ; absent tant que le compte n'est pas connu.
+    var persistence: SchoolCourseIntentPersistence?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var model: SchoolLearnerCoursesWorkspace?
@@ -568,14 +570,14 @@ struct SchoolLearnerCourseEntry: ViewModifier {
         guard let client, let schoolID else { model = nil; presented = nil; offered = nil; return }
         if model?.schoolID != schoolID {
             presented = nil; offered = nil
-            model = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: timeZone, client: client)
+            model = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: timeZone, client: client, persistence: persistence)
         }
         await model?.load()
     }
 }
 
 extension View {
-    func schoolLearnerCourses(client: SchoolCourseClient?, schoolID: UUID?, timeZone: String) -> some View {
-        modifier(SchoolLearnerCourseEntry(client: client, schoolID: schoolID, timeZone: timeZone))
+    func schoolLearnerCourses(client: SchoolCourseClient?, schoolID: UUID?, timeZone: String, persistence: SchoolCourseIntentPersistence? = nil) -> some View {
+        modifier(SchoolLearnerCourseEntry(client: client, schoolID: schoolID, timeZone: timeZone, persistence: persistence))
     }
 }

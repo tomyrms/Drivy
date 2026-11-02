@@ -479,11 +479,18 @@ struct SchoolHomeView: View {
             // Cours collectifs (#39-#41) : entrée et places proposées, dans Leçons seulement.
             .schoolLearnerCourses(client: section == .lessons && workspace.school?.status == "ACTIVE" ? agendaClient?.courseClient : nil,
                 schoolID: section == .lessons ? workspace.membership?.schoolId : nil,
-                timeZone: workspace.school?.timeZone ?? "Europe/Zurich")
+                timeZone: workspace.school?.timeZone ?? "Europe/Zurich",
+                persistence: coursePersistence)
             // Examens (#54) : le prochain examen prévu, dans Leçons seulement.
             .schoolLearnerExams(client: section == .lessons && workspace.school?.status == "ACTIVE" ? agendaClient?.examClient : nil,
                 schoolID: section == .lessons ? workspace.membership?.schoolId : nil)
         }
+    }
+
+    /// Coffre des demandes de l'élève sur les cours (#126), pour ce compte dans cette école.
+    private var coursePersistence: SchoolCourseIntentPersistence? {
+        guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return nil }
+        return SchoolCourseIntentPersistence(scope: agendaClient.scope(person: person, membership: membership))
     }
 
     /// Un seul fond pour chaque état : erreur, attente et vide se remplacent sans saut de couleur.

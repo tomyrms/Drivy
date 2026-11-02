@@ -348,7 +348,8 @@ struct SchoolCourseDetailView: View {
                 if canOpenParticipants {
                     Section {
                         Button {
-                            attendance = SchoolCourseAttendanceWorkspace(schoolID: model.schoolID, seriesID: series.id, timeZone: timeZone, client: model.client)
+                            attendance = SchoolCourseAttendanceWorkspace(schoolID: model.schoolID, seriesID: series.id, timeZone: timeZone, client: model.client,
+                                persistence: model.persistence)
                         } label: { Label("Suivre les participants", systemImage: "checklist") }
                             .buttonStyle(DrivyPrimaryButtonStyle())
                             .disabled(model.isBusy)
