@@ -224,6 +224,69 @@ import Testing
         #expect(await server.writes().count == 1)
     }
 
+    @Test func choicesMadeWhileTheSaveIsSlowSurviveItsConfirmationWithoutAFalseConflict() async throws {
+        let server = PlanningDefaultsServer(), outbox = ConfigurationOutboxStub()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: outbox)
+        await model.load()
+        try #require(model.saved?.version == 1)
+        model.selectCategory("B")
+        await server.pauseNextDefaultsWrite()
+        let saving = Task { await model.save() }
+        await server.waitForPausedDefaultsWrite()
+        // La réponse tarde : la demande est conservée, rien n'est annoncé, les choix restent modifiables.
+        #expect(model.isBusy && model.pending != nil && model.canEdit && !model.canSave)
+        #expect(model.successMessage == nil)
+        model.selectProduct("lesson-50")
+        await server.resumeDefaultsWrite()
+        await saving.value
+
+        // Notre écriture (permis B) est la version connue ; le tarif choisi ensuite reste un brouillon à enregistrer.
+        #expect(model.saved?.version == 2 && model.saved?.trainingCategoryCode == "B" && model.saved?.serviceProductKey == nil)
+        #expect(model.trainingCategoryCode == "B" && model.serviceProductKey == "lesson-50")
+        #expect(model.conflictingDefaults == nil && model.errorMessage == nil)
+        #expect(model.pending == nil && outbox.value == nil)
+        #expect(model.hasChanges && model.canSave)
+        #expect(await server.writes().count == 1)
+
+        // Un changement fait ailleurs après notre écriture reste signalé.
+        await server.changeDefaultsRemotely()
+        await model.load()
+        #expect(model.conflictingDefaults?.version == 3 && model.serviceProductKey == "lesson-50")
+        #expect(!model.canSave)
+    }
+
+    @Test func choicesMadeWhileARequestAwaitsVerificationSurviveIt() async throws {
+        let server = PlanningDefaultsServer(receiptAvailable: false), outbox = ConfigurationOutboxStub()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: outbox)
+        await model.load()
+        try #require(model.saved?.version == 1)
+        model.selectCategory("B")
+        await model.save()
+        let pending = try #require(model.pending)
+        #expect(model.canEdit && !model.canSave)
+        model.selectProduct("lesson-50")
+        await server.enableReceipt()
+        await model.verify()
+
+        #expect(model.pending == nil && outbox.value == nil && outbox.removals == [pending])
+        #expect(model.saved?.version == 2 && model.saved?.trainingCategoryCode == "B")
+        #expect(model.trainingCategoryCode == "B" && model.serviceProductKey == "lesson-50" && model.conflictingDefaults == nil)
+        #expect(model.hasChanges && model.canSave)
+        // La demande conservée n'a été émise qu'une fois ; la vérification n'écrit rien.
+        #expect(await server.writes().count == 1)
+    }
+
+    @Test func aConfirmedSaveWithoutLaterChoicesLeavesNothingToSave() async throws {
+        let server = PlanningDefaultsServer()
+        let model = SchoolPlanningSettingsWorkspace(scope: ConfigurationFixture.scope(), client: client(server), outbox: ConfigurationOutboxStub())
+        await model.load()
+        model.selectCategory("B"); model.selectProduct("lesson-50")
+        await model.save()
+        #expect(model.saved?.version == 2 && model.saved?.serviceProductKey == "lesson-50")
+        #expect(!model.hasChanges && !model.canSave && model.errorMessage == nil && model.pending == nil)
+        #expect(model.successMessage != nil)
+    }
+
     @Test func cancellationIsConfirmedEvenWhenTheFollowingReadFails() async throws {
         let server = PlanningDefaultsServer(failReadsAfterCancellation: true), outbox = ConfigurationOutboxStub()
         let model = SchoolPlanningWorkspace(scope: ConfigurationFixture.scope(), client: client(server),
@@ -359,6 +422,9 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
     private var pausesNextDefaultsRead = false
     private var pausedDefaultsRead: CheckedContinuation<Void, Never>?
     private var defaultsPauseWaiter: CheckedContinuation<Void, Never>?
+    private var pausesNextDefaultsWrite = false
+    private var pausedDefaultsWrite: CheckedContinuation<Void, Never>?
+    private var defaultsWriteWaiter: CheckedContinuation<Void, Never>?
     private var availabilityFailure: Int?
     private var pausesNextAvailabilityRead = false
     private var pausedAvailabilityRead: CheckedContinuation<Void, Never>?
@@ -387,6 +453,13 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
         await withCheckedContinuation { defaultsPauseWaiter = $0 }
     }
     func resumeDefaultsRead() { pausedDefaultsRead?.resume(); pausedDefaultsRead = nil }
+    /// Écriture déjà validée par l'école dont la réponse tarde : l'appareil ne sait pas encore qu'elle a réussi.
+    func pauseNextDefaultsWrite() { pausesNextDefaultsWrite = true }
+    func waitForPausedDefaultsWrite() async {
+        if pausedDefaultsWrite != nil { return }
+        await withCheckedContinuation { defaultsWriteWaiter = $0 }
+    }
+    func resumeDefaultsWrite() { pausedDefaultsWrite?.resume(); pausedDefaultsWrite = nil }
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         if readUnavailable && request.httpMethod == "GET" { throw URLError(.notConnectedToInternet) }
         sent.append(request)
@@ -433,6 +506,12 @@ actor PlanningDefaultsServer: SchoolHTTPTransport {
                 let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
                 defaultsVersion += 1; operationID = body["operationId"] as? String
                 category = body["trainingCategoryCode"] ?? NSNull(); productKey = body["serviceProductKey"] ?? NSNull()
+                if pausesNextDefaultsWrite {
+                    pausesNextDefaultsWrite = false
+                    await withCheckedContinuation { continuation in
+                        pausedDefaultsWrite = continuation; defaultsWriteWaiter?.resume(); defaultsWriteWaiter = nil
+                    }
+                }
             }
             return try ok(record(ConfigurationFixture.membershipID, ["version": defaultsVersion, "trainingCategoryCode": category, "serviceProductKey": productKey]))
         }
