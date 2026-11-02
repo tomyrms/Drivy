@@ -50,7 +50,38 @@ extension SchoolCommandKind {
     }
 }
 
+extension SchoolCommandKind {
+    /// Ce que la demande conservée est en train de faire, avant toute preuve de l’école.
+    /// Jamais « Réservé », « Annulé » ni « Envoyé » : ces mots attendent la confirmation.
+    var inProgressTitle: String? {
+        switch self {
+        case .createLesson: "Planification en cours"
+        case .moveLesson: "Déplacement en cours"
+        case .cancelLesson: "Annulation en cours"
+        case .createInvitation: "Création en cours"
+        case .resendInvitation: "Renvoi en cours"
+        case .revokeInvitation: "Révocation en cours"
+        default: nil
+        }
+    }
+}
+
 extension PendingSchoolCommand {
+    /// Début demandé par une création ou un déplacement de leçon ; nil pour toute autre demande.
+    var requestedLessonStart: Date? {
+        guard kind == .createLesson || kind == .moveLesson,
+              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let value = object["plannedStart"] as? String else { return nil }
+        return SchoolLesson.date(value)
+    }
+
+    /// Une réservation dont l’horaire est passé ne se renvoie plus : l’école la refuserait, et rien ne doit la rejouer
+    /// à l’insu de la personne. Elle reste à vérifier, puis à abandonner si l’école ne la connaît pas.
+    func isStaleLessonRequest(at now: Date = Date()) -> Bool {
+        guard let start = requestedLessonStart else { return false }
+        return start <= now
+    }
+
     /// Dit quelle demande attend, depuis quand, et ce que l’école en sait après une vérification.
     /// `absent` : l’école a répondu qu’elle n’a aucune trace de cette opération.
     func waitingMessage(absent: Bool) -> String {

@@ -618,7 +618,7 @@ struct SchoolPlanningFeedback: View {
         if let command = model.pending {
             Section {
                 DrivyPendingRequest(message: command.waitingMessage(absent: model.pendingAbsent),
-                    notes: !model.canRetry && command.scope != model.scope ? ["Tes accès ont changé. La demande initiale reste conservée."] : [],
+                    notes: model.pendingNotes,
                     reference: command.id,
                     verify: model.pendingAbsent ? nil : { Task { await model.verify() } }, canVerify: !(model.isBusy || model.isLoading),
                     retry: model.canRetry ? { Task { _ = await model.retry() } } : nil,
@@ -627,7 +627,8 @@ struct SchoolPlanningFeedback: View {
             }
                 .drivyFormRows()
         }
-        if model.isBusy { Section { DrivyLoadingState(title: "Confirmation par l’école…") }
+        // La demande est conservée : la feuille dit laquelle est en cours, sans la donner pour faite.
+        if model.isBusy { Section { DrivyLoadingState(title: model.pending?.kind.inProgressTitle ?? "Confirmation par l’école…") }
             .drivyFormRows() }
     }
 }

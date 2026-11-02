@@ -328,6 +328,200 @@ import Testing
         #expect(model.learners.isEmpty && model.products.isEmpty && model.errorMessage == nil)
     }
 
+    // MARK: Demande conservée : double appui, réponse perdue, refus, reprise
+
+    @Test func aSecondTapWhileTheFirstRequestIsInFlightSendsNothing() async throws {
+        let server = PlanningBookingServer(writeDelayMilliseconds: 150), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+        try #require(model.validBooking)
+
+        let first = Task { await model.saveBooking() }
+        var attempts = 0
+        while attempts < 200, !(await server.didReceiveWrite()) {
+            try await Task.sleep(for: .milliseconds(5)); attempts += 1
+        }
+        #expect(await server.didReceiveWrite())
+        // La demande est conservée et l'envoi tarde : le formulaire n'accepte plus de seconde demande.
+        let pending = try #require(model.pending)
+        #expect(model.isBusy && !model.canMutate && !model.validBooking)
+        #expect(model.pending?.kind.inProgressTitle == "Planification en cours")
+        #expect(await model.saveBooking() == false)
+        #expect(model.pending == pending && outbox.saves.allSatisfy { $0 == pending })
+
+        #expect(await first.value)
+        #expect(await server.writes().count == 1)
+        #expect(model.confirmedLesson != nil && outbox.value == nil)
+        // Une fois confirmée, la même saisie ne repart pas non plus.
+        #expect(await model.saveBooking() == false)
+        #expect(await server.writes().count == 1)
+    }
+
+    @Test func aLostResponseIsVerifiedWithoutASecondLesson() async throws {
+        let server = PlanningBookingServer(receiptAvailable: false), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+        try #require(model.validBooking)
+
+        #expect(await model.saveBooking() == false)
+        let pending = try #require(model.pending)
+        #expect(model.confirmedLesson == nil && model.successMessage == nil && outbox.value == pending)
+        #expect(!model.canMutate)
+
+        await server.enableReceipt()
+        await model.verify()
+        #expect(model.pending == nil && outbox.value == nil && outbox.removals == [pending])
+        let confirmed = try #require(model.confirmedLesson)
+        #expect(confirmed.id == HubFixture.lessonID && model.successMessage != nil)
+        // La vérification lit le reçu : elle n'écrit rien et ne crée pas de deuxième leçon.
+        #expect(await server.writes().count == 1)
+    }
+
+    @Test func aMoveRefusedForAStaleVersionKeepsEveryInputAndAsksForANewIntent() async throws {
+        let server = PlanningBookingServer(rejection: "VERSION_CONFLICT"), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox, lesson: HubFixture.lesson())
+        await model.load()
+        model.startsAt = Date().addingTimeInterval(86_400)
+        model.meetingPoint = "Parking nord"
+        model.agreementConfirmed = true
+        await model.validateSlot()
+        try #require(model.validBooking)
+        let proposed = model.startsAt
+
+        #expect(await model.saveBooking() == false)
+        #expect(model.needsReload && model.errorMessage != nil && model.successMessage == nil)
+        #expect(model.pending == nil && outbox.value == nil && model.confirmedLesson == nil && !model.writeConfirmed)
+        #expect(!model.canMutate)
+        #expect(await server.writes().count == 1)
+
+        // Relire l'école ne rend ni ancien horaire ni ancien lieu : seul l'accord est redemandé.
+        await model.load()
+        #expect(model.startsAt == proposed && model.meetingPoint == "Parking nord" && model.learnerID == HubFixture.learnerID)
+        #expect(model.canMutate && !model.agreementConfirmed && !model.validBooking)
+    }
+
+    @Test func aCancellationOfAClosedLessonIsRefusedAndNeverReportedCancelled() async throws {
+        let server = PlanningBookingServer(rejection: "LESSON_CLOSED"), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox, lesson: HubFixture.lesson())
+        model.readsForCancellation = true
+        await model.load()
+        model.cancellationReason = "OTHER"
+        try #require(model.canMutate)
+
+        #expect(await model.cancel() == false)
+        #expect(model.errorMessage == "Cette leçon est déjà terminée ou annulée.")
+        #expect(model.confirmedCancellationLessonID == nil && !model.writeConfirmed && model.successMessage == nil)
+        #expect(model.pending == nil && outbox.value == nil)
+        #expect(await server.writes().count == 1)
+    }
+
+    @Test func aFailedReadAfterTheConfirmationKeepsTheWriteConfirmedAndNeverResendsIt() async throws {
+        let server = PlanningBookingServer(lessonReadStatus: 503), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+        try #require(model.validBooking)
+
+        #expect(await model.saveBooking() == false)
+        #expect(model.writeConfirmed && model.pending == nil && outbox.value == nil)
+        #expect(model.confirmedLesson == nil && model.errorMessage?.contains("enregistrée") == true)
+        #expect(!model.canMutate)
+
+        await server.setLessonReadStatus(nil)
+        #expect(await model.reloadConfirmedLesson())
+        #expect(model.confirmedLesson?.id == HubFixture.lessonID && model.errorMessage == nil)
+        #expect(await server.writes().count == 1)
+    }
+
+    @Test func reopeningWithAKeptRequestSendsNothingByItself() async throws {
+        let pending = try keptCreation(startingIn: 86_400)
+        let server = PlanningBookingServer(), outbox = ConfigurationOutboxStub(value: pending)
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        #expect(model.pending == pending && model.canRetry && !model.pendingIsStale && model.pendingNotes.isEmpty)
+        #expect(!model.canMutate && !model.validBooking)
+        #expect(await server.writes().isEmpty)
+        #expect(outbox.value == pending && outbox.removals.isEmpty)
+    }
+
+    @Test func aKeptCreationWhoseStartHasPassedIsNeverOfferedAgain() async throws {
+        let pending = try keptCreation(startingIn: -3_600)
+        let server = PlanningBookingServer(), outbox = ConfigurationOutboxStub(value: pending)
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        #expect(model.pending == pending && model.pendingIsStale && !model.canRetry)
+        #expect(model.pendingNotes.count == 1)
+        #expect(await model.retry() == false)
+        #expect(await server.writes().isEmpty)
+        // La demande reste conservée pour être vérifiée : rien ne la supprime en silence.
+        #expect(outbox.value == pending && outbox.removals.isEmpty)
+    }
+
+    @Test func aKeptCancellationStaysRetriableWhateverTheDate() async throws {
+        let operation = UUID()
+        let body = try JSONSerialization.data(withJSONObject: ["operationId": operation.uuidString, "reasonCode": "OTHER", "comment": ""],
+            options: [.sortedKeys])
+        let pending = PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .cancelLesson, resourceVersion: 2,
+            createdAt: Date().addingTimeInterval(-86_400), body: body, resourceID: HubFixture.lessonID)
+        let model = workspace(PlanningBookingServer(), outbox: ConfigurationOutboxStub(value: pending))
+        await model.load()
+        #expect(model.pending == pending && !model.pendingIsStale && model.canRetry)
+        #expect(pending.kind.inProgressTitle == "Annulation en cours")
+    }
+
+    @Test func aRequestKeptUnderAnotherAccessEpochIsNeverReplayed() async throws {
+        let pending = try keptCreation(startingIn: 86_400, scope: ConfigurationFixture.scope(epoch: 2))
+        let server = PlanningBookingServer(), outbox = ConfigurationOutboxStub(value: pending)
+        let model = workspace(server, outbox: outbox)
+        await model.load()
+        #expect(model.pending == pending && !model.canRetry && !model.canMutate)
+        #expect(model.pendingNotes == ["Tes accès ont changé. La demande initiale reste conservée."])
+        #expect(await model.retry() == false)
+        #expect(await server.writes().isEmpty)
+        #expect(outbox.value == pending && outbox.removals.isEmpty)
+    }
+
+    @Test func aRefusedCreationKeepsEveryInputThroughTheReload() async throws {
+        let server = PlanningBookingServer(rejection: "SLOT_CONFLICT"), outbox = ConfigurationOutboxStub()
+        let model = workspace(server, outbox: outbox)
+        await model.load(); await model.selectLearner(HubFixture.learnerID)
+        model.meetingPoint = "Gare nord"; model.bufferMinutes = 15
+        await model.validateSlot()
+        try #require(model.validBooking)
+        let learner = model.learnerID, training = model.trainingID, instructor = model.instructorID, product = model.productID
+        let start = model.startsAt, duration = model.duration
+
+        #expect(await model.saveBooking() == false)
+        #expect(model.needsReload && model.confirmedLesson == nil && model.pending == nil)
+        await model.load()
+        #expect(model.learnerID == learner && model.trainingID == training && model.instructorID == instructor)
+        #expect(model.productID == product && model.startsAt == start && model.duration == duration)
+        #expect(model.meetingPoint == "Gare nord" && model.bufferMinutes == 15)
+        #expect(await server.writes().count == 1)
+    }
+
+    @Test func eachPlanningActionNamesItsOwnProgressAndNeverSaysItIsDone() {
+        #expect(SchoolCommandKind.createLesson.inProgressTitle == "Planification en cours")
+        #expect(SchoolCommandKind.moveLesson.inProgressTitle == "Déplacement en cours")
+        #expect(SchoolCommandKind.cancelLesson.inProgressTitle == "Annulation en cours")
+        #expect(SchoolCommandKind.createInvitation.inProgressTitle == "Création en cours")
+        #expect(SchoolCommandKind.resendInvitation.inProgressTitle == "Renvoi en cours")
+        #expect(SchoolCommandKind.revokeInvitation.inProgressTitle == "Révocation en cours")
+        #expect(SchoolCommandKind.savePlanningDefaults.inProgressTitle == nil)
+        for kind in [SchoolCommandKind.createLesson, .moveLesson, .cancelLesson, .createInvitation, .resendInvitation, .revokeInvitation] {
+            let title = kind.inProgressTitle ?? ""
+            #expect(title.hasSuffix("en cours") && !title.contains("Réservé") && !title.contains("Annulé") && !title.contains("Envoyé"))
+        }
+    }
+
+    private func keptCreation(startingIn offset: TimeInterval, scope: SchoolCommandScope = ConfigurationFixture.scope()) throws -> PendingSchoolCommand {
+        let operation = UUID(), start = Date().addingTimeInterval(offset), iso = ISO8601DateFormatter()
+        let body: [String: Any] = ["operationId": operation.uuidString, "plannedStart": iso.string(from: start),
+            "plannedEnd": iso.string(from: start.addingTimeInterval(3_000)), "timeZone": "Europe/Zurich",
+            "trainingId": HubFixture.trainingID.uuidString, "instructorMembershipId": ConfigurationFixture.membershipID.uuidString]
+        return PendingSchoolCommand(id: operation, scope: scope, kind: .createLesson, resourceVersion: 0, createdAt: Date(),
+            body: try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]), routeResourceID: HubFixture.trainingID)
+    }
+
     private func workspace(_ server: PlanningBookingServer, outbox: ConfigurationOutboxStub? = nil,
                            date: Date = Date().addingTimeInterval(86_400), lesson: SchoolLesson? = nil) -> SchoolPlanningWorkspace {
         let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
@@ -353,7 +547,8 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
     private let rejection: String?
     private let lessonReadDelayMilliseconds: Int
     private let lessonVersionDelta: Int
-    private let lessonReadStatus: Int?
+    private var lessonReadStatus: Int?
+    private let writeDelayMilliseconds: Int
     private var receiptAvailable: Bool
     private var operationID: String?
     private var operationType = "CREATE_LESSON"
@@ -362,10 +557,19 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
     private var recorded: [URLRequest] = []
 
     init(receiptAvailable: Bool = true, restriction: String? = nil, deadline: String? = nil, rejection: String? = nil,
-         lessonReadDelayMilliseconds: Int = 0, lessonVersionDelta: Int = 0, lessonReadStatus: Int? = nil) {
+         lessonReadDelayMilliseconds: Int = 0, lessonVersionDelta: Int = 0, lessonReadStatus: Int? = nil,
+         writeDelayMilliseconds: Int = 0) {
         self.receiptAvailable = receiptAvailable; self.restriction = restriction; self.deadline = deadline; self.rejection = rejection
         self.lessonReadDelayMilliseconds = lessonReadDelayMilliseconds; self.lessonVersionDelta = lessonVersionDelta
-        self.lessonReadStatus = lessonReadStatus
+        self.lessonReadStatus = lessonReadStatus; self.writeDelayMilliseconds = writeDelayMilliseconds
+    }
+    func didReceiveWrite() -> Bool { recorded.contains { $0.httpMethod == "POST" } }
+    func setLessonReadStatus(_ status: Int?) { lessonReadStatus = status }
+    /// Refus de l'école : un conflit de créneau est un 409, une version périmée un 412, tout autre refus métier un 422.
+    private func refusal(_ code: String, url: URL) throws -> SchoolHTTPResponse {
+        let status = code == "SLOT_CONFLICT" ? 409 : code == "VERSION_CONFLICT" ? 412 : 422
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["code": code]),
+            status: status, url: url, contentType: "application/problem+json")
     }
     func writes() -> [URLRequest] { recorded.filter { $0.httpMethod != "GET" } }
     /// Dernier segment de chaque lecture reçue.
@@ -416,11 +620,10 @@ private actor PlanningBookingServer: SchoolHTTPTransport {
             startNowPosts += 1
             return try reply(try JSONSerialization.jsonObject(with: JSONEncoder().encode(HubFixture.lesson())))
         }
+        if request.httpMethod == "POST", url.lastPathComponent == "cancel", let rejection { return try refusal(rejection, url: url) }
         if request.httpMethod == "POST", ["lessons", "move"].contains(url.lastPathComponent) {
-            if let rejection {
-                return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["code": rejection]),
-                    status: rejection == "SLOT_CONFLICT" ? 409 : 422, url: url, contentType: "application/problem+json")
-            }
+            if let rejection { return try refusal(rejection, url: url) }
+            if writeDelayMilliseconds > 0 { try await Task.sleep(for: .milliseconds(writeDelayMilliseconds)) }
             let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
             operationID = body["operationId"] as? String
             operationType = url.lastPathComponent == "move" ? "MOVE_LESSON" : "CREATE_LESSON"
