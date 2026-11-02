@@ -377,6 +377,107 @@ struct SchoolInvitationWorkspaceTests {
         #expect(outbox.value == nil)
         #expect(model.invitations.isEmpty && model.school == nil)
     }
+
+    // MARK: Avancement d'une demande conservée (#121)
+
+    @Test func aResendInFlightIsNamedOnItsInvitationOnlyAndIsNeverSentTwice() async throws {
+        let api = InvitationAPIStub()
+        let target = InvitationFixture.invitation()
+        let other = InvitationFixture.invitation(id: UUID(), email: "b***@example.invalid")
+        api.items = [target, other]
+        let model = InvitationFixture.workspace(api: api)
+        await model.load()
+        let held = InvitationResponse<SchoolInvitation>()
+        api.sendHandler = { _ in try await held.value() }
+
+        let resending = Task { await model.resendAfterConfirmation(target) }
+        await held.waitUntilRequested()
+        #expect(model.isBusy && model.progressTitle(for: target) == "Renvoi en cours")
+        #expect(model.progressTitle(for: other) == nil && model.creationInProgressTitle == nil)
+        #expect(model.successMessage == nil)
+        // Un second appui ne repart pas, et la liste déjà autorisée reste lisible.
+        #expect(await model.resendAfterConfirmation(target) == false)
+        #expect(api.commands.count == 1 && model.invitations.count == 2)
+
+        held.succeed(InvitationFixture.invitation(id: target.id, version: 2))
+        #expect(await resending.value)
+        #expect(model.progressTitle(for: target) == nil && model.pending == nil)
+        #expect(api.commands.count == 1)
+    }
+
+    @Test func aRevocationInFlightIsNamedAndNothingIsAnnouncedBeforeTheProof() async throws {
+        let api = InvitationAPIStub()
+        let target = InvitationFixture.invitation()
+        api.items = [target]
+        let model = InvitationFixture.workspace(api: api)
+        await model.load()
+        let held = InvitationResponse<SchoolInvitation>()
+        api.sendHandler = { _ in try await held.value() }
+
+        let revoking = Task { await model.revokeAfterConfirmation(target, reason: "Adresse erronée") }
+        await held.waitUntilRequested()
+        #expect(model.progressTitle(for: target) == "Révocation en cours")
+        #expect(model.successMessage == nil && model.issuedCode == nil && model.codeRecovery == nil)
+        #expect(model.invitations.first?.status == .pending)
+
+        // La relecture qui suit la réponse lit l'invitation révoquée.
+        api.items = [InvitationFixture.invitation(id: target.id, version: 2, status: .revoked)]
+        held.succeed(InvitationFixture.invitation(id: target.id, version: 2, status: .revoked))
+        #expect(await revoking.value)
+        #expect(model.progressTitle(for: target) == nil)
+        #expect(model.invitations.first?.status == .revoked && model.successMessage != nil)
+    }
+
+    @Test func aCodeCreationInFlightInventsNeitherRowNorCodeNorMember() async throws {
+        let api = InvitationAPIStub()
+        let offering = SchoolOffering(id: UUID(), schoolId: ConfigurationFixture.schoolID, version: 1, offeringKey: "B",
+            categoryCode: "B", curriculumVersionId: UUID(), policyVersionId: UUID(), enabled: true,
+            defaultDurationMinutes: 50, defaultPriceCents: 9000)
+        api.offeringValues = [offering]
+        api.instructorValues = [SchoolInvitationInstructor(id: UUID(), displayName: "Moniteur exemple")]
+        let model = InvitationFixture.workspace(api: api)
+        await model.load()
+        try #require(model.codeDraftIsValid)
+        let before = model.invitations.map(\.id)
+        let held = InvitationResponse<SchoolInvitation>()
+        api.sendHandler = { _ in try await held.value() }
+
+        let creating = Task { await model.createCode() }
+        await held.waitUntilRequested()
+        #expect(model.creationInProgressTitle == "Création en cours")
+        #expect(model.invitations.map(\.id) == before)
+        #expect(model.issuedCode == nil && model.codeRecovery == nil && model.successMessage == nil)
+        #expect(!model.mayEdit)
+        #expect(await model.createCode() == false)
+        #expect(api.commands.count == 1)
+
+        held.succeed(InvitationFixture.codeInvitation(id: UUID(), code: "K7Q4MX2P"))
+        #expect(await creating.value)
+        #expect(model.creationInProgressTitle == nil && model.issuedCode?.code == "K7Q4-MX2P")
+        #expect(api.commands.count == 1)
+    }
+
+    @Test func anUncertainResendKeepsItsLabelUntilTheSchoolAnswersAndNeverUnderAnotherEpoch() async throws {
+        let api = InvitationAPIStub()
+        let target = InvitationFixture.invitation()
+        api.items = [target]
+        api.sendFailure = .unavailable
+        let outbox = ConfigurationOutboxStub()
+        let model = InvitationFixture.workspace(api: api, outbox: outbox)
+        await model.load()
+        #expect(await model.resendAfterConfirmation(target) == false)
+        let pending = try #require(model.pending)
+        #expect(model.progressTitle(for: target) == "Renvoi en cours")
+
+        // Autre époque d'accès : la demande reste conservée, sans étiquette ni renvoi.
+        let otherEpoch = SchoolInvitationWorkspace(scope: ConfigurationFixture.scope(epoch: 2), roles: ["ADMIN"], api: api, outbox: outbox)
+        await otherEpoch.load()
+        #expect(otherEpoch.pending == pending && otherEpoch.progressTitle(for: target) == nil && !otherEpoch.canRetryPending)
+
+        api.receipt = InvitationFixture.receipt(pending)
+        await model.verifyPending()
+        #expect(model.progressTitle(for: target) == nil && outbox.value == nil)
+    }
 }
 
 @MainActor
