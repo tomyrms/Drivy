@@ -93,6 +93,19 @@ import Observation
     /// Bilan tel que l’école l’a confirmé alors que la saisie a continué (#114) :
     /// la relecture le reconnaît comme point de départ, la saisie suivante n’est ni remplacée ni prise pour un conflit.
     @ObservationIgnored private var confirmedReport: DraftContent?
+    /// Aperçu du trajet en cours de lecture (#114, #115) : la fiche s’utilise sans l’attendre. Une lecture plus récente,
+    /// la fermeture ou la perte d’accès l’abandonnent.
+    @ObservationIgnored private var previewRead: Task<(value: SchoolCapturePriorTrack.Track?, message: String?), Error>?
+    @ObservationIgnored private var previewPublication: Task<Void, Never>?
+    /// Trajets dont est issu l’aperçu affiché : un autre jeu de trajets l’efface à la relecture, sans attendre le suivant.
+    @ObservationIgnored private var previewCaptureIDs: Set<UUID> = []
+    /// Aperçu d’un trajet synchronisé déjà lu, gardé tant que l’école n’en change pas la version. En mémoire de cette
+    /// fiche seulement : jamais écrit sur l’appareil, perdu à sa fermeture.
+    @ObservationIgnored private var previewMemo: [UUID: PreviewMemo] = [:]
+    private struct PreviewMemo {
+        let version: Int
+        let part: SchoolCapturePriorTrack.Track
+    }
 
     init(scope: SchoolCommandScope, membership: SchoolMembership, lessonID: UUID, client: SchoolLessonReportClient,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(), notifications: NotificationCenter = .default,
@@ -114,6 +127,9 @@ import Observation
     }
     /// Bilan tout juste envoyé (#114) : la rédaction continue ; ce qui est saisi pendant l’envoi reste à enregistrer.
     var isSendingReport: Bool { isBusy && isFirstSend && pending?.kind == .saveReportDraft }
+    /// Constat de fin ou d’absence tout juste envoyé (#114) : l’intention est déjà dans la file chiffrée, la fiche peut être
+    /// quittée sans rien perdre. Rien n’est confirmé, ni la leçon terminée ni l’absence, tant que l’école n’a pas répondu.
+    var isSendingClosure: Bool { isBusy && isFirstSend && (pending?.kind == .completeLesson || pending?.kind == .markNoShow) }
     /// Saisie possible. Une relecture silencieuse ou l’envoi d’un réglage de partage ne ferment rien à l’écran ;
     /// seul un état qui dure le fait : accès retiré, conflit à relire, stockage fermé, demande à vérifier,
     /// contenu en cours d’enregistrement. L’envoi d’une commande reste gardé par `canMutate`.
@@ -126,9 +142,9 @@ import Observation
     /// Demande restée en attente après un envoi sans réponse sûre. Le premier envoi, en cours, n’en est pas une.
     var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
     var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
-    /// Envoi qui retient la fiche jusqu’à son résultat ; un réglage de partage ou une révision des objectifs, déjà
-    /// conservés dans la file chiffrée, ne la retiennent pas.
-    var holdsScreen: Bool { isBusy && !isSendingSharing && !isSendingTextRevision }
+    /// Envoi qui retient la fiche jusqu’à son résultat ; un réglage de partage, une révision des objectifs ou un constat
+    /// de fin ou d’absence, déjà conservés dans la file chiffrée, ne la retiennent pas.
+    var holdsScreen: Bool { isBusy && !isSendingSharing && !isSendingTextRevision && !isSendingClosure }
     var validTexts: Bool { [workedOn, observationText, nextStep].allSatisfy { $0.unicodeScalars.count <= 4_000 } }
     var preparationValid: Bool {
         goals.count <= 3 && administrativeNote.unicodeScalars.count <= 4_000 && goals.allSatisfy {
@@ -503,10 +519,32 @@ import Observation
     /// pendant que la feuille descend (vider l’écran à cet instant faisait apparaître un formulaire vide).
     func close() {
         invalidated = true; generation = UUID(); isLoading = false; isBusy = false
+        cancelPreview()
         wake()
     }
 
+    /// Quitte la fiche pendant l’envoi du constat de fin ou d’absence (#114). L’école a peut-être déjà la demande :
+    /// elle reste dans la file chiffrée jusqu’à sa réponse, et la fiche rouverte la retrouve « à vérifier » si cette
+    /// réponse ne vient pas. Si l’école la confirme entre-temps, les écrans qui montrent la leçon se relisent.
+    @discardableResult func leaveWhileClosureIsSent() -> Bool {
+        guard isSendingClosure, !invalidated, !hasLocalEdits else { return false }
+        close()
+        return true
+    }
+
+    private func cancelPreview() {
+        previewRead?.cancel(); previewRead = nil
+        previewPublication?.cancel(); previewPublication = nil
+    }
+
+    /// Attend la publication de l’aperçu du trajet, lue sans retenir la fiche.
+    func previewSettled() async {
+        await previewPublication?.value
+    }
+
     func invalidate() {
+        cancelPreview()
+        previewCaptureIDs = []; previewMemo = [:]
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
         sharedReportWasRead = false
@@ -562,6 +600,8 @@ import Observation
             proposesWorkedOn = false
         }
         generation = UUID(); let request = generation
+        // L’aperçu d’une lecture précédente n’a plus d’objet : celle-ci le relit, ou le retrouve en mémoire.
+        cancelPreview()
         // Une relecture garde l’état affiché : `needsReload`, les notes et la saisie ne changent qu’à son résultat.
         isLoading = true; errorMessage = nil; pendingReviewed = false
         defer { wake() }
@@ -664,26 +704,25 @@ import Observation
             // Les lectures qui en attendent une autre partent dès qu’elle répond : l’aperçu du trajet, le référentiel.
             var capturesRead = try await capturesTask.value
             if discreetCaptures { capturesRead.message = nil }
-            var trackRead: (value: (segments: [[SchoolCapturePoint]], observations: [SchoolPrivateGeoObservation], pointsByAnchor: [String: SchoolCapturePoint])?, message: String?) = (nil, nil)
             // Une leçon interrompue (fermeture, crash, redémarrage) puis reprise a plusieurs trajets : l’aperçu les
             // montre tous, dans l’ordre, chacun avec ses propres lacunes.
             let replayable = (capturesRead.value ?? []).filter(SchoolTripsWorkspace.isReplayable)
                 .sorted { (SchoolLesson.date($0.authorizedAt) ?? .distantPast) < (SchoolLesson.date($1.authorizedAt) ?? .distantPast) }
-            if !replayable.isEmpty {
-                trackRead = try await readSupplement(request: request,
-                    unavailable: "L’aperçu du trajet n’a pas pu être chargé. Tu peux ouvrir le replay pour réessayer.",
-                    absentWhenRefused: discreetCaptures) { () async throws -> SchoolCapturePriorTrack.Track in
-                    var segments: [[SchoolCapturePoint]] = [], observations: [SchoolPrivateGeoObservation] = []
-                    var anchors: [String: SchoolCapturePoint] = [:]
-                    for capture in replayable {
-                        let part = try await self.client.agenda.captureClient.replayTrack(schoolID: schoolID, captureID: capture.id)
-                        segments += part.segments; observations += part.observations
-                        anchors.merge(part.pointsByAnchor) { first, _ in first }
-                    }
-                    return (segments: segments, observations: observations, pointsByAnchor: anchors)
+            // L’aperçu se télécharge page après page : il part avec les autres lectures mais ne retient plus la fiche.
+            // Il se publie à son arrivée (`publishPreview`) ; d’ici là, le replay s’ouvre depuis la liste des trajets.
+            let preview = supplement(request, when: !replayable.isEmpty,
+                unavailable: "L’aperçu du trajet n’a pas pu être chargé. Tu peux ouvrir le replay pour réessayer.",
+                absentWhenRefused: discreetCaptures) { () async throws -> SchoolCapturePriorTrack.Track in
+                var segments: [[SchoolCapturePoint]] = [], observations: [SchoolPrivateGeoObservation] = []
+                var anchors: [String: SchoolCapturePoint] = [:]
+                for capture in replayable {
+                    let part = try await self.previewPart(of: capture, schoolID: schoolID)
+                    segments += part.segments; observations += part.observations
+                    anchors.merge(part.pointsByAnchor) { first, _ in first }
                 }
-                if discreetCaptures { trackRead.message = nil }
+                return (segments: segments, observations: observations, pointsByAnchor: anchors)
             }
+            previewRead = preview
             let (trainingRead, curriculumRead) = try await curriculumTask.value
             let wishRead = try await wishTask.value
             let revisionsRead = try await revisionsTask.value
@@ -742,12 +781,16 @@ import Observation
             if observationsRead.message == nil { lessonObservations = (observationsRead.value ?? []).sorted { ($0.observedAt ?? "") < ($1.observedAt ?? "") } }
             // Le réglage voulu reste affiché jusqu’à la fin de son propre envoi (`updateSharing`).
             sharing = sharingRead.value
-            track = trackRead.value?.segments ?? []; trackAnchors = trackRead.value?.pointsByAnchor ?? [:]
+            // L’aperçu affiché reste tant que ses trajets sont les mêmes ; d’autres trajets, ou aucun, l’effacent aussitôt.
+            let previewIDs = Set(replayable.map(\.id))
+            if previewIDs.isEmpty || previewIDs != previewCaptureIDs {
+                track = []; trackAnchors = [:]; previewCaptureIDs = []
+            }
             if lesson.status == "COMPLETED" { captures = capturesRead.value ?? [] }
             else if let values = capturesRead.value { captures = values }
             else if !author { captures = [] }
             let notes = [wishRead.message, preparationRead.message, draftsRead.message, accountRead.message,
-                         observationsRead.message, capturesRead.message, trackRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
+                         observationsRead.message, capturesRead.message, sharingRead.message, curriculumRead.message, progressRead.message].compactMap { $0 }
             information = notes.isEmpty ? nil : notes.joined(separator: "\n\n")
             isLoading = false; needsReload = conflict || draftUnread || preparationUnread; awaitsRereadAfterWrite = false
             if conflict {
@@ -755,12 +798,45 @@ import Observation
             }
             if !conflict, !localDraftReadFailed { _ = persistTextDrafts() }
             wake()
+            publishPreview(preview, ids: previewIDs, request: request, quiet: discreetCaptures)
             if author && lesson.status == "PLANNED" { await refreshCaptures() }
         } catch {
             guard request == generation, !invalidated else { return }
             // Relecture échouée : l’état de l’école n’est plus connu, toute écriture attend une relecture réussie.
+            cancelPreview()
             isLoading = false; needsReload = true; information = nil; revisionsError = nil; fail(error)
         }
+    }
+    /// L’aperçu du trajet arrive après la fiche (#114, #115) : il ne retient ni la saisie ni les commandes. Une lecture
+    /// plus récente, la fermeture ou la perte d’accès l’abandonnent ; une panne ne laisse que le replay depuis la liste.
+    private func publishPreview(_ read: Task<(value: SchoolCapturePriorTrack.Track?, message: String?), Error>,
+                                ids: Set<UUID>, request: UUID, quiet: Bool) {
+        previewPublication?.cancel()
+        previewPublication = Task { @MainActor in
+            do {
+                var result = try await read.value
+                guard request == self.generation, !self.invalidated else { return }
+                if quiet { result.message = nil }
+                self.track = result.value?.segments ?? []
+                self.trackAnchors = result.value?.pointsByAnchor ?? [:]
+                self.previewCaptureIDs = result.value == nil ? [] : ids
+                if let message = result.message {
+                    self.information = [self.information, message].compactMap { $0 }.joined(separator: "\n\n")
+                }
+            } catch {
+                guard request == self.generation, !self.invalidated else { return }
+                if !(error is CancellationError), self.isAccessRevoked(error) { self.fail(error) }
+            }
+        }
+    }
+    /// Tracé d’un trajet pour l’aperçu. Un trajet synchronisé déjà lu garde le sien tant que l’école ne change pas sa
+    /// version : une relecture de la fiche (après un enregistrement, au retour) ne retélécharge pas ses pages.
+    private func previewPart(of capture: SchoolCaptureSession, schoolID: UUID) async throws -> SchoolCapturePriorTrack.Track {
+        let reusable = capture.syncState == .synced && capture.publicationState == .privateCapture
+        if reusable, let known = previewMemo[capture.id], known.version == capture.version { return known.part }
+        let part = try await client.agenda.captureClient.replayTrack(schoolID: schoolID, captureID: capture.id)
+        if reusable { previewMemo[capture.id] = PreviewMemo(version: capture.version, part: part) }
+        return part
     }
     /// Lecture discrète des trajets de la leçon : une panne laisse simplement l’horaire prévu au constat.
     func refreshCaptures() async {
@@ -978,7 +1054,12 @@ import Observation
             try outbox.save(command)
             let confirmedSharing = try await client.send(command)
             try outbox.remove(command)
-            guard request == generation, !invalidated else { return false }
+            guard request == generation, !invalidated else {
+                // Fiche quittée avant la réponse (#114) : l’école a pourtant enregistré la demande, et les écrans qui
+                // montrent cette leçon (Aujourd’hui, agenda, dossier) se relisent d’eux-mêmes.
+                announceConfirmedChange(command)
+                return false
+            }
             pending = nil; isBusy = false
             // Objectifs et souhait : la saisie continue jusqu’à la relecture, qui reconnaît la révision confirmée.
             if !rememberConfirmedText(command), command.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }

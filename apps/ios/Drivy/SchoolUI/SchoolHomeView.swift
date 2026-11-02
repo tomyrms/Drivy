@@ -99,6 +99,8 @@ struct SchoolHomeView: View {
             if let change = notification.object as? SchoolLessonChange, change.schoolID == workspace.membership?.schoolId,
                change.kind == .completeLesson || change.kind == .markNoShow {
                 requiredActions.resolve(.finishLesson, entityID: change.lessonID)
+                // Fin confirmée après que la fiche a été quittée (#114) : le trajet arrêté de cette leçon n'a plus qu'à se fermer.
+                if change.kind == .completeLesson { captureController?.noteLessonCompleted(change.lessonID) }
             }
         }
         .onChange(of: workspace.membership?.membershipId) { _, _ in resetScope() }

@@ -177,13 +177,28 @@ struct SchoolLessonReportView: View {
 
 /// Une seule attente pendant le constat durable et la lecture du bilan, sans fiche planifiée intermédiaire.
 private struct SchoolLessonFinishingView: View {
+    /// Donné seulement quand la fin de leçon est déjà conservée sur l’appareil et que l’école n’a pas encore répondu
+    /// (#114) : la fiche peut alors être quittée, rien n’est confirmé ni perdu.
+    var leave: (() -> Void)? = nil
+
+    private var title: String { leave == nil ? "Préparation du bilan…" : "Fin de la leçon en cours…" }
+
     var body: some View {
-        ProgressView("Préparation du bilan…")
-            .controlSize(.large)
-            .font(.headline)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(DrivyTheme.canvas)
-            .accessibilityIdentifier("lesson-finishing")
+        VStack(spacing: DrivySpacing.l) {
+            ProgressView { Text(title) }
+                .controlSize(.large)
+                .font(.headline)
+                .accessibilityIdentifier("lesson-finishing")
+            if let leave {
+                Button("Fermer", action: leave)
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .accessibilityHint("La fin de la leçon reste conservée sur l’appareil jusqu’à la confirmation de l’école")
+                    .accessibilityIdentifier("lesson-finishing-leave")
+                    .padding(.horizontal, DrivySpacing.l)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(DrivyTheme.canvas)
     }
 }
 
@@ -298,7 +313,8 @@ private struct SchoolLessonReportContent: View {
     var body: some View {
         TimelineView(.everyMinute) { context in
             if isFinishing || completionQueued || awaitsConfirmedCompletion {
-                SchoolLessonFinishingView()
+                // La fin est déjà conservée sur l’appareil : tant que l’école n’a pas répondu, la fiche peut être quittée.
+                SchoolLessonFinishingView(leave: model.isSendingClosure ? { leaveWhileFinishing() } : nil)
             } else {
                 form(now: context.date)
             }
@@ -634,6 +650,13 @@ private struct SchoolLessonReportContent: View {
     private var awaitsConfirmedCompletion: Bool {
         opensCompletion && completionConfirmed && !completionOpened
             && (model.isLoading || (isPlanned && model.isAuthor && model.canMutate))
+    }
+
+    /// Le moniteur quitte la fiche pendant l’envoi de la fin : le trajet est déjà arrêté et scellé sur l’appareil, la demande
+    /// est dans la file chiffrée. Si l’école la confirme, Aujourd’hui se relit ; sinon la fiche rouverte la propose à vérifier.
+    private func leaveWhileFinishing() {
+        guard model.leaveWhileClosureIsSent() else { return }
+        dismiss()
     }
 
     private func beginCompletion() {
