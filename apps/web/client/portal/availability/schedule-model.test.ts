@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Availability, Closure } from '../../school-api';
-import { absenceBody, absenceLabel, absenceProblems, dayRange, draftFromRule, periodLabel, ruleBody, ruleGroups, ruleProblems, ruleState, sameRuleDraft, upcomingAbsences, weekRows, weekScale } from './schedule-model';
+import { ABSENCE_REASON_LIMIT, absenceBody, absenceLabel, absenceProblems, dayRange, draftFromRule, periodLabel, ruleBody, ruleGroups, ruleProblems, ruleState, sameRuleDraft, upcomingAbsences, weekRows, weekScale } from './schedule-model';
 
 const rule = (id: string, patch: Partial<Availability> = {}): Availability => ({ id, schoolId: 'school', version: 1, instructorMembershipId: 'instructor',
   weekdays: [1, 2, 3, 4, 5], localStart: '08:00', localEnd: '12:00', validFrom: '2026-10-01', validUntil: null, ...patch });
@@ -63,6 +63,18 @@ describe('instructor schedule model', () => {
     expect(absenceBody({ start: '2026-11-03T08:00', end: '2026-11-04T18:00', reason: '  Congé  ' }, 'instructor', 'Europe/Zurich'))
       .toEqual({ instructorMembershipId: 'instructor', startsAt: '2026-11-03T07:00:00.000Z', endsAt: '2026-11-04T17:00:00.000Z', reason: 'Congé' });
     expect(absenceBody({ start: '2026-11-03T08:00', end: '', reason: '' }, 'instructor', 'Europe/Zurich')).toBeNull();
+  });
+
+  it('keeps the reason of an absence optional, empty as null and bounded by what the API accepts', () => {
+    const draft = (reason: string) => ({ start: '2026-11-03T08:00', end: '2026-11-04T18:00', reason });
+    expect(absenceBody(draft(''), 'instructor', 'Europe/Zurich')?.reason).toBeNull();
+    expect(absenceBody(draft('   \n '), 'instructor', 'Europe/Zurich')?.reason).toBeNull();
+    expect(absenceProblems(draft('é'.repeat(ABSENCE_REASON_LIMIT)), 'Europe/Zurich')).toEqual({});
+    expect(absenceProblems(draft('é'.repeat(ABSENCE_REASON_LIMIT + 1)), 'Europe/Zurich').reason).toBe('1000 caractères au plus.');
+    // Un motif trop long n'est jamais envoyé : la saisie reste à l'écran avec son erreur.
+    expect(absenceBody(draft('é'.repeat(ABSENCE_REASON_LIMIT + 1)), 'instructor', 'Europe/Zurich')).toBeNull();
+    // Le motif est un texte : du balisage reste tel quel, sans transformation.
+    expect(absenceBody(draft('<b>Congé</b>'), 'instructor', 'Europe/Zurich')?.reason).toBe('<b>Congé</b>');
   });
 
   it('lists absences still to come, labelled in the school time zone', () => {
