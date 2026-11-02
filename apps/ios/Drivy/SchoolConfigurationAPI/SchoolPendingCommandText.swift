@@ -45,6 +45,7 @@ extension SchoolCommandKind {
         case .setExamResult: "Résultat d’un examen"
         case .courseSheetIntent: "Appel, règlement ou validation d’un cours"
         case .courseLearnerIntent: "Inscription à un cours"
+        case .courseEditorIntent: "Cours collectif en préparation"
         }
     }
 }

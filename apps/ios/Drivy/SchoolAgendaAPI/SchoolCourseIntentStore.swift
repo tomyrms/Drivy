@@ -202,6 +202,32 @@ struct SchoolCourseLearnerRecord: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: Éditeur de cours (#127)
+
+/// Opération incertaine de l'éditeur (type, brouillon ou publication) avec la saisie qui l'accompagne : après un arrêt de l'app, la même
+/// opération se rejoue sur la même saisie, et l'école ne l'enregistre pas deux fois. La saisie jamais envoyée n'est pas conservée.
+struct SchoolCourseEditorRecord: Codable, Equatable, Sendable {
+    enum Intent: String, Codable, Sendable { case type, draft, publication }
+
+    let operationId: UUID
+    let intent: Intent
+    /// Vrai : la feuille se ferme à la réponse (« Enregistrer »), faux : elle reste ouverte (brouillon écrit avant une publication).
+    let closing: Bool
+    /// Identité de l'intention : la même clé désigne la même opération.
+    let key: String
+    /// `nil` : création d'un cours qui n'existe pas encore.
+    let seriesId: UUID?
+    let form: SchoolCourseForm
+    let newTypeTitle: String
+    let newTypeDescription: String
+
+    func command(scope: SchoolCommandScope, createdAt: Date) throws -> PendingSchoolCommand {
+        // Un cours en création n'a pas d'identifiant : l'adhésion de la personne désigne son brouillon.
+        PendingSchoolCommand(id: operationId, scope: scope, kind: .courseEditorIntent, resourceVersion: 0, createdAt: createdAt,
+            body: try JSONEncoder().encode(self), resourceID: seriesId ?? operationId, routeResourceID: seriesId ?? scope.membershipID)
+    }
+}
+
 extension SchoolCourseIntentPersistence {
     static let restoredMessage = "Geste conservé sur cet appareil, pas encore confirmé par l’école."
     static let unkeptMessage = "Cet appareil ne peut pas conserver ce geste : il n’a pas été envoyé."

@@ -197,6 +197,74 @@ import Testing
         #expect(broken.action == nil)
     }
 
+    // MARK: Éditeur de cours (#127)
+
+    private func editor(_ transport: any SchoolHTTPTransport, store: SchoolCourseIntentMemoryStore) -> SchoolCourseEditorWorkspace {
+        SchoolCourseEditorWorkspace(schoolID: schoolID, membershipID: membershipID, timeZone: "Europe/Zurich",
+            client: SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: transport),
+            catalogue: nil, persistence: SchoolCourseIntentPersistence(store: store, scope: scope()))
+    }
+
+    @Test func anEditorOperationWithoutAnswerSurvivesAStoppedApp() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let first = editor(CourseCountingOfflineTransport(), store: store)
+        first.newTypeTitle = "Premiers secours"
+        first.newTypeDescription = "Gestes de base"
+        #expect(await first.createType() == false)
+        // Réponse perdue : l'opération reste à reprendre, avec sa saisie, dans le coffre.
+        #expect(first.hasUnconfirmedOperation)
+        let kept = try #require(try store.commands(scope: scope(), seriesID: membershipID).first)
+        #expect(kept.kind == .courseEditorIntent && kept.hasValidTarget)
+
+        // Nouvelle session : la même opération revient avec la même saisie, sans rien renvoyer d'elle-même.
+        let transport = CourseCountingOfflineTransport()
+        let reopened = editor(transport, store: store)
+        await reopened.load()
+        #expect(reopened.hasUnconfirmedOperation)
+        #expect(reopened.newTypeTitle == "Premiers secours" && reopened.newTypeDescription == "Gestes de base")
+        let calls = await transport.calls
+        #expect(calls == 1) // la seule lecture du catalogue ; aucune écriture
+
+        // Abandonner la retire du coffre.
+        await reopened.abandonUnconfirmed()
+        #expect(!reopened.hasUnconfirmedOperation)
+        #expect(try store.commands(scope: scope(), seriesID: membershipID).isEmpty)
+    }
+
+    @Test func anEditorOperationTheDeviceCannotKeepIsNotSent() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        store.refusesToStore = true
+        let transport = CourseCountingOfflineTransport()
+        let model = editor(transport, store: store)
+        model.newTypeTitle = "Sensibilisation"
+        #expect(await model.createType() == false)
+        #expect(!model.hasUnconfirmedOperation)
+        #expect(model.errorMessage == SchoolCourseIntentPersistence.unkeptMessage)
+        #expect(await transport.calls == 0)
+    }
+
+    @Test func anEditorRecordOfAnotherCourseIsNeverRestored() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let record = SchoolCourseEditorRecord(operationId: UUID(), intent: .type, closing: false, key: "type|x|", seriesId: UUID(),
+            form: SchoolCourseForm(), newTypeTitle: "x", newTypeDescription: "")
+        try store.replace(nil, with: record.command(scope: scope(), createdAt: Date()))
+        // Un nouveau cours cherche le brouillon de la personne, pas celui d'un cours existant.
+        let model = editor(CourseCountingOfflineTransport(), store: store)
+        await model.load()
+        #expect(!model.hasUnconfirmedOperation && model.newTypeTitle.isEmpty)
+    }
+
+    @Test func aCourseFormSurvivesTheRoundTrip() throws {
+        var form = SchoolCourseForm()
+        form.title = "Sensibilisation"; form.capacity = 8; form.minParticipants = 4; form.teachingLanguage = "fr"
+        form.occurrences = [SchoolCourseOccurrenceDraft(startsAt: Date(timeIntervalSince1970: 1_900_000_000),
+            endsAt: Date(timeIntervalSince1970: 1_900_010_000), instructorID: UUID(), attendanceRequired: false)]
+        let record = SchoolCourseEditorRecord(operationId: UUID(), intent: .draft, closing: true, key: "draft|new|0|x", seriesId: nil,
+            form: form, newTypeTitle: "", newTypeDescription: "")
+        let decoded = try JSONDecoder().decode(SchoolCourseEditorRecord.self, from: JSONEncoder().encode(record))
+        #expect(decoded == record && decoded.form.occurrences.first?.attendanceRequired == false)
+    }
+
     // MARK: Coffre chiffré
 
     @Test func theEncryptedStoreKeepsCourseGesturesApartAndFollowsTheAccessEpoch() throws {
@@ -224,4 +292,13 @@ import Testing
 /// Aucune réponse de l'école : la panne laisse la demande « non confirmée ».
 private struct CourseOfflineTransport: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse { throw URLError(.notConnectedToInternet) }
+}
+
+/// Idem, en comptant les appels : rien ne doit partir quand l'appareil ne peut pas conserver le geste.
+private actor CourseCountingOfflineTransport: SchoolHTTPTransport {
+    private(set) var calls = 0
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        calls += 1
+        throw URLError(.notConnectedToInternet)
+    }
 }
