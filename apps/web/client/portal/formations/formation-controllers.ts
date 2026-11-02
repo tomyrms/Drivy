@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createCommand, matchesSearch } from '../../command-core';
-import { useCommandSnapshot } from '../../command-store';
+import { catalogueReads } from '../../command-families';
+import { useCommandRevision } from '../../command-store';
 import { formationListSchema, proposalsSchema, readFormationSheet, readReference, textProposalsLite, type Programme } from '../../formation-api';
 import { programmeUpdate } from '../../formation-programme-update';
 import { readSchool } from '../../school-api';
@@ -13,7 +14,7 @@ import type { SectionKey } from '../../console/sections';
 /** Liste des permis préparés, avec recherche gardée en mémoire pour la session. */
 export function useCatalogueList() {
   const { schoolId } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   const loaded = useLoad(() => readSchool(schoolId, 'formations', formationListSchema), [schoolId, revision]);
   const [search, setSearch] = useListState('catalogue/search', '');
   const categories = useMemo(() => (loaded.data?.categories ?? []).filter(item => matchesSearch([`Permis ${item.categoryCode}`, item.categoryCode], search)), [loaded.data, search]);
@@ -23,7 +24,7 @@ export function useCatalogueList() {
 /** Fiche d'un permis ; une fiche d'un autre permis n'est jamais affichée (contrôle dans readFormationSheet). */
 export function useFormationSheet(category: string) {
   const { schoolId, routeQuery = {} } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   const loaded = useLoad(() => readFormationSheet(schoolId, category), [schoolId, category, revision], `${schoolId}/${category}`);
   const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsLite), [schoolId]);
   const programmes = loaded.data?.programmes ?? [];

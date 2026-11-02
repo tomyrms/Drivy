@@ -250,6 +250,38 @@ describe('Relecture ciblée', () => {
   });
 });
 
+describe('Relecture ciblée du catalogue', () => {
+  test('un tarif confirmé relit le catalogue ; une invitation, un horaire ou un dossier d’un autre domaine n’y touche pas', async () => {
+    const { revisionOf, catalogueReads, kindsOf } = await import('../client/command-families.js');
+    const view = () => store.getSnapshot() as unknown as { byKind: Record<string, number>; rereads: number };
+    const start = revisionOf(view(), catalogueReads), startInvitations = revisionOf(view(), kindsOf('invitations'));
+    const id = randomUUID(), invitation = resend(id);
+    script(() => ({ status: 200, body: created(invitation) }));
+    await lane.start(invitation, 'Renvoyée.', `invitation:${id}`).result;
+    expect(revisionOf(view(), catalogueReads)).toBe(start);
+    expect(revisionOf(view(), kindsOf('invitations'))).toBe(startInvitations + 1);
+    const tariff = createCommand({ schoolId, kind: 'saveTariff', path: 'formations/tariffs', resourceVersion: 0, body: { mode: 'CREATE' } });
+    script(() => ({ status: 201, body: envelope({ id: randomUUID(), schoolId, version: 1 }) }));
+    await expect(lane.start(tariff, 'Le tarif est ajouté.', 'tariff:new').result).resolves.toMatchObject({ status: 'confirmed' });
+    expect(revisionOf(view(), catalogueReads)).toBe(start + 1);
+    expect(revisionOf(view(), kindsOf('invitations'))).toBe(startInvitations + 1);
+    // Une inscription ouverte change les effectifs d'une formation : le catalogue les relit aussi.
+    const training = createCommand({ schoolId, kind: 'createTraining', path: 'trainings', resourceVersion: 0, scope: randomUUID(), body: { learnerId: randomUUID() } });
+    script(() => ({ status: 201, body: envelope({ id: randomUUID(), schoolId, version: 1 }) }));
+    await lane.start(training, 'La formation est ouverte.', 'training:new').result;
+    expect(revisionOf(view(), catalogueReads)).toBe(start + 2);
+  });
+
+  test('chaque famille ne contient que des commandes connues, sans doublon dans une famille', async () => {
+    const { commandFamilies } = await import('../client/command-families.js');
+    const { commandSpecs } = await import('../client/command-core.js');
+    for (const [family, kinds] of Object.entries(commandFamilies)) {
+      expect(new Set(kinds).size, family).toBe(kinds.length);
+      for (const kind of kinds) expect(commandSpecs[kind as keyof typeof commandSpecs], `${family}:${kind}`).toBeDefined();
+    }
+  });
+});
+
 describe('Résultat que la voie ne confirme jamais d’elle-même', () => {
   test('un résultat incertain n’appelle jamais la confirmation et garde l’intention suivie', async () => {
     const id = randomUUID(), command = resend(id);

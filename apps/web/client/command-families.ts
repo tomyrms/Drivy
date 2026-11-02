@@ -24,3 +24,9 @@ export const kindsOf = (...families: CommandFamily[]): CommandKind[] => families
 export function revisionOf(view: { readonly byKind: Readonly<Record<string, number>>; readonly rereads: number }, kinds: readonly CommandKind[]): number {
   return view.rereads + kinds.reduce((total, kind) => total + (view.byKind[kind] ?? 0), 0);
 }
+
+/**
+ * What the catalogue reads depend on: its own commands, the school's setup (a preparation creates formations and prices) and the
+ * dossiers (the enrolment counts of a formation). Lessons, hours, invitations or exams never read the catalogue again.
+ */
+export const catalogueReads: readonly CommandKind[] = kindsOf('catalogue', 'learners', 'school');

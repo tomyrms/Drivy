@@ -153,3 +153,30 @@ L'écart était le coureur unique : toute demande du dossier (formation, affecta
 - Les commandes d'école gardent leurs clés de conflit conservatrices (`school`, `profile-policy`, et `*` pour l'activation, les modules, les accès) : séquencer plus finement partagerait la version commune de l'école, ce que l'issue interdit de supprimer.
 - Fuseau, site et modules : le web ne change pas le fuseau et envoie `impactConfirmed: true` avec le fuseau actuel ; l'analyse d'impact reste côté serveur (`CONFIG_IMPACT_REVIEW_REQUIRED`). Rien n'a été ajouté.
 - Natif (`SchoolConfigurationUI`, `SchoolProfileUI`) : hors périmètre.
+
+## #124 Catalogue : formations, référentiels, prestations, tarifs
+
+### Ce qui existait déjà
+
+- Brouillons en mémoire des éditeurs (`useProgrammeEditor`, `useTariffEditor`, `useSharedTermsRevision`), conservés quand on change de rubrique ou de parcours par la garde de navigation (`useUnsavedChanges`, `setRouteQuery(..., keepForms)`), jamais dans le stockage du navigateur.
+- Une version enregistrée est une seule commande serveur atomique avec version attendue (`expectedOfferingVersionId`, `expectedProductVersionId`, `expectedProductVersionIds`) : `apps/api/src/formation-catalogue.ts`, non relancé ici. Un conflit (`FORMATION_CHANGED`, `TARIFF_CHANGED`, `TERMS_USAGE_CHANGED`) relit la fiche, garde la saisie et signale l'édition « à relire » (`rebased`, `waitingFor`) : `portal/formations/formation-controllers.ts`, `portal/pricing/pricing-controllers.ts`.
+- Montants en entiers (`parseCents`, test `test/command-core.test.ts`), un prix vide jamais traité comme 0 (`portal/pricing/pricing.test.ts`), différences avant/après et historique de versions (`portal/formations/formations.test.ts`), routage exact d'une version désignée.
+- Aucun tarif provisoire ne remplace un engagement : le web ne projette rien, il affiche ce que l'école liste ; un résultat incertain reste suivi par le panneau des demandes (`command-store.ts`).
+
+### Ce qui a changé
+
+Une seule chose, la relecture ciblée : `command-families.ts` (`catalogueReads` = catalogue, dossiers pour les effectifs, école pour la préparation) et `portal/formations/formation-controllers.ts`, `portal/pricing/pricing-controllers.ts`. Une invitation, un horaire, une leçon ou un examen confirmés ne relisent plus le catalogue. Test : `test/command-lane.test.ts` (« Relecture ciblée du catalogue », et cohérence des familles).
+
+### Preuve par critère
+
+| Critère | Preuve |
+| --- | --- |
+| Changement de rubrique et édition sous 15 s de latence sans perte de saisie ni spinner global | Non prouvé comme demandé. Changer de rubrique garde la saisie (garde de navigation existante) mais un éditeur ouvert reste verrouillé pendant l'envoi : le coureur unique de `useCatalogueCommand` désactive le formulaire jusqu'à la confirmation. |
+| Deux versions créées ou modifiées rapidement, réponse perdue : ni doublon ni référence à un objet temporaire | Réponse perdue : mécanisme commun prouvé (`command-store-code.test.ts`, `command-lane.test.ts` : même clé, même corps, reçu sans seconde écriture). Aucune référence temporaire n'existe puisqu'aucune ligne provisoire n'est fabriquée. Deux modifications rapides : la seconde est refusée localement tant que la première est suivie (clé `catalogue` conservatrice), sans perte de saisie. |
+| Conditions/prix refusés sans effet sur une réservation confirmée ; lecteur natif sans catalogue provisoire | Le web ne crée aucun état provisoire du catalogue et le serveur reste seul à publier ; lecteur natif hors périmètre. |
+| Conflit, droits retirés, dates de validité, changement d'école isolés | Conflit : relecture et saisie gardée (code existant) ; dates de validité : règles existantes (`TARIFF_SCHEDULING_UNSUPPORTED`) ; changement d'école et de compte : brouillons et cache renouvelés avec la portée. Pas de nouveau test. |
+| Aucune donnée privée dans le stockage du navigateur ; historique de versions conservé | Existant et inchangé (`command-store.ts` ne garde que des identifiants) ; historique : `portal/formations/history-view.tsx`. |
+
+### Non fait ici (écart trop large pour être livré à moitié)
+
+L'issue demande, pour l'enregistrement d'une version, un élément local « En cours d'enregistrement » et un formulaire non bloqué. Quatre flux sont liés au coureur unique, au bouton `busy` et aux dialogues de relecture (`ReviewDialog runner`) : l'éditeur de programme (général, compétences, règles), la mise à jour de référence, l'éditeur de tarif (création, révision, bascule proposé/non proposé) et la révision des conditions communes. Les convertir sur la voie de commandes de ce lot (`useCommandLane`, voir #110 et #116) exige de définir, pour chacun, la projection d'un brouillon dans les lecteurs (programme, tarifs, conditions), des clés de conflit par agrégat (offre, produit, conditions, avec les tarifs qui partagent des conditions) et le retour d'un refus avec sa saisie : une part importante du code du catalogue web à réécrire, puis à rejouer dans le navigateur. Ce travail n'est pas commencé ; le socle (`command-lane.ts`, `command-conflicts.ts`) est prêt pour le recevoir. Aucun tarif ni contrat réel n'a été modifié.
