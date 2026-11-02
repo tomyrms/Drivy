@@ -2,7 +2,7 @@
 
 [← Présentation du projet](../../README.md) · [Organisation du suivi](SETUP.md)
 
-Dernière mise à jour : **30 octobre 2026**.
+Dernière mise à jour : **2 novembre 2026**.
 
 **Conserver les idées aujourd'hui. Créer les issues lorsqu'elles sont prêtes.**
 
@@ -21,8 +21,9 @@ Une initiative n'est ni une fonctionnalité livrée, ni un cahier des charges va
 | R05 | [Site vitrine et commercialisation](initiatives/R05-site-vitrine.md) | Idée | À définir | Définir le public, les preuves et le parcours de demande de démonstration. |
 | R06 | [Revue finale de chaque page web](initiatives/R06-revue-finale-web.md) | Idée | Fin du périmètre fonctionnel web | Confirmer la stabilité suffisante, puis revoir chaque page avec Impeccable et Uncodixfy. |
 | R07 | [Revue finale de chaque écran Swift](initiatives/R07-revue-finale-swift.md) | Idée | Après R06 validée et stabilisation native | Retrouver le skill personnel « Swift native composant », puis l'utiliser avec Impeccable et Uncodixfy. |
+| R08 | [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md) | Idée | À définir | Déplacer la personnalisation des signalements des réglages de l’école vers le profil utilisateur. |
 
-**R01–R07 sont des identifiants de vision produit**, pas des numéros d'issues ni les anciens lots R01–R25 de la refonte #311. R06 et R07 sont des intentions approuvées à conserver pour la fin du chantier, pas des développements à lancer maintenant.
+**R01–R08 sont des identifiants de vision produit**, pas des numéros d'issues ni les anciens lots R01–R25 de la refonte #311. R06 et R07 sont des intentions approuvées à conserver pour la fin du chantier, pas des développements à lancer maintenant.
 
 ## R01 — Administration de la plateforme Drivy
 
@@ -80,6 +81,14 @@ Utiliser **Impeccable + Uncodixfy + « Swift native composant »**, le skill per
 
 **Fiche : [Revue finale Swift](initiatives/R07-revue-finale-swift.md).** Aucune issue créée pour cette intention ; pas de lancement en parallèle de la revue web.
 
+## R08 — Préférences de signalements liées au profil
+
+La personnalisation de la page **Signalements** doit appartenir au profil utilisateur, pas aux réglages de l’auto-école. L’ordre, la visibilité et les préférences choisies suivent donc le même utilisateur d’une école à l’autre ; un autre compte possède sa propre configuration.
+
+La page doit être déplacée vers les réglages du profil lors de la réalisation, avec migration propre de l’éventuel état existant et cohérence entre les clients concernés.
+
+**Fiche : [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md).** Aucune issue créée automatiquement depuis cette idée.
+
 ## Ordre de réflexion proposé
 
 **Maintenant :** poursuivre et stabiliser le périmètre déjà autorisé. Examiner le code récent, les PR et les preuves avant d'assimiler une issue ouverte à une fonctionnalité absente. Le tableau de bord et les statistiques de l'auto-école ont leur suivi de réalisation dans [l'epic #373](https://github.com/tomyrms/Drivy/issues/373), distinct des idées différées.
@@ -111,13 +120,13 @@ Pour lancer un sujet, relire la fiche avec le porteur, vérifier l'existant, dé
 - **Réalisation et qualification :** le [suivi d'implémentation](../implementation/STATUS.md) et les preuves associées au commit.
 - **Kanban facultatif :** le [Project privé n°2](https://github.com/users/tomyrms/projects/2), conservé comme vue de travail. Il n'est pas nécessaire pour lire ou modifier les idées en fichiers.
 
-Le Project et ces fichiers ne sont **pas synchronisés automatiquement**. La création et l'état du Project ont été vérifiés par API le 30 octobre 2026 ; cette organisation documentaire n'en modifie ni les cartes ni les vues. **R06 et R07 sont ajoutées aux fichiers de roadmap uniquement, pas aux brouillons du Project.** Voir [SETUP.md](SETUP.md).
+Le Project et ces fichiers ne sont **pas synchronisés automatiquement**. La création et l'état du Project ont été vérifiés par API le 30 octobre 2026 ; cette organisation documentaire n'en modifie ni les cartes ni les vues. **R06, R07 et R08 sont ajoutées aux fichiers de roadmap uniquement, pas aux brouillons du Project.** Voir [SETUP.md](SETUP.md).
 
 Le dépôt est public : les documents suivis y sont publics également. Garder les secrets, données personnelles et informations commerciales confidentielles dans un espace privé autorisé, pas dans ces fiches.
 
 ## Consignes aux agents
 
-Ne pas développer automatiquement les initiatives R01–R07, ni les convertir en issues sans décision du porteur. Les idées historiques [#45](https://github.com/tomyrms/Drivy/issues/45) et [#63](https://github.com/tomyrms/Drivy/issues/63) restent elles aussi différées tant que leur cadrage n'a pas changé.
+Ne pas développer automatiquement les initiatives R01–R08, ni les convertir en issues sans décision du porteur. Les idées historiques [#45](https://github.com/tomyrms/Drivy/issues/45) et [#63](https://github.com/tomyrms/Drivy/issues/63) restent elles aussi différées tant que leur cadrage n'a pas changé.
 
 Ne pas rouvrir le lot de finition annulé **#340, #341–#346 et #348–#369**. R06/R07 conservent la demande de revue globale pour plus tard, sans annuler cette décision ni recréer ses tickets maintenant. Ne pas lancer une nouvelle refonte graphique au prétexte d'organiser la roadmap.
 
