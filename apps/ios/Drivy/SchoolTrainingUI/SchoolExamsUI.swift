@@ -163,7 +163,9 @@ struct SchoolTrainingExamsSection: View {
     @State private var sheet: SchoolExamSheet?
 
     var body: some View {
-        Group {
+        // Un conteneur, pas un `Group` : tant que le modèle n'existe pas, la section est vide, et SwiftUI ne lance ni `.task` ni `.onAppear`
+        // sur une vue vide. Le chargement ne démarrerait alors jamais (constaté sur les captures de la progression).
+        VStack(spacing: 0) {
             if let model {
                 if let state = model.state {
                     if state.canManage || !state.exams.isEmpty || model.pending != nil { content(model, state) }
