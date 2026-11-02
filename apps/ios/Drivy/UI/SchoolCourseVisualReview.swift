@@ -110,7 +110,14 @@ struct SchoolCourseVisualReview: View {
                 displayName: index >= 31 ? "Zoé Exemple" : String(format: "Élève Exemple %02d", index), contactEmail: nil, contactPhone: nil,
                 archivedAt: nil, profileReadiness: "READY", profilePhotoDocumentId: nil)
         }
-        roster = SchoolCourseRosterWorkspace(schoolID: school, seriesID: seriesID, client: client, learners: candidates)
+        // L’app ne connaît d’abord qu’une page : les deux Zoé, après le trentième nom, n’arrivent qu’avec la lecture de l’annuaire (A30).
+        let pageSize = 12
+        roster = SchoolCourseRosterWorkspace(schoolID: school, seriesID: seriesID, client: client, learners: Array(candidates.prefix(pageSize)),
+            learnerPages: { cursor in
+                let start = cursor.flatMap { Int($0) } ?? 0
+                let end = min(candidates.count, start + pageSize)
+                return SchoolPage(items: Array(candidates[start..<end]), nextCursor: end < candidates.count ? String(end) : nil)
+            })
         attendance = SchoolCourseAttendanceWorkspace(schoolID: school, seriesID: seriesID, timeZone: "Europe/Zurich", client: client)
     }
 }

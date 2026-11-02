@@ -554,8 +554,14 @@ struct SchoolAgendaView: View {
                 persistence: coursePersistence)
         } else {
             courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series,
-                learners: workspace.learners, selectedOccurrenceID: occurrenceID, persistence: coursePersistence)
+                learners: workspace.learners, learnerPages: learnerPages(schoolID: membership.schoolId),
+                selectedOccurrenceID: occurrenceID, persistence: coursePersistence)
         }
+    }
+    /// L’annuaire entier se lit à l’ouverture du sélecteur d’élèves : la liste de l’onglet Élèves n’en est qu’une page.
+    private func learnerPages(schoolID: UUID) -> SchoolCourseLearnerPageReader {
+        let reader = client.reader
+        return { cursor in try await reader.learners(schoolID: schoolID, query: "", cursor: cursor) }
     }
     /// Coffre des gestes de la feuille des participants, pour ce compte dans cette école (#128 à #130).
     private var coursePersistence: SchoolCourseIntentPersistence? {

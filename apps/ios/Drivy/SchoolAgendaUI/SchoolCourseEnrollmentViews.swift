@@ -452,7 +452,7 @@ struct SchoolCourseRosterSection: View {
                     }
                 }
                 Button { presented = .enroll } label: { Label("Inscrire un élève", systemImage: "person.badge.plus") }
-                    .disabled(model.isBusy || model.candidates.isEmpty)
+                    .disabled(model.isBusy)
                     .accessibilityIdentifier("course-staff-enroll")
                     // Une Section est aplatie par Form : présenter depuis une ligne réellement rendue.
                     .sheet(item: $presented) { destination in

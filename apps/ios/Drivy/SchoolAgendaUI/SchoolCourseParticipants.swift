@@ -49,15 +49,9 @@ struct SchoolCourseParticipantPicker: View {
 
     var body: some View {
         NavigationStack {
-            SchoolLearnerPicker(learners: model.candidates, selectedID: selected?.id, showsHomonymReference: true) { id in
-                selected = model.candidates.first { $0.id == id }
-            }
+            content
             .disabled(model.isBusy)
-            .safeAreaInset(edge: .bottom) {
-                if let error = model.errorMessage {
-                    DrivyFormMessage(text: error, tone: .danger).padding().background(DrivyTheme.canvas)
-                }
-            }
+            .safeAreaInset(edge: .bottom) { if showsFooter { footer } }
             .background(DrivyTheme.canvas)
             .navigationTitle("Inscrire un élève").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Fermer") { dismiss() }.disabled(model.isBusy) } }
@@ -70,9 +64,66 @@ struct SchoolCourseParticipantPicker: View {
                 }
                 Button("Annuler", role: .cancel) { selected = nil }
             } message: { Text("L’inscription couvre toutes les séances, à la demande de l’élève.") }
+            // Tout l’annuaire, pas la seule page déjà lue par l’app (A30) ; une lecture complète n’est pas refaite.
+            .task { await model.loadCandidates() }
         }
         .interactiveDismissDisabled(model.isBusy)
         .tint(DrivyTheme.accent)
+    }
+
+    /// La liste, ou l’état de sa lecture tant qu’aucun nom n’est connu : jamais « Aucun élève » pour une lecture en cours.
+    @ViewBuilder private var content: some View {
+        if model.candidates.isEmpty, model.candidateRead != .complete {
+            if case .failed(let message) = model.candidateRead {
+                VStack(spacing: DrivySpacing.s) {
+                    SchoolErrorNotice(message: message, retry: { Task { await model.retryCandidates() } },
+                                      retryIdentifier: "course-candidates-retry")
+                    Spacer(minLength: 0)
+                }
+                .padding(DrivySpacing.m)
+            } else {
+                VStack {
+                    DrivyLoadingState(title: "Chargement…").accessibilityIdentifier("course-candidates-loading")
+                    Spacer(minLength: 0)
+                }
+                .padding(DrivySpacing.m)
+            }
+        } else if model.candidates.isEmpty {
+            DrivyEmptyState(title: "Aucun élève à inscrire", symbol: "person.2")
+                .accessibilityIdentifier("course-candidates-empty")
+        } else {
+            SchoolLearnerPicker(learners: model.candidates, selectedID: selected?.id, showsHomonymReference: true) { id in
+                selected = model.candidates.first { $0.id == id }
+            }
+        }
+    }
+
+    /// Refus de l’école, puis lecture de la suite de l’annuaire ou sa panne quand des noms sont déjà proposés.
+    @ViewBuilder private var footer: some View {
+        VStack(spacing: DrivySpacing.xs) {
+            if let error = model.errorMessage {
+                DrivyFormMessage(text: error, tone: .danger)
+            }
+            if !model.candidates.isEmpty {
+                switch model.candidateRead {
+                case .idle, .loading:
+                    DrivyLoadingState(title: "Chargement des autres élèves…").accessibilityIdentifier("course-candidates-loading")
+                case .failed(let message):
+                    SchoolErrorNotice(message: message, retry: { Task { await model.retryCandidates() } },
+                                      retryIdentifier: "course-candidates-retry")
+                case .complete:
+                    EmptyView()
+                }
+            }
+        }
+        .padding(.horizontal, DrivySpacing.m)
+        .padding(.vertical, DrivySpacing.xs)
+        .frame(maxWidth: .infinity)
+        .background(DrivyTheme.canvas)
+    }
+
+    private var showsFooter: Bool {
+        model.errorMessage != nil || (!model.candidates.isEmpty && model.candidateRead != .complete)
     }
 
     private func label(_ learner: SchoolLearner) -> String {
