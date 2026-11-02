@@ -96,7 +96,7 @@ export function useProfileEditor(learner: Learner, canEdit: boolean) {
     const body = profileBody(data.fields, draft);
     if (!body) return;
     const result = await runner.run(createCommand({ schoolId, kind: 'updateAdministrativeProfile', path: `learners/${learner.id}/administrative-profile`, ifMatch: data.profile.version,
-      resourceId: data.profile.id, resourceVersion: data.profile.version, body: { policyVersionId: data.profile.policyVersionId, ...body } }), 'Le profil de l’élève est à jour.');
+      resourceId: data.profile.id, resourceVersion: data.profile.version, scope: learner.id, body: { policyVersionId: data.profile.policyVersionId, ...body } }), 'Le profil de l’élève est à jour.');
     if (result.status !== 'rejected') setConfirming(false);
   }
   return { draft, setDraft: update, dirty, release, submitted, confirming, setConfirming, runner, loaded, data, conflict, disabled, address, fieldProblem, invalid, review, save };

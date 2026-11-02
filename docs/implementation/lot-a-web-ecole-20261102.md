@@ -84,3 +84,40 @@ L'écart était un verrou global : `locked = runner.busy || runner.pending` bloq
 - Préférences de durée, tampon, prestation par défaut : natives, hors périmètre web ; non traitées.
 - Aucun serveur réel : l'aperçu est un transport simulé. Passage d'une saison à l'autre sur une règle récurrente : la règle est en heure civile, rien d'instant à convertir côté web ; aucune recette intégrée.
 - iOS inchangé.
+
+## #116 Annuaire, dossiers, formations, affectations, archivage
+
+### Ce qui existait déjà
+
+- Recherche, filtres, tri, pagination par 25 et mention « Annuaire partiellement chargé » : `portal/learners/learner-controller.ts`, `learner-page.tsx`. Le dossier d'un autre élève n'est jamais montré : chaque lecture du dossier est liée à sa portée `school/élève` (`useLoad`, `readStateFor`) et les réponses sont refusées si l'identifiant ou l'école diffère (`INVALID_RESPONSE`).
+- Archivage et restauration avec confirmation, motif et case d'acquittement ; règles métier (`LEARNER_HAS_OPEN_TRAININGS`, dernière formation, etc.) côté serveur : `command-core.ts` (`commandMessage`), `apps/api` (non relancé ici).
+- Réserver une leçon n'utilise que les formations lues chez l'école : aucune ressource provisoire n'entre dans l'agenda.
+- Identité unique #94 : le nom et la photo globaux ne sont pas éditables dans le dossier ; seuls les champs scolaires le sont (`useProfileEditor`).
+
+### Ce qui a changé
+
+L'écart était le coureur unique : toute demande du dossier (formation, affectation, permis, état, archivage) bloquait l'annuaire et chaque bouton (`canWrite` dépendait de `runner.pending`), et un archivage confirmé faisait disparaître le dossier sans état intermédiaire.
+
+- `portal/learners/learner-controller.ts` passe à `useCommandLane`. Une demande par dossier à la fois (clés `learners:<élève>`), indépendante des autres dossiers et du reste de la page ; la planification attend toujours. Le formulaire se libère dès que la demande est conservée.
+- `portal/learners/learner-projection.ts` (pur) : une formation à ouvrir est une ligne provisoire « Ouverture à confirmer » sans identifiant de l'école (non ouvrable, non utilisable pour une leçon) ; un changement d'état ou un contrôle de permis est une marque, le statut officiel ne change pas ; une affectation demandée est « À confirmer » et un retrait garde l'affectation ouverte, marquée (aucun accès accordé ni retiré par la projection) ; un archivage ou une restauration demandés sont des marques, le dossier reste dans la liste, archivé ou non selon l'école. Une fois confirmée, la ligne montre le fait confirmé sans marque jusqu'à la relecture suivante.
+- Mêmes marques dans la liste, l'en-tête du dossier et la fiche de formation (une seule projection). « Planifier une leçon » est désactivé pendant un archivage demandé.
+- Refus : le dossier, les filtres et la sélection ne bougent pas ; la demande revient par un bandeau « Reprendre la saisie » (formulaire de formation, revue d'affectation, motif, brouillon de contrôle de permis) ; sur l'annuaire, « Ouvrir le dossier » nomme l'élève par son identifiant (homonymes distingués par une référence courte, `person-reference.ts`, appliquée à l'annuaire, au fil d'Ariane et au titre).
+- La modification du profil scolaire garde son propre formulaire mais s'ordonne par élève (`scope`), sans bloquer les autres dossiers.
+- Relecture ciblée (`command-families.ts`, familles `learners`, `members`, `catalogue`) avec cache de lecture sur l'annuaire, les formations et les références : les données connues restent affichées pendant l'actualisation.
+- Intentions suivies en mémoire (`drafts` de la console), jamais dans le stockage du navigateur.
+
+### Preuve par critère
+
+| Critère | Preuve |
+| --- | --- |
+| Aller-retour liste/dossier et recherche sous latence, sans données du mauvais élève ni spinner global | Existant (portée par élève, réponses vérifiées) ; cache de lecture ajouté (retour à l'annuaire sans squelette) : non mesuré sous latence simulée dans un test dédié, vérifié par lecture du code seulement. Edge : le dossier A reste ouvrable et l'annuaire utilisable pendant une demande de 15 s. |
+| Changements provisoires cohérents entre liste, dossier et en-tête ; un refus ne réinitialise pas la page | Edge (aperçu synthétique) : « Ouverture à confirmer » dans la fiche et la liste (`B · Ouverture à confirmer`), « Changement à confirmer » avec statut officiel inchangé, « Archivage à confirmer » ; refus d'archivage : dossier ouvert, ni archivé ni marqué, bandeau puis dialogue rouvert avec le motif ; `learner-projection.test.ts` (12 tests). |
+| Création, archivage, restauration, affectation, réponse perdue, deux utilisateurs : ni doublon ni faux droit | Edge : archivage à réponse perdue, marque conservée, reçu sans seconde écriture, une seule création de formation partie ; `command-lane.test.ts` (même clé, même corps, même version à la reprise) ; `command-conflicts.test.ts` (un élève n'attend pas un autre, le même est ordonné, la planification attend tous) ; `learner-projection.test.ts` (aucune affectation provisoire n'est un droit, une restauration demandée garde le dossier archivé). Deux utilisateurs : arbitrage serveur (versions `If-Match`), non rejoué contre un vrai serveur. |
+| Pagination, homonymes, rôle mixte, changement d'école | Pagination et rôles : code existant inchangé, non retesté ; homonymes : référence courte ajoutée à l'annuaire (`person-reference.test.ts` couvre le calcul), non vérifiée visuellement (l'aperçu n'a pas d'homonymes) ; changement d'école et de compte : la voie est détruite, aucune réponse tardive ne la rappelle (`command-lane.test.ts`) ; les intentions vivent dans `drafts`, renouvelé avec la portée. |
+| Attente conservée ou limite de reprise expliquée ; aucun contenu scolaire en clair dans le stockage | Edge : stockage du navigateur vérifié après les parcours (seul `drivy-gestion-demandes-v1`, identifiants) ; une demande dont le contenu est perdu après rechargement reste « à vérifier » (comportement du magasin, inchangé). |
+
+### Non prouvé ici
+
+- Aucun serveur réel : l'aperçu est un transport simulé ; la restauration, la fin d'affectation et le contrôle de permis ne sont couverts que par la projection (tests unitaires) et le chemin commun, pas par un parcours Edge propre.
+- Deux administrateurs sur le même dossier, rôle mixte et pagination au-delà de 25 dossiers : non rejoués.
+- Côté iOS : inchangé, hors périmètre.
