@@ -49,7 +49,7 @@ import Foundation
     var canEdit: Bool { saved != nil && !isLoading }
 
     /// Les valeurs que la demande conservée porte : la référence que l'école confirmera, distincte de la saisie suivante.
-    static func draft(of command: PendingSchoolCommand) -> SchoolPlanningPreferenceDraft? {
+    static func confirmedDraft(of command: PendingSchoolCommand) -> SchoolPlanningPreferenceDraft? {
         guard command.kind == .savePlanningDefaults,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any] else { return nil }
         return SchoolPlanningPreferenceDraft(trainingCategoryCode: object["trainingCategoryCode"] as? String ?? "",
@@ -60,7 +60,7 @@ import Foundation
     /// à la version d'avant, sans quoi notre propre écriture passerait pour un changement fait ailleurs.
     private func adoptConfirmed(_ command: PendingSchoolCommand, receipt: SchoolOperationReceipt?) {
         guard let receipt, let current = saved, receipt.resourceVersion > current.version,
-              receipt.resourceId == scope.membershipID, let confirmed = Self.draft(of: command) else { return }
+              receipt.resourceId == scope.membershipID, let confirmed = Self.confirmedDraft(of: command) else { return }
         saved = SchoolPlanningDefaults(id: current.id, schoolId: current.schoolId, version: receipt.resourceVersion,
             trainingCategoryCode: confirmed.trainingCategoryCode.isEmpty ? nil : confirmed.trainingCategoryCode,
             serviceProductKey: confirmed.serviceProductKey.isEmpty ? nil : confirmed.serviceProductKey)
@@ -195,7 +195,7 @@ import Foundation
             try outbox.remove(command); pending = nil; absentPendingID = nil
             successMessage = command.kind == .savePlanningDefaults ? "Préférences enregistrées." : nil
             adoptConfirmed(command, receipt: receipt)
-            isBusy = false; await load(keepingEdits: Self.draft(of: command).map { draft != $0 } ?? false)
+            isBusy = false; await load(keepingEdits: Self.confirmedDraft(of: command).map { draft != $0 } ?? false)
         } catch SchoolPlanningFailure.notFound {
             isBusy = false; absentPendingID = command.id
         } catch { isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
@@ -216,7 +216,7 @@ import Foundation
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
             adoptConfirmed(command, receipt: receipt)
             // Une saisie poursuivie pendant l'envoi se compare à la valeur confirmée et reste un brouillon.
-            isBusy = false; await load(keepingEdits: Self.draft(of: command).map { draft != $0 } ?? false)
+            isBusy = false; await load(keepingEdits: Self.confirmedDraft(of: command).map { draft != $0 } ?? false)
         } catch {
             // Refus motivé, ou service qui ne connaît pas cette écriture (404) : l’école a répondu, rien n’est
             // enregistré. La demande quitte la file au lieu de bloquer toutes les autres écritures de l’école.
