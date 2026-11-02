@@ -43,11 +43,32 @@ struct SchoolObservationEditor: Identifiable {
     /// Enregistreur du dernier « Signaler » ouvert depuis cet écran.
     @ObservationIgnored private var live: SchoolLiveObservationRecorder?
     @ObservationIgnored private let themeStore: SchoolObservationThemeStore
+    /// Corrections et retraits en cours d'envoi, une demande par observation (#112) : indépendantes les unes des autres.
+    private(set) var corrections: [SchoolObservationCorrection] = []
+    /// Refus de l'école, dit sur la ligne de l'observation concernée jusqu'à la prochaine demande.
+    private(set) var correctionNotices: [UUID: String] = [:]
+    @ObservationIgnored private let correctionStore: any SchoolObservationCorrectionStoring
+    @ObservationIgnored private var correctionsRunning: Set<UUID> = []
+    @ObservationIgnored private var didRestoreCorrections = false
+    /// Ne change qu'à la révocation des accès : une relecture de la leçon n'interrompt pas une demande qui part.
+    @ObservationIgnored private var correctionEpoch = UUID()
 
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
-         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
+         correctionStore: any SchoolObservationCorrectionStoring = SchoolObservationCorrectionStores.shared) {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
+        self.correctionStore = correctionStore
         themeStore = SchoolObservationThemeStores.store(for: scope, client: client.themeClient)
+    }
+
+    /// Corriger ou retirer ne dépend ni de la relecture ni d'une autre demande en cours : seule la leçon et ses accès comptent.
+    var canCorrect: Bool {
+        loaded && !accessRevoked && storageAccessible && ["PLANNED", "COMPLETED"].contains(lesson?.status ?? "")
+    }
+    func correction(for observationID: UUID) -> SchoolObservationCorrection? { corrections.first { $0.observationID == observationID } }
+    /// La liste telle que les demandes en cours la montreront ; la ligne dit qu'elles ne sont pas confirmées.
+    var displayedObservations: [SchoolObservation] {
+        observations.map { observation in correction(for: observation.id)?.projecting(observation) ?? observation }
     }
 
     var canMutate: Bool {
@@ -114,7 +135,7 @@ struct SchoolObservationEditor: Identifiable {
         return .init(original: nil, observedAt: nil, origin: "REVIEW", draftID: draft?.id, marker: false)
     }
     func edit(_ observation: SchoolObservation) -> SchoolObservationEditor? {
-        guard acceptsChanges, !isBusy,
+        guard acceptsChanges, correction(for: observation.id) == nil,
               observations.contains(where: { $0.id == observation.id && $0.version == observation.version }) else { return nil }
         return .init(original: observation, observedAt: observation.observedAt, origin: observation.origin ?? "REVIEW",
                      draftID: observation.draftId, marker: observation.isMarker)
@@ -155,10 +176,13 @@ struct SchoolObservationEditor: Identifiable {
         lesson = nil; learnerName = ""; observations = []; competencies = []; draft = nil; pending = nil
         storageAccessible = false; confirmation = nil; competenciesMessage = nil; draftMessage = nil
         isFirstSend = false; live = nil; absentPendingID = nil
+        // Les demandes restent dans le coffre : seule la lecture s'arrête, jamais le geste conservé.
+        corrections = []; correctionNotices = [:]; correctionEpoch = UUID()
     }
 
     func load() async {
         guard !accessRevoked, !isBusy else { return }
+        restoreCorrections()
         generation = UUID(); let request = generation
         // Une relecture garde la liste, ses messages et sa barre d’action : `loaded` ne retombe qu’après un échec.
         isLoading = true; errorMessage = nil
@@ -214,7 +238,8 @@ struct SchoolObservationEditor: Identifiable {
     /// compétence déjà portée par un ancien signalement est conservée telle quelle, jamais attribuée par supposition.
     func save(_ editor: SchoolObservationEditor, text: String, marker: Bool, competencyID: UUID?, themeKey: String? = nil,
               status: SchoolObservationStatus?) async -> Bool {
-        guard canMutate else { return false }
+        guard editor.original == nil ? canMutate : canCorrect else { return false }
+        if let original = editor.original, correction(for: original.id) != nil { return false }
         if editor.original == nil, !canAdd { return false }
         let competency = marker ? nil : competencyID
         if let competency, !competencies.contains(where: { $0.id == competency }), competency != editor.original?.competencyId { return false }
@@ -234,16 +259,119 @@ struct SchoolObservationEditor: Identifiable {
             eventKind: editor.origin == "LIVE" ? (marker ? "MARKER" : "QUALIFIED") : editor.original?.eventKind,
             eventStatus: marker ? nil : status?.rawValue, themeKey: theme)
         guard body.isValid else { return false }
-        return await submit(body, operation: operation, kind: editor.original == nil ? .createObservation : .updateObservation,
-                            resourceID: editor.original?.id, version: editor.original?.version ?? 0)
+        // Une correction part sans retenir l'écran : écrite dans le coffre, elle revient « en cours » sur sa ligne.
+        if let original = editor.original {
+            return enqueueCorrection(body, operation: operation, kind: .updateObservation, observation: original)
+        }
+        return await submit(body, operation: operation, kind: .createObservation, resourceID: nil, version: 0)
     }
     func remove(_ observation: SchoolObservation, reason: String) async -> Bool {
-        guard canMutate else { return false }
+        guard canCorrect, correction(for: observation.id) == nil else { return false }
         let operation = UUID()
         let body = SchoolRemoveObservationBody(operationId: operation, reason: reason)
         guard body.isValid else { return false }
-        return await submit(body, operation: operation,
-                            kind: .removeObservation, resourceID: observation.id, version: observation.version)
+        return enqueueCorrection(body, operation: operation, kind: .removeObservation, observation: observation)
+    }
+
+    // MARK: Corrections et retraits (#112)
+
+    /// Écrit la demande dans le coffre avant tout envoi, puis la laisse partir. Faux : l'appareil ne peut pas la conserver, elle ne part pas.
+    private func enqueueCorrection<Value: Encodable>(_ value: Value, operation: UUID, kind: SchoolCommandKind,
+                                                     observation: SchoolObservation) -> Bool {
+        errorMessage = nil; confirmation = nil; correctionNotices[observation.id] = nil
+        do {
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            let command = PendingSchoolCommand(id: operation, scope: scope, kind: kind, resourceVersion: observation.version,
+                createdAt: Date(), body: try encoder.encode(value), resourceID: observation.id, routeResourceID: lessonID)
+            try correctionStore.save(command)
+            corrections.append(SchoolObservationCorrection(command: command, state: .queued))
+            driveCorrection(observation.id)
+            return true
+        } catch {
+            errorMessage = SchoolObservationCorrectionText.unkept
+            return false
+        }
+    }
+
+    private func driveCorrection(_ observationID: UUID) {
+        guard !correctionsRunning.contains(observationID) else { return }
+        correctionsRunning.insert(observationID)
+        let epoch = correctionEpoch
+        Task { await runCorrection(observationID, epoch: epoch) }
+    }
+
+    private func runCorrection(_ observationID: UUID, epoch: UUID) async {
+        defer { correctionsRunning.remove(observationID) }
+        guard let index = corrections.firstIndex(where: { $0.observationID == observationID }),
+              corrections[index].state == .queued else { return }
+        corrections[index].state = .sending
+        let command = corrections[index].command
+        do {
+            _ = try await authorizedLesson()
+            guard epoch == correctionEpoch, !accessRevoked else { return }
+            _ = try await client.send(command, validateContinuation: { [self] in
+                guard epoch == correctionEpoch, !accessRevoked else { throw CancellationError() }
+            })
+            // Réponse de l'école reçue : la demande quitte le coffre, même si l'écran a été fermé entre-temps.
+            try? correctionStore.remove(command)
+            guard epoch == correctionEpoch else { return }
+            corrections.removeAll { $0.id == command.id }
+            confirmation = command.kind == .removeObservation ? "Observation retirée." : "Observation enregistrée."
+            await reloadAfterCorrections()
+        } catch {
+            guard epoch == correctionEpoch, !accessRevoked else { return }
+            settleFailedCorrection(command, error)
+        }
+    }
+
+    private func settleFailedCorrection(_ command: PendingSchoolCommand, _ error: any Error) {
+        if isRevoked(error) { fail(error); return }
+        if let refusal = error as? SchoolObservationFailure, refusal.permitsFreshCorrection {
+            // Refus motivé : la demande s'arrête, la ligne dit pourquoi et l'observation se relit sans effacer les autres demandes.
+            try? correctionStore.remove(command)
+            corrections.removeAll { $0.id == command.id }
+            if let observationID = command.resourceID {
+                correctionNotices[observationID] = refusal.errorDescription ?? SchoolObservationFailure.unavailable.localizedDescription
+            }
+            Task { await reloadAfterCorrections() }
+            return
+        }
+        // Panne ou réponse perdue : peut-être enregistrée. Elle reste conservée, à reprendre ou à abandonner par la personne.
+        guard let index = corrections.firstIndex(where: { $0.id == command.id }) else { return }
+        corrections[index].state = .uncertain((error as? LocalizedError)?.errorDescription
+            ?? SchoolObservationFailure.unavailable.localizedDescription)
+    }
+
+    /// Une seule relecture quand plus aucune demande ne part : elle ne remplace pas la projection des autres.
+    private func reloadAfterCorrections() async {
+        guard !corrections.contains(where: { $0.state == .queued || $0.state == .sending }) else { return }
+        await load()
+    }
+
+    /// Même demande, même opération : l'école ne l'enregistre pas deux fois.
+    func retryCorrection(_ observationID: UUID) {
+        guard let index = corrections.firstIndex(where: { $0.observationID == observationID }),
+              case .uncertain = corrections[index].state, canCorrect else { return }
+        corrections[index].state = .queued
+        driveCorrection(observationID)
+    }
+
+    /// Abandonne la demande à reprendre ; l'école l'a peut-être reçue, la leçon se relit pour le montrer.
+    func abandonCorrection(_ observationID: UUID) async {
+        guard let current = self.correction(for: observationID), case .uncertain = current.state else { return }
+        try? correctionStore.remove(current.command)
+        corrections.removeAll { $0.id == current.id }
+        await reloadAfterCorrections()
+    }
+
+    /// Demandes laissées par une session précédente : à reprendre ou à abandonner par la personne, jamais renvoyées d'elles-mêmes.
+    private func restoreCorrections() {
+        guard !didRestoreCorrections else { return }
+        didRestoreCorrections = true
+        guard let commands = try? correctionStore.commands(scope: scope, lessonID: lessonID) else { return }
+        for command in commands where command.hasValidTarget && command.resourceID != nil && !corrections.contains(where: { $0.id == command.id }) {
+            corrections.append(SchoolObservationCorrection(command: command, state: .uncertain(SchoolObservationCorrectionText.restored)))
+        }
     }
     func verifyPending() async {
         guard canRetry, let command = rereadPending() else { return }

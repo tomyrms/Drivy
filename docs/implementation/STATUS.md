@@ -1,5 +1,12 @@
 # État de la réalisation
 
+## 2 novembre 2026 (nuit) — Corrections et retraits d'observations après la leçon (#112, `claude/signalements-112`)
+
+- **Lot** : une correction ou un retrait d'observation après la leçon est conservé sur l'appareil avant son envoi, ne retient plus l'écran, ne bloque plus les autres observations, revient « non confirmé » après un arrêt de l'app (Réessayer rejoue la même opération, Abandonner la retire) et n'est jamais renvoyé de lui-même. Détail et limites : [signalements-corrections-112.md](signalements-corrections-112.md).
+- **Exécuté** : compilation et 241 tests Swift métier verts sur la branche (run 41501744060), dont la nouvelle suite `SchoolObservationCorrectionTests` (12 tests) ; `FieldFlowTests` en entier sur iPhone, 10 tests, dont les deux tests des signalements (run 41501749900). Aucune campagne complète : arrêtée à la demande du porteur.
+- **Non exécuté** : iPhone ou iPad physique, arrêt réel de l'app pendant un envoi, latence réelle de 15 s, VoiceOver, texte agrandi, captures des lignes « en cours » et « non confirmé ». Palette, thèmes et classement non examinés.
+- **Déploiement** : aucun, seul l'iPhone a changé.
+
 ## 2 novembre 2026 (soir) — Gestes de cours conservés sur l'appareil (#126 à #130), tests de démarrage alignés (#55), campagne finale interrompue
 
 - **Lot** : les gestes de cours (inscription de l'élève, appel, règlements, validation, éditeur de cours) sont conservés sur l'appareil avant leur envoi, reviennent « non confirmés » après un arrêt de l'app, ne sont jamais renvoyés d'eux-mêmes, et « Réessayer » rejoue la même opération. Détail et limites : [gestes-cours-conserves-126-130.md](gestes-cours-conserves-126-130.md). PR #409 fusionnée (`4b69884f`). Issues #126, #127, #128, #129 et #130 fermées, avec la liste de ce qui n'est pas prouvé. #251 (motif d'absence : tests, PR #407) et #192 (épopée des 60 points B) fermées.
