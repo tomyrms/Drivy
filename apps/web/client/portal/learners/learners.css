@@ -211,6 +211,8 @@
 .exam-side { display: grid; justify-items: end; gap: 8px; }
 .exam-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .exam-escort-toggle { display: flex; align-items: center; gap: 8px; }
+.exam-next-step { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; }
+.exam-next-step p { margin: 0; }
 .exam-pending { margin-bottom: 16px; }
 .exam-pending .exam-row { padding: 0; }
 .exam-pending-open.ui-button { display: flex; width: 100%; justify-content: space-between; height: auto; min-height: 44px; padding-block: 10px; text-align: left; }

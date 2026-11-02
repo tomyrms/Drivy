@@ -11,6 +11,7 @@ import { setupFamily } from './families/setup';
 import { openingFamily } from './families/opening';
 import { metricsFamily } from './families/metrics';
 import { examsFamily } from './families/exams';
+import { lessonRequestsFamily } from './families/lesson-requests';
 
 /** Rebuilt families add their synthetic behaviour here, one import per family. Pilots stay in transport.ts. */
-export const previewFamilies: readonly PreviewFamily[] = [teamFamily, planningFamily, catalogueFamily, signalsFamily, tripsFamily, setupFamily, overviewFamily, settingsFamily, privacyFamily, openingFamily, metricsFamily, examsFamily];
+export const previewFamilies: readonly PreviewFamily[] = [teamFamily, planningFamily, catalogueFamily, signalsFamily, tripsFamily, setupFamily, overviewFamily, settingsFamily, privacyFamily, openingFamily, metricsFamily, examsFamily, lessonRequestsFamily];

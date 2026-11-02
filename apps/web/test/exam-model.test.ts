@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { commandConflictKeys } from '../client/command-conflicts.js';
 import { commandSpecs, createCommand } from '../client/command-core.js';
 import {
-  draftFromExam, emptyExamDraft, examActions, examBody, examListSchema, examProblems, examSchema, examStateSchema, resultBody, resultDraft, resultProblems, rowTitle,
+  draftFromExam, emptyExamDraft, examActions, nextStep, examBody, examListSchema, examProblems, examSchema, examStateSchema, resultBody, resultDraft, resultProblems, rowTitle,
   schedulableKinds, statusText, type Exam, type ExamState,
 } from '../client/exam-model.js';
 
@@ -50,6 +50,27 @@ describe('Examens : règles d’affichage', () => {
     expect(examActions({ status: 'SCHEDULED', startsAt: '2030-03-04T09:00:00.000Z' }, now)).toEqual(['result', 'edit', 'postpone']);
     expect(examActions({ status: 'FAILED', startsAt: '2030-03-04T09:00:00.000Z' }, now)).toEqual(['correct']);
     expect(examActions({ status: 'POSTPONED', startsAt: '2030-03-04T09:00:00.000Z' }, now)).toEqual([]);
+  });
+});
+
+describe('Examens : prochaine étape', () => {
+  const none = { kind: 'THEORY' as const, passed: false, attempts: 0, scheduledExamId: null };
+  const practicalNone = { ...none, kind: 'PRACTICAL' as const };
+  test('les deux épreuves réussies proposent la clôture, sans rien clore', () => {
+    const step = nextStep(state([{ ...none, passed: true, attempts: 1 }, { ...practicalNone, passed: true, attempts: 2 }]));
+    expect(step?.kind).toBe('CLOSE');
+    expect(step?.text).toMatch(/rien n’est clos automatiquement/);
+  });
+  test('le théorique réussi propose le pratique tant qu’il n’a ni tentative ni date', () => {
+    expect(nextStep(state([{ ...none, passed: true, attempts: 1 }, practicalNone]))?.kind).toBe('SCHEDULE_PRACTICAL');
+    expect(nextStep(state([{ ...none, passed: true, attempts: 1 }, { ...practicalNone, scheduledExamId: randomUUID() }]))).toBeNull();
+  });
+  test('un échec ou une absence sans nouvelle date propose une nouvelle date, un report n’est pas un échec', () => {
+    const summary = [{ ...none, passed: true, attempts: 1 }, { ...practicalNone, attempts: 1 }];
+    expect(nextStep(state(summary, [exam({ kind: 'PRACTICAL', status: 'FAILED' })]))).toMatchObject({ kind: 'SCHEDULE_AGAIN', text: expect.stringMatching(/échoué.*examen pratique/) });
+    expect(nextStep(state(summary, [exam({ kind: 'PRACTICAL', status: 'ABSENT' })]))?.text).toMatch(/Absence/);
+    expect(nextStep(state(summary, [exam({ kind: 'PRACTICAL', status: 'POSTPONED' })]))).toBeNull();
+    expect(nextStep(state([none, practicalNone]))).toBeNull();
   });
 });
 
