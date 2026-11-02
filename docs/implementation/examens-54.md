@@ -53,3 +53,9 @@ Console de gestion, dossier d'un élève : onglet « Examens ». Une ligne par t
 - **Notifications** : aucune alerte à la saisie d'un examen ni de son résultat (#43/#44, le push n'est pas activé).
 - **Agenda de l'élève** : l'examen apparaît dans Leçons (« Prochain examen ») et dans sa progression ; il n'est pas une cellule de l'agenda du personnel.
 - **Qualification sur appareil** : captures, VoiceOver, texte agrandi et essai du porteur avec une vraie école.
+
+## 7. Fin de lot du 2 novembre 2026
+
+- **Passerelle web** : les routes des examens (`trainings/:id/exams`, `exams?filter=`, `exams/:id/revisions|update|postpone|result`) sont déclarées dans `apps/web/server/school-routes.ts` ; sans cela, l'onglet Examens répondait 404 en production. Un test de garde et la lecture par `/app/bff/...` dans le test navigateur l'empêchent de revenir.
+- **iOS** : la section Examens de la progression ne se chargeait jamais (le chargement était accroché à une vue vide) ; corrigé et vérifié sur captures iPhone et iPad. Chez l'élève, elle est une carte comme les autres blocs. Après un résultat, une phrase suggère la suite au personnel (nouvelle date, examen pratique, clôture) sans rien clore. Un geste conservé sur l'appareil s'affiche avec Réessayer et Abandonner.
+- **Déployé** : `05de23ca` le 2 novembre 2026, voir `STATUS.md`.
