@@ -196,10 +196,17 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     if (step === 'PRICING') void save('REVIEW', { ...content, formations: content.formations.map(item => ({ ...item, apply: false })) });
   }
 
+  /**
+   * Moving between steps never waits for the school: the draft stays in memory (and in the console's drafts) whatever the latency.
+   * Only the review needs a saved draft, because the school reads what it holds; « Continuer » and « Enregistrer et quitter » still
+   * save explicitly, with the version and the receipt, and nothing becomes adopted before that.
+   */
   function jump(target: SetupStep, field?: string) {
     if (blocked || !steps.includes(target) && (catalogueOnly || !secondarySteps.includes(target))) return;
     setFocusField(field ?? null);
-    if (dirty) void save(target); else { setStep(target); if (target === 'REVIEW' && document) void refreshReview(document); }
+    if (target === 'REVIEW' && dirty) { void save(target); return; }
+    setStep(target);
+    if (target === 'REVIEW' && document) void refreshReview(document);
   }
 
   function discardAndReload() {

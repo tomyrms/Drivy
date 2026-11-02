@@ -121,3 +121,35 @@ L'écart était le coureur unique : toute demande du dossier (formation, affecta
 - Aucun serveur réel : l'aperçu est un transport simulé ; la restauration, la fin d'affectation et le contrôle de permis ne sont couverts que par la projection (tests unitaires) et le chemin commun, pas par un parcours Edge propre.
 - Deux administrateurs sur le même dossier, rôle mixte et pagination au-delà de 25 dossiers : non rejoués.
 - Côté iOS : inchangé, hors périmètre.
+
+## #123 Paramètres, préparation, activation, politiques de champs
+
+### Ce qui existait déjà
+
+- Coordonnées de l'école : champs modifiables pendant l'enregistrement, saisie poursuivie gardée et encore à enregistrer (`useDraft.markSaved(value, sent)` dans `console/context.ts`, `portal/settings/school-page.tsx`).
+- Aucune annonce avant la confirmation : `command-store.ts` ne marque rien comme fait avant la réponse vérifiée ou le reçu AP72. L'activation passe par `applySetupDraft` avec `reviewDigest`, `expectedSchoolVersion` et `expectedConfigurationVersion` (`portal/setup/use-setup-guide.ts`, `finish`) ; la readiness vient du serveur (`setup-draft/preview`), pas de cases locales.
+- Textes de confidentialité : relecture, impact lu au serveur, case d'acquittement avant adoption (`portal/settings/privacy-page.tsx`, `Review`) ; champs demandés : même relecture avant publication, `impactAcknowledged`, version de notice obligatoire ; aucun marquage « accepté par l'élève » côté web ; l'aperçu pour l'élève est local et vide (`FieldsPreview`).
+- Brouillon distingué de l'effectif : badge « En préparation » (`school-page.tsx`), « À adopter » / « À publier » (`privacy-page.tsx`).
+- Contenu de préparation jamais écrit dans le navigateur : seules des métadonnées d'identifiants vont en `sessionStorage` (`command-store.ts`, `test/command-store-code.test.ts`). Tests de la préparation : `test/setup-model.test.ts`.
+
+### Ce qui a changé
+
+- `portal/setup/use-setup-guide.ts` : passer d'une étape à une autre ne dépend plus du réseau. Avant, un brouillon modifié était enregistré avant chaque changement d'étape (la navigation attendait la réponse de l'école, la fiche entière était verrouillée). Le brouillon reste en mémoire (et dans `drafts` de la console) ; seule la revue exige un brouillon enregistré (l'école lit ce qu'elle détient), et « Enregistrer et continuer » et « Enregistrer et quitter » restent des enregistrements explicites avec version et reçu.
+- `portal/settings/privacy-page.tsx` : les cartes des textes, des champs et des conditions ne relisent plus l'école à chaque confirmation, seulement quand une commande de leur famille (`school`, et `catalogue` pour les conditions) est confirmée. La page « École » garde la relecture globale : sa readiness dépend du catalogue, de l'équipe et des horaires et ne doit jamais être périmée.
+
+### Preuve par critère
+
+| Critère | Preuve |
+| --- | --- |
+| Édition et aperçu immédiats sous latence ; une confirmation n'efface pas les saisies suivantes | Edge (aperçu synthétique) : coordonnées, PATCH à 5 s, champ saisissable pendant l'envoi, valeur suivante gardée après la confirmation et encore à enregistrer, une seule écriture ; assistant : changement d'étape en 0,03 s avec un PUT de brouillon réglé à 15 s, aucune écriture envoyée pour naviguer, choix gardé au retour, rien dans le stockage du navigateur. |
+| Brouillon et état effectif distingués dans toutes les vues | Partiel : badges existants dans la page École et la confidentialité (ci-dessus). Les autres vues (aperçu d'accueil, agenda, autres rubriques) n'ont pas été inventoriées une à une. |
+| Deux administrateurs, version commune, refus de readiness, réponse perdue : ni fausse activation ni double adoption | Mécanisme commun : `command-store-code.test.ts` (réponse perdue puis reçu sans seconde écriture, y compris pour un changement de modules) et `command-lane.test.ts` ; versions et condensat de revue exigés par le serveur (non relancé). Aucun parcours dédié de l'activation n'a été rejoué. |
+| Publication des champs obligatoires : versions, droits, protections des données | Existant : relecture, version de notice, refus serveur `PROFILE_POLICY_*` ; non modifié. |
+| Revalidation ciblée, isolation école/compte, reprise web | Relecture ciblée par famille (ci-dessus) ; isolation : cache de lecture et brouillons renouvelés avec la portée (`console/management-runtime.ts`, inchangé). |
+
+### Non fait ici
+
+- Enregistrer une étape (« Enregistrer et continuer ») attend toujours la réponse de l'école avec la fiche verrouillée pendant l'envoi : une sauvegarde coalescée en arrière-plan, comme celle des préférences de notifications, n'a pas été construite. L'écart reste.
+- Les commandes d'école gardent leurs clés de conflit conservatrices (`school`, `profile-policy`, et `*` pour l'activation, les modules, les accès) : séquencer plus finement partagerait la version commune de l'école, ce que l'issue interdit de supprimer.
+- Fuseau, site et modules : le web ne change pas le fuseau et envoie `impactConfirmed: true` avec le fuseau actuel ; l'analyse d'impact reste côté serveur (`CONFIG_IMPACT_REVIEW_REQUIRED`). Rien n'a été ajouté.
+- Natif (`SchoolConfigurationUI`, `SchoolProfileUI`) : hors périmètre.
