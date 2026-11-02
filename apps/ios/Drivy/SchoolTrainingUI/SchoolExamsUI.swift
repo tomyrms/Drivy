@@ -159,6 +159,8 @@ private func examKindTitle(_ kind: SchoolExam.Kind?) -> String {
 struct SchoolTrainingExamsSection: View {
     let training: SchoolTrainingWorkspace
     let schoolTimeZone: String
+    /// Vrai sur la page de l'élève, où chaque bloc est une carte ; faux dans le dossier du moniteur, lu à plat.
+    var grouped = false
     @State private var model: SchoolExamModel?
     @State private var sheet: SchoolExamSheet?
 
@@ -187,9 +189,15 @@ struct SchoolTrainingExamsSection: View {
     }
 
     @ViewBuilder private func content(_ model: SchoolExamModel, _ state: SchoolExamState) -> some View {
-        VStack(alignment: .leading, spacing: DrivySpacing.s) {
+        VStack(alignment: .leading, spacing: grouped ? DrivySpacing.xs : DrivySpacing.s) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Examens").font(.headline).accessibilityAddTraits(.isHeader)
+                // Sur la page de l'élève, comme les autres blocs : titre discret au-dessus d'une carte.
+                if grouped {
+                    Text("Examens").font(.subheadline.weight(.semibold)).foregroundStyle(DrivyTheme.muted)
+                        .padding(.horizontal, DrivySpacing.m).accessibilityAddTraits(.isHeader)
+                } else {
+                    Text("Examens").font(.headline).accessibilityAddTraits(.isHeader)
+                }
                 Spacer(minLength: 0)
                 let kinds = SchoolExam.Kind.allCases.filter { state.canSchedule($0) }
                 if state.canManage && !kinds.isEmpty && model.pending == nil {
@@ -202,18 +210,23 @@ struct SchoolTrainingExamsSection: View {
                     .accessibilityIdentifier("exams-schedule")
                 }
             }
-            if let pending = model.pending { pendingBanner(model, pending) }
-            else if state.canManage, let step = state.nextStep {
-                Text(step.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                    .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(DrivyTheme.surfaceCard, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-                    .accessibilityIdentifier("exams-next-step")
-            }
-            ForEach(state.exams) { exam in row(exam, canManage: state.canManage && model.pending == nil) }
-            if let message = model.errorMessage, model.pending == nil { DrivyActionNote(text: message, isError: true) }
+            if grouped { VStack(alignment: .leading, spacing: DrivySpacing.s) { details(model, state) }.drivyGroupedBlock() }
+            else { details(model, state) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("training-exams")
+    }
+
+    @ViewBuilder private func details(_ model: SchoolExamModel, _ state: SchoolExamState) -> some View {
+        if let pending = model.pending { pendingBanner(model, pending) }
+        else if state.canManage, let step = state.nextStep {
+            Text(step.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
+                .background(DrivyTheme.surfaceCard, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                .accessibilityIdentifier("exams-next-step")
+        }
+        ForEach(state.exams) { exam in row(exam, canManage: state.canManage && model.pending == nil) }
+        if let message = model.errorMessage, model.pending == nil { DrivyActionNote(text: message, isError: true) }
     }
 
     /// Le geste conservé sur l'appareil et pas encore confirmé : l'école n'a rien annoncé, l'écran ne le présente jamais comme fait.
