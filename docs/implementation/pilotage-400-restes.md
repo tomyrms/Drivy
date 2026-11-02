@@ -19,3 +19,8 @@
 Exécuté le 2 novembre 2026 : typage web, 603 tests web (dont celui de la comparaison zéro contre zéro), build d'aperçu, puis 16 contrôles dans Edge sur l'aperçu synthétique : filtres repliés sur 390 px et en ligne sur 1440 px, bouton qui les ouvre, aucune icône d'aide seule sur sa ligne (13 libellés), aucune comparaison « 0 vs » au tableau de bord, « Finances du mois » et onglet Finances absents avec `?droits=activite`, filets en couleur de contrôle sous `prefers-contrast: more` émulé. Script : `.local/captures-exams/pilotage-400.py` (non versionné). **Non exécuté** : `forced-colors`, clair/sombre comparés avant/après.
 
 Les vérifications de l'issue qui exigent un tiers restent ouvertes : parcours authentifié en production avec une vraie école, lecteur d'écran réel (NVDA, VoiceOver), appareil physique et texte agrandi par le système. Le jugement à l'œil du porteur (relevé, signe + et filet de total, « Finances du mois » à côté de « Ce mois-ci », contrôle segmenté) lui revient.
+
+## Fin de lot du 2 novembre 2026
+
+- Les vérifications du lot ont été faites dans Edge sur l'aperçu synthétique : aide collée, filtres repliés, comparaison 0 contre 0 masquée, `?droits=activite`, `prefers-contrast`, `forced-colors`, mode sombre, zoom à 200 % et 400 %. Déployé avec la release `05de23ca`.
+- **Reste au porteur** : le jugement à l'œil (relevé, signe + et filet de total, « Finances du mois » à côté de « Ce mois-ci », contrôle segmenté), un appareil physique et le texte agrandi par le système.

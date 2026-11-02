@@ -43,3 +43,9 @@ Les commandes passent par `schoolCommand` : clé d'idempotence, reçu `GET opera
 - **Persistance** : les trois gestes de l'élève et le refus ne sont pas dans la file locale chiffrée ; la reprise après arrêt forcé n'existe pas pour eux. Accepter passe par la planification, qui a sa propre file.
 - **Hors périmètre** : demande par l'élève d'un créneau précis réservé d'avance, modification directe du planning du moniteur, paiement, calcul de frais d'annulation tardive.
 - **Réponse du moniteur** : la feuille de planification ne rappelle pas la proposition de l'élève ; elle reste lisible dans la fiche sous la feuille.
+
+## Fin de lot du 2 novembre 2026
+
+- **Boîte du personnel** : web (dossier de l'élève, annuaire) et iOS (liste d'élèves, fiche de la leçon). La boîte donne l'identifiant de l'élève pour ouvrir son dossier. Le personnel refuse, ou accepte en déplaçant ou en annulant la leçon avec `changeRequestId`.
+- **Passerelle web** : lecture et refus sont relayés ; la création et le retrait d'une demande ne le sont volontairement pas (application native de l'élève seulement).
+- **Vu sur captures iPhone** : carte du moniteur, demande de l'élève « Hors délai » avec « Retirer la demande », demande refusée avec son motif. Aucune notification (#43/#44).
