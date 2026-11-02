@@ -7,10 +7,11 @@ import XCTest
         let start = app.buttons["start-now-confirm"]
         XCTAssertTrue(start.waitForExistence(timeout: 20), app.debugDescription)
         waitUntilEnabled(start, in: app)
-        XCTAssertEqual(start.label, "Démarrer sans GPS")
+        // Depuis la simplification du 28 octobre (épic 253), un seul libellé : le départ annonce la leçon, pas le parcours GPS.
+        XCTAssertEqual(start.label, "Démarrer la leçon")
         XCTAssertTrue(app.descendants(matching: .any)["gps-unavailable-notice"].exists, app.debugDescription)
         XCTAssertTrue(app.buttons["Actualiser les accès"].exists, app.debugDescription)
-        XCTAssertFalse(app.buttons["Avec GPS"].exists)
+        XCTAssertFalse(app.buttons["Accepter le GPS"].exists)
         XCTAssertFalse(app.buttons["lesson-complete"].exists)
         capture(app, name: "start-now-gps-disabled")
 
@@ -25,11 +26,11 @@ import XCTest
     func testStartWithoutAnAnswerKeepsGPSPreparationAvailableFromTheLesson() {
         continueAfterFailure = false
         let app = launch("start-now-gps-permission")
-        let allow = app.buttons["Avec GPS"]
+        let allow = app.buttons["Accepter le GPS"]
         XCTAssertTrue(allow.waitForExistence(timeout: 20), app.debugDescription)
         let start = app.buttons["start-now-confirm"]
         waitUntilEnabled(start, in: app)
-        XCTAssertEqual(start.label, "Démarrer sans GPS")
+        XCTAssertEqual(start.label, "Démarrer la leçon")
         XCTAssertFalse(app.descendants(matching: .any)["gps-unavailable-notice"].exists)
         XCTAssertFalse(app.buttons["lesson-complete"].exists)
 
@@ -41,8 +42,8 @@ import XCTest
         prepare.tap()
         XCTAssertTrue(app.navigationBars["Démarrer le trajet"].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(allow.waitForExistence(timeout: 10), app.debugDescription)
-        XCTAssertTrue(app.buttons["Sans GPS"].exists)
-        XCTAssertTrue(app.buttons["capture-continue-without-gps"].exists)
+        XCTAssertTrue(app.buttons["Refuser le GPS"].exists)
+        // Le bouton « continuer sans GPS » de la préparation a disparu avec l'épic 253 : le choix se fait par les deux cartes.
         capture(app, name: "start-now-gps-choice-from-lesson")
         // La préparation attend un accord : ce contrôle n’émet ni autorisation signée ni point.
         XCTAssertFalse(app.buttons["capture-signal-observation"].exists)
@@ -55,9 +56,9 @@ import XCTest
         XCTAssertTrue(start.waitForExistence(timeout: 20), app.debugDescription)
         waitUntilEnabled(start, in: app)
         // Choix général valide déjà enregistré : ni cartes de choix ni panneau « Accord GPS », le bouton l’annonce.
-        XCTAssertEqual(start.label, "Démarrer avec GPS")
-        XCTAssertFalse(app.buttons["Avec GPS"].exists)
-        XCTAssertFalse(app.buttons["Sans GPS"].exists)
+        XCTAssertEqual(start.label, "Démarrer la leçon")
+        XCTAssertFalse(app.buttons["Accepter le GPS"].exists)
+        XCTAssertFalse(app.buttons["Refuser le GPS"].exists)
         XCTAssertFalse(app.staticTexts["Accord GPS"].exists)
         let change = app.buttons["start-now-gps-change"]
         XCTAssertTrue(change.exists, app.debugDescription)
@@ -70,12 +71,12 @@ import XCTest
 
         // Changer d’avis reste possible et n’enregistre rien avant le départ.
         change.tap()
-        let refuse = app.buttons["Sans GPS"]
+        let refuse = app.buttons["Refuser le GPS"]
         XCTAssertTrue(refuse.waitForExistence(timeout: 5), app.debugDescription)
         for _ in 0..<3 where !refuse.isHittable { app.swipeUp() }
         refuse.tap()
         waitUntilEnabled(start, in: app)
-        XCTAssertEqual(start.label, "Démarrer sans GPS")
+        XCTAssertEqual(start.label, "Démarrer la leçon")
         XCTAssertTrue(change.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["lesson-complete"].exists)
     }
@@ -83,21 +84,21 @@ import XCTest
     func testChoosingGPSRequestsPermissionAndExplainsItsRefusal() {
         continueAfterFailure = false
         let app = launch("start-now-gps-permission")
-        let allow = app.buttons["Avec GPS"]
+        let allow = app.buttons["Accepter le GPS"]
         XCTAssertTrue(allow.waitForExistence(timeout: 20), app.debugDescription)
         waitUntilEnabled(allow, in: app)
         for _ in 0..<3 where !allow.isHittable { app.swipeUp() }
         allow.tap()
         let start = app.buttons["start-now-confirm"]
         waitUntilEnabled(start, in: app)
-        XCTAssertEqual(start.label, "Démarrer avec GPS")
+        XCTAssertEqual(start.label, "Démarrer la leçon")
         XCTAssertFalse(app.buttons["lesson-complete"].exists)
         capture(app, name: "start-now-gps-chosen")
 
         start.tap()
         // Le double de permission refuse uniquement quand requestPermission est appelé. Ce message
         // confirme que le parcours a demandé l’autorisation ; il ne qualifie pas l’alerte système d’iOS.
-        XCTAssertTrue(app.staticTexts["La localisation n’est pas autorisée pour Drivy. La leçon continue sans GPS."]
+        XCTAssertTrue(app.staticTexts["La localisation n’est pas autorisée pour Drivy. Vérifie la fiche de la leçon."]
             .waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.buttons["lesson-prepare-gps"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.buttons["lesson-complete"].exists)
