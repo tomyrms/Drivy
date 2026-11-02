@@ -68,6 +68,9 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
+    /// Correction ou retrait d'une observation existante (#112) : indépendants d'une observation à l'autre.
+    var isObservationCorrection: Bool { self == .updateObservation || self == .removeObservation }
+
     var isPlanning: Bool {
         switch self {
         case .createLesson, .moveLesson, .cancelLesson, .createCommercialTerms, .createServiceProduct,

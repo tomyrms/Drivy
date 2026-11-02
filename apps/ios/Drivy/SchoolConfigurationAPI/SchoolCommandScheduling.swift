@@ -23,6 +23,10 @@ extension PendingSchoolCommand {
     func conflicts(with other: Self) -> Bool {
         if id == other.id { return true }
         guard scope.belongsToWorkspace(other.scope) else { return false }
+        // Corrections et retraits de deux observations d'une même leçon (#112) : deux demandes indépendantes, même d'une époque d'accès
+        // à l'autre. Deux demandes sur la même observation restent ordonnées : la seconde attend la réponse de la première.
+        if kind.isObservationCorrection && other.kind.isObservationCorrection
+            && routeResourceID != nil && routeResourceID == other.routeResourceID && resourceID != other.resourceID { return false }
         // Gestes de cours (#126, #128 à #130) : un par élève et par séance, indépendants les uns des autres, y compris d'une époque
         // d'accès à l'autre ; leur coffre ne contient rien d'autre.
         if kind.isCourse && other.kind.isCourse { return false }
