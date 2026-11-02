@@ -7,7 +7,8 @@ export type SchoolMethod = 'GET' | 'POST' | 'PATCH' | 'PUT';
 type QueryKey = 'limit' | 'cursor' | 'status' | 'noticeVersionId' | 'learnerId' | 'trainingId' | 'instructorMembershipId' | 'from' | 'to' | 'action' | 'activate' | 'category'
   | 'plannedStart' | 'plannedEnd' | 'timeZone' | 'bufferMinutes' | 'excludeLessonId'
   | 'domain' | 'toExclusive' | 'compare' | 'breakdown' | 'scope' | 'categoryCode' | 'productKey' | 'granularity' | 'measures' | 'measure' | 'part'
-  | 'bucketFrom' | 'bucketToExclusive' | 'expectedLineCount' | 'expectedAmountCents';
+  | 'bucketFrom' | 'bucketToExclusive' | 'expectedLineCount' | 'expectedAmountCents'
+  | 'filter';
 export interface SchoolRoute {
   readonly method: SchoolMethod;
   /** Literal segments after the school identifier; ':id' stands for one UUID. */
@@ -147,6 +148,19 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'GET', segments: ['metrics'], query: ['domain', 'from', 'toExclusive', 'compare', 'breakdown', ...metricsFilters], queryRules: metricsRules },
   { method: 'GET', segments: ['metrics', 'series'], query: ['from', 'toExclusive', 'granularity', 'measures', ...metricsFilters], queryRules: metricsRules },
   { method: 'GET', segments: ['metrics', 'details'], query: ['measure', 'part', 'from', 'toExclusive', 'bucketFrom', 'bucketToExclusive', 'limit', 'cursor', 'expectedLineCount', 'expectedAmountCents', ...metricsFilters], queryRules: metricsRules },
+  // Examens théorique et pratique (#54) : saisie du personnel, droits relus par l'API. Jamais de route d'écriture pour l'élève.
+  { method: 'GET', segments: ['trainings', ':id', 'exams'] },
+  { method: 'POST', segments: ['trainings', ':id', 'exams'], bodyLimit: 4_096 },
+  { method: 'GET', segments: ['exams'], query: ['filter'] },
+  { method: 'GET', segments: ['exams', ':id', 'revisions'] },
+  { method: 'POST', segments: ['exams', ':id', 'update'], ifMatch: true, bodyLimit: 4_096 },
+  { method: 'POST', segments: ['exams', ':id', 'postpone'], ifMatch: true, bodyLimit: 4_096 },
+  { method: 'POST', segments: ['exams', ':id', 'result'], ifMatch: true, bodyLimit: 4_096 },
+  // Demandes de l'élève sur sa leçon (#52) : le personnel lit et refuse ; accepter passe par le déplacement ou l'annulation.
+  // L'élève demande et retire depuis l'app native, qui parle à l'API sans passer ici.
+  { method: 'GET', segments: ['lessons', ':id', 'change-requests'] },
+  { method: 'GET', segments: ['lesson-change-requests'] },
+  { method: 'POST', segments: ['lesson-change-requests', ':id', 'refuse'], ifMatch: true, bodyLimit: 2_048 },
 ];
 
 const uuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -186,6 +200,8 @@ const queryRules: Record<QueryKey, RegExp> = {
   bucketToExclusive: civilDate,
   expectedLineCount: /^[0-9]{1,16}$/,
   expectedAmountCents: /^[0-9]{1,16}$/,
+  // Examens (#54) : examens prévus dont le résultat reste à renseigner, ou à venir.
+  filter: /^(?:PENDING_RESULT|UPCOMING)$/,
 };
 export const MAX_SCHOOL_BODY = Math.max(...schoolRoutes.map(route => route.bodyLimit ?? 0));
 export const isUUID = (value: unknown): value is string => typeof value === 'string' && uuid.test(value);
