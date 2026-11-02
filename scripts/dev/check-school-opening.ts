@@ -551,6 +551,25 @@ async function main() {
     await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,administration,
       ownMail,mailLink,deliverInvitation:()=>deliverOneInvitation(mailer!,invitationMail),
       getAccessToken:accessTokenFor,assert,setStage:value=>{stage=value;},artifactDirectory});
+    // Examens (#54) et demandes de l'élève (#52) par la passerelle web : elle ne relaie que des routes nommées, et l'aperçu comme l'API directe
+    // ne le voient pas (le 2 novembre 2026, l'onglet Examens répondait 404 en production alors que l'API le servait).
+    stage='examens et demandes relayés par la passerelle web';
+    {
+      const training=(await administration.query('SELECT id FROM drivy.training WHERE school_id=$1 ORDER BY created_at LIMIT 1',[school.id])).rows[0];
+      const lesson=(await administration.query('SELECT id FROM drivy.lesson WHERE school_id=$1 ORDER BY created_at LIMIT 1',[school.id])).rows[0];
+      assert(training!==undefined&&lesson!==undefined,'La première leçon laisse une formation et une leçon à lire');
+      const base=`${origin}/app/bff/schools/${school.id}`;
+      const exams=await consumerContext.request.get(`${base}/trainings/${training.id}/exams`);
+      const examState=z.object({data:z.object({trainingId:z.string(),canManage:z.literal(true),exams:z.array(z.unknown()),escortCandidates:z.array(z.unknown())})}).safeParse(await exams.json());
+      assert(exams.status()===200&&examState.success&&examState.data.data.trainingId===training.id,'La passerelle relaie les examens d’une formation à l’administration');
+      assert((await consumerContext.request.get(`${base}/exams?filter=PENDING_RESULT`)).status()===200
+        &&(await consumerContext.request.get(`${base}/exams?filter=UPCOMING`)).status()===200
+        &&(await consumerContext.request.get(`${base}/exams?filter=ALL`)).status()===404,'La passerelle relaie les deux listes d’examens et refuse tout autre filtre');
+      const requests=await consumerContext.request.get(`${base}/lessons/${lesson.id}/change-requests`);
+      const requestState=z.object({data:z.object({lessonId:z.string(),requests:z.array(z.unknown())})}).safeParse(await requests.json());
+      assert(requests.status()===200&&requestState.success&&requestState.data.data.requests.length===0,'La passerelle relaie les demandes d’une leçon, sans demande avant que l’élève en fasse une');
+      assert((await consumerContext.request.get(`${base}/lesson-change-requests`)).status()===200,'La passerelle relaie la boîte des demandes du personnel');
+    }
     if(process.argv.includes('--audit-v2')) await verifyAuditV2({page,context:consumerContext,origin,keycloakOrigin,schoolId:school.id,
       operatorPassword,consumerPassword,assert,setStage:value=>{stage=value;}});
     // Formations et tarifs après une première leçon réelle : harnais distinct, joué avec --extended.

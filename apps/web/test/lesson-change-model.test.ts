@@ -18,7 +18,7 @@ describe('Demandes de l’élève : lecture du contrat de l’API', () => {
     expect(lessonChangeStateSchema.parse(state).requests).toHaveLength(1);
     expect(() => lessonChangeStateSchema.parse({ ...state, requests: [{ ...one, status: 'DONE' }] })).toThrow();
     const inbox = { items: [{ request: one, lesson: { id: one.lessonId, plannedStart: '2030-03-04T09:00:00.000Z', plannedEnd: '2030-03-04T09:50:00.000Z', timeZone: 'Europe/Zurich',
-      version: 2, instructorMembershipId: randomUUID(), learnerDisplayName: 'Alice' } }] };
+      version: 2, instructorMembershipId: randomUUID(), learnerId: randomUUID(), learnerDisplayName: 'Alice' } }] };
     expect(lessonChangeInboxSchema.parse(inbox).items[0]?.lesson.learnerDisplayName).toBe('Alice');
   });
 });

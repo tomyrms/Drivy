@@ -63,6 +63,7 @@ struct SchoolLessonChangeInboxItem: Codable, Sendable, Equatable, Identifiable {
         let timeZone: String
         let version: Int
         let instructorMembershipId: UUID
+        let learnerId: UUID
         let learnerDisplayName: String
     }
     let request: SchoolLessonChangeRequest

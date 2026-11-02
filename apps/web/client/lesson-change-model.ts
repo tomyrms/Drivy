@@ -28,7 +28,7 @@ export type LessonChangeState = z.infer<typeof lessonChangeStateSchema>;
 export const lessonChangeInboxSchema = z.object({
   items: z.array(z.object({
     request: lessonChangeRequestSchema,
-    lesson: z.object({ id, plannedStart: timestamp, plannedEnd: timestamp, timeZone: z.string(), version: z.number().int().positive(), instructorMembershipId: id, learnerDisplayName: z.string() }),
+    lesson: z.object({ id, plannedStart: timestamp, plannedEnd: timestamp, timeZone: z.string(), version: z.number().int().positive(), instructorMembershipId: id, learnerId: id, learnerDisplayName: z.string() }),
   })).max(100),
 });
 export type LessonChangeInboxItem = z.infer<typeof lessonChangeInboxSchema>['items'][number];

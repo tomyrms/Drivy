@@ -129,7 +129,7 @@ describe('réponse du personnel',()=>{
   const item=inbox.json().data.items.find((entry:{request:{id:string}})=>entry.request.id===request.id);
   expect(item).toBeDefined();
   expect(item.request).toMatchObject({kind:'RESCHEDULE',note:'Mardi 17 h',mine:false});
-  expect(item.lesson).toMatchObject({id:lesson.id,plannedStart:lesson.plannedStart,version:lesson.version,instructorMembershipId:id.instructorMember});
+  expect(item.lesson).toMatchObject({id:lesson.id,plannedStart:lesson.plannedStart,version:lesson.version,instructorMembershipId:id.instructorMember,learnerId:id.aliceLearner});
   expect(item.lesson.learnerDisplayName).toBeTypeOf('string');
   expect((await call('GET','/lesson-change-requests',undefined,null,'demo-admin')).json().data.items.some((entry:{request:{id:string}})=>entry.request.id===request.id)).toBe(true);
   expect((await call('GET','/lesson-change-requests',undefined,null,alice)).statusCode).toBe(403);

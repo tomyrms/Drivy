@@ -39,7 +39,7 @@ export const lessonRequestsFamily: PreviewFamily = {
     const items = (db['lesson-change-requests'] ?? []).filter(item => status(item) === 'PENDING').map(item => {
       const lesson = db.lessons!.find(entry => entry.id === item.lessonId)!;
       return { request: view(item), lesson: { id: lesson.id, plannedStart: lesson.plannedStart, plannedEnd: lesson.plannedEnd, timeZone: lesson.timeZone, version: lesson.version,
-        instructorMembershipId: lesson.instructorMembershipId, learnerDisplayName: lesson.learnerDisplayName } };
+        instructorMembershipId: lesson.instructorMembershipId, learnerId: lesson.learnerId, learnerDisplayName: lesson.learnerDisplayName } };
     }).sort((a, b) => a.lesson.plannedStart.localeCompare(b.lesson.plannedStart));
     return tools.reply(200, tools.envelope({ items }));
   },

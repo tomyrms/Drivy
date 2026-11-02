@@ -100,14 +100,14 @@ export function registerLessonChangeRequests(app:FastifyInstance,options:{pool:P
   empty.parse(r.query);const {schoolId}=params(r),identity=await options.verifyToken(r.headers.authorization);
   const data=await withActor(options.pool,identity,schoolId,async(db,actor,member)=>{
    if(!member?.roles.some(role=>role==='ADMIN'||role==='INSTRUCTOR'))throw forbidden();
-   const rows=(await db.query<RequestRow&{planned_start:Date;planned_end:Date;time_zone:string;lesson_version:number;instructor_membership_id:string;learner_display_name:string|null}>(
-    `SELECT ${requestColumns.split(',').map(column=>`r.${column}`).join(',')},l.planned_start,l.planned_end,l.time_zone,l.version AS lesson_version,l.instructor_membership_id,
+   const rows=(await db.query<RequestRow&{planned_start:Date;planned_end:Date;time_zone:string;lesson_version:number;instructor_membership_id:string;learner_id:string;learner_display_name:string|null}>(
+    `SELECT ${requestColumns.split(',').map(column=>`r.${column}`).join(',')},l.planned_start,l.planned_end,l.time_zone,l.version AS lesson_version,l.instructor_membership_id,l.learner_id,
       drivy.lesson_learner_name(l.school_id,l.training_id,l.instructor_membership_id,l.learner_id) AS learner_display_name
      FROM drivy.lesson_change_request r JOIN drivy.lesson l ON l.school_id=r.school_id AND l.id=r.lesson_id
      WHERE r.school_id=$1 AND r.status='PENDING' AND l.status='PLANNED' AND l.actual_start IS NULL
      ORDER BY l.planned_start,r.created_at,r.id LIMIT 100`,[schoolId])).rows;
    return {items:rows.map(row=>({request:requestView(row,actor.personId),lesson:{id:row.lesson_id,plannedStart:row.planned_start.toISOString(),plannedEnd:row.planned_end.toISOString(),
-    timeZone:row.time_zone,version:row.lesson_version,instructorMembershipId:row.instructor_membership_id,learnerDisplayName:row.learner_display_name??''}}))};
+    timeZone:row.time_zone,version:row.lesson_version,instructorMembershipId:row.instructor_membership_id,learnerId:row.learner_id,learnerDisplayName:row.learner_display_name??''}}))};
   });
   return envelope(data,r);
  });
