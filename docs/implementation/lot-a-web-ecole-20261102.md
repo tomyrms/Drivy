@@ -14,7 +14,7 @@ Le moteur reste `command-store.ts` (clé d'idempotence, corps et version identiq
 | `client/command-families.ts` + `command-store.ts` | Compteurs de confirmations par type de commande. Une section ne relit que sa famille (`invitations`, `members`, `catalogue`, `availability`, `learners`, `school`) au lieu de toute l'école. |
 | `console/context.ts` | `useCommandLane` (voie liée au contexte) ; `useCommandRunner` est inchangé pour les sections non migrées. |
 
-Tests du socle : `test/command-conflicts.test.ts` (7), `test/command-lane.test.ts` (12) contre le vrai magasin de commandes, un faux `window` et un réseau scripté.
+Tests du socle : `test/command-conflicts.test.ts` (7), `test/command-lane.test.ts` (14) contre le vrai magasin de commandes, un faux `window` et un réseau scripté.
 
 ## #121 Invitations
 
@@ -180,3 +180,16 @@ Une seule chose, la relecture ciblée : `command-families.ts` (`catalogueReads` 
 ### Non fait ici (écart trop large pour être livré à moitié)
 
 L'issue demande, pour l'enregistrement d'une version, un élément local « En cours d'enregistrement » et un formulaire non bloqué. Quatre flux sont liés au coureur unique, au bouton `busy` et aux dialogues de relecture (`ReviewDialog runner`) : l'éditeur de programme (général, compétences, règles), la mise à jour de référence, l'éditeur de tarif (création, révision, bascule proposé/non proposé) et la révision des conditions communes. Les convertir sur la voie de commandes de ce lot (`useCommandLane`, voir #110 et #116) exige de définir, pour chacun, la projection d'un brouillon dans les lecteurs (programme, tarifs, conditions), des clés de conflit par agrégat (offre, produit, conditions, avec les tarifs qui partagent des conditions) et le retour d'un refus avec sa saisie : une part importante du code du catalogue web à réécrire, puis à rejouer dans le navigateur. Ce travail n'est pas commencé ; le socle (`command-lane.ts`, `command-conflicts.ts`) est prêt pour le recevoir. Aucun tarif ni contrat réel n'a été modifié.
+
+## Vérifications exécutées (3 novembre 2026)
+
+| Vérification | Résultat |
+| --- | --- |
+| `npm run typecheck` dans `apps/web` | PASS |
+| `npm run test:unit` dans `apps/web` | PASS, 64 fichiers, 663 tests réussis et 1 échec attendu (déjà présent à l'ouverture : 60 fichiers, 619 tests réussis et 1 échec attendu) |
+| Tests ajoutés | `test/command-conflicts.test.ts` (7), `test/command-lane.test.ts` (14), `portal/availability/schedule-projection.test.ts` (11), `portal/learners/learner-projection.test.ts` (12) |
+| Parcours dans Edge (Playwright) sur l'aperçu synthétique `vite.preview-311.config.ts` : invitations (latence 15 s, deux invitations indépendantes, double appui, réponse perdue, refus, invitation révoquée entre-temps), horaires et absences (15 s, retrait lent, réponse perdue, refus), dossiers (15 s, changement d'état, archivage perdu puis reçu, refus), assistant de préparation (15 s) et coordonnées (5 s) | PASS ; scripts jetables non versionnés, captures relues. Le transport est simulé : il ne remplace pas une recette avec le serveur. |
+| Tests API (`apps/api`) et PostgreSQL | NOT_EXECUTED : Docker non lancé, `apps/api` non modifié |
+| Appareil, VoiceOver, e-mail réel, déploiement, homelab | NOT_EXECUTED |
+
+Les routes appelées par le web n'ont pas changé : rien à ajouter à `school-routes.ts`.
