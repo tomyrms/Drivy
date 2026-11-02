@@ -13,6 +13,8 @@ import { formatSpan, type ResolvedPeriod } from './period-model';
  */
 export interface MeasureGroup {
   title: string;
+  /** Portée du titre, entre parenthèses et en retrait de ton. */
+  qualifier?: string;
   ids: readonly string[];
   onlyWhenOpen?: boolean;
   total?: string | undefined;
@@ -67,7 +69,7 @@ export function MeasureGroups({ domain, groups, answer, definitions, period, tod
     if (ids.length === 0 && !total && outside.length === 0) return [];
     // Le signe ne se lit que si la somme est affichée sous ses termes.
     const summed = total !== undefined && ids.length > 1;
-    return [{ column: group.column ?? 1, node: <MeasureList key={group.title} title={group.title} action={group.action}>
+    return [{ column: group.column ?? 1, node: <MeasureList key={group.title} title={group.title} qualifier={group.qualifier} action={group.action}>
       {ids.map((id, index) => row(id, summed && index > 0 ? { position: 'term' } : {}))}
       {total && row(total, summed ? { position: 'total' } : {})}
       {outside.map(id => row(id, { position: 'outside', note: group.outside!.note }))}

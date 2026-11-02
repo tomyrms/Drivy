@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react';
-import { ArrowRight, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Field, FieldError, FieldLabel } from '../../components/ui/field';
@@ -22,10 +22,10 @@ export interface MeasureRowProps {
   comparison?: MeasureComparison | undefined;
   /** Base déjà nommée de la comparaison (« vs le 1er octobre »). */
   comparisonLabel?: string | undefined;
-  /** Ouvre les lignes de la mesure : la valeur devient le bouton, chevron à droite. */
+  /** Ouvre les lignes de la mesure : la valeur devient le bouton, chevron à droite, et toute la ligne est sa cible (#410). */
   onOpen?: (() => void) | undefined;
-  /** Action d'une autre nature (ouvrir l'agenda) : un bouton nommé, la valeur reste du texte. */
-  action?: { label: string; onClick: () => void } | undefined;
+  /** Ce que fait la valeur ouvrante, dit aux lecteurs d'écran après le chiffre ; « Voir le détail » par défaut, « Ouvrir l'agenda » pour une ligne à traiter. */
+  openLabel?: string | undefined;
   /** Précision courte après le libellé (« hors du total »). */
   note?: string | undefined;
   /** `term` : terme d'une somme, précédé d'un signe ; `total` : la somme, sous un filet ; `outside` : lue à part, après le total. */
@@ -35,31 +35,30 @@ export interface MeasureRowProps {
 }
 
 /**
- * Une mesure du serveur, en ligne de relevé : libellé à gauche, valeur alignée à droite pour se comparer d'une ligne à l'autre,
- * comparaison nommée sous la valeur (sous le libellé sur un téléphone). La définition s'ouvre à la demande, le détail depuis la valeur.
+ * Une mesure du serveur, en ligne de relevé : libellé à gauche, aide « comment ce chiffre est calculé » dans une colonne fixe (les icônes
+ * tombent à la verticale les unes des autres, et aucune ne part seule à la ligne), valeur alignée à droite pour se comparer d'une ligne à
+ * l'autre, comparaison nommée sous la valeur (sous le libellé sur un téléphone). La définition s'ouvre à la demande, le détail depuis la valeur.
  */
-export function MeasureRow({ label, measure, definition, comparison, comparisonLabel, onOpen, action, note, position, measureId }: MeasureRowProps) {
+export function MeasureRow({ label, measure, definition, comparison, comparisonLabel, onOpen, openLabel = 'Voir le détail', note, position, measureId }: MeasureRowProps) {
   const status = measure.coverage.status;
   const change = describeComparison(comparison, measure.unit);
   const value = formatMeasure(measure.value, measure.unit);
-  // L'aide reste collée au dernier mot : sur un téléphone, elle ne part jamais seule à la ligne (#400).
-  const cut = label.lastIndexOf(' ');
   return <li className="pilotage-row" data-coverage={status} data-measure={measureId} data-role={position}>
     <div className="pilotage-row-label">
-      <span className="pilotage-row-name">{cut > 0 && label.slice(0, cut + 1)}<span className="pilotage-row-tail">{label.slice(cut + 1)}<MeasureHelp label={label} measure={measure} definition={definition} /></span></span>
+      <span className="pilotage-row-name">{label}</span>
       {note && <span className="pilotage-row-note">{note}</span>}
       {status !== 'COMPLETE' && <Badge variant="outline">{coverageBadge[status]}</Badge>}
     </div>
-    {change && comparisonLabel && <p className="pilotage-row-change">{change} <span>{comparisonLabel}</span></p>}
+    <MeasureHelp label={label} measure={measure} definition={definition} />
     <div className="pilotage-row-value">
       {position === 'term' && <span className="pilotage-row-sign" aria-hidden="true">+</span>}
       {onOpen
-        ? <Button variant="ghost" size="sm" className="pilotage-row-open" onClick={onOpen} aria-label={`${label} : ${value}. Voir le détail`}>
+        ? <Button variant="ghost" size="sm" className="pilotage-row-open" onClick={onOpen} aria-label={`${label} : ${value}. ${openLabel}`}>
           <span>{value}</span><ChevronRight data-icon="inline-end" aria-hidden="true" />
         </Button>
         : <span className="pilotage-row-figure">{value}</span>}
     </div>
-    {action && <Button variant="ghost" size="sm" className="pilotage-row-action" onClick={action.onClick}>{action.label}<ArrowRight data-icon="inline-end" aria-hidden="true" /></Button>}
+    {change && comparisonLabel && <p className="pilotage-row-change">{change} <span>{comparisonLabel}</span></p>}
   </li>;
 }
 
@@ -82,18 +81,21 @@ function MeasureHelp({ label, measure, definition }: { label: string; measure: M
   </Popover>;
 }
 
-/** Un bloc de page sous un titre ; le titre nomme la région pour les lecteurs d'écran. `action` se place à droite du titre. */
-export function PilotageSection({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
+/**
+ * Un bloc de page sous un titre ; le titre nomme la région pour les lecteurs d'écran. `action` se place à droite du titre.
+ * `qualifier` précise la portée du titre, entre parenthèses et en retrait de ton (« Leçons individuelles (tarif à l'unité) ») : le texte lu est le même.
+ */
+export function PilotageSection({ title, qualifier, action, children, className }: { title: string; qualifier?: string | undefined; action?: ReactNode; children: ReactNode; className?: string }) {
   const id = useId();
   return <section className={className ? `pilotage-section ${className}` : 'pilotage-section'} aria-labelledby={id}>
-    <div className="pilotage-section-head"><h2 id={id}>{title}</h2>{action}</div>
+    <div className="pilotage-section-head"><h2 id={id}>{title}{qualifier && <span className="pilotage-qualifier"> ({qualifier})</span>}</h2>{action}</div>
     {children}
   </section>;
 }
 
 /** Des lignes de relevé sous un titre. */
-export function MeasureList({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return <PilotageSection title={title} action={action}><ul className="pilotage-rows">{children}</ul></PilotageSection>;
+export function MeasureList({ title, qualifier, action, children }: { title: string; qualifier?: string | undefined; action?: ReactNode; children: ReactNode }) {
+  return <PilotageSection title={title} qualifier={qualifier} action={action}><ul className="pilotage-rows">{children}</ul></PilotageSection>;
 }
 
 export interface FilterOption { value: string; label: string }

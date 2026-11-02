@@ -16,13 +16,13 @@ import { StackedBars } from './stacked-bars';
  * tarif à l'unité sont valorisées, les cours collectifs ne le sont pas.
  */
 export const lessonValueGroup: MeasureGroup = {
-  title: 'Leçons individuelles (tarif à l’unité)', ids: ['F01', 'F02'], total: 'F03',
+  title: 'Leçons individuelles', qualifier: 'tarif à l’unité', ids: ['F01', 'F02'], total: 'F03',
   // Une leçon commencée ou dont l'heure est passée n'est ni réalisée ni une réservation certaine : elle se lit après le total, hors de lui.
   outside: { ids: ['F04'], note: 'hors du total' },
 };
 const groups: readonly MeasureGroup[] = [
   lessonValueGroup,
-  { title: 'Règlements enregistrés (par date de saisie)', ids: ['F05', 'F06'], column: 2 },
+  { title: 'Règlements enregistrés', qualifier: 'par date de saisie', ids: ['F05', 'F06'], column: 2 },
   { title: 'Cours collectifs', ids: ['F07'], column: 2 },
 ];
 /** À date, seules les valeurs déjà constatées sont les mêmes dans la période entière et dans la période écoulée. */
@@ -59,25 +59,25 @@ function Evolution({ period, filters }: { period: ResolvedPeriod; filters: Metri
   return <>
     {series.status === 'error' && <ReadFeedback loaded={series} label="Lecture de l’évolution" />}
     <StackedBars title={`Valeur des leçons par ${unitName[granularity]}`} periodText={periodLabel(period)} emptyText="Aucune valeur de leçon sur cette période."
-      series={[{ label: 'Réalisée', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]} format={money} tickFormat={formatFrancsShort}
+      series={[{ label: 'Réalisée', pattern: 'solid' }, { label: 'À venir', pattern: 'dashed' }]} format={money} tickFormat={formatFrancsShort}
       buckets={buckets.map(bucket => chartBucket(granularity, bucket, year, [value(bucket, 'F01'), value(bucket, 'F02')]))} />
-    {!filtered && <StackedBars title={`Règlements enregistrés par ${unitName[granularity]}`} note="Par date de saisie" periodText={`${periodLabel(period)} · date de saisie`} emptyText="Aucun règlement enregistré sur cette période."
-      series={[{ label: 'Enregistrés', pattern: 'solid' }]} format={money} tickFormat={formatFrancsShort}
+    {!filtered && <StackedBars title={`Règlements enregistrés par ${unitName[granularity]}`} note="par date de saisie" periodText={`${periodLabel(period)} · date de saisie`} emptyText="Aucun règlement enregistré sur cette période."
+      series={[{ label: 'Enregistrés', pattern: 'solid', tone: 'ink' }]} size="compact" format={money} tickFormat={formatFrancsShort}
       buckets={buckets.map(bucket => chartBucket(granularity, bucket, year, [value(bucket, 'F05')]))} />}
   </>;
 }
 
 type Mix = 'category' | 'product' | 'instructor';
-const mixTitle = { category: 'par permis', product: 'par prestation', instructor: 'par moniteur' } as const;
+const mixGrouping = { category: 'par permis', product: 'par prestation', instructor: 'par moniteur' } as const;
 const mixOptions = [{ value: 'category', label: 'Par permis' }, { value: 'product', label: 'Par prestation' }, { value: 'instructor', label: 'Par moniteur' }] as const;
 /** Valeur des leçons réalisées par permis, prestation ou moniteur. Lignes rangées par nom : un montant ne classe personne. */
 function ValueMix({ period, filters }: { period: ResolvedPeriod; filters: MetricFilters }) {
   const [by, setBy] = useState<Mix>('category');
   const chosen: Mix = by === 'instructor' && filters.instructor ? 'category' : by;
   const loaded = useMetrics({ domain: 'finance', from: period.from, toExclusive: period.toExclusive, ...filters, breakdown: chosen });
-  const title = `Valeur des leçons réalisées ${mixTitle[chosen]}`;
+  const title = 'Valeur des leçons réalisées', grouping = mixGrouping[chosen];
   const choice = <BreakdownChoice label="Répartition de la valeur des leçons réalisées" value={chosen} options={filters.instructor ? mixOptions.slice(0, 2) : mixOptions} onChange={setBy} />;
-  if (!loaded.data) return <BreakdownBars title={title} periodText={periodLabel(period)} action={choice} rows={null} format={money} emptyText="" notice={<ReadFeedback loaded={loaded} label="Lecture de la répartition" />} />;
-  return <BreakdownBars title={title} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
+  if (!loaded.data) return <BreakdownBars title={title} grouping={grouping} periodText={periodLabel(period)} action={choice} rows={null} format={money} emptyText="" notice={<ReadFeedback loaded={loaded} label="Lecture de la répartition" />} />;
+  return <BreakdownBars title={title} grouping={grouping} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
     rows={breakdownRows(loaded.data.breakdown, 'F01')} format={money} emptyText="Aucune valeur de leçon réalisée sur cette période." />;
 }

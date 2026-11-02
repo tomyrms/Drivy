@@ -103,7 +103,7 @@ function DetailBody({ measure, part, onPart, card, definition, answer, period, f
       <p className="pilotage-scope">Total : {totalText(detail.total)} · Affichées : {lines.length} sur {detail.total.lineCount}{!complete && shown !== null ? ` · somme des lignes affichées : ${formatMeasure(shown, 'cents')}` : ''}</p>
       {lines.length === 0
         ? <Empty><EmptyHeader><EmptyMedia variant="icon"><FileSearch aria-hidden="true" /></EmptyMedia><EmptyTitle>Aucune ligne sur cette période</EmptyTitle></EmptyHeader></Empty>
-        : <ul className="pilotage-list pilotage-lines">{lines.map(line => <li key={`${line.kind}:${line.id}`}>
+        : <ul className="pilotage-lines">{lines.map(line => <li key={`${line.kind}:${line.id}`}>
           <div className="pilotage-line-what">
             <strong>{lineTitle(line)}</strong>
             <span>{[time.format(new Date(line.eventAt)), line.instructorLabel?.trim() || null, lineStatus(line),

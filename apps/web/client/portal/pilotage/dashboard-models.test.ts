@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vitest';
 import type { AgendaEvent } from '../../console/agenda-projection';
 import { dayHeading, groupByDay, upcomingAppointments } from './appointments';
 import { breakdownRows, chartBucket, chooseGranularity } from './chart-model';
-import { comparisonPlan, formatSpan, resolvePeriod } from './period-model';
+import { comparisonPlan, formatCivilWeekday, formatSpan, resolvePeriod } from './period-model';
 import { stackLayout } from './stacked-bars';
-import { summarizeToday } from './today-summary';
+import { overviewToday } from './today-summary';
 
 const now = Date.parse('2026-11-02T10:00:00Z');
 const context = { now, limit: 10, learnerName: (id: string) => `Élève ${id}`, memberName: (id: string) => `Moniteur ${id}` };
@@ -61,25 +61,33 @@ describe('rendez-vous de l’accueil', () => {
   });
 });
 
-describe('résumé de la journée', () => {
+describe('la journée en parties', () => {
   const measure = (value: number | null, status = 'COMPLETE') => ({ value, unit: 'count' as const, coverage: { status: status as 'COMPLETE', reasons: [] } });
-  test('dit le total, puis seulement les états présents, les heures et les séances', () => {
-    const summary = summarizeToday({ measures: {
+  test('dit le nombre de leçons, puis seulement les états présents, les heures et les séances', () => {
+    const overview = overviewToday({ measures: {
       L01: measure(2), L02: measure(3), L03: measure(0), L04: measure(0), L05: measure(0), L06: measure(1), L07: measure(1), L08: measure(7),
       H01: { ...measure(19_800), unit: 'seconds' as const }, C01: measure(1),
     } });
-    expect(summary.segments).toEqual(['7 leçons aujourd’hui', '2 réalisées', '1 en cours', '1 à finaliser', '3 à venir', '5 h 30 min programmées', '1 séance collective']);
-    expect(summary.incomplete).toBe(false);
+    expect(overview.count).toBe('7 leçons');
+    expect(overview.states.map(state => state.text)).toEqual(['2 réalisées', '1 en cours', '1 à finaliser', '3 à venir']);
+    expect(overview.extras).toEqual(['5 h 30 min programmées', '1 séance collective']);
+    expect(overview.incomplete).toBe(false);
+  });
+
+  test('chaque état garde le nombre du serveur et son rôle dans la barre : plein pour le réalisé, tireté pour le prévu', () => {
+    const { states } = overviewToday({ measures: { L08: measure(6), L01: measure(2), L02: measure(3), L07: measure(1), L03: measure(0) } });
+    expect(states.map(state => [state.id, state.count, state.kind])).toEqual([['L01', 2, 'done'], ['L07', 1, 'attention'], ['L02', 3, 'upcoming']]);
   });
 
   test('une journée vide le dit, et un total absent n’est pas un zéro', () => {
-    expect(summarizeToday({ measures: { L08: measure(0) } }).segments).toEqual(['Aucune leçon aujourd’hui']);
-    expect(summarizeToday({ measures: { L08: measure(1), L01: measure(1) } }).segments).toEqual(['1 leçon aujourd’hui', '1 réalisée']);
-    expect(summarizeToday({ measures: { L08: measure(null, 'UNAVAILABLE') } })).toEqual({ segments: ['Leçons du jour indisponibles'], incomplete: true });
+    expect(overviewToday({ measures: { L08: measure(0) } })).toEqual({ count: 'Aucune leçon', states: [], extras: [], incomplete: false });
+    expect(overviewToday({ measures: { L08: measure(1), L01: measure(1) } }).count).toBe('1 leçon');
+    expect(overviewToday({ measures: { L08: measure(1), L01: measure(1) } }).states.map(state => state.text)).toEqual(['1 réalisée']);
+    expect(overviewToday({ measures: { L08: measure(null, 'UNAVAILABLE') } })).toEqual({ count: 'Leçons du jour indisponibles', states: [], extras: [], incomplete: true });
   });
 
   test('une mesure partielle rend le résumé incomplet', () => {
-    expect(summarizeToday({ measures: { L08: measure(4), H01: { ...measure(3_600, 'PARTIAL'), unit: 'seconds' as const } } }).incomplete).toBe(true);
+    expect(overviewToday({ measures: { L08: measure(4), H01: { ...measure(3_600, 'PARTIAL'), unit: 'seconds' as const } } }).incomplete).toBe(true);
   });
 });
 
@@ -101,6 +109,15 @@ describe('histogramme empilé', () => {
   test('sans aucune valeur, l’échelle reste définie', () => {
     expect(stackLayout([]).max).toBe(1);
     expect(stackLayout([{ key: 'a', label: '1', values: [0] }]).bars[0]!.layers[0]!.height).toBe(0);
+  });
+});
+
+describe('date du tableau de bord', () => {
+  test('le jour de la semaine précède la date, sans virgule, et le premier du mois s’écrit « 1er »', () => {
+    expect(formatCivilWeekday('2026-11-02')).toBe('lundi 2 novembre 2026');
+    expect(formatCivilWeekday('2026-11-01')).toBe('dimanche 1er novembre 2026');
+    expect(formatCivilWeekday('2026-11-12')).toBe('jeudi 12 novembre 2026');
+    expect(formatCivilWeekday('2026-11-21')).toBe('samedi 21 novembre 2026');
   });
 });
 
