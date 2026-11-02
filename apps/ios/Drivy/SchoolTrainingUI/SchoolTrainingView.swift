@@ -927,7 +927,7 @@ private struct SchoolTrainingContent: View {
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                     // Examens de la formation (#54) : prévus, reportés, résultats saisis par le personnel.
-                    SchoolTrainingExamsSection(training: model, schoolTimeZone: zone)
+                    SchoolTrainingExamsSection(training: model, schoolTimeZone: zone, grouped: groupsBlocks)
                         .id("exams-\(model.trainingID.uuidString)")
                 }
             }

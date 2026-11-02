@@ -11,7 +11,7 @@ import { createCommand } from '../../command-core';
 import { useCommandSnapshot } from '../../command-store';
 import { useCommandRunner, useConsole, useLoad } from '../../console/context';
 import {
-  draftFromExam, emptyExamDraft, EXAM_LOCATION_LIMIT, EXAM_TEXT_LIMIT, examActions, examBody, examKindLabels, examListSchema, examProblems, examStateSchema,
+  draftFromExam, emptyExamDraft, EXAM_LOCATION_LIMIT, EXAM_TEXT_LIMIT, examActions, examBody, examKindLabels, examListSchema, examProblems, examStateSchema, nextStep,
   resultBody, resultDraft, resultLabels, resultProblems, rowTitle, schedulableKinds, statusText,
   type Exam, type ExamDraft, type ExamKind, type ExamState, type ResultChoice, type ResultDraft,
 } from '../../exam-model';
@@ -29,7 +29,7 @@ type ExamDialog =
   | null;
 
 /** Examens théorique et pratique d'un élève, par formation : prévus, reportés, résultats saisis par le personnel (#54). */
-export function LearnerExams({ state }: { state: LearnerController }) {
+export function LearnerExams({ state, openFormations }: { state: LearnerController; openFormations: () => void }) {
   const { schoolId, school } = useConsole();
   const { revision } = useCommandSnapshot();
   const trainings = state.current ? state.trainingsOf(state.current.id) : [];
@@ -58,6 +58,8 @@ export function LearnerExams({ state }: { state: LearnerController }) {
     <ReadFeedback loaded={loaded} />
     <CommandFeedback runner={runner} />
     {data && data.exams.length === 0 && <p className="student-muted">Aucun examen suivi pour cette formation.</p>}
+    {data && canManage && (step => step && <div className="exam-next-step" data-step={step.kind}><p>{step.text}</p>
+      {step.kind === 'CLOSE' && <Button size="sm" variant="outline" onClick={openFormations}>Voir la formation</Button>}</div>)(nextStep(data))}
     {data && <ul className="exam-list">{data.exams.map(exam => {
       const status = statusText(exam, data.canManage), actions = canManage ? examActions(exam) : [];
       return <li key={exam.id} className="exam-row" data-status={exam.status}>

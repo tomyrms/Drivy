@@ -81,6 +81,60 @@ import SwiftUI
     }
 }
 
+/// Demandes des élèves en attente, lues pour le personnel qui gère des leçons. Une panne garde la dernière lecture : ne rien afficher de plus
+/// n'est pas dire qu'il n'y a rien à traiter.
+@MainActor @Observable final class SchoolLessonRequestInboxModel {
+    private(set) var items: [SchoolLessonChangeInboxItem] = []
+
+    func load(client: SchoolLessonChangeClient?, schoolID: UUID?) async {
+        guard let client, let schoolID else { items = []; return }
+        guard let loaded = try? await client.inbox(schoolID: schoolID) else { return }
+        items = loaded
+    }
+}
+
+/// « Demandes des élèves », en tête de la liste d'élèves : chaque ligne ouvre le dossier de l'élève, où la leçon porte la demande.
+struct SchoolPendingRequestRows: View {
+    let items: [SchoolLessonChangeInboxItem]
+    let open: (UUID) -> Void
+
+    @MainActor private func summary(_ item: SchoolLessonChangeInboxItem) -> String {
+        let what = item.request.requestKind == .cancel ? "Annulation demandée" : "Déplacement demandé"
+        guard let start = SchoolLesson.date(item.lesson.plannedStart) else { return what }
+        let when = SchoolDateFormat.template("EEEdMMMjmm", start, zone: item.lesson.timeZone)
+        return "\(what) · leçon du \(when)\(item.request.late == true ? " · hors délai" : "")"
+    }
+
+    var body: some View {
+        if !items.isEmpty {
+            Text("Demandes des élèves")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DrivyTheme.muted)
+                .accessibilityAddTraits(.isHeader)
+                .listRowSeparator(.hidden)
+                .drivyPlainRows()
+            ForEach(items.prefix(8)) { item in
+                Button { open(item.lesson.learnerId) } label: {
+                    DrivyEntityRow(title: item.lesson.learnerDisplayName.isEmpty ? "Élève" : item.lesson.learnerDisplayName,
+                        meta: summary(item), leading: .symbol("arrow.left.arrow.right"), showsChevron: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(item.lesson.learnerDisplayName), \(summary(item))")
+                .accessibilityIdentifier("pending-request-\(item.request.id.uuidString)")
+                .listRowSeparator(.hidden)
+                .drivyPlainRows()
+            }
+            if items.count > 8 {
+                Text("\(items.count - 8) autres demandes")
+                    .font(.footnote)
+                    .foregroundStyle(DrivyTheme.muted)
+                    .listRowSeparator(.hidden)
+                    .drivyPlainRows()
+            }
+        }
+    }
+}
+
 /// Texte court d'une échéance dans le fuseau de la leçon.
 @MainActor private func changeDeadlineText(_ date: Date, zone: String) -> String {
     SchoolDateFormat.template("EEEdMMMjmm", date, zone: zone)

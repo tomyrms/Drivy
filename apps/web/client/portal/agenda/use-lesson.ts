@@ -35,7 +35,8 @@ export function useLesson(lessonId: string | null, onSaved: () => void) {
 }
 
 /** Domain state and effects only: presentation never owns an alternate command queue. */
-export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, learnerId: string | undefined, catalogue: PlanningCatalogue, onSaved: () => void) {
+/** `requestId` : la demande de déplacement de l'élève que ce déplacement accepte ; l'école la ferme avec la leçon. */
+export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, learnerId: string | undefined, catalogue: PlanningCatalogue, onSaved: () => void, requestId?: string) {
   const { schoolId, school, membership } = useConsole();
   const [original, setOriginal] = useState(loadedOriginal);
   const initial = useRef(initialLessonForm(original, learnerId));
@@ -122,7 +123,7 @@ export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, lear
     if (!review || submitInFlight.current || requestInFlight.current || runner.pending) return;
     submitInFlight.current = true;
     const result = await runner.run(createCommand({ schoolId, kind: original ? 'moveLesson' : 'createLesson', path: original ? `lessons/${original.id}/move` : 'lessons',
-      body: review, resourceVersion: original?.version ?? 0, ...(original ? { ifMatch: original.version, resourceId: original.id } : {}) }), original ? 'La leçon est déplacée.' : 'La leçon est planifiée.');
+      body: original && requestId ? { ...review, changeRequestId: requestId } : review, resourceVersion: original?.version ?? 0, ...(original ? { ifMatch: original.version, resourceId: original.id } : {}) }), original ? 'La leçon est déplacée.' : 'La leçon est planifiée.');
     if (!mounted.current) return;
     if (result.status === 'rejected') { submitInFlight.current = false; setReview(null); setStep('appointment'); }
     if (result.status === 'pending') window.requestAnimationFrame(() => document.getElementById('pending-title')?.focus());

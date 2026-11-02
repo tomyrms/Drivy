@@ -189,3 +189,11 @@
   .agenda-review-facts > div { grid-template-columns: 100px minmax(0, 1fr); gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .agenda-event { transition: none; } }
+
+/* Demande de l'élève sur sa leçon (#52) : au-dessus du détail, la leçon reste planifiée tant que le personnel n'a pas répondu. */
+.agenda-request { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--muted, transparent); }
+.agenda-request-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.agenda-request h2 { margin: 0; font-size: 1.0625rem; }
+.agenda-request-meta { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; }
+.agenda-request-note { margin: 0; overflow-wrap: anywhere; }
+.lesson-requests { margin-bottom: 16px; }

@@ -44,6 +44,29 @@ export function schedulableKinds(state: ExamState): ExamKind[] {
   });
 }
 
+export type ExamNextStepKind = 'CLOSE' | 'SCHEDULE_PRACTICAL' | 'SCHEDULE_AGAIN';
+export interface ExamNextStep { kind: ExamNextStepKind; text: string }
+/**
+ * Ce que le résultat suggère au personnel (#54) : jamais une action automatique. Les deux épreuves réussies proposent la clôture sans
+ * rien clore ni archiver ; une épreuve réussie propose la suivante ; un échec ou une absence propose une nouvelle date.
+ */
+export function nextStep(state: Pick<ExamState, 'summary' | 'exams'>): ExamNextStep | null {
+  const [theory, practical] = examKinds.map(kind => state.summary.find(item => item.kind === kind));
+  if (theory?.passed && practical?.passed) return { kind: 'CLOSE', text: 'Les deux épreuves sont réussies. L’école peut clore cette formation ; rien n’est clos automatiquement.' };
+  if (theory?.passed && practical && !practical.passed && practical.attempts === 0 && practical.scheduledExamId === null) {
+    return { kind: 'SCHEDULE_PRACTICAL', text: 'Examen théorique réussi : prévoir l’examen pratique.' };
+  }
+  for (const kind of examKinds) {
+    const summary = state.summary.find(item => item.kind === kind);
+    if (!summary || summary.passed || summary.scheduledExamId !== null) continue;
+    const latest = state.exams.filter(exam => exam.kind === kind && exam.status !== 'POSTPONED').sort((a, b) => b.startsAt.localeCompare(a.startsAt))[0];
+    if (latest && (latest.status === 'FAILED' || latest.status === 'ABSENT')) {
+      return { kind: 'SCHEDULE_AGAIN', text: `${latest.status === 'FAILED' ? 'Examen échoué' : 'Absence à l’examen'} : prévoir une nouvelle date pour l’${examKindLabels[kind].toLowerCase()}.` };
+    }
+  }
+  return null;
+}
+
 export function rowTitle(exam: Pick<Exam, 'kind' | 'attempt'>): string {
   return exam.attempt && exam.attempt > 1 ? `${examKindLabels[exam.kind]} · tentative ${exam.attempt}` : examKindLabels[exam.kind];
 }

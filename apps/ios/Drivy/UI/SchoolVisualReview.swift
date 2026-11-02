@@ -28,12 +28,13 @@ struct SchoolVisualReview: View {
                 case "planning", "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known", "planning-settings", "invitations", "invitation-create", "invitation-detail", "invitation-feedback", "invitation-success", "lesson-tariff", "lesson-finish", "lesson-modal", "lesson-permit", "lesson-draft", "lesson-draft-error":
                     SchoolOfficeVisualReview(screen: screen, context: context)
                 case "lesson", "lesson-planned", "lesson-observations", "lesson-cancelled", "lesson-competencies", "lesson-route",
-                     "learner-lesson", "learner-lesson-planned":
+                     "learner-lesson", "learner-lesson-planned", "lesson-request", "learner-lesson-request", "learner-lesson-refused":
                     NavigationStack {
                         SchoolLessonReportView(client: context.agenda.reportClient, schoolWorkspace: context.workspace,
                             lessonID: SchoolVisualData.reportLessonID(for: screen),
                             learnerName: context.learner.displayName,
-                            isNextPlanned: screen == "learner-lesson-planned" ? true : nil, outbox: SchoolVisualOutbox())
+                            isNextPlanned: ["learner-lesson-planned", "learner-lesson-request", "learner-lesson-refused"].contains(screen) ? true : nil,
+                            outbox: SchoolVisualOutbox())
                     }
                     .environment(\.lessonSummaryInitialTab, SchoolVisualData.summaryTab(for: screen))
                 case "learner-permit":
@@ -124,7 +125,7 @@ struct SchoolVisualReview: View {
             guard context == nil else { return }
             do {
                 context = try await SchoolVisualData.prepare(learnerRole: ["learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "learner-lesson",
-                    "learner-lesson-planned", "learner-permit"].contains(screen),
+                    "learner-lesson-planned", "learner-lesson-request", "learner-lesson-refused", "learner-permit"].contains(screen),
                     populatedObservations: ["lesson-observations", "lesson-route", "learner-lesson"].contains(screen),
                     permitCount: SchoolVisualData.permitCount(for: screen), agendaScenario: screen)
             }
@@ -208,7 +209,7 @@ struct SchoolVisualShell: View {
         SchoolObservationRankingStores.makeCache = { SchoolVisualRankingCache() }
         SchoolLessonSignalOrderStores.make = { _ in SchoolLessonSignalOrderMemoryStore() }
         let fixtures = try responses(learnerRole: learnerRole, populatedObservations: populatedObservations,
-            permitCount: permitCount)
+            permitCount: permitCount, screen: agendaScenario)
         let transport: any SchoolHTTPTransport
         if let agendaScenario, SchoolAgendaVisualData.screens.contains(agendaScenario) {
             transport = try SchoolAgendaVisualData.transport(overriding: fixtures, scenario: agendaScenario)
@@ -400,7 +401,7 @@ struct SchoolVisualShell: View {
     }
 
     static func responses(learnerRole: Bool = false, populatedObservations: Bool = false,
-        permitCount: Int = 1, allSignalThemes: Bool = false) throws -> [String: Data] {
+        permitCount: Int = 1, allSignalThemes: Bool = false, screen: String? = nil) throws -> [String: Data] {
         let null = NSNull()
         let root = "/v1/schools/\(schoolID.uuidString)"
         let roles = ["ADMIN", "INSTRUCTOR"]
@@ -588,6 +589,8 @@ struct SchoolVisualShell: View {
         }
         // Fiche d’une leçon annulée (clés nouvelles : aucun écran existant n’en dépend).
         objects.merge(cancelledLessonObjects()) { _, new in new }
+        // Examens (#54) et demandes de l’élève (#52) : lus par la fiche de la leçon, la formation et la liste d’élèves.
+        objects.merge(examsAndRequestsObjects(root: root, learnerRole: learnerRole, screen: screen)) { _, new in new }
         // Élève à deux ou trois permis : remplace la formation, l’offre, le référentiel et les leçons du dossier.
         if permitCount > 1 {
             objects.merge(permitObjects(count: permitCount, training: training, offerings: [offering, otherOffering],
@@ -617,7 +620,10 @@ struct SchoolVisualTransport: SchoolHTTPTransport {
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let window = url.lastPathComponent == "lessons" && query.contains { $0.name == "from" || $0.name == "to" }
         let action = url.lastPathComponent == "action-readiness" ? query.first(where: { $0.name == "action" })?.value : nil
+        // Examens (#54) : un même chemin, deux listes selon le filtre demandé.
+        let examFilter = url.lastPathComponent == "exams" ? query.first(where: { $0.name == "filter" })?.value : nil
         guard var bytes = (window ? responses[url.path + Self.agendaSuffix] : nil)
+                ?? examFilter.flatMap({ responses[url.path + "?filter=" + $0] })
                 ?? action.flatMap({ responses[url.path + Self.actionSuffix($0)] }) ?? responses[url.path]
         else { throw SchoolAPIError.invalidResponse }
         if window { bytes = try filteredAgenda(bytes, query: query) }

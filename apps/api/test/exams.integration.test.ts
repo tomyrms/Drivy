@@ -218,6 +218,62 @@ describe('listes transversales et moniteurs proposables',()=>{
  });
 });
 
+describe('critères d\u2019acceptation de l\u2019issue #54',()=>{
+ it('un autre élève ne lit ni ne modifie les examens, et ses listes ne les contiennent pas',async()=>{
+  const training=await freshTraining(),exam=(await create(training,'THEORY')).json().data.exams[0];
+  expect([403,404]).toContain((await call('GET',`/trainings/${training}/exams`,undefined,null,'demo-bob')).statusCode);
+  expect([403,404]).toContain((await call('POST',`/exams/${exam.id}/update`,body(),exam.version,'demo-bob')).statusCode);
+  const bobList=await call('GET','/exams?filter=UPCOMING',undefined,null,'demo-bob');expect(bobList.statusCode,bobList.body).toBe(200);
+  expect(bobList.json().data.items.map((item:{exam:{id:string}})=>item.exam.id)).not.toContain(exam.id);
+  expect((await call('GET',`/trainings/${id.bobTraining}/exams`,undefined,null,'demo-bob')).statusCode).toBe(200);
+ });
+
+ it('un résultat n\u2019altère ni la formation, ni les autres formations, ni les leçons, ni les bilans',async()=>{
+  const first=await freshTraining(),second=await freshTraining();
+  const exam=(await create(first,'PRACTICAL')).json().data.exams[0],other=(await create(second,'PRACTICAL')).json().data.exams[0];
+  await toPast(exam.id);
+  const snapshot=async()=>({
+   trainings:(await pool.query('SELECT id,status,version,closed_on FROM drivy.training WHERE id=ANY($1) ORDER BY id',[[first,second]])).rows,
+   lessons:(await pool.query('SELECT count(*)::int AS n,coalesce(sum(version),0)::int AS versions,count(*) FILTER(WHERE status<>\'PLANNED\')::int AS closed FROM drivy.lesson')).rows[0],
+   reports:(await pool.query('SELECT count(*)::int AS n FROM drivy.report_revision')).rows[0],
+   other:(await pool.query('SELECT status,version,starts_at FROM drivy.exam WHERE id=$1',[other.id])).rows[0]});
+  const before=await snapshot();
+  expect((await call('POST',`/exams/${exam.id}/result`,{operationId:randomUUID(),result:'PASSED'},exam.version,staff)).statusCode).toBe(200);
+  expect(await snapshot()).toEqual(before);
+  // Même un échec ne ferme ni n'archive : la formation reste active, rien n'est clos automatiquement.
+  const failed=(await create(second,'THEORY')).json().data.exams.find((entry:{kind:string})=>entry.kind==='THEORY');await toPast(failed.id);
+  expect((await call('POST',`/exams/${failed.id}/result`,{operationId:randomUUID(),result:'FAILED',note:'À revoir'},failed.version,staff)).statusCode).toBe(200);
+  expect((await pool.query('SELECT status,closed_on FROM drivy.training WHERE id=$1',[second])).rows[0]).toEqual({status:'ACTIVE',closed_on:null});
+ });
+
+ it('l\u2019accompagnement est en conflit avec une séance de cours du moniteur, dans les deux sens',async()=>{
+  const course=async(offset:number)=>{
+   const type=(await call('POST','/course-types',{operationId:randomUUID(),title:`Type ${randomUUID()}`,description:''},null,admin)).json().data.id;
+   const day=new Date();day.setUTCDate(day.getUTCDate()+offset);const at=(hour:number)=>{const d=new Date(day);d.setUTCHours(hour,0,0,0);return d.toISOString();};
+   const created=await call('POST','/course-series',{operationId:randomUUID(),typeId:type,title:'Cours de recette',description:'',location:'Salle',conditions:'',teachingLanguage:null,
+    responsibleMembershipId:id.adminMember,capacity:8,minParticipants:null,timeZone:'Europe/Zurich',
+    occurrences:[{startsAt:at(8),endsAt:at(11),instructorMembershipId:id.instructorMember,attendanceRequired:true}]},null,admin);
+   expect(created.statusCode,created.body).toBe(201);
+   return call('POST',`/course-series/${created.json().data.id}/publish`,{operationId:randomUUID()},created.json().data.version,admin);
+  };
+  // 1. Le cours est publié d'abord : l'accompagnement qui le chevauche est refusé, sans examen créé.
+  const first=nextDay++;
+  expect((await course(first)).statusCode).toBe(200);
+  const training=await freshTraining();
+  const clash=await create(training,'PRACTICAL',{startsAt:when(first,9),escort:{instructorMembershipId:id.instructorMember,startsAt:when(first,9),endsAt:when(first,10)}});
+  expect(clash.statusCode,clash.body).toBe(409);expect(clash.json().code).toBe('EXAM_ESCORT_CONFLICT');
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.exam WHERE training_id=$1',[training])).rows[0].n).toBe(0);
+  // 2. L'accompagnement existe d'abord : le cours qui le chevauche ne peut pas être publié.
+  const second=nextDay++,held=await create(training,'PRACTICAL',{startsAt:when(second,9),escort:{instructorMembershipId:id.instructorMember,startsAt:when(second,9),endsAt:when(second,10)}});
+  expect(held.statusCode,held.body).toBe(201);
+  const blocked=await course(second);expect(blocked.statusCode).toBe(409);
+  // 3. Sans accompagnement, un examen ne bloque rien.
+  const third=nextDay++;
+  expect((await create(await freshTraining(),'THEORY',{startsAt:when(third,9)})).statusCode).toBe(201);
+  expect((await course(third)).statusCode).toBe(200);
+ });
+});
+
 describe('isolement',()=>{
  it('les examens sont forcés par la sécurité par ligne',async()=>{
   const rows=await pool.query("SELECT relname,relrowsecurity AND relforcerowsecurity AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relname IN('exam','exam_revision')");

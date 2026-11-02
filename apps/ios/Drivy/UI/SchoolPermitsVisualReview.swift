@@ -63,7 +63,7 @@ extension SchoolVisualData {
     /// La leçon ouverte en fiche : la planifiée, l’annulée, ou la terminée par défaut.
     nonisolated static func reportLessonID(for screen: String) -> UUID {
         switch screen {
-        case "lesson-planned", "learner-lesson-planned": plannedLessonID
+        case "lesson-planned", "learner-lesson-planned", "lesson-request", "learner-lesson-request", "learner-lesson-refused": plannedLessonID
         case "lesson-cancelled": cancelledLessonID
         default: lessonID
         }

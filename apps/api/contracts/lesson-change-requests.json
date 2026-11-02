@@ -89,7 +89,7 @@
         "lesson": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["id", "plannedStart", "plannedEnd", "timeZone", "version", "instructorMembershipId", "learnerDisplayName"],
+          "required": ["id", "plannedStart", "plannedEnd", "timeZone", "version", "instructorMembershipId", "learnerId", "learnerDisplayName"],
           "properties": {
             "id": {"type": "string", "format": "uuid"},
             "plannedStart": {"type": "string", "format": "date-time"},
@@ -97,6 +97,7 @@
             "timeZone": {"type": "string"},
             "version": {"type": "integer", "minimum": 1},
             "instructorMembershipId": {"type": "string", "format": "uuid"},
+            "learnerId": {"type": "string", "format": "uuid"},
             "learnerDisplayName": {"type": "string"}
           }
         }

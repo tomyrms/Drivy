@@ -59,6 +59,10 @@ export const examsFamily: PreviewFamily = {
       exam(3, 0, 'PRACTICAL', 'SCHEDULED', at(12, '10:30'), { escort: { instructorMembershipId: ids.instructor, startsAt: at(12, '09:30'), endsAt: at(12, '12:00') } }),
       exam(4, 1, 'THEORY', 'SCHEDULED', at(-1, '14:00')),
       exam(5, 3, 'THEORY', 'SCHEDULED', at(6, '08:30')),
+      exam(6, 2, 'THEORY', 'PASSED', at(-30, '09:00')),
+      exam(7, 2, 'PRACTICAL', 'FAILED', at(-9, '10:00'), { resultNote: 'Stationnement à revoir' }),
+      exam(8, 4, 'THEORY', 'PASSED', at(-50, '09:00')),
+      exam(9, 4, 'PRACTICAL', 'PASSED', at(-20, '10:00')),
     ];
   },
   read(request, tools) {

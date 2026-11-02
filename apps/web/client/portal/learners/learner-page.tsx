@@ -15,6 +15,7 @@ import { LearnerFollowUp } from './learner-follow-up';
 import { LearnerFormations, LearnerConfirmation } from './learner-management';
 import { LearnerInformation } from './learner-information';
 import { LearnerExams, PendingExamResults } from './learner-exams';
+import { PendingLessonRequests } from './learner-requests';
 import './learners.css';
 
 export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('');
@@ -45,7 +46,7 @@ export function LearnerPilot() {
       <TabsList aria-label="Rubriques du dossier"><TabsTrigger value="follow-up">Suivi</TabsTrigger><TabsTrigger value="formations">Formations</TabsTrigger><TabsTrigger value="exams">Examens</TabsTrigger><TabsTrigger value="information">Informations</TabsTrigger></TabsList>
       <TabsContent value="follow-up"><LearnerFollowUp state={state} /></TabsContent>
       <TabsContent value="formations"><LearnerFormations state={state} /></TabsContent>
-      <TabsContent value="exams"><LearnerExams state={state} /></TabsContent>
+      <TabsContent value="exams"><LearnerExams state={state} openFormations={() => setSection('formations')} /></TabsContent>
       <TabsContent value="information"><LearnerInformation learner={current} state={state} /></TabsContent>
     </Tabs>
     <LearnerConfirmation state={state} />
@@ -60,6 +61,7 @@ function LearnerDirectory({ state }: { state: LearnerController }) {
       <PortalSelect id="directory-readiness" label="Profil" value={state.readinessFilter} onValueChange={value => { if (value === 'all' || value === 'incomplete') state.setReadinessFilter(value); state.setPage(1); }} options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
       <PortalSelect id="directory-sort" label="Trier" value={state.sort} onValueChange={value => { if (value === 'name-asc' || value === 'name-desc') state.setSort(value); }} options={[{ value: 'name-asc', label: 'Nom A–Z' }, { value: 'name-desc', label: 'Nom Z–A' }]} />
     </div>
+    <PendingLessonRequests state={state} />
     <PendingExamResults state={state} />
     <ReadFeedback loaded={state.loaded} />
     {state.loaded.data?.truncated && <Alert><AlertTitle>Annuaire partiellement chargé</AlertTitle><AlertDescription>La recherche porte sur les dossiers chargés.</AlertDescription></Alert>}

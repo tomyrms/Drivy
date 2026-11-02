@@ -16,22 +16,25 @@ import { CommandFeedback, dateTime, money, phaseLabels, ReadFeedback } from './p
 import { readPlanningCatalogue, useLesson, useLessonEditor, type PlanningCatalogue } from './use-lesson';
 import { cancellationReasons, useCancellation } from './use-cancellation';
 import { useHeadingFocus } from './use-heading-focus';
+import { LessonRequestCard, useLessonRequest } from './lesson-request-card';
+import { acceptingRequestId, type LessonChangeRequest } from '../../lesson-change-model';
 
 export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier }: { lessonId: string | null; onClose: () => void; onSaved: () => void; onDossier: (learnerId: string, lessonId: string) => void }) {
   const context = useConsole();
   const state = useLesson(lessonId, onSaved);
+  const { request } = useLessonRequest(lessonId);
   const lesson = state.loaded.data;
   const canWrite = context.membership.roles.includes('ADMIN') || context.membership.roles.includes('INSTRUCTOR') && (!lesson || context.membership.membershipId === lesson.instructorMembershipId);
-  if (state.editing && canWrite && (!lessonId || lesson && canEditPlannedLesson(lesson))) return <LessonEditorLoader original={lesson ?? undefined} onClose={() => lessonId ? state.setEditing(false) : onClose()} onSaved={() => { state.setEditing(false); state.saved(lesson); if (!lessonId) onClose(); }} />;
+  if (state.editing && canWrite && (!lessonId || lesson && canEditPlannedLesson(lesson))) return <LessonEditorLoader original={lesson ?? undefined} request={request} onClose={() => lessonId ? state.setEditing(false) : onClose()} onSaved={() => { state.setEditing(false); state.saved(lesson); if (!lessonId) onClose(); }} />;
   return <section className="agenda-page"><ReadFeedback loaded={state.loaded} label="Lecture de la leçon" />
     {state.refreshing && <Alert><AlertTitle>Changement confirmé</AlertTitle><AlertDescription>Actualisation de la fiche en cours.</AlertDescription></Alert>}
-    {lesson ? <LessonDetail lesson={lesson} refreshing={state.refreshing} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
+    {lesson ? <LessonDetail lesson={lesson} request={request} refreshing={state.refreshing} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
     {!canWrite && !lessonId && <Alert><AlertTitle>Planification indisponible</AlertTitle><AlertDescription>Votre rôle ne permet pas de planifier une leçon.</AlertDescription></Alert>}
   </section>;
 }
 
-function LessonDetail({ lesson, refreshing, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; refreshing: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
-  const state = useCancellation(lesson, onSaved);
+function LessonDetail({ lesson, request, refreshing, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; request: LessonChangeRequest | null; refreshing: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
+  const state = useCancellation(lesson, onSaved, acceptingRequestId(request, 'CANCEL'));
   const heading = useRef<HTMLHeadingElement>(null);
   useHeadingFocus(heading);
   const phase = lessonPhase(lesson);
@@ -39,6 +42,7 @@ function LessonDetail({ lesson, refreshing, onClose, onEdit, onSaved, onDossier 
     <Button className="agenda-back" variant="ghost" onClick={onClose} disabled={state.locked}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
     <header className="agenda-heading"><div><span className="agenda-eyebrow">Leçon individuelle</span><h1 ref={heading} tabIndex={-1}>{lesson.learnerDisplayName}</h1></div>{state.editable && <Button onClick={onEdit} disabled={state.locked || refreshing}><Pencil data-icon="inline-start" />Modifier la leçon</Button>}</header>
     <CommandFeedback outcome={state.runner.outcome} blocked={state.runner.blockedReason} />
+    {request && state.editable && <LessonRequestCard request={request} timeZone={lesson.timeZone} locked={state.locked || refreshing} onMove={onEdit} onCancel={state.open} />}
     {lesson.permitWarning && <Alert><AlertTitle>Permis à vérifier</AlertTitle></Alert>}
     <div className="agenda-detail-layout"><div className="agenda-detail-main"><section className="agenda-appointment-read"><div className="agenda-calendar-mark"><CalendarDays aria-hidden="true" /></div><div><span className="agenda-eyebrow">{phaseLabels[phase]}</span><h2>{formatDayHeading(civilDateIn(lesson.timeZone, Date.parse(lesson.plannedStart)))}</h2><p>{formatTimeRange(lesson.plannedStart, lesson.plannedEnd, lesson.timeZone)}</p></div></section>
       <section><h2>Le rendez-vous</h2><dl className="agenda-detail-facts"><div><dt><UserRound aria-hidden="true" />Moniteur</dt><dd>{lesson.instructorDisplayName}</dd></div><div><dt><MapPin aria-hidden="true" />Lieu</dt><dd>{lesson.meetingPoint || 'Non précisé'}</dd></div><div><dt><Clock3 aria-hidden="true" />Durée prévue</dt><dd>{(Date.parse(lesson.plannedEnd) - Date.parse(lesson.plannedStart)) / 60000} min</dd></div>{lesson.actualStart && <div><dt>Début réel</dt><dd>{dateTime(lesson.actualStart, lesson.timeZone)}</dd></div>}{lesson.actualEnd && <div><dt>Fin réelle</dt><dd>{dateTime(lesson.actualEnd, lesson.timeZone)}</dd></div>}</dl></section>
@@ -54,14 +58,14 @@ function LessonDetail({ lesson, refreshing, onClose, onEdit, onSaved, onDossier 
   </>;
 }
 
-function LessonEditorLoader({ original, onClose, onSaved }: { original: PlanningLesson | undefined; onClose: () => void; onSaved: () => void }) {
+function LessonEditorLoader({ original, request, onClose, onSaved }: { original: PlanningLesson | undefined; request?: LessonChangeRequest | null; onClose: () => void; onSaved: () => void }) {
   const { schoolId, routeQuery } = useConsole();
   const catalogue = useLoad(() => readPlanningCatalogue(schoolId), [schoolId], undefined, 'planning-catalogue');
-  return catalogue.data && catalogue.status === 'ready' ? <LessonEditor original={original} learnerId={routeQuery?.learner} catalogue={catalogue.data} onClose={onClose} onSaved={onSaved} /> : <section className="agenda-page"><Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour</Button><ReadFeedback loaded={catalogue} label="Lecture des élèves et conditions" /></section>;
+  return catalogue.data && catalogue.status === 'ready' ? <LessonEditor original={original} requestId={original ? acceptingRequestId(request ?? null, 'MOVE') : undefined} learnerId={routeQuery?.learner} catalogue={catalogue.data} onClose={onClose} onSaved={onSaved} /> : <section className="agenda-page"><Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour</Button><ReadFeedback loaded={catalogue} label="Lecture des élèves et conditions" /></section>;
 }
 
-function LessonEditor({ original: loadedOriginal, learnerId, catalogue, onClose, onSaved }: { original: PlanningLesson | undefined; learnerId: string | undefined; catalogue: PlanningCatalogue; onClose: () => void; onSaved: () => void }) {
-  const state = useLessonEditor(loadedOriginal, learnerId, catalogue, () => { state.release(); onSaved(); });
+function LessonEditor({ original: loadedOriginal, requestId, learnerId, catalogue, onClose, onSaved }: { original: PlanningLesson | undefined; requestId: string | undefined; learnerId: string | undefined; catalogue: PlanningCatalogue; onClose: () => void; onSaved: () => void }) {
+  const state = useLessonEditor(loadedOriginal, learnerId, catalogue, () => { state.release(); onSaved(); }, requestId);
   const original = state.original;
   const [discard, setDiscard] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);

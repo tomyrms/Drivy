@@ -71,6 +71,37 @@ struct SchoolExamState: Codable, Sendable, Equatable {
     }
 }
 
+/// Ce que le résultat suggère au personnel (#54) : jamais une action automatique, rien n'est clos ni archivé.
+struct SchoolExamNextStep: Equatable, Sendable {
+    enum Kind: Equatable, Sendable { case close, schedulePractical, scheduleAgain }
+    let kind: Kind
+    let text: String
+}
+
+extension SchoolExamState {
+    /// Les deux épreuves réussies proposent la clôture ; une épreuve réussie propose la suivante ; un échec ou une absence sans nouvelle
+    /// date propose une nouvelle date. Un report n'est ni un échec ni une absence.
+    var nextStep: SchoolExamNextStep? {
+        let theory = summary(for: .theory), practical = summary(for: .practical)
+        if theory?.passed == true, practical?.passed == true {
+            return SchoolExamNextStep(kind: .close, text: "Les deux épreuves sont réussies. L’école peut clore cette formation ; rien n’est clos automatiquement.")
+        }
+        if theory?.passed == true, let practical, !practical.passed, practical.attempts == 0, practical.scheduledExamId == nil {
+            return SchoolExamNextStep(kind: .schedulePractical, text: "Examen théorique réussi : prévoir l’examen pratique.")
+        }
+        for kind in SchoolExam.Kind.allCases {
+            guard let value = summary(for: kind), !value.passed, value.scheduledExamId == nil else { continue }
+            let latest = exams.filter { $0.examKind == kind && $0.examStatus != .postponed }
+                .max { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+            guard let latest, latest.examStatus == .failed || latest.examStatus == .absent else { continue }
+            let what = kind == .theory ? "l’examen théorique" : "l’examen pratique"
+            return SchoolExamNextStep(kind: .scheduleAgain,
+                text: "\(latest.examStatus == .failed ? "Examen échoué" : "Absence à l’examen") : prévoir une nouvelle date pour \(what).")
+        }
+        return nil
+    }
+}
+
 /// Un examen prévu de l'école, avec l'élève concerné : « à renseigner » pour le personnel, « à venir » pour l'élève.
 struct SchoolExamListItem: Codable, Sendable, Equatable, Identifiable {
     let exam: SchoolExam

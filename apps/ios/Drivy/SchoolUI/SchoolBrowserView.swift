@@ -16,6 +16,8 @@ struct SchoolBrowserView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// Examens dont la date est passée et dont le résultat reste à renseigner (#54), pour qui gère des formations.
     @State private var pendingExams = SchoolPendingExamsModel()
+    /// Demandes d'élèves en attente sur des leçons (#52), pour qui gère des leçons.
+    @State private var requestInbox = SchoolLessonRequestInboxModel()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -153,6 +155,7 @@ struct SchoolBrowserView: View {
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
+            SchoolPendingRequestRows(items: requestInbox.items) { workspace.selectLearner($0) }
             SchoolPendingExamRows(items: pendingExams.items) { workspace.selectLearner($0) }
             let references = homonymReferences
             ForEach(workspace.learners) { learner in
@@ -191,6 +194,7 @@ struct SchoolBrowserView: View {
         }
         // Retour sur l’onglet : un élève qui vient de rejoindre l’école apparaît, sans effacer la liste.
         .task { await workspace.refreshLearners() }
+        .task(id: examKey) { await requestInbox.load(client: managesExams ? agendaClient?.lessonChangeClient : nil, schoolID: workspace.membership?.schoolId) }
         .task(id: examKey) { await pendingExams.load(client: managesExams ? agendaClient?.examClient : nil, schoolID: workspace.membership?.schoolId) }
     }
 

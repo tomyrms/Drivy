@@ -129,7 +129,7 @@ describe('réponse du personnel',()=>{
   const item=inbox.json().data.items.find((entry:{request:{id:string}})=>entry.request.id===request.id);
   expect(item).toBeDefined();
   expect(item.request).toMatchObject({kind:'RESCHEDULE',note:'Mardi 17 h',mine:false});
-  expect(item.lesson).toMatchObject({id:lesson.id,plannedStart:lesson.plannedStart,version:lesson.version,instructorMembershipId:id.instructorMember});
+  expect(item.lesson).toMatchObject({id:lesson.id,plannedStart:lesson.plannedStart,version:lesson.version,instructorMembershipId:id.instructorMember,learnerId:id.aliceLearner});
   expect(item.lesson.learnerDisplayName).toBeTypeOf('string');
   expect((await call('GET','/lesson-change-requests',undefined,null,'demo-admin')).json().data.items.some((entry:{request:{id:string}})=>entry.request.id===request.id)).toBe(true);
   expect((await call('GET','/lesson-change-requests',undefined,null,alice)).statusCode).toBe(403);
@@ -185,6 +185,58 @@ describe('réponse du personnel',()=>{
   const cancelled=await call('POST',`/lessons/${third.id}/cancel`,{operationId:randomUUID(),reasonCode:'INSTRUCTOR_UNAVAILABLE'},(await lessonRow(third.id)).version);
   expect(cancelled.statusCode,cancelled.body).toBe(200);
   expect((await pool.query('SELECT status FROM drivy.lesson_change_request WHERE id=$1',[cancelRequest.id])).rows[0].status).toBe('SUPERSEDED');
+ });
+});
+
+describe('critères d’acceptation de l’issue #52',()=>{
+ it('un autre élève n’agit pas sur la leçon d’Alice, ni ne la lit',async()=>{
+  const lesson=await plan(),request=(await ask(lesson.id,'CANCEL')).json().data.requests[0];
+  const bob=await call('POST',`/lessons/${lesson.id}/change-requests`,{operationId:randomUUID(),kind:'CANCEL',note:''},null,'demo-bob');
+  expect([403,404]).toContain(bob.statusCode);
+  expect([403,404]).toContain((await call('GET',`/lessons/${lesson.id}/change-requests`,undefined,null,'demo-bob')).statusCode);
+  expect([403,404]).toContain((await call('POST',`/lesson-change-requests/${request.id}/withdraw`,{operationId:randomUUID()},request.version,'demo-bob')).statusCode);
+  expect((await pool.query('SELECT status FROM drivy.lesson_change_request WHERE id=$1',[request.id])).rows[0].status).toBe('PENDING');
+ });
+
+ it('une leçon terminée ou marquée absente n’accepte plus de demande',async()=>{
+  const absent=await plan();await pool.query("UPDATE drivy.lesson SET status='NO_SHOW' WHERE id=$1",[absent.id]);
+  expect((await ask(absent.id,'RESCHEDULE','Jeudi')).json().code).toBe('LESSON_CLOSED');
+  expect((await state(absent.id)).conditions).toMatchObject({canRequest:false,blockedReason:'LESSON_CLOSED'});
+  const done=await plan();await pool.query("UPDATE drivy.lesson SET status='COMPLETED',actual_start=planned_start,actual_end=planned_end WHERE id=$1",[done.id]);
+  expect((await ask(done.id,'CANCEL')).json().code).toBe('LESSON_CLOSED');
+ });
+
+ it('deux clics simultanés ne créent qu’une demande, l’autre est refusée sans doublon',async()=>{
+  const lesson=await plan();
+  const [one,two]=await Promise.all([ask(lesson.id,'CANCEL','Premier clic'),ask(lesson.id,'RESCHEDULE','Second clic')]);
+  expect([one.statusCode,two.statusCode].sort()).toEqual([201,409]);
+  expect([one,two].find(response=>response.statusCode===409)!.json().code).toBe('LESSON_CHANGE_REQUEST_PENDING');
+  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.lesson_change_request WHERE lesson_id=$1 AND status='PENDING'",[lesson.id])).rows[0].n).toBe(1);
+ });
+
+ it('le moniteur change la leçon pendant la demande : l’ancienne demande ne peut plus être acceptée, l’élève peut en refaire une',async()=>{
+  const lesson=await plan(),request=(await ask(lesson.id,'RESCHEDULE','Samedi matin')).json().data.requests[0];
+  const free={operationId:randomUUID(),...slot(nextDay++,12),timeZone:'Europe/Zurich',meetingPoint:lesson.meetingPoint,instructorMembershipId:id.instructorMember,agreementConfirmed:true};
+  const moved=await call('POST',`/lessons/${lesson.id}/move`,free,lesson.version);expect(moved.statusCode,moved.body).toBe(200);
+  expect((await pool.query('SELECT status FROM drivy.lesson_change_request WHERE id=$1',[request.id])).rows[0].status).toBe('SUPERSEDED');
+  const version=(await lessonRow(lesson.id)).version;
+  const stale=await call('POST',`/lessons/${lesson.id}/move`,{...free,operationId:randomUUID(),...slot(nextDay++,13),changeRequestId:request.id},version);
+  expect(stale.statusCode).toBe(409);expect(stale.json().code).toBe('LESSON_CHANGE_REQUEST_CLOSED');
+  expect((await lessonRow(lesson.id)).version).toBe(version);
+  expect((await state(lesson.id)).conditions).toMatchObject({canRequest:true});
+  expect((await ask(lesson.id,'CANCEL')).statusCode).toBe(201);
+ });
+
+ it('l’échéance et la procédure lues à la demande ne changent pas quand l’école modifie ensuite sa procédure',async()=>{
+  const lesson=await plan();
+  await pool.query(`UPDATE drivy.school_policy_version SET cancellation_rules='{"cancellationHours":48,"lateAction":"CONTACT"}'::jsonb WHERE id=$1`,[school.policy]);
+  try{
+   const created=(await ask(lesson.id,'CANCEL')).json().data.requests[0];
+   expect(created).toMatchObject({cancellationHours:48,policyVersionId:school.policy});
+   await pool.query(`UPDATE drivy.school_policy_version SET cancellation_rules='{"cancellationHours":2,"lateAction":"NO_FEE"}'::jsonb WHERE id=$1`,[school.policy]);
+   const reread=(await state(lesson.id)).requests.find((entry:{id:string})=>entry.id===created.id);
+   expect(reread).toMatchObject({cancellationHours:48,deadlineAt:created.deadlineAt,late:created.late,policyVersionId:school.policy});
+  }finally{await pool.query('UPDATE drivy.school_policy_version SET cancellation_rules=NULL WHERE id=$1',[school.policy]);}
  });
 });
 

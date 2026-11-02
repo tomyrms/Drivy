@@ -8,7 +8,8 @@ export const cancellationReasons = [
   { value: 'LEARNER_REQUEST', label: 'Demande de l’élève' }, { value: 'INSTRUCTOR_UNAVAILABLE', label: 'Moniteur indisponible' },
   { value: 'SCHOOL_CLOSURE', label: 'Fermeture de l’école' }, { value: 'OTHER', label: 'Autre motif' },
 ];
-export function useCancellation(lesson: PlanningLesson, onSaved: () => void) {
+/** `requestId` : la demande d'annulation de l'élève que cette annulation accepte ; l'école la ferme avec la leçon. */
+export function useCancellation(lesson: PlanningLesson, onSaved: () => void, requestId?: string) {
   const { schoolId, membership } = useConsole();
   const [target, setTarget] = useState<PlanningLesson | null>(null), [reason, setReason] = useState('LEARNER_REQUEST'), [comment, setComment] = useState('');
   const [discard, setDiscard] = useState(false), [rereading, setRereading] = useState(false), [problem, setProblem] = useState('');
@@ -27,7 +28,7 @@ export function useCancellation(lesson: PlanningLesson, onSaved: () => void) {
     if (!target || !editable || inFlight.current || locked || !cancellationReasons.some(item => item.value === reason) || comment.length > 1000) return;
     inFlight.current = true;
     const result = await runner.run(createCommand({ schoolId, kind: 'cancelLesson', path: `lessons/${target.id}/cancel`, ifMatch: target.version,
-      resourceId: target.id, resourceVersion: target.version, body: { reasonCode: reason, comment: comment.trim() || null } }), 'La leçon est annulée.');
+      resourceId: target.id, resourceVersion: target.version, body: { reasonCode: reason, comment: comment.trim() || null, ...(requestId ? { changeRequestId: requestId } : {}) } }), 'La leçon est annulée.');
     if (result.status === 'rejected') inFlight.current = false;
     if (result.status === 'pending') { setTarget(null); window.requestAnimationFrame(() => document.getElementById('pending-title')?.focus()); }
   };
