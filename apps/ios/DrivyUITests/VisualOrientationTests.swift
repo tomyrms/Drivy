@@ -17,7 +17,7 @@ import XCTest
         "join-code", "join-code-preview", "join-code-error", "join-code-pending", "join-code-confirmed",
         "join-link", "join-link-preview", "profile", "profile-error", "onboarding-welcome",
         "onboarding-information", "onboarding-formation", "onboarding-gps", "onboarding-review", "onboarding-ready",
-        "onboarding-staff", "dossier-multi", "lessons-multi", "lessons-two", "progression-multi", "lesson-cancelled",
+        "onboarding-staff", "dossier-multi", "lessons-multi", "lessons-two", "progression-multi", "lesson-cancelled", "lesson-request", "learner-lesson-request", "learner-lesson-refused",
         "access-code", "access-register", "access-opening", "school-opening", "dossier-incomplete",
         "lesson-competencies", "lesson-route", "learner-lesson", "learner-lesson-planned", "learner-permit", "start-now-gps-known",
         "sign-in-recovery-ready", "course-learner", "course-enrolled", "course-list", "course-editor", "course-roster",
