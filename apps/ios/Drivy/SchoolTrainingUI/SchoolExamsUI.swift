@@ -34,7 +34,13 @@ import SwiftUI
         }
         do { state = try await client.state(schoolID: schoolID, trainingID: trainingID); if pending == nil { errorMessage = nil } }
         catch is CancellationError { isLoading = false; return }
-        catch { errorMessage = Self.message(error) }
+        catch {
+            // Une école qui ne connaît pas encore les examens (route absente, accès retiré) ne montre pas de panne sur toute la formation :
+            // la section se tait. Seule une vraie panne de l'école s'affiche, avec sa reprise.
+            let silent: [SchoolPlanningFailure] = [.notFound, .invalidResponse, .forbidden]
+            if let failure = error as? SchoolPlanningFailure, silent.contains(failure), pending == nil { state = nil; errorMessage = nil }
+            else { errorMessage = Self.message(error) }
+        }
         isLoading = false
         if pending != nil { _ = await transmit() }
     }
@@ -195,6 +201,12 @@ struct SchoolTrainingExamsSection: View {
                 }
             }
             if let pending = model.pending { pendingBanner(model, pending) }
+            else if state.canManage, let step = state.nextStep {
+                Text(step.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DrivyTheme.surfaceCard, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
+                    .accessibilityIdentifier("exams-next-step")
+            }
             ForEach(state.exams) { exam in row(exam, canManage: state.canManage && model.pending == nil) }
             if let message = model.errorMessage, model.pending == nil { DrivyActionNote(text: message, isError: true) }
         }
