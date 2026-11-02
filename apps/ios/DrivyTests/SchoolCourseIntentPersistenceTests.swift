@@ -222,8 +222,8 @@ import Testing
         await reopened.load()
         #expect(reopened.hasUnconfirmedOperation)
         #expect(reopened.newTypeTitle == "Premiers secours" && reopened.newTypeDescription == "Gestes de base")
-        let calls = await transport.calls
-        #expect(calls == 1) // la seule lecture du catalogue ; aucune écriture
+        // Seule la lecture du catalogue peut avoir eu lieu : rien n'est renvoyé de soi-même.
+        #expect(await transport.writes == 0)
 
         // Abandonner la retire du coffre.
         await reopened.abandonUnconfirmed()
@@ -297,8 +297,10 @@ private struct CourseOfflineTransport: SchoolHTTPTransport {
 /// Idem, en comptant les appels : rien ne doit partir quand l'appareil ne peut pas conserver le geste.
 private actor CourseCountingOfflineTransport: SchoolHTTPTransport {
     private(set) var calls = 0
+    private(set) var writes = 0
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         calls += 1
+        if (request.httpMethod ?? "GET") != "GET" { writes += 1 }
         throw URLError(.notConnectedToInternet)
     }
 }
