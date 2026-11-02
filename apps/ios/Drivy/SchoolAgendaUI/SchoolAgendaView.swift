@@ -550,16 +550,22 @@ struct SchoolAgendaView: View {
         guard let membership = workspace.membership else { return }
         if series.isDraft && series.canManage {
             courseEditor = SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
-                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series, selectedOccurrenceID: occurrenceID)
+                timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, series: series, selectedOccurrenceID: occurrenceID,
+                persistence: coursePersistence)
         } else {
             courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series,
-                learners: workspace.learners, selectedOccurrenceID: occurrenceID)
+                learners: workspace.learners, selectedOccurrenceID: occurrenceID, persistence: coursePersistence)
         }
+    }
+    /// Coffre des gestes de la feuille des participants, pour ce compte dans cette école (#128 à #130).
+    private var coursePersistence: SchoolCourseIntentPersistence? {
+        guard let person = workspace.person, let membership = workspace.membership else { return nil }
+        return SchoolCourseIntentPersistence(scope: client.scope(person: person, membership: membership))
     }
     private func newCourseEditor() -> SchoolCourseEditorWorkspace? {
         guard let membership = workspace.membership, mayCreateCourse else { return nil }
         return SchoolCourseEditorWorkspace(schoolID: membership.schoolId, membershipID: membership.membershipId,
-            timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, day: selectedDate)
+            timeZone: schoolTimeZone, client: client.courseClient, catalogue: courseCatalogue, day: selectedDate, persistence: coursePersistence)
     }
     /// Les deux sources ont chacune leur résultat ; la réussite de l'une ne masque pas l'autre.
     @MainActor private func refreshSources() async {

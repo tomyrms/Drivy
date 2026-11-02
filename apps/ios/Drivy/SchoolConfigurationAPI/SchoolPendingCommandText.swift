@@ -43,6 +43,9 @@ extension SchoolCommandKind {
         case .updateExam: "Date d’un examen"
         case .postponeExam: "Report d’un examen"
         case .setExamResult: "Résultat d’un examen"
+        case .courseSheetIntent: "Appel, règlement ou validation d’un cours"
+        case .courseLearnerIntent: "Inscription à un cours"
+        case .courseEditorIntent: "Cours collectif en préparation"
         }
     }
 }

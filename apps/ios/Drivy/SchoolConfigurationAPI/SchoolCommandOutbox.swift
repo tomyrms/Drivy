@@ -42,6 +42,17 @@ enum SchoolCommandKind: String, Codable, Sendable {
     case savePlanningDefaults
     /// Examens théorique et pratique d'une formation (#54).
     case createExam, updateExam, postponeExam, setExamResult
+    /// Gestes de cours conservés dans leur propre coffre (#126, #128 à #130) : feuille du cours et demande de l'élève.
+    case courseSheetIntent, courseLearnerIntent
+    /// Opération incertaine de l'éditeur de cours (#127) : type, brouillon ou publication, avec la saisie qui l'accompagne.
+    case courseEditorIntent
+
+    var isCourse: Bool {
+        switch self {
+        case .courseSheetIntent, .courseLearnerIntent, .courseEditorIntent: true
+        default: false
+        }
+    }
 
     var isExam: Bool {
         switch self {
@@ -87,7 +98,7 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
-    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation && !isExam }
+    var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation && !isExam && !isCourse }
 
     var isInvitation: Bool {
         switch self {
@@ -144,6 +155,9 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .updateExam: "UPDATE_EXAM"
         case .postponeExam: "POSTPONE_EXAM"
         case .setExamResult: "SET_EXAM_RESULT"
+        case .courseSheetIntent: "COURSE_SHEET_INTENT"
+        case .courseLearnerIntent: "COURSE_LEARNER_INTENT"
+        case .courseEditorIntent: "COURSE_EDITOR_INTENT"
         }
     }
 
@@ -176,6 +190,8 @@ enum SchoolCommandKind: String, Codable, Sendable {
         case .recordPermitCheck: "PermitCheck"
         case .savePlanningDefaults: "PlanningDefaults"
         case .createExam, .updateExam, .postponeExam, .setExamResult: "Exam"
+        case .courseSheetIntent: "CourseEnrollment"
+        case .courseLearnerIntent, .courseEditorIntent: "CourseSeries"
         }
     }
 }
@@ -218,13 +234,16 @@ struct PendingSchoolCommand: Codable, Sendable, Equatable, Identifiable {
 
     var hasValidTarget: Bool {
         if let observationUndoOperationID, kind != .createObservation || observationUndoOperationID == id { return false }
-        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && !kind.isExam && (routeResourceID != nil || expectedVersion != nil) { return false }
+        if !kind.isProfile && !kind.isCatalog && !kind.isPlanning && !kind.isReport && !kind.isObservation && !kind.isExam && !kind.isCourse && (routeResourceID != nil || expectedVersion != nil) { return false }
         switch kind {
         case .createExam:
             // La création vise la formation (route) ; l'examen n'a pas encore d'identifiant.
             return resourceVersion == 0 && resourceID == nil && routeResourceID != nil && expectedVersion == nil
         case .updateExam, .postponeExam, .setExamResult:
             return (1...2_147_483_647).contains(resourceVersion) && resourceID != nil && routeResourceID != nil && expectedVersion == nil
+        case .courseSheetIntent, .courseLearnerIntent, .courseEditorIntent:
+            // Le geste vise une inscription (feuille) ou un cours (élève) ; la série est la route. Aucune version : c'est l'opération qui compte.
+            return resourceVersion == 0 && resourceID != nil && routeResourceID != nil && expectedVersion == nil
         case .savePlanningDefaults:
             return resourceVersion > 0 && resourceID == scope.membershipID && routeResourceID == nil && expectedVersion == nil
         case .createObservation:

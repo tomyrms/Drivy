@@ -114,9 +114,15 @@ struct SchoolCourseAnnouncement: Equatable {
     @ObservationIgnored private var stamp = 0
     @ObservationIgnored private var reloadRequested = false
     @ObservationIgnored var onChange: (@MainActor () async -> Void)?
+    /// Coffre des gestes de cet appareil (#128 à #130) ; sans lui (tests, aperçus), les gestes restent en mémoire.
+    private let persistence: SchoolCourseIntentPersistence?
+    @ObservationIgnored private var kept: [UUID: PendingSchoolCommand] = [:]
+    @ObservationIgnored private var didRestore = false
+    @ObservationIgnored private var didPrune = false
 
-    init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient) {
+    init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient, persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.seriesID = seriesID; self.timeZone = timeZone; self.client = client
+        self.persistence = persistence
     }
 
     var rights: SchoolCourseSheetRights? { sheet?.rights }
@@ -138,6 +144,7 @@ struct SchoolCourseAnnouncement: Equatable {
     }
 
     func load() async {
+        restoreKeptIntents()
         guard !isLoading else { reloadRequested = true; return }
         isLoading = true; defer { isLoading = false }
         repeat {
@@ -146,10 +153,72 @@ struct SchoolCourseAnnouncement: Equatable {
             do {
                 let fresh = try await client.sheet(schoolID: schoolID, seriesID: seriesID)
                 apply(fresh, keepingRowsNewerThan: since)
+                discardOrphanedIntents()
                 errorMessage = nil
             } catch is CancellationError { return
             } catch { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
         } while reloadRequested
+    }
+
+    // MARK: Conservation sur l'appareil (#128 à #130)
+
+    /// Écrit ou remplace le geste dans le coffre avant son envoi. Faux : rien n'a pu être conservé, le geste ne part pas.
+    private func keep(_ intent: SchoolCourseSheetIntent) -> Bool {
+        guard let persistence else { return true }
+        do {
+            let command = try SchoolCourseSheetRecord(intent).command(scope: persistence.scope, seriesID: seriesID,
+                createdAt: kept[intent.id]?.createdAt ?? Date())
+            try persistence.store.replace(kept[intent.id], with: command)
+            kept[intent.id] = command
+            return true
+        } catch { return false }
+    }
+
+    /// Le geste a reçu sa réponse (ou son refus) : il quitte le coffre. Un reste éventuel reviendrait en « non confirmé »,
+    /// et rejouer la même opération rend la réponse déjà enregistrée sans second effet.
+    private func release(_ intentID: UUID) {
+        guard let persistence, let command = kept.removeValue(forKey: intentID) else { return }
+        try? persistence.store.remove(command)
+    }
+
+    /// Gestes laissés par une session précédente : à reprendre ou à abandonner par la personne, jamais renvoyés d'eux-mêmes.
+    private func restoreKeptIntents() {
+        guard let persistence, !didRestore else { return }
+        didRestore = true
+        let commands: [PendingSchoolCommand]
+        do { commands = try persistence.store.commands(scope: persistence.scope, seriesID: seriesID) }
+        catch {
+            errorMessage = "Cet appareil ne peut pas relire les gestes conservés."
+            return
+        }
+        for command in commands where command.kind == .courseSheetIntent {
+            guard let record = try? JSONDecoder().decode(SchoolCourseSheetRecord.self, from: command.body),
+                  record.operationId == command.id, let action = record.action,
+                  !(lanes[action.enrollmentID] ?? []).contains(where: { $0.id == command.id }) else {
+                try? persistence.store.remove(command)
+                continue
+            }
+            var intent = SchoolCourseSheetIntent(id: command.id, action: action, learnerName: record.learnerName)
+            intent.sent = record.sent
+            kept[command.id] = command
+            lanes[action.enrollmentID, default: []].append(intent)
+        }
+        // Le premier geste de chaque élève attend la personne : l'école n'a peut-être pas répondu avant l'arrêt.
+        for enrollmentID in Array(lanes.keys) where lanes[enrollmentID]?.first?.state == .queued {
+            lanes[enrollmentID]?[0].state = .uncertain(SchoolCourseIntentPersistence.restoredMessage)
+        }
+    }
+
+    /// Après la première lecture de la feuille : un geste conservé pour une inscription qui n'y est plus (annulée) ne peut plus
+    /// s'appliquer ; il est retiré au lieu de rester à reprendre.
+    private func discardOrphanedIntents() {
+        guard persistence != nil, !didPrune, let rows = sheet?.rows else { return }
+        didPrune = true
+        let known = Set(rows.map(\.enrollmentId))
+        for enrollmentID in Array(lanes.keys) where !known.contains(enrollmentID) {
+            for intent in lanes[enrollmentID] ?? [] where kept[intent.id] != nil { release(intent.id) }
+            lanes[enrollmentID] = nil
+        }
     }
 
     // MARK: Projection
@@ -204,9 +273,20 @@ struct SchoolCourseAnnouncement: Equatable {
            let index = lane.lastIndex(where: { $0.occurrenceID == occurrence }), !lane[index].sent, lane[index].state == .queued {
             let confirmed = sheet?.rows.first { $0.enrollmentId == enrollmentID }?.mark(occurrence)?.status
             let earlier = lane[..<index].last { $0.occurrenceID == occurrence }?.attendanceStatus ?? confirmed
-            if earlier == status { lane.remove(at: index) } else { lane[index].action = action }
+            if earlier == status {
+                release(lane[index].id)
+                lane.remove(at: index)
+            } else {
+                var changed = lane[index]
+                changed.action = action
+                guard keep(changed) else { notices[enrollmentID] = SchoolCourseIntentPersistence.unkeptMessage; return }
+                lane[index] = changed
+            }
         } else {
-            lane.append(SchoolCourseSheetIntent(id: UUID(), action: action, learnerName: learnerName))
+            let intent = SchoolCourseSheetIntent(id: UUID(), action: action, learnerName: learnerName)
+            // Écrit avant tout : un geste que l'appareil ne peut pas conserver n'est pas envoyé.
+            guard keep(intent) else { notices[enrollmentID] = SchoolCourseIntentPersistence.unkeptMessage; return }
+            lane.append(intent)
         }
         lanes[enrollmentID] = lane.isEmpty ? nil : lane
         drain(enrollmentID)
@@ -224,6 +304,7 @@ struct SchoolCourseAnnouncement: Equatable {
     func abandon(_ enrollmentID: UUID) {
         guard var lane = lanes[enrollmentID], let head = lane.first, case .uncertain = head.state else { return }
         lane.removeFirst()
+        release(head.id)
         lanes[enrollmentID] = lane.isEmpty ? nil : lane
         Task {
             await load()
@@ -252,6 +333,12 @@ struct SchoolCourseAnnouncement: Equatable {
                 }
                 intent.action = prepared
                 intent.sent = true
+                guard keep(intent) else {
+                    intent.sent = false
+                    intent.state = .uncertain(SchoolCourseIntentPersistence.unkeptMessage)
+                    update(intent, in: enrollmentID)
+                    return
+                }
             }
             intent.state = .sending
             update(intent, in: enrollmentID)
@@ -337,6 +424,7 @@ struct SchoolCourseAnnouncement: Equatable {
     }
 
     private func remove(_ intentID: UUID, from enrollmentID: UUID) {
+        release(intentID)
         lanes[enrollmentID]?.removeAll { $0.id == intentID }
         if lanes[enrollmentID]?.isEmpty == true { lanes[enrollmentID] = nil }
     }

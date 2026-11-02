@@ -217,6 +217,10 @@ struct SchoolCourseEditorView: View {
             Button("Réessayer la demande") { Task { await model.retryUnconfirmed() } }
                 .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isBusy)
                 .accessibilityIdentifier("course-retry-command")
+            Button("Abandonner la demande", role: .destructive) { Task { await model.abandonUnconfirmed() } }
+                .disabled(model.isBusy)
+                .frame(minHeight: DrivyLayout.tapTarget)
+                .accessibilityIdentifier("course-abandon-command")
         } else {
         if let problem = model.publishProblem, !model.isBusy {
             DrivyActionNote(text: problem, isError: model.problem != nil)
@@ -348,7 +352,8 @@ struct SchoolCourseDetailView: View {
                 if canOpenParticipants {
                     Section {
                         Button {
-                            attendance = SchoolCourseAttendanceWorkspace(schoolID: model.schoolID, seriesID: series.id, timeZone: timeZone, client: model.client)
+                            attendance = SchoolCourseAttendanceWorkspace(schoolID: model.schoolID, seriesID: series.id, timeZone: timeZone, client: model.client,
+                                persistence: model.persistence)
                         } label: { Label("Suivre les participants", systemImage: "checklist") }
                             .buttonStyle(DrivyPrimaryButtonStyle())
                             .disabled(model.isBusy)

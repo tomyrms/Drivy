@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Une séance en cours de saisie. L’identifiant ne sert qu’à l’écran.
-struct SchoolCourseOccurrenceDraft: Identifiable, Equatable, Sendable {
+struct SchoolCourseOccurrenceDraft: Identifiable, Equatable, Sendable, Codable {
     let id: UUID
     var startsAt: Date
     var endsAt: Date
@@ -14,7 +14,7 @@ struct SchoolCourseOccurrenceDraft: Identifiable, Equatable, Sendable {
 }
 
 /// Saisie d’un cours collectif, contrôlée ici avant tout envoi avec les mêmes bornes que le serveur.
-struct SchoolCourseForm: Equatable, Sendable {
+struct SchoolCourseForm: Equatable, Sendable, Codable {
     var typeID: UUID?
     var title = ""
     var description = ""
@@ -131,11 +131,17 @@ enum SchoolCourseFormat {
     private enum Intent { case type, draft(closing: Bool), publication }
     @ObservationIgnored private var pendingIntent: Intent?
     @ObservationIgnored private var initialForm = SchoolCourseForm()
+    /// Coffre des opérations de cet appareil (#127) ; sans lui (tests, aperçus), l'opération incertaine reste en mémoire.
+    private let persistence: SchoolCourseIntentPersistence?
+    @ObservationIgnored private var kept: PendingSchoolCommand?
+    @ObservationIgnored private var didRestore = false
 
     init(schoolID: UUID, membershipID: UUID, timeZone: String, client: SchoolCourseClient,
-         catalogue: SchoolCourseCatalogue?, series: SchoolCourseSeries? = nil, day: Date = Date(), selectedOccurrenceID: UUID? = nil) {
+         catalogue: SchoolCourseCatalogue?, series: SchoolCourseSeries? = nil, day: Date = Date(), selectedOccurrenceID: UUID? = nil,
+         persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.membershipID = membershipID; self.timeZone = timeZone; self.client = client
         self.catalogue = catalogue; self.series = series
+        self.persistence = persistence
         self.selectedOccurrenceID = selectedOccurrenceID
         selectedOccurrenceAvailable = selectedOccurrenceID.map { selected in
             series?.occurrences.contains { $0.id == selected } == true
@@ -173,12 +179,14 @@ enum SchoolCourseFormat {
     var hasUnconfirmedOperation: Bool { pending != nil }
 
     func load() async {
+        restoreKept()
         guard !isLoading else { return }
         let wasUnedited = !hasUnsavedChanges
         isLoading = true; defer { isLoading = false }
         do {
             catalogue = try await client.catalogue(schoolID: schoolID)
-            applyCatalogueDefaults()
+            // Une opération reprise garde sa saisie telle quelle : la changer changerait son identité, donc l'opération.
+            if pending == nil { applyCatalogueDefaults() }
             if series == nil && wasUnedited { initialForm = form }
             if catalogue?.canManage == false { errorMessage = SchoolCourseClient.failure(403, "COURSE_ACCESS_REQUIRED").errorDescription }
             if let selectedOccurrenceID, let series {
@@ -225,11 +233,13 @@ enum SchoolCourseFormat {
         guard canCreateType else { return false }
         pendingIntent = .type
         isBusy = true; errorMessage = nil; defer { isBusy = false }
-        let operation = operationID(for: "type|\(title)|\(description)")
+        let key = "type|\(title)|\(description)"
+        let operation = operationID(for: key)
+        guard remember(.type, key: key, operation: operation) else { return false }
         do {
             let type = try await client.createType(schoolID: schoolID,
                 body: SchoolCourseTypeBody(operationId: operation, title: title, description: description))
-            pending = nil
+            clearPending()
             if let catalogue {
                 self.catalogue = SchoolCourseCatalogue(schoolId: catalogue.schoolId, canManage: catalogue.canManage,
                     types: catalogue.types.filter { $0.id != type.id } + [type], policy: catalogue.policy, instructors: catalogue.instructors)
@@ -255,10 +265,12 @@ enum SchoolCourseFormat {
         var written = series
         if written == nil || hasUnsavedChanges { written = await writeDraft(closing: false) }
         guard let draft = written else { return }
-        let operation = operationID(for: "publish|\(draft.id)|\(draft.version)")
+        let key = "publish|\(draft.id)|\(draft.version)"
+        let operation = operationID(for: key)
+        guard remember(.publication, key: key, operation: operation) else { return }
         do {
             let published = try await client.publish(schoolID: schoolID, seriesID: draft.id, version: draft.version, operationID: operation)
-            pending = nil; series = published; finished = published
+            clearPending(); series = published; finished = published
         } catch { fail(error) }
     }
 
@@ -271,6 +283,8 @@ enum SchoolCourseFormat {
     /// Les champs restent figés après une réponse perdue : ce bouton reprend exactement l’intention précédente.
     func retryUnconfirmed() async {
         guard pending != nil, !isBusy else { return }
+        // Opération reprise après un arrêt de l'app : le catalogue n'est pas encore relu, et rien ne part sans lui.
+        if catalogue == nil { await load() }
         switch pendingIntent {
         case .type: await createType()
         case .draft(let closing): _ = await saveDraft(closing: closing)
@@ -287,10 +301,11 @@ enum SchoolCourseFormat {
                 timeZone: probe.timeZone, occurrences: probe.occurrences)) else { return nil }
         let key = "draft|\(series?.id.uuidString ?? "new")|\(series?.version ?? 0)|" + signature.base64EncodedString()
         let operation = operationID(for: key)
+        guard remember(.draft, closing: closing, key: key, operation: operation) else { return nil }
         guard let body = form.body(operationID: operation, timeZone: timeZone) else { return nil }
         do {
             let saved = try await client.save(schoolID: schoolID, seriesID: series?.id, version: series?.version, body: body)
-            pending = nil; series = saved
+            clearPending(); series = saved
             if closing { finished = saved }
             return saved
         } catch { fail(error); return nil }
@@ -304,8 +319,69 @@ enum SchoolCourseFormat {
     private func fail(_ error: any Error) {
         if error is CancellationError { return }
         // Un refus motivé clôt l’opération ; une réponse perdue garde la même pour la nouvelle tentative.
-        if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection || failure == .forbidden { pending = nil }
+        if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection || failure == .forbidden { clearPending() }
         errorMessage = message(error)
+    }
+
+    // MARK: Conservation sur l'appareil (#127)
+
+    /// Écrit l'opération et la saisie dans le coffre avant l'envoi. Faux : rien n'a pu être conservé, l'opération ne part pas.
+    private func remember(_ intent: SchoolCourseEditorRecord.Intent, closing: Bool = false, key: String, operation: UUID) -> Bool {
+        guard let persistence else { return true }
+        // Même opération reprise : elle est déjà conservée, avec la même saisie (sa clé la désigne).
+        if kept?.id == operation { return true }
+        do {
+            let command = try SchoolCourseEditorRecord(operationId: operation, intent: intent, closing: closing, key: key, seriesId: series?.id,
+                form: form, newTypeTitle: newTypeTitle, newTypeDescription: newTypeDescription)
+                .command(scope: persistence.scope, createdAt: Date())
+            try persistence.store.replace(kept, with: command)
+            kept = command
+            return true
+        } catch {
+            pending = nil
+            errorMessage = SchoolCourseIntentPersistence.unkeptMessage
+            return false
+        }
+    }
+
+    /// L'école a répondu (ou refusé) : l'opération quitte le coffre.
+    private func clearPending() {
+        pending = nil
+        guard let persistence, let command = kept else { return }
+        kept = nil
+        try? persistence.store.remove(command)
+    }
+
+    /// Opération laissée par une session précédente : sa saisie revient telle quelle, à reprendre ou à abandonner par la personne.
+    /// Rien n'est renvoyé de soi-même ; reprendre rejoue la même opération, que l'école n'enregistre pas deux fois.
+    private func restoreKept() {
+        guard let persistence, !didRestore else { return }
+        didRestore = true
+        guard let commands = try? persistence.store.commands(scope: persistence.scope, seriesID: series?.id ?? membershipID),
+              let command = commands.first(where: { $0.kind == .courseEditorIntent }) else { return }
+        guard pending == nil, let record = try? JSONDecoder().decode(SchoolCourseEditorRecord.self, from: command.body),
+              record.operationId == command.id, record.seriesId == series?.id else {
+            try? persistence.store.remove(command)
+            return
+        }
+        kept = command
+        form = record.form; newTypeTitle = record.newTypeTitle; newTypeDescription = record.newTypeDescription
+        pending = (record.key, record.operationId)
+        switch record.intent {
+        case .type: pendingIntent = .type
+        case .draft: pendingIntent = .draft(closing: record.closing)
+        case .publication: pendingIntent = .publication
+        }
+        errorMessage = SchoolCourseIntentPersistence.restoredMessage
+    }
+
+    /// Abandonne la demande à reprendre ; l'école l'a peut-être reçue, l'agenda se relit pour le montrer.
+    func abandonUnconfirmed() async {
+        guard pending != nil, !isBusy else { return }
+        clearPending()
+        pendingIntent = nil
+        errorMessage = "Demande abandonnée. L’école l’a peut-être reçue : vérifie l’agenda avant d’enregistrer à nouveau."
+        await load()
     }
     private func message(_ error: any Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? "L’école n’a pas pu enregistrer ce cours."
@@ -373,10 +449,14 @@ struct SchoolAgendaCourseItem: Identifiable, Equatable, Sendable {
     @ObservationIgnored private var pending: (capacity: Int, version: Int, operation: UUID)?
     /// Inscrits et file, seulement pour qui gère un cours publié.
     let roster: SchoolCourseRosterWorkspace?
+    /// Coffre des gestes de la feuille des participants (#128 à #130) ; absent dans les tests et les aperçus.
+    let persistence: SchoolCourseIntentPersistence?
 
-    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = [], selectedOccurrenceID: UUID? = nil) {
+    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = [], selectedOccurrenceID: UUID? = nil,
+         persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.client = client; self.series = series; capacity = series.capacity
         self.selectedOccurrenceID = selectedOccurrenceID
+        self.persistence = persistence
         roster = series.canManage && series.status == .published
             ? SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: series.id, client: client, learners: learners) : nil
         roster?.onChange = { [weak self] in await self?.refresh() }

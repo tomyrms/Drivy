@@ -163,9 +163,14 @@ struct SchoolCourseLearnerPending: Equatable {
     /// Dernière commande confirmée par l’école, annoncée une fois.
     private(set) var confirmation: String?
     @ObservationIgnored var onChange: (@MainActor () -> Void)?
+    /// Coffre des demandes de cet appareil (#126) ; sans lui (tests, aperçus), la demande reste en mémoire.
+    private let persistence: SchoolCourseIntentPersistence?
+    @ObservationIgnored private var kept: PendingSchoolCommand?
+    @ObservationIgnored private var didRestore = false
 
-    init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient) {
+    init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient, persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.seriesID = seriesID; self.timeZone = timeZone; self.client = client
+        self.persistence = persistence
     }
 
     /// Une demande part : les autres gestes attendent sa réponse.
@@ -217,6 +222,7 @@ struct SchoolCourseLearnerPending: Equatable {
     }
 
     func load() async {
+        restoreKeptRequest()
         guard !isLoading else { return }
         isLoading = true; defer { isLoading = false }
         do {
@@ -244,7 +250,10 @@ struct SchoolCourseLearnerPending: Equatable {
         default: break
         }
         errorMessage = nil; confirmation = nil
-        pending = SchoolCourseLearnerPending(action: action, operation: UUID())
+        let request = SchoolCourseLearnerPending(action: action, operation: UUID())
+        // Écrite avant tout : une demande que l'appareil ne peut pas conserver n'est pas envoyée.
+        guard keep(request) else { errorMessage = SchoolCourseIntentPersistence.unkeptMessage; return }
+        pending = request
         Task { await send() }
     }
 
@@ -258,7 +267,7 @@ struct SchoolCourseLearnerPending: Equatable {
     /// Elle a peut-être été enregistrée : la fiche est relue pour montrer l’état réel.
     func abandonPending() async {
         guard let current = pending, case .uncertain = current.state else { return }
-        pending = nil
+        pending = nil; release()
         await load()
         onChange?()
     }
@@ -268,7 +277,7 @@ struct SchoolCourseLearnerPending: Equatable {
         do {
             let result = try await client.act(current.action, schoolID: schoolID, seriesID: seriesID, operationID: current.operation)
             guard pending?.operation == current.operation else { return }
-            pending = nil; reply = result
+            pending = nil; release(); reply = result
             confirmation = Self.done(current.action)
             onChange?()
         } catch {
@@ -276,16 +285,51 @@ struct SchoolCourseLearnerPending: Equatable {
             let message = Self.message(error)
             let failure = error as? SchoolPlanningFailure
             if let failure, [.unauthorized, .forbidden, .notFound].contains(failure) {
-                pending = nil; reply = nil; following = nil; errorMessage = message
+                pending = nil; release(); reply = nil; following = nil; errorMessage = message
             } else if let failure, failure.definitiveRejection {
                 // Refus motivé : la demande s’arrête et la fiche se relit sans effacer la raison.
-                pending = nil
+                pending = nil; release()
                 await load()
                 errorMessage = message
             } else {
                 pending?.state = .uncertain(error is CancellationError ? SchoolPlanningFailure.unavailable.localizedDescription : message)
             }
         }
+    }
+
+    // MARK: Conservation sur l'appareil (#126)
+
+    /// Écrit la demande dans le coffre avant son envoi. Faux : rien n'a pu être conservé, la demande ne part pas.
+    private func keep(_ request: SchoolCourseLearnerPending) -> Bool {
+        guard let persistence else { return true }
+        do {
+            let command = try SchoolCourseLearnerRecord(action: request.action, operation: request.operation)
+                .command(scope: persistence.scope, seriesID: seriesID, createdAt: Date())
+            try persistence.store.replace(kept, with: command)
+            kept = command
+            return true
+        } catch { return false }
+    }
+
+    /// L'école a répondu (ou refusé) : la demande quitte le coffre. Un reste éventuel reviendrait en « non confirmé », et rejouer
+    /// la même opération rend la réponse déjà enregistrée sans second effet.
+    private func release() {
+        guard let persistence, let command = kept else { return }
+        kept = nil
+        try? persistence.store.remove(command)
+    }
+
+    /// Demande laissée par une session précédente : à reprendre ou à abandonner par l'élève, jamais renvoyée d'elle-même.
+    func restoreKeptRequest() {
+        guard let persistence, !didRestore, pending == nil else { return }
+        didRestore = true
+        guard let commands = try? persistence.store.commands(scope: persistence.scope, seriesID: seriesID),
+              let command = commands.first(where: { $0.kind == .courseLearnerIntent }),
+              let record = try? JSONDecoder().decode(SchoolCourseLearnerRecord.self, from: command.body),
+              record.operationId == command.id, let action = record.action else { return }
+        kept = command
+        pending = SchoolCourseLearnerPending(action: action, operation: command.id,
+            state: .uncertain(SchoolCourseIntentPersistence.restoredMessage))
     }
 
     /// L’échéance d’annulation de la série est passée (accepter une place ne permettra plus d’annuler soi-même).
@@ -326,8 +370,13 @@ struct SchoolCourseLearnerPending: Equatable {
     private(set) var hasLoaded = false
     var errorMessage: String?
 
-    init(schoolID: UUID, timeZone: String, client: SchoolCourseClient) {
+    /// Coffre des demandes de cet appareil (#126) : une demande laissée par une session précédente se dit dans la liste.
+    private let persistence: SchoolCourseIntentPersistence?
+    @ObservationIgnored private var didRestore = false
+
+    init(schoolID: UUID, timeZone: String, client: SchoolCourseClient, persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.timeZone = timeZone; self.client = client
+        self.persistence = persistence
     }
 
     /// Propositions encore ouvertes, la plus proche échéance d’abord.
@@ -345,7 +394,8 @@ struct SchoolCourseLearnerPending: Equatable {
     @ObservationIgnored private var details: [UUID: SchoolCourseLearnerWorkspace] = [:]
     func detail(for seriesID: UUID) -> SchoolCourseLearnerWorkspace {
         if let existing = details[seriesID] { return existing }
-        let course = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: timeZone, client: client)
+        let course = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: timeZone, client: client,
+            persistence: persistence)
         details[seriesID] = course
         return course
     }
@@ -397,7 +447,18 @@ struct SchoolCourseLearnerPending: Equatable {
         guard let fresh = try? await client.mine(schoolID: schoolID), !Task.isCancelled else { return }
         mine = fresh
     }
+    /// Demandes laissées par une session précédente : leur cours les dit dans la liste dès l'ouverture.
+    private func restoreKeptRequests() {
+        guard let persistence, !didRestore else { return }
+        didRestore = true
+        guard let commands = try? persistence.store.commands(scope: persistence.scope) else { return }
+        for seriesID in Set(commands.filter { $0.kind == .courseLearnerIntent }.compactMap(\.routeResourceID)) {
+            detail(for: seriesID).restoreKeptRequest()
+        }
+    }
+
     func load(now: Date = Date()) async {
+        restoreKeptRequests()
         guard !isLoading else { return }
         isLoading = true; defer { isLoading = false }
         do {
