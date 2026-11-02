@@ -6,6 +6,12 @@ enum SchoolCoursePresentation {
             .min { ($0.start ?? .distantFuture) < ($1.start ?? .distantFuture) }
     }
 
+    /// Texte saisi par l'organisateur, sans espaces autour ; `nil` s'il est vide : aucune section vide, aucun contenu inventé.
+    static func text(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     static func allAttendanceRequired(_ series: SchoolCourseSeries) -> Bool {
         !series.occurrences.isEmpty && series.occurrences.allSatisfy(\.attendanceRequired)
     }
@@ -67,7 +73,7 @@ struct SchoolCourseEnrollmentReviewView: View {
                 if let series = model.series {
                     Section {
                         Text(series.title).font(.headline)
-                        if !series.location.isEmpty { Text(series.location) }
+                        if let location = SchoolCoursePresentation.text(series.location) { Text(location) }
                         if let language = SchoolCourseLanguage.phrase(for: series.teachingLanguage) { Text(language) }
                         Text("Inscription pour \(SchoolCourseEnrollmentFormat.sessions(series.occurrences.count)).")
                     }.drivyFormRows()
@@ -78,7 +84,7 @@ struct SchoolCourseEnrollmentReviewView: View {
                     .drivyFormRows()
                     Section {
                         Text("Paiement sur place")
-                        if !series.conditions.isEmpty { Text(series.conditions).fixedSize(horizontal: false, vertical: true) }
+                        if let conditions = SchoolCoursePresentation.text(series.conditions) { Text(conditions).fixedSize(horizontal: false, vertical: true) }
                         if let deadline = SchoolLesson.date(series.selfCancellationDeadline) {
                             LabeledContent("Annulable jusqu’au") {
                                 Text(SchoolCourseEnrollmentFormat.deadline(deadline, zone: model.timeZone)).multilineTextAlignment(.trailing)
