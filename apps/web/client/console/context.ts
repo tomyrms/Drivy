@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { SchoolCommand } from '../command-core';
 import { commandMessage } from '../command-core';
-import { commandRefreshesSchool } from '../command-conflicts';
+import { commandRefreshesSchool, wouldConflict, type ConflictSubject } from '../command-conflicts';
+import { CommandLane, laneView, type LaneIntent, type LaneResult, type LaneView } from '../command-lane';
 import { commandStore, useCommandSnapshot, type PendingEntry, type SubmitResult } from '../command-store';
 import { errorMessage, RequestFailure } from '../protocol';
 import type { Member, Me } from '../protocol';
@@ -209,6 +210,44 @@ export const pendingResourceLabel: Partial<Record<SchoolCommand['kind'], string>
   resendInvitation: 'Renvoi en cours', revokeInvitation: 'Révocation en cours',
   updateMember: 'Modification en cours', deactivateMember: 'Retrait en cours',
 };
+
+/**
+ * Several independent intentions in one section (an invitation renewed while another is revoked, hours edited while an absence is
+ * added), each followed on its own through the same command store. `tag` names the intention: one live request per tag, and a
+ * control stays available unless a followed request concerns the same aggregate (`blocked`). The lane never grants anything:
+ * `onConfirmed` runs only when the school confirmed, by response or by AP72 receipt, and the lane is dropped with the account,
+ * school, membership or access epoch it was opened for.
+ */
+export function useCommandLane(onConfirmed?: (intent: LaneIntent, result: LaneResult | null) => void) {
+  const context = useConsole();
+  const snapshot = useCommandSnapshot();
+  const scope = `${context.me.personId}/${context.schoolId}/${context.membership.membershipId}/${context.membership.accessEpoch}`;
+  const latest = useRef({ context, onConfirmed });
+  latest.current = { context, onConfirmed };
+  const lane = useMemo(() => new CommandLane(commandStore, () => ({
+    csrf: () => latest.current.context.csrf(),
+    confirmed: (intent, result) => {
+      if (result && commandRefreshesSchool(intent.kind)) void latest.current.context.reloadSchool();
+      latest.current.onConfirmed?.(intent, result);
+    },
+  })), [scope]);
+  useEffect(() => () => lane.dispose(), [lane]);
+  const state = useSyncExternalStore(lane.subscribe, lane.getSnapshot);
+  useEffect(() => { lane.reconcile(); }, [lane, snapshot, state]);
+  const view = useCallback((tag: string): LaneView => laneView(state, tag), [state]);
+  const run = useCallback((command: SchoolCommand, success: string, tag: string) => {
+    const started = lane.start(command, success, tag);
+    void started.result.then(result => {
+      // The pending panel at the top of the page carries the verification; move focus there.
+      if (result.status === 'pending' && result.message) window.requestAnimationFrame(() => document.getElementById('pending-title')?.focus());
+    });
+    return started;
+  }, [lane]);
+  /** Would a request like this one wait for a request still followed for the same aggregate? */
+  const blocked = useCallback((subject: ConflictSubject) => wouldConflict(snapshot.entries.values(), context.schoolId, subject), [snapshot, context.schoolId]);
+  return { run, view, blocked, outcomes: state.outcomes, clearOutcome: (tag?: string) => lane.clearOutcome(tag), busy: state.intents.size > 0 };
+}
+export type CommandLaneApi = ReturnType<typeof useCommandLane>;
 
 /**
  * Submit one command through the shared store and report its real outcome to the section.

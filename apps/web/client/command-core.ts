@@ -117,6 +117,11 @@ export interface SchoolCommand {
   readonly resourceId?: string;
   /** Version the command starts from; 0 for a creation. The receipt must be strictly newer. */
   readonly resourceVersion: number;
+  /**
+   * Aggregate the command orders itself with when its body does not name it (the instructor of a removed hours rule, the learner of
+   * an assignment). In memory only, like the body: it decides which commands may run side by side, never what the school accepts.
+   */
+  readonly scope?: string;
   readonly createdAt: number;
 }
 
@@ -148,7 +153,7 @@ export function newOperationId(): string {
 
 export function createCommand(input: {
   schoolId: string; kind: CommandKind; path: string; body: Record<string, unknown>;
-  ifMatch?: number; resourceId?: string; resourceVersion: number; operationId?: string; now?: number;
+  ifMatch?: number; resourceId?: string; resourceVersion: number; operationId?: string; now?: number; scope?: string;
 }): SchoolCommand {
   const operationId = input.operationId ?? newOperationId();
   if (!isUUID(operationId) || !isUUID(input.schoolId)) throw new Error('Identifiant de commande invalide.');
@@ -164,6 +169,7 @@ export function createCommand(input: {
     body: Object.freeze({ ...input.body, operationId }),
     ...(input.ifMatch !== undefined ? { ifMatch: input.ifMatch } : {}),
     ...(input.resourceId ? { resourceId: input.resourceId } : {}),
+    ...(input.scope ? { scope: input.scope } : {}),
     resourceVersion: input.resourceVersion, createdAt: input.now ?? Date.now(),
   };
 }

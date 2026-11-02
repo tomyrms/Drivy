@@ -12,8 +12,8 @@ import { formatDateTime, invitationStatusLabels, isActionable } from './invitati
 import type { InvitationsState } from './use-invitations';
 
 /** Handing over: the issued code, shown once, copied only on explicit request. */
-function IssuedReceipt({ state }: { state: InvitationsState }) {
-  const issued = state.issued!, { school } = state.context;
+function IssuedReceipt({ state, issued }: { state: InvitationsState; issued: NonNullable<InvitationsState['issuedCodes'][string]> }) {
+  const { school } = state.context;
   const expiry = formatDateTime(issued.expiresAt, school.timeZone);
   return <section className="invitation-receipt" aria-labelledby="invitation-receipt-title">
     <div className="invitation-receipt-head"><h2 id="invitation-receipt-title">Code émis</h2><Badge variant="secondary">Affiché une seule fois</Badge></div>
@@ -35,10 +35,11 @@ export function InvitationDetail({ state }: { state: InvitationsState }) {
     <ChevronRight aria-hidden="true" /><span aria-current="page">{current ? state.labelOf(current) : 'Invitation'}</span></nav>;
   if (!current) {
     // The school just confirmed this invitation; its list is being read again.
-    const waiting = state.issued?.invitationId === state.selected;
+    const issuedCode = state.selected ? state.issuedCodes[state.selected] : undefined;
+    const waiting = issuedCode !== undefined;
     return <section className="invitation-page">{crumb}
       <header className="invitation-heading"><h1 ref={heading} tabIndex={-1}>Invitation</h1></header>
-      {waiting ? <><div role="status" aria-label="Lecture de l’invitation"><Skeleton className="h-10 w-64" /></div><IssuedReceipt state={state} /></>
+      {waiting ? <><div role="status" aria-label="Lecture de l’invitation"><Skeleton className="h-10 w-64" /></div><IssuedReceipt state={state} issued={issuedCode} /></>
         : state.loaded.status === 'ready' ? <Alert variant="destructive"><AlertTitle>Invitation non disponible</AlertTitle>
           <AlertDescription>Cette invitation n’est pas présente dans la liste lue avec vos accès actuels.</AlertDescription>
           <div className="invitation-alert-actions"><Button variant="outline" onClick={state.backToList}>Retour aux invitations</Button></div></Alert>
@@ -48,19 +49,22 @@ export function InvitationDetail({ state }: { state: InvitationsState }) {
   const actionable = isActionable(current), code = current.delivery === 'CODE';
   const available = code ? state.codeAvailable : state.emailAvailable;
   const waiting = state.pendingLabel(current.id);
+  const issuedCode = state.issuedCodes[current.id];
+  const outcome = state.dialog ? null : state.detailOutcome(current.id);
+  const blocked = state.actionBlocked('revokeInvitation', current.id);
   const target = state.team ? 'equipe' : 'eleves';
   return <section className="invitation-page">{crumb}
     <header className="invitation-heading">
       <div><h1 ref={heading} tabIndex={-1}>{state.labelOf(current)}</h1>
         <p className="invitation-state">{waiting ? waiting : current.status === 'EXPIRED' || current.status === 'REVOKED' ? <Badge variant="secondary">{invitationStatusLabels[current.status]}</Badge> : invitationStatusLabels[current.status]}</p></div>
       {actionable && state.active && <div className="invitation-actions">
-        {available && <Button variant="outline" disabled={!state.canWrite} onClick={() => state.ask('renew')}>{code ? <RefreshCw aria-hidden="true" /> : <Send aria-hidden="true" />}{code ? 'Nouveau code' : 'Renvoyer l’invitation'}</Button>}
-        <Button variant="destructive" disabled={!state.canWrite} onClick={() => state.ask('revoke')}>Révoquer…</Button></div>}
+        {available && <Button variant="outline" disabled={!state.canWrite || blocked} onClick={() => state.ask('renew')}>{code ? <RefreshCw aria-hidden="true" /> : <Send aria-hidden="true" />}{code ? 'Nouveau code' : 'Renvoyer l’invitation'}</Button>}
+        <Button variant="destructive" disabled={!state.canWrite || blocked} onClick={() => state.ask('revoke')}>Révoquer…</Button></div>}
     </header>
-    {state.runner.outcome && !state.dialog && !(state.issued && state.runner.outcome.tone === 'success') && <Alert variant={state.runner.outcome.tone === 'error' ? 'destructive' : 'default'}><AlertTitle>{state.runner.outcome.title}</AlertTitle><AlertDescription>{state.runner.outcome.message}</AlertDescription></Alert>}
-    {state.runner.blockedReason && <Alert><AlertTitle>Confirmation en attente</AlertTitle><AlertDescription>{state.runner.blockedReason}</AlertDescription></Alert>}
+    {outcome && !(issuedCode && outcome.tone === 'success') && <Alert variant={outcome.tone === 'error' ? 'destructive' : 'default'}><AlertTitle>{outcome.title}</AlertTitle><AlertDescription>{outcome.message}</AlertDescription></Alert>}
+    {state.awaitingVerification(current.id) && <Alert><AlertTitle>Confirmation en attente</AlertTitle><AlertDescription>Une demande attend la vérification de son résultat (voir en haut de la page).</AlertDescription></Alert>}
     {state.codeMissing && <Alert variant="destructive"><AlertTitle>Code non affiché</AlertTitle><AlertDescription>La réponse de l’école ne permet pas d’afficher le code. « Nouveau code » en crée un autre.</AlertDescription></Alert>}
-    {state.issued?.invitationId === current.id && <IssuedReceipt state={state} />}
+    {issuedCode && <IssuedReceipt state={state} issued={issuedCode} />}
     <dl className="invitation-facts">
       <div><dt>Type</dt><dd>{code ? 'Code élève' : 'Invitation par e-mail'}</dd></div>
       {!code && current.maskedEmail && <div><dt>Adresse</dt><dd>{current.maskedEmail}</dd></div>}
