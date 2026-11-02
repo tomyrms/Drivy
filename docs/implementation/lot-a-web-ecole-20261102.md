@@ -49,3 +49,38 @@ Le reste de l'issue était « un seul envoi à la fois dans la section » (`reac
 - Aucun envoi réel d'e-mail, aucun serveur réel : l'aperçu est un transport simulé, le serveur n'est pas lancé (Docker non démarré).
 - Les cas « acceptée pendant l'opération » et « expirée » ne sont prouvés que par le refus de version et les tests API existants, pas par une recette intégrée.
 - Côté iOS : inchangé, hors périmètre.
+
+## #110 Disponibilités et absences
+
+### Ce qui existait déjà
+
+- Lectures indépendantes en `Promise.all`, version lue avec chaque ligne, retrait versionné, conversion heure civile/fuseau et refus d'une heure inexistante au passage été/hiver, détection locale de chevauchement, trois sémantiques séparées (horaire récurrent, absence, retrait) : `portal/availability/schedule-model.ts`, `client/availability-model.ts`, tests `portal/availability/schedule-model.test.ts` (dont `2026-03-29T02:30` refusé) et `test/availability-model.test.ts`.
+- Serveur seul décideur : un retrait ou une modification d'horaire relit les rendez-vous (`EXISTING_BOOKINGS`), une absence aussi : `apps/api/src/lesson-setup.ts` (lignes 114 à 160), non relancé ici.
+- Les préférences personnelles (durée, tampon, prestation par défaut) n'existent que côté natif : le web n'appelle pas `planning-defaults` (recherche dans `apps/web/client`, aucune occurrence). Rien n'est ajouté « par harmonisation ».
+
+### Ce qui a changé
+
+L'écart était un verrou global : `locked = runner.busy || runner.pending` bloquait filtres, boutons et formulaires pendant toute sauvegarde, et le formulaire ne se fermait qu'à la confirmation.
+
+- `portal/availability/use-schedule-commands.ts` passe à `useCommandLane`. Le formulaire se libère dès que le magasin conserve la demande ; la ligne devient « À confirmer » (création), « Modification à confirmer » ou « Retrait à confirmer ».
+- `portal/availability/schedule-projection.ts` (pur) : une création est une ligne provisoire sans identifiant de l'école (`pending:<opération>`, version 0, aucune action) ; une modification montre les valeurs voulues, l'horaire confirmé n'est pas touché ; un retrait laisse la ligne à l'écran, marquée. La semaine type et l'agenda lisent toujours les horaires de l'école : aucun créneau n'est ouvert ni proposé avant le reçu. Une intention confirmée reste projetée sans marqueur jusqu'à la relecture suivante (pas de ligne qui disparaît puis revient) ; un retrait confirmé disparaît aussitôt.
+- Ordre : un moniteur et un type (horaires ou absences) à la fois, par clé de conflit `planning:availability:<moniteur>:rules|closures` ; la planification (leçons, cours) attend toujours tous les horaires. La modification suivante d'un même moniteur reste un brouillon (envoi désactivé, raison donnée) ; un autre moniteur, une absence, le choix du moniteur et la lecture de l'agenda ne sont jamais bloqués.
+- Refus ou conflit : seule la ligne concernée est concernée, les autres horaires restent. La demande refusée revient par un bandeau « Reprendre la saisie » (formulaire rouvert avec la saisie et la raison, dont `EXISTING_BOOKINGS` et le lien vers l'agenda) ; un retrait refusé rouvre sa confirmation avec la raison.
+- Lecture : relecture ciblée sur les seules commandes d'horaires/absences/membres (`command-families.ts`), avec cache de lecture (`useLoad`, clé `schedule`) : les données connues s'affichent pendant l'actualisation.
+- Les intentions suivies sont gardées en mémoire dans `drafts` de la console (renouvelées avec compte, école, rattachement, époque) : elles survivent à un changement de rubrique, jamais au stockage du navigateur.
+
+### Preuve par critère
+
+| Critère | Preuve |
+| --- | --- |
+| Modification visible tout de suite avec statut ; aucune opération indépendante bloquée par une sauvegarde lente | Edge (aperçu synthétique, ajout d'horaire à 15 s) : ligne « À confirmer » immédiate, aucun succès annoncé, une absence du même moniteur partie et confirmée pendant ce temps, puis horaire confirmé et lu sans marqueur ; `schedule-projection.test.ts`, `command-conflicts.test.ts`. |
+| Deux changements rapides et relecture concurrente : convergence, aucune saisie effacée | Edge : la modification suivante du même moniteur reste un brouillon (envoi désactivé, saisie `07:00` gardée) ; `command-lane.test.ts` (une même invitation ordonnée, relecture ciblée) ; `schedule-projection.test.ts` (projection retirée seulement par une relecture plus récente). |
+| Créneau occupé, règle chevauchante, passage été/hiver, changement de moniteur corrects | Inchangés et déjà testés : `schedule-model.test.ts` ; la projection tient compte d'un horaire provisoire pour l'indice de chevauchement et ne projette pas une heure inexistante (`schedule-projection.test.ts`, heure d'hiver du 25 octobre 2026) ; moniteurs séparés (`command-conflicts.test.ts`). Créneau occupé : refus serveur affiché (Edge, scénario de refus), non rejoué contre le vrai serveur. |
+| Reprise après coupure sans double absence ni clé accidentelle ; demandes périmées à réévaluer | Edge : création d'absence à réponse perdue, ligne « À confirmer », vérification par reçu, aucune deuxième création ; `command-lane.test.ts` (même clé, même corps, même version à la reprise) ; `command-store-code.test.ts` existant (changement d'accès : le corps n'est jamais rejoué). |
+| Agenda et préremplissage cohérents, une intention n'est pas une disponibilité confirmée | Edge : la semaine type ne montre pas l'horaire provisoire ; un retrait garde la ligne (`schedule-projection.test.ts`). Aucun préremplissage côté web (préférences natives). |
+
+### Non prouvé ici
+
+- Préférences de durée, tampon, prestation par défaut : natives, hors périmètre web ; non traitées.
+- Aucun serveur réel : l'aperçu est un transport simulé. Passage d'une saison à l'autre sur une règle récurrente : la règle est en heure civile, rien d'instant à convertir côté web ; aucune recette intégrée.
+- iOS inchangé.

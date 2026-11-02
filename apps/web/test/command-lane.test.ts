@@ -132,7 +132,8 @@ describe('Une section, plusieurs intentions indépendantes', () => {
     await expect(store.verify(schoolId, lost.operationId)).resolves.toMatchObject({ status: 'confirmed' });
     lane.reconcile(); lane.reconcile();
     expect(calls.map(call => call.method)).toEqual(['GET']);
-    expect(view(`invitation:${id}`)).toMatchObject({ following: false, outcome: { tone: 'success' } });
+    // Le panneau des demandes suivies annonce déjà le reçu : la voie ne montre pas de seconde confirmation.
+    expect(view(`invitation:${id}`)).toMatchObject({ following: false, outcome: null });
     expect(hooks.confirmed).toHaveBeenCalledTimes(2);
     const [intent, answer] = hooks.confirmed.mock.calls.find(([item]) => (item as LaneIntent).operationId === lost.operationId)!;
     expect((intent as LaneIntent).tag).toBe(`invitation:${id}`);

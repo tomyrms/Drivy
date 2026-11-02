@@ -47,6 +47,12 @@ export interface LaneHooks {
 
 const refusal = (code: string, message: string): LaneResult => ({ status: 'rejected', code, message, needsLogin: false });
 
+/** What the person sees for a refusal: a local wait is not a refusal of the school, and the typed content is always kept. */
+export function refusalOutcome(result: Extract<LaneResult, { status: 'rejected' }>): LaneOutcome {
+  return { tone: 'error', title: result.code.startsWith('LOCAL_COMMAND_') ? 'Modification en attente' : 'Modification refusée',
+    message: result.needsLogin ? result.message : `${result.message} Votre saisie est conservée.`, code: result.code, needsLogin: result.needsLogin };
+}
+
 export class CommandLane {
   private snapshot: LaneSnapshot = { intents: new Map(), outcomes: new Map() };
   private readonly listeners = new Set<() => void>();
@@ -100,8 +106,7 @@ export class CommandLane {
       this.end(intent, { tone: 'success', title: 'Confirmé par l’école', message: intent.success });
       this.hooks().confirmed?.(intent, result);
     } else if (result.status === 'rejected') {
-      this.end(intent, { tone: 'error', title: result.code.startsWith('LOCAL_COMMAND_') ? 'Modification en attente' : 'Modification refusée',
-        message: result.needsLogin ? result.message : `${result.message} Votre saisie est conservée.`, code: result.code, needsLogin: result.needsLogin });
+      this.end(intent, refusalOutcome(result));
     } else this.put({ ...intent, status: 'followed' });
     return result;
   }
@@ -117,7 +122,8 @@ export class CommandLane {
     for (const intent of [...this.snapshot.intents.values()]) {
       if (intent.status !== 'followed') continue;
       if (confirmed.has(intent.operationId)) {
-        this.end(intent, { tone: 'success', title: 'Confirmé par l’école', message: intent.success });
+        // Settled by a receipt, which the panel of followed requests already announced: no second confirmation here.
+        this.end(intent);
         this.hooks().confirmed?.(intent, null);
       } else if (!view.entries.has(intent.operationId)) this.end(intent);
     }
