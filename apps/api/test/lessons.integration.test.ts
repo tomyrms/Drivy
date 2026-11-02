@@ -58,6 +58,13 @@ describe('ouvertures et fermetures (AP31–AP37)',()=>{
   await expectContract('ClosureEnvelope',c.json());await expectContract('ClosurePageEnvelope',(await call('GET','/closures',undefined,null,'demo-admin')).json());
   expect((await call('GET',`/closures?instructorMembershipId=${id.otherInstructorMember}`,undefined,null,'demo-admin')).json().data.items.map((x:{id:string})=>x.id)).toContain(c.json().data.id);
   expect((await call('POST',`/closures/${c.json().data.id}/remove`,{operationId:randomUUID(),reason:'Retrait'},1,'demo-other-instructor')).statusCode).toBe(200);
+  // Motif facultatif (B59) : enregistré tel quel, borné à 1 000 caractères, lu par l'administration et les moniteurs seulement.
+  const withReason={operationId:randomUUID(),instructorMembershipId:id.otherInstructorMember,startsAt:new Date(Date.now()+172_800_000).toISOString(),endsAt:new Date(Date.now()+176_400_000).toISOString(),reason:'Congé <b>annuel</b>'};
+  expect((await call('POST','/closures',{...withReason,operationId:randomUUID(),reason:'x'.repeat(1001)},null,'demo-other-instructor')).json().code).toBe('INVALID_REQUEST');
+  const reasoned=await call('POST','/closures',withReason,null,'demo-other-instructor');expect(reasoned.statusCode,reasoned.body).toBe(201);expect(reasoned.json().data.reason).toBe('Congé <b>annuel</b>');
+  const listed=(await call('GET',`/closures?instructorMembershipId=${id.otherInstructorMember}`,undefined,null,'demo-admin')).json().data.items as {id:string;reason:string|null}[];
+  expect(listed.find(x=>x.id===reasoned.json().data.id)?.reason).toBe('Congé <b>annuel</b>');
+  expect((await call('GET','/closures',undefined,null,'demo-alice')).statusCode).toBe(403);
   expect((await call('GET',`/operations/${closure.operationId}`,undefined,null,'demo-other-instructor')).json().data.resourceType).toBe('Closure');
  });
 });
