@@ -26,9 +26,10 @@ import { acceptingRequestId, type LessonChangeRequest } from '../../lesson-chang
  * libère dès que la demande est conservée, la consultation reste possible et rien n'est annoncé réservé ou annulé avant la
  * réponse vérifiée ou le reçu. Un refus rend la saisie avec sa raison.
  */
-export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restored, onQueued, onRefused, onClearRestored }: {
+export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restored, moving, onQueued, onRefused, onClearRestored }: {
   lessonId: string | null; onClose: () => void; onSaved: () => void; onDossier: (learnerId: string, lessonId: string) => void;
-  restored: LessonRestored | null; onQueued: (intention: LessonIntention) => void; onRefused: (refusal: LessonRefusal) => void; onClearRestored: () => void;
+  restored: LessonRestored | null; moving: boolean;
+  onQueued: (intention: LessonIntention) => void; onRefused: (refusal: LessonRefusal) => void; onClearRestored: () => void;
 }) {
   const context = useConsole();
   const state = useLesson(lessonId, onSaved);
@@ -42,19 +43,19 @@ export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restore
     onClose={closeEditor} onQueued={intention => { onQueued(intention); closeEditor(); }} onRefused={onRefused} />;
   return <section className="agenda-page"><ReadFeedback loaded={state.loaded} label="Lecture de la leçon" />
     {state.refreshing && <Alert><AlertTitle>Changement confirmé</AlertTitle><AlertDescription>Actualisation de la fiche en cours.</AlertDescription></Alert>}
-    {lesson ? <LessonDetail lesson={lesson} request={request} refreshing={state.refreshing} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
+    {lesson ? <LessonDetail lesson={lesson} request={request} refreshing={state.refreshing} moving={moving} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
     {!canWrite && !lessonId && <Alert><AlertTitle>Planification indisponible</AlertTitle><AlertDescription>Votre rôle ne permet pas de planifier une leçon.</AlertDescription></Alert>}
   </section>;
 }
 
-function LessonDetail({ lesson, request, refreshing, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; request: LessonChangeRequest | null; refreshing: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
+function LessonDetail({ lesson, request, refreshing, moving, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; request: LessonChangeRequest | null; refreshing: boolean; moving: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
   const state = useCancellation(lesson, onSaved, acceptingRequestId(request, 'CANCEL'));
   const heading = useRef<HTMLHeadingElement>(null);
   useHeadingFocus(heading);
   const phase = lessonPhase(lesson);
   return <>
     <Button className="agenda-back" variant="ghost" onClick={onClose} disabled={state.busy}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
-    <header className="agenda-heading"><div><span className="agenda-eyebrow">Leçon individuelle</span><h1 ref={heading} tabIndex={-1}>{lesson.learnerDisplayName}</h1></div><div className="agenda-actions">{state.busy && <Badge variant="outline">Annulation en cours</Badge>}{state.editable && <Button onClick={onEdit} disabled={state.busy || refreshing}><Pencil data-icon="inline-start" />Modifier la leçon</Button>}</div></header>
+    <header className="agenda-heading"><div><span className="agenda-eyebrow">Leçon individuelle</span><h1 ref={heading} tabIndex={-1}>{lesson.learnerDisplayName}</h1></div><div className="agenda-actions">{moving && <Badge variant="outline">Déplacement en cours</Badge>}{state.busy && <Badge variant="outline">Annulation en cours</Badge>}{state.editable && <Button onClick={onEdit} disabled={state.busy || moving || refreshing}><Pencil data-icon="inline-start" />Modifier la leçon</Button>}</div></header>
     <CommandFeedback outcome={state.outcome} blocked={state.blockedReason} />
     {request && state.editable && <LessonRequestCard request={request} timeZone={lesson.timeZone} locked={state.busy || refreshing} onMove={onEdit} onCancel={state.open} />}
     {lesson.permitWarning && <Alert><AlertTitle>Permis à vérifier</AlertTitle></Alert>}
