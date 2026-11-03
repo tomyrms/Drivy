@@ -1,7 +1,8 @@
 import { acknowledgeFields, projectFields, type FieldIntention } from './command-projection.js';
 import { type Choices, type NotificationPreferences, type SaveOutcome } from './notification-preferences-model.js';
 
-type Key = keyof Choices;
+/** Choix affichés sur cette page. Les deux champs #43/#44 sont transmis tels quels mais n'ont pas d'interrupteur ici. */
+type Key = Exclude<keyof Choices, 'lessonRequests' | 'examUpdates'>;
 type Intentions = Partial<Record<Key, FieldIntention<boolean>>>;
 type Flight = { base: NotificationPreferences; body: Choices; intentions: Intentions };
 export type PreferencePhase = 'loading' | 'ready' | 'saving' | 'uncertain' | 'conflict' | 'unavailable' | 'rejected';

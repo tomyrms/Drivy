@@ -3,7 +3,7 @@ import { NotificationPreferenceStore, type PreferenceTransport } from '../client
 import { saveNotificationPreferences, type NotificationPreferences, type SaveOutcome } from '../client/notification-preferences-model.js';
 
 const initial: NotificationPreferences = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true,
-  messagingPrivate: true, messagingGeneral: false, messagingMentions: true };
+  messagingPrivate: true, messagingGeneral: false, messagingMentions: true, lessonRequests: true, examUpdates: true };
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 
@@ -67,6 +67,14 @@ describe('Préférences : projection locale et réconciliation par catégorie', 
     h.store.choose('messagingMentions', false); await flush();
     expect(h.server()).toMatchObject({ version: 3, courseOffers: true, messagingPrivate: true, messagingGeneral: true, messagingMentions: false });
     expect(h.store.getSnapshot()).toMatchObject({ phase: 'ready', pendingKeys: [] });
+  });
+
+  test('les demandes de leçon et les examens restent transmis sans être remis à zéro (#43/#44)', async () => {
+    const h = harness(); await h.store.refresh();
+    h.store.choose('courseOffers', false); await flush();
+    const { version: _version, ...body } = initial;
+    expect(vi.mocked(h.transport.write).mock.calls[0]![1]).toEqual({ ...body, courseOffers: false });
+    expect(h.server()).toMatchObject({ lessonRequests: true, examUpdates: true, version: 2 });
   });
 
   test('commit puis réponse perdue : la lecture confirme les choix sans second PUT', async () => {

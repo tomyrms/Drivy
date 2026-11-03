@@ -13,7 +13,10 @@ export const notificationKeys = [
 ] as const;
 export const notificationSchema = z.object({ data: z.object({ version: z.number().int().positive(),
   courseOffers: z.boolean(), courseReminders: z.boolean(), courseChanges: z.boolean(), courseStaffAlerts: z.boolean(),
-  messagingPrivate: z.boolean(), messagingGeneral: z.boolean(), messagingMentions: z.boolean() }) });
+  messagingPrivate: z.boolean(), messagingGeneral: z.boolean(), messagingMentions: z.boolean(),
+  // Demandes de leçon et examens (#43/#44) : facultatifs comme pour les anciennes API, lus et renvoyés tels quels,
+  // sans interrupteur ici (un worker d'interface s'en chargera). Absents = inchangés côté serveur.
+  lessonRequests: z.boolean().optional(), examUpdates: z.boolean().optional() }) });
 export type NotificationPreferences = z.infer<typeof notificationSchema>['data'];
 export type Choices = Omit<NotificationPreferences, 'version'>;
 const url = '/app/bff/me/notification-preferences';
