@@ -150,7 +150,14 @@ final class SchoolProfileWorkspace: Identifiable {
         // Une relecture garde l’état affiché : `needsReload` ne se lève qu’après un échec.
         isLoading = true; isReplacingDraft = !preserveDraft; errorMessage = nil; storageAccessible = false
         var storageError: String?
-        do { pending = try outbox.pending(for: scope); storageAccessible = true }
+        do {
+            // #106 : seule une écriture de ce dossier (ou un changement d’accès, `updateMember`) concerne cette
+            // saisie. Une invitation, un tarif ou une leçon en attente ne bloquent plus le dossier ni l’accueil.
+            pending = try outbox.pending(for: scope) { command in
+                command.kind == .updateMember || (command.kind.isProfile && ownsRoute(command))
+            }
+            storageAccessible = true
+        }
         catch { storageError = SchoolConfigurationFailure.storage.localizedDescription }
         do {
             let school = try await api.school(id: scope.schoolID)

@@ -186,8 +186,12 @@ struct SchoolObservationEditor: Identifiable {
         generation = UUID(); let request = generation
         // Une relecture garde la liste, ses messages et sa barre d’action : `loaded` ne retombe qu’après un échec.
         isLoading = true; errorMessage = nil
-        do { pending = try outbox.pending(for: scope); storageAccessible = true }
-        catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
+        do {
+            // #106 : seule une écriture de la même leçon ou de la même observation partage la version, l’ancrage
+            // ou le partage ; une invitation, un examen ou une observation d’une autre leçon ne bloquent plus ici.
+            pending = try outbox.pending(for: scope) { $0.routeResourceID == lessonID || $0.resourceID == lessonID }
+            storageAccessible = true
+        } catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         if pending?.id != absentPendingID { absentPendingID = nil }
         do {
             let current = try await authorizedLesson()
@@ -420,7 +424,9 @@ struct SchoolObservationEditor: Identifiable {
 
     private func rereadPending() -> PendingSchoolCommand? {
         do {
-            guard let current = try outbox.pending(for: scope), current.scope == scope,
+            // Même lecture que `load()` : la commande de cette leçon, jamais celle d’une autre ressource.
+            let command = try outbox.pending(for: scope) { $0.routeResourceID == lessonID || $0.resourceID == lessonID }
+            guard let current = command, current.scope == scope,
                   current.kind.isObservation, current.routeResourceID == lessonID else { return nil }
             pending = current
             return current
@@ -437,7 +443,7 @@ struct SchoolObservationEditor: Identifiable {
             do { try outbox.save(command); pending = command }
             catch {
                 storageAccessible = false
-                pending = try? outbox.pending(for: scope)
+                pending = try? outbox.pending(for: scope) { $0.routeResourceID == lessonID || $0.resourceID == lessonID }
                 throw error
             }
             return await transmit(command, fresh: true)

@@ -56,7 +56,8 @@ final class SchoolPresentationTests: XCTestCase {
         windows.append(pending)
         try await Task.sleep(for: .seconds(1))
         attach(pending, name: "f02-04-demande-incertaine-fixtures")
-        XCTAssertFalse(model.mayEdit)
+        // #106 : le renvoi d'une invitation n'empêche plus d'en créer ou d'en gérer une autre.
+        XCTAssertTrue(model.mayEdit)
         XCTAssertEqual(model.invitations.count, 3)
         XCTAssertTrue(api.commands.isEmpty)
     }

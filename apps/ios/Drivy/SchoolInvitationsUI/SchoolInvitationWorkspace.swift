@@ -34,6 +34,12 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var isBusy = false
     private(set) var needsReload = false
     private(set) var pendingRequiresReview = false
+    /// Une écriture conservée qui n’est pas le renvoi ou la révocation d’une invitation ferme le formulaire :
+    /// création dont l’issue reste inconnue, écriture du domaine de l’école, autre portée (époque, adhésion) (#106).
+    private(set) var blocksCreation = false
+    /// Invitations dont un renvoi ou une révocation attend la réponse de l’école : la même invitation reste
+    /// séquentielle, une invitation distincte reste gérée (#106).
+    private(set) var pendingInvitationWrites: Set<UUID> = []
     /// Demande que l’école a déclaré ne pas connaître : rien n’a été enregistré, elle peut être abandonnée.
     private(set) var absentPendingID: UUID?
     var pendingAbsent: Bool { pending != nil && pending?.id == absentPendingID }
@@ -83,7 +89,7 @@ final class SchoolInvitationWorkspace: Identifiable {
     }
     var mayEdit: Bool {
         hasLoaded && storageAccessible && school?.status == "ACTIVE" && !allowedRoles.isEmpty
-            && !isLoading && !isBusy && !isInvalidated && !needsReload && pending == nil
+            && !isLoading && !isBusy && !isInvalidated && !needsReload && !blocksCreation
     }
     var canRetryPending: Bool {
         pending?.kind.isInvitation == true && pending?.scope == scope && school?.status == "ACTIVE"
@@ -146,6 +152,7 @@ final class SchoolInvitationWorkspace: Identifiable {
         issuedCode = nil; codeRecovery = nil
         school = nil; invitations = []; nextCursor = nil; selectedID = nil; pending = nil; offerings = []; instructors = []
         invitationReferences = [:]; loadedPageCount = 1
+        blocksCreation = false; pendingInvitationWrites = []
         selectedOfferingIDs = []; selectedInstructorID = nil; creationOptionsError = nil
         email = ""; selectedRoles = [.learner]; readErrorMessage = nil; operationErrorMessage = nil; successMessage = nil
         operationInvitationID = nil; successInvitationID = nil
@@ -163,6 +170,17 @@ final class SchoolInvitationWorkspace: Identifiable {
         var storageError: String?
         do {
             pending = try outbox.pending(for: scope, domain: .invitations)
+            let commands = try outbox.pendingCommands(for: scope)
+            // #106 : le renvoi ou la révocation d’une invitation ne ferme plus le formulaire (seule cette invitation
+            // attend sa réponse) ; une création dont l’issue reste inconnue, toute écriture en conflit avec le domaine
+            // des invitations, ou d’une autre portée (époque, adhésion), restent des barrières.
+            blocksCreation = commands.contains { command in
+                if command.scope != scope { return true }
+                guard command.kind.schedulingDomain.conflicts(with: .invitations) else { return false }
+                return command.kind != .resendInvitation && command.kind != .revokeInvitation
+            }
+            pendingInvitationWrites = Set(commands.filter { $0.scope == scope && $0.kind.isInvitation }
+                .compactMap(\.resourceID))
             if pending == nil { pendingRequiresReview = false }
             storageAccessible = true
         } catch {
@@ -336,6 +354,7 @@ final class SchoolInvitationWorkspace: Identifiable {
     func canManage(_ invitation: SchoolInvitation) -> Bool {
         mayEdit && invitation.schoolId == scope.schoolID && invitation.status.canBeManaged
             && invitations.contains(invitation) && Set(invitation.roles).isSubset(of: Set(allowedRoles))
+            && !pendingInvitationWrites.contains(invitation.id)
     }
 
     func retryPending() async { _ = await transmit(firstAttempt: false) }
@@ -393,6 +412,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                 createdAt: Date(), body: try encoder.encode(value), resourceID: resource)
             try outbox.save(command)
             pending = command; pendingRequiresReview = false
+            if command.kind != .createInvitation, let target = command.resourceID { pendingInvitationWrites.insert(target) }
         } catch {
             storageAccessible = false; fail(error, context: .operation(resource)); return false
         }
@@ -415,6 +435,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                 throw SchoolInvitationFailure.invalidResponse
             }
             try outbox.remove(command)
+            if let target = command.resourceID { pendingInvitationWrites.remove(target) }
             guard request == generation else { return true }
             pending = nil; pendingRequiresReview = false; isBusy = false; didConfirmWrite = true
             if command.kind == .createInvitation { email = ""; selectedRoles = [.learner] }
@@ -444,6 +465,7 @@ final class SchoolInvitationWorkspace: Identifiable {
                     }
                     guard request == generation else { return false }
                     pending = nil; needsReload = true
+                    if let target = command.resourceID { pendingInvitationWrites.remove(target) }
                 } else {
                     guard request == generation else { return false }
                     pendingRequiresReview = true

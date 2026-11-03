@@ -27,6 +27,12 @@ struct SchoolStartNowBody: Encodable, Sendable {
     private(set) var contextValid = false
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
+    /// Écriture d’enseignement en cours, celle qui peut réserver le créneau ou la leçon (#106) : elle seule
+    /// empêche de démarrer. Une invitation, un profil ou un tarif en attente ne concernent pas ce départ.
+    private(set) var blockingCommand: PendingSchoolCommand?
+    /// Ce qui ferme la saisie : la demande de ce départ déjà conservée (à vérifier), ou une écriture d’enseignement
+    /// en cours (#106).
+    var blocksStart: Bool { pending != nil || blockingCommand != nil }
     /// Demande que l’école a déclaré ne pas connaître : elle peut être renvoyée comme neuve, ou abandonnée.
     private(set) var absentPendingID: UUID?
     private(set) var started: SchoolLesson?
@@ -56,7 +62,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     /// Same trimmed UTF-16 length as the API and the planning form.
     var meetingPointTooLong: Bool { meetingPoint.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count > 500 }
     var canStart: Bool {
-        !invalidated && contextValid && !isLoading && !isBusy && storageAvailable && pending == nil && started == nil
+        !invalidated && contextValid && !isLoading && !isBusy && storageAvailable && !blocksStart && started == nil
             && learnerID.map { id in learners.contains { $0.id == id } } == true
             && trainingID.map { id in trainings.contains { $0.id == id && $0.learnerId == learnerID } } == true && !meetingPointTooLong
     }
@@ -66,8 +72,13 @@ struct SchoolStartNowBody: Encodable, Sendable {
         generation = UUID(); let request = generation
         let previousLearnerID = learnerID
         isLoading = true; contextValid = false; errorMessage = nil
-        do { pending = try outbox.pending(for: scope); storageAvailable = true }
-        catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
+        do {
+            // #106 : la demande à vérifier ici reste celle de ce départ ; la barrière ne vient que du domaine
+            // pédagogique, qui partage le créneau et la version de la leçon.
+            pending = try outbox.pendingCommands(for: scope).first { $0.kind == .startLessonNow }
+            blockingCommand = try outbox.pending(for: scope, domain: .teaching)
+            storageAvailable = true
+        } catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
             // Préférences et élèves ne dépendent pas l’un de l’autre : ils se lisent ensemble (#86).
             let schoolID = scope.schoolID, membershipID = scope.membershipID, client = self.client
@@ -271,7 +282,8 @@ struct SchoolStartNowBody: Encodable, Sendable {
 
     func invalidate() {
         invalidated = true; generation = UUID(); learners = []; trainings = []; learnerID = nil; trainingID = nil
-        pending = nil; started = nil; isBusy = false; isLoading = false; contextValid = false; storageAvailable = false; meetingPoint = ""
+        pending = nil; blockingCommand = nil; started = nil; isBusy = false; isLoading = false; contextValid = false
+        storageAvailable = false; meetingPoint = ""
     }
 
     /// Émis après confirmation durable seulement, sans contenu pédagogique ni position.
@@ -516,7 +528,7 @@ struct SchoolStartNowView: View {
         }
         .padding(.horizontal, DrivySpacing.m)
         .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
-        .disabled(launch.isBusy || form.pending != nil)
+        .disabled(launch.isBusy || form.blocksStart)
     }
 
     private func fieldRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -543,7 +555,7 @@ struct SchoolStartNowView: View {
             gpsUnavailable(gps)
         case .needsReview, .question:
             SchoolRecordingChoiceInline(model: gps.consent, answer: gps.answer,
-                isEnabled: !launch.isBusy && form.pending == nil, forcesQuestion: gps.isChanging) { status in gps.select(status) }
+                isEnabled: !launch.isBusy && !form.blocksStart, forcesQuestion: gps.isChanging) { status in gps.select(status) }
                 .padding(DrivySpacing.m)
                 .background(DrivyTheme.surfaceRaised, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
         case .known:
@@ -585,7 +597,7 @@ struct SchoolStartNowView: View {
             }
             .buttonStyle(.drivyText)
             .frame(minHeight: DrivyLayout.tapTarget, alignment: .leading)
-            .disabled(launch.isBusy || form.pending != nil || gps.consent.isBusy)
+            .disabled(launch.isBusy || form.blocksStart || gps.consent.isBusy)
             .accessibilityIdentifier("start-now-gps-change")
         }
         .frame(maxWidth: .infinity, alignment: .leading)

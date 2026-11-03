@@ -37,11 +37,16 @@ import Testing
     @Test func sharedDomainAndSchoolBarrierStillRejectConflictingOperations() throws {
         try inDirectory { directory in
             let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
-            let invitation = try command(.createInvitation)
-            try store.save(invitation)
-            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(command(.createInvitation)) }
+            let target = UUID()
+            let resend = try command(.resendInvitation, resourceID: target, version: 2)
+            try store.save(resend)
+            // #106 : deux invitations distinctes coexistent ; la même invitation reste séquentielle.
+            try store.save(command(.resendInvitation, resourceID: UUID(), version: 2))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.resendInvitation, resourceID: target, version: 2))
+            }
             #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(command(.updateSchool)) }
-            #expect(try store.pending(for: scope, domain: .school) == invitation)
+            #expect(try store.pending(for: scope, domain: .school) == resend)
         }
     }
 
@@ -91,12 +96,13 @@ import Testing
             routeResourceID: lesson)
     }
 
-    private func command(_ kind: SchoolCommandKind, scope: SchoolCommandScope? = nil) throws -> PendingSchoolCommand {
+    private func command(_ kind: SchoolCommandKind, scope: SchoolCommandScope? = nil, resourceID: UUID? = nil,
+                         version: Int? = nil) throws -> PendingSchoolCommand {
         let id = UUID(), scope = scope ?? self.scope
         return PendingSchoolCommand(id: id, scope: scope, kind: kind,
-            resourceVersion: kind == .createInvitation ? 0 : 1, createdAt: Date(),
+            resourceVersion: version ?? (kind == .createInvitation ? 0 : 1), createdAt: Date(),
             body: try JSONSerialization.data(withJSONObject: ["operationId": id.uuidString]),
-            resourceID: kind == .savePlanningDefaults ? scope.membershipID : nil)
+            resourceID: resourceID ?? (kind == .savePlanningDefaults ? scope.membershipID : nil))
     }
     private func inDirectory(_ body: (URL) throws -> Void) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Scheduling-\(UUID().uuidString)")

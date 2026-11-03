@@ -299,6 +299,33 @@ protocol SchoolCommandOutbox: AnyObject {
     func remove(_ command: PendingSchoolCommand) throws
 }
 
+extension SchoolCommandOutbox {
+    /// Première commande du même espace qui empêche cette écriture (#106). Deux cas seulement : elle vient d’une
+    /// autre portée (époque d’accès, adhésion) et reste à résoudre avant toute émission, ou elle concerne l’agrégat
+    /// que `blocks` nomme. Une invitation, un tarif ou une leçon d’une autre ressource ne ferment plus l’écran.
+    func pending(for scope: SchoolCommandScope,
+                 blockedBy blocks: (PendingSchoolCommand) -> Bool) throws -> PendingSchoolCommand? {
+        try pendingCommands(for: scope).first { $0.scope != scope || blocks($0) }
+    }
+}
+
+extension PendingSchoolCommand {
+    /// Une entrée déjà conservée empêche-t-elle celle-ci d’entrer dans la file (#106) ? Le conflit reste celui de
+    /// l’ordonnancement, sauf entre invitations distinctes : seule la même invitation garde l’ordre de son renvoi
+    /// ou de sa révocation, et deux créations n’ont aucune version commune.
+    func blocksQueueEntry(of other: Self) -> Bool {
+        guard kind.isInvitation, other.kind.isInvitation, scope.belongsToWorkspace(other.scope) else {
+            return conflicts(with: other)
+        }
+        if id == other.id { return true }
+        // Une commande d’une autre époque d’accès (ou d’une autre adhésion) reste à résoudre avant toute émission.
+        guard scope == other.scope else { return true }
+        guard kind != .createInvitation, other.kind != .createInvitation,
+              let target = resourceID, let otherTarget = other.resourceID else { return false }
+        return target == otherTarget
+    }
+}
+
 /// Persist before emission. Only encrypted bytes reach disk; an uncertain
 /// command keeps the exact request and operation identifier across launches.
 @MainActor
@@ -344,7 +371,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             try synchronize()
             return
         }
-        guard !commands.contains(where: { $0.conflicts(with: command) }) else { throw SchoolConfigurationFailure.pendingCommand }
+        guard !commands.contains(where: { $0.blocksQueueEntry(of: command) }) else { throw SchoolConfigurationFailure.pendingCommand }
         guard commands.count < 50 else { throw SchoolConfigurationFailure.storage }
         commands.append(command)
         try write(commands)
@@ -381,7 +408,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             for (index, command) in archive.commands.enumerated() {
                 try validate(command)
                 guard !archive.commands.prefix(index).contains(where: {
-                    archive.version < 3 ? $0.scope.belongsToWorkspace(command.scope) : $0.conflicts(with: command)
+                    archive.version < 3 ? $0.scope.belongsToWorkspace(command.scope) : $0.blocksQueueEntry(of: command)
                 }) else {
                     throw SchoolConfigurationFailure.storage
                 }
