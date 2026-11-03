@@ -18,6 +18,8 @@
 .agenda-notices { display: grid; gap: 12px; }
 .agenda-notices:empty { display: none; }
 .agenda-loading { display: grid; gap: 12px; }
+/* Période jamais lue : un squelette à la place de la grille, jamais une semaine vide. */
+.agenda-period-loading { display: grid; gap: 12px; padding: 8px 0; }
 .agenda-week { border: 1px solid var(--border); background: var(--card); border-radius: 12px; overflow: clip; min-width: 0; }
 .agenda-week-head { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--border); align-items: stretch; background: var(--card); }
 .agenda-week-head > button { border-radius: 0; display: flex; flex-direction: column; gap: 4px; height: 78px; border-left: 1px solid var(--border); }
