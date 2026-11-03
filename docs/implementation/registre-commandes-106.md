@@ -558,3 +558,97 @@ invitation, tarif, école). Ajustements : `SchoolCommandSchedulingTests` (deux l
 
 **Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Ces tests doivent être lancés sur
 un runner Apple avant de considérer la tâche qualifiée.
+
+## Blocages levés (tâche 4) : le domaine « enseignement » par agrégat
+
+Réalisation de la proposition 4 de la section 5, avec la méthode de la tâche 3 : **la barrière d’un écran reste
+exactement la règle d’admission de la file** (`pending(for:refusing:)` → `blocksQueueEntry`, la fonction de `save` et de
+la relecture du coffre). Aucune route, aucun envoi, aucune idempotence, aucun droit, aucun texte d’écran ne change ;
+seuls les états d’ouverture changent.
+
+### Mécanisme
+
+`SchoolConfigurationAPI/SchoolCommandScheduling.swift` : `SchoolTeachingFootprint` décrit ce qu’une commande
+d’enseignement **lit ou écrit réellement** côté API. Six clés d’agrégat — leçon (`drivy.lesson.version`), examen
+(`drivy.exam.version`), épreuves prévues d’une formation, contrôles de permis lus, contrôles de permis écrits, souhait
+d’une formation — et une prise d’occupation d’agenda. Chaque clé est `absent`, `known(identifiant)` ou `unknown` (l’API
+la relit, la file ne porte pas son identifiant). Deux commandes d’enseignement que `conflicts(with:)` jugeait
+conflictuelles ne sont desserrées que si **les deux empreintes existent** et sont **disjointes sur toutes les clés** :
+
+- même leçon connue, même examen connu, même formation relue, même clé de permis et même souhait restent séquentiels ;
+- une clé `unknown` face à la même clé bloque la paire, comme avant : aucune preuve, aucun desserrement ;
+- deux prises d’occupation se sérialisent : le moniteur et l’élève ne sont pas dans la file ;
+- une empreinte `nil` (preuve manquante, ou identifiant exigé absent de la commande) garde la règle du domaine.
+
+`SchoolCommandOutbox.swift` : `blocksQueueEntry` appelle cette empreinte après les exceptions des tâches 1 à 3.
+`SchoolCommandOutbox.pending(for:refusing:)` est réécrit sur `Array<PendingSchoolCommand>.refusing(_:in:…)` pour que les
+écrans puissent comparer plusieurs gestes sans relire la file à chaque rendu. La sonde n’est jamais écrite : seuls son
+type, sa portée, sa ressource et son empreinte sont comparés. Une file valide reste valide (le desserrement ne peut
+qu’accepter davantage) et aucune migration de `pending-v1.bin` n’est faite : `hasValidTarget` est inchangé.
+
+### Paires desserrées, avec preuve côté API
+
+| Paire | Preuve (fichier:ligne) | Version, occupation ou agrégat |
+|---|---|---|
+| Deux commandes de **leçons différentes** (préparation, signalement, partage, déplacement, annulation, départ, absence) | `apps/api/src/lessons.ts:368` (départ : `checkVersion(old.version)`), `:390` (déplacement), `:414` (annulation) ; `lesson-reports.ts:137-138` (`drivy.lesson_preparation.version`), `:158` (constat) ; `lesson-outcomes.ts:73` (absence) ; `sharing.ts:48` (`sharing_version`) ; `capture-observations.ts:169`, `:188` (`drivy.geo_observation.version`) | Chaque route ne vérifie que la version de **sa** leçon (`drivy.lesson.version`), de sa préparation ou de son observation ; aucune ligne n’est commune à deux leçons |
+| Une écriture d’une leçon **planifiée** et un brouillon ou une publication (**réalisée**) | `lessons.ts:390`, `:414`, `:370` ; `lesson-reports.ts:138`, `:159` ; `lesson-outcomes.ts:74` (exigent `PLANNED`) contre `lesson-reports.ts:197`, `:210` (exigent `COMPLETED`) | `drivy.lesson.status` ; une leçon planifiée n’est jamais la leçon réalisée d’un brouillon |
+| Deux **épreuves distinctes** de la même formation : résultat contre modification | `apps/api/src/exams.ts:243` (`checkVersion(old.version)` de l’examen visé) contre `:206` (autre examen) ; `:206-214` ne relit ni ne réécrit la liste des épreuves prévues | `drivy.exam.version` de deux lignes distinctes ; `UPDATE_EXAM` ne change pas le statut, donc pas la liste |
+| Un **résultat d’examen** et une écriture de leçon (préparation, constat, départ, absence, signalement, partage) | `exams.ts:243-250` : aucune lecture de `drivy.lesson`, aucune écriture de `drivy.reservation` | Version d’examen d’un côté, version de leçon de l’autre ; aucune occupation prise par `SET_EXAM_RESULT` |
+| Une **création ou un départ immédiat** de leçon et un bilan, une préparation, un examen, un permis, un souhait | `lessons.ts:316-327` et `:333-361` : `INSERT drivy.lesson`, occupations (`:149-153`), aucune version lue | Aucune version ni agrégat commun ; la création ne lit pas la leçon d’autrui |
+| Deux **contrôles de permis** de formations différentes | `apps/api/src/permits.ts:69-72` (`checkVersion(training.version)` de sa formation), `:82` (`version=version+1`) | `drivy.training.version` d’une seule formation |
+| Deux **souhaits** de formations différentes | `lesson-reports.ts:148` (`drivy.training_wish.version` de la formation) | Une ligne de souhait par formation |
+
+### Ce qui reste bloquant, faute de preuve ou par conflit réel
+
+| Paire gardée | Preuve (fichier:ligne) | Pourquoi la paire reste séquentielle |
+|---|---|---|
+| **Même leçon** (toute paire) | `lessons.ts:390`, `:414` (`drivy.lesson.version`) ; `lesson-reports.ts:137` (préparation), `:158` (constat), `:196`/`:209` (brouillon) ; `capture-observations.ts:155` (`touchDraft`) | Même ligne, même version, même brouillon |
+| Deux **prises d’occupation** (création, déplacement, départ immédiat, accompagnement d’examen) | `lessons.ts:149-153` (`INSERT drivy.reservation`), exclusion `migrations/006_lessons.sql:50` (`EXCLUDE … WHERE(active)`) ; `exams.ts:195` | La file ne porte ni le moniteur ni l’élève : deux prises peuvent se recouvrir. Une **libération** (`lessons.ts:422`, `lesson-reports.ts:174`, `lesson-outcomes.ts:78`) n’est pas une prise : elle ne crée aucune occupation future et ne peut pas échouer sur l’exclusion |
+| **Même examen**, et **même formation** pour une épreuve prévue | `exams.ts:189` (`SELECT … status='PASSED'` et unicité `exam_one_scheduled` par formation et par type), `:227-232` (le report ouvre une nouvelle épreuve prévue), `:248` (le résultat sort une épreuve prévue) | `drivy.exam` de la même formation : l’unicité et la liste relue sont un seul agrégat |
+| Un **contrôle de permis** et la **fin de leçon** de sa formation | `lesson-reports.ts:163` (`drivy.lesson_permit_warning(training_id, date)`) contre `permits.ts:80` (`INSERT drivy.permit_check`) | La fin de leçon lit les contrôles de la formation de sa leçon, que la file ne nomme pas (`permitRead = unknown`) |
+| Un **brouillon ou une publication** et toute écriture de leçon | `lesson-reports.ts:196`, `:209` : la leçon se lit par `drivy.report_draft` ; la file ne porte que `report_drafts/:draftId` | La leçon d’un brouillon est inconnue de la file : la paire pourrait viser la même |
+| **Tarifs, conditions commerciales, disponibilités, fermetures** et toute écriture de leçon | `lessons.ts:102-114` (produit courant et conditions), `lesson-setup.ts:35-48` (`ensureOpen`), `:163-171` (`checkBookings`) | L’identifiant qui les distingue (clé de produit, moniteur) reste dans le corps ; l’écriture de leçon revalide ces lectures |
+| **Souhait** et déplacement ou annulation de la leçon qu’il cite | `lesson-reports.ts:150` (le souhait relit `lesson.status` de la leçon citée) | La leçon citée est dans le corps, hors de la file : sa version ne peut pas être comparée |
+
+### Ce que le desserrement ne couvre pas
+
+- **Le coffre de capture en direct** (`SchoolCaptureUI/SchoolCaptureLiveObservations.swift:313-315`) juge encore
+  « étrangère » toute commande du domaine pédagogique. Ce n’est pas un des trois sites de la tâche, et son verdict n’est
+  pas une barrière d’écran : il reste inchangé, à traiter avec la proposition 4 côté capture.
+- Une **prise d’occupation** peut encore être refusée (`409 SLOT_CONFLICT`) là où une libération en attente aurait
+  libéré le créneau : c’est un refus métier affiché, jamais une saisie perdue, et la file ne peut pas comparer deux
+  personnes qu’elle ne porte pas.
+
+### Site par site
+
+| # | Fichier:ligne | Barrière | Levé | Gardé |
+|---|---|---|---|---|
+| 4 | `SchoolAgendaUI/SchoolPlanningWorkspace.swift:188` (`canMutate`), `:450-466` (`admissionBlocker`, `rereadBlocker`) | règle exacte pour `CANCEL_LESSON` (feuille d’annulation), `MOVE_LESSON` (leçon existante) ou `CREATE_LESSON` (création) | invitation, préparation/bilan/observation d’une autre leçon, brouillon d’une autre leçon, résultat d’examen, annulation d’une autre leçon, création pendant un bilan | tarif/disponibilité/fermeture, déplacement ou création concurrente (occupation), même leçon, même formation d’examen relue, contrôle de permis de la fin de leçon, brouillon (leçon inconnue), école, autre époque |
+| 5 | `SchoolLessonReportUI/SchoolLessonReportWorkspace.swift:129` (`canMutate`), `:618-656` (`admissionProbes`), `:660-681` (`rereadQueue`, `belongsToThisScreen`) | règle exacte pour chaque geste possible de la leçon affichée : `SAVE_PREPARATION`, `START_LESSON`, `COMPLETE_LESSON`, `MARK_NO_SHOW`, `SAVE_WISH`, `RECORD_PERMIT_CHECK` sur une leçon planifiée ; `SAVE_REPORT_DRAFT`, `UPDATE_LESSON_SHARING` sur une leçon réalisée | invitation, préparation/bilan/déplacement/création d’une autre leçon, résultat d’examen, partage d’une autre leçon | tarif, même leçon, même brouillon, signalement (la leçon d’un brouillon est inconnue de la file), contrôle de permis de cette formation, même formation d’examen relue, école, autre époque |
+| 7 | `SchoolTrainingUI/SchoolExamsUI.swift:75-79` (`blocks`), `:219` (menu « Prévoir »), `:315-339` (actions par épreuve) | règle exacte pour `CREATE_EXAM`, `UPDATE_EXAM`, `POSTPONE_EXAM`, `SET_EXAM_RESULT` | invitation, leçon d’une autre formation, modification d’une **autre épreuve** pendant qu’un résultat attend | même épreuve, épreuve prévue de la même formation (unicité et liste relues), accompagnement concurrent (occupation), tarif, école |
+
+La demande affichée (`pending`) garde son sens d’avant : sur la feuille de planification et sur les examens elle reste
+la commande du domaine ou de la formation (aucun changement d’écran) ; sur la fiche de leçon, elle est la demande de
+**cette** leçon (même règle que l’écran des signalements, tâche 3), et une commande d’une autre leçon ne ferme plus ni la
+saisie ni les gestes.
+
+### Vérification
+
+`apps/ios/DrivyTests/SchoolCommandScopes106Tests.swift`, ajouts de la tâche 4 :
+
+- une paire par famille desserrée : `twoCommandsOfDifferentLessonsCoexist`,
+  `aReportDraftAndAPlannedLessonCommandNeverShareALesson`, `examsAreKeyedByExamAndByTheScheduledList`,
+  `aPermitCheckKeepsTheCompletionOfItsTraining` ;
+- une paire gardée par preuve manquante : `teachingCommandsWithoutProofStillQueue` (tarif) ;
+- trois écrans, chacun comparé à `save` sur des états réels de la file chiffrée
+  (« écran ouvert == la file accepte le geste ») : `thePlanningSheetOpensExactlyWhenTheQueueAcceptsItsGesture`
+  (déplacement, annulation, création), `theReportSheetOpensExactlyWhenTheQueueAcceptsItsGestures` (leçon réalisée :
+  enregistrement du brouillon et partage), `theExamRowOpensExactlyWhenTheQueueAcceptsItsGesture` (ouverture et
+  fermeture par épreuve).
+
+Ajustements : `observationsOfDifferentLessonsDoNotShareALesson` (la fin de leçon reste bloquée pour **sa** leçon) et
+`SchoolPendingRequestResolutionTests.aRequestFromAnotherScreenNoLongerBlocksStartingALesson` (le départ n’est plus
+bloqué par le début d’une leçon d’un autre écran).
+
+**Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Ces tests doivent être lancés sur un
+runner Apple (et l’IPA construite) avant de considérer la tâche qualifiée.
