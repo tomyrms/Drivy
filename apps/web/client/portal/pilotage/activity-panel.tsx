@@ -42,7 +42,7 @@ export function ActivityPanel({ period, today, filters, scopeLabel, onOpen, retu
       <MeasureGroups domain="activity" groups={groups} answer={answer} definitions={definitions} period={period} today={today} filters={filters} toDate={plan.kind === 'to-date'} comparableToDate={comparableToDate} onOpen={onOpen} returnFocus={returnFocus} onFocused={onFocused} />
       <div className="pilotage-charts">
         <EvolutionChart period={period} filters={filters} />
-        {!filters.instructor && <BreakdownBars title="Heures programmées par moniteur" periodText={periodLabel(period)} rows={breakdownRows(answer.breakdown, 'H01')}
+        {!filters.instructor && <BreakdownBars title="Heures programmées par moniteur" tone="ink" periodText={periodLabel(period)} rows={breakdownRows(answer.breakdown, 'H01')}
           format={formatDuration} emptyText="Aucune heure programmée sur cette période." />}
         <MixChart period={period} filters={filters} />
       </div>
@@ -58,7 +58,7 @@ function EvolutionChart({ period, filters }: { period: ResolvedPeriod; filters: 
   const series = useMetricSeries({ from: period.from, toExclusive: period.toExclusive, granularity, measures: ['L01', 'L02'], ...filters });
   if (!series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution" />;
   return <>{series.status === 'error' && <ReadFeedback loaded={series} label="Lecture de l’évolution" />}<StackedBars title={evolutionTitle[granularity]} periodText={periodLabel(period)} emptyText="Aucune leçon sur cette période."
-    series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]}
+    series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'dashed' }]}
     buckets={series.data.buckets.map(bucket => chartBucket(granularity, bucket, period.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} /></>;
 }
 
@@ -68,9 +68,9 @@ const mixOptions = [{ value: 'category', label: 'Par permis' }, { value: 'produc
 function MixChart({ period, filters }: { period: ResolvedPeriod; filters: MetricFilters }) {
   const [by, setBy] = useState<Mix>('category');
   const loaded = useMetrics({ domain: 'activity', from: period.from, toExclusive: period.toExclusive, ...filters, breakdown: by });
-  const title = by === 'category' ? 'Leçons réalisées par permis' : 'Leçons réalisées par prestation';
+  const title = 'Leçons réalisées', grouping = by === 'category' ? 'par permis' : 'par prestation';
   const choice = <BreakdownChoice label="Répartition des leçons réalisées" value={by} options={mixOptions} onChange={setBy} />;
-  if (!loaded.data) return <BreakdownBars title={title} periodText={periodLabel(period)} action={choice} rows={null} format={String} emptyText="" notice={<ReadFeedback loaded={loaded} label="Lecture de la répartition" />} />;
-  return <BreakdownBars title={title} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
+  if (!loaded.data) return <BreakdownBars title={title} grouping={grouping} periodText={periodLabel(period)} action={choice} rows={null} format={String} emptyText="" notice={<ReadFeedback loaded={loaded} label="Lecture de la répartition" />} />;
+  return <BreakdownBars title={title} grouping={grouping} notice={loaded.status === 'error' ? <ReadFeedback loaded={loaded} label="Lecture de la répartition" /> : undefined} periodText={periodLabel(period)} action={choice}
     rows={breakdownRows(loaded.data.breakdown, 'L01')} format={value => formatMeasure(value, 'count')} emptyText="Aucune leçon réalisée sur cette période." />;
 }

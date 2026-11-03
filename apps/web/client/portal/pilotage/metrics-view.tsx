@@ -36,6 +36,11 @@ export function MetricsView({ request, label, children }: {
   return <>{children(metrics.data, definitions.data)}</>;
 }
 
+/** L'heure du calcul, seule : sur le tableau de bord, la période et la portée sont déjà dites par le titre et le filtre. */
+export function Freshness({ answer }: { answer: MetricsAnswer }) {
+  return <span className="pilotage-fresh">calculé à {clock(answer)}</span>;
+}
+
 /** Période, portée et fraîcheur d'une lecture, en une ligne. */
 export function ScopeLine({ period, scope, answer }: { period: string; scope: string; answer: MetricsAnswer }) {
   return <p className="pilotage-scope">{period} · {scope} · calculé à {clock(answer)}</p>;
