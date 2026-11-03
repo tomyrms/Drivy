@@ -2,7 +2,7 @@
 
 [← Présentation du projet](../../README.md) · [Organisation du suivi](SETUP.md)
 
-Dernière mise à jour : **3 novembre 2026**.
+Dernière mise à jour : **4 novembre 2026**.
 
 **Conserver les idées aujourd'hui. Créer les issues lorsqu'elles sont prêtes.**
 
@@ -24,8 +24,9 @@ Une initiative n'est ni une fonctionnalité livrée, ni un cahier des charges va
 | R08 | [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md) | Idée | À définir | Déplacer la personnalisation des signalements des réglages de l’école vers le profil utilisateur. |
 | R09 | [Bilan pédagogique IA à partir de l'audio de la leçon](initiatives/R09-bilan-pedagogique-ia-audio.md) | Idée | Très long terme | Cadrage produit et confidentialité, avant toute étude technique. |
 | R10 | [Gestion financière des cours et des leçons](initiatives/R10-gestion-financiere-cours-lecons.md) | Idée | À définir | Valider le périmètre avec les écoles : paiements, packs, remboursements. |
+| R11 | [Revue complète du modèle de données avant production](initiatives/R11-revue-modele-donnees.md) | Idée | Après stabilisation fonctionnelle, avant production durable | Auditer le schéma réel, les invariants, migrations, performances et risques de données. |
 
-**R01–R10 sont des identifiants de vision produit**, pas des numéros d'issues ni les anciens lots R01–R25 de la refonte #311. R06 et R07 sont des intentions approuvées à conserver pour la fin du chantier, pas des développements à lancer maintenant.
+**R01–R11 sont des identifiants de vision produit**, pas des numéros d'issues ni les anciens lots R01–R25 de la refonte #311. R06 et R07 sont des intentions approuvées à conserver pour la fin du chantier, pas des développements à lancer maintenant.
 
 ## R01 — Administration de la plateforme Drivy
 
@@ -107,6 +108,14 @@ Un paiement ne valide jamais une présence ni un accomplissement, et rien n'est 
 
 **Fiche : [Gestion financière des cours et des leçons](initiatives/R10-gestion-financiere-cours-lecons.md).** Reprend l'ancienne issue #45, fermée au profit de cette fiche. Aucune issue créée automatiquement depuis cette idée.
 
+## R11 — Revue complète du modèle de données avant production
+
+Quand les fonctionnalités principales de Drivy seront quasiment terminées et stabilisées, effectuer une **revue globale du modèle de données** avant la mise en production durable.
+
+L’audit doit couvrir la structure du schéma, les relations et contraintes, l’isolation multi-tenant, le versionnement et l’historique, les données redondantes ou dérivées, les migrations, l’intégrité transactionnelle, les performances, la conservation des données et les risques de bugs ou de dette structurelle. Les changements ne sont retenus que s’ils répondent à un problème ou un risque démontré.
+
+**Fiche : [Revue complète du modèle de données avant production](initiatives/R11-revue-modele-donnees.md).** Aucune issue créée automatiquement depuis cette idée.
+
 ## Ordre de réflexion proposé
 
 **Maintenant :** poursuivre et stabiliser le périmètre déjà autorisé. Examiner le code récent, les PR et les preuves avant d'assimiler une issue ouverte à une fonctionnalité absente. Le tableau de bord et les statistiques de l'auto-école ont leur suivi de réalisation dans [l'epic #373](https://github.com/tomyrms/Drivy/issues/373), distinct des idées différées.
@@ -115,7 +124,7 @@ Un paiement ne valide jamais une présence ni un accomplissement, et rien n'est 
 
 **Puis :** concevoir la facturation sur les offres retenues (R04) et préparer la présentation commerciale (R05). Le contenu du site vitrine peut avancer sans attendre un système de paiement complet.
 
-L'ordre commercial R01–R05 est une proposition de dépendances, pas un calendrier approuvé ; leurs horizons restent « À définir ». **Pour la finition globale, l'ordre demandé est explicite : périmètre fonctionnel quasiment terminé → R06 web → validation de R06 → R07 Swift.** Définir le périmètre de la version avec le porteur au lancement, sans attendre indéfiniment toutes les idées à très long terme. Les corrections urgentes de sécurité ou de fonctionnement ne sont pas reportées à ces revues.
+L'ordre commercial R01–R05 est une proposition de dépendances, pas un calendrier approuvé ; leurs horizons restent « À définir ». **Avant la production durable, R11 prévoit une revue complète du modèle de données une fois le périmètre fonctionnel stabilisé. Pour la finition globale, l'ordre demandé est explicite : périmètre fonctionnel quasiment terminé → R06 web → validation de R06 → R07 Swift.** Définir le périmètre de la version avec le porteur au lancement, sans attendre indéfiniment toutes les idées à très long terme. Les corrections urgentes de sécurité ou de fonctionnement ne sont pas reportées à ces revues.
 
 ## De l'idée à la réalisation
 
@@ -138,13 +147,13 @@ Pour lancer un sujet, relire la fiche avec le porteur, vérifier l'existant, dé
 - **Réalisation et qualification :** le [suivi d'implémentation](../implementation/STATUS.md) et les preuves associées au commit.
 - **Kanban facultatif :** le [Project privé n°2](https://github.com/users/tomyrms/projects/2), conservé comme vue de travail. Il n'est pas nécessaire pour lire ou modifier les idées en fichiers.
 
-Le Project et ces fichiers ne sont **pas synchronisés automatiquement**. La création et l'état du Project ont été vérifiés par API le 30 octobre 2026 ; cette organisation documentaire n'en modifie ni les cartes ni les vues. **R06 à R10 sont ajoutées aux fichiers de roadmap uniquement, pas aux brouillons du Project.** Voir [SETUP.md](SETUP.md).
+Le Project et ces fichiers ne sont **pas synchronisés automatiquement**. La création et l'état du Project ont été vérifiés par API le 30 octobre 2026 ; cette organisation documentaire n'en modifie ni les cartes ni les vues. **R06 à R11 sont ajoutées aux fichiers de roadmap uniquement, pas aux brouillons du Project.** Voir [SETUP.md](SETUP.md).
 
 Le dépôt est public : les documents suivis y sont publics également. Garder les secrets, données personnelles et informations commerciales confidentielles dans un espace privé autorisé, pas dans ces fiches.
 
 ## Consignes aux agents
 
-Ne pas développer automatiquement les initiatives R01–R10, ni les convertir en issues sans décision du porteur. Les anciennes issues #63 et #45 sont devenues R09 et R10.
+Ne pas développer automatiquement les initiatives R01–R11, ni les convertir en issues sans décision du porteur. Les anciennes issues #63 et #45 sont devenues R09 et R10.
 
 Ne pas rouvrir le lot de finition annulé **#340, #341–#346 et #348–#369**. R06/R07 conservent la demande de revue globale pour plus tard, sans annuler cette décision ni recréer ses tickets maintenant. Ne pas lancer une nouvelle refonte graphique au prétexte d'organiser la roadmap.
 
