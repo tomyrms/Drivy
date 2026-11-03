@@ -3,24 +3,27 @@ import { Pencil } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/ui/collapsible';
+import type { LaneOutcome } from '../../command-lane';
 import type { FormationSheet, Programme, TextProposalsLite } from '../../formation-api';
 import {
   competenciesChanged, competencyDrafts, competencyPayload, competencyProblems, emptyCompetency, generalChanges, generalDraft, generalProblems,
-  programmeName, rulesChanged, rulesDraft, rulesPayload, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft,
+  minutes, programmeName, rulesChanged, rulesDraft, rulesPayload, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft,
 } from '../../console/formation-model';
-import { ActionSlot, ChangeList, CommandFeedback, ReviewDialog } from './catalogue-ui';
-import type { CatalogueCommand } from './catalogue-command';
+import { ActionSlot, ChangeList, ReviewDialog, StateBadge } from './catalogue-ui';
+import { LaneFeedback, RefusalBanner } from './formation-feedback';
+import type { ProgrammeRefusal, ProgrammeLane } from './formation-commands';
 import { competencyChangeCount, competencyChanges, generalDifferences, rulesChanges, type CompetencyChanges, type TextChange } from './formation-diff';
+import { formationMarkLabels, type FormationMark } from './formation-projection';
 import { useProgrammeEditor, type ProgrammeEditor } from './formation-controllers';
-import { plural } from './formation-format';
+import { duration, plural } from './formation-format';
 import { CompetencyFields, GeneralFields, RulesFields } from './programme-fields';
 import { CompetencyList, ProgrammeOverview, RulesReader } from './programme-read';
 import { ReferenceUpdate } from './reference-update';
 import { editorTitles } from './sheet-routing';
 
 interface SectionProps {
-  sheet: FormationSheet; programme: Programme; command: CatalogueCommand; proposals: TextProposalsLite | undefined;
-  reload: () => void; onTariffs: () => void; onHistory: () => void;
+  sheet: FormationSheet; programme: Programme; commands: ProgrammeLane; proposals: TextProposalsLite | undefined;
+  onTariffs: () => void; onHistory: () => void;
   /** Une édition ouverte occupe toute la page : la fiche masque son en-tête et ses onglets. */
   onEditing: (editing: boolean) => void;
   /** Emplacement des actions de rubrique, sur la rangée des onglets. */
@@ -39,10 +42,13 @@ function useRestoreFocus(editing: boolean, onEditing: (editing: boolean) => void
   return heading;
 }
 
-/** Édition d'une seule section en page entière : l'élément modifié est seul à l'écran, avec sa portée. */
-function EditorFrame({ view, scope, rebased, saved, dirty, busy, reviewing, command, onCancel, onSubmit, children }: {
-  view: keyof typeof editorTitles; scope: string; rebased: boolean; saved: ReactNode; dirty: boolean; busy: boolean; reviewing: boolean; command: CatalogueCommand;
-  onCancel: () => void; onSubmit: () => void; children: ReactNode;
+/**
+ * Édition d'une seule section en page entière : l'élément modifié est seul à l'écran, avec sa portée. Le formulaire n'est jamais
+ * verrouillé par un envoi : le magasin conserve la demande, l'éditeur se ferme et la rubrique dit ce qui est en cours.
+ */
+function EditorFrame({ view, scope, rebased, saved, restored, dirty, reviewing, onCancel, onSubmit, children }: {
+  view: keyof typeof editorTitles; scope: string; rebased: boolean; saved: ReactNode; restored: LaneOutcome | null;
+  dirty: boolean; reviewing: boolean; onCancel: () => void; onSubmit: () => void; children: ReactNode;
 }) {
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => { title.current?.focus(); }, []);
@@ -52,21 +58,37 @@ function EditorFrame({ view, scope, rebased, saved, dirty, busy, reviewing, comm
     {rebased && <Alert><AlertTitle>La fiche a changé pendant votre modification</AlertTitle>
       <AlertDescription>La version enregistrée entre-temps est disponible ci-dessous. Votre saisie est conservée : relisez-la avant d’enregistrer.</AlertDescription>
       <Collapsible className="cat-collapsible"><CollapsibleTrigger render={<Button type="button" variant="outline" />}>Voir la version enregistrée</CollapsibleTrigger><CollapsibleContent className="cat-saved">{saved}</CollapsibleContent></Collapsible></Alert>}
-    {!reviewing && <CommandFeedback runner={command.runner} />}
+    {!reviewing && <LaneFeedback outcome={restored} />}
     {children}
     <footer className="cat-editor-bar">
-      <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>Annuler</Button>
-      <Button type="submit" disabled={busy || !dirty}>Relire les changements</Button>
+      <Button type="button" variant="ghost" onClick={onCancel}>Annuler</Button>
+      <Button type="submit" disabled={!dirty}>Relire les changements</Button>
     </footer>
   </form>;
 }
 
 /** Le titre de la rubrique est déjà celui de l'onglet : il reste pour les lecteurs d'écran, l'écran garde un repère utile et l'action. */
-function SectionHead({ title, headingRef, lead, slot, children }: { title: string; headingRef: RefObject<HTMLHeadingElement | null>; lead?: ReactNode; slot: HTMLElement | null; children?: ReactNode }) {
+function SectionHead({ title, headingRef, lead, slot, children }: {
+  title: string; headingRef: RefObject<HTMLHeadingElement | null>; lead?: ReactNode; slot: HTMLElement | null; children?: ReactNode;
+}) {
   return <>
     <h2 id="cat-section-title" className="visually-hidden" ref={headingRef} tabIndex={-1}>{title}</h2>
     {lead ? <p className="cat-section-lead">{lead}</p> : null}
     {children ? <ActionSlot slot={slot}>{children}</ActionSlot> : null}
+  </>;
+}
+
+/**
+ * Ce que la rubrique montre quand l'éditeur est fermé : un refus avec sa saisie à reprendre, puis la marque de la demande en cours.
+ * La version publiée reste celle de l'école ; la ligne ne dit que ce qui est en attente.
+ */
+function SectionState({ mark, refusals, blocked, line, onResume }: {
+  mark: FormationMark | null; refusals: readonly ProgrammeRefusal[]; blocked: boolean; line?: string | null; onResume: (refusal: ProgrammeRefusal) => void;
+}) {
+  return <>
+    {refusals.map(refusal => <RefusalBanner key={refusal.intention.operationId} outcome={refusal.outcome} onResume={() => onResume(refusal)} />)}
+    {mark && <p className="cat-hint" role="status"><StateBadge badge={{ tone: 'neutral', label: formationMarkLabels[mark] }} />{line ? <span className="cat-muted"> · {line}</span> : null}</p>}
+    {blocked && !mark && refusals.length === 0 && <p className="cat-hint">Une demande sur ce parcours attend sa confirmation.</p>}
   </>;
 }
 
@@ -78,95 +100,110 @@ function ScopedNotice({ shared }: { shared: boolean }) {
   return shared ? <Alert><AlertDescription>Ce contenu est aussi celui d’un autre parcours ; l’enregistrer ici ne modifie que ce parcours.</AlertDescription></Alert> : null;
 }
 
+const generalLine = (draft: GeneralDraft) => [draft.label.trim() || null, minutes(draft.duration) !== null ? duration(minutes(draft.duration)) : null].filter(Boolean).join(' · ');
+
 export function ProgrammeSection({ view, ...props }: SectionProps & { view: 'general' | 'competences' | 'deroulement' }) {
   return view === 'general' ? <GeneralSection {...props} /> : view === 'competences' ? <CompetenciesSection {...props} /> : <RulesSection {...props} />;
 }
 
-function GeneralSection({ sheet, programme, command, reload, onTariffs, onHistory, onEditing, actionSlot }: SectionProps) {
+function GeneralSection({ sheet, programme, commands, onTariffs, onHistory, onEditing, actionSlot }: SectionProps) {
   const multiple = sheet.programmes.length > 1;
   const others = sheet.programmes.filter(item => item !== programme).flatMap(item => item.head.label ? [item.head.label] : []);
-  const editor: ProgrammeEditor<GeneralDraft> = useProgrammeEditor<GeneralDraft>({ programme, command, reload, success: 'Le parcours est enregistré.', initial: () => generalDraft(programme),
-    valid: draft => generalProblems(draft, multiple, others).valid, changed: draft => Object.keys(generalChanges(draft, programme)).length > 0, body: draft => generalChanges(draft, programme) });
+  const editor: ProgrammeEditor<GeneralDraft> = useProgrammeEditor<GeneralDraft>({ programme, section: 'general', commands, success: 'Le parcours est enregistré.',
+    initial: () => generalDraft(programme), valid: draft => generalProblems(draft, multiple, others).valid,
+    changed: draft => Object.keys(generalChanges(draft, programme)).length > 0, body: draft => generalChanges(draft, programme) });
   const heading = useRestoreFocus(editor.editing, onEditing);
-  const blocked = command.busy;
   if (editor.editing && editor.draft) {
     const problems = generalProblems(editor.draft, multiple, others);
     return <>
-      <EditorFrame view="general" scope={`Permis ${sheet.categoryCode}${multiple ? ` · ${programmeName(programme, sheet.programmes)}` : ''}`} rebased={editor.rebased} dirty={editor.dirty} busy={blocked} reviewing={editor.reviewing} command={command}
-        onCancel={editor.cancel} onSubmit={() => { if (!editor.review()) focusInvalid(); }} saved={<ProgrammeOverview sheet={sheet} programme={programme} onTariffs={onTariffs} onHistory={onHistory} />}>
-        <GeneralFields draft={editor.draft} onChange={editor.update} disabled={blocked} showErrors={editor.attempted} problems={problems} nameRequired={multiple} />
+      <EditorFrame view="general" scope={`Permis ${sheet.categoryCode}${multiple ? ` · ${programmeName(programme, sheet.programmes)}` : ''}`} rebased={editor.rebased} dirty={editor.dirty} reviewing={editor.reviewing}
+        restored={editor.restored} onCancel={editor.cancel} onSubmit={() => { if (!editor.review()) focusInvalid(); }} saved={<ProgrammeOverview sheet={sheet} programme={programme} onTariffs={onTariffs} onHistory={onHistory} />}>
+        <GeneralFields draft={editor.draft} onChange={editor.update} disabled={false} showErrors={editor.attempted} problems={problems} nameRequired={multiple} />
       </EditorFrame>
-      <ReviewDialog open={editor.reviewing} title="Enregistrer ces changements ?" description={`Permis ${sheet.categoryCode}`} runner={command.runner} busy={blocked} confirmLabel="Enregistrer"
-        onClose={editor.closeReview} onConfirm={() => void editor.confirm()}>
+      <ReviewDialog open={editor.reviewing} title="Enregistrer ces changements ?" description={`Permis ${sheet.categoryCode}`} outcome={editor.restored} busy={false}
+        disabled={editor.blocked} confirmLabel="Enregistrer" onClose={editor.closeReview} onConfirm={editor.confirm}>
         <ChangeList rows={generalDifferences(editor.draft, programme)} /><p className="cat-muted">{effectText(programme)}</p>
+        {editor.blocked && <p className="cat-muted">Une demande sur ce parcours attend sa confirmation.</p>}
       </ReviewDialog>
     </>;
   }
+  const shown = editor.shown;
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Général" headingRef={heading} slot={actionSlot} lead={multiple ? `Parcours ${programmeName(programme, sheet.programmes)}` : null}>{sheet.canConfigureCatalog && <EditButton label="Modifier" disabled={blocked} onClick={editor.open} />}</SectionHead>
-    <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
+    <SectionHead title="Général" headingRef={heading} slot={actionSlot} lead={multiple ? `Parcours ${programmeName(programme, sheet.programmes)}` : null}>
+      {sheet.canConfigureCatalog && <EditButton label="Modifier" disabled={editor.blocked} onClick={editor.open} />}
+    </SectionHead>
+    <SectionState mark={shown.mark} refusals={editor.refusals} blocked={editor.blocked} line={shown.wanted ? generalLine(shown.wanted.draft) : null} onResume={editor.resume} />
     <ProgrammeOverview sheet={sheet} programme={programme} onTariffs={onTariffs} onHistory={onHistory} />
   </section>;
 }
 
-function CompetenciesSection({ sheet, programme, command, reload, onEditing, actionSlot }: SectionProps) {
+function CompetenciesSection({ sheet, programme, commands, onEditing, actionSlot }: SectionProps) {
   const current = programme.curriculum?.competencies ?? [];
-  const editor: ProgrammeEditor<CompetencyDraft[]> = useProgrammeEditor<CompetencyDraft[]>({ programme, command, reload, success: 'Les compétences sont enregistrées pour les nouvelles inscriptions.',
+  const editor: ProgrammeEditor<CompetencyDraft[]> = useProgrammeEditor<CompetencyDraft[]>({ programme, section: 'competences', commands,
+    success: 'Les compétences sont enregistrées pour les nouvelles inscriptions.',
     initial: () => current.length ? competencyDrafts(current) : [emptyCompetency()], valid: draft => competencyProblems(draft).valid,
     changed: draft => competenciesChanged(draft, current) || !programme.curriculum?.approved, body: draft => ({ competencies: competencyPayload(draft) }) });
   const heading = useRestoreFocus(editor.editing, onEditing);
-  const blocked = command.busy;
   if (editor.editing && editor.draft) {
     const changes = competencyChanges(current, editor.draft);
     return <>
-      <EditorFrame view="competences" scope={`Permis ${sheet.categoryCode}${sheet.programmes.length > 1 ? ` · ${programmeName(programme, sheet.programmes)}` : ''}`} rebased={editor.rebased} dirty={editor.dirty} busy={blocked} reviewing={editor.reviewing} command={command}
-        onCancel={editor.cancel} onSubmit={() => { if (!editor.review()) focusInvalid(); }} saved={<CompetencyList items={current} />}>
+      <EditorFrame view="competences" scope={`Permis ${sheet.categoryCode}${sheet.programmes.length > 1 ? ` · ${programmeName(programme, sheet.programmes)}` : ''}`} rebased={editor.rebased} dirty={editor.dirty}
+        reviewing={editor.reviewing} restored={editor.restored} onCancel={editor.cancel} onSubmit={() => { if (!editor.review()) focusInvalid(); }} saved={<CompetencyList items={current} />}>
         <ScopedNotice shared={programme.sharedCurriculumWith.length > 0} />
-        <CompetencyFields items={editor.draft} onChange={editor.update} disabled={blocked} showErrors={editor.attempted} />
+        <CompetencyFields items={editor.draft} onChange={editor.update} disabled={false} showErrors={editor.attempted} />
       </EditorFrame>
-      <ReviewDialog open={editor.reviewing} title="Enregistrer les compétences ?" description={`Permis ${sheet.categoryCode} · ${plural(changes.total, 'compétence')} au total`} runner={command.runner} busy={blocked}
-        confirmLabel="Enregistrer les compétences" onClose={editor.closeReview} onConfirm={() => void editor.confirm()}>
+      <ReviewDialog open={editor.reviewing} title="Enregistrer les compétences ?" description={`Permis ${sheet.categoryCode} · ${plural(changes.total, 'compétence')} au total`}
+        outcome={editor.restored} busy={false} disabled={editor.blocked} confirmLabel="Enregistrer les compétences" onClose={editor.closeReview} onConfirm={editor.confirm}>
         <CompetencyReview changes={changes} /><p className="cat-muted">{effectText(programme)}</p>
+        {editor.blocked && <p className="cat-muted">Une demande sur ce parcours attend sa confirmation.</p>}
       </ReviewDialog>
     </>;
   }
+  const shown = editor.shown;
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
     <SectionHead title="Compétences" headingRef={heading} slot={actionSlot} lead={current.length ? plural(current.length, 'compétence') : null}>
-      {sheet.canConfigureCatalog && <EditButton label={current.length ? 'Modifier les compétences' : 'Ajouter les compétences'} disabled={blocked} onClick={editor.open} />}
+      {sheet.canConfigureCatalog && <EditButton label={current.length ? 'Modifier les compétences' : 'Ajouter les compétences'} disabled={editor.blocked} onClick={editor.open} />}
     </SectionHead>
-    <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
+    <SectionState mark={shown.mark} refusals={editor.refusals} blocked={editor.blocked}
+      line={shown.wanted ? plural(shown.wanted.draft.length, 'compétence') : null} onResume={editor.resume} />
     {current.length ? <>
       {programme.curriculum && !programme.curriculum.approved && <p className="cat-muted">Ces compétences n’ont jamais été appliquées.</p>}
       <CompetencyList items={current} />
     </> : <p className="cat-muted">Aucune compétence enregistrée pour ce parcours.</p>}
-    {sheet.canConfigureCatalog && <div className="cat-section-foot"><ReferenceUpdate programme={programme} categoryCode={sheet.categoryCode} canConfigure={sheet.canConfigureCatalog} command={command} reload={reload} /></div>}
+    {sheet.canConfigureCatalog && <div className="cat-section-foot"><ReferenceUpdate programme={programme} categoryCode={sheet.categoryCode} canConfigure={sheet.canConfigureCatalog} commands={commands} /></div>}
   </section>;
 }
 
-function RulesSection({ sheet, programme, command, proposals, reload, onEditing, actionSlot }: SectionProps) {
+function RulesSection({ sheet, programme, commands, proposals, onEditing, actionSlot }: SectionProps) {
   const current = programme.procedure;
-  const editor: ProgrammeEditor<RulesDraft> = useProgrammeEditor<RulesDraft>({ programme, command, reload, success: 'Le déroulement et l’annulation sont enregistrés pour les nouvelles inscriptions.',
-    initial: () => rulesDraft(current), valid: draft => rulesProblems(draft).valid, changed: draft => rulesChanged(draft, current) || !current?.approved, body: draft => ({ procedure: rulesPayload(draft) }) });
+  const editor: ProgrammeEditor<RulesDraft> = useProgrammeEditor<RulesDraft>({ programme, section: 'deroulement', commands,
+    success: 'Le déroulement et l’annulation sont enregistrés pour les nouvelles inscriptions.',
+    initial: () => rulesDraft(current), valid: draft => rulesProblems(draft).valid, changed: draft => rulesChanged(draft, current) || !current?.approved,
+    body: draft => ({ procedure: rulesPayload(draft) }) });
   const heading = useRestoreFocus(editor.editing, onEditing);
-  const blocked = command.busy;
   if (editor.editing && editor.draft) {
     const changes = rulesChanges(current, editor.draft);
     return <>
-      <EditorFrame view="deroulement" scope={`Permis ${sheet.categoryCode}${sheet.programmes.length > 1 ? ` · ${programmeName(programme, sheet.programmes)}` : ''}`} rebased={editor.rebased} dirty={editor.dirty} busy={blocked} reviewing={editor.reviewing} command={command}
-        onCancel={editor.cancel} onSubmit={() => { if (!editor.review()) focusInvalid(); }} saved={current ? <RulesReader procedure={current} /> : <p className="cat-muted">Aucune règle enregistrée.</p>}>
+      <EditorFrame view="deroulement" scope={`Permis ${sheet.categoryCode}${sheet.programmes.length > 1 ? ` · ${programmeName(programme, sheet.programmes)}` : ''}`} rebased={editor.rebased} dirty={editor.dirty}
+        reviewing={editor.reviewing} restored={editor.restored} onCancel={editor.cancel} onSubmit={() => { if (!editor.review()) focusInvalid(); }}
+        saved={current ? <RulesReader procedure={current} /> : <p className="cat-muted">Aucune règle enregistrée.</p>}>
         <ScopedNotice shared={programme.sharedProcedureWith.length > 0} />
-        <RulesFields draft={editor.draft} onChange={editor.update} disabled={blocked} showErrors={editor.attempted} example={proposals?.procedure ?? null} />
+        <RulesFields draft={editor.draft} onChange={editor.update} disabled={false} showErrors={editor.attempted} example={proposals?.procedure ?? null} />
       </EditorFrame>
-      <ReviewDialog open={editor.reviewing} title="Enregistrer les règles ?" description={`Permis ${sheet.categoryCode}`} runner={command.runner} busy={blocked} confirmLabel="Enregistrer les règles"
-        onClose={editor.closeReview} onConfirm={() => void editor.confirm()}>
+      <ReviewDialog open={editor.reviewing} title="Enregistrer les règles ?" description={`Permis ${sheet.categoryCode}`} outcome={editor.restored} busy={false}
+        disabled={editor.blocked} confirmLabel="Enregistrer les règles" onClose={editor.closeReview} onConfirm={editor.confirm}>
         {changes.length === 0 ? <p>Les textes sont identiques à ceux déjà enregistrés ; les règles seront appliquées aux nouvelles inscriptions.</p> : <RulesReview changes={changes} />}
         <p className="cat-muted">{effectText(programme)}</p>
+        {editor.blocked && <p className="cat-muted">Une demande sur ce parcours attend sa confirmation.</p>}
       </ReviewDialog>
     </>;
   }
+  const shown = editor.shown;
   return <section className="cat-section cat-surface" aria-labelledby="cat-section-title">
-    <SectionHead title="Règles" headingRef={heading} slot={actionSlot} lead={null}>{sheet.canConfigureCatalog && <EditButton label={current ? 'Modifier les règles' : 'Rédiger les règles'} disabled={blocked} onClick={editor.open} />}</SectionHead>
-    <CommandFeedback runner={command.runner} onDismiss={command.runner.clearOutcome} />
+    <SectionHead title="Règles" headingRef={heading} slot={actionSlot} lead={null}>
+      {sheet.canConfigureCatalog && <EditButton label={current ? 'Modifier les règles' : 'Rédiger les règles'} disabled={editor.blocked} onClick={editor.open} />}
+    </SectionHead>
+    <SectionState mark={shown.mark} refusals={editor.refusals} blocked={editor.blocked} onResume={editor.resume} />
     {current ? <RulesReader procedure={current} /> : <p className="cat-muted">Aucune règle enregistrée pour ce parcours.</p>}
   </section>;
 }
