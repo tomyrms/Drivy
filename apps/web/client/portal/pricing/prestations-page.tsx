@@ -3,7 +3,6 @@ import { ArrowRight } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { useConsole } from '../../console/context';
 import { ReadFeedback } from '../formations/catalogue-ui';
-import { useCatalogueCommand } from '../formations/catalogue-command';
 import type { TariffType } from '../../formation-api';
 import { TariffReference } from './tariff-reference';
 import { TariffsPanel } from './tariffs-panel';
@@ -16,7 +15,6 @@ import './pricing.css';
 export function PrestationsPage() {
   const { school, routeQuery = {}, navigate, setRouteQuery } = useConsole();
   const { loaded, proposals } = useUncategorizedTariffs();
-  const command = useCatalogueCommand();
   const selection = routeQuery.selection;
   const title = useRef<HTMLHeadingElement>(null);
   const consultTitle = useRef<HTMLHeadingElement>(null);
@@ -42,7 +40,7 @@ export function PrestationsPage() {
         {reference.data?.kind === 'TARIFF' && reference.data.categoryCode === null && <TariffReference reference={reference.data} onClose={() => select(null)} headingRef={consultTitle}
           badge={<Badge variant="secondary" className="cat-badge" data-tone="neutral">{reference.data.current ? 'Version actuelle' : 'Version précédente'}</Badge>} />}
       </div>}
-      <TariffsPanel tariffs={data.tariffs} categoryCode={null} today={data.today} canConfigure={data.canConfigureCatalog} types={types} proposals={proposals.data} command={command}
+      <TariffsPanel tariffs={data.tariffs} categoryCode={null} today={data.today} canConfigure={data.canConfigureCatalog} types={types} proposals={proposals.data}
         reload={loaded.reload} programmeCount={0} selection={consult ? undefined : selection} listLabel="Prestations sans permis"
         actions={<Button variant="ghost" onClick={() => navigate('conditions', {})}>Conditions commerciales<ArrowRight data-icon="inline-end" /></Button>} onSelect={select} onConsultVersion={id => select(id)} onOpenTerms={id => navigate('conditions', { selection: id })} />
     </>}

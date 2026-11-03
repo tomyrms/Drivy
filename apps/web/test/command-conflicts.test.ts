@@ -91,9 +91,49 @@ describe('Conflits : une opération n’attend que ce qu’elle partage', () => 
 
   test('les autres familles gardent leurs clés d’origine', () => {
     expect(commandConflictKeys(create('saveTariff', { path: 'formations/tariffs' }))).toEqual(['catalogue']);
+    expect(commandConflictKeys(create('createCommercialTerms', { path: 'formations/terms' }))).toEqual(['catalogue']);
     expect(commandConflictKeys(create('createExam', { path: 'exams' }))).toEqual(['exams', 'planning']);
     expect(commandConflictKeys(create('updateSchool', { path: '' }))).toEqual(['school']);
     expect(commandConflictKeys(create('createTraining', { path: 'trainings' }))).toEqual(['learners', 'planning']);
     expect(commandConflictKeys(create('saveObservationThemes', { path: 'observation-themes' }))).toEqual(['observation-themes']);
+  });
+});
+
+describe('Catalogue : un agrégat par produit tarifaire et par jeu de conditions (#124)', () => {
+  const tariff = (productKey: string | null) => create('saveTariff', { path: 'formations/tariffs', body: { mode: 'UPDATE' },
+    ...(productKey ? { scope: productKey } : {}) });
+  const terms = (termsVersionId: string | null) => create('reviseSharedTerms', { path: 'formations/terms/revise', body: { reviewAcknowledged: true },
+    ...(termsVersionId ? { scope: termsVersionId } : {}) });
+
+  test('deux produits indépendants ne s’attendent pas ; le même produit reste ordonné', () => {
+    expect(commandConflictKeys(tariff('lesson-45'))).toEqual(['catalogue:product:lesson-45']);
+    expect(commandsConflict(tariff('lesson-45'), tariff('exam-support'))).toBe(false);
+    expect(commandsConflict(tariff('lesson-45'), tariff('lesson-45'))).toBe(true);
+    expect(commandsConflict(tariff('LESSON-45'), tariff('lesson-45'))).toBe(true);
+  });
+
+  test('sans agrégat nommé, un tarif garde la famille entière : création et conditions partagées attendent tout le catalogue', () => {
+    expect(commandConflictKeys(tariff(null))).toEqual(['catalogue']);
+    expect(commandsConflict(tariff(null), tariff('lesson-45'))).toBe(true);
+    expect(commandsConflict(tariff('lesson-45'), tariff(null))).toBe(true);
+    // Un tarif qui touche des conditions partagées n'a qu'une clé à sa disposition : la famille, qui contient la révision.
+    expect(commandsConflict(tariff(null), terms('terms-1'))).toBe(true);
+  });
+
+  test('une révision de conditions s’ordonne par jeu ; un tarif a ses propres conditions n’attend pas une révision', () => {
+    expect(commandConflictKeys(terms('terms-1'))).toEqual(['catalogue:terms:terms-1', 'planning']);
+    expect(commandsConflict(terms('terms-1'), terms('terms-1'))).toBe(true);
+    // Le tarif qui partage ces conditions est envoyé sans portée (test précédent) ; celui qui a ses propres conditions, non.
+    expect(commandsConflict(terms('terms-1'), tariff('lesson-45'))).toBe(false);
+  });
+
+  test('les relations existantes avec la planification et les accès ne changent pas', () => {
+    const lesson = create('createLesson', { path: 'lessons' }), member = create('updateMember', { path: `members/${instructorA}`, resourceId: instructorA });
+    // Avant #124 comme après : un tarif n'attend pas une leçon, une révision de conditions si (elle tombait dans « * »).
+    expect(commandsConflict(tariff('lesson-45'), lesson)).toBe(false);
+    expect(commandsConflict(terms('terms-1'), lesson)).toBe(true);
+    // Un changement d'accès bloque toujours tout, tarif comme conditions.
+    expect(commandsConflict(tariff('lesson-45'), member)).toBe(true);
+    expect(commandsConflict(terms('terms-1'), member)).toBe(true);
   });
 });

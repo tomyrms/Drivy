@@ -37,7 +37,18 @@ export function commandConflictKeys(command: ConflictSubject): readonly string[]
     return [target ? `invitations:${target}` : 'invitations'];
   }
   if (['createOffering', 'createCurriculum', 'createCatalogPolicy', 'createCommercialTerms', 'createServiceProduct',
-    'createFormation', 'saveFormationProgramme', 'saveTariff'].includes(kind)) return ['catalogue'];
+    'createFormation', 'saveFormationProgramme'].includes(kind)) return ['catalogue'];
+  // Un tarif s'ordonne par produit, une révision de conditions par jeu de conditions (#124). Sans agrégat nommé — une création,
+  // qui n'a pas encore d'identifiant d'école, ou un tarif qui partage ses conditions — la clé reste la famille entière.
+  if (kind === 'saveTariff') {
+    const product = lower(command.scope);
+    return [product ? `catalogue:product:${product}` : 'catalogue'];
+  }
+  // Une révision de conditions reste ordonnée avec la planification, comme le repli « * » qu'elle avait avant (#124).
+  if (kind === 'reviseSharedTerms') {
+    const terms = lower(command.scope);
+    return terms ? [`catalogue:terms:${terms}`, 'planning'] : ['catalogue', 'planning'];
+  }
   // Weekly hours and absences of one instructor are ordered with their own kind only; both still wait for lessons and courses (`planning`).
   if (kind === 'createAvailabilityRule' || kind === 'updateAvailabilityRule' || kind === 'removeAvailabilityRule'
     || kind === 'createClosure' || kind === 'removeClosure') {
