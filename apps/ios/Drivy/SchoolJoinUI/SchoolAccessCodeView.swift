@@ -12,6 +12,7 @@ struct SchoolAccessCodeView: View {
     @ScaledMetric(relativeTo: .title2) private var codeSize: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var minimumNameWidth: CGFloat = 200
     @State private var namesWidth: CGFloat = 0
+    @State private var wait = SchoolWaitMonitor()
 
     var body: some View {
         NavigationStack {
@@ -57,6 +58,7 @@ struct SchoolAccessCodeView: View {
         .onChange(of: model.codeInputError ?? model.errorMessage) { _, message in
             if let message { UIAccessibility.post(notification: .announcement, argument: message) }
         }
+        .schoolWaitAnnouncements(wait, title: busyTitle)
         .accessibilityIdentifier("access-code")
     }
 
@@ -91,7 +93,7 @@ struct SchoolAccessCodeView: View {
                         .keyboardType(.asciiCapable)
                         .textContentType(.oneTimeCode)
                         .submitLabel(.go)
-                        .onSubmit { Task { await model.inspect() } }
+                        .onSubmit { wait.run { await model.inspect() } }
                         .focused($focus, equals: .code)
                         .schoolJoinFieldChrome(hasError: model.codeInputError != nil || model.errorMessage != nil, isFocused: focus == .code, minHeight: 64)
                         .accessibilityLabel("Code ou lien reçu")
@@ -106,7 +108,7 @@ struct SchoolAccessCodeView: View {
                 .frame(minHeight: DrivyLayout.tapTarget)
             }
             SchoolJoinTextLink(title: "J’ai déjà un compte", isBusy: model.isBusy) {
-                Task { await model.continueWithExistingAccount() }
+                wait.run { await model.continueWithExistingAccount() }
             }
                 .accessibilityIdentifier("access-code-sign-in")
         }
@@ -132,7 +134,7 @@ struct SchoolAccessCodeView: View {
                                identifier: "access-email", onSubmit: { focus = .password })
             SchoolAccountField(label: "Mot de passe", text: $model.password, kind: .newPassword, id: .password, focus: $focus,
                                hint: "8 caractères au moins", identifier: "access-password", submitLabel: .go,
-                               onSubmit: { Task { await model.register() } })
+                               onSubmit: { wait.run { await model.register() } })
             SchoolJoinTextLink(title: "J’ai déjà un compte", isBusy: model.isBusy) { model.show(.signIn) }
                 .accessibilityIdentifier("access-has-account")
             editCode
@@ -176,27 +178,43 @@ struct SchoolAccessCodeView: View {
             return
         }
         focus = nil
-        Task { await model.signIn() }
+        wait.run { await model.signIn() }
+    }
+
+    /// Libellé court de l’étape en attente, dans le bouton et dans l’annonce vocale.
+    private var busyTitle: String {
+        switch model.step {
+        case .code: "Vérification du code…"
+        case .register: "Création du compte…"
+        case .signIn: "Connexion…"
+        }
+    }
+
+    /// Seule la lecture du code peut repartir sans risque : la création du compte n’est pas rejouée d’ici.
+    private var retryInspect: (() -> Void)? {
+        guard model.step == .code, model.isBusy else { return nil }
+        return { wait.retry { if model.step == .code, model.canInspect { await model.inspect() } } }
     }
 
     private var actionBar: some View {
         DrivyFormActionBar {
+            SchoolWaitLine(monitor: wait, retry: retryInspect)
             switch model.step {
             case .code:
-                Button { Task { await model.inspect() } } label: {
-                    DrivyBusyLabel(title: "Continuer", busyTitle: "Vérification…", isBusy: model.isBusy)
+                Button { wait.run { await model.inspect() } } label: {
+                    DrivyBusyLabel(title: "Continuer", busyTitle: busyTitle, isBusy: model.isBusy)
                 }
                 .disabled(!model.canInspect)
                 .accessibilityIdentifier("access-code-continue")
             case .register:
-                Button { Task { await model.register() } } label: {
-                    DrivyBusyLabel(title: "Créer mon compte", busyTitle: "Création…", isBusy: model.isBusy)
+                Button { wait.run { await model.register() } } label: {
+                    DrivyBusyLabel(title: "Créer mon compte", busyTitle: busyTitle, isBusy: model.isBusy)
                 }
                 .disabled(!model.canRegister)
                 .accessibilityIdentifier("access-register")
             case .signIn:
                 Button(action: submitSignIn) {
-                    DrivyBusyLabel(title: "Se connecter", busyTitle: "Connexion…", isBusy: model.isBusy)
+                    DrivyBusyLabel(title: "Se connecter", busyTitle: busyTitle, isBusy: model.isBusy)
                 }
                 .disabled(!model.canSignIn)
                 .accessibilityHint(model.isBusy ? "Connexion en cours." : (SchoolSignInValidation.emailIssue(model.email)
