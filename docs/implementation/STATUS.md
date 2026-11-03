@@ -1598,3 +1598,13 @@ Exécuté : typage web et API sans erreur ; 593 tests web ; 83 tests API du pilo
 - **Retour arrière :** `python scripts/homelab/deploy-web-311.py --rollback 20261101T180106Z-8d6350c53e13` (plan), puis avec `--execute`.
 - **Non prouvé :** aucun parcours authentifié sur le serveur de production (aucune connexion réelle ; l'école du homelab est vide). Le même code a été lu sur la vraie API par le test navigateur de la CI, avec une école synthétique sans leçon. Les chiffres réels d'une école n'ont jamais été vus à l'écran.
 - **À savoir :** l'entrée par défaut d'une école active est désormais le tableau de bord, plus l'agenda (documentation du pilotage, section 13.1). Les issues #373 et #376 à #382 restent ouvertes.
+
+
+## 3 novembre 2026 — Lots A et B : réactivité (#99, #107 à #111, #114 à #116, #121, #123, #124) et passe Unslop (#410)
+
+Branche `claude/lot-a-20261102` : les cinq branches du lot A (2 novembre) plus dix tâches du lot B, réalisées par des workers OpenCode (DeepSeek V4.1 Flash), relues et revérifiées par le coordinateur. Détail et preuves par critère dans les documents `lot-a-*-20261102.md` et `lot-b-*-20261103.md`.
+
+- **Web :** tarifs et conditions communes, programmes et référentiels (#124), préparation enregistrée en arrière-plan (#123), planification provisoire et nommée avec règle d'expiration du renvoi (#109), agenda et aperçu lus par période avec préchargement borné (#107, #108), participants de cours indépendants (#99, lot E), plus le lot A (invitations #121, disponibilités #110, dossiers #116, Unslop #410). Clés de conflit par agrégat dans `command-conflicts.ts`.
+- **iOS :** repères des demandes de planification dans Aujourd'hui et l'Agenda (#108, #109), feuille de planification quittable pendant l'envoi d'une création ou d'un déplacement (#109), fin de leçon ou absence en attente ou refusée visible dans Aujourd'hui (#114), tests de pause, reprise et arrêt sans réseau (#111), plus le lot A (#114, #115, #99, #109, #110, #121).
+- **Exécuté :** web `npm run typecheck` et `npm run test:unit` sur la branche intégrée, 74 fichiers, 763 tests réussis et 1 échec attendu ; IPA d'essai verte sur `c8e9fde5` (run 41650521449, cible de l'app seulement).
+- **Non exécuté :** tests Swift (environ 70 écrits dans les lots A et B, jamais compilés ni lancés), parcours navigateur et latence réelle, serveur et PostgreSQL pour ces parcours, VoiceOver, appareil. Aucune route ni migration nouvelle : `apps/api` et `apps/web/server` inchangés.
