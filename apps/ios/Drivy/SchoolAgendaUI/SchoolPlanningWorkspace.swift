@@ -60,6 +60,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
+    /// Création ou déplacement dont l’envoi est parti (#109) : l’intention est déjà dans le coffre chiffré, la feuille
+    /// peut être quittée sans rien perdre. Rien n’est confirmé tant que l’école n’a pas répondu.
+    private(set) var isSendingRequest = false
     private(set) var needsReload = true
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
@@ -92,6 +95,13 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     @ObservationIgnored private let searchStart: Date
     @ObservationIgnored private var suggestionGeneration = UUID()
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
+    /// Annonces d’écriture confirmée. Injectable pour que les tests observent le nombre exact d’annonces.
+    @ObservationIgnored private let notifications: NotificationCenter
+    /// Saisie au moment où l’envoi est parti : modifiée depuis, elle n’est jamais abandonnée par une sortie.
+    @ObservationIgnored private var sentDraft: SchoolPlanningDraftSnapshot?
+    /// La feuille a été quittée volontairement pendant l’envoi (#109). Seul ce cas autorise une annonce après coup :
+    /// un changement de compte, d’école ou d’époque d’accès, ou un accès retiré, n’annonce rien dans l’ancienne portée.
+    @ObservationIgnored private var leftWhileSending = false
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var selectionGeneration = UUID()
     @ObservationIgnored private var availabilityGeneration = UUID()
@@ -150,8 +160,10 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     }
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, date: Date = Date(), lesson: SchoolLesson? = nil,
-         suggestingNextSlotFrom: Date? = nil, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+         suggestingNextSlotFrom: Date? = nil, outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
+         notifications: NotificationCenter = .default) {
         self.scope = scope; self.client = client; originalLesson = lesson; self.outbox = outbox
+        self.notifications = notifications
         // `date` reste l’horaire initial si l’école ne connaît pas la recherche ; celle-ci part de `suggestingNextSlotFrom`.
         suggestsNextSlot = suggestingNextSlotFrom != nil && lesson == nil; searchStart = suggestingNextSlotFrom ?? date
         startsAt = lesson?.startsAt ?? Date(timeIntervalSince1970: ceil(date.timeIntervalSince1970 / 60) * 60)
@@ -171,6 +183,11 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                                        lesson: marker.kind == .creation ? nil : lesson, outbox: outbox)
     }
     var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && !writeConfirmed && storageAvailable && pending == nil && school?.status == "ACTIVE" }
+    /// Ce qui retient la feuille pendant un envoi (#109) : une annulation, un renvoi d’une demande déjà conservée ou une
+    /// vérification. Une création ou un déplacement, eux, sont déjà dans le coffre chiffré et ne la retiennent pas.
+    var holdsScreen: Bool { isBusy && !isSendingRequest }
+    /// Saisie modifiée depuis le départ de l’envoi : elle n’est jamais abandonnée en silence par une sortie.
+    var draftChangedSinceSend: Bool { sentDraft.map { $0 != draftSnapshot } ?? false }
     var selectedTraining: SchoolTraining? { trainings.first { $0.id == trainingID } }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedTraining?.offeringId } }
     var selectedProduct: SchoolServiceProduct? { products.first { $0.id == productID } }
@@ -309,11 +326,31 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     func invalidate() {
         invalidated = true; generation = UUID(); selectionGeneration = UUID(); availabilityGeneration = UUID(); clear()
     }
+    /// Feuille qui se ferme : plus aucune lecture ni écriture ne s’applique, mais ce qui est affiché reste en place
+    /// pendant que la feuille descend (vider l’écran ferait apparaître un formulaire vide).
+    func close() {
+        invalidated = true; generation = UUID(); isBusy = false; isSendingRequest = false
+    }
+    /// Quitte la feuille pendant l’envoi d’une création ou d’un déplacement (#109). La demande est déjà dans le coffre
+    /// chiffré : cette sortie ne la perd pas et n’en renvoie rien. Si l’école confirme ensuite, la preuve est annoncée
+    /// une fois (`.drivyLessonsDidChange`) ; sans preuve, la demande reste « à vérifier » et se retrouve à la
+    /// réouverture, sans renvoi automatique. Une saisie modifiée depuis l’envoi n’est jamais abandonnée : la feuille
+    /// reste ouverte et c’est l’avertissement de saisie non conservée qui s’applique.
+    @discardableResult func leaveWhileRequestIsSent() -> Bool {
+        guard isSendingRequest, !invalidated, !draftChangedSinceSend else { return false }
+        // Une sortie volontaire, et elle seule, autorise l’annonce d’une réponse arrivée après la fermeture.
+        leftWhileSending = true
+        close()
+        return true
+    }
     private func clear() {
         school = nil; defaults = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
         instructors = []; assignments = []; clearAvailability(); clearSlot(); clearSuggestion(); pending = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
         confirmedLesson = nil; confirmedLessonReference = nil
+        isSendingRequest = false; sentDraft = nil
+        // Changement de portée ou accès retiré : plus aucune annonce ne part dans l’ancienne portée.
+        leftWhileSending = false
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
@@ -673,6 +710,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                 throw error
             }
         } catch { fail(error); return false }
+        sentDraft = draftSnapshot
         return await transmit(firstAttempt: true)
     }
     /// Création ou déplacement dont l'horaire demandé est passé : la demande reste à vérifier, jamais à renvoyer.
@@ -688,7 +726,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         if pendingIsStale { return ["L’horaire demandé est passé : la demande ne sera pas renvoyée. Vérifie-la auprès de l’école."] }
         return []
     }
-    func retry() async -> Bool { await transmit(firstAttempt: false) }
+    func retry() async -> Bool { sentDraft = draftSnapshot; return await transmit(firstAttempt: false) }
     func verify() async {
         guard !invalidated, !isBusy, let command = pending, command.scope.belongsToWorkspace(scope) else { return }
         isBusy = true; let request = generation
@@ -706,12 +744,12 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                 // Changement de compte ou accès retiré pendant la relecture : rien n'est annoncé dans l'ancienne portée.
                 guard request == generation, !invalidated, !accessRevoked else { return }
                 successMessage = "Enregistrement confirmé par l’école."
-                NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+                announceConfirmedWrite()
                 return
             }
             if command.kind != .cancelLesson { await load() }
             successMessage = "Enregistrement confirmé par l’école."
-            NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+            announceConfirmedWrite()
         } catch SchoolPlanningFailure.notFound {
             // Le reçu absent ne dit rien des accès : l’école n’a simplement pas enregistré cette opération.
             guard request == generation else { return }
@@ -726,9 +764,19 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         pending = nil; absentPendingID = nil; errorMessage = nil
         await load()
     }
+    /// L’école a répondu et sa preuve est vérifiée : les écrans qui montrent la leçon se relisent, une seule fois.
+    /// Jamais avant le reçu, et jamais deux fois pour la même écriture.
+    private func announceConfirmedWrite() {
+        notifications.post(name: .drivyLessonsDidChange, object: nil)
+    }
     private func transmit(firstAttempt: Bool) async -> Bool {
         guard canRetry, let command = pending else { return false }
         let request = generation; isBusy = true; errorMessage = nil; successMessage = nil
+        // Création ou déplacement : la demande est déjà écrite dans le coffre chiffré, la feuille peut être quittée
+        // avant la réponse. Ce qui suit ne réécrit alors plus rien à l’écran ; seule la preuve de l’école est annoncée.
+        isSendingRequest = command.kind == .createLesson || command.kind == .moveLesson
+        leftWhileSending = false
+        defer { isSendingRequest = false }
         do {
             try outbox.save(command)
             let receipt = try await client.send(command)
@@ -738,13 +786,20 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                 throw SchoolPlanningFailure.unavailable
             }
             try outbox.remove(command)
-            guard request == generation else { return true }
+            // Feuille quittée pendant l’envoi (#109) : l’école a répondu et sa preuve est vérifiée. Rien n’est écrit
+            // dans une feuille qui n’existe plus, mais les écrans qui montrent la leçon se relisent, une seule fois.
+            // Seule une sortie volontaire annonce : un changement de compte, d’école ou d’époque d’accès, ou un accès
+            // retiré pendant l’envoi, ne publie rien dans l’ancienne portée (même règle que `verify()`).
+            guard request == generation, !invalidated else {
+                if leftWhileSending, !accessRevoked { announceConfirmedWrite(); return false }
+                return true
+            }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
             // La feuille se ferme sur ce résultat : relire tout le planning derrière elle ne faisait que retarder sa
             // fermeture et changer le formulaire sous les yeux. Une nouvelle saisie exigerait une relecture.
             writeConfirmed = true
-            NotificationCenter.default.post(name: .drivyLessonsDidChange, object: nil)
+            announceConfirmedWrite()
             if command.kind == .createLesson || command.kind == .moveLesson, let receipt {
                 confirmedLessonReference = (receipt.resourceId, receipt.resourceVersion)
                 return await reloadConfirmedLesson()
