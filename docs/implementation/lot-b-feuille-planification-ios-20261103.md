@@ -102,16 +102,18 @@ l’annulation reste verrouillée. Aucun hôte n’est exclu.
 ## Écarts, limites, décisions
 
 - **`onConfirmedLesson` ne s’exécute pas si la personne est partie avant la réponse.** C’est le prix de la sortie
-  demandée : l’Agenda ne fait pas surgir la fiche de la leçon devant quelqu’un qui a explicitement quitté. Rien n’est
-  perdu : `.drivyLessonsDidChange` relit l’agenda et Aujourd’hui, la leçon y figure à son nouvel horaire. Choisir
-  d’ouvrir la fiche malgré la sortie aurait volé le geste de la personne.
+  demandée : après « Fermer » pendant l’envoi, l’Agenda ne fait pas surgir la fiche de la leçon devant quelqu’un qui a
+  explicitement quitté. Rien n’est perdu : `.drivyLessonsDidChange` relit l’agenda et Aujourd’hui, la leçon y figure à
+  son nouvel horaire. Choisir d’ouvrir la fiche malgré la sortie aurait volé le geste de la personne.
 - **`SchoolLessonReportView` n’écoute pas `.drivyLessonsDidChange`** : un déplacement quitté pendant l’envoi puis
   confirmé après coup n’est pas relu dans cette fiche (elle s’est déjà relue à la fermeture). La fiche reste ouverte sur
   l’ancienne version jusqu’à sa prochaine relecture ; l’agenda et Aujourd’hui, eux, sont à jour. Corriger cela demande de
   modifier `SchoolLessonReportView.swift`, hors de la liste des fichiers autorisés : non fait, signalé.
 - **Le glissement d’une feuille en cours d’envoi ne passe pas par `close()`** : le modèle reste vivant, la confirmation
-  est appliquée et annoncée normalement (la vue n’existe plus, donc rien ne s’affiche). Le bouton « Fermer » et le
-  chemin de confirmation, eux, ferment proprement. Écart cosmétique, sans effet sur le coffre ni sur les annonces.
+  est appliquée et annoncée normalement (la vue n’existe plus, donc rien ne s’affiche). Si la réponse arrive pendant
+  l’animation de sortie, l’hôte peut encore recevoir `onConfirmedLesson` pour une écriture réellement prouvée ; une fois
+  la feuille partie, plus rien ne lui est remis. Le bouton « Fermer » et la confirmation de saisie non conservée, eux,
+  ferment proprement le modèle. Écart cosmétique, sans effet sur le coffre ni sur les annonces.
 - **Un renvoi (« Réessayer ») d’une création ou d’un déplacement déjà conservé est traité comme le premier envoi** : la
   demande est dans le coffre et la feuille peut être quittée. Une annulation conservée reste verrouillée à chaque renvoi.
 - **« Lancer maintenant » (`startLessonNow`) retenu par le coffre n’est pas concerné** : sa réponse n’a pas de reçu AP72
