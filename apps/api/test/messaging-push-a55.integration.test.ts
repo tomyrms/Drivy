@@ -251,7 +251,9 @@ describe('A55 : appareil, changement de compte et révocation', () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const registered = await req('demo-alice', 'PUT', '/v1/me/push-devices', { token: token(id.alice), environment: 'SANDBOX' });
       expect(registered.statusCode, registered.body).toBe(200);
-      expect(registered.json().data).toEqual({ registered: true });
+      // L'enregistrement reste idempotent et rend, à chaque appel, le secret de révocation propre à l'appareil (#120).
+      expect(registered.json().data).toMatchObject({ registered: true });
+      expect(registered.json().data.revocationSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
     }
     expect((await pool.query('SELECT count(*)::int AS count FROM drivy.push_device WHERE token=$1', [token(id.alice)])).rows[0]!.count).toBe(1);
     await send('demo-instructor', conversationId);
