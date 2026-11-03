@@ -75,11 +75,9 @@ struct SchoolCaptureLifecycleReactivityTests {
     // MARK: Pause sans réseau
 
     /// `pause()` n’écrit que dans le coffre (`SQLCipherSchoolCaptureStore.sealSegment`) : aucune requête ne
-    /// part, même sans réseau. Au retour du réseau, `resumePendingSynchronizations` ne rejoue rien pour une
-    /// pause et ne rouvre aucun segment.
-    ///
-    /// Écart connu : le critère « la mutation de pause part au retour du réseau avec la même clé
-    /// d’idempotence » suppose une opération de pause que le contrat n’a pas (voir le bloc `withKnownIssue`).
+    /// part, même sans réseau. C’est le comportement voulu : la pause n’a aucune opération réseau et l’école
+    /// l’apprend par le manifeste d’arrêt (`endReason: PAUSE`). Au retour du réseau,
+    /// `resumePendingSynchronizations` ne rejoue rien pour une pause et ne rouvre aucun segment.
     @Test func aPauseWithoutNetworkAppliesLocallyAndLeavesNoPauseOperationBehind() async throws {
         let fixture = try await ReactivityFixture.make()
         let controller = fixture.controller
@@ -118,11 +116,13 @@ struct SchoolCaptureLifecycleReactivityTests {
         let pauseRequests = afterReconnection.filter {
             $0.httpMethod == "POST" && $0.url?.lastPathComponent.lowercased() == "pause"
         }
-        await withKnownIssue("La pause n’a aucune opération réseau : SchoolCaptureMutationKind n’en contient pas et l’école n’apprend la pause qu’avec le manifeste d’arrêt (endReason PAUSE). Le critère « la mutation de pause part au retour du réseau avec la même clé d’idempotence, une seule fois » ne peut donc pas être satisfait par le code actuel ; le comportement réel (pause locale immédiate, aucun envoi) est vérifié au-dessus.") {
-            #expect(pauseRequests.count == 1)
-        }
+        // Par conception, la pause n’a aucune opération réseau : rien ne part, même au retour du réseau.
+        #expect(pauseRequests.count == 0)
 
         #expect(await controller.stopAndSynchronize())
+        // Le seul endroit où l’école apprend la pause : le manifeste d’arrêt.
+        let stopped = try await fixture.store.storedSession(captureID: fixture.capture.id, scope: fixture.scope)
+        #expect(stopped.manifest?.map(\.endReason.rawValue) == ["PAUSE"])
         await fixture.waitUntilSettled()
         controller.setScope(nil)
     }
