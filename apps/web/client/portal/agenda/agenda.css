@@ -64,6 +64,13 @@
 .agenda-event-warning > svg { width: 12px; height: 12px; flex: 0 0 12px; }
 .agenda-day-list .agenda-event-warning { display: flex; align-items: center; gap: 5px; }
 .agenda-event-state, .agenda-event-warning { font-size: 10px; line-height: 1.35; font-weight: 550; }
+/* Une intention de planification : texte et bordure, jamais la seule couleur. */
+.agenda-event-mark { font-size: 10px; line-height: 1.35; font-weight: 600; color: var(--accent-foreground); }
+.agenda-event[data-mark] { border-left-style: dashed; }
+.agenda-event[data-provisional=true] { cursor: default; background: var(--background); }
+.agenda-event[data-provisional=true]:hover { box-shadow: none; border-color: color-mix(in srgb, var(--accent-foreground) 18%, var(--border)); }
+.agenda-positioned-event .agenda-event-mark { grid-area: 3 / 2; align-self: start; margin-left: 6px; white-space: nowrap; }
+.agenda-day-list .agenda-event-mark { grid-column: 3; font-size: 12px; }
 .agenda-event-warning { color: var(--portal-warning); }
 .agenda-week-empty { border-top: 1px solid var(--border); padding: 16px 20px; margin: 0; color: var(--muted-foreground); font-size: 14px; }
 .agenda-read-time { display: flex; justify-content: space-between; gap: 16px; color: var(--muted-foreground); font-size: 11px; }

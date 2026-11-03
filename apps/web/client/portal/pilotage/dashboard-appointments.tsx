@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import { addDays, startOfDay, weekStart } from '../../agenda-model';
 import { useCommandSnapshot } from '../../command-store';
-import { agendaDays } from '../../console/agenda-projection';
+import { agendaDays, agendaFacts } from '../../console/agenda-projection';
+import { agendaMarkLabels } from '../../console/agenda-intentions';
 import { courseSeriesListSchema } from '../../console/course-model';
 import { useConsole, useLoad } from '../../console/context';
 import { lessonSchema, readAll, readSchool } from '../../school-api';
@@ -11,6 +12,7 @@ import { Button } from '../../components/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { ReadFeedback } from '../components/feedback';
 import { phaseLabels } from '../agenda/presentation';
+import { useLessonIntentions } from '../agenda/use-lesson-intentions';
 import { PilotageSection } from './components';
 import { dayHeading, groupByDay, upcomingAppointments, type Appointment } from './appointments';
 
@@ -43,12 +45,16 @@ export function Appointments({ today, instructor, learnerName, memberName }: {
     if (!from || !to) throw new Error('Période invalide.');
     return (await readSchool(schoolId, 'course-series', courseSeriesListSchema, { from, to })).items;
   }, [schoolId, revision, from, to], `${schoolId}/${today}`);
+  const intentState = useLessonIntentions(lessons.readAt);
   const open = (appointment: Appointment) => navigate('agenda', {
     week: weekStart(appointment.day), day: appointment.day, ...(instructor ? { instructor } : {}),
     ...('lesson' in appointment.target ? { lesson: appointment.target.lesson } : { course: appointment.target.course, occurrence: appointment.target.occurrence }),
   });
   const rows = from && to && lessons.data
-    ? upcomingAppointments(agendaDays(lessons.data.items, courses.data ?? [], { timeZone: school.timeZone, from, to, instructor: instructor ?? '', includeCourses: true }),
+    ? upcomingAppointments(agendaDays(lessons.data.items, courses.data ?? [], { timeZone: school.timeZone, from, to, instructor: instructor ?? '', includeCourses: true,
+      intentions: intentState.intentions })
+      // Aucune création provisoire, aucune proposition de créneau ici : les marques portent sur les faits confirmés.
+      .map(day => ({ day: day.day, items: agendaFacts(day.items) })),
       { now, limit, learnerName, memberName })
     : [];
   const time = new Intl.DateTimeFormat('fr-CH', { hour: '2-digit', minute: '2-digit', timeZone: school.timeZone });
@@ -65,6 +71,7 @@ export function Appointments({ today, instructor, learnerName, memberName }: {
           <Button variant="ghost" className="pilotage-appointment" onClick={() => open(appointment)}>
             <span className="pilotage-appointment-time">{range(appointment)}</span>
             <span className="pilotage-appointment-what"><strong>{appointment.title}</strong><span>{appointment.detail}</span></span>
+            {appointment.mark && <Badge variant="outline">{agendaMarkLabels[appointment.mark]}</Badge>}
             {appointment.phase && appointment.phase !== 'planned' && <Badge variant="outline">{phaseLabels[appointment.phase]}</Badge>}
           </Button>
         </li>)}</ul>
