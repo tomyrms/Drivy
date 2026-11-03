@@ -11,8 +11,9 @@ import { useConsole } from '../../console/context';
 import type { NavigationQuery } from '../../console/route';
 import { PortalSelect } from '../components/portal-select';
 import { TariffsPanel } from '../pricing/tariffs-panel';
-import { BackButton, CommandFeedback, PermitMark, ReadFeedback, StateBadge } from './catalogue-ui';
-import { useCatalogueCommand } from './catalogue-command';
+import { BackButton, PermitMark, ReadFeedback, StateBadge } from './catalogue-ui';
+import { LaneFeedback } from './formation-feedback';
+import { useProgrammeLane } from './formation-commands';
 import { useFormationSheet } from './formation-controllers';
 import { plural } from './formation-format';
 import { HistoryView } from './history-view';
@@ -23,7 +24,8 @@ import { rubrics, sheetView, type SheetView } from './sheet-routing';
 export function PermitSheet({ category }: { category: string }) {
   const { school, routeQuery = {}, navigate, setRouteQuery } = useConsole();
   const { loaded, proposals, programmes, selected } = useFormationSheet(category);
-  const command = useCatalogueCommand();
+  // Une seule voie pour la fiche : une demande à la fois par formation, l'éditeur se libère dès que le magasin la conserve.
+  const commands = useProgrammeLane(loaded.data?.programmes, loaded.reload);
   const view = sheetView(routeQuery.view);
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => { title.current?.focus({ preventScroll: true }); }, [category]);
@@ -53,6 +55,7 @@ export function PermitSheet({ category }: { category: string }) {
         <AlertDescription><ul className="cat-issues">{issues.map(issue => <li key={issue}>{categoryIssueText(issue)}</li>)}</ul></AlertDescription></Alert>}
       {!editing && !data.programmes.every(item => item.head.hasReferencePrice) && view !== 'historique' && <Alert><AlertTitle>Prix de référence absent</AlertTitle>
         <AlertDescription>Ce parcours ancien n’a pas de prix de référence : aucun prix n’est supposé. Préparez de nouveau ce permis pour le compléter.</AlertDescription></Alert>}
+      {!editing && view !== 'historique' && <LaneFeedback outcome={commands.confirmation} onDismiss={() => commands.clearOutcome()} />}
       {view === 'historique'
         ? <HistoryView sheet={data} selection={routeQuery.selection} />
         : <Tabs value={view} onValueChange={next => { const value = sheetView(String(next)); go({ view: value, ...(selected && value !== 'tarifs' ? { programme: selected.offeringKey } : {}) }); }} className="cat-tabs">
@@ -63,7 +66,7 @@ export function PermitSheet({ category }: { category: string }) {
           <TabsContent value={view} className="cat-tab-content">
             {view === 'tarifs'
               ? <TariffsPanel tariffs={data.tariffs} categoryCode={data.categoryCode} today={data.today} canConfigure={data.canConfigureCatalog} types={tariffTypes} proposals={proposals.data}
-                command={command} reload={loaded.reload} programmeCount={programmes.length} selection={routeQuery.selection} listLabel="Tarifs" onEditing={setEditing} actionSlot={actionSlot}
+                reload={loaded.reload} programmeCount={programmes.length} selection={routeQuery.selection} listLabel="Tarifs" onEditing={setEditing} actionSlot={actionSlot}
                 onSelect={id => inside({ view: 'tarifs', ...(id ? { selection: id } : {}) })} onConsultVersion={id => inside({ view: 'historique', selection: id })} onOpenTerms={id => navigate('conditions', { selection: id })} />
               : !selected
                 ? <Empty className="cat-empty"><EmptyHeader><EmptyMedia variant="icon"><BookOpen /></EmptyMedia><EmptyTitle>Aucun parcours pour ce permis</EmptyTitle></EmptyHeader>
@@ -72,12 +75,11 @@ export function PermitSheet({ category }: { category: string }) {
                   {!editing && programmes.length > 1 && <PortalSelect id="cat-programme" label="Parcours" value={selected.offeringKey} className="cat-programme-switch"
                     options={programmes.map(item => ({ value: item.offeringKey, label: programmeName(item, programmes) }))} onValueChange={key => { if (key) go({ view, programme: key }); }} />}
                   {!editing && !data.canConfigureCatalog && <p className="cat-hint">L’autorisation de configurer les tarifs est nécessaire pour modifier ce permis.</p>}
-                  <ProgrammeSection key={`${view}:${selected.offeringKey}`} view={view as Exclude<SheetView, 'historique' | 'tarifs'>} sheet={data} programme={selected} command={command} proposals={proposals.data} reload={loaded.reload}
+                  <ProgrammeSection key={`${view}:${selected.offeringKey}`} view={view as Exclude<SheetView, 'historique' | 'tarifs'>} sheet={data} programme={selected} commands={commands} proposals={proposals.data}
                     onTariffs={() => inside({ view: 'tarifs' })} onHistory={() => inside({ view: 'historique' })} onEditing={setEditing} actionSlot={actionSlot} />
                 </>}
           </TabsContent>
         </Tabs>}
-      {view === 'historique' && <CommandFeedback runner={command.runner} />}
     </>}
   </section>;
 }

@@ -137,3 +137,49 @@ describe('Catalogue : un agrégat par produit tarifaire et par jeu de conditions
     expect(commandsConflict(terms('terms-1'), member)).toBe(true);
   });
 });
+
+describe('Catalogue : un agrégat par formation (#124)', () => {
+  const offeringA = 'offering-a', offeringB = 'offering-b';
+  /** Un enregistrement de programme nomme sa formation par la portée ; la création n'en a pas encore. */
+  const programme = (offeringKey: string | null) => create('saveFormationProgramme', { path: 'formations/programmes', body: { offeringKey: offeringKey ?? 'x' },
+    ...(offeringKey ? { scope: offeringKey } : {}) });
+
+  test('deux formations indépendantes ne s’attendent pas ; la même formation reste ordonnée', () => {
+    expect(commandConflictKeys(programme(offeringA))).toEqual([`catalogue:offering:${offeringA}`]);
+    expect(commandsConflict(programme(offeringA), programme(offeringB))).toBe(false);
+    expect(commandsConflict(programme(offeringA), programme(offeringA))).toBe(true);
+    expect(commandsConflict(programme('OFFERING-A'), programme(offeringA))).toBe(true);
+  });
+
+  test('sans portée, un enregistrement garde la famille entière : création et commande restaurée attendent le catalogue', () => {
+    expect(commandConflictKeys(programme(null))).toEqual(['catalogue']);
+    expect(commandsConflict(programme(null), programme(offeringA))).toBe(true);
+    expect(commandsConflict(programme(offeringA), programme(null))).toBe(true);
+    // La liste des créations n'a pas bougé : une création de formation reste dans la famille.
+    expect(commandConflictKeys(create('createFormation', { path: 'formations' }))).toEqual(['catalogue']);
+    expect(commandConflictKeys(create('createOffering', { path: 'formations/offerings' }))).toEqual(['catalogue']);
+    expect(commandsConflict(create('createFormation', { path: 'formations' }), programme(offeringA))).toBe(true);
+  });
+
+  test('une formation nommée attend les écritures de famille, pas celles qui nomment un autre agrégat', () => {
+    // Sans portée, un tarif à conditions partagées et une création restent dans la famille : le programme les attend.
+    expect(commandsConflict(programme(offeringA), create('saveTariff', { path: 'formations/tariffs' }))).toBe(true);
+    expect(commandsConflict(programme(offeringA), create('createFormation', { path: 'formations' }))).toBe(true);
+    // Comme un tarif à conditions propres (existant depuis #124), un produit nommé ou un jeu de conditions nommé ne touche pas
+    // ce programme : chacun porte son agrégat, et la relecture du catalogue remet les deux lectures d'accord.
+    expect(commandsConflict(programme(offeringA), create('saveTariff', { path: 'formations/tariffs', scope: 'lesson-45' }))).toBe(false);
+    expect(commandsConflict(programme(offeringA), create('reviseSharedTerms', { path: 'formations/terms/revise', scope: 'terms-1' }))).toBe(false);
+  });
+
+  test('les relations existantes avec la planification et les accès ne changent pas', () => {
+    const lesson = create('createLesson', { path: 'lessons' }), member = create('updateMember', { path: `members/${instructorA}`, resourceId: instructorA });
+    // Avant #124 comme après : un programme n'attend pas une leçon (familles sœurs) et n'est pas attendu par elle.
+    expect(commandsConflict(programme(offeringA), lesson)).toBe(false);
+    expect(commandsConflict(lesson, programme(offeringA))).toBe(false);
+    // Un changement d'accès bloque toujours tout.
+    expect(commandsConflict(programme(offeringA), member)).toBe(true);
+    expect(commandsConflict(programme(null), member)).toBe(true);
+    // Une commande restaurée sans contenu reste conservatrice pour tout le catalogue, programme comme création.
+    expect(wouldConflict([entry(null)], schoolId, { kind: 'saveFormationProgramme', scope: offeringA })).toBe(true);
+  });
+});
