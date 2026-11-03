@@ -183,3 +183,55 @@ describe('Catalogue : un agrégat par formation (#124)', () => {
     expect(wouldConflict([entry(null)], schoolId, { kind: 'saveFormationProgramme', scope: offeringA })).toBe(true);
   });
 });
+
+describe('Faits de cours : un participant n’attend pas un autre (#99, lot E)', () => {
+  const series = randomUUID();
+  const scoped = (participant: string) => `${series}:${participant}`;
+  const participantA = randomUUID(), participantB = randomUUID();
+  const attendance = (participant: string) => create('recordCourseAttendance', {
+    path: `course-enrollments/${randomUUID()}/attendance/${randomUUID()}`, resourceId: randomUUID(), body: { status: 'PRESENT' }, scope: scoped(participant) });
+  const payment = (participant: string) => create('recordCoursePayment', { path: `course-enrollments/${randomUUID()}/payments`, body: { amountCents: 12_000, note: null }, scope: scoped(participant) });
+  const validate = (participant: string) => create('validateCourse', { path: `course-enrollments/${randomUUID()}/validate`, body: { note: null }, scope: scoped(participant) });
+  const revoke = (participant: string) => create('revokeCourseCompletion', {
+    path: `course-completions/${randomUUID()}/revoke`, resourceId: randomUUID(), body: { reason: 'Erreur de saisie' }, scope: scoped(participant) });
+  const voidPayment = (participant: string) => create('voidCoursePayment', {
+    path: `course-payments/${randomUUID()}/void`, resourceId: randomUUID(), body: { reason: 'Erreur de saisie' }, scope: scoped(participant) });
+  const unscoped = () => create('recordCoursePayment', { path: `course-enrollments/${randomUUID()}/payments`, body: { amountCents: 12_000, note: null } });
+
+  test('deux participants sont indépendants ; le même participant reste ordonné quel que soit le geste', () => {
+    expect(commandConflictKeys(attendance(participantA))).toEqual([`course-facts:${series}:${participantA}`]);
+    expect(commandsConflict(attendance(participantA), payment(participantB))).toBe(false);
+    expect(commandsConflict(attendance(participantA), validate(participantA))).toBe(true);
+    expect(commandsConflict(payment(participantA), voidPayment(participantA))).toBe(true);
+    expect(commandsConflict(revoke(participantA), attendance(participantA))).toBe(true);
+    // Une autre série, même personne : deux cours distincts ne s'attendent pas.
+    const otherSeries = create('recordCourseAttendance', { path: `course-enrollments/${randomUUID()}/attendance/${randomUUID()}`, resourceId: randomUUID(),
+      body: { status: 'ABSENT' }, scope: `${randomUUID()}:${participantA}` });
+    expect(commandsConflict(attendance(participantA), otherSeries)).toBe(false);
+  });
+
+  test('sans participant nommé, la famille reste conservatrice', () => {
+    expect(commandConflictKeys(unscoped())).toEqual(['course-facts']);
+    expect(commandsConflict(unscoped(), attendance(participantB))).toBe(true);
+    expect(commandsConflict(attendance(participantA), unscoped())).toBe(true);
+    expect(commandsConflict(unscoped(), unscoped())).toBe(true);
+    expect(wouldConflict([entry(attendance(participantA))], schoolId, { kind: 'recordCoursePayment' })).toBe(true);
+    expect(wouldConflict([entry(attendance(participantA))], schoolId, { kind: 'recordCoursePayment', scope: scoped(participantB) })).toBe(false);
+  });
+
+  test('les relations existantes avec la planification et les accès ne changent pas', () => {
+    const lesson = create('createLesson', { path: 'lessons' });
+    const enrolment = create('staffEnrollCourse', { path: `course-series/${randomUUID()}/enrollments`, body: { learnerId: learnerA } });
+    const reschedule = create('rescheduleCourseSeries', { path: `course-series/${randomUUID()}/reschedule`, resourceId: randomUUID(), body: {} });
+    expect(commandsConflict(attendance(participantA), lesson)).toBe(false);
+    expect(commandsConflict(lesson, attendance(participantA))).toBe(false);
+    expect(commandsConflict(attendance(participantA), enrolment)).toBe(false);
+    expect(commandsConflict(attendance(participantA), reschedule)).toBe(false);
+    // Un changement d'accès bloque toujours tout, faits de cours compris.
+    expect(commandsConflict(attendance(participantA), create('updateMember', { path: `members/${instructorA}`, resourceId: instructorA }))).toBe(true);
+    expect(commandsConflict(attendance(participantA), create('deactivateMember', { path: `members/${instructorA}/deactivate`, resourceId: instructorA }))).toBe(true);
+    // Deux gestes sans agrégat nommé s'ordonnent comme avant.
+    expect(commandsConflict(create('recordCoursePayment', { path: `course-enrollments/${randomUUID()}/payments`, body: { amountCents: 1, note: null } }),
+      create('recordCoursePayment', { path: `course-enrollments/${randomUUID()}/payments`, body: { amountCents: 2, note: null } }))).toBe(true);
+  });
+});
