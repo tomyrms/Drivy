@@ -5,6 +5,7 @@ import type { WebConfig } from '../server/config.js';
 import { InvalidCredentials, type IdentityProvider } from '../server/oidc.js';
 import { SessionStore, type Tokens } from '../server/session.js';
 import type { AnonymousGateway, ApiGateway } from '../server/upstream.js';
+import type { OpeningGateway } from '../server/opening-routes.js';
 
 const config: WebConfig = { origin:'https://drivy.example.test', apiBaseURL:'https://api.example.test', issuer:'https://identity.example.test/realms/drivy',
   clientId:'drivy-web', clientSecret:randomBytes(32).toString('hex'), development:false, host:'127.0.0.1', port:3002 };
@@ -13,14 +14,19 @@ const secret = () => randomBytes(32).toString('base64url');
 const chosenSecret = `Aa1!${randomUUID()}`;
 const apps: Awaited<ReturnType<typeof buildWebApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
+// Données synthétiques : aucune personne réelle ni secret du dépôt.
+const openingFields = { schoolName: 'École de recette', displayName: 'Responsable de recette', contactEmail: 'ecole@example.test',
+  contactPhone: null, timeZone: 'Europe/Zurich', instructs: true };
+const openingReceipt = (operationId: string) => ({ schoolId: randomUUID(), schoolName: openingFields.schoolName, status: 'DRAFT',
+  membershipId: randomUUID(), roles: ['ADMIN'], grants: ['CONFIGURE_CATALOG'], accessEpoch: 1, operationId, committedAt: new Date().toISOString() });
 
-async function harness(anonymous: AnonymousGateway, gateway: ApiGateway = vi.fn(async () => ({ status: 200, body: { data: { memberships: [] } } }))) {
+async function harness(anonymous: AnonymousGateway, gateway: ApiGateway = vi.fn(async () => ({ status: 200, body: { data: { memberships: [] } } })), openingGateway?: OpeningGateway) {
   const tokens: Tokens = { accessToken: secret(), refreshToken: secret(), expiresAt: Date.now() + 300_000,
     principal: { subject: randomUUID(), displayName: 'Camille Recette', email: 'camille@example.test', emailVerified: false } };
   const identity: IdentityProvider = { begin: vi.fn(), complete: vi.fn(), refresh: vi.fn(async () => tokens), revoke: vi.fn(async () => {}),
     password: vi.fn(async (username: string, value: string) => { if (value !== chosenSecret) throw new InvalidCredentials(); return { ...tokens, principal: { ...tokens.principal, email: username } }; }) };
   const store = new SessionStore();
-  const app = await buildWebApp({ config, identity, store, anonymousGateway: anonymous, gateway });
+  const app = await buildWebApp({ config, identity, store, anonymousGateway: anonymous, gateway, ...(openingGateway ? { openingGateway } : {}) });
   apps.push(app);
   let cookie = '', csrf = (await app.inject({ url: '/app/bff/session' })).json().csrfToken as string;
   const post = async (url: string, payload: Record<string, unknown> = {}) => {
@@ -65,6 +71,37 @@ test('un code d’ouverture est gardé dans la session, puis le compte créé s�
   expect(h.identity.password).toHaveBeenCalledWith('camille@example.test', chosenSecret);
   // L'intention d'ouverture survit à la rotation de session : le formulaire de l'école s'ouvre ensuite.
   expect(h.session()?.tokens).toBeDefined(); expect(h.session()?.opening?.token).toBe('ABCD-EFGH');
+});
+
+test('une personne connectée qui saisit un code d’ouverture ouvre l’école sans changer de compte', async () => {
+  const anonymous = vi.fn<AnonymousGateway>(async path => path === '/v1/access-codes/preview'
+    ? { status: 200, body: { data: { kind: 'SCHOOL_OPENING', expiresAt: '2026-10-22T12:00:00.000Z' } } }
+    : { status: 409, body: { code: 'ACCOUNT_EXISTS', title: 'Un compte existe déjà.' } });
+  const openingGateway = vi.fn<OpeningGateway>(async command => ({ status: 201, body: { data: openingReceipt(command.idempotencyKey!) } }));
+  const h = await harness(anonymous, undefined, openingGateway);
+  expect((await h.post('/app/bff/password-login', { email: 'camille@example.test', password: chosenSecret })).statusCode).toBe(200);
+  expect((await h.post('/app/bff/access-code', { code: 'abcd efgh' })).statusCode).toBe(200);
+  // Le code saisi par une personne déjà connectée lui appartient : aucune nouvelle connexion ne suit.
+  expect(h.session()?.opening?.token).toBe('ABCD-EFGH');
+  const created = await h.post('/app/bff/opening/create', openingFields);
+  expect(created.statusCode, created.body).toBe(201);
+  expect(h.session()?.opening?.identity).toBe(h.session()?.tokens?.principal.subject);
+  expect(openingGateway).toHaveBeenCalledTimes(1);
+});
+test('une création de compte avec un code d’ouverture ouvre l’école dans la foulée', async () => {
+  const anonymous = vi.fn<AnonymousGateway>(async path => path === '/v1/access-codes/preview'
+    ? { status: 200, body: { data: { kind: 'SCHOOL_OPENING', expiresAt: '2026-10-22T12:00:00.000Z' } } }
+    : { status: 201, body: { data: { kind: 'SCHOOL_OPENING', email: 'camille@example.test' } } });
+  const openingGateway = vi.fn<OpeningGateway>(async command => ({ status: 201, body: { data: openingReceipt(command.idempotencyKey!) } }));
+  const h = await harness(anonymous, undefined, openingGateway);
+  const created = await h.post('/app/bff/accounts', { code: 'ABCD-EFGH', firstName: 'Camille', lastName: 'Recette', email: 'camille@example.test', password: chosenSecret });
+  expect(created.statusCode, created.body).toBe(200); expect(created.json()).toEqual({ kind: 'SCHOOL_OPENING' });
+  // Le compte vient d'être créé : l'intention qui suit la connexion lui appartient.
+  expect(h.session()?.opening?.token).toBe('ABCD-EFGH');
+  const submitted = await h.post('/app/bff/opening/create', openingFields);
+  expect(submitted.statusCode, submitted.body).toBe(201);
+  expect(h.session()?.opening?.identity).toBe(h.session()?.tokens?.principal.subject);
+  expect(openingGateway).toHaveBeenCalledTimes(1);
 });
 
 test('un code d’élève garde son intention côté serveur ; les refus de l’API passent tels quels', async () => {
