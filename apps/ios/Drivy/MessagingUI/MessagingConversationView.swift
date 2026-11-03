@@ -538,8 +538,11 @@ struct MessagingConversationView: View {
             chat
                 .overlay(alignment: .top) {
                     VStack(spacing: 0) {
-                        MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { id in
-                            Task { await thread.jump(to: id) }
+                        // Pendant le choix des messages à signaler, la pastille ne recouvre aucune bulle : elle revient à la sortie.
+                        if !thread.reporting {
+                            MessagingPinnedBanner(workspace: workspace, pinned: workspace.pinnedMessages(conversationID)) { id in
+                                Task { await thread.jump(to: id) }
+                            }
                         }
                         noticeView
                     }
@@ -658,7 +661,8 @@ struct MessagingConversationView: View {
     }
 
     @ViewBuilder private var jumpToBottom: some View {
-        if !thread.atBottom {
+        // Masqué pendant le choix des messages à signaler : il recouvrait le rond d'un message près du bas.
+        if !thread.atBottom && !thread.reporting {
             let unseen = thread.unseenBelow
             Button { thread.scrollToNewest() } label: {
                 HStack(spacing: DrivySpacing.xxs) {
@@ -803,7 +807,11 @@ private struct MessagingThreadRow: View {
                             .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
                             .accessibilityHidden(true)
                     }
+                    let bubbleTop = bubbleTopPadding
                     bubble(item, mine: mine)
+                        // Repère du rond de sélection : le centre de la bulle elle-même, hors nom d'auteur, ligne d'état et
+                        // marge haute de la ligne (la bulle occupe la hauteur restante, donc son centre est à `marge / 2` plus bas).
+                        .alignmentGuide(.bubbleCenter) { $0[VerticalAlignment.center] + bubbleTop / 2 }
                     MessagingThreadStateLine(thread: thread, item: item)
                         .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
                 }
@@ -937,7 +945,8 @@ private struct MessagingThreadRow: View {
                 // calcule la bulle sur la largeur du fil entier, coupait alors d'une ligne un message court (« Message 17 du
                 // gén… ») et poussait le sondage hors de l'écran.
                 content()
-                    .overlay(alignment: mine ? .leading : .trailing) {
+                    .overlay(alignment: Alignment(horizontal: mine ? HorizontalAlignment.leading : HorizontalAlignment.trailing,
+                                                  vertical: .bubbleCenter)) {
                         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(selected ? DrivyTheme.accent : DrivyTheme.muted)
                             .font(.title3)
@@ -954,6 +963,15 @@ private struct MessagingThreadRow: View {
             content()
         }
     }
+}
+
+/// Alignement vertical sur le centre de la bulle (sans le nom d'auteur ni la ligne d'état), pour le rond de sélection.
+private enum BubbleCenterID: AlignmentID {
+    static func defaultValue(in context: ViewDimensions) -> CGFloat { context[VerticalAlignment.center] }
+}
+
+private extension VerticalAlignment {
+    static let bubbleCenter = VerticalAlignment(BubbleCenterID.self)
 }
 
 /// Aligne un ajout Drivy sur le bord de la bulle Exyte (avatar, coche d'état et marge opposée compris).
