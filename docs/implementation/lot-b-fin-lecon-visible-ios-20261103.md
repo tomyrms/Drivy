@@ -41,9 +41,12 @@ par la leçon restée « à terminer » dans Aujourd’hui, sans dire qu’un en
    - `SchoolRefusedClosureMarker` + `@MainActor SchoolRefusedClosureMemory` : mémoire de session seulement, jamais sur
      le disque, par portée et par leçon. `remember`, `marker(forLesson:scope:)`, `markers(for:)`, `forget`, `forgetAll`.
 2. **`SchoolLessonReportWorkspace.swift`** (minimum)
-   - Dans `transmit`, un refus définitif (`permitsFreshCorrection` ou `.notFound`) reçu alors que la fiche est fermée
-     (`invalidated` ou génération changée) enregistre le repère en mémoire puis s’arrête, au lieu de perdre
-     l’information. Le refus reçu fiche ouverte ne change rien (il s’y lit déjà).
+   - `leftWhileClosureIsSent` (privé) : vrai seulement quand la fiche a été quittée par `leaveWhileClosureIsSent()`,
+     remis à faux par `invalidate()` et au début de chaque envoi (`transmit`). Un changement de compte, d’école,
+     d’époque d’accès, un accès retiré ou une nouvelle tentative n’héritent donc jamais d’une sortie précédente.
+   - Dans `transmit`, un refus définitif (`permitsFreshCorrection` ou `.notFound`) n’est mémorisé et annoncé que si
+     `leftWhileClosureIsSent` est vrai ; sinon la demande quitte le coffre et la méthode rend `false` sans rien
+     retenir ni annoncer, comme avant #114. Le refus reçu fiche ouverte ne change rien (il s’y lit déjà).
    - `rememberRefusedClosure` ne retient que `completeLesson` et `markNoShow`, et publie `drivyLessonsDidChange` avec un
      `SchoolLessonChange` **sans `kind`** : les écrans relisent leurs repères, mais rien n’est annoncé terminé ni
      absent (le point « à terminer » et le trajet ne se ferment pas sur un refus).
@@ -74,6 +77,7 @@ encre secondaire, comme les repères de planification.
 | En cours puis à vérifier, même règle que la planification | `anUnansweredClosureIsToVerifyAndAFreshOneIsInFlight` (fenêtre partagée `inFlightWindow`) | écrit, `NOT_EXECUTED` |
 | Refus gardé en mémoire seulement, puis effacé à la réouverture et au changement de portée | `aRefusalStaysInMemoryUntilTheSheetReopensOrTheScopeChanges` ; `aRefusalReceivedAfterTheSheetWasLeftIsKeptThenForgottenOnReopening` (serveur qui refuse après la fermeture) | écrit, `NOT_EXECUTED` |
 | Refus fiche ouverte jamais mémorisé | `aRefusalWithTheSheetStillOpenIsNeverKeptInMemory` | écrit, `NOT_EXECUTED` |
+| Aucune mémoire ni annonce après `invalidate()` (autre portée, accès retiré) | `aRefusalAfterInvalidationNeverStaysInMemoryNorAnnounces` (sortie, `invalidate()`, puis refus) | écrit, `NOT_EXECUTED` |
 | Aucune leçon montrée terminée sans preuve | `aLessonIsNeverShownCompletedWithoutProof` ; `model.lesson?.status == "PLANNED"` après le refus | écrit, `NOT_EXECUTED` |
 | Repères relus sur `.drivyLessonsDidChange`, au premier plan, à la fermeture des feuilles ; purge au changement de portée | `reloadPendingRequests` et `forgetAll` dans `SchoolTodayView` | lecture du diff seulement |
 | Toucher la ligne ouvre la fiche existante, aucun envoi depuis le repère | `lessonSummary` inchangé pour le geste ; le repère ne touche ni coffre ni client | lecture du diff seulement |
@@ -89,8 +93,10 @@ encre secondaire, comme les repères de planification.
   documenté dans `rowNote`.
 - **« En cours » reste une approximation d’horodatage (60 s)**, héritée des repères de planification : hors de la
   fiche, l’app ne possède pas l’état d’envoi. Le libellé ne dit jamais que l’école a enregistré.
-- **Le refus n’est mémorisé qu’après la fermeture** : fiche ouverte, le refus et sa raison s’affichent dans la fiche.
-  La mémoire ne survit ni au redémarrage ni au changement de portée (exigence : rien sur le disque).
+- **Le refus n’est mémorisé qu’après une sortie explicite** : fiche ouverte, le refus et sa raison s’affichent dans la
+  fiche. Seul `leaveWhileClosureIsSent()` pose le drapeau qui autorise le repère ; `invalidate()` et tout nouvel envoi le
+  remettent à faux, donc un refus reçu après un changement de compte, d’école, d’époque ou un accès retiré ne retient
+  et n’annonce rien. La mémoire ne survit ni au redémarrage ni au changement de portée (rien sur le disque).
 - **La raison détaillée du refus n’est pas conservée** : la demande a quitté le coffre sur un refus définitif. Le
   repère dit seulement « Fin refusée » / « Absence refusée » ; la consigne interdisait tout texte de refus sur la
   ligne. La fiche rouverte relit la leçon, qui reste planifiée : elle ne rejoue pas automatiquement la demande.
@@ -105,5 +111,8 @@ encre secondaire, comme les repères de planification.
 - `git log -1 --format=%h` avant modification : `869cc11f` (conforme).
 - Relecture du diff complet `git diff 869cc11f` (accolades, `try`/`await`, `switch` exhaustifs, labels d’arguments,
   `@MainActor`, types `Sendable`, `self.` dans les closures, ordre des paramètres des initialiseurs synthétiques).
+- Correction de relecture : séparation « sortie explicite » / « invalidation » par `leftWhileClosureIsSent`, et test
+  `aRefusalAfterInvalidationNeverStaysInMemoryNorAnnounces`. Relecture du diff de correction et de l’équilibrage des
+  délimiteurs (0/0/0).
 - Compilation Swift, exécution des tests, IPA : `NOT_EXECUTED` (pas de chaîne Apple sur cette machine ; à faire sur
   GitHub Actions).

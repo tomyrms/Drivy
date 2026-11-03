@@ -80,6 +80,10 @@ import Observation
     @ObservationIgnored private let textDrafts: (any SchoolLessonTextDraftStore)?
     /// Cette fiche vient de terminer la leçon : la prochaine lecture propose les objectifs comme travail réalisé.
     @ObservationIgnored private var proposesWorkedOn = false
+    /// Vrai seulement quand la fiche a été quittée pendant l’envoi d’une fin ou d’une absence (#114). Un refus reçu
+    /// ensuite ne se retient que dans ce cas : après `invalidate()` (autre compte, école, époque ou accès retiré),
+    /// rien n’est mémorisé ni annoncé dans l’ancienne portée.
+    @ObservationIgnored private var leftWhileClosureIsSent = false
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var invalidated = false
     @ObservationIgnored private var storageAccessible = false
@@ -528,6 +532,9 @@ import Observation
     /// réponse ne vient pas. Si l’école la confirme entre-temps, les écrans qui montrent la leçon se relisent.
     @discardableResult func leaveWhileClosureIsSent() -> Bool {
         guard isSendingClosure, !invalidated, !hasLocalEdits else { return false }
+        // Seule cette sortie autorise le repère de refus : une fermeture ou une invalidation venue d’ailleurs ne
+        // doit jamais retenir ni annoncer quoi que ce soit dans l’ancienne portée.
+        leftWhileClosureIsSent = true
         close()
         return true
     }
@@ -545,6 +552,8 @@ import Observation
     func invalidate() {
         cancelPreview()
         previewCaptureIDs = []; previewMemo = [:]
+        // Portée perdue ou fiche invalidée : un refus ultérieur ne se retient ni ne s’annonce ici (#114).
+        leftWhileClosureIsSent = false
         // Refus mémorisé d’une fin ou d’une absence (#114) : la fiche est fermée ou l’accès est perdu, il ne
         // représente plus rien d’ouvrable.
         SchoolRefusedClosureMemory.forget(lessonID: lessonID, scope: scope)
@@ -1055,6 +1064,8 @@ import Observation
     private func transmit(firstAttempt: Bool) async -> Bool {
         guard canRetry, let command = pending else { return false }
         let request = generation; isBusy = true; isFirstSend = firstAttempt; errorMessage = nil; confirmation = nil
+        // Un nouvel envoi n’hérite jamais de la sortie d’un envoi précédent (#114).
+        leftWhileClosureIsSent = false
         defer { wake() }
         do {
             try outbox.save(command)
@@ -1100,10 +1111,12 @@ import Observation
             if fresh, let failure = error as? SchoolReportFailure, failure.permitsFreshCorrection || refused {
                 do { try outbox.remove(command) }
                 catch { guard request == generation else { return false }; isBusy = false; storageAccessible = false; fail(error); return false }
-                // Refus définitif reçu alors que la fiche est fermée (#114) : la demande a quitté le coffre et ne sera
-                // plus vérifiable. Un repère en mémoire seulement dit à Aujourd’hui que cette fin ou cette absence a
-                // été refusée ; la raison se lit dans la fiche, rien n’est confirmé.
-                if invalidated || request != generation {
+                // Refus définitif reçu alors que la fiche a été quittée par `leaveWhileClosureIsSent()` (#114) : la
+                // demande a quitté le coffre et ne sera plus vérifiable. Un repère en mémoire seulement dit à
+                // Aujourd’hui que cette fin ou cette absence a été refusée ; la raison se lit dans la fiche.
+                // Après `invalidate()` (autre compte, école, époque ou accès retiré), le drapeau est faux : rien n’est
+                // retenu ni annoncé dans l’ancienne portée, la demande quitte le coffre comme avant #114.
+                if leftWhileClosureIsSent {
                     rememberRefusedClosure(command)
                     return false
                 }

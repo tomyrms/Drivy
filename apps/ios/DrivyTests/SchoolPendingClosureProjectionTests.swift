@@ -119,6 +119,33 @@ struct SchoolPendingClosureProjectionTests {
         #expect(SchoolRefusedClosureMemory.marker(forLesson: HubFixture.lessonID, scope: scope) == nil)
     }
 
+    @Test func aRefusalAfterInvalidationNeverStaysInMemoryNorAnnounces() async throws {
+        SchoolRefusedClosureMemory.forgetAll()
+        let server = RefusingClosureServer(), outbox = ConfigurationOutboxStub()
+        let notifications = NotificationCenter(), changes = ClosureBroadcastLog()
+        let observer = notifications.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) {
+            changes.append($0.object as? SchoolLessonChange)
+        }
+        defer { notifications.removeObserver(observer) }
+        let model = workspace(server, outbox, notifications: notifications)
+        await model.load()
+        let start = try #require(model.lesson?.startedAt)
+        await server.hold()
+        let closing = Task { await model.complete(start: start, end: start.addingTimeInterval(60), reason: "",
+            localCaptureStopped: true) }
+        try await HubFixture.wait { await server.isHolding() }
+        #expect(model.leaveWhileClosureIsSent())
+        // Autre compte, autre école, autre époque ou accès retiré : la portée change pendant l’envoi.
+        model.invalidate()
+        await server.release()
+        #expect(!(await closing.value))
+
+        // La demande quitte le coffre sans rien retenir ni annoncer dans l’ancienne portée.
+        #expect(outbox.value == nil)
+        #expect(SchoolRefusedClosureMemory.marker(forLesson: HubFixture.lessonID, scope: scope) == nil)
+        #expect(changes.count == 0)
+    }
+
     @Test func aRefusalWithTheSheetStillOpenIsNeverKeptInMemory() async throws {
         SchoolRefusedClosureMemory.forgetAll()
         let server = RefusingClosureServer(), outbox = ConfigurationOutboxStub()
@@ -147,13 +174,14 @@ struct SchoolPendingClosureProjectionTests {
 
     // MARK: Données synthétiques
 
-    private func workspace(_ server: RefusingClosureServer, _ outbox: ConfigurationOutboxStub) -> SchoolLessonReportWorkspace {
+    private func workspace(_ server: RefusingClosureServer, _ outbox: ConfigurationOutboxStub,
+                           notifications: NotificationCenter = .default) -> SchoolLessonReportWorkspace {
         let membership = SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: HubFixture.schoolID,
             schoolName: "École de test", roles: ["INSTRUCTOR"], grants: ["permit_review"], accessEpoch: 1)
         let client = SchoolLessonReportClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
             tokenSource: HubToken(), transport: server)
         return SchoolLessonReportWorkspace(scope: ConfigurationFixture.scope(), membership: membership,
-            lessonID: HubFixture.lessonID, client: client, outbox: outbox)
+            lessonID: HubFixture.lessonID, client: client, outbox: outbox, notifications: notifications)
     }
 
     private func command(_ kind: SchoolCommandKind, lessonID: UUID? = nil,
@@ -171,6 +199,19 @@ struct SchoolPendingClosureProjectionTests {
             body: try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]),
             resourceID: lessonID, routeResourceID: kind == .createLesson ? HubFixture.trainingID : nil)
     }
+}
+
+/// Journal synthétique des annonces `drivyLessonsDidChange` : compte les diffusions, avec ou sans `SchoolLessonChange`.
+private final class ClosureBroadcastLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [SchoolLessonChange?] = []
+
+    func append(_ value: SchoolLessonChange?) {
+        lock.lock(); defer { lock.unlock() }
+        stored.append(value)
+    }
+
+    var count: Int { lock.lock(); defer { lock.unlock() }; return stored.count }
 }
 
 /// École synthétique : la fin ou l’absence est retenue à la demande puis refusée définitivement (400 motivé).
