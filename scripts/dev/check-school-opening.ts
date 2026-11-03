@@ -33,6 +33,8 @@ const keycloakImage='quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab
 const artifactDirectory=fileURLToPath(new URL('../../artifacts/onboarding-web-synthetic/',import.meta.url));
 const containerName=`drivy-opening-e2e-${randomUUID()}`;
 const checks:string[]=[];let stage='initialisation de la recette';
+/** Adresse telle que la liste des invitations l'affiche : première lettre, puis le domaine (`i***@example.invalid`). */
+const maskedAddress=(email:string)=>email.replace(/^([^@])[^@]*@/,'$1***@');
 // Sans option : parcours de base. `--extended` joue les trois suites ; `--extended=code,recovery` rejoue une sélection.
 const allExtendedSuites=['formations','code','recovery'];
 const extendedFlag=process.argv.find(value=>value==='--extended'||value.startsWith('--extended='));
@@ -514,7 +516,16 @@ async function main() {
       &&(await administration.query('SELECT count(*)::int AS n FROM drivy.invitation WHERE school_id=$1 AND email=$2',[school.id,'instructor@example.invalid'])).rows[0].n===0,
       'La relecture présente l’adresse et le rôle sans créer d’invitation avant la confirmation distincte');
     await invitationDialog.getByRole('button',{name:'Enregistrer l’invitation',exact:true}).click();
+    // Depuis #121 le dialogue se ferme dès que la demande est conservée, avant la réponse de l'école : la confirmation
+    // visible est le repère qui prouve l'écriture, pas la fermeture du dialogue ni le clic.
     await invitationDialog.waitFor({state:'hidden'});
+    await page.getByText('L’invitation est enregistrée pour envoi par e-mail.',{exact:true}).waitFor();
+    const invitationRow=page.getByRole('list',{name:'Invitations de l’école, les plus récentes d’abord',exact:true})
+      .getByRole('button',{name:maskedAddress('instructor@example.invalid')});
+    await invitationRow.waitFor();
+    await invitationRow.getByText('En attente',{exact:true}).waitFor();
+    assert(await page.getByRole('status').filter({hasText:'Création d’une invitation en cours'}).count()===0,
+      'La mention de création en cours disparaît une fois l’invitation confirmée par l’école');
     const invitation=(await administration.query('SELECT id,status,roles FROM drivy.invitation WHERE school_id=$1 AND email=$2',[school.id,'instructor@example.invalid'])).rows[0];
     assert(invitation?.status==='PENDING'&&JSON.stringify(invitation.roles)==='["INSTRUCTOR"]','L’invitation équipe est enregistrée avant livraison, sans rôle supplémentaire');
     const queued=(await administration.query('SELECT id,status,payload FROM drivy.invitation_mail WHERE invitation_id=$1',[invitation.id])).rows[0];

@@ -81,6 +81,18 @@ const entryOf = (body: SetupDraftBody): Entry => ({
   body, contentKey: contentKey(body.content), key: JSON.stringify(canonical(body)),
 });
 
+/**
+ * Ce que vaut un brouillon remis à la file, une fois la file au repos : confirmé par l'école, encore inconnu, ou refusé.
+ * « Enregistrer et quitter » ne sort que sur `confirmed` ; un résultat inconnu n'est pas un refus : la commande reste
+ * suivie par le magasin et la sortie attend sa vérification.
+ */
+export function saveOutcome(snapshot: SetupSaveSnapshot, body: SetupDraftBody): 'confirmed' | 'pending' | 'failed' {
+  // Le résultat n'est pas établi : la commande est suivie par le magasin (reçu AP72), ce n'est pas un refus.
+  if (snapshot.phase === 'unknown') return 'pending';
+  if (snapshot.phase !== 'idle' || !snapshot.held) return 'failed';
+  return contentKey(snapshot.held.content) === contentKey(body.content) ? 'confirmed' : 'failed';
+}
+
 const UNSAVED = 'Enregistrement non confirmé. Vérifiez son résultat avant de réessayer.';
 
 export class SetupSaveQueue {

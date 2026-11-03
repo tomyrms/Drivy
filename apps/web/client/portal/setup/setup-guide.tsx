@@ -105,10 +105,10 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
             {step === 'PROFILE' && <ProfileEditor content={content} onChange={guide.update} errorFor={guide.errorFor} />}
             {step === 'FORMATIONS' && <FormationsStep content={content} templates={loaded.data.templates} offerings={loaded.data.offerings} initialOfferingId={routeQuery?.selection}
               today={guide.today} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
-            {step === 'PRICING' && <PricingStep key={`${document.version}:${guide.editorRevision}`} content={content} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
+            {step === 'PRICING' && <PricingStep key={guide.editorRevision} content={content} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
             {step === 'REVIEW' && <div className="setup-step-body">
-              {!preview && !reviewing && <Button type="button" variant="outline" className="setup-start" onClick={() => void guide.refreshReview()} disabled={!guide.synced}
-                aria-describedby={guide.reviewReason ? 'setup-review-reason' : undefined}>Vérifier la préparation</Button>}
+              {!preview && !reviewing && <Button type="button" variant="outline" className="setup-start" onClick={() => void guide.refreshReview()} disabled={!guide.review.verify}
+                aria-describedby={guide.review.reason ? 'setup-review-reason' : undefined}>Vérifier la préparation</Button>}
               {!preview && reviewing && <div className="grid gap-3" role="status" aria-label="Vérification de la préparation"><Skeleton className="h-16 w-full" /><Skeleton className="h-28 w-full" /></div>}
               {preview && <SetupSummary preview={preview} onEdit={guide.jump} />}
               {preview?.ready && <div className="setup-ack"><CheckRow checked={acknowledged} onChange={guide.setAcknowledged} label={preview.activate
@@ -126,7 +126,7 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
               <Button type="button" variant="outline" className="setup-start mt-3" onClick={guide.retrySave}>Réessayer</Button></Alert>}
             {saveState.phase === 'conflict' && <Alert><AlertTitle>Préparation modifiée à l’école</AlertTitle>
               <AlertDescription>Votre saisie est conservée. Relisez l’étape signalée avant d’enregistrer.</AlertDescription></Alert>}
-            {step === 'REVIEW' && guide.reviewReason && <p id="setup-review-reason" className="setup-reason">{guide.reviewReason}</p>}
+            {step === 'REVIEW' && guide.review.reason && <p id="setup-review-reason" className="setup-reason">{guide.review.reason}</p>}
             {runner.outcome?.code === 'VERSION_CONFLICT' && <Button type="button" variant="outline" className="setup-start" onClick={() => guide.setDiscard(true)}>Relire la version enregistrée</Button>}
           </div>
           <div className="setup-actions">
@@ -136,8 +136,8 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
             </div>
             <div className="setup-actions-main">
               <Button type="button" variant="outline" disabled={blocked} onClick={() => void guide.save(step, content, true)}>Enregistrer et quitter</Button>
-              <Button type="submit" disabled={blocked || (step === 'REVIEW' && (!preview?.ready || !acknowledged || !guide.synced))}
-                aria-describedby={step === 'REVIEW' && guide.reviewReason ? 'setup-review-reason' : undefined}
+              <Button type="submit" disabled={step === 'REVIEW' ? !guide.review.activate : blocked}
+                aria-describedby={step === 'REVIEW' && guide.review.reason ? 'setup-review-reason' : undefined}
                 aria-busy={saving || runner.busy || undefined}>{primary}</Button>
             </div>
           </div>
