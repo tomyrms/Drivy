@@ -665,7 +665,19 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         } catch { fail(error); return false }
         return await transmit(firstAttempt: true)
     }
-    var canRetry: Bool { !invalidated && !isBusy && !isLoading && !accessRevoked && !pendingRequiresReview && pending?.scope == scope && pending?.kind.isPlanning == true }
+    /// Création ou déplacement dont l'horaire demandé est passé : la demande reste à vérifier, jamais à renvoyer.
+    var pendingIsStale: Bool { pending?.isStaleLessonRequest() ?? false }
+    var canRetry: Bool {
+        !invalidated && !isBusy && !isLoading && !accessRevoked && !pendingRequiresReview && !pendingIsStale
+            && pending?.scope == scope && pending?.kind.isPlanning == true
+    }
+    /// Ce que la demande conservée ne permet plus de faire, en plus de sa vérification.
+    var pendingNotes: [String] {
+        guard let command = pending else { return [] }
+        if command.scope != scope { return ["Tes accès ont changé. La demande initiale reste conservée."] }
+        if pendingIsStale { return ["L’horaire demandé est passé : la demande ne sera pas renvoyée. Vérifie-la auprès de l’école."] }
+        return []
+    }
     func retry() async -> Bool { await transmit(firstAttempt: false) }
     func verify() async {
         guard !invalidated, !isBusy, let command = pending, command.scope.belongsToWorkspace(scope) else { return }

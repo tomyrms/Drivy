@@ -74,7 +74,7 @@ struct SchoolInvitationsView: View {
                         NavigationLink(value: invitation.id) {
                             InvitationRow(invitation: invitation, training: model.trainingLabel(invitation),
                                 reference: model.reference(invitation), timeZone: model.school?.timeZone, now: now,
-                                isSelected: model.selectedID == invitation.id)
+                                isSelected: model.selectedID == invitation.id, progress: model.progressTitle(for: invitation))
                         }
                         .accessibilityIdentifier("invitation-\(invitation.id.uuidString)")
                         // Le fond de sélection ne porte pas seul l’état : VoiceOver l’annonce.
@@ -274,8 +274,17 @@ private struct InvitationRow: View {
     let timeZone: String?
     let now: Date
     let isSelected: Bool
+    /// Renvoi ou révocation demandé et pas encore confirmé par l'école.
+    var progress: String? = nil
     private var status: SchoolInvitationStatus { SchoolInvitationListPresentation.status(invitation, now: now) }
     private var deadline: String? { SchoolInvitationListPresentation.activeDeadline(invitation, now: now, timeZone: timeZone) }
+    /// La demande en cours est l'inhabituel à dire ; sans elle, seul un état autre que « en attente » a un badge.
+    private var badge: DrivyStatusBadge? {
+        if let progress { return DrivyStatusBadge(title: progress, symbol: "clock", tone: .accent) }
+        guard status != .pending else { return nil }
+        return DrivyStatusBadge(title: SchoolInvitationListPresentation.statusLabel(invitation, now: now),
+            symbol: InvitationPresentation.symbol(status), tone: InvitationPresentation.tone(status))
+    }
     private var meta: String {
         let identification = [invitation.isCode ? nil : invitation.roleLabel, "Réf. \(reference)"]
             .compactMap { $0 }.joined(separator: " · ")
@@ -284,12 +293,10 @@ private struct InvitationRow: View {
     var body: some View {
         DrivyEntityRow(title: InvitationPresentation.title(invitation, training: training), meta: meta,
             leading: .symbol(invitation.isCode ? "number" : "envelope"),
-            badge: status == .pending ? nil : DrivyStatusBadge(
-                title: SchoolInvitationListPresentation.statusLabel(invitation, now: now),
-                symbol: InvitationPresentation.symbol(status), tone: InvitationPresentation.tone(status)),
+            badge: badge,
             isSelected: isSelected)
             .accessibilityLabel([InvitationPresentation.title(invitation, training: training), invitation.roleLabel,
-                "Référence \(reference)", SchoolInvitationListPresentation.statusLabel(invitation, now: now), deadline]
+                "Référence \(reference)", SchoolInvitationListPresentation.statusLabel(invitation, now: now), progress, deadline]
                 .compactMap { $0 }.joined(separator: ", "))
     }
 }
@@ -318,6 +325,11 @@ private struct InvitationDetailView: View {
                     if status != .pending {
                         DrivyStatusBadge(title: SchoolInvitationListPresentation.statusLabel(invitation, now: now),
                             symbol: InvitationPresentation.symbol(status), tone: InvitationPresentation.tone(status))
+                    }
+                    // Demande conservée, pas encore confirmée : ni lien révoqué ni nouveau code avant la preuve de l'école.
+                    if let progress = model.progressTitle(for: invitation) {
+                        DrivyStatusBadge(title: progress, symbol: "clock", tone: .accent)
+                            .accessibilityIdentifier("invitation-progress")
                     }
                 }
                 DrivyRowGroup {
@@ -495,7 +507,7 @@ struct InvitationCreationView: View {
             if model.codeRecovery == nil {
                 DrivyFormActionBar(hint: hint) {
                     Button { Task { await model.createCode() } } label: {
-                        DrivyBusyLabel(title: "Créer le code", busyTitle: "Création…", isBusy: model.isBusy)
+                        DrivyBusyLabel(title: "Créer le code", busyTitle: "Création en cours…", isBusy: model.isBusy)
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
                     .disabled(!model.mayEdit || !model.codeDraftIsValid)

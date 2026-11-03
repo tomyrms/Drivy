@@ -116,6 +116,22 @@ final class SchoolInvitationWorkspace: Identifiable {
         invitationReferences[invitation.id] ?? SchoolInvitationListPresentation.shortReference(invitation.id)
     }
 
+    /// Renvoi ou révocation conservé pour cette invitation, tant que l'école n'a pas répondu. Le libellé dit ce qui est
+    /// demandé, jamais ce qui est fait : le lien reste valable et le code utilisable jusqu'à la preuve de l'école.
+    /// Seule la demande de cette portée compte ; celle d'une autre époque d'accès reste à vérifier, sans étiquette.
+    func progressTitle(for invitation: SchoolInvitation) -> String? {
+        guard let command = pending, command.scope == scope, command.kind != .createInvitation,
+              command.resourceID == invitation.id else { return nil }
+        return command.kind.inProgressTitle
+    }
+
+    /// Création conservée dont l'invitation n'existe pas encore pour l'école : aucune ligne, aucun code, aucun lien
+    /// ni membre n'est inventé, seul le fait que la demande est conservée est dit.
+    var creationInProgressTitle: String? {
+        guard let command = pending, command.scope == scope, command.kind == .createInvitation else { return nil }
+        return command.kind.inProgressTitle
+    }
+
     func matchingInvitations(query: String, filter: SchoolInvitationListFilter, now: Date) -> [SchoolInvitation] {
         invitations.filter {
             filter.includes(SchoolInvitationListPresentation.status($0, now: now))
