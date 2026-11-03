@@ -32,6 +32,8 @@ const productsSchema=z.object({items:z.array(z.object({id:z.uuid(),enabled:z.boo
   unitPriceCents:z.number(),termsVersionId:z.uuid(),type:z.string()}))});
 const readinessSchema=z.object({learnerId:z.uuid(),ready:z.boolean(),blockers:z.array(z.object({code:z.string()}))});
 const slotSchema=z.object({slot:z.object({plannedStart:z.iso.datetime({offset:true}),plannedEnd:z.iso.datetime({offset:true})}).nullable(),timeZone:z.string()});
+/** Adresse telle que la liste des invitations l'affiche : première lettre, puis le domaine (`i***@example.invalid`). */
+const maskedAddress=(email:string)=>email.replace(/^([^@])[^@]*@/,'$1***@');
 
 export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promise<void> {
   const {browser,page,consumerContext,schoolId,origin,apiOrigin,keycloakOrigin,administration,artifactDirectory,
@@ -108,6 +110,11 @@ export async function verifySchoolFirstLesson(options:FirstLessonOptions):Promis
   await invitationDialog.waitFor();
   assert(await invitationDialog.getByText(learnerEmail,{exact:true}).isVisible(),'La relecture présente l’adresse invitée avant confirmation');
   await invitationDialog.getByRole('button',{name:'Enregistrer l’invitation',exact:true}).click();await invitationDialog.waitFor({state:'hidden'});
+  // Depuis #121 le dialogue se ferme dès que la demande est conservée, avant la réponse de l'école : la confirmation
+  // visible atteste l'écriture, avant toute lecture du guide ou de la base.
+  await page.getByText('L’invitation est enregistrée pour envoi par e-mail.',{exact:true}).waitFor();
+  await page.getByRole('list',{name:'Invitations de l’école, les plus récentes d’abord',exact:true})
+    .getByRole('button',{name:maskedAddress(learnerEmail)}).waitFor();
   const pending=await read('setup-draft/next-actions',nextSchema);
   assert(pending.actions[0]?.code==='LEARNER_INVITATION_PENDING'&&(await read('learners',learnersSchema)).items.length===0,
     'L’invitation envoyée ne crée aucun dossier ni fausse possibilité de planifier');
