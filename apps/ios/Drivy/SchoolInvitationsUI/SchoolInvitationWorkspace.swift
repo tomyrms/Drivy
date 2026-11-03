@@ -34,8 +34,8 @@ final class SchoolInvitationWorkspace: Identifiable {
     private(set) var isBusy = false
     private(set) var needsReload = false
     private(set) var pendingRequiresReview = false
-    /// Une écriture conservée qui n’est pas le renvoi ou la révocation d’une invitation ferme le formulaire :
-    /// création dont l’issue reste inconnue, écriture du domaine de l’école, autre portée (époque, adhésion) (#106).
+    /// La file refuserait une nouvelle invitation (règle exacte de `save`), ou une création conservée dont l'issue
+    /// reste inconnue attend : le formulaire reste fermé pour ne pas perdre le code qu'elle doit rendre (#106).
     private(set) var blocksCreation = false
     /// Invitations dont un renvoi ou une révocation attend la réponse de l’école : la même invitation reste
     /// séquentielle, une invitation distincte reste gérée (#106).
@@ -171,14 +171,10 @@ final class SchoolInvitationWorkspace: Identifiable {
         do {
             pending = try outbox.pending(for: scope, domain: .invitations)
             let commands = try outbox.pendingCommands(for: scope)
-            // #106 : le renvoi ou la révocation d’une invitation ne ferme plus le formulaire (seule cette invitation
-            // attend sa réponse) ; une création dont l’issue reste inconnue, toute écriture en conflit avec le domaine
-            // des invitations, ou d’une autre portée (époque, adhésion), restent des barrières.
-            blocksCreation = commands.contains { command in
-                if command.scope != scope { return true }
-                guard command.kind.schedulingDomain.conflicts(with: .invitations) else { return false }
-                return command.kind != .resendInvitation && command.kind != .revokeInvitation
-            }
+            // #106 : la barrière est la règle exacte de la file pour une création d'invitation ; une création dont
+            // l'issue reste inconnue ferme en plus le formulaire, pour ne pas perdre le code qu'elle doit rendre.
+            blocksCreation = (try outbox.pending(for: scope, refusing: .createInvitation)) != nil
+                || commands.contains { $0.scope == scope && $0.kind == .createInvitation }
             pendingInvitationWrites = Set(commands.filter { $0.scope == scope && $0.kind.isInvitation }
                 .compactMap(\.resourceID))
             if pending == nil { pendingRequiresReview = false }

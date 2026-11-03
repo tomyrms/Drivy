@@ -27,12 +27,12 @@ struct SchoolStartNowBody: Encodable, Sendable {
     private(set) var contextValid = false
     private(set) var errorMessage: String?
     private(set) var pending: PendingSchoolCommand?
-    /// Écriture d’enseignement en cours, celle qui peut réserver le créneau ou la leçon (#106) : elle seule
-    /// empêche de démarrer. Une invitation, un profil ou un tarif en attente ne concernent pas ce départ.
+    /// Commande conservée qui refuserait ce départ, lue avec la règle exacte de la file (#106) : une écriture de
+    /// l'enseignement ou de l'école, la demande incertaine de ce départ comprise. Une invitation ou une préférence
+    /// de planning ne la ferment pas.
     private(set) var blockingCommand: PendingSchoolCommand?
-    /// Ce qui ferme la saisie : la demande de ce départ déjà conservée (à vérifier), ou une écriture d’enseignement
-    /// en cours (#106).
-    var blocksStart: Bool { pending != nil || blockingCommand != nil }
+    /// Ce qui ferme la saisie : la file refuserait ce départ.
+    var blocksStart: Bool { blockingCommand != nil }
     /// Demande que l’école a déclaré ne pas connaître : elle peut être renvoyée comme neuve, ou abandonnée.
     private(set) var absentPendingID: UUID?
     private(set) var started: SchoolLesson?
@@ -73,10 +73,10 @@ struct SchoolStartNowBody: Encodable, Sendable {
         let previousLearnerID = learnerID
         isLoading = true; contextValid = false; errorMessage = nil
         do {
-            // #106 : la demande à vérifier ici reste celle de ce départ ; la barrière ne vient que du domaine
-            // pédagogique, qui partage le créneau et la version de la leçon.
+            // #106 : la demande à vérifier ici reste celle de ce départ ; la barrière est la règle exacte de la
+            // file pour START_LESSON_NOW, donc l'écran n'ouvre jamais une saisie que `save` refusera.
             pending = try outbox.pendingCommands(for: scope).first { $0.kind == .startLessonNow }
-            blockingCommand = try outbox.pending(for: scope, domain: .teaching)
+            blockingCommand = try outbox.pending(for: scope, refusing: .startLessonNow, routeResourceID: trainingID)
             storageAvailable = true
         } catch { storageAvailable = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {

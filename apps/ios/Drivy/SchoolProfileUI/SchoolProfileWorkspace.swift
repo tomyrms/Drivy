@@ -19,6 +19,8 @@ final class SchoolProfileWorkspace: Identifiable {
     private(set) var profile: SchoolAdministrativeProfile?
     private(set) var readiness: SchoolLearnerReadiness?
     private(set) var onboarding: SchoolOnboarding?
+    /// Commande conservée qui refuserait l'écriture que cet écran émet, lue avec la règle exacte de la file (#106) :
+    /// c'est elle qui montre la demande à vérifier et qui ferme la saisie, jamais une autre.
     private(set) var pending: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
@@ -151,11 +153,12 @@ final class SchoolProfileWorkspace: Identifiable {
         isLoading = true; isReplacingDraft = !preserveDraft; errorMessage = nil; storageAccessible = false
         var storageError: String?
         do {
-            // #106 : seule une écriture de ce dossier (ou un changement d’accès, `updateMember`) concerne cette
-            // saisie. Une invitation, un tarif ou une leçon en attente ne bloquent plus le dossier ni l’accueil.
-            pending = try outbox.pending(for: scope) { command in
-                command.kind == .updateMember || (command.kind.isProfile && ownsRoute(command))
-            }
+            // #106 : la barrière des écritures est la règle exacte de la file pour l'écriture que cet écran émet.
+            // L'écran des politiques sonde une création de politique (elle avance la version de l'école) ; un
+            // dossier sonde son profil administratif (version du dossier et de la personne seulement).
+            pending = try outbox.pending(for: scope,
+                refusing: isPolicyManagement ? .createProfilePolicy : .updateProfile,
+                resourceID: isPolicyManagement ? nil : learnerID, routeResourceID: learnerID)
             storageAccessible = true
         }
         catch { storageError = SchoolConfigurationFailure.storage.localizedDescription }

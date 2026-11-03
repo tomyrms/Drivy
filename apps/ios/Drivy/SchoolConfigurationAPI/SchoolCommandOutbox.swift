@@ -300,29 +300,47 @@ protocol SchoolCommandOutbox: AnyObject {
 }
 
 extension SchoolCommandOutbox {
-    /// Première commande du même espace qui empêche cette écriture (#106). Deux cas seulement : elle vient d’une
-    /// autre portée (époque d’accès, adhésion) et reste à résoudre avant toute émission, ou elle concerne l’agrégat
-    /// que `blocks` nomme. Une invitation, un tarif ou une leçon d’une autre ressource ne ferment plus l’écran.
-    func pending(for scope: SchoolCommandScope,
-                 blockedBy blocks: (PendingSchoolCommand) -> Bool) throws -> PendingSchoolCommand? {
-        try pendingCommands(for: scope).first { $0.scope != scope || blocks($0) }
+    /// Première commande conservée qui refuserait cette écriture, selon exactement la règle de `save`
+    /// (`blocksQueueEntry`). L'écran n'ouvre une action que si cette lecture est vide : il ne propose donc jamais
+    /// une saisie que la file refusera (#106). La sonde n'est jamais écrite ; seuls son type, sa portée et sa
+    /// ressource sont comparés.
+    func pending(for scope: SchoolCommandScope, refusing kind: SchoolCommandKind,
+                 resourceID: UUID? = nil, routeResourceID: UUID? = nil) throws -> PendingSchoolCommand? {
+        let probe = PendingSchoolCommand(id: UUID(), scope: scope, kind: kind, resourceVersion: 0, createdAt: Date(),
+            body: Data(), resourceID: resourceID, routeResourceID: routeResourceID)
+        return try pendingCommands(for: scope).first { $0.blocksQueueEntry(of: probe) }
     }
 }
 
 extension PendingSchoolCommand {
-    /// Une entrée déjà conservée empêche-t-elle celle-ci d’entrer dans la file (#106) ? Le conflit reste celui de
-    /// l’ordonnancement, sauf entre invitations distinctes : seule la même invitation garde l’ordre de son renvoi
-    /// ou de sa révocation, et deux créations n’ont aucune version commune.
+    /// Écriture d'un dossier de profil (profil administratif, accueil guidé), hors politique de champ : elle ne
+    /// vérifie et n'avance que la version du dossier et de la personne (profiles.ts:122-161, :262-283).
+    var isProfileRecord: Bool { self == .updateProfile || self == .saveOnboarding || self == .completeOnboarding }
+
+    /// Une entrée déjà conservée empêche-t-elle celle-ci d'entrer dans la file (#106) ? Le conflit reste celui de
+    /// l'ordonnancement, sauf pour les paires dont les deux routes ne lisent ni n'écrivent la même version :
+    /// deux invitations distinctes, une invitation et une écriture de dossier de profil, deux signalements de
+    /// leçons différentes. Tout le reste garde la règle de `conflicts(with:)`.
     func blocksQueueEntry(of other: Self) -> Bool {
-        guard kind.isInvitation, other.kind.isInvitation, scope.belongsToWorkspace(other.scope) else {
-            return conflicts(with: other)
+        guard conflicts(with: other) else { return false }
+        // Même commande, ou commande d'une autre époque d'accès (ou d'une autre adhésion) : elle reste à résoudre.
+        guard id != other.id, scope == other.scope else { return true }
+        if kind.isInvitation, other.kind.isInvitation {
+            // Création : aucune version. Renvoi ou révocation : la même invitation attend sa réponse, et elle seule
+            // (invitations.ts:385-444 : aucune version d'école, une ligne d'invitation).
+            guard kind != .createInvitation, other.kind != .createInvitation,
+                  let target = resourceID, let otherTarget = other.resourceID else { return false }
+            return target == otherTarget
         }
-        if id == other.id { return true }
-        // Une commande d’une autre époque d’accès (ou d’une autre adhésion) reste à résoudre avant toute émission.
-        guard scope == other.scope else { return true }
-        guard kind != .createInvitation, other.kind != .createInvitation,
-              let target = resourceID, let otherTarget = other.resourceID else { return false }
-        return target == otherTarget
+        // Invitation et dossier de profil : l'invitation ne vérifie ni n'avance aucune version d'école, le dossier ne
+        // vérifie que la version du dossier et de la personne (profiles.ts:122-161). Aucune des deux ne relit l'autre.
+        if kind.isInvitation != other.kind.isInvitation,
+           kind.isProfileRecord || other.kind.isProfileRecord { return false }
+        // Signalements de leçons différentes : la création ne vérifie aucune version et n'écrit que la leçon, son
+        // brouillon et ses captures (capture-observations.ts:143-165).
+        if kind == .createObservation, other.kind == .createObservation,
+           let lesson = routeResourceID, let otherLesson = other.routeResourceID, lesson != otherLesson { return false }
+        return true
     }
 }
 

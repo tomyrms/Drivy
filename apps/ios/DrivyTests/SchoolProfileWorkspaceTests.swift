@@ -205,7 +205,7 @@ struct SchoolProfileWorkspaceTests {
         #expect(await model.saveProfileAfterConfirmation() == false)
         #expect(api.commands.isEmpty)
     }
-    @Test func anObservationWithdrawalNeitherBlocksNorIsSettledFromTheProfile() async throws {
+    @Test func anObservationWithdrawalCannotBeVerifiedOrAcknowledgedFromTheProfile() async throws {
         let operation = UUID()
         let body = SchoolObservationBody(operationId: operation, draftId: nil, captureId: nil, segmentId: nil,
             pointSequence: nil, competencyId: nil, text: "Moment marqué", origin: "LIVE",
@@ -217,11 +217,12 @@ struct SchoolProfileWorkspaceTests {
         api.receipt = ProfileFixture.receipt(original)
         let model = ProfileFixture.workspace(api: api, box: box)
         await model.load()
-        // #106 : une observation en attente ne concerne pas le dossier ; elle ne s’y vérifie pas non plus.
-        #expect(model.profile != nil && !model.canVerifyPending && !model.canRetryPending && model.canMutate)
+        // Une observation en attente reste une barrière pour le dossier (l'écriture de profil est du domaine de
+        // l'école, la file la refuserait) et ne se vérifie pas depuis cet écran (#106).
+        #expect(model.profile != nil && !model.canVerifyPending && !model.canRetryPending && !model.canMutate)
         await model.verifyPending()
         #expect(api.operationRequests.isEmpty && api.commands.isEmpty)
-        #expect(model.pending == nil && box.value == withdrawal)
+        #expect(model.pending == withdrawal && box.value == withdrawal)
         #expect(model.errorMessage == nil && model.successMessage == nil)
     }
     @Test func policyCreationUsesSchoolVersionAndDoesNotPublishAutomatically() async throws {
