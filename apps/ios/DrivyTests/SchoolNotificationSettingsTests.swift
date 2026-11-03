@@ -265,6 +265,51 @@ import Testing
         #expect(model.confirmed?.supportsMessaging == false && !model.hasPendingChanges)
     }
 
+    // MARK: Demandes de leçon et examens (#43, #44)
+
+    @Test func lessonChoicesShareTheVersionedObjectAndLeaveTheOtherFieldsUntouched() async throws {
+        let api = NotificationSettingsTestAPI(), store = NotificationSettingsTestStore()
+        api.current = .init(version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true,
+                            lessonRequests: true, examUpdates: true)
+        let model = make(api, store)
+        await model.load()
+        #expect(model.preferences?.supportsLessonNotifications == true)
+        model.set(.examUpdates, false)
+        try await until { api.requests.count == 1 }
+        let body = api.requests[0].body
+        #expect(api.requests[0].version == 1)
+        #expect(body.examUpdates == false && body.lessonRequests == true)
+        #expect(body.courseOffers && body.courseReminders && body.courseChanges && body.courseStaffAlerts)
+        #expect(model.synchronization(.examUpdates) == .sending && model.synchronization(.lessonRequests) == nil)
+        api.succeed()
+        try await until { !model.isSaving }
+        #expect(model.confirmed?.examUpdates == false && model.confirmed?.lessonRequests == true && !model.hasPendingChanges)
+        #expect(SchoolNotificationCategory.allCases.allSatisfy { model.synchronization($0) == nil })
+    }
+
+    @Test func anOlderAPIWithoutLessonFieldsSendsNoneAndShowsNoLessonChoice() async throws {
+        let api = NotificationSettingsTestAPI(), store = NotificationSettingsTestStore()
+        let model = make(api, store)
+        await model.load()
+        #expect(model.preferences?.supportsLessonNotifications == false)
+        model.set(.courseOffers, false)
+        try await until { api.requests.count == 1 }
+        #expect(api.requests[0].body.lessonRequests == nil && api.requests[0].body.examUpdates == nil)
+        api.succeed()
+        try await until { !model.isSaving }
+        #expect(model.confirmed?.supportsLessonNotifications == false && !model.hasPendingChanges)
+    }
+
+    @Test func lessonTogglesDependOnTheAnnouncedFieldsAndTheRole() {
+        typealias Screen = SchoolNotificationSettingsView
+        #expect(Screen.lessonToggles(supportsLessonNotifications: false, roles: ["LEARNER"]).isEmpty)
+        #expect(Screen.lessonToggles(supportsLessonNotifications: true, roles: ["LEARNER"]) == [.lessonRequests, .examUpdates])
+        #expect(Screen.lessonToggles(supportsLessonNotifications: true, roles: ["INSTRUCTOR"]) == [.lessonRequests])
+        #expect(Screen.lessonToggles(supportsLessonNotifications: true, roles: ["ADMIN"]) == [.lessonRequests])
+        #expect(Screen.lessonToggles(supportsLessonNotifications: true, roles: ["INSTRUCTOR", "LEARNER"]) == [.lessonRequests, .examUpdates])
+        #expect(Screen.lessonToggles(supportsLessonNotifications: true, roles: []).isEmpty)
+    }
+
     private func make(_ api: NotificationSettingsTestAPI, _ store: NotificationSettingsTestStore) -> SchoolNotificationSettingsModel {
         SchoolNotificationSettingsModel(scope: scope, api: api, store: store, contextIsCurrent: { true })
     }
@@ -314,7 +359,8 @@ import Testing
         current = .init(version: last.version + 1, courseOffers: last.body.courseOffers,
                         courseReminders: last.body.courseReminders, courseChanges: last.body.courseChanges,
                         courseStaffAlerts: last.body.courseStaffAlerts, messagingPrivate: last.body.messagingPrivate,
-                        messagingGeneral: last.body.messagingGeneral, messagingMentions: last.body.messagingMentions)
+                        messagingGeneral: last.body.messagingGeneral, messagingMentions: last.body.messagingMentions,
+                        lessonRequests: last.body.lessonRequests, examUpdates: last.body.examUpdates)
     }
     func succeed() { applyLastWrite(); let pending = waiter; waiter = nil; pending?.resume(returning: current) }
     func fail(_ error: SchoolPlanningFailure) { let pending = waiter; waiter = nil; pending?.resume(throwing: error) }

@@ -15,20 +15,27 @@ struct SchoolNotificationPreferences: Codable, Sendable, Equatable {
     var messagingPrivate: Bool? = nil
     var messagingGeneral: Bool? = nil
     var messagingMentions: Bool? = nil
+    /// Demandes de leçon et examens (#43, #44). Absents d'une API plus ancienne : aucun interrupteur et aucun envoi.
+    /// Valeurs d'une personne sans ligne : les deux actifs.
+    var lessonRequests: Bool? = nil
+    var examUpdates: Bool? = nil
 
     /// Les trois catégories de messagerie sont connues de l'API qui a répondu.
     var supportsMessaging: Bool { messagingPrivate != nil && messagingGeneral != nil && messagingMentions != nil }
+    /// Les deux alertes de leçon sont connues de l'API qui a répondu : jamais d'interrupteur pour une alerte inexistante.
+    var supportsLessonNotifications: Bool { lessonRequests != nil && examUpdates != nil }
 
     var body: SchoolNotificationPreferencesBody {
         SchoolNotificationPreferencesBody(courseOffers: courseOffers, courseReminders: courseReminders,
                                           courseChanges: courseChanges, courseStaffAlerts: courseStaffAlerts,
                                           messagingPrivate: messagingPrivate, messagingGeneral: messagingGeneral,
-                                          messagingMentions: messagingMentions)
+                                          messagingMentions: messagingMentions,
+                                          lessonRequests: lessonRequests, examUpdates: examUpdates)
     }
 }
 
 /// Corps de `PUT /v1/me/notification-preferences` : le même que la lecture, sans version (le serveur le refuse strictement).
-/// Les champs de messagerie sont omis quand l'API ne les a pas annoncés ; une écriture en vol enregistrée avant #74 reste lisible.
+/// Les champs de messagerie et de leçon sont omis quand l'API ne les a pas annoncés ; une écriture en vol enregistrée avant #74 reste lisible.
 struct SchoolNotificationPreferencesBody: Codable, Sendable, Equatable {
     let courseOffers: Bool
     let courseReminders: Bool
@@ -37,6 +44,8 @@ struct SchoolNotificationPreferencesBody: Codable, Sendable, Equatable {
     var messagingPrivate: Bool? = nil
     var messagingGeneral: Bool? = nil
     var messagingMentions: Bool? = nil
+    var lessonRequests: Bool? = nil
+    var examUpdates: Bool? = nil
 
     /// La réponse de l'école reflète ce corps : chaque champ envoyé y figure avec la même valeur.
     func isReflected(in saved: SchoolNotificationPreferencesBody) -> Bool {
@@ -45,6 +54,8 @@ struct SchoolNotificationPreferencesBody: Codable, Sendable, Equatable {
             && (messagingPrivate == nil || messagingPrivate == saved.messagingPrivate)
             && (messagingGeneral == nil || messagingGeneral == saved.messagingGeneral)
             && (messagingMentions == nil || messagingMentions == saved.messagingMentions)
+            && (lessonRequests == nil || lessonRequests == saved.lessonRequests)
+            && (examUpdates == nil || examUpdates == saved.examUpdates)
     }
 }
 

@@ -65,12 +65,15 @@ l'écriture durable (jamais avant, jamais dans un second appel), avec une clé d
   ne les mentionne pas les laisse inchangés) et toujours présents en lecture. L'API ne connaît que la personne
   connectée : ni lecture ni écriture des choix d'un tiers. Extension de contrat :
   `apps/api/contracts/notification-preferences.json`.
-- **Clients** : le modèle web (`notification-preferences-model.ts`) et le relais BFF acceptent et retransmettent les
-  deux champs sans interrupteur ni écran ; l'app iOS ignore les champs qu'elle ne connaît pas et n'envoie que les siens,
-  donc elle ne réinitialise rien. Aucun changement Swift n'a été nécessaire.
+- **Clients** : le relais BFF accepte et retransmet les deux champs. Écrans : groupe « Leçons » (« Demandes de leçon »,
+  « Examens ») sur la page web des préférences et dans Notifications de l'app iOS (identifiants
+  `notification-lesson-requests` et `notification-exam-updates`). Un interrupteur n'existe que si l'API a annoncé les
+  deux champs ; sur une ancienne API, aucun interrupteur et aucun champ envoyé. Sur iOS, « Examens » est réservé au rôle
+  élève, « Demandes de leçon » à l'élève, au moniteur et à l'administration ; la page web, personnelle et sans rôle
+  d'école, montre les deux.
 
-Non vérifié : la réception APNs réelle (expéditeur simulé dans les tests, iLoader et clés Apple non disponibles), et
-les écrans (interrupteurs web et iOS, ouverture d'un écran depuis une alerte) qui relèvent d'un worker d'interface.
+Non vérifié : la réception APNs réelle (expéditeur simulé dans les tests, iLoader et clés Apple non disponibles), le
+rendu des interrupteurs iOS (aucun compilateur Swift sur le poste de développement) et l'ouverture d'un écran depuis une alerte.
 
 ## Préférences et appareils
 
