@@ -37,6 +37,19 @@ export interface ExamListItem {exam:ExamView;learnerId:string;learnerDisplayName
 
 const columns='id,training_id,kind,category_code,status,starts_at,time_zone,location,escort_instructor_membership_id,escort_starts_at,escort_ends_at,result_note,result_recorded_at,postponed_to_exam_id,version,created_at';
 const kinds:Kind[]=['THEORY','PRACTICAL'];
+/** Textes génériques (#43/#44) : aucun résultat, aucun lieu, aucun nom sur l'écran verrouillé. */
+const pushTexts={created:['Examen planifié','Un examen a été ajouté.'],updated:['Examen modifié','La date ou le lieu d’un examen a changé.'],
+ result:['Résultat d’examen','Un résultat est disponible.']} as const;
+/** L'élève de la formation, jamais l'auteur de la saisie. Mise en file dans la transaction de l'écriture. */
+async function notifyExam(db:PoolClient,schoolId:string,trainingId:string,examId:string,dedupe:string,
+ text:readonly[string,string],authorPersonId:string){
+ const person=(await db.query<{person_id:string}>('SELECT drivy.exam_learner_person($1) AS person_id',[trainingId])).rows[0]?.person_id;
+ if(!person||person===authorPersonId)return;
+ await db.query('SELECT drivy.push_lesson_exam_enqueue($1,$2,$3,$4,$5,$6,NULL,$7)',[person,schoolId,'EXAM',dedupe,text[0],text[1],examId]);
+}
+/** Une modification n'alerte que si la date, le fuseau ou le lieu change réellement. */
+const scheduleChanged=(old:ExamRow,next:{startsAt:string;timeZone:string;location:string})=>
+ Date.parse(next.startsAt)!==old.starts_at.getTime()||next.timeZone!==old.time_zone||next.location!==old.location;
 
 /** Rang de chaque tentative réellement tenue ou prévue : un report n'en est pas une. */
 export function attemptNumbers(rows:Pick<ExamRow,'id'|'kind'|'status'|'starts_at'|'created_at'>[]):Map<string,number>{
@@ -194,6 +207,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
      body.escort?.instructorMembershipId??null,body.escort?.startsAt??null,body.escort?.endsAt??null])).rows[0]!;
    if(body.escort)await holdEscort(db,schoolId,row,body.escort);
    await revise(db,schoolId,row.id,body.operationId,'CREATED',actor,'');
+   await notifyExam(db,schoolId,trainingId,row.id,`Exam:${row.id}:CREATED`,pushTexts.created,actor.personId);
    return {data:await examState(db,schoolId,trainingId),action:'ExamCreated',resourceType:'Exam',resourceId:row.id,resourceVersion:1,changedFields:['status','startsAt']};
   });
   reply.status(201);return envelope(data,r);
@@ -211,6 +225,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
     WHERE school_id=$1 AND id=$2`,[schoolId,examId,body.startsAt,body.timeZone,body.location,body.escort?.instructorMembershipId??null,body.escort?.startsAt??null,body.escort?.endsAt??null]);
    if(body.escort)await holdEscort(db,schoolId,old,body.escort);
    await revise(db,schoolId,examId,body.operationId,'UPDATED',actor,body.reason);
+   if(scheduleChanged(old,body))await notifyExam(db,schoolId,old.training_id,examId,`Exam:${examId}:UPDATED:${old.version+1}`,pushTexts.updated,actor.personId);
    return {data:await examState(db,schoolId,old.training_id),action:'ExamUpdated',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,changedFields:['startsAt','timeZone','location','escort'],...(body.reason?{reason:body.reason}:{})};
   }),r);
  });
@@ -232,6 +247,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
    if(body.escort)await holdEscort(db,schoolId,{id:next,training_id:old.training_id},body.escort);
    await revise(db,schoolId,examId,body.operationId,'POSTPONED',actor,body.reason);
    await revise(db,schoolId,next,body.operationId,'CREATED',actor,'');
+   if(scheduleChanged(old,body))await notifyExam(db,schoolId,old.training_id,examId,`Exam:${examId}:POSTPONED:${old.version+1}`,pushTexts.updated,actor.personId);
    return {data:await examState(db,schoolId,old.training_id),action:'ExamPostponed',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,changedFields:['status','postponedToExamId'],...(body.reason?{reason:body.reason}:{})};
   }),r);
  });
@@ -248,6 +264,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
    await db.query(`UPDATE drivy.exam SET status=$3,result_note=$4,result_recorded_at=coalesce(result_recorded_at,statement_timestamp()),version=version+1,updated_at=statement_timestamp()
     WHERE school_id=$1 AND id=$2`,[schoolId,examId,body.result,body.note]);
    await revise(db,schoolId,examId,body.operationId,correction?'RESULT_CORRECTED':'RESULT_RECORDED',actor,body.reason);
+   await notifyExam(db,schoolId,old.training_id,examId,`Exam:${examId}:RESULT:${old.version+1}`,pushTexts.result,actor.personId);
    return {data:await examState(db,schoolId,old.training_id),action:correction?'ExamResultCorrected':'ExamResultRecorded',resourceType:'Exam',resourceId:examId,resourceVersion:old.version+1,
     changedFields:['status','resultNote'],...(body.reason?{reason:body.reason}:{})};
   }),r);

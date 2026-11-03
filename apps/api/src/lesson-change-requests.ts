@@ -6,6 +6,7 @@ import {withActor} from './database.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
 import {getLesson,type LessonRow} from './lessons.js';
+import {changeAnswerPushText} from './lesson-change-resolution.js';
 
 /**
  * Demandes de l'élève sur sa leçon (#52) : déplacement ou annulation. Une demande ne change ni la leçon, ni ses occupations, ni son
@@ -33,6 +34,18 @@ export interface ChangeConditions {policyVersionId:string|null;policyVersion:num
 export interface ChangeState {lessonId:string;conditions:ChangeConditions;requests:ChangeRequestView[]}
 
 const requestColumns='id,lesson_id,requester_person_id,kind,status,note,late,deadline_at,cancellation_hours,policy_version_id,resolved_at,resolution_note,version,created_at';
+/** Textes génériques (#43/#44) : ni nom, ni note, ni motif, ni résultat sur l'écran verrouillé. */
+export const lessonRequestPushText=['Nouvelle demande','Un élève attend votre réponse.'] as const;
+/** Destinataires d'une nouvelle demande : le moniteur actif de la leçon, sinon les administrateurs actifs (lus par la base). */
+async function requestRecipients(db:PoolClient,schoolId:string,lessonId:string):Promise<string[]>{
+ return (await db.query<{person_id:string}>('SELECT person_id FROM drivy.lesson_push_recipients($1,$2) ORDER BY person_id',[schoolId,lessonId])).rows.map(row=>row.person_id);
+}
+/** Mise en file dans la transaction de l'écriture. L'auteur n'est jamais notifié de sa propre action. */
+async function enqueueFor(db:PoolClient,schoolId:string,lessonId:string,category:'LESSON_REQUEST'|'LESSON_REQUEST_ANSWER',
+ dedupe:string,text:readonly[string,string],personId:string|undefined,authorPersonId:string){
+ if(!personId||personId===authorPersonId)return;
+ await db.query('SELECT drivy.push_lesson_exam_enqueue($1,$2,$3,$4,$5,$6,$7,NULL)',[personId,schoolId,category,dedupe,text[0],text[1],lessonId]);
+}
 const requestView=(row:RequestRow,personId:string):ChangeRequestView=>({id:row.id,lessonId:row.lesson_id,kind:row.kind,status:row.status,note:row.note,
  mine:row.requester_person_id===personId,late:row.late,deadlineAt:row.deadline_at?.toISOString()??null,cancellationHours:row.cancellation_hours,
  policyVersionId:row.policy_version_id,resolvedAt:row.resolved_at?.toISOString()??null,resolutionNote:row.resolution_note,version:row.version,createdAt:row.created_at.toISOString()});
@@ -130,6 +143,8 @@ export function registerLessonChangeRequests(app:FastifyInstance,options:{pool:P
     if(typeof error==='object'&&error!==null&&'code'in error&&error.code==='23505'){const [status,code,message]=blockedFailures.REQUEST_PENDING;throw new ApiError(status,code,message);}
     throw error;
    }
+   for(const person of await requestRecipients(db,schoolId,lessonId))
+    await enqueueFor(db,schoolId,lessonId,'LESSON_REQUEST',`LessonRequest:${created.id}`,lessonRequestPushText,person,actor.personId);
    return {data:await changeState(db,schoolId,lessonId,actor.personId,now),action:'LessonChangeRequested',resourceType:'LessonChangeRequest',resourceId:created.id,resourceVersion:1,changedFields:['status']};
   });
   reply.status(201);return envelope(data,r);
@@ -160,6 +175,7 @@ export function registerLessonChangeRequests(app:FastifyInstance,options:{pool:P
    const updated=await db.query(`UPDATE drivy.lesson_change_request SET status='REFUSED',version=version+1,resolved_by_membership_id=$3,resolved_at=statement_timestamp(),
     resolution_note=$4,updated_at=statement_timestamp() WHERE school_id=$1 AND id=$2 AND status='PENDING'`,[schoolId,requestId,actor.membershipId,resolution]);
    if(updated.rowCount!==1)throw closed();
+   await enqueueFor(db,schoolId,row.lesson_id,'LESSON_REQUEST_ANSWER',`LessonRequestAnswer:${requestId}`,changeAnswerPushText,row.requester_person_id,actor.personId);
    return {data:await changeState(db,schoolId,row.lesson_id,actor.personId),action:'LessonChangeRequestRefused',resourceType:'LessonChangeRequest',resourceId:requestId,resourceVersion:row.version+1,changedFields:['status','resolutionNote']};
   }),r);
  });

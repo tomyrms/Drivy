@@ -13,13 +13,15 @@ import {ApiError,forbidden,notFound} from './errors.js';
  */
 const empty=z.object({}).strict();
 const preferenceBody=z.object({courseOffers:z.boolean(),courseReminders:z.boolean(),courseChanges:z.boolean(),courseStaffAlerts:z.boolean(),
- messagingPrivate:z.boolean().optional(),messagingGeneral:z.boolean().optional(),messagingMentions:z.boolean().optional()}).strict();
+ messagingPrivate:z.boolean().optional(),messagingGeneral:z.boolean().optional(),messagingMentions:z.boolean().optional(),
+ lessonRequests:z.boolean().optional(),examUpdates:z.boolean().optional()}).strict();
 const deviceBody=z.object({token:z.string().regex(/^[0-9a-fA-F]{64,200}$/),environment:z.enum(['SANDBOX','PRODUCTION'])}).strict();
 interface Preferences {version:number;courseOffers:boolean;courseReminders:boolean;courseChanges:boolean;courseStaffAlerts:boolean;
- messagingPrivate:boolean;messagingGeneral:boolean;messagingMentions:boolean}
-/** Valeurs d'une personne sans ligne : privés et mentions actifs, messages du général désactivés (décision du 31 octobre 2026). */
+ messagingPrivate:boolean;messagingGeneral:boolean;messagingMentions:boolean;lessonRequests:boolean;examUpdates:boolean}
+/** Valeurs d'une personne sans ligne : privés et mentions actifs, messages du général désactivés (décision du 31 octobre 2026) ;
+ *  demandes de leçon et examens actifs (#43/#44). */
 const defaults:Preferences={version:1,courseOffers:true,courseReminders:true,courseChanges:true,courseStaffAlerts:true,
- messagingPrivate:true,messagingGeneral:false,messagingMentions:true};
+ messagingPrivate:true,messagingGeneral:false,messagingMentions:true,lessonRequests:true,examUpdates:true};
 
 export function registerNotificationPreferences(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier}){
  const envelope=(data:unknown,r:FastifyRequest)=>({data,requestId:r.id,serverTime:new Date().toISOString()});
@@ -38,7 +40,8 @@ export function registerNotificationPreferences(app:FastifyInstance,options:{poo
  }
  const read=async(db:PoolClient,personId:string):Promise<Preferences>=>(await db.query<Preferences>(`SELECT version,course_offers AS "courseOffers",course_reminders AS "courseReminders",
   course_changes AS "courseChanges",course_staff_alerts AS "courseStaffAlerts",messaging_private AS "messagingPrivate",
-  messaging_general AS "messagingGeneral",messaging_mentions AS "messagingMentions" FROM drivy.notification_preference WHERE person_id=$1`,[personId])).rows[0]??defaults;
+  messaging_general AS "messagingGeneral",messaging_mentions AS "messagingMentions",lesson_requests AS "lessonRequests",
+  exam_updates AS "examUpdates" FROM drivy.notification_preference WHERE person_id=$1`,[personId])).rows[0]??defaults;
 
  app.get('/v1/me/notification-preferences',async(r,reply)=>{
   empty.parse(r.query);const identity=await options.verifyToken(r.headers.authorization);
@@ -55,12 +58,14 @@ export function registerNotificationPreferences(app:FastifyInstance,options:{poo
    const current=await read(db,personId);
    if(current.version!==expected)throw new ApiError(412,'VERSION_CONFLICT','Vos préférences ont changé. Rechargez-les.');
    const next={messagingPrivate:body.messagingPrivate??current.messagingPrivate,messagingGeneral:body.messagingGeneral??current.messagingGeneral,
-    messagingMentions:body.messagingMentions??current.messagingMentions};
-   await db.query(`INSERT INTO drivy.notification_preference(person_id,version,course_offers,course_reminders,course_changes,course_staff_alerts,messaging_private,messaging_general,messaging_mentions)
-    VALUES($1,2,$2,$3,$4,$5,$6,$7,$8)
+    messagingMentions:body.messagingMentions??current.messagingMentions,lessonRequests:body.lessonRequests??current.lessonRequests,
+    examUpdates:body.examUpdates??current.examUpdates};
+   await db.query(`INSERT INTO drivy.notification_preference(person_id,version,course_offers,course_reminders,course_changes,course_staff_alerts,messaging_private,messaging_general,messaging_mentions,lesson_requests,exam_updates)
+    VALUES($1,2,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     ON CONFLICT(person_id) DO UPDATE SET version=notification_preference.version+1,course_offers=$2,course_reminders=$3,course_changes=$4,course_staff_alerts=$5,
-     messaging_private=$6,messaging_general=$7,messaging_mentions=$8,updated_at=now()`,
-    [personId,body.courseOffers,body.courseReminders,body.courseChanges,body.courseStaffAlerts,next.messagingPrivate,next.messagingGeneral,next.messagingMentions]);
+     messaging_private=$6,messaging_general=$7,messaging_mentions=$8,lesson_requests=$9,exam_updates=$10,updated_at=now()`,
+    [personId,body.courseOffers,body.courseReminders,body.courseChanges,body.courseStaffAlerts,next.messagingPrivate,next.messagingGeneral,next.messagingMentions,
+     next.lessonRequests,next.examUpdates]);
    return read(db,personId);
   });
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);
