@@ -3,7 +3,7 @@ import type { AgendaEvent } from '../../console/agenda-projection';
 import { calendarInterval, calendarLanes } from './calendar-layout';
 
 function event(id: string, start: string, end: string): AgendaEvent {
-  return { kind: 'lesson', key: id, startsAt: start, lesson: { id, schoolId: 'school', version: 1, trainingId: 'training', learnerId: id, instructorMembershipId: 'instructor', plannedStart: start, plannedEnd: end, timeZone: 'Europe/Zurich', meetingPoint: '', status: 'PLANNED' } };
+  return { kind: 'lesson', key: id, logicalKey: `lesson:${id}`, startsAt: start, lesson: { id, schoolId: 'school', version: 1, trainingId: 'training', learnerId: id, instructorMembershipId: 'instructor', plannedStart: start, plannedEnd: end, timeZone: 'Europe/Zurich', meetingPoint: '', status: 'PLANNED' } };
 }
 describe('agenda calendar readability', () => {
   it('keeps intersecting appointments in separate lanes, then recovers the full width', () => {

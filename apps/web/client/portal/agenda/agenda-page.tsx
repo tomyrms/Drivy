@@ -8,10 +8,12 @@ import { Input } from '../../components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { addDays, civilDateIn, formatDayHeading, formatTimeRange, formatWeek, lessonPhase } from '../../agenda-model';
 import type { AgendaEvent } from '../../console/agenda-projection';
+import { agendaMarkLabels } from '../../console/agenda-intentions';
 import { PortalSelect } from '../components/portal-select';
 import { useAgenda } from './use-agenda';
 import { calendarInterval, calendarLanes } from './calendar-layout';
 import { LessonWorkspace } from './lesson-workspace';
+import { LessonRefusals } from './lesson-intentions';
 import { phaseLabels, ReadFeedback } from './presentation';
 import { AgendaAddMenu } from '../courses/course-add-menu';
 import { CoursePolicyDialog } from '../courses/course-policy-dialog';
@@ -31,7 +33,8 @@ export function AgendaPilot() {
   const { school, membership } = state.context;
   const selection = state.selection;
   if (selection && 'lesson' in selection) return <LessonWorkspace key={selection.lesson ?? 'new'} lessonId={selection.lesson ?? null} onClose={state.close} onSaved={refresh}
-    onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })} />;
+    onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })}
+    restored={state.restored} onQueued={state.queueLesson} onRefused={state.refuseLesson} onClearRestored={state.clearRestored} />;
   if (selection && 'course' in selection) return <CourseWorkspace key="course" courseId={selection.course ?? null} occurrenceId={selection.occurrence} catalogue={state.catalogue} onClose={state.close} onShow={state.showCourse} onChanged={refresh} />;
   const dayView = state.compact || state.presentation === 'day';
   const today = civilDateIn(school.timeZone, state.now);
@@ -44,6 +47,7 @@ export function AgendaPilot() {
   return <section className="agenda-page">
     <header className="agenda-heading"><div><span className="agenda-eyebrow">Planning de l’école</span><h1 id="portal-agenda-title" tabIndex={-1}>Agenda</h1></div>
       {canPlan && <AgendaAddMenu canCreateCourse={state.canManageCourses} onLesson={() => state.openLesson(null)} onCourse={state.openNewCourse} />}</header>
+    <LessonRefusals refusals={state.refusals} onResume={state.resume} onDismiss={state.dismissRefusal} />
     <PlanningReadinessBanner refreshKey={readinessRefresh} />
     {school.status === 'ACTIVE' && <FirstLessonActions refreshKey={readinessRefresh} />}
     <div className="agenda-toolbar"><div className="agenda-period"><div className="agenda-arrows"><Button variant="outline" size="icon" aria-label={dayView ? 'Jour précédent' : 'Semaine précédente'} onClick={() => state.chooseDay(addDays(state.day, dayView ? -1 : -7))}><ChevronLeft /></Button><Button variant="outline" size="icon" aria-label={dayView ? 'Jour suivant' : 'Semaine suivante'} onClick={() => state.chooseDay(addDays(state.day, dayView ? 1 : 7))}><ChevronRight /></Button></div><h2>{dayView ? formatDayHeading(state.day) : formatWeek(state.monday)}</h2></div>
@@ -83,9 +87,17 @@ function EventEntry({ event, state }: { event: AgendaEvent; state: AgendaState }
   // One state label per appointment: a lesson's phase, or a course that is not simply published. The phase is also read aloud.
   const stateLabel = isLesson ? phase && phase !== 'planned' ? phaseLabels[phase] : null
     : event.series.status === 'CANCELLED' ? 'Annulé' : event.series.status === 'DRAFT' ? 'Brouillon' : event.series.status === 'CLOSED' ? 'Clos' : null;
+  // Une intention de planification se dit en toutes lettres, jamais par la seule couleur.
+  const mark = event.kind === 'lesson' && event.mark ? agendaMarkLabels[event.mark] : null;
   const warning = isLesson && event.lesson.permitWarning === true;
-  return <button type="button" id={id} className="agenda-event" data-kind={event.kind} data-phase={phase} data-has-state={stateLabel ? true : undefined} onClick={() => isLesson ? state.openLesson(event.lesson.id) : state.openCourse(event.series.id, event.occurrence.id)} aria-label={[title, formatTimeRange(event.startsAt, end, state.context.school.timeZone), instructor, stateLabel, warning ? 'Permis à vérifier' : null].filter(Boolean).join(', ')}>
+  const content = <>
     <span className="agenda-event-clock"><Clock3 aria-hidden="true" />{formatTimeRange(event.startsAt, end, state.context.school.timeZone)}</span><strong>{title}</strong><span className="agenda-event-instructor">{!isLesson && <Users aria-hidden="true" />}{instructor}</span>{place && <span className="agenda-event-place"><MapPin aria-hidden="true" />{place}</span>}
-    {stateLabel && <span className="agenda-event-state">{stateLabel}</span>}{warning && <span className="agenda-event-warning"><TriangleAlert aria-hidden="true" /><span>Permis à vérifier</span></span>}
+    {stateLabel && <span className="agenda-event-state">{stateLabel}</span>}{mark && <span className="agenda-event-mark">{mark}</span>}{warning && <span className="agenda-event-warning"><TriangleAlert aria-hidden="true" /><span>Permis à vérifier</span></span>}
+  </>;
+  const label = [title, formatTimeRange(event.startsAt, end, state.context.school.timeZone), instructor, stateLabel, mark, warning ? 'Permis à vérifier' : null].filter(Boolean).join(', ');
+  // Une création ou une proposition n'a pas d'identité de l'école : rien à ouvrir, rien à annuler.
+  if (isLesson && event.provisional) return <div id={id} className="agenda-event" data-kind={event.kind} data-mark={event.mark} data-provisional="true" role="group" aria-label={label}>{content}</div>;
+  return <button type="button" id={id} className="agenda-event" data-kind={event.kind} data-phase={phase} data-mark={event.kind === 'lesson' ? event.mark : undefined} data-has-state={stateLabel ? true : undefined} onClick={() => isLesson ? state.openLesson(event.lesson.id) : state.openCourse(event.series.id, event.occurrence.id)} aria-label={label}>
+    {content}
   </button>;
 }
