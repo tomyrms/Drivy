@@ -1,4 +1,5 @@
 import { CircleCheck, Plus } from 'lucide-react';
+import { type ReactNode } from 'react';
 import { addDays, civilDateIn } from '../../agenda-model';
 import { useConsole } from '../../console/context';
 import { Badge } from '../../components/ui/badge';
@@ -8,13 +9,13 @@ import { chartBucket } from './chart-model';
 import { InstructorSelect, MeasureList, MeasureRow, PilotageSection } from './components';
 import { Appointments } from './dashboard-appointments';
 import { lessonValueGroup } from './finance-panel';
-import { MetricsView, ScopeLine } from './metrics-view';
+import { Freshness, MetricsView } from './metrics-view';
 import { MeasureGroups, type MeasureGroup } from './measure-groups';
 import { useMetricSeries, type MetricDefinition, type MetricMeasure } from './metrics-api';
-import { currentMonth, formatCivil, periodLabel, type ResolvedPeriod } from './period-model';
+import { currentMonth, formatCivilWeekday, periodLabel, type ResolvedPeriod } from './period-model';
 import { metricRights } from './rights';
 import { StackedBars } from './stacked-bars';
-import { summarizeToday } from './today-summary';
+import { overviewToday, type TodayOverview } from './today-summary';
 import { useDirectory } from './use-directory';
 
 /** Mesures du serveur qui demandent une action ; les trois s'ouvrent dans l'agenda, où se trouvent les leçons et les séances. */
@@ -39,10 +40,9 @@ export function DashboardPilot() {
   const instructor = routeQuery?.instructor;
   const { instructorOptions, learnerName, memberName } = useDirectory({ learners: true });
   const scope: Scope = { today, instructor };
-  const scopeLabel = instructorOptions.find(option => option.value === instructor)?.label ?? 'Toute l’école';
   return <section className="pilotage-page">
     <header className="pilotage-heading">
-      <div><h1>Tableau de bord</h1><p>{formatCivil(today)}</p></div>
+      <div><h1>Tableau de bord</h1><p className="pilotage-date">{formatCivilWeekday(today)}</p></div>
       <div className="pilotage-heading-actions">
         <InstructorSelect value={instructor} options={instructorOptions} onChange={value => setRouteQuery?.({ ...routeQuery, instructor: value }, true)} />
         <Button onClick={() => navigate('agenda', { view: 'nouvelle' })}><Plus data-icon="inline-start" aria-hidden="true" />Planifier une leçon</Button>
@@ -52,7 +52,7 @@ export function DashboardPilot() {
     <Appointments today={today} instructor={instructor} learnerName={learnerName} memberName={memberName} />
     {(rights.activity || rights.finance) && <div className="pilotage-month">
       <div className="pilotage-month-figures">
-        {rights.activity && <MonthBlock {...scope} scopeLabel={scopeLabel} />}
+        {rights.activity && <MonthBlock {...scope} />}
         {rights.finance && <FinanceBlock {...scope} navigate={navigate} />}
       </div>
       {rights.activity && <MonthChart month={currentMonth(today)} instructor={instructor} />}
@@ -60,41 +60,52 @@ export function DashboardPilot() {
   </section>;
 }
 
-/** La journée en une phrase, puis ce qui reste à traiter. */
+/**
+ * La journée d'un coup d'œil (#410) : le nombre de leçons, la barre de ses états et leur légende chiffrée, à côté de ce qui reste à traiter.
+ * Chaque ligne à traiter est une seule cible qui ouvre l'agenda ; le verbe se dit aux lecteurs d'écran, pas deux fois à l'écran.
+ */
 function TodayBlock({ today, instructor, navigate }: Scope & { navigate: Navigate }) {
   return <MetricsView label="Lecture de la journée" request={{ domain: 'activity', from: today, toExclusive: addDays(today, 1), instructor }}>
     {(answer, definitions) => {
-      const summary = summarizeToday(answer);
+      const day = overviewToday(answer);
       const pending = todo.filter(id => needsAction(answer.measures[id]));
-      const [lead, ...rest] = summary.segments;
-      return <>
-        <PilotageSection title="Aujourd’hui">
-          <p className="pilotage-today"><strong>{lead}</strong>{rest.map(segment => <span key={segment}> · {segment}</span>)}
-            {summary.incomplete && <> <Badge variant="outline">Partiel</Badge></>}</p>
-        </PilotageSection>
+      return <div className="pilotage-today-grid">
+        <DaySection day={day} />
         <MeasureList title="À traiter">
           {pending.length === 0
             ? <li className="pilotage-row pilotage-row-done"><CircleCheck aria-hidden="true" />Rien à traiter</li>
             : pending.map(id => <MeasureRow key={id} label={labelOf(definitions, id)} measure={answer.measures[id]!} definition={definitions.get(id)}
-              action={{ label: 'Ouvrir l’agenda', onClick: () => navigate('agenda', instructor ? { instructor } : {}) }} />)}
+              onOpen={() => navigate('agenda', instructor ? { instructor } : {})} openLabel="Ouvrir l’agenda" />)}
         </MeasureList>
-      </>;
+      </div>;
     }}
   </MetricsView>;
 }
 
-/** Ce mois-ci : valeurs du mois entier, écart à date avec le mois dernier (voir `MeasureGroups`). */
-const monthGroups: readonly MeasureGroup[] = [{ title: 'Ce mois-ci', ids: ['L01', 'L02', 'H02'] }];
+/**
+ * Le nombre de leçons du jour, puis la barre de leurs états (la largeur de chaque part est le nombre que le serveur donne, rien n'est
+ * additionné ici) et sa légende chiffrée, qui est le texte lu : la barre n'est qu'un dessin. Plein = réalisé, tireté = à venir.
+ */
+function DaySection({ day }: { day: TodayOverview }) {
+  return <PilotageSection title="Aujourd’hui">
+    <p className="pilotage-day-lead">{day.count}{day.incomplete && <> <Badge variant="outline">Partiel</Badge></>}</p>
+    {day.states.length > 0 && <>
+      <div className="pilotage-day-bar" aria-hidden="true">{day.states.map(state => <span key={state.id} data-kind={state.kind} style={{ flexGrow: state.count }} />)}</div>
+      <ul className="pilotage-day-legend">{day.states.map(state => <li key={state.id}><span className="pilotage-day-mark" data-kind={state.kind} aria-hidden="true" />{state.text}</li>)}</ul>
+    </>}
+    {day.extras.length > 0 && <p className="pilotage-day-extras">{day.extras.join(' · ')}</p>}
+  </PilotageSection>;
+}
+
+/** Ce mois-ci : valeurs du mois entier, écart à date avec le mois dernier (voir `MeasureGroups`). Seule l'heure du calcul est dite, dans le titre. */
+const monthGroup = (action: ReactNode): readonly MeasureGroup[] => [{ title: 'Ce mois-ci', ids: ['L01', 'L02', 'H02'], action }];
 const monthComparable: ReadonlySet<string> = new Set(['L01', 'H02']);
 const noComparison: ReadonlySet<string> = new Set();
-function MonthBlock({ today, instructor, scopeLabel }: Scope & { scopeLabel: string }) {
+function MonthBlock({ today, instructor }: Scope) {
   const month = currentMonth(today);
   return <div className="pilotage-month-block">
     <MetricsView label="Lecture du mois" request={{ domain: 'activity', from: month.from, toExclusive: month.toExclusive, instructor }}>
-      {(answer, definitions) => <>
-        <MeasureGroups domain="activity" groups={monthGroups} answer={answer} definitions={definitions} period={month} today={today} filters={{ instructor }} toDate comparableToDate={monthComparable} />
-        <ScopeLine period={periodLabel(month)} scope={scopeLabel} answer={answer} />
-      </>}
+      {(answer, definitions) => <MeasureGroups domain="activity" groups={monthGroup(<Freshness answer={answer} />)} answer={answer} definitions={definitions} period={month} today={today} filters={{ instructor }} toDate comparableToDate={monthComparable} />}
     </MetricsView>
   </div>;
 }
@@ -104,7 +115,7 @@ function MonthChart({ month, instructor }: { month: ResolvedPeriod; instructor: 
   const series = useMetricSeries({ from: month.from, toExclusive: month.toExclusive, granularity: 'day', measures: ['L01', 'L02'], instructor });
   if (!series.data) return <ReadFeedback loaded={series} label="Lecture de l’évolution du mois" />;
   return <>{series.status === 'error' && <ReadFeedback loaded={series} label="Lecture de l’évolution du mois" />}<StackedBars title="Leçons par jour" periodText={periodLabel(month)} emptyText="Aucune leçon ce mois-ci."
-    series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'hatch' }]}
+    series={[{ label: 'Réalisées', pattern: 'solid' }, { label: 'À venir', pattern: 'dashed' }]}
     buckets={series.data.buckets.map(bucket => chartBucket('day', bucket, month.from.slice(0, 4), [bucket.measures.L01?.value ?? null, bucket.measures.L02?.value ?? null]))} /></>;
 }
 

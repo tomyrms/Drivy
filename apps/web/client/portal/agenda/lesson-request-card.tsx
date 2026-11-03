@@ -6,7 +6,7 @@ import { Field, FieldError, FieldLabel } from '../../components/ui/field';
 import { Textarea } from '../../components/ui/textarea';
 import { createCommand } from '../../command-core';
 import { useCommandSnapshot } from '../../command-store';
-import { useCommandRunner, useConsole, useLoad } from '../../console/context';
+import { useCommandLane, useConsole, useLoad } from '../../console/context';
 import {
   LESSON_CHANGE_NOTE_LIMIT, lateLabel, lessonChangeStateSchema, pendingRequest, refuseBody, refuseProblems, requestTitle, type LessonChangeRequest,
 } from '../../lesson-change-model';
@@ -53,24 +53,29 @@ export function LessonRequestCard({ request, timeZone, locked, onMove, onCancel 
 function RefuseDialog({ request, close }: { request: LessonChangeRequest; close: () => void }) {
   const { schoolId } = useConsole();
   const [note, setNote] = useState('');
-  const runner = useCommandRunner(close);
-  const busy = runner.busy || !!runner.pending;
+  const lane = useCommandLane();
+  const tag = `request:${request.id}:refuse`;
+  const outcome = lane.outcomes.get(tag) ?? null;
+  const busy = lane.busy;
+  const blocked = lane.blocked({ kind: 'refuseLessonChangeRequest', resourceId: request.id });
   const problems = refuseProblems({ note });
   const submit = () => {
     const body = refuseBody({ note });
-    if (!body || busy) return;
-    return runner.run(createCommand({ schoolId, kind: 'refuseLessonChangeRequest', path: `lesson-change-requests/${request.id}/refuse`, resourceId: request.id,
-      resourceVersion: request.version, ifMatch: request.version, body }), 'La demande est refusée.');
+    if (!body || busy || blocked) return;
+    const started = lane.run(createCommand({ schoolId, kind: 'refuseLessonChangeRequest', path: `lesson-change-requests/${request.id}/refuse`, resourceId: request.id,
+      resourceVersion: request.version, ifMatch: request.version, body }), 'La demande est refusée.', tag);
+    if (!started.admitted) return;
+    void started.result.then(result => { if (result.status === 'confirmed') close(); });
   };
   return <Dialog open onOpenChange={(next, details) => { if (busy) details.cancel(); else if (!next) close(); }}>
     <DialogContent showCloseButton={!busy}>
       <DialogHeader><DialogTitle>Refuser la demande ?</DialogTitle><DialogDescription>La leçon reste telle quelle. Votre motif est lu par l’élève.</DialogDescription></DialogHeader>
-      <form onSubmit={event => { event.preventDefault(); void submit(); }}>
+      <form onSubmit={event => { event.preventDefault(); submit(); }}>
         <Field data-invalid={!!problems.note}><FieldLabel htmlFor="lesson-request-refuse-note">Motif (facultatif)</FieldLabel>
           <Textarea id="lesson-request-refuse-note" value={note} maxLength={LESSON_CHANGE_NOTE_LIMIT} rows={3} disabled={busy} onChange={event => setNote(event.target.value)} />
           {problems.note && <FieldError>{problems.note}</FieldError>}</Field>
-        <CommandFeedback outcome={runner.outcome} blocked={runner.blockedReason} />
-        <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={close}>Retour</Button><Button type="submit" disabled={busy || !!problems.note}>Refuser la demande</Button></DialogFooter>
+        <CommandFeedback outcome={outcome} blocked={blocked ? 'Une demande de planification attend sa confirmation (voir en haut de la page).' : null} />
+        <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={close}>Retour</Button><Button type="submit" disabled={busy || blocked || !!problems.note}>Refuser la demande</Button></DialogFooter>
       </form>
     </DialogContent>
   </Dialog>;

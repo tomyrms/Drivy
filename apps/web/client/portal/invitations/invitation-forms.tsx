@@ -59,7 +59,7 @@ export function EmailForm({ state }: { state: InvitationsState }) {
 
 function FormActions({ state }: { state: InvitationsState }) {
   return <footer className="invitation-form-actions">
-    <Button type="button" variant="ghost" disabled={state.busy} onClick={state.cancelCreation}>Annuler</Button>
+    <Button type="button" variant="ghost" onClick={state.cancelCreation}>Annuler</Button>
     <Button type="submit" disabled={!state.canWrite}>Relire<ArrowRight data-icon="inline-end" aria-hidden="true" /></Button>
   </footer>;
 }

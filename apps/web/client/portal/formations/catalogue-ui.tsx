@@ -6,7 +6,8 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Skeleton } from '../../components/ui/skeleton';
-import { useConsole, type Loaded, type useCommandRunner } from '../../console/context';
+import type { LaneOutcome } from '../../command-lane';
+import { useConsole, type Loaded } from '../../console/context';
 import type { FieldChange } from './formation-diff';
 import './formations.css';
 
@@ -17,22 +18,6 @@ export function ReadFeedback({ loaded, label = 'Chargement' }: { loaded: Pick<Lo
   if (loaded.status !== 'error') return null;
   return <Alert variant="destructive"><AlertTitle>Lecture impossible</AlertTitle><AlertDescription>{loaded.error}</AlertDescription>
     <div className="cat-alert-actions"><Button variant="outline" onClick={loaded.reload}>Réessayer</Button>{loaded.needsLogin && <Button variant="outline" onClick={() => context.login()}>Se reconnecter</Button>}</div></Alert>;
-}
-
-/** Résultat d'une commande : succès seulement après confirmation durable, refus avec saisie conservée, attente de vérification. */
-export function CommandFeedback({ runner, onDismiss, children }: { runner: ReturnType<typeof useCommandRunner>; onDismiss?: () => void; children?: ReactNode }) {
-  const context = useConsole();
-  const outcome = runner.outcome;
-  return <>
-    {outcome && <Alert variant={outcome.tone === 'error' ? 'destructive' : 'default'}>
-      <AlertTitle>{outcome.title}</AlertTitle><AlertDescription>{outcome.message}</AlertDescription>
-      <div className="cat-alert-actions">
-        {children}
-        {outcome.needsLogin && <Button variant="outline" onClick={() => context.login({ reauthenticate: outcome.code === 'REAUTH_REQUIRED' })}>Se reconnecter</Button>}
-        {outcome.tone === 'success' && onDismiss && <Button variant="ghost" onClick={onDismiss}>Masquer</Button>}
-      </div></Alert>}
-    {runner.blockedReason && <Alert><AlertTitle>Confirmation en attente</AlertTitle><AlertDescription>{runner.blockedReason}</AlertDescription></Alert>}
-  </>;
 }
 
 /** Titre d'une édition : reçoit le focus une seule fois à l'ouverture, jamais pendant la saisie. */
@@ -69,16 +54,20 @@ export function ChangeList({ rows }: { rows: readonly FieldChange[] }) {
   </div>)}</dl>;
 }
 
-/** Relecture avant envoi : la saisie reste en place derrière, rien n'est confirmé avant la réponse de l'école. */
-export function ReviewDialog({ open, title, description, confirmLabel, busy, disabled = false, runner, onClose, onConfirm, children }: {
+/**
+ * Relecture avant envoi : la saisie reste en place derrière, rien n'est confirmé avant la réponse de l'école. `outcome` porte le refus
+ * d'une intention de la voie de commandes ; `runner` reste accepté pour les appelants qui n'ont pas encore migré.
+ */
+export function ReviewDialog({ open, title, description, confirmLabel, busy, disabled = false, runner, outcome, onClose, onConfirm, children }: {
   open: boolean; title: string; description?: string | undefined; confirmLabel: string; busy: boolean; disabled?: boolean;
-  runner: ReturnType<typeof useCommandRunner>; onClose: () => void; onConfirm: () => void; children: ReactNode;
+  runner?: { readonly outcome: LaneOutcome | null }; outcome?: LaneOutcome | null; onClose: () => void; onConfirm: () => void; children: ReactNode;
 }) {
+  const notice = outcome !== undefined ? outcome : runner?.outcome ?? null;
   return <Dialog open={open} onOpenChange={(next, details) => { if (busy) { details.cancel(); return; } if (!next) onClose(); }}>
     <DialogContent showCloseButton={!busy} className="cat-dialog">
       <DialogHeader><DialogTitle>{title}</DialogTitle>{description && <DialogDescription>{description}</DialogDescription>}</DialogHeader>
       <div className="cat-dialog-body">{children}</div>
-      {runner.outcome?.tone === 'error' && <Alert variant="destructive"><AlertTitle>{runner.outcome.title}</AlertTitle><AlertDescription>{runner.outcome.message}</AlertDescription></Alert>}
+      {notice?.tone === 'error' && <Alert variant="destructive"><AlertTitle>{notice.title}</AlertTitle><AlertDescription>{notice.message}</AlertDescription></Alert>}
       <DialogFooter>
         <Button variant="outline" disabled={busy} onClick={onClose}>Retour</Button>
         <Button disabled={busy || disabled} aria-busy={busy} onClick={onConfirm}>{busy ? 'Enregistrement…' : confirmLabel}</Button>

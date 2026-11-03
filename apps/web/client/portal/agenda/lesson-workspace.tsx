@@ -11,61 +11,86 @@ import { Textarea } from '../../components/ui/textarea';
 import { formatDayHeading, formatTimeRange, civilDateIn, lessonPhase } from '../../agenda-model';
 import { canEditPlannedLesson, lessonCommercial, type PlanningLesson } from '../../lesson-planning-model';
 import { useConsole, useLoad } from '../../console/context';
+import type { LessonIntention } from '../../console/agenda-intentions';
 import { PortalSelect } from '../components/portal-select';
 import { CommandFeedback, dateTime, money, phaseLabels, ReadFeedback } from './presentation';
 import { readPlanningCatalogue, useLesson, useLessonEditor, type PlanningCatalogue } from './use-lesson';
 import { cancellationReasons, useCancellation } from './use-cancellation';
 import { useHeadingFocus } from './use-heading-focus';
 import { LessonRequestCard, useLessonRequest } from './lesson-request-card';
+import { LessonRefusals } from './lesson-intentions';
+import type { LessonRefusal, LessonRestored } from './lesson-intentions-model';
 import { acceptingRequestId, type LessonChangeRequest } from '../../lesson-change-model';
 
-export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier }: { lessonId: string | null; onClose: () => void; onSaved: () => void; onDossier: (learnerId: string, lessonId: string) => void }) {
+/**
+ * Fiche d'une leçon et son formulaire. Créer, déplacer et annuler passent par la voie de commandes (#109) : le dialogue se
+ * libère dès que la demande est conservée, la consultation reste possible et rien n'est annoncé réservé ou annulé avant la
+ * réponse vérifiée ou le reçu. Un refus rend la saisie avec sa raison.
+ */
+export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restored, moving, refusals, onQueued, onRefused, onClearRestored, onResumeRefusal, onDismissRefusal }: {
+  lessonId: string | null; onClose: () => void; onSaved: () => void; onDossier: (learnerId: string, lessonId: string) => void;
+  restored: LessonRestored | null; moving: boolean; refusals: readonly LessonRefusal[];
+  onQueued: (intention: LessonIntention) => void; onRefused: (refusal: LessonRefusal) => void; onClearRestored: () => void;
+  onResumeRefusal: (refusal: LessonRefusal) => void; onDismissRefusal: (refusal: LessonRefusal) => void;
+}) {
   const context = useConsole();
   const state = useLesson(lessonId, onSaved);
   const { request } = useLessonRequest(lessonId);
   const lesson = state.loaded.data;
   const canWrite = context.membership.roles.includes('ADMIN') || context.membership.roles.includes('INSTRUCTOR') && (!lesson || context.membership.membershipId === lesson.instructorMembershipId);
-  if (state.editing && canWrite && (!lessonId || lesson && canEditPlannedLesson(lesson))) return <LessonEditorLoader original={lesson ?? undefined} request={request} onClose={() => lessonId ? state.setEditing(false) : onClose()} onSaved={() => { state.setEditing(false); state.saved(lesson); if (!lessonId) onClose(); }} />;
+  // Une saisie refusée ne rouvre que le formulaire de la leçon concernée.
+  const restoredHere = restored && restored.lessonId === lessonId ? restored : null;
+  const closeEditor = () => { onClearRestored(); if (lessonId) state.setEditing(false); else onClose(); };
+  if ((state.editing || restoredHere) && canWrite && (!lessonId || lesson && canEditPlannedLesson(lesson))) return <LessonEditorLoader original={lesson ?? undefined} request={request} restored={restoredHere}
+    onClose={closeEditor} onQueued={intention => { onQueued(intention); closeEditor(); }} onRefused={onRefused} />;
   return <section className="agenda-page"><ReadFeedback loaded={state.loaded} label="Lecture de la leçon" />
+    <LessonRefusals refusals={refusals.filter(refusal => refusal.intention.kind !== 'lesson-create' && refusal.intention.lessonId === lessonId)}
+      onResume={onResumeRefusal} onDismiss={onDismissRefusal} />
     {state.refreshing && <Alert><AlertTitle>Changement confirmé</AlertTitle><AlertDescription>Actualisation de la fiche en cours.</AlertDescription></Alert>}
-    {lesson ? <LessonDetail lesson={lesson} request={request} refreshing={state.refreshing} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
+    {lesson ? <LessonDetail lesson={lesson} request={request} refreshing={state.refreshing} moving={moving} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
     {!canWrite && !lessonId && <Alert><AlertTitle>Planification indisponible</AlertTitle><AlertDescription>Votre rôle ne permet pas de planifier une leçon.</AlertDescription></Alert>}
   </section>;
 }
 
-function LessonDetail({ lesson, request, refreshing, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; request: LessonChangeRequest | null; refreshing: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
+function LessonDetail({ lesson, request, refreshing, moving, onClose, onEdit, onSaved, onDossier }: { lesson: PlanningLesson; request: LessonChangeRequest | null; refreshing: boolean; moving: boolean; onClose: () => void; onEdit: () => void; onSaved: () => void; onDossier: () => void }) {
   const state = useCancellation(lesson, onSaved, acceptingRequestId(request, 'CANCEL'));
   const heading = useRef<HTMLHeadingElement>(null);
   useHeadingFocus(heading);
   const phase = lessonPhase(lesson);
   return <>
-    <Button className="agenda-back" variant="ghost" onClick={onClose} disabled={state.locked}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
-    <header className="agenda-heading"><div><span className="agenda-eyebrow">Leçon individuelle</span><h1 ref={heading} tabIndex={-1}>{lesson.learnerDisplayName}</h1></div>{state.editable && <Button onClick={onEdit} disabled={state.locked || refreshing}><Pencil data-icon="inline-start" />Modifier la leçon</Button>}</header>
-    <CommandFeedback outcome={state.runner.outcome} blocked={state.runner.blockedReason} />
-    {request && state.editable && <LessonRequestCard request={request} timeZone={lesson.timeZone} locked={state.locked || refreshing} onMove={onEdit} onCancel={state.open} />}
+    <Button className="agenda-back" variant="ghost" onClick={onClose} disabled={state.busy}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
+    <header className="agenda-heading"><div><span className="agenda-eyebrow">Leçon individuelle</span><h1 ref={heading} tabIndex={-1}>{lesson.learnerDisplayName}</h1></div><div className="agenda-actions">{moving && <Badge variant="outline">Déplacement en cours</Badge>}{state.busy && <Badge variant="outline">Annulation en cours</Badge>}{state.editable && <Button onClick={onEdit} disabled={state.busy || moving || refreshing}><Pencil data-icon="inline-start" />Modifier la leçon</Button>}</div></header>
+    <CommandFeedback outcome={state.outcome} blocked={state.blockedReason} />
+    {request && state.editable && <LessonRequestCard request={request} timeZone={lesson.timeZone} locked={state.busy || refreshing} onMove={onEdit} onCancel={state.open} />}
     {lesson.permitWarning && <Alert><AlertTitle>Permis à vérifier</AlertTitle></Alert>}
     <div className="agenda-detail-layout"><div className="agenda-detail-main"><section className="agenda-appointment-read"><div className="agenda-calendar-mark"><CalendarDays aria-hidden="true" /></div><div><span className="agenda-eyebrow">{phaseLabels[phase]}</span><h2>{formatDayHeading(civilDateIn(lesson.timeZone, Date.parse(lesson.plannedStart)))}</h2><p>{formatTimeRange(lesson.plannedStart, lesson.plannedEnd, lesson.timeZone)}</p></div></section>
       <section><h2>Le rendez-vous</h2><dl className="agenda-detail-facts"><div><dt><UserRound aria-hidden="true" />Moniteur</dt><dd>{lesson.instructorDisplayName}</dd></div><div><dt><MapPin aria-hidden="true" />Lieu</dt><dd>{lesson.meetingPoint || 'Non précisé'}</dd></div><div><dt><Clock3 aria-hidden="true" />Durée prévue</dt><dd>{(Date.parse(lesson.plannedEnd) - Date.parse(lesson.plannedStart)) / 60000} min</dd></div>{lesson.actualStart && <div><dt>Début réel</dt><dd>{dateTime(lesson.actualStart, lesson.timeZone)}</dd></div>}{lesson.actualEnd && <div><dt>Fin réelle</dt><dd>{dateTime(lesson.actualEnd, lesson.timeZone)}</dd></div>}</dl></section>
-      <div className="agenda-actions"><Button variant="outline" onClick={onDossier} disabled={state.locked}>Ouvrir la fiche élève<ArrowRight data-icon="inline-end" /></Button>{state.editable && <Button variant="ghost" onClick={state.open} disabled={state.locked || refreshing}>Annuler la leçon</Button>}</div>
+      <div className="agenda-actions"><Button variant="outline" onClick={onDossier} disabled={state.busy}>Ouvrir la fiche élève<ArrowRight data-icon="inline-end" /></Button>{state.editable && <Button variant="ghost" onClick={state.open} disabled={state.busy || state.locked || refreshing}>Annuler la leçon</Button>}</div>
     </div><aside className="agenda-context"><span className="agenda-eyebrow">Prix convenu</span><p className="agenda-price">{money(lesson.priceCentsSnapshot)}</p><dl className="agenda-facts"><div><dt>Mode</dt><dd>{lesson.commercialSelection.mode === 'ENTITLEMENT' ? 'Droit prépayé' : 'À la leçon'}</dd></div><div><dt>Temps de battement</dt><dd>{lesson.bufferMinutesSnapshot} min</dd></div></dl><Badge variant="secondary">Conditions enregistrées</Badge></aside></div>
     <Dialog open={!!state.target && !state.discard} onOpenChange={(open, details) => { if (state.locked) { details.cancel(); return; } if (!open) state.close(); }}><DialogContent showCloseButton={!state.locked}><DialogHeader><DialogTitle>Annuler cette leçon ?</DialogTitle><DialogDescription>{state.target?.learnerDisplayName} · {state.target && dateTime(state.target.plannedStart, state.target.timeZone)}</DialogDescription></DialogHeader>
       <FieldGroup><PortalSelect id="lesson-cancel-reason" label="Motif" options={cancellationReasons} value={state.reason} onValueChange={value => state.setReason(value ?? 'LEARNER_REQUEST')} disabled={state.locked} /><Field><FieldLabel htmlFor="lesson-cancel-comment">Commentaire</FieldLabel><Textarea id="lesson-cancel-comment" value={state.comment} onChange={event => state.setComment(event.target.value)} rows={3} maxLength={1000} disabled={state.locked} /></Field></FieldGroup>
-      <CommandFeedback outcome={state.runner.outcome} blocked={state.runner.blockedReason} />{state.problem && <Alert variant="destructive"><AlertTitle>Actualisation impossible</AlertTitle><AlertDescription>{state.problem}</AlertDescription></Alert>}
-      {state.runner.outcome?.code === 'VERSION_CONFLICT' && <Button variant="outline" disabled={state.locked} onClick={() => void state.reread()}>Relire la leçon, conserver le motif</Button>}
-      <DialogFooter><Button variant="outline" disabled={state.locked} onClick={state.close}>Retour</Button><Button variant="destructive" disabled={state.locked || !!state.runner.blockedReason || !!state.problem} onClick={() => void state.cancel()}>{state.runner.busy ? 'Confirmation…' : 'Confirmer l’annulation'}</Button></DialogFooter>
+      <CommandFeedback outcome={state.outcome} blocked={state.blockedReason} />{state.problem && <Alert variant="destructive"><AlertTitle>Actualisation impossible</AlertTitle><AlertDescription>{state.problem}</AlertDescription></Alert>}
+      {state.outcome?.code === 'VERSION_CONFLICT' && <Button variant="outline" disabled={state.locked} onClick={() => void state.reread()}>Relire la leçon, conserver le motif</Button>}
+      <DialogFooter><Button variant="outline" disabled={state.locked} onClick={state.close}>Retour</Button><Button variant="destructive" disabled={state.locked || !!state.blockedReason || !!state.problem} onClick={state.cancel}>Confirmer l’annulation</Button></DialogFooter>
     </DialogContent></Dialog>
     <DiscardDialog open={state.discard} onCancel={() => state.setDiscard(false)} onDiscard={state.reset} />
   </>;
 }
 
-function LessonEditorLoader({ original, request, onClose, onSaved }: { original: PlanningLesson | undefined; request?: LessonChangeRequest | null; onClose: () => void; onSaved: () => void }) {
+function LessonEditorLoader({ original, request, restored, onClose, onQueued, onRefused }: {
+  original: PlanningLesson | undefined; request?: LessonChangeRequest | null; restored: LessonRestored | null;
+  onClose: () => void; onQueued: (intention: LessonIntention) => void; onRefused: (refusal: LessonRefusal) => void;
+}) {
   const { schoolId, routeQuery } = useConsole();
   const catalogue = useLoad(() => readPlanningCatalogue(schoolId), [schoolId], undefined, 'planning-catalogue');
-  return catalogue.data && catalogue.status === 'ready' ? <LessonEditor original={original} requestId={original ? acceptingRequestId(request ?? null, 'MOVE') : undefined} learnerId={routeQuery?.learner} catalogue={catalogue.data} onClose={onClose} onSaved={onSaved} /> : <section className="agenda-page"><Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour</Button><ReadFeedback loaded={catalogue} label="Lecture des élèves et conditions" /></section>;
+  return catalogue.data && catalogue.status === 'ready' ? <LessonEditor original={original} requestId={original ? acceptingRequestId(request ?? null, 'MOVE') : undefined} learnerId={routeQuery?.learner} catalogue={catalogue.data} restored={restored} onClose={onClose} onQueued={onQueued} onRefused={onRefused} /> : <section className="agenda-page"><Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour</Button><ReadFeedback loaded={catalogue} label="Lecture des élèves et conditions" /></section>;
 }
 
-function LessonEditor({ original: loadedOriginal, requestId, learnerId, catalogue, onClose, onSaved }: { original: PlanningLesson | undefined; requestId: string | undefined; learnerId: string | undefined; catalogue: PlanningCatalogue; onClose: () => void; onSaved: () => void }) {
-  const state = useLessonEditor(loadedOriginal, learnerId, catalogue, () => { state.release(); onSaved(); }, requestId);
+function LessonEditor({ original: loadedOriginal, requestId, learnerId, catalogue, restored, onClose, onQueued, onRefused }: {
+  original: PlanningLesson | undefined; requestId: string | undefined; learnerId: string | undefined; catalogue: PlanningCatalogue;
+  restored: LessonRestored | null; onClose: () => void; onQueued: (intention: LessonIntention) => void; onRefused: (refusal: LessonRefusal) => void;
+}) {
+  const state = useLessonEditor({ original: loadedOriginal, learnerId, catalogue, requestId, restored: restored ?? undefined, onQueued, onRefused });
   const original = state.original;
   const [discard, setDiscard] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -80,11 +105,12 @@ function LessonEditor({ original: loadedOriginal, requestId, learnerId, catalogu
   return <section className="agenda-page"><Button variant="ghost" className="agenda-back" disabled={state.locked} onClick={close}><ArrowLeft data-icon="inline-start" />{original ? 'Retour à la leçon' : 'Retour à l’agenda'}</Button>
     <header className="agenda-heading"><div><span className="agenda-eyebrow">{original ? name : 'Leçon individuelle'}</span><h1>{original ? 'Modifier la leçon' : 'Planifier une leçon'}</h1></div></header>
     <div className="agenda-editor-layout"><aside className="agenda-stepper" aria-label="Étapes de planification"><ol>{steps.map((item, index) => <li key={item.key} data-current={state.step === item.key}><Button variant="ghost" disabled={state.locked || index >= stepIndex || !!original && item.key === 'people'} onClick={() => state.setStep(item.key)} aria-current={state.step === item.key ? 'step' : undefined}><span className="agenda-step-number">{index < stepIndex ? <Check aria-hidden="true" /> : index + 1}</span><span>{item.label}</span></Button></li>)}</ol><div className="agenda-step-context"><CalendarDays aria-hidden="true" /><strong>{state.school.name}</strong><span>{state.school.timeZone}</span></div></aside>
-      <form className="agenda-editor-body" onSubmit={event => { event.preventDefault(); if (state.step === 'people') state.next(); else if (state.step === 'appointment') void state.verify(); else void state.submit(); }}>
+      <form className="agenda-editor-body" onSubmit={event => { event.preventDefault(); if (state.step === 'people') state.next(); else if (state.step === 'appointment') void state.verify(); else state.submit(); }}>
         <div className="agenda-step-content"><h2 tabIndex={-1} ref={heading}>{state.step === 'people' ? 'Avec qui ?' : state.step === 'appointment' ? 'Quand et où ?' : 'Confirmer le rendez-vous'}</h2>
-          <CommandFeedback outcome={state.runner.outcome} blocked={state.runner.blockedReason} />
+          {restored && <Alert variant="destructive"><AlertTitle>{restored.outcome.title}</AlertTitle><AlertDescription>{restored.outcome.message}</AlertDescription></Alert>}
+          <CommandFeedback outcome={state.outcome} blocked={state.blockedReason} />
           {state.problem && <Alert variant="destructive"><AlertTitle>Vérifiez la proposition</AlertTitle><AlertDescription>{state.problem}</AlertDescription></Alert>}
-          {state.runner.outcome?.code === 'VERSION_CONFLICT' && <Button type="button" variant="outline" disabled={state.locked} onClick={() => void state.rereadVersion()}>Relire la version actuelle</Button>}
+          {state.outcome?.code === 'VERSION_CONFLICT' && <Button type="button" variant="outline" disabled={state.locked} onClick={() => void state.rereadVersion()}>Relire la version actuelle</Button>}
           {catalogue.truncated && <Alert><AlertTitle>Lecture incomplète</AlertTitle><AlertDescription>La planification est bloquée jusqu’à une lecture complète du catalogue.</AlertDescription></Alert>}
           <ReadFeedback loaded={state.trainingRead} label="Lecture des formations" /><ReadFeedback loaded={state.assignmentRead} label="Lecture des affectations" />
           {state.step === 'people' && <FieldGroup><PortalSelect id="lesson-learner" label="Élève" value={state.form.learnerId || null} onValueChange={value => state.chooseLearner(value ?? '')} options={state.learnerOptions} searchable disabled={state.locked} placeholder="Choisir un élève" />
@@ -111,7 +137,7 @@ function LessonEditor({ original: loadedOriginal, requestId, learnerId, catalogu
             {!original && state.policy?.cancellationPolicyText && <section className="agenda-terms"><h3>Annulation</h3><p>{state.policy.cancellationPolicyText}</p>{state.cancellationDeadline && <p>Contacter l’école pour une annulation après le {dateTime(state.cancellationDeadline, state.school.timeZone)}.</p>}</section>}
             {original && <FieldDescription>L’accord pour ce déplacement est confirmé.</FieldDescription>}
           </div>}
-        </div><footer className="agenda-editor-footer"><Button type="button" variant="ghost" disabled={state.locked} onClick={close}>Annuler</Button><div>{state.step !== 'people' && (!original || state.step === 'review') && <Button type="button" variant="outline" disabled={state.locked} onClick={() => state.setStep(state.step === 'review' ? 'appointment' : 'people')}><ArrowLeft data-icon="inline-start" />Retour</Button>}<Button type="submit" disabled={state.locked || !!state.runner.blockedReason || !state.complete || state.step === 'review' && !state.review}>{state.checking ? 'Vérification…' : state.runner.busy ? 'Confirmation…' : state.step === 'review' ? original ? 'Confirmer le changement' : 'Planifier la leçon' : 'Continuer'}<ArrowRight data-icon="inline-end" /></Button></div></footer>
+        </div><footer className="agenda-editor-footer"><Button type="button" variant="ghost" disabled={state.locked} onClick={close}>Annuler</Button><div>{state.step !== 'people' && (!original || state.step === 'review') && <Button type="button" variant="outline" disabled={state.locked} onClick={() => state.setStep(state.step === 'review' ? 'appointment' : 'people')}><ArrowLeft data-icon="inline-start" />Retour</Button>}<Button type="submit" disabled={state.locked || !!state.blockedReason || !state.complete || state.step === 'review' && !state.review}>{state.checking ? 'Vérification…' : state.step === 'review' ? original ? 'Confirmer le changement' : 'Planifier la leçon' : 'Continuer'}<ArrowRight data-icon="inline-end" /></Button></div></footer>
       </form>
     </div><DiscardDialog open={discard} onCancel={() => setDiscard(false)} onDiscard={() => { state.release(); onClose(); }} />
   </section>;

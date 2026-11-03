@@ -3,11 +3,10 @@ import { ChevronRight, KeyRound, Mail } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { portalSections } from '../pages';
-import { CommandFeedback } from '../team/feedback';
 import { InvitationDetail } from './invitation-detail';
 import { InvitationDialogs } from './invitation-dialogs';
 import { CodeForm, EmailForm } from './invitation-forms';
-import { InvitationList } from './invitation-list';
+import { InvitationFeed, InvitationList } from './invitation-list';
 import { useInvitations } from './use-invitations';
 import './invitations.css';
 
@@ -24,7 +23,6 @@ export function InvitationsPilot() {
   if (state.creating) return <section className="invitation-page">
     <nav className="access-breadcrumb" aria-label="Fil d’Ariane"><button type="button" onClick={state.backToList}>{title}</button><ChevronRight aria-hidden="true" /><span aria-current="page">{state.creating === 'code' ? 'Code élève' : 'Inviter par e-mail'}</span></nav>
     <header className="invitation-heading"><h1 ref={heading} tabIndex={-1}>{state.creating === 'code' ? 'Code élève' : 'Inviter par e-mail'}</h1></header>
-    {state.runner.outcome && !state.dialog && <CommandFeedback runner={state.runner} />}
     {state.creating === 'code' ? <CodeForm state={state} /> : <EmailForm state={state} />}
     {dialogs}
   </section>;
@@ -43,7 +41,7 @@ export function InvitationsPilot() {
       <AlertDescription>Le service de messagerie doit être configuré pour inviter l’équipe.</AlertDescription>
       <div className="invitation-alert-actions"><Button variant="outline" onClick={state.loaded.reload}>Actualiser</Button></div></Alert>}
     {state.codeMissing && <Alert variant="destructive"><AlertTitle>Code non affiché</AlertTitle><AlertDescription>La réponse de l’école ne permet pas d’afficher le code. Ouvrez l’invitation créée et demandez un nouveau code.</AlertDescription></Alert>}
-    {!state.dialog && <CommandFeedback runner={state.runner} />}
+    <InvitationFeed state={state} />
     <InvitationList state={state} />
     {dialogs}
   </section>;

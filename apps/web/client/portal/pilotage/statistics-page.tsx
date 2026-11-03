@@ -15,7 +15,10 @@ import { canOpenStatistics, metricRights } from './rights';
 import { useCatalogueOptions } from './use-catalogue-options';
 import { useDirectory } from './use-directory';
 
-/** Statistiques (#373) : deux onglets, Activité et Finances, sous les mêmes filtres portés par l'adresse. */
+/**
+ * Statistiques (#373) : deux onglets, Activité et Finances, sous les mêmes filtres portés par l'adresse. Le choix du domaine est un contrôle
+ * segmenté dans la ligne du titre (#410) : il ne se confond plus avec la barre d'onglets soulignée du cadre du portail juste au-dessus.
+ */
 export function StatisticsPilot() {
   const { school, membership, routeQuery, setRouteQuery } = useConsole();
   const query = routeQuery ?? {};
@@ -46,12 +49,14 @@ export function StatisticsPilot() {
     <MeasureDetail measure={measure} part={query.part} period={period} filters={filters} scopeLabel={scopeLabel} canExport={canExport} onBack={close} onPart={part => setRouteQuery?.({ ...query, part }, true)} />;
 
   return <section className="pilotage-page">
-    <header className="pilotage-heading"><h1>Statistiques</h1></header>
     <Tabs className="pilotage-domain" value={tab} onValueChange={value => setRouteQuery?.({ ...query, measure: undefined, part: undefined, tab: value === 'activity' ? undefined : value as StatisticsTab })}>
-      <TabsList variant="line" aria-label="Domaine des statistiques">
-        {rights.activity && <TabsTrigger value="activity">Activité</TabsTrigger>}
-        {rights.finance && <TabsTrigger value="finance">Finances</TabsTrigger>}
-      </TabsList>
+      <header className="pilotage-heading">
+        <h1>Statistiques</h1>
+        <TabsList className="pilotage-domain-tabs" aria-label="Domaine des statistiques">
+          {rights.activity && <TabsTrigger value="activity">Activité</TabsTrigger>}
+          {rights.finance && <TabsTrigger value="finance">Finances</TabsTrigger>}
+        </TabsList>
+      </header>
       <PilotageFilters query={query} instructors={instructors} categories={categoryOptions} products={productOptions} problem={resolved.problem ?? null} onChange={change} />
       {rights.activity && <TabsContent value="activity"><div className="pilotage-panel">
         {resolved.period && (detail && measureDomain(detail) === 'activity'

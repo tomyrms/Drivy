@@ -44,6 +44,27 @@ import Foundation
     var draft: SchoolPlanningPreferenceDraft {
         SchoolPlanningPreferenceDraft(trainingCategoryCode: trainingCategoryCode, serviceProductKey: serviceProductKey)
     }
+    /// Les choix restent modifiables pendant l'envoi comme avec une demande à vérifier : ce qui est choisi ensuite
+    /// est un brouillon à enregistrer sur la version que l'école confirme, jamais effacé par la réponse de l'envoi.
+    var canEdit: Bool { saved != nil && !isLoading }
+
+    /// Les valeurs que la demande conservée porte : la référence que l'école confirmera, distincte de la saisie suivante.
+    static func confirmedDraft(of command: PendingSchoolCommand) -> SchoolPlanningPreferenceDraft? {
+        guard command.kind == .savePlanningDefaults,
+              let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any] else { return nil }
+        return SchoolPlanningPreferenceDraft(trainingCategoryCode: object["trainingCategoryCode"] as? String ?? "",
+                                             serviceProductKey: object["serviceProductKey"] as? String ?? "")
+    }
+
+    /// Une écriture confirmée devient la version connue : la saisie poursuivie pendant l'envoi se compare à elle et non
+    /// à la version d'avant, sans quoi notre propre écriture passerait pour un changement fait ailleurs.
+    private func adoptConfirmed(_ command: PendingSchoolCommand, receipt: SchoolOperationReceipt?) {
+        guard let receipt, let current = saved, receipt.resourceVersion > current.version,
+              receipt.resourceId == scope.membershipID, let confirmed = Self.confirmedDraft(of: command) else { return }
+        saved = SchoolPlanningDefaults(id: current.id, schoolId: current.schoolId, version: receipt.resourceVersion,
+            trainingCategoryCode: confirmed.trainingCategoryCode.isEmpty ? nil : confirmed.trainingCategoryCode,
+            serviceProductKey: confirmed.serviceProductKey.isEmpty ? nil : confirmed.serviceProductKey)
+    }
 
     func selectCategory(_ code: String) {
         guard code != trainingCategoryCode else { return }
@@ -170,10 +191,11 @@ import Foundation
         guard !isBusy, !isLoading, let command = pending else { return }
         isBusy = true; errorMessage = nil
         do {
-            _ = try await client.receipt(for: command)
+            let receipt = try await client.receipt(for: command)
             try outbox.remove(command); pending = nil; absentPendingID = nil
             successMessage = command.kind == .savePlanningDefaults ? "Préférences enregistrées." : nil
-            isBusy = false; await load(keepingEdits: command.kind != .savePlanningDefaults)
+            adoptConfirmed(command, receipt: receipt)
+            isBusy = false; await load(keepingEdits: Self.confirmedDraft(of: command).map { draft != $0 } ?? false)
         } catch SchoolPlanningFailure.notFound {
             isBusy = false; absentPendingID = command.id
         } catch { isBusy = false; errorMessage = (error as? LocalizedError)?.errorDescription ?? SchoolPlanningFailure.unavailable.localizedDescription }
@@ -187,13 +209,14 @@ import Foundation
         await load(keepingEdits: true)
     }
     private func send(_ command: PendingSchoolCommand, fresh: Bool) async {
-        let draftAtSend = draft
         isBusy = true; errorMessage = nil; successMessage = nil
         do {
             try outbox.save(command)
-            try await client.send(command)
+            let receipt = try await client.send(command)
             try outbox.remove(command); pending = nil; successMessage = "Préférences enregistrées."
-            isBusy = false; await load(keepingEdits: draft != draftAtSend)
+            adoptConfirmed(command, receipt: receipt)
+            // Une saisie poursuivie pendant l'envoi se compare à la valeur confirmée et reste un brouillon.
+            isBusy = false; await load(keepingEdits: Self.confirmedDraft(of: command).map { draft != $0 } ?? false)
         } catch {
             // Refus motivé, ou service qui ne connaît pas cette écriture (404) : l’école a répondu, rien n’est
             // enregistré. La demande quitte la file au lieu de bloquer toutes les autres écritures de l’école.
@@ -278,7 +301,7 @@ struct SchoolPlanningSettingsView: View {
                                     .frame(minHeight: DrivyLayout.tapTarget)
                             }
                         }
-                    }.disabled(model.isLoading || model.isBusy || model.pending != nil)
+                    }.disabled(!model.canEdit)
                 }
                 Button { Task { await model.save() } } label: {
                     DrivyBusyLabel(title: "Enregistrer les préférences", busyTitle: "Enregistrement des préférences…", isBusy: model.isBusy)

@@ -10,7 +10,8 @@ import { Alert, AlertTitle, AlertDescription } from '../../components/ui/alert';
 import { useConsole } from '../../console/context';
 import { PortalSelect } from '../components/portal-select';
 import { trainingStatusLabels, useLearnerController, type LearnerController } from './learner-controller';
-import { CommandFeedback, ReadFeedback } from './learner-feedback';
+import { markLabels } from './learner-projection';
+import { ReadFeedback, RequestFeedback } from './learner-feedback';
 import { LearnerFollowUp } from './learner-follow-up';
 import { LearnerFormations, LearnerConfirmation } from './learner-management';
 import { LearnerInformation } from './learner-information';
@@ -31,14 +32,17 @@ export function LearnerPilot() {
   const current = state.current;
   if (!state.selected) return <LearnerDirectory state={state} />;
   if (!current) return <section className="student-page"><Button variant="ghost" onClick={() => state.setSelected(null)}><ArrowLeft />Élèves</Button><h1 ref={titleRef} tabIndex={-1}>Dossier élève</h1><ReadFeedback loaded={state.selectedLearner.status === 'error' ? state.selectedLearner : state.loaded.status === 'error' ? state.loaded : state.selectedLearner} />{state.selectedLearner.status === 'ready' && !current && <p>Ce dossier n’est pas disponible.</p>}</section>;
-  const busy = state.runner.busy || !!state.runner.pending;
+  const dossierMark = state.learnerMark(current.id);
+  const mine = state.refusals.filter(item => item.intention.learnerId === current.id);
   return <section className="student-page">
-    <nav className="student-breadcrumb" aria-label="Fil d’Ariane"><Button variant="ghost" size="sm" onClick={() => state.setSelected(null)}><ArrowLeft />Élèves</Button><ChevronRight aria-hidden="true" /><span>{current.displayName}</span></nav>
-    <header className="student-heading"><div className="student-identity"><Avatar className="student-avatar"><AvatarFallback>{initials(current.displayName)}</AvatarFallback></Avatar><div><h1 ref={titleRef} tabIndex={-1}>{current.displayName}</h1><div className="student-contact">{current.contactEmail && <a href={`mailto:${current.contactEmail}`}><Mail aria-hidden="true" />{current.contactEmail}</a>}{current.contactPhone && <a href={`tel:${current.contactPhone}`}><Phone aria-hidden="true" />{current.contactPhone}</a>}{!current.contactEmail && !current.contactPhone && <span>Contact non renseigné</span>}</div></div></div>
-      {current.archivedAt ? <Badge variant="secondary">Dossier archivé</Badge> : <Button disabled={busy || state.school.status !== 'ACTIVE'} onClick={() => state.navigate('agenda', { view: 'nouvelle', learner: current.id })}><CalendarPlus />Planifier une leçon</Button>}
+    <nav className="student-breadcrumb" aria-label="Fil d’Ariane"><Button variant="ghost" size="sm" onClick={() => state.setSelected(null)}><ArrowLeft />Élèves</Button><ChevronRight aria-hidden="true" /><span>{state.labelOf(current)}</span></nav>
+    <header className="student-heading"><div className="student-identity"><Avatar className="student-avatar"><AvatarFallback>{initials(current.displayName)}</AvatarFallback></Avatar><div><h1 ref={titleRef} tabIndex={-1}>{state.labelOf(current)}</h1><div className="student-contact">{current.contactEmail && <a href={`mailto:${current.contactEmail}`}><Mail aria-hidden="true" />{current.contactEmail}</a>}{current.contactPhone && <a href={`tel:${current.contactPhone}`}><Phone aria-hidden="true" />{current.contactPhone}</a>}{!current.contactEmail && !current.contactPhone && <span>Contact non renseigné</span>}</div></div></div>
+      {dossierMark && <Badge variant="outline">{markLabels[dossierMark]}</Badge>}
+      {current.archivedAt ? <Badge variant="secondary">Dossier archivé</Badge> : <Button disabled={dossierMark === 'archiving' || state.school.status !== 'ACTIVE'} onClick={() => state.navigate('agenda', { view: 'nouvelle', learner: current.id })}><CalendarPlus />Planifier une leçon</Button>}
     </header>
     {(state.routeQuery?.from === 'agenda' || state.routeQuery?.lesson) && <Button className="student-back-context" variant="ghost" onClick={() => state.navigate('agenda', { week: state.routeQuery?.week, day: state.routeQuery?.day, instructor: state.routeQuery?.instructor, lesson: state.routeQuery?.lesson })}><ArrowLeft />Retour à l’agenda</Button>}
-    <CommandFeedback runner={state.runner} />
+    <RequestFeedback outcome={state.confirmation} />
+    <LearnerRefusals state={state} refusals={mine} onResume={refusal => { state.resume(refusal); if (refusal.intention.kind === 'training-create' || refusal.intention.kind === 'assignment-create') setSection('formations'); }} />
     <ReadFeedback loaded={state.resources} />
     {state.resources.data?.truncated && <Alert><AlertTitle>Références partiellement chargées</AlertTitle><AlertDescription>Les modifications attendent la lecture complète des formations, des moniteurs et des programmes.</AlertDescription></Alert>}
     {state.selectedTrainings.data?.truncated && <Alert><AlertTitle>Formations partiellement chargées</AlertTitle><AlertDescription>Les modifications sont indisponibles tant que la liste complète n’est pas lue.</AlertDescription></Alert>}
@@ -53,6 +57,21 @@ export function LearnerPilot() {
   </section>;
 }
 
+/**
+ * Requests the school refused after their form had been released: what was typed comes back on demand, nothing else changes.
+ * A refusal is never a confirmation and never alters a dossier, a formation or an access: the lists show the school's own data.
+ */
+function LearnerRefusals({ state, refusals, onResume, resumeLabel = 'Reprendre la saisie', named = false }: {
+  state: LearnerController; refusals: LearnerController['refusals']; onResume: (refusal: LearnerController['refusals'][number]) => void; resumeLabel?: string; named?: boolean;
+}) {
+  return <>{refusals.map(refusal => {
+    const learner = state.loaded.data?.items.find(item => item.id === refusal.intention.learnerId);
+    const owner = learner ? state.labelOf(learner) : undefined;
+    return <Alert key={refusal.intention.operationId} variant="destructive"><AlertTitle>{named && owner ? `${owner} · ${refusal.outcome.title}` : refusal.outcome.title}</AlertTitle><AlertDescription>{refusal.outcome.message}</AlertDescription>
+      <div className="student-refusal-actions"><Button variant="outline" onClick={() => named ? onResume(refusal) : state.resume(refusal)}>{resumeLabel}</Button><Button variant="ghost" onClick={() => state.dismiss(refusal)}>Ignorer</Button></div></Alert>;
+  })}</>;
+}
+
 function LearnerDirectory({ state }: { state: LearnerController }) {
   return <section className="student-page">
     <header className="student-heading"><div><p className="student-eyebrow">École</p><h1>Élèves</h1></div><span className="student-directory-count"><UsersRound aria-hidden="true" />{state.loaded.data ? `${state.visible.length} dossier${state.visible.length > 1 ? 's' : ''}${state.loaded.data.truncated ? ' chargés' : ''}` : 'Annuaire'}</span></header>
@@ -61,13 +80,15 @@ function LearnerDirectory({ state }: { state: LearnerController }) {
       <PortalSelect id="directory-readiness" label="Profil" value={state.readinessFilter} onValueChange={value => { if (value === 'all' || value === 'incomplete') state.setReadinessFilter(value); state.setPage(1); }} options={[{ value: 'all', label: 'Tous les profils' }, { value: 'incomplete', label: 'À compléter' }]} />
       <PortalSelect id="directory-sort" label="Trier" value={state.sort} onValueChange={value => { if (value === 'name-asc' || value === 'name-desc') state.setSort(value); }} options={[{ value: 'name-asc', label: 'Nom A–Z' }, { value: 'name-desc', label: 'Nom Z–A' }]} />
     </div>
+    <RequestFeedback outcome={state.confirmation} />
+    <LearnerRefusals state={state} refusals={state.refusals} onResume={refusal => state.setSelected(refusal.intention.learnerId)} resumeLabel="Ouvrir le dossier" named />
     <PendingLessonRequests state={state} />
     <PendingExamResults state={state} />
     <ReadFeedback loaded={state.loaded} />
     {state.loaded.data?.truncated && <Alert><AlertTitle>Annuaire partiellement chargé</AlertTitle><AlertDescription>La recherche porte sur les dossiers chargés.</AlertDescription></Alert>}
     <div className="student-directory" role="list" aria-label="Dossiers élèves">{state.pageRows.map(learner => {
-      const trainings = state.trainingsOf(learner.id); const active = trainings.filter(training => training.status === 'ACTIVE' || training.status === 'PAUSED');
-      return <button type="button" className="student-directory-row" key={learner.id} role="listitem" onClick={() => state.setSelected(learner.id)}><Avatar><AvatarFallback>{initials(learner.displayName)}</AvatarFallback></Avatar><span className="student-directory-person"><strong>{learner.displayName}</strong><span>{learner.contactEmail ?? learner.contactPhone ?? 'Contact non renseigné'}</span></span><span className="student-directory-training">{state.listTrainings.status === 'ready' ? active.length ? active.map(training => `${state.category(training)} · ${trainingStatusLabels[training.status]}`).join(', ') : 'Aucune formation en cours' : 'Formations indisponibles'}</span><span className="student-directory-state">{learner.archivedAt ? <Badge variant="secondary">Archivé</Badge> : state.notReady(learner) ? <Badge variant="outline">Profil à compléter</Badge> : null}</span><ArrowRight className="student-row-arrow" aria-hidden="true" /></button>;
+      const view = state.trainingView(learner.id); const active = view.trainings.filter(training => training.status === 'ACTIVE' || training.status === 'PAUSED'); const dossierMark = state.learnerMark(learner.id);
+      return <button type="button" className="student-directory-row" key={learner.id} role="listitem" onClick={() => state.setSelected(learner.id)}><Avatar><AvatarFallback>{initials(learner.displayName)}</AvatarFallback></Avatar><span className="student-directory-person"><strong>{state.labelOf(learner)}</strong><span>{learner.contactEmail ?? learner.contactPhone ?? 'Contact non renseigné'}</span></span><span className="student-directory-training">{state.listTrainings.status === 'ready' ? active.length ? active.map(training => `${state.category(training)} · ${view.marks.get(training.id) ? markLabels[view.marks.get(training.id)!] : trainingStatusLabels[training.status]}`).join(', ') : 'Aucune formation en cours' : 'Formations indisponibles'}</span><span className="student-directory-state">{dossierMark ? <Badge variant="outline">{markLabels[dossierMark]}</Badge> : learner.archivedAt ? <Badge variant="secondary">Archivé</Badge> : state.notReady(learner) ? <Badge variant="outline">Profil à compléter</Badge> : null}</span><ArrowRight className="student-row-arrow" aria-hidden="true" /></button>;
     })}</div>
     {state.loaded.status === 'ready' && !state.visible.length && <div className="student-empty"><UsersRound aria-hidden="true" /><h2>{state.search || state.readinessFilter !== 'all' ? 'Aucun dossier correspondant' : 'Aucun élève dans cette liste'}</h2>{(state.search || state.readinessFilter !== 'all') && <Button variant="outline" onClick={() => { state.setSearch(''); state.setReadinessFilter('all'); }}>Effacer les filtres</Button>}</div>}
     {state.visible.length > state.pageSize && <footer className="student-pagination"><span>Page {state.currentPage} sur {Math.ceil(state.visible.length / state.pageSize)}</span><div><Button variant="outline" size="icon" aria-label="Page précédente" disabled={state.currentPage <= 1} onClick={() => state.setPage(state.currentPage - 1)}><ChevronLeft /></Button><Button variant="outline" size="icon" aria-label="Page suivante" disabled={state.currentPage * state.pageSize >= state.visible.length} onClick={() => state.setPage(state.currentPage + 1)}><ChevronRight /></Button></div></footer>}

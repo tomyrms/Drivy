@@ -452,13 +452,15 @@ struct SchoolAgendaCourseItem: Identifiable, Equatable, Sendable {
     /// Coffre des gestes de la feuille des participants (#128 à #130) ; absent dans les tests et les aperçus.
     let persistence: SchoolCourseIntentPersistence?
 
-    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = [], selectedOccurrenceID: UUID? = nil,
+    init(schoolID: UUID, client: SchoolCourseClient, series: SchoolCourseSeries, learners: [SchoolLearner] = [],
+         learnerPages: SchoolCourseLearnerPageReader? = nil, selectedOccurrenceID: UUID? = nil,
          persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.client = client; self.series = series; capacity = series.capacity
         self.selectedOccurrenceID = selectedOccurrenceID
         self.persistence = persistence
         roster = series.canManage && series.status == .published
-            ? SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: series.id, client: client, learners: learners) : nil
+            ? SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: series.id, client: client, learners: learners,
+                learnerPages: learnerPages) : nil
         roster?.onChange = { [weak self] in await self?.refresh() }
     }
     var minimumCapacity: Int { min(200, max(1, series.seatsTaken, series.minParticipants ?? 1)) }

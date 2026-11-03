@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { civilDateIn } from '../../agenda-model';
-import { useCommandSnapshot } from '../../command-store';
+import { kindsOf } from '../../command-families';
+import { useCommandRevision } from '../../command-store';
 import { activeInstructors } from '../../invitation-model';
 import { availabilitySchema, closureSchema, memberSchema, readAll } from '../../school-api';
 import { distinctLabel, homonymReferences } from '../../person-reference';
-import { useConsole, useLoad } from '../../console/context';
+import { useConsole, useLoad, type Outcome } from '../../console/context';
 import { useListState } from '../../console/list-state';
-import { ruleGroups, upcomingAbsences } from './schedule-model';
+import { ruleGroups, upcomingAbsences, type AbsenceDraft, type RuleDraft } from './schedule-model';
 
-/** Which composition is open on the page: the reading view, one hours editor (new or existing), or the absence editor. */
-export type ScheduleView = null | { kind: 'rule'; ruleId: string | null } | { kind: 'absence' };
+/**
+ * Which composition is open on the page: the reading view, one hours editor (new or existing), or the absence editor.
+ * `restored` gives back what was typed, with the school's refusal, when a request that had been kept was refused.
+ */
+export type ScheduleView = null
+  | { kind: 'rule'; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome> } }
+  | { kind: 'absence'; restored?: { draft: AbsenceDraft; outcome: NonNullable<Outcome> } };
 
 /**
  * One read projection for hours and absences, and the instructor they are shown for.
@@ -18,12 +24,13 @@ export type ScheduleView = null | { kind: 'rule'; ruleId: string | null } | { ki
 export function useSchedule() {
   const context = useConsole();
   const { schoolId, school, membership, routeQuery, setRouteQuery, confirmNavigation } = context;
-  const { revision } = useCommandSnapshot();
+  // Only a confirmed hours, absence or access change reads the planning again; the known data stays on screen meanwhile.
+  const revision = useCommandRevision(kindsOf('availability', 'members'));
   const loaded = useLoad(async () => {
     const [members, rules, closures] = await Promise.all([readAll(schoolId, 'members', memberSchema),
       readAll(schoolId, 'availability-rules', availabilitySchema), readAll(schoolId, 'closures', closureSchema)]);
     return { members: members.items, rules: rules.items, closures: closures.items, truncated: members.truncated || rules.truncated || closures.truncated };
-  }, [schoolId, revision]);
+  }, [schoolId, revision], schoolId, 'schedule');
   const [remembered, setRemembered] = useListState('portal/planning/instructor', '');
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60_000); return () => window.clearInterval(timer); }, []);

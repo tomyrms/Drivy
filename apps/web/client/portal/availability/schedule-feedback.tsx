@@ -27,6 +27,18 @@ export function ScheduleRefusal({ outcome, blocked, instructorName, busy, onAgen
   return <CommandFeedback outcome={outcome?.tone === 'success' ? null : outcome} blocked={blocked} />;
 }
 
+/**
+ * Requests the school refused after the form had been released: what was typed comes back on demand, nothing else changes.
+ * A refusal is never a confirmation and never alters a row: the lists show the school's hours and absences.
+ */
+export function ScheduleRefusals({ refusals, disabled, onResume, onDismiss }: {
+  refusals: readonly { intention: { kind: string }; outcome: NonNullable<Outcome> }[]; disabled: boolean; onResume: (index: number) => void; onDismiss: (index: number) => void;
+}) {
+  return <>{refusals.map((item, index) => <Alert key={index} variant="destructive"><AlertTitle>{item.outcome.title}</AlertTitle><AlertDescription>{item.outcome.message}</AlertDescription>
+    <div className="schedule-actions"><Button type="button" variant="outline" disabled={disabled} onClick={() => onResume(index)}>Reprendre la saisie</Button>
+      <Button type="button" variant="ghost" onClick={() => onDismiss(index)}>Ignorer</Button></div></Alert>)}</>;
+}
+
 export function DiscardDialog({ open, onCancel, onDiscard }: { open: boolean; onCancel: () => void; onDiscard: () => void }) {
   return <Dialog open={open} onOpenChange={value => { if (!value) onCancel(); }}><DialogContent>
     <DialogHeader><DialogTitle>Quitter sans enregistrer ?</DialogTitle><DialogDescription>Votre saisie sera perdue.</DialogDescription></DialogHeader>

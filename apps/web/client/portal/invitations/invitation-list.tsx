@@ -12,6 +12,21 @@ import type { InvitationsState } from './use-invitations';
 
 const statusOptions = [{ value: 'all', label: 'Toutes' }, ...invitationStatuses.map(value => ({ value, label: invitationStatusLabels[value] }))];
 
+/**
+ * What ended while its form was not on screen: confirmations, and a refused request that can be taken up again with what was typed.
+ * A refusal is never a confirmation, and nothing here changes an invitation: the list below is the school's.
+ */
+export function InvitationFeed({ state }: { state: InvitationsState }) {
+  const refusal = state.refusals[0];
+  return <>
+    {state.confirmations.map(({ tag, outcome }) => <Alert key={tag}><AlertTitle>{outcome.title}</AlertTitle><AlertDescription>{outcome.message}</AlertDescription></Alert>)}
+    {refusal && <Alert variant="destructive"><AlertTitle>{state.refusalOutcome?.title ?? 'Modification refusée'}</AlertTitle>
+      <AlertDescription>{state.refusalOutcome?.message ?? 'L’école a refusé cette demande. Votre saisie est conservée.'}</AlertDescription>
+      <div className="invitation-alert-actions"><Button variant="outline" onClick={state.resumeRefusal}>Reprendre la saisie</Button>
+        <Button variant="ghost" onClick={state.dismissRefusal}>Ignorer</Button></div></Alert>}
+  </>;
+}
+
 /** Follow-up: every invitation of the audience with its state and expiry; a badge only for what needs attention. */
 export function InvitationList({ state }: { state: InvitationsState }) {
   const { school } = state.context;
@@ -36,6 +51,7 @@ export function InvitationList({ state }: { state: InvitationsState }) {
           <span className="invitation-row-main"><strong>{state.labelOf(item)}</strong>
             <span>{state.team && roleNames(item.roles)}{state.team && expiryLead(item.status) && ' · '}{expiryLead(item.status) && <>{expiryLead(item.status)} <time dateTime={item.expiresAt}>{formatDateTime(item.expiresAt, school.timeZone)}</time></>}</span></span>
           <span className="invitation-row-state">{waiting ? <span className="invitation-waiting"><Clock aria-hidden="true" />{waiting}</span>
+            : state.issuedCodes[item.id] ? <Badge variant="secondary">Code à copier</Badge>
             : item.status === 'EXPIRED' || item.status === 'REVOKED' ? <Badge variant="secondary">{invitationStatusLabels[item.status]}</Badge> : <span>{invitationStatusLabels[item.status]}</span>}</span>
           <ChevronRight aria-hidden="true" />
         </button></li>;

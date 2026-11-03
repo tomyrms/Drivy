@@ -1,15 +1,59 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { addDays, civilDateIn, lessonsOfLearners, weekStart, weekWindow } from '../../agenda-model';
 import { useCommandSnapshot } from '../../command-store';
 import { activeInstructors } from '../../invitation-model';
 import { learnerSchema, lessonSchema, memberSchema, readAll, readSchool } from '../../school-api';
 import { agendaSearchQuery } from '../../console-filter-model';
 import { agendaDays, agendaReadStatus } from '../../console/agenda-projection';
-import { courseSeriesListSchema } from '../../console/course-model';
-import { useConsole, useLoad } from '../../console/context';
+import type { LessonIntention } from '../../console/agenda-intentions';
+import { courseSeriesListSchema, type CourseSeries } from '../../console/course-model';
+import { PeriodReads, type PeriodSelection } from '../../console/period-cache';
+import type { ScopedReadCache } from '../../console/load-model';
+import { readError, useConsole, useLoad, type Loaded } from '../../console/context';
 import { useListState } from '../../console/list-state';
 import { distinctLabel, homonymReferences } from '../../person-reference';
 import { useCanManageCourses, useCourseCatalogue } from '../courses/course-catalogue';
+import { refusalNeedsReread, type LessonRefusal, type LessonRestored } from './lesson-intentions-model';
+import { useLessonIntentions } from './use-lesson-intentions';
+
+/**
+ * Une lecture d'agenda bornée par période (#107/#108) : une période déjà lue reste à l'écran pendant sa relecture, une
+ * période jamais lue est honnêtement en chargement, et seule la réponse de la dernière lecture de la clé affichée est
+ * appliquée. La mémoire est recréée avec la portée (compte, école, rattachement, droits, époque) : tout est purgé.
+ */
+function usePeriodRead<T>(options: {
+  resource: 'lessons' | 'courses'; scope: string; schoolId: string; accessEpoch: number;
+  selection: PeriodSelection; revision: number; load: (selection: PeriodSelection) => Promise<T>;
+  store: ScopedReadCache | undefined;
+}): Loaded<T> {
+  const { resource, scope, schoolId, accessEpoch, revision, selection, store } = options;
+  const { period, instructor } = selection;
+  const loader = useRef(options.load);
+  loader.current = options.load;
+  const reads = useMemo(() => new PeriodReads<T>({ resource, schoolId, accessEpoch, store,
+    load: item => loader.current(item), describe: readError }), [resource, scope, schoolId, accessEpoch, store]);
+  // Le numéro de version force un rendu à chaque écriture de la mémoire de période.
+  useSyncExternalStore(reads.subscribe, reads.getVersion);
+  useEffect(() => { reads.show({ period, instructor }); }, [reads, period, instructor]);
+  // Une commande confirmée relit la période affichée, sans la vider : les intentions restent projetées.
+  const seenRevision = useRef(revision);
+  useEffect(() => {
+    if (seenRevision.current === revision) return;
+    seenRevision.current = revision;
+    reads.refresh({ period, instructor });
+  }, [reads, revision, period, instructor]);
+  const entry = reads.entry(selection);
+  // Préchargement borné : la période voisine, et seulement une fois celle-ci affichée à l'écran.
+  useEffect(() => { if (entry?.status === 'ready') reads.prefetchNeighbours({ period, instructor }); },
+    [reads, entry?.status, period, instructor]);
+  return {
+    status: entry?.status ?? 'loading', data: entry?.data, error: entry?.error ?? null,
+    ...(entry?.needsLogin ? { needsLogin: true } : {}),
+    reload: () => reads.reload({ period, instructor }),
+    refresh: () => reads.refresh({ period, instructor }),
+    ...(entry?.readAt !== undefined ? { readAt: entry.readAt } : {}),
+  };
+}
 
 /** One read projection shared by both layouts. Selection contains identifiers only. */
 export function useAgenda() {
@@ -34,23 +78,36 @@ export function useAgenda() {
   const directory = useLoad(async () => {
     const [members, learners] = await Promise.all([readAll(schoolId, 'members', memberSchema), readAll(schoolId, 'learners', learnerSchema, { status: 'ALL' })]);
     return { members: members.items, learners: learners.items, truncated: members.truncated || learners.truncated };
-  }, [schoolId, revision]);
-  const lessons = useLoad(async () => {
-    if (!bounds) throw new Error('Période invalide.');
-    return readAll(schoolId, 'lessons', lessonSchema, { from: bounds.from, to: bounds.to, ...(instructor ? { instructorMembershipId: instructor } : {}) });
-  }, [schoolId, revision, bounds?.from, bounds?.to, instructor], `${schoolId}/${monday}/${instructor}`);
-  const courses = useLoad(async () => {
-    if (!bounds) throw new Error('Période invalide.');
-    return (await readSchool(schoolId, 'course-series', courseSeriesListSchema, bounds)).items;
-  }, [schoolId, revision, bounds?.from, bounds?.to], `${schoolId}/${monday}`);
+  }, [schoolId, revision], schoolId, 'agenda/directory');
+  // Clé de lecture complète : personne, rattachement, droits, époque d'accès, moniteur filtré et période. Une instance
+  // neuve est une mémoire vide : tout changement de compte, d'école, d'époque ou de droits purge les périodes retenues.
+  const accessScope = `${context.me.personId}/${schoolId}/${context.membership.membershipId}/${context.membership.accessEpoch}/${context.membership.roles.join(',')}`;
+  const readLessons = async (item: PeriodSelection) => {
+    const window = weekWindow(item.period, school.timeZone);
+    if (!window) throw new Error('Période invalide.');
+    return readAll(schoolId, 'lessons', lessonSchema, { from: window.from, to: window.to, ...(item.instructor ? { instructorMembershipId: item.instructor } : {}) });
+  };
+  const readCourses = async (item: PeriodSelection) => {
+    const window = weekWindow(item.period, school.timeZone);
+    if (!window) throw new Error('Période invalide.');
+    return (await readSchool(schoolId, 'course-series', courseSeriesListSchema, window)).items;
+  };
+  const lessons = usePeriodRead({ resource: 'lessons', scope: accessScope, schoolId, accessEpoch: context.membership.accessEpoch,
+    selection: { period: monday, instructor }, revision, load: readLessons, store: context.readCache });
+  const courses = usePeriodRead<CourseSeries[]>({ resource: 'courses', scope: accessScope, schoolId,
+    accessEpoch: context.membership.accessEpoch, selection: { period: monday, instructor: '' }, revision, load: readCourses,
+    store: context.readCache });
   // Collective courses: types, delays and instructors. A failure here never blocks the lessons.
   const catalogue = useCourseCatalogue();
   const canManageCourses = useCanManageCourses(catalogue);
   const searchQuery = agendaSearchQuery(directory, search).trim();
   const searching = Boolean(search.trim());
+  const intentState = useLessonIntentions(lessons.readAt);
+  const [refusals, setRefusals] = useState<LessonRefusal[]>([]);
+  const [restored, setRestored] = useState<LessonRestored | null>(null);
   const events = useMemo(() => bounds ? agendaDays(lessonsOfLearners(lessons.data?.items ?? [], directory.data?.learners ?? [], searchQuery), courses.data ?? [], {
-    ...bounds, timeZone: school.timeZone, instructor, includeCourses: !searching,
-  }) : [], [lessons.data, directory.data, courses.data, searchQuery, searching, bounds?.from, bounds?.to, school.timeZone, instructor]);
+    ...bounds, timeZone: school.timeZone, instructor, includeCourses: !searching, intentions: intentState.intentions,
+  }) : [], [lessons.data, directory.data, courses.data, searchQuery, searching, bounds?.from, bounds?.to, school.timeZone, instructor, intentState.intentions]);
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(monday, index);
     return { day: date, items: events.find(item => item.day === date)?.items ?? [] };
@@ -116,7 +173,25 @@ export function useAgenda() {
       (document.getElementById(returnPosition.focus) ?? document.getElementById('portal-agenda-title'))?.focus({ preventScroll: true }); window.scrollTo({ top: returnPosition.top });
     });
   };
+  /** Une demande conservée par le magasin : la projection la montre, le formulaire a été rendu à la consultation. */
+  const queueLesson = (intention: LessonIntention) => { intentState.add(intention); setRestored(null); };
+  /** Un refus ne touche que son intention : les autres rendez-vous et la sélection restent ; une version périmée se relit. */
+  const refuseLesson = (refusal: LessonRefusal) => {
+    setRefusals(list => [...list, refusal]);
+    if (refusalNeedsReread(refusal.outcome)) refresh();
+  };
+  /** Rouvre le formulaire avec la saisie refusée et sa raison, sur la leçon concernée (`null` : une création). */
+  const resume = (refusal: LessonRefusal) => {
+    setRefusals(list => list.filter(item => item !== refusal));
+    // Une annulation refusée rouvre sa propre confirmation : elle ne passe pas par ce bandeau.
+    if (refusal.intention.kind === 'lesson-cancel') return;
+    const lessonId = refusal.intention.kind === 'lesson-create' ? null : refusal.intention.lessonId;
+    setRestored({ lessonId, draft: refusal.intention.draft, outcome: refusal.outcome });
+    openLesson(lessonId);
+  };
+  const dismissRefusal = (refusal: LessonRefusal) => setRefusals(list => list.filter(item => item !== refusal));
   return { context, now, monday, day, days, search, setSearch, instructor, chooseInstructor, instructorOptions, presentation, setPresentation,
     compact, filtersOpen, setFiltersOpen, directory, lessons, courses, partial, freshness, emptyConfirmed, searching, learnerName, memberName,
-    refresh, chooseDay, openLesson, openCourse, openNewCourse, showCourse, close, selection, catalogue, canManageCourses };
+    refresh, chooseDay, openLesson, openCourse, openNewCourse, showCourse, close, selection, catalogue, canManageCourses,
+    intentions: intentState.intentions, refusals, restored, queueLesson, refuseLesson, resume, dismissRefusal, clearRestored: () => setRestored(null) };
 }

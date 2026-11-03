@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCommand, matchesSearch } from '../../command-core';
-import { useCommandSnapshot } from '../../command-store';
+import { matchesSearch } from '../../command-core';
+import { catalogueReads } from '../../command-families';
+import { useCommandRevision } from '../../command-store';
 import { formationListSchema, proposalsSchema, readFormationSheet, readReference, textProposalsLite, type Programme } from '../../formation-api';
 import { programmeUpdate } from '../../formation-programme-update';
 import { readSchool } from '../../school-api';
-import { useConsole, useLoad, useUnsavedChanges } from '../../console/context';
+import { useConsole, useLoad, useUnsavedChanges, type Outcome } from '../../console/context';
 import { useListState } from '../../console/list-state';
-import { changedCodes, unchangedCodes, type CatalogueCommand } from './catalogue-command';
+import { changedCodes } from './catalogue-command';
+import { formationTag, projectProgramme, type ProgrammeSection } from './formation-projection';
+import type { ProgrammeLane, ProgrammeRefusal } from './formation-commands';
 import { referenceDestination } from './sheet-routing';
 import type { SectionKey } from '../../console/sections';
 
 /** Liste des permis préparés, avec recherche gardée en mémoire pour la session. */
 export function useCatalogueList() {
   const { schoolId } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   const loaded = useLoad(() => readSchool(schoolId, 'formations', formationListSchema), [schoolId, revision]);
   const [search, setSearch] = useListState('catalogue/search', '');
   const categories = useMemo(() => (loaded.data?.categories ?? []).filter(item => matchesSearch([`Permis ${item.categoryCode}`, item.categoryCode], search)), [loaded.data, search]);
@@ -23,7 +26,7 @@ export function useCatalogueList() {
 /** Fiche d'un permis ; une fiche d'un autre permis n'est jamais affichée (contrôle dans readFormationSheet). */
 export function useFormationSheet(category: string) {
   const { schoolId, routeQuery = {} } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   const loaded = useLoad(() => readFormationSheet(schoolId, category), [schoolId, category, revision], `${schoolId}/${category}`);
   const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsLite), [schoolId]);
   const programmes = loaded.data?.programmes ?? [];
@@ -38,7 +41,9 @@ export function useFormationSheet(category: string) {
 
 export interface ProgrammeEditorOptions<D> {
   programme: Programme;
-  command: CatalogueCommand;
+  /** Rubrique éditée : la marque, le refus et la saisie rendue ne concernent que la demande de cette rubrique. */
+  section: ProgrammeSection;
+  commands: ProgrammeLane;
   /** Brouillon initial, construit depuis la version enregistrée. */
   initial: () => D;
   valid: (draft: D) => boolean;
@@ -46,73 +51,98 @@ export interface ProgrammeEditorOptions<D> {
   /** Seule la rubrique concernée est envoyée. */
   body: (draft: D) => Record<string, unknown>;
   success: string;
-  reload: () => void;
 }
 /** `waitingFor` : la fiche affichée au moment du conflit ; une nouvelle lecture la remplace, l'édition repart alors de la version relue. */
 interface Editing<D> { draft: D; snapshot: string; baseId: string; rebased: boolean; waitingFor: Programme | null }
 
 /**
- * Édition d'une seule rubrique d'un parcours. La version attendue (`expectedOfferingVersionId`) est celle lue à l'ouverture ;
- * si le serveur répond que la fiche a changé, la fiche est relue, la saisie est gardée et signalée comme à relire.
+ * Édition d'une seule rubrique d'un parcours sur la voie de commandes (#124). La version attendue (`expectedOfferingVersionId`) est
+ * celle lue à l'ouverture ; dès que le magasin conserve la demande, l'éditeur se libère et la rubrique dit « Enregistrement en cours ».
+ * Si le serveur répond que la fiche a changé, la fiche est relue, la saisie est gardée et rendue dans l'éditeur avec sa raison.
  */
 export function useProgrammeEditor<D>(options: ProgrammeEditorOptions<D>) {
-  const { schoolId } = useConsole();
-  const { programme, command } = options;
+  const { programme, section, commands } = options;
   const [editing, setEditing] = useState<Editing<D> | null>(null);
   const [attempted, setAttempted] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [restored, setRestored] = useState<NonNullable<Outcome> | null>(null);
   const dirty = editing !== null && JSON.stringify(editing.draft) !== editing.snapshot;
-  useUnsavedChanges(dirty && !command.busy);
+  useUnsavedChanges(dirty);
   // Après relecture, l'édition repart de la version actuelle et le dit.
   useEffect(() => {
     if (editing?.waitingFor && programme !== editing.waitingFor) setEditing({ ...editing, baseId: programme.head.id, waitingFor: null, rebased: true });
   }, [programme, editing]);
+  const tag = formationTag(programme.offeringKey);
   const valid = editing ? options.valid(editing.draft) : false;
   const changed = editing ? options.changed(editing.draft) : false;
-  const close = () => { setEditing(null); setReviewing(false); setAttempted(false); };
+  const blocked = commands.blocked(programme.offeringKey);
+  const close = () => { setEditing(null); setReviewing(false); setAttempted(false); setRestored(null); };
+  /** Refus de cette rubrique : la saisie exacte revient, rien ne repart sans une nouvelle relecture. */
+  const refusals = commands.refusals.filter(refusal => refusal.intention.offeringKey === programme.offeringKey && refusal.section === section);
+  const resume = (refusal: ProgrammeRefusal) => {
+    // La saisie vient de la même fabrique de rubrique : elle est rendue telle quelle à cet éditeur.
+    const rebased = changedCodes.has(refusal.outcome.code ?? '');
+    setEditing({ draft: refusal.draft as D, snapshot: JSON.stringify(options.initial()), baseId: programme.head.id, rebased,
+      waitingFor: rebased ? programme : null });
+    setAttempted(false); setReviewing(false); setRestored(refusal.outcome); commands.dismiss(refusal);
+  };
   return {
-    editing: editing !== null, draft: editing?.draft ?? null, rebased: editing?.rebased ?? false, dirty, valid, changed, attempted, reviewing,
-    open: () => { const draft = options.initial(); setEditing({ draft, snapshot: JSON.stringify(draft), baseId: programme.head.id, rebased: false, waitingFor: null }); setAttempted(false); command.runner.clearOutcome(); },
+    editing: editing !== null, draft: editing?.draft ?? null, rebased: editing?.rebased ?? false, dirty, valid, changed, attempted, reviewing, restored,
+    /** Ce que la rubrique montre quand l'éditeur est fermé : la version voulue, marquée, sans remplacer celle de l'école. */
+    shown: projectProgramme<D>(programme, section, commands.projected),
+    blocked, refusals, resume,
+    open: () => { const draft = options.initial(); setEditing({ draft, snapshot: JSON.stringify(draft), baseId: programme.head.id, rebased: false, waitingFor: null }); setAttempted(false); setRestored(null); commands.clearOutcome(tag); },
     update: (draft: D) => setEditing(current => current ? { ...current, draft } : current),
-    cancel: () => { if (!command.busy) close(); },
+    cancel: close,
     /** Relire : valide, puis présente les différences avant l'envoi. */
     review: () => {
       setAttempted(true);
-      if (editing && options.valid(editing.draft) && options.changed(editing.draft)) { command.runner.clearOutcome(); setReviewing(true); return true; }
+      if (editing && options.valid(editing.draft) && options.changed(editing.draft)) { commands.clearOutcome(tag); setReviewing(true); return true; }
       return false;
     },
-    closeReview: () => { if (!command.busy) setReviewing(false); },
-    confirm: async () => {
-      if (!editing || command.busy || !options.valid(editing.draft) || !options.changed(editing.draft)) return;
-      const result = await command.submit(createCommand({ schoolId, kind: 'saveFormationProgramme', path: 'formations/programmes', resourceVersion: 0,
-        body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: editing.baseId, ...options.body(editing.draft) } }), options.success, close);
-      // Résultat incertain : la relecture (modale) se ferme pour laisser accessible la vérification de la demande en attente.
-      if (result.status === 'pending') { setReviewing(false); return; }
-      if (result.status !== 'rejected') return;
-      if (changedCodes.has(result.code)) { setEditing(current => current ? { ...current, waitingFor: programme } : current); setReviewing(false); options.reload(); }
-      else if (unchangedCodes.has(result.code)) { setReviewing(false); options.reload(); }
+    closeReview: () => setReviewing(false),
+    /**
+     * Le magasin conserve la demande : l'éditeur se ferme tout de suite, rien n'est annoncé publié avant la réponse vérifiée ou le reçu.
+     * Refusée sur place (une demande de la même formation attend), la demande reste suivie : l'éditeur garde sa saisie.
+     */
+    confirm: () => {
+      if (!editing || !options.valid(editing.draft) || !options.changed(editing.draft)) return;
+      const saved = commands.save({ section, offeringKey: programme.offeringKey, draft: editing.draft, success: options.success,
+        body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: editing.baseId, ...options.body(editing.draft) } });
+      if (!saved.admitted) { setAttempted(true); return; }
+      close();
     },
   };
 }
 export type ProgrammeEditor<D> = ReturnType<typeof useProgrammeEditor<D>>;
 
-/** Mise à jour proposée à la demande : seules les clés absentes sont ajoutées, jamais une personnalisation écrasée. */
-export function useReferenceUpdate(programme: Programme, categoryCode: string, command: CatalogueCommand) {
+/**
+ * Mise à jour proposée à la demande : seules les clés absentes sont ajoutées, jamais une personnalisation écrasée. Elle passe par la
+ * voie de commandes de la fiche : le dialogue se ferme dès que le magasin conserve la demande, et un refus le rouvre avec sa raison.
+ */
+export function useReferenceUpdate(programme: Programme, categoryCode: string, commands: ProgrammeLane) {
   const { schoolId } = useConsole();
   const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState<NonNullable<Outcome> | null>(null);
   const loaded = useLoad(async () => open ? readSchool(schoolId, 'setup-draft/templates', proposalsSchema) : null, [schoolId, open]);
   const template = loaded.data?.formations.find(item => item.categoryCode === categoryCode);
   const diff = useMemo(() => template ? programmeUpdate(programme.curriculum?.competencies ?? [], template) : null, [template, programme.curriculum]);
+  const refusals = commands.refusals.filter(refusal => refusal.intention.offeringKey === programme.offeringKey && refusal.section === 'reference');
+  const shown = projectProgramme(programme, 'reference', commands.projected);
   return {
-    open, setOpen, loaded, template, diff,
-    apply: async (reload: () => void) => {
-      if (loaded.status !== 'ready' || !diff || !diff.canApply || command.busy) return;
-      const result = await command.submit(createCommand({ schoolId, kind: 'saveFormationProgramme', path: 'formations/programmes', resourceVersion: 0,
-        body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: programme.head.id, competencies: diff.competencies, source: diff.source } }),
-        'Le programme est mis à jour pour les nouvelles inscriptions.', () => setOpen(false));
-      if (result.status === 'pending') setOpen(false);
-      if (result.status === 'rejected' && (changedCodes.has(result.code) || unchangedCodes.has(result.code))) reload();
+    open, loaded, template, diff, refusals, shown, notice, blocked: commands.blocked(programme.offeringKey),
+    setOpen: (next: boolean) => { setOpen(next); setNotice(null); },
+    /** Le magasin conserve la demande : le dialogue se ferme, la rubrique dit ce qui est en cours. */
+    apply: () => {
+      if (loaded.status !== 'ready' || !diff || !diff.canApply) return;
+      const saved = commands.save({ section: 'reference', offeringKey: programme.offeringKey, draft: null,
+        success: 'Le programme est mis à jour pour les nouvelles inscriptions.',
+        body: { offeringKey: programme.offeringKey, expectedOfferingVersionId: programme.head.id, competencies: diff.competencies, source: diff.source } });
+      if (!saved.admitted) return;
+      setOpen(false);
     },
+    /** Un refus rend la raison et rouvre le dialogue : la référence proposée est recalculée depuis la fiche relue. */
+    resume: (refusal: ProgrammeRefusal) => { commands.dismiss(refusal); setNotice(refusal.outcome); setOpen(true); },
   };
 }
 

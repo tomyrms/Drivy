@@ -5,13 +5,16 @@ import { Badge } from '../../components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Field, FieldGroup, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { Skeleton } from '../../components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { addDays, civilDateIn, formatDayHeading, formatTimeRange, formatWeek, lessonPhase } from '../../agenda-model';
 import type { AgendaEvent } from '../../console/agenda-projection';
+import { agendaMarkLabels } from '../../console/agenda-intentions';
 import { PortalSelect } from '../components/portal-select';
 import { useAgenda } from './use-agenda';
 import { calendarInterval, calendarLanes } from './calendar-layout';
 import { LessonWorkspace } from './lesson-workspace';
+import { LessonRefusals } from './lesson-intentions';
 import { phaseLabels, ReadFeedback } from './presentation';
 import { AgendaAddMenu } from '../courses/course-add-menu';
 import { CoursePolicyDialog } from '../courses/course-policy-dialog';
@@ -31,7 +34,10 @@ export function AgendaPilot() {
   const { school, membership } = state.context;
   const selection = state.selection;
   if (selection && 'lesson' in selection) return <LessonWorkspace key={selection.lesson ?? 'new'} lessonId={selection.lesson ?? null} onClose={state.close} onSaved={refresh}
-    onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })} />;
+    onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })}
+    restored={state.restored} onQueued={state.queueLesson} onRefused={state.refuseLesson} onClearRestored={state.clearRestored}
+    refusals={state.refusals} onResumeRefusal={state.resume} onDismissRefusal={state.dismissRefusal}
+    moving={state.intentions.some(intention => intention.kind === 'lesson-move' && intention.lessonId === selection.lesson && intention.settledAt === undefined)} />;
   if (selection && 'course' in selection) return <CourseWorkspace key="course" courseId={selection.course ?? null} occurrenceId={selection.occurrence} catalogue={state.catalogue} onClose={state.close} onShow={state.showCourse} onChanged={refresh} />;
   const dayView = state.compact || state.presentation === 'day';
   const today = civilDateIn(school.timeZone, state.now);
@@ -44,6 +50,7 @@ export function AgendaPilot() {
   return <section className="agenda-page">
     <header className="agenda-heading"><div><span className="agenda-eyebrow">Planning de l’école</span><h1 id="portal-agenda-title" tabIndex={-1}>Agenda</h1></div>
       {canPlan && <AgendaAddMenu canCreateCourse={state.canManageCourses} onLesson={() => state.openLesson(null)} onCourse={state.openNewCourse} />}</header>
+    <LessonRefusals refusals={state.refusals} onResume={state.resume} onDismiss={state.dismissRefusal} />
     <PlanningReadinessBanner refreshKey={readinessRefresh} />
     {school.status === 'ACTIVE' && <FirstLessonActions refreshKey={readinessRefresh} />}
     <div className="agenda-toolbar"><div className="agenda-period"><div className="agenda-arrows"><Button variant="outline" size="icon" aria-label={dayView ? 'Jour précédent' : 'Semaine précédente'} onClick={() => state.chooseDay(addDays(state.day, dayView ? -1 : -7))}><ChevronLeft /></Button><Button variant="outline" size="icon" aria-label={dayView ? 'Jour suivant' : 'Semaine suivante'} onClick={() => state.chooseDay(addDays(state.day, dayView ? 1 : 7))}><ChevronRight /></Button></div><h2>{dayView ? formatDayHeading(state.day) : formatWeek(state.monday)}</h2></div>
@@ -56,11 +63,13 @@ export function AgendaPilot() {
       {(state.search || state.instructor) && <Button variant="ghost" onClick={() => { state.setSearch(''); state.chooseInstructor(''); }}>Effacer les filtres</Button>}
     </FieldGroup>}
     {!state.filtersOpen && (state.search || state.instructor) && <div className="agenda-active-filters"><Badge variant="secondary">{state.search ? `Élève : ${state.search}` : ''}{state.search && state.instructor ? ' · ' : ''}{state.instructor ? state.memberName(state.instructor) : ''}</Badge><Button variant="ghost" onClick={() => { state.setSearch(''); state.chooseInstructor(''); }}>Effacer</Button></div>}
-    <div className="agenda-notices"><ReadFeedback loaded={state.lessons} label="Lecture des leçons" /><ReadFeedback loaded={state.directory} label="Lecture de l’annuaire" /><ReadFeedback loaded={state.courses} label="Lecture des cours" />
+    <div className="agenda-notices">{state.lessons.status !== 'loading' && <ReadFeedback loaded={state.lessons} label="Lecture des leçons" stale={state.lessons.data !== undefined} />}<ReadFeedback loaded={state.directory} label="Lecture de l’annuaire" stale={state.directory.data !== undefined} /><ReadFeedback loaded={state.courses} label="Lecture des cours" stale={state.courses.data !== undefined} />
       {state.partial && <Alert><AlertTitle>Vue partielle</AlertTitle><AlertDescription>Tous les rendez-vous n’ont pas pu être lus. Les créneaux vides ne prouvent pas une disponibilité.</AlertDescription></Alert>}
       {state.searching && state.directory.status !== 'ready' && <Alert><AlertTitle>Recherche en attente</AlertTitle><AlertDescription>Les leçons restent affichées jusqu’à la lecture de l’annuaire.</AlertDescription></Alert>}
     </div>
-    {dayView ? <><nav className="agenda-day-strip" aria-label="Jours de la semaine">{state.days.map(day => <Button variant="ghost" key={day.day} data-today={day.day === today} aria-current={day.day === state.day ? 'date' : undefined} onClick={() => state.chooseDay(day.day)}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong><span className="agenda-day-dot" data-has-events={day.items.length > 0} /></Button>)}</nav>
+    {state.lessons.data === undefined
+      ? state.lessons.status === 'loading' ? <PeriodLoading /> : null
+      : dayView ? <><nav className="agenda-day-strip" aria-label="Jours de la semaine">{state.days.map(day => <Button variant="ghost" key={day.day} data-today={day.day === today} aria-current={day.day === state.day ? 'date' : undefined} onClick={() => state.chooseDay(day.day)}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong><span className="agenda-day-dot" data-has-events={day.items.length > 0} /></Button>)}</nav>
       <div className="agenda-day-list">{events.map(event => <EventEntry key={event.key} event={event} state={state} />)}{events.length === 0 && state.emptyConfirmed && <div className="agenda-empty"><CalendarDays aria-hidden="true" /><h3>{state.searching ? 'Aucune leçon pour cet élève' : 'Aucun rendez-vous ce jour'}</h3>{canPlan && !state.searching && <Button variant="outline" onClick={() => state.openLesson(null)}>Planifier une leçon</Button>}</div>}</div>
     </> : <div className="agenda-week"><div className="agenda-week-head"><span className="agenda-time-zone">{school.timeZone.split('/').at(-1)}</span>{state.days.map(day => <Button key={day.day} variant="ghost" onClick={() => { state.chooseDay(day.day); state.setPresentation('day'); }} data-today={day.day === today}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong></Button>)}</div>
       <div className="agenda-grid-scroll" id="agenda-grid-scroll"><div className="agenda-time-grid" style={{ height: `${(endHour - startHour) * 60}px` }}><div className="agenda-hour-rail">{Array.from({ length: endHour - startHour }, (_, index) => <span key={index} style={{ top: index * 60 }}>{String((startHour + index) % 24).padStart(2, '0')}:00</span>)}</div>
@@ -70,6 +79,11 @@ export function AgendaPilot() {
     {state.canManageCourses && state.catalogue.data && <CoursePolicyDialog open={policyOpen} catalogue={state.catalogue.data} onClose={() => setPolicyOpen(false)} onSaved={state.catalogue.reload} onReread={state.catalogue.reload} />}
     <footer className="agenda-read-time">{state.freshness.complete && state.freshness.readAt ? `Actualisé à ${new Intl.DateTimeFormat('fr-CH', { timeZone: school.timeZone, timeStyle: 'short' }).format(state.freshness.readAt)}` : 'La lecture complète de l’agenda n’est pas confirmée.'}<span>{school.timeZone}</span></footer>
   </section>;
+}
+
+/** Une période jamais lue : squelette honnête, jamais une grille vide qui se lirait comme « rien de prévu ». */
+function PeriodLoading() {
+  return <div className="agenda-period-loading" role="status" aria-label="Lecture de la période"><Skeleton className="h-10 w-full" /><Skeleton className="h-72 w-full" /></div>;
 }
 
 function EventEntry({ event, state }: { event: AgendaEvent; state: AgendaState }) {
@@ -83,9 +97,17 @@ function EventEntry({ event, state }: { event: AgendaEvent; state: AgendaState }
   // One state label per appointment: a lesson's phase, or a course that is not simply published. The phase is also read aloud.
   const stateLabel = isLesson ? phase && phase !== 'planned' ? phaseLabels[phase] : null
     : event.series.status === 'CANCELLED' ? 'Annulé' : event.series.status === 'DRAFT' ? 'Brouillon' : event.series.status === 'CLOSED' ? 'Clos' : null;
+  // Une intention de planification se dit en toutes lettres, jamais par la seule couleur.
+  const mark = event.kind === 'lesson' && event.mark ? agendaMarkLabels[event.mark] : null;
   const warning = isLesson && event.lesson.permitWarning === true;
-  return <button type="button" id={id} className="agenda-event" data-kind={event.kind} data-phase={phase} data-has-state={stateLabel ? true : undefined} onClick={() => isLesson ? state.openLesson(event.lesson.id) : state.openCourse(event.series.id, event.occurrence.id)} aria-label={[title, formatTimeRange(event.startsAt, end, state.context.school.timeZone), instructor, stateLabel, warning ? 'Permis à vérifier' : null].filter(Boolean).join(', ')}>
+  const content = <>
     <span className="agenda-event-clock"><Clock3 aria-hidden="true" />{formatTimeRange(event.startsAt, end, state.context.school.timeZone)}</span><strong>{title}</strong><span className="agenda-event-instructor">{!isLesson && <Users aria-hidden="true" />}{instructor}</span>{place && <span className="agenda-event-place"><MapPin aria-hidden="true" />{place}</span>}
-    {stateLabel && <span className="agenda-event-state">{stateLabel}</span>}{warning && <span className="agenda-event-warning"><TriangleAlert aria-hidden="true" /><span>Permis à vérifier</span></span>}
+    {stateLabel && <span className="agenda-event-state">{stateLabel}</span>}{mark && <span className="agenda-event-mark">{mark}</span>}{warning && <span className="agenda-event-warning"><TriangleAlert aria-hidden="true" /><span>Permis à vérifier</span></span>}
+  </>;
+  const label = [title, formatTimeRange(event.startsAt, end, state.context.school.timeZone), instructor, stateLabel, mark, warning ? 'Permis à vérifier' : null].filter(Boolean).join(', ');
+  // Une création ou une proposition n'a pas d'identité de l'école : rien à ouvrir, rien à annuler.
+  if (isLesson && event.provisional) return <div id={id} className="agenda-event" data-kind={event.kind} data-mark={event.mark} data-provisional="true" role="group" aria-label={label}>{content}</div>;
+  return <button type="button" id={id} className="agenda-event" data-kind={event.kind} data-phase={phase} data-mark={event.kind === 'lesson' ? event.mark : undefined} data-has-state={stateLabel ? true : undefined} onClick={() => isLesson ? state.openLesson(event.lesson.id) : state.openCourse(event.series.id, event.occurrence.id)} aria-label={label}>
+    {content}
   </button>;
 }

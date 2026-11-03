@@ -35,6 +35,18 @@ struct SchoolTodayView: View {
     @State private var cardHeight: CGFloat = 0
     @State private var location = SchoolTodayLocationPermission()
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
+    /// Demandes de planification conservées dans le coffre de ce compte, de cette école et de cette époque d’accès
+    /// (#108) : un repère en lecture seule, jamais une leçon confirmée.
+    @State private var pendingMarkers: [SchoolPendingPlanningMarker] = []
+    /// Fins de leçon et absences encore conservées dans le coffre (#114) : un repère par leçon, jamais une leçon
+    /// terminée. Rien n’est envoyé depuis la ligne, la fiche de la leçon porte Vérifier / Réessayer.
+    @State private var closureMarkers: [SchoolPendingClosureMarker] = []
+    /// Refus définitifs reçus alors que la fiche était fermée : mémoire de l’app seulement, effacés à sa réouverture,
+    /// au changement de portée ou dès qu’une relecture montre la leçon terminée.
+    @State private var refusedClosures: [SchoolRefusedClosureMarker] = []
+    /// Feuille de planification ouverte sur une demande conservée : elle porte déjà Vérifier / Réessayer / Abandonner.
+    @State private var planningModel: SchoolPlanningWorkspace?
+    @State private var planningCancels = false
 
     /// « Commencer la leçon » direct en cours (accord lu, puis rideau) : un second appui ne lance rien.
     @State private var startingPlanned = false
@@ -127,7 +139,7 @@ struct SchoolTodayView: View {
             if floatsTitle { DrivyFloatingTitleBar(title: "Aujourd’hui", schoolName: schoolName, chooseSchool: chooseSchool) }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { location.refresh(); Task { await load() } }
+            if phase == .active { location.refresh(); reloadPendingRequests(); Task { await load() } }
         }
         // Les leçons à terminer que cet écran lit déjà (le jour et le rappel des jours passés) sont l’action
         // de l’onglet : aucune lecture de plus, et le point part dès que la liste se vide. Une leçon commencée
@@ -143,19 +155,31 @@ struct SchoolTodayView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
+            reloadPendingRequests()
             if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }
             if opened == nil { Task { await load() } }
         }
+        .task(id: scopeKey) { reloadPendingRequests() }
         .onChange(of: scopeKey) { _, _ in
             opened = nil; presentsStartNow = false; courseDetail = nil; courseRead.reset()
+            // Purge de portée : aucun repère de l’ancien compte, de l’ancienne école ou de l’ancienne époque ne reste.
+            pendingMarkers = []; closureMarkers = []; refusedClosures = []
+            SchoolRefusedClosureMemory.forgetAll()
+            planningModel?.invalidate(); planningModel = nil
+            reloadPendingRequests()
         }
         .sheet(item: $courseDetail, onDismiss: { Task { await load() } }) { model in
             SchoolCourseDetailView(model: model, timeZone: schoolTimeZone)
         }
         .modifier(SchoolStartNowSheets(presentation: startNow, workspace: workspace, agendaClient: agendaClient))
+        .sheet(item: $planningModel, onDismiss: { Task { await refreshAfterPlanning() } }) { model in
+            SchoolPlanningView(model: model, cancelling: planningCancels)
+        }
         .sheet(item: $opened, onDismiss: {
             // Une demande abandonnée ou vérifiée depuis la fiche ne reste pas affichée par l'enregistreur du trajet.
             captureController?.liveObservations?.refreshPending()
+            // Un refus de fin reçu pendant la fermeture est déjà en mémoire : la ligne le reprend sans attendre.
+            reloadPendingRequests()
             Task { await load() }
         }) { item in
             if let agendaClient {
@@ -270,6 +294,7 @@ struct SchoolTodayView: View {
         let featured = events.first
         let courseError = courseRead.error(in: courseScope(now), timeZone: schoolTimeZone)
         let complete = loadedKey == dayKey(now) && error == nil && courseRead.isComplete(in: courseScope(now))
+        let provisional = provisionalMarkers(now: now)
         DrivyMapDock(floating: floating) {
             if case .lesson(let lesson)? = featured {
                 // Une leçon commencée se lit « En cours » sur sa ligne, pas seulement dans le libellé du bouton.
@@ -308,6 +333,11 @@ struct SchoolTodayView: View {
             if let error { SchoolErrorNotice(message: error, retry: { Task { await load() } }) }
             if let courseError { SchoolErrorNotice(message: courseError, retry: { Task { await loadCourses() } }) }
             followingAppointments(Array(events.dropFirst()), now: now)
+            // Une création conservée n’est pas un rendez-vous : ligne provisoire à part, sous les engagements du jour.
+            if !provisional.isEmpty {
+                Divider().overlay(DrivyTheme.border)
+                ForEach(provisional) { marker in pendingRow(marker) }
+            }
         }
     }
 
@@ -348,20 +378,140 @@ struct SchoolTodayView: View {
     private func openCourse(_ item: SchoolAgendaCourseItem) {
         guard let agendaClient, let membership = workspace.membership, instructs,
               item.series.schoolId == membership.schoolId else { return }
-        courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: agendaClient.courseClient,
-            series: item.series, learners: workspace.learners, selectedOccurrenceID: item.occurrence.id)
+        let schoolID = membership.schoolId
+        let reader = agendaClient.reader
+        courseDetail = SchoolCourseDetailWorkspace(schoolID: schoolID, client: agendaClient.courseClient,
+            series: item.series, learners: workspace.learners,
+            learnerPages: { cursor in try await reader.learners(schoolID: schoolID, query: "", cursor: cursor) },
+            selectedOccurrenceID: item.occurrence.id)
     }
 
     /// Même lecture compacte que l’agenda : horaire, élève, lieu et éventuel état inhabituel.
-    /// La fiche de leçon reste accessible depuis toute la ligne.
+    /// Une demande conservée qui vise cette leçon passe devant son état, et son geste ouvre la demande.
     private func lessonSummary(_ lesson: SchoolLesson, note: DrivyRowNote?, featured: Bool = false) -> some View {
-        Button { opened = OpenedLesson(lesson: lesson, completing: false) } label: {
+        let marker = pendingMarker(forLesson: lesson.id)
+        return Button {
+            if let marker { openPendingPlanning(marker, lesson: lesson) }
+            else { opened = OpenedLesson(lesson: lesson, completing: false) }
+        } label: {
             DrivyLessonRow(start: startTime(lesson), end: endTime(lesson), title: name(lesson),
-                details: (unfinished.contains { $0.id == lesson.id } ? [day(lesson)] : []) + [lesson.meetingPoint], note: note)
+                details: (unfinished.contains { $0.id == lesson.id } ? [day(lesson)] : []) + [lesson.meetingPoint],
+                note: rowNote(forLesson: lesson.id, beside: note))
         }
         .buttonStyle(DrivyRowButtonStyle())
         .accessibilityIdentifier(featured ? "today-focus-lesson" : "today-lesson-\(lesson.id.uuidString)")
-        .accessibilityHint("Ouvre la leçon")
+        .accessibilityHint(marker == nil ? "Ouvre la leçon" : "Ouvre la demande conservée")
+    }
+
+    /// Repère de la demande conservée qui vise cette leçon : un déplacement ou une annulation la garde à sa place.
+    private func pendingMarker(forLesson lessonID: UUID) -> SchoolPendingPlanningMarker? {
+        pendingMarkers.first { $0.concerns(lessonID) }
+    }
+
+    /// Le repère passe devant l’état habituel de la leçon (« Déplacement en cours · En attente ») : la demande est ce
+    /// qui attend une décision, l’état du rendez-vous reste lisible.
+    private func planningNote(_ marker: SchoolPendingPlanningMarker?, beside note: DrivyRowNote?) -> DrivyRowNote? {
+        guard let marker else { return note }
+        let text = note.map { "\(marker.title) · \($0.text)" } ?? marker.title
+        return DrivyRowNote(text: text, tone: marker.state == .inProgress ? .accent : .neutral)
+    }
+
+    /// Repère de fin ou d’absence de cette leçon : la demande conservée d’abord, sinon le refus mémorisé.
+    /// Il ne déclare jamais la leçon terminée : son mot dit ce que l’app a demandé, jamais ce que l’école a prouvé.
+    private func closureMarker(forLesson lessonID: UUID) -> (title: String, tone: DrivyTone)? {
+        if let pending = closureMarkers.first(where: { $0.lessonID == lessonID }) {
+            return (pending.title, pending.state == .inProgress ? .accent : .neutral)
+        }
+        if let refused = refusedClosures.first(where: { $0.lessonID == lessonID }) {
+            // Un refus se lit dans l’encre principale, comme une demande en cours : il ne passe pas pour une note
+            // secondaire, et son mot porte l’état sans dépendre de la couleur.
+            return (refused.title, .accent)
+        }
+        return nil
+    }
+
+    /// Un seul repère par ligne. Celui de planification garde la priorité : il porte le geste de la ligne (rouvrir la
+    /// demande conservée) et reste vérifiable depuis sa feuille ; le repère de fin n’apparaît qu’en son absence, et se
+    /// vérifie en ouvrant la fiche de la leçon. Aucun des deux ne déclare la leçon terminée.
+    private func rowNote(forLesson lessonID: UUID, beside note: DrivyRowNote?) -> DrivyRowNote? {
+        if let planning = pendingMarker(forLesson: lessonID) { return planningNote(planning, beside: note) }
+        return closureNote(forLesson: lessonID, beside: note)
+    }
+
+    /// Le repère de fin passe devant l’état habituel (« Fin en cours · En attente »), comme celui de planification.
+    private func closureNote(forLesson lessonID: UUID, beside note: DrivyRowNote?) -> DrivyRowNote? {
+        guard let marker = closureMarker(forLesson: lessonID) else { return note }
+        let text = note.map { "\(marker.title) · \($0.text)" } ?? marker.title
+        return DrivyRowNote(text: text, tone: marker.tone)
+    }
+
+    /// Créations conservées du jour : elles n’ont pas encore de leçon, donc aucune ligne confirmée ne les porte.
+    private func provisionalMarkers(now: Date) -> [SchoolPendingPlanningMarker] {
+        pendingMarkers.filter { marker in
+            guard marker.kind == .creation, let start = marker.requestedStart else { return false }
+            return schoolCalendar.isDate(start, inSameDayAs: now)
+        }
+    }
+
+    /// Ligne provisoire d’une création : ni nom d’élève, ni état de leçon, ni départ possible. Le seul geste ouvre la
+    /// demande conservée, là où Vérifier / Réessayer / Abandonner existent déjà. Aucun envoi ne part d’ici.
+    private func pendingRow(_ marker: SchoolPendingPlanningMarker) -> some View {
+        let moment = marker.requestedStart.map { SchoolDateFormat.time($0, zone: schoolTimeZone) }
+        return Button { openPendingPlanning(marker) } label: {
+            DrivyLessonRow(start: moment ?? "—", title: marker.title)
+        }
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityLabel(moment.map { "\(marker.title), \($0)" } ?? marker.title)
+        .accessibilityHint("Ouvre la demande conservée")
+        .accessibilityIdentifier("today-pending-\(marker.id.uuidString)")
+    }
+
+    /// Ouvre la feuille de planification sur la demande : la lecture retrouve la commande du coffre, avec ses gestes.
+    /// Le repère ne renvoie et ne résout jamais rien de lui-même.
+    private func openPendingPlanning(_ marker: SchoolPendingPlanningMarker, lesson: SchoolLesson? = nil) {
+        guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return }
+        let scope = agendaClient.scope(person: person, membership: membership)
+        guard let model = SchoolPlanningWorkspace.opening(marker, scope: scope,
+            client: agendaClient.planningClient, lesson: lesson) else { return }
+        planningCancels = marker.kind == .cancellation
+        planningModel = model
+    }
+
+    /// Portée des demandes conservées de cet écran : le compte, l’école et l’époque d’accès affichés.
+    private var commandScope: SchoolCommandScope? {
+        guard let agendaClient, let person = workspace.person, let membership = workspace.membership else { return nil }
+        return agendaClient.scope(person: person, membership: membership)
+    }
+
+    /// Relit les demandes conservées du coffre pour ce compte, cette école et cette époque d’accès : planification,
+    /// puis fin de leçon ou absence, et les refus gardés en mémoire. Rien n’est écrit, renvoyé ni résolu ici.
+    @MainActor private func reloadPendingRequests() {
+        guard let scope = commandScope else {
+            pendingMarkers = []; closureMarkers = []; refusedClosures = []; return
+        }
+        let outbox = EncryptedSchoolCommandOutbox()
+        guard let commands = try? outbox.pendingCommands(for: scope) else {
+            pendingMarkers = []; closureMarkers = []; refusedClosures = []; return
+        }
+        pendingMarkers = SchoolPendingPlanningProjection.markers(from: commands, scope: scope)
+        closureMarkers = SchoolPendingClosureProjection.markers(from: commands, scope: scope)
+        refusedClosures = SchoolRefusedClosureMemory.markers(for: scope)
+    }
+
+    /// Une relecture qui montre la leçon terminée, absente ou annulée prouve que le refus n’a plus d’objet.
+    @MainActor private func forgetSettledRefusals(_ lessons: [SchoolLesson]) {
+        let settled = Set(lessons.filter { $0.status != "PLANNED" }.map(\.id))
+        guard !settled.isEmpty, !refusedClosures.isEmpty else { return }
+        for marker in refusedClosures where settled.contains(marker.lessonID) {
+            SchoolRefusedClosureMemory.forget(lessonID: marker.lessonID, scope: marker.scope)
+        }
+        refusedClosures.removeAll { settled.contains($0.lessonID) }
+    }
+
+    /// Fermeture de la feuille : la demande a pu être vérifiée, renvoyée ou abandonnée.
+    @MainActor private func refreshAfterPlanning() async {
+        reloadPendingRequests()
+        await load()
     }
 
     /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.
@@ -504,6 +654,8 @@ struct SchoolTodayView: View {
             var unique: [UUID: SchoolLesson] = [:]
             for lesson in all { unique[lesson.id] = lesson }
             lessons = Array(unique.values); loadedKey = key
+            // Une leçon relue avec son résultat prouve que le refus mémorisé de sa fin n’a plus d’objet.
+            forgetSettledRefusals(lessons)
             SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
             // Lecture discrète : les pages les plus récentes des leçons passées du moniteur suffisent à retrouver celles
             // restées sans fin (cinq pages au plus, soit 500 leçons). Une panne garde le rappel déjà affiché et ne dit
@@ -522,6 +674,8 @@ struct SchoolTodayView: View {
                 historyCursor = next
             }
             unfinished = SchoolTodayPresentation.unfinishedLessons(earlier, before: dayStart)
+            // Une leçon passée relue terminée lève aussi son refus mémorisé.
+            forgetSettledRefusals(earlier)
             SchoolTodayMemory.remember(key: key, lessons: lessons, unfinished: unfinished)
         } catch {
             guard key == dayKey(Date()), requestID == request, !Task.isCancelled, !(error is CancellationError) else { return }

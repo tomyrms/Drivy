@@ -23,6 +23,10 @@ struct SchoolAgendaView: View {
     @State private var freshness = SchoolAgendaFreshness()
     @State private var selectedLesson: SchoolLesson?
     @State private var planningModel: SchoolPlanningWorkspace?
+    /// Demandes de planification conservées dans le coffre (#108) : repères en lecture seule sur la période.
+    @State private var pendingMarkers: [SchoolPendingPlanningMarker] = []
+    /// La feuille ouverte sur une demande d’annulation montre les champs d’annulation, jamais ceux d’un déplacement.
+    @State private var planningCancels = false
     /// Résultat durable de la feuille de planification, ouvert seulement après la fermeture de celle-ci.
     @State private var planningReturn = SchoolAgendaPlanningReturn()
     /// Leçons de la fenêtre lue (semaine ou grille du mois) rangées par jour, calculées une fois par lecture.
@@ -141,8 +145,9 @@ struct SchoolAgendaView: View {
         // ouverte n’est jamais refermée par elle. Un changement de compte ou de filtre repart de zéro (`loaded`).
         .task(id: currentScope) { await loadAgenda(keepingCurrent: true, navigating: true) }
         .task(id: currentScope) { await loadCourses() }
-        .task(id: identityScope) { await loadCourseCatalogue() }
+        .task(id: identityScope) { reloadPendingPlanning(); await loadCourseCatalogue() }
         .onReceive(NotificationCenter.default.publisher(for: .drivyLessonsDidChange)) { notification in
+            reloadPendingPlanning()
             if let change = notification.object as? SchoolLessonChange, change.schoolID != workspace.membership?.schoolId { return }
             // La fermeture de la feuille relira déjà l’agenda ; ne pas ajouter de requête concurrente.
             if selectedLesson == nil && planningModel == nil { Task { await loadAgenda(keepingCurrent: true) } }
@@ -159,9 +164,9 @@ struct SchoolAgendaView: View {
         .sheet(item: $planningModel, onDismiss: {
             // La fiche confirmée s'ouvre, et l'agenda derrière elle est relu pour afficher la nouvelle leçon.
             if let lesson = planningReturn.takeConfirmedLesson() { selectedLesson = lesson }
-            Task { await loadAgenda(keepingCurrent: true) }
+            Task { await refreshAfterPlanning() }
         }) { model in
-            SchoolPlanningView(model: model, onConfirmedLesson: { planningReturn.receive($0) })
+            SchoolPlanningView(model: model, cancelling: planningCancels, onConfirmedLesson: { planningReturn.receive($0) })
         }
         .sheet(item: $courseEditor, onDismiss: { Task { await loadCourses() } }) { model in
             SchoolCourseEditorView(model: model)
@@ -175,6 +180,9 @@ struct SchoolAgendaView: View {
             planningReturn = SchoolAgendaPlanningReturn(); freshness.reset()
             instructorSelection = "default"; searchText = ""; catalogueError = nil
             nextSearch.cancel(clear: true)
+            // Purge de portée : aucun repère de l’ancien compte, de l’ancienne école ou de l’ancienne époque ne reste.
+            pendingMarkers = []; planningCancels = false
+            reloadPendingPlanning()
         }
         .onChange(of: currentScope) { _, _ in nextSearch.cancel(clear: true) }
         .onChange(of: selectedDate) { _, _ in nextSearch.cancel(clear: true) }
@@ -182,7 +190,10 @@ struct SchoolAgendaView: View {
         // Retour au premier plan : la période se relit sans s’effacer, comme Aujourd’hui. Une feuille ouverte
         // relira déjà l’agenda à sa fermeture.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && selectedLesson == nil && planningModel == nil { Task { await refreshSources() } }
+            if phase == .active {
+                reloadPendingPlanning()
+                if selectedLesson == nil && planningModel == nil { Task { await refreshSources() } }
+            }
         }
     }
 
@@ -357,23 +368,26 @@ struct SchoolAgendaView: View {
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .accessibilityIdentifier("agenda-courses-loading")
             }
-            if isComplete(selectedDate) && dailyEvents.isEmpty {
+            if isComplete(selectedDate) && dailyEvents.isEmpty && selectedDayPendingRows.isEmpty {
                 // Qui planifie a déjà « Planifier une leçon » dans l’en-tête du jour : pas de second bouton identique.
                 DrivyEmptyState(title: "Aucun rendez-vous ce jour", message: "",
                     symbol: "calendar", actionTitle: emptyPresentation.nextDayActionTitle) {
                     if let next = calendar.date(byAdding: .day, value: 1, to: selectedDate) { select(next) }
                 }
                 nextAppointment
-            } else if !dailyEvents.isEmpty {
+            } else if !dailyEvents.isEmpty || !selectedDayPendingRows.isEmpty {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(dailyEvents.enumerated()), id: \.element.id) { index, event in
                         switch event {
                         case .lesson(let lesson):
-                            Button { selectedLesson = lesson } label: {
+                            Button {
+                                if let marker = pendingMarker(forLesson: lesson.id) { openPendingPlanning(marker, lesson: lesson) }
+                                else { selectedLesson = lesson }
+                            } label: {
                                 lessonRow(lesson, position: .at(index, count: dailyEvents.count))
                             }
                             .buttonStyle(DrivyRowButtonStyle())
-                            .accessibilityHint("Ouvre la leçon")
+                            .accessibilityHint(pendingMarker(forLesson: lesson.id) == nil ? "Ouvre la leçon" : "Ouvre la demande conservée")
                             .accessibilityIdentifier("agenda-event-lesson-\(lesson.id.uuidString)")
                         case .course(let item):
                             Button { open(item.series, occurrenceID: item.occurrence.id) } label: {
@@ -385,6 +399,8 @@ struct SchoolAgendaView: View {
                             .accessibilityIdentifier("agenda-course-occurrence")
                         }
                     }
+                    // Demandes conservées sans leçon affichée : une ligne provisoire, jamais une leçon confirmée.
+                    ForEach(selectedDayPendingRows) { marker in pendingRow(marker) }
                 }
             }
         }
@@ -554,8 +570,14 @@ struct SchoolAgendaView: View {
                 persistence: coursePersistence)
         } else {
             courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: client.courseClient, series: series,
-                learners: workspace.learners, selectedOccurrenceID: occurrenceID, persistence: coursePersistence)
+                learners: workspace.learners, learnerPages: learnerPages(schoolID: membership.schoolId),
+                selectedOccurrenceID: occurrenceID, persistence: coursePersistence)
         }
+    }
+    /// L’annuaire entier se lit à l’ouverture du sélecteur d’élèves : la liste de l’onglet Élèves n’en est qu’une page.
+    private func learnerPages(schoolID: UUID) -> SchoolCourseLearnerPageReader {
+        let reader = client.reader
+        return { cursor in try await reader.learners(schoolID: schoolID, query: "", cursor: cursor) }
     }
     /// Coffre des gestes de la feuille des participants, pour ce compte dans cette école (#128 à #130).
     private var coursePersistence: SchoolCourseIntentPersistence? {
@@ -670,11 +692,89 @@ struct SchoolAgendaView: View {
     /// Same row anatomy as the training dossier and the report lists: the time column already
     /// gives start and end, so the meta lines keep only who and where. An unusual state
     /// (à terminer, annulée, absence) is one word at the head of the detail line, no capsule.
+    /// Une demande conservée qui vise la leçon passe devant cet état, sans changer sa place.
     private func lessonRow(_ lesson: SchoolLesson, position: DrivyThreadPosition) -> some View {
+        let state = lesson.drivyState
         var details = [lesson.meetingPoint]
         if showsInstructor, let instructor = lesson.providedInstructorName { details.insert(instructor, at: 0) }
         return DrivyLessonRow(start: time(lesson.startsAt), end: time(lesson.endsAt), title: learnerName(lesson),
-            details: details, state: lesson.drivyState, railPosition: position)
+            details: details, state: state, note: planningNote(pendingMarker(forLesson: lesson.id), state: state),
+            railPosition: position)
+    }
+
+    /// Repère de la demande conservée qui vise cette leçon : un déplacement ou une annulation la garde à sa place.
+    private func pendingMarker(forLesson lessonID: UUID) -> SchoolPendingPlanningMarker? {
+        pendingMarkers.first { $0.concerns(lessonID) }
+    }
+
+    /// Le repère passe devant l’état habituel de la leçon (« Déplacement en cours · En attente ») : la demande est ce
+    /// qui attend une décision, l’état du rendez-vous reste lisible.
+    private func planningNote(_ marker: SchoolPendingPlanningMarker?, state: DrivyLessonState) -> DrivyRowNote? {
+        guard let marker else { return nil }
+        let text = state.rowNote.map { "\(marker.title) · \($0.text)" } ?? marker.title
+        return DrivyRowNote(text: text, tone: marker.state == .inProgress ? .accent : .neutral)
+    }
+
+    /// Repères du jour qui ne sont pas déjà portés par une leçon affichée : une création est sa propre ligne
+    /// provisoire ; un déplacement ou une annulation gardent leur leçon confirmée à sa place avec le repère.
+    private var selectedDayPendingRows: [SchoolPendingPlanningMarker] { pendingRows(on: selectedDate) }
+    private func pendingRows(on day: Date) -> [SchoolPendingPlanningMarker] {
+        let start = calendar.startOfDay(for: day)
+        let shown = Set((dayIndex[start] ?? []).map(\.id))
+        return pendingMarkers.compactMap { marker -> SchoolPendingPlanningMarker? in
+            if let lessonID = marker.lessonID, shown.contains(lessonID) { return nil }
+            guard let date = marker.requestedStart ?? concernedLesson(marker)?.startsAt else { return nil }
+            return calendar.isDate(date, inSameDayAs: start) ? marker : nil
+        }
+    }
+
+    /// La leçon visée, quand la période lue la contient : elle seule porte le repère d’un déplacement ou d’une annulation.
+    private func concernedLesson(_ marker: SchoolPendingPlanningMarker) -> SchoolLesson? {
+        guard let lessonID = marker.lessonID else { return nil }
+        return lessons.first { $0.id == lessonID }
+    }
+
+    /// Ligne provisoire d’une demande sans leçon affichée (une création, le plus souvent). Jamais une leçon confirmée :
+    /// aucun élève, aucun état de leçon, et le seul geste ouvre la demande conservée.
+    private func pendingRow(_ marker: SchoolPendingPlanningMarker) -> some View {
+        Button { openPendingPlanning(marker, lesson: concernedLesson(marker)) } label: {
+            DrivyLessonRow(start: time(marker.requestedStart), title: marker.title)
+        }
+        .buttonStyle(DrivyRowButtonStyle())
+        .accessibilityLabel(marker.requestedStart.map {
+            "\(marker.title), \(formattedDay($0, template: "EEEE d MMMM")) à \(time($0))"
+        } ?? marker.title)
+        .accessibilityHint("Ouvre la demande conservée")
+        .accessibilityIdentifier("agenda-pending-\(marker.id.uuidString)")
+    }
+
+    /// Ouvre la feuille de planification sur la demande : la lecture retrouve la commande du coffre, avec ses gestes.
+    /// Le repère ne renvoie et ne résout jamais rien de lui-même.
+    private func openPendingPlanning(_ marker: SchoolPendingPlanningMarker, lesson: SchoolLesson? = nil) {
+        guard let person = workspace.person, let membership = workspace.membership, mayPlan,
+              let model = SchoolPlanningWorkspace.opening(marker,
+                  scope: client.scope(person: person, membership: membership),
+                  client: client.planningClient, lesson: lesson) else { return }
+        planningCancels = marker.kind == .cancellation
+        planningModel = model
+    }
+
+    /// Relit les demandes de planification du coffre pour ce compte, cette école et cette époque d’accès.
+    /// Rien n’est écrit, renvoyé ni résolu ici ; le coffre n’est que lu.
+    @MainActor private func reloadPendingPlanning() {
+        guard let person = workspace.person, let membership = workspace.membership else {
+            pendingMarkers = []; return
+        }
+        let scope = client.scope(person: person, membership: membership)
+        let outbox = EncryptedSchoolCommandOutbox()
+        guard let commands = try? outbox.pendingCommands(for: scope) else { pendingMarkers = []; return }
+        pendingMarkers = SchoolPendingPlanningProjection.markers(from: commands, scope: scope)
+    }
+
+    /// Fermeture de la feuille : la demande a pu être vérifiée, renvoyée ou abandonnée.
+    @MainActor private func refreshAfterPlanning() async {
+        reloadPendingPlanning()
+        await loadAgenda(keepingCurrent: true)
     }
 
     /// Nom fourni avec la leçon, sinon celui d’un dossier déjà chargé ; jamais deviné.
@@ -725,6 +825,8 @@ struct SchoolAgendaView: View {
     }
     private func newPlanningModel() -> SchoolPlanningWorkspace? {
         guard let person = workspace.person, let membership = workspace.membership, mayPlan else { return nil }
+        // Une feuille ouverte depuis « Planifier » n’est jamais une annulation.
+        planningCancels = false
         let day = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: selectedDate) ?? selectedDate
         let proposed = max(day, Date().addingTimeInterval(3600))
         // Le prochain créneau libre se cherche à partir du jour affiché (ou de maintenant, s’il est passé) ;

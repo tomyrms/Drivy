@@ -65,6 +65,10 @@ const atNoon = (civil: string) => new Date(`${civil}T12:00:00Z`);
 const first = (text: string) => text.replace(/^1(?=\s)/, '1er');
 export const formatCivil = (civil: string) => first(dayFormat.format(atNoon(civil)));
 
+const weekdayYearFormat = new Intl.DateTimeFormat('fr-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** « lundi 2 novembre 2026 » (#410) : le jour de la semaine aide à situer la journée ; « lundi 1er novembre » le premier du mois. */
+export const formatCivilWeekday = (civil: string) => weekdayYearFormat.format(atNoon(civil)).replace(/^(\p{L}+),?\s+(1(?=\s))?/u, (_match, weekday: string, day?: string) => `${weekday} ${day ? '1er' : ''}`);
+
 /** Libellé de la période affichée : « octobre 2026 », « 2026 » ou « du 5 octobre 2026 au 12 octobre 2026 » (« 1er » pour le premier du mois). */
 export function periodLabel(period: ResolvedPeriod): string {
   if (period.choice === 'month' || period.choice === 'previous-month') return monthFormat.format(atNoon(period.from));

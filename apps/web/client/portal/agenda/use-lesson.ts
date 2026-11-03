@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { commandMessage, createCommand } from '../../command-core';
+import { refusalOutcome } from '../../command-lane';
 import { useCommandSnapshot } from '../../command-store';
 import { assignmentSchema, catalogPolicySchema, learnerSchema, memberSchema, offeringSchema, readAll, readSchool, termsSchema, trainingSchema } from '../../school-api';
 import { applicableProducts, assignmentCovers, canEditPlannedLesson, initialLessonForm, individualCancellationDeadline, lessonCommercial, lessonInterval, lessonLocalInstants,
   lessonWriteBody, planningLessonSchema, planningProductSchema, planningTrainingLabel, slotAvailabilitySchema, type LessonForm, type PlanningLesson } from '../../lesson-planning-model';
-import { readError, useCommandRunner, useConsole, useLoad, useUnsavedChanges } from '../../console/context';
+import type { LessonIntention, PlannedLessonDraft } from '../../console/agenda-intentions';
+import { readError, useCommandLane, useConsole, useLoad, useUnsavedChanges, type Outcome } from '../../console/context';
 import { distinctLabel, homonymReferences } from '../../person-reference';
 import { RequestFailure } from '../../protocol';
+import type { LessonRefusal, LessonRestored } from './lesson-intentions-model';
 
 export async function readPlanningCatalogue(schoolId: string) {
   const [learners, members, offerings, policies, products, terms] = await Promise.all([
@@ -34,30 +37,48 @@ export function useLesson(lessonId: string | null, onSaved: () => void) {
   return { loaded, editing, setEditing, refreshing, saved };
 }
 
-/** Domain state and effects only: presentation never owns an alternate command queue. */
-/** `requestId` : la demande de déplacement de l'élève que ce déplacement accepte ; l'école la ferme avec la leçon. */
-export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, learnerId: string | undefined, catalogue: PlanningCatalogue, onSaved: () => void, requestId?: string) {
+export interface LessonEditorInput {
+  original: PlanningLesson | undefined;
+  learnerId: string | undefined;
+  catalogue: PlanningCatalogue;
+  requestId?: string | undefined;
+  /** Formulaire rouvert avec la saisie d'une demande refusée. */
+  restored?: LessonRestored | undefined;
+  /** La demande est conservée : le dialogue se libère, la projection montre l'intention. */
+  onQueued: (intention: LessonIntention) => void;
+  /** Refus définitif : la saisie revient avec la raison, les autres rendez-vous ne bougent pas. */
+  onRefused: (refusal: LessonRefusal) => void;
+}
+
+/**
+ * Domain state and effects only: presentation never owns an alternate command queue.
+ *
+ * Créer ou déplacer une leçon passe par la voie de commandes (#109) : dès que le magasin conserve la demande, le formulaire est
+ * rendu à la consultation et l'agenda montre « Planification en cours » ou « Déplacement en cours ». Rien n'est annoncé réservé
+ * avant la réponse vérifiée ou le reçu ; un refus rouvre la saisie avec sa raison.
+ * `requestId` : la demande de déplacement de l'élève que ce déplacement accepte ; l'école la ferme avec la leçon.
+ */
+export function useLessonEditor(input: LessonEditorInput) {
+  const { original, learnerId, catalogue, requestId, restored, onQueued, onRefused } = input;
   const { schoolId, school, membership } = useConsole();
-  const [original, setOriginal] = useState(loadedOriginal);
+  const lane = useCommandLane();
   const initial = useRef(initialLessonForm(original, learnerId));
-  const [form, setForm] = useState(initial.current);
-  const [step, setStep] = useState<'people' | 'appointment' | 'review'>(original ? 'appointment' : 'people');
+  const [form, setForm] = useState(restored?.draft.form ?? initial.current);
+  const [step, setStep] = useState<'people' | 'appointment' | 'review'>(original || restored ? 'appointment' : 'people');
   const [review, setReview] = useState<Record<string, unknown> | null>(null);
   const [checking, setChecking] = useState(false), [problem, setProblem] = useState('');
   const requestInFlight = useRef(false), submitInFlight = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const runner = useCommandRunner(onSaved);
-  const wasPending = useRef(false);
-  useEffect(() => {
-    if (runner.pending) wasPending.current = true;
-    else if (wasPending.current && !runner.busy) { wasPending.current = false; submitInFlight.current = false; setReview(null); setStep('appointment'); }
-  }, [runner.pending, runner.busy]);
-  const locked = runner.busy || Boolean(runner.pending) || checking;
+  const tag = original ? `lesson:${original.id}` : 'lesson:new';
+  // Une seule écriture de planification à la fois : la clé `planning` couvre les leçons, les cours et les horaires.
+  const blocked = lane.blocked({ kind: original ? 'moveLesson' : 'createLesson', ...(original ? { resourceId: original.id } : {}) });
+  const outcome: Outcome = (lane.outcomes.get(tag) as Outcome | undefined) ?? null;
+  const locked = checking;
   const dirty = JSON.stringify(form) !== JSON.stringify(initial.current);
   const release = useUnsavedChanges(dirty);
   const change = <K extends keyof LessonForm>(key: K, value: LessonForm[K]) => {
     if (requestInFlight.current || submitInFlight.current) return;
-    setForm(previous => ({ ...previous, [key]: value })); setProblem(''); setReview(null); runner.clearOutcome();
+    setForm(previous => ({ ...previous, [key]: value })); setProblem(''); setReview(null); lane.clearOutcome();
   };
   const trainingRead = useLoad(async () => form.learnerId ? readAll(schoolId, 'trainings', trainingSchema, { learnerId: form.learnerId }) : { items: [], truncated: false },
     [schoolId, form.learnerId], `${schoolId}/${form.learnerId}`, `planning-trainings/${form.learnerId}`);
@@ -101,13 +122,13 @@ export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, lear
     setProblem(''); setStep('appointment');
   };
   const verify = async () => {
-    if (requestInFlight.current || submitInFlight.current || runner.pending) return;
-    setProblem(''); runner.clearOutcome();
+    if (requestInFlight.current || submitInFlight.current) return;
+    setProblem(''); lane.clearOutcome();
     if (original && !canEditPlannedLesson(original)) { setProblem('Cette leçon a commencé ou est terminée. Revenez à sa fiche.'); return; }
+    if (!interval) { setProblem('Ce créneau est passé ou n’existe pas dans le fuseau de l’école. Choisissez un nouvel horaire.'); return; }
     if (!complete || !training || !offering || !policy || !instructors.some(item => item.id === form.instructorId) || !learners.some(item => item.id === form.learnerId)) { setProblem('Choisissez une formation active et un moniteur affecté pour tout ce créneau. Les lectures doivent être complètes.'); return; }
     try {
       const body = lessonWriteBody(form, school.timeZone, policy.id, product, original);
-      if (!interval) throw new Error('Ce créneau n’est pas valide dans le fuseau de l’école.');
       requestInFlight.current = true; setChecking(true);
       const availability = await readSchool(schoolId, 'lessons/availability', slotAvailabilitySchema, {
         trainingId: form.trainingId, instructorMembershipId: form.instructorId, plannedStart: interval.plannedStart, plannedEnd: interval.plannedEnd,
@@ -119,14 +140,29 @@ export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, lear
     } catch (error) { if (mounted.current) setProblem(error instanceof RequestFailure ? error.status === 401 || error.status === 0 ? readError(error) : commandMessage(error.code) : error instanceof Error ? error.message : 'Vérification impossible. Réessayez.'); }
     finally { requestInFlight.current = false; if (mounted.current) setChecking(false); }
   };
-  const submit = async () => {
-    if (!review || submitInFlight.current || requestInFlight.current || runner.pending) return;
+  const submit = () => {
+    if (!review || submitInFlight.current || requestInFlight.current) return;
+    if (!interval) { setProblem('Ce créneau est passé. Choisissez un nouvel horaire.'); setStep('appointment'); return; }
     submitInFlight.current = true;
-    const result = await runner.run(createCommand({ schoolId, kind: original ? 'moveLesson' : 'createLesson', path: original ? `lessons/${original.id}/move` : 'lessons',
-      body: original && requestId ? { ...review, changeRequestId: requestId } : review, resourceVersion: original?.version ?? 0, ...(original ? { ifMatch: original.version, resourceId: original.id } : {}) }), original ? 'La leçon est déplacée.' : 'La leçon est planifiée.');
-    if (!mounted.current) return;
-    if (result.status === 'rejected') { submitInFlight.current = false; setReview(null); setStep('appointment'); }
-    if (result.status === 'pending') window.requestAnimationFrame(() => document.getElementById('pending-title')?.focus());
+    const command = createCommand({ schoolId, kind: original ? 'moveLesson' : 'createLesson', path: original ? `lessons/${original.id}/move` : 'lessons',
+      body: original && requestId ? { ...review, changeRequestId: requestId } : review, resourceVersion: original?.version ?? 0, ...(original ? { ifMatch: original.version, resourceId: original.id } : {}) });
+    const draft: PlannedLessonDraft = {
+      learnerId: form.learnerId, trainingId: form.trainingId, instructorMembershipId: form.instructorId,
+      learnerDisplayName: catalogue.learners.find(item => item.id === form.learnerId)?.displayName ?? original?.learnerDisplayName ?? 'Élève',
+      instructorDisplayName: catalogue.members.find(item => item.id === form.instructorId)?.displayName ?? original?.instructorDisplayName ?? 'Moniteur',
+      meetingPoint: form.meetingPoint.trim(), timeZone: school.timeZone, plannedStart: interval.plannedStart, plannedEnd: interval.plannedEnd, form,
+    };
+    const intention: LessonIntention = original
+      ? { tag, operationId: command.operationId, kind: 'lesson-move', lessonId: original.id, draft }
+      : { tag, operationId: command.operationId, kind: 'lesson-create', draft };
+    const started = lane.run(command, original ? 'La leçon est déplacée.' : 'La leçon est planifiée.', tag);
+    // Refusée localement (une planification attend déjà, double appui) : rien n'est envoyé, la saisie reste.
+    if (!started.admitted) { submitInFlight.current = false; return; }
+    // Conservée par le magasin : le dialogue se libère, la projection porte l'intention jusqu'au résultat.
+    onQueued(intention);
+    void started.result.then(result => {
+      if (result.status === 'rejected') onRefused({ intention, outcome: refusalOutcome(result) });
+    });
   };
   const rereadVersion = async () => {
     if (!original || requestInFlight.current || submitInFlight.current) return;
@@ -135,13 +171,16 @@ export function useLessonEditor(loadedOriginal: PlanningLesson | undefined, lear
       const current = await readSchool(schoolId, `lessons/${original.id}`, planningLessonSchema);
       if (!mounted.current) return;
       if (current.id !== original.id || current.schoolId !== schoolId || current.trainingId !== original.trainingId) throw new RequestFailure('INVALID_RESPONSE');
-      setOriginal(current); setReview(null); setStep('appointment'); runner.clearOutcome();
+      lane.clearOutcome();
+      setReview(null); setStep('appointment');
       setForm(previous => ({ ...previous, buffer: String(current.bufferMinutesSnapshot), duration: previous.commercialChange ? previous.duration : String((Date.parse(current.plannedEnd) - Date.parse(current.plannedStart)) / 60_000), agreement: false }));
       setProblem('Version actuelle relue. Votre proposition est conservée ; relisez les conditions et confirmez de nouveau l’accord.');
     } catch (error) { if (mounted.current) setProblem(readError(error)); }
     finally { requestInFlight.current = false; if (mounted.current) setChecking(false); }
   };
-  return { original, school, form, change, step, setStep, review, checking, problem, runner, locked, dirty, release, trainingRead, assignmentRead,
+  return { original, school, form, change, step, setStep, review, checking, problem, outcome, blocked, blockedReason: blocked
+      ? 'Une demande de planification attend sa confirmation (voir en haut de la page).' : null,
+    locked, dirty, release, trainingRead, assignmentRead,
     learners, trainings, instructors, offering, policy, interval, cancellationDeadline, localInstants, learnerOptions, trainingOptions, instructorOptions,
     products, terms, usesNewTerms, price, complete, chooseLearner, chooseTraining, next, verify, submit, rereadVersion };
 }

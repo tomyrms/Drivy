@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import {
   classifyFailure, commandHeaders, commandMessage, commandSpecs, parseMetadata, receiptMatches, toMetadata,
-  type CommandMetadata, type SchoolCommand,
+  type CommandKind, type CommandMetadata, type SchoolCommand,
 } from './command-core';
+import { revisionOf } from './command-families';
 import { confirmedData, readSchool, receiptSchema, schoolFetch } from './school-api';
 import { RequestFailure } from './protocol';
 import { commandsConflict } from './command-conflicts';
@@ -47,10 +48,16 @@ export function pendingActions(entry: Pick<PendingEntry, 'command' | 'phase' | '
 
 const storageKey = 'drivy-gestion-demandes-v1';
 type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number };
-type Snapshot = { entries: ReadonlyMap<string, PendingEntry>; revision: number; confirmed: Confirmation | null; confirmations: readonly Confirmation[] };
+/**
+ * `byKind` counts the confirmations of each kind of command and `rereads` the requests given up or refused on a resend: a section that
+ * reads one family of resources (see command-families) asks for a new read only when one of its kinds was confirmed, not for every
+ * confirmation of the school. `revision` still changes with every one of them.
+ */
+type Snapshot = { entries: ReadonlyMap<string, PendingEntry>; revision: number; confirmed: Confirmation | null; confirmations: readonly Confirmation[];
+  byKind: Readonly<Record<string, number>>; rereads: number };
 
 class CommandStore {
-  private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null, confirmations: [] };
+  private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null, confirmations: [], byKind: {}, rereads: 0 };
   private readonly listeners = new Set<() => void>();
   private personId: string | null = null;
   private generation = 0;
@@ -79,7 +86,9 @@ class CommandStore {
     const confirmation: Confirmation | null = confirmed ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now() } : null;
     this.snapshot = { entries, revision: this.snapshot.revision + (confirmed || reread ? 1 : 0),
       confirmed: confirmation ?? this.snapshot.confirmed,
-      confirmations: confirmation ? [...this.snapshot.confirmations.slice(-49), confirmation] : this.snapshot.confirmations };
+      confirmations: confirmation ? [...this.snapshot.confirmations.slice(-49), confirmation] : this.snapshot.confirmations,
+      byKind: confirmed ? { ...this.snapshot.byKind, [confirmed.kind]: (this.snapshot.byKind[confirmed.kind] ?? 0) + 1 } : this.snapshot.byKind,
+      rereads: this.snapshot.rereads + (reread ? 1 : 0) };
     try { window.sessionStorage.setItem(storageKey, JSON.stringify([...entries.values()].map(item => item.meta))); } catch { /* memory only */ }
     for (const listener of this.listeners) listener();
   }
@@ -210,7 +219,7 @@ class CommandStore {
   clear() {
     this.generation++;
     this.accessScopes.clear();
-    this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null, confirmations: [] };
+    this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null, confirmations: [], byKind: this.snapshot.byKind, rereads: this.snapshot.rereads };
     try { window.sessionStorage.removeItem(storageKey); } catch { /* nothing stored */ }
     for (const listener of this.listeners) listener();
   }
@@ -220,4 +229,9 @@ export const commandStore = new CommandStore();
 
 export function useCommandSnapshot(): Snapshot {
   return useSyncExternalStore(commandStore.subscribe, commandStore.getSnapshot);
+}
+
+/** A number that changes when a command of one of these kinds was confirmed (or a request was given up): a targeted read key. */
+export function useCommandRevision(kinds: readonly CommandKind[]): number {
+  return revisionOf(useCommandSnapshot(), kinds);
 }

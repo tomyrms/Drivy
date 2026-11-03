@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { commandSpecs } from '../../command-core';
 import { commandStore, pendingActions, useCommandSnapshot } from '../../command-store';
 import { commandRefreshesSchool } from '../../command-conflicts';
+import { lessonResendAllowed, lessonResendReason } from '../../console/agenda-intentions';
 import { useConsole } from '../../console/context';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
@@ -30,12 +31,15 @@ export function PortalPendingRequests() {
   return <section className="mb-6 grid gap-3" aria-label="Demandes en cours" aria-live="polite">
     {entries.map((entry, index) => {
       const busy = entry.phase === 'sending' || entry.phase === 'verifying', available = pendingActions(entry);
+      // Une planification dont l'horaire voulu est passé n'est plus renvoyée : vérifier ou arrêter le suivi.
+      const resend = available.resend && lessonResendAllowed({ kind: entry.meta.kind, command: entry.command });
+      const resendReason = available.resend && !resend ? lessonResendReason({ kind: entry.meta.kind, command: entry.command }) : null;
       return <Alert key={entry.meta.operationId}>
         <AlertTitle id={index === 0 ? 'pending-title' : undefined} tabIndex={-1}>{busy ? entry.phase === 'sending' ? 'Enregistrement en cours…' : 'Vérification en cours…' : 'Résultat à vérifier'}</AlertTitle>
-        <AlertDescription><p>{commandSpecs[entry.meta.kind].label}</p>{entry.message && <p>{entry.message}</p>}</AlertDescription>
+        <AlertDescription><p>{commandSpecs[entry.meta.kind].label}</p>{entry.message && <p>{entry.message}</p>}{resendReason && <p>{resendReason}</p>}</AlertDescription>
         {!busy && <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={() => void act(entry.meta.operationId)}>Vérifier le résultat</Button>
-          {available.resend && <Button variant="outline" onClick={() => void act(entry.meta.operationId, true)}>Renvoyer la même demande</Button>}
+          {resend && <Button variant="outline" onClick={() => void act(entry.meta.operationId, true)}>Renvoyer la même demande</Button>}
           {entry.needsLogin && <Button variant="outline" onClick={() => context.login()}>Se reconnecter</Button>}
           {available.release && <Button variant="ghost" onClick={() => setReleaseId(entry.meta.operationId)}>Arrêter le suivi</Button>}
         </div>}

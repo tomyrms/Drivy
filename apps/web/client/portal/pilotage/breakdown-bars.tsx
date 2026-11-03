@@ -6,9 +6,14 @@ import './pilotage.css';
 /**
  * Répartition d'une mesure en barres horizontales (#378). La valeur est écrite à côté de chaque barre : la lecture ne dépend ni de la
  * couleur ni du survol. Les lignes arrivent déjà rangées par nom ; la longueur compare la charge, elle ne classe personne.
+ * Cobalt pour une mesure constatée (réalisé), encre neutre pour le reste (#410) : la couleur de l'accent veut dire « constaté ».
  */
-export function BreakdownBars({ title, periodText, rows, format, emptyText, action, notice }: {
+export function BreakdownBars({ title, grouping, periodText, rows, format, emptyText, action, notice, tone = 'accent' }: {
   title: string;
+  /** Regroupement choisi (« par permis ») : dit aux lecteurs d'écran avec le titre, sans le répéter à côté du choix actif. */
+  grouping?: string;
+  /** `accent` : mesure constatée ; `ink` : grandeur programmée ou autre. */
+  tone?: 'accent' | 'ink';
   /** Période lue, dite aux lecteurs d'écran avec le titre ; la page l'affiche déjà une fois. */
   periodText: string;
   /** `null` tant que la répartition n'est pas lue : seul l'avis (chargement, erreur) s'affiche. */
@@ -21,8 +26,9 @@ export function BreakdownBars({ title, periodText, rows, format, emptyText, acti
   notice?: ReactNode;
 }) {
   const max = Math.max(1, ...(rows ?? []).map(row => row.value));
-  return <figure className="pilotage-chart" aria-label={`${title}, ${periodText}`}>
-    <figcaption><h3>{title}</h3>{action}</figcaption>
+  return <figure className="pilotage-chart" data-tone={tone} aria-label={`${title}${grouping ? ` ${grouping}` : ''}, ${periodText}`}>
+    <figcaption><h3>{title}</h3></figcaption>
+    {action && <div className="pilotage-chart-action">{action}</div>}
     {notice}
     {rows !== null && (rows.length === 0
       ? <p className="pilotage-chart-empty">{emptyText}</p>

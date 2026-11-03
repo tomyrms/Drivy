@@ -30,6 +30,7 @@ export function TariffForm({ editor, types, sharedWith, current, today, disabled
   return <FieldGroup className="cat-tariff-form">
     {editor.rebased && <Alert><AlertTitle>Ce tarif a changé pendant votre modification</AlertTitle>
       <AlertDescription>Une autre version a été enregistrée entre-temps. Votre saisie est conservée : relisez-la avant d’enregistrer.</AlertDescription></Alert>}
+    {editor.restored && <Alert variant="destructive"><AlertTitle>{editor.restored.title}</AlertTitle><AlertDescription>{editor.restored.message}</AlertDescription></Alert>}
     <Field data-invalid={!!error('label')}>
       <FieldLabel htmlFor={`${id}-label`}>Nom du tarif</FieldLabel>
       <Input disabled={disabled} id={`${id}-label`} value={draft.label} maxLength={200} placeholder="Par exemple Leçon de 45 minutes" aria-invalid={!!error('label')} onChange={event => update({ label: event.target.value })} />

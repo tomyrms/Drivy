@@ -10,12 +10,14 @@ import { PortalSelect } from '../components/portal-select';
 import { ReadFeedback } from '../agenda/presentation';
 import { instantDayLabel, occurrenceTimes } from './course-presentation';
 import { attendanceSummary, filterByName } from './participants-model';
-import { FeedbackText } from './participants-parts';
+import { cellKey, markLabels } from './participants-projection';
+import { FeedbackText, MarkText } from './participants-parts';
 import { feedbackKey, type CourseParticipants } from './use-course-participants';
 
 /**
  * The call of one named session. One line per participant, the state next to the name and three choices under it:
- * unset, absent, excused and present stay four different things, and nothing is ticked on anyone's behalf.
+ * unset, absent, excused and present stay four different things, and nothing is ticked on anyone's behalf. A presence still
+ * being answered is marked « À confirmer » beside the confirmed state; only that person's choices wait for it.
  */
 export function AttendanceTab({ state, occurrenceId, onOccurrence, now }: { state: CourseParticipants; occurrenceId: string; onOccurrence: (id: string) => void; now: number }) {
   const { school } = useConsole();
@@ -30,10 +32,10 @@ export function AttendanceTab({ state, occurrenceId, onOccurrence, now }: { stat
   const shown = filterByName(people, search);
   const summary = attendanceSummary(sheet.rows, occurrence.id);
   const options = state.occurrences.map(item => ({ value: item.id, label: `Séance ${item.position} · ${instantDayLabel(item.startsAt, timeZone)} · ${occurrenceTimes(item, timeZone)}` }));
-  const choose = (row: CourseSheetRow, status: string | undefined) => { if (status && (attendanceStatuses as readonly string[]).includes(status)) void state.mark(row, occurrence.id, status as AttendanceStatus); };
+  const choose = (row: CourseSheetRow, status: string | undefined) => { if (status && (attendanceStatuses as readonly string[]).includes(status)) state.mark(row, occurrence.id, status as AttendanceStatus); };
   return <div className="participants-tab">
     <ReadFeedback loaded={state.sheetRead} label="Lecture de la feuille d’appel" />
-    <PortalSelect id="attendance-session" label="Séance de l’appel" value={occurrence.id} onValueChange={value => { if (value) onOccurrence(value); }} options={options} disabled={state.locked} />
+    <PortalSelect id="attendance-session" label="Séance de l’appel" value={occurrence.id} onValueChange={value => { if (value) onOccurrence(value); }} options={options} />
     <div className="participants-session"><h2>Séance {occurrence.position} sur {state.occurrences.length}</h2>
       <p className="course-muted">{instantDayLabel(occurrence.startsAt, timeZone)} · {occurrenceTimes(occurrence, timeZone)} · {occurrence.instructorDisplayName}{!occurrence.attendanceRequired && ' · '}{!occurrence.attendanceRequired && <Badge variant="secondary">Facultative</Badge>}</p>
       {started && <p className="participants-counts" aria-label="Résumé de l’appel"><span><strong>{summary.present}</strong> présents</span><span><strong>{summary.absent}</strong> absents</span><span><strong>{summary.excused}</strong> excusés</span><span><strong>{summary.unset}</strong> non renseignés</span></p>}
@@ -43,13 +45,20 @@ export function AttendanceTab({ state, occurrenceId, onOccurrence, now }: { stat
       : <ul className="participants-list">{shown.map(row => {
         const cell = attendanceCell(row, occurrence.id);
         const editable = canMarkAttendance(sheet, row, occurrence, now);
+        const asked = state.attendanceMarks.get(cellKey(row.enrollmentId, occurrence.id));
+        const blocked = state.blockedFor(row.enrollmentId);
+        const markId = `attendance-mark-${row.enrollmentId}`;
+        const texts = asked ? [`${markLabels.attendance} · ${attendanceLabels[asked]}`]
+          : (state.marks.get(row.enrollmentId) ?? []).map(value => markLabels[value]);
         return <li key={row.enrollmentId} className="participants-call">
           <div className="participants-main"><strong>{row.learnerDisplayName || 'Élève'}</strong>
             <span className="participants-state" data-state={cell.status ?? 'unset'}>{cell.status ? attendanceLabels[cell.status] : 'Non renseigné'}</span>
+            {texts.length > 0 && <MarkText id={markId} text={texts.join(' · ')} />}
             <FeedbackText feedback={state.feedback[feedbackKey('call', row.enrollmentId)]} /></div>
-          {editable ? <ToggleGroup className="participants-choices" variant="outline" aria-label={`Présence de ${row.learnerDisplayName || 'cet élève'}`} value={cell.status ? [cell.status] : []} disabled={state.locked}
-            onValueChange={values => choose(row, (values as string[]).find(value => value !== cell.status))}>
-            {attendanceStatuses.map(status => <ToggleGroupItem key={status} value={status}>{attendanceLabels[status]}</ToggleGroupItem>)}</ToggleGroup>
+          {editable ? <ToggleGroup className="participants-choices" variant="outline" aria-label={`Présence de ${row.learnerDisplayName || 'cet élève'}`} value={cell.status ? [cell.status] : []} disabled={Boolean(blocked)}
+            {...(texts.length > 0 ? { 'aria-describedby': markId } : {})} onValueChange={values => choose(row, (values as string[]).find(value => value !== cell.status))}>
+            {attendanceStatuses.map(status => <ToggleGroupItem key={status} value={status}>{attendanceLabels[status]}</ToggleGroupItem>)}
+          </ToggleGroup>
             : <span className="course-muted">{started ? 'Appel indisponible' : 'À venir'}</span>}
         </li>;
       })}</ul>}

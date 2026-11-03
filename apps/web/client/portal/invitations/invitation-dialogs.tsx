@@ -18,8 +18,8 @@ export function InvitationDialogs({ state }: { state: InvitationsState }) {
   const chosen = state.instructors.find(item => item.id === state.instructorId);
   const confirmLabel = kind === 'create' ? delivery === 'code' ? 'Créer le code' : 'Enregistrer l’invitation'
     : kind === 'renew' ? delivery === 'code' ? 'Créer un nouveau code' : 'Enregistrer un nouveau lien' : 'Révoquer l’invitation';
-  return <Dialog open={kind !== null} onOpenChange={(open, details) => { if (state.busy) { details.cancel(); return; } if (!open) state.closeDialog(); }}>
-    <DialogContent showCloseButton={!state.busy}>
+  return <Dialog open={kind !== null} onOpenChange={(open, details) => { if (state.dialogBusy) { details.cancel(); return; } if (!open) state.closeDialog(); }}>
+    <DialogContent showCloseButton={!state.dialogBusy}>
       {kind && <>
         <DialogHeader><DialogTitle>{titles[kind][delivery]}</DialogTitle><DialogDescription>{school.name}</DialogDescription></DialogHeader>
         {kind === 'create' && delivery === 'code' && <dl className="access-changes">
@@ -35,11 +35,11 @@ export function InvitationDialogs({ state }: { state: InvitationsState }) {
         {kind === 'revoke' && current && <>
           <p className="invitation-dialog-lead">{state.labelOf(current)}</p>
           <FieldGroup><Field data-invalid={state.revokeReason !== '' && !reasonOk}><FieldLabel htmlFor="revoke-reason">Motif de la révocation</FieldLabel>
-            <Textarea id="revoke-reason" value={state.revokeReason} onChange={event => state.setRevokeReason(event.target.value)} maxLength={1000} rows={3} disabled={state.busy} />
+            <Textarea id="revoke-reason" value={state.revokeReason} onChange={event => state.setRevokeReason(event.target.value)} maxLength={1000} rows={3} disabled={state.dialogBusy} />
             {state.revokeReason !== '' && !reasonOk && <FieldError>Indiquez le motif de la révocation (1 000 caractères au plus).</FieldError>}</Field></FieldGroup></>}
-        {state.runner.outcome?.tone === 'error' && <Alert variant="destructive"><AlertTitle>{state.runner.outcome.title}</AlertTitle><AlertDescription>{state.runner.outcome.message}</AlertDescription></Alert>}
-        <DialogFooter><Button variant="outline" disabled={state.busy} onClick={state.closeDialog}>Retour</Button>
-          <Button variant={kind === 'revoke' ? 'destructive' : 'default'} disabled={state.busy || !state.canWrite || (kind === 'revoke' && !reasonOk)} aria-busy={state.runner.busy} onClick={() => void state.confirm()}>{state.runner.busy ? 'Confirmation…' : confirmLabel}</Button></DialogFooter>
+        {state.dialogOutcome?.tone === 'error' && <Alert variant="destructive"><AlertTitle>{state.dialogOutcome.title}</AlertTitle><AlertDescription>{state.dialogOutcome.message}</AlertDescription></Alert>}
+        <DialogFooter><Button variant="outline" disabled={state.dialogBusy} onClick={state.closeDialog}>Retour</Button>
+          <Button variant={kind === 'revoke' ? 'destructive' : 'default'} disabled={state.dialogBusy || !state.canWrite || (kind === 'revoke' && !reasonOk)} aria-busy={state.dialogBusy} onClick={() => void state.confirm()}>{state.dialogBusy ? 'Confirmation…' : confirmLabel}</Button></DialogFooter>
       </>}
     </DialogContent>
   </Dialog>;

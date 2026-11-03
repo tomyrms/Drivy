@@ -7,11 +7,11 @@ export const money = (cents: number) => new Intl.NumberFormat('fr-CH', { style: 
 export const dateTime = (instant: string, timeZone: string) => new Intl.DateTimeFormat('fr-CH', { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(new Date(instant));
 export const phaseLabels = { planned: 'Planifiée', waiting: 'À démarrer', started: 'En cours', 'to-finish': 'À terminer', completed: 'Terminée', cancelled: 'Annulée', absent: 'Absence' };
 
-export function ReadFeedback({ loaded, label }: { loaded: { status: string; error?: string | null | undefined; needsLogin?: boolean | undefined; reload: () => void }; label: string }) {
+export function ReadFeedback({ loaded, label, stale = false }: { loaded: { status: string; error?: string | null | undefined; needsLogin?: boolean | undefined; reload: () => void }; label: string; stale?: boolean }) {
   const context = useConsole();
   if (loaded.status === 'loading') return <div className="agenda-loading" role="status" aria-label={label}><Skeleton className="h-6 w-48" /><Skeleton className="h-24 w-full" /></div>;
   if (loaded.status !== 'error') return null;
-  return <Alert variant="destructive"><AlertTitle>{label}</AlertTitle><AlertDescription>{loaded.error}</AlertDescription><div className="agenda-actions"><Button variant="outline" onClick={loaded.reload}>Réessayer</Button>{loaded.needsLogin && <Button variant="outline" onClick={() => context.login()}>Se reconnecter</Button>}</div></Alert>;
+  return <Alert variant="destructive"><AlertTitle>{label}</AlertTitle><AlertDescription>{loaded.error}{stale ? ' Les données affichées datent d’une lecture précédente.' : ''}</AlertDescription><div className="agenda-actions"><Button variant="outline" onClick={loaded.reload}>Réessayer</Button>{loaded.needsLogin && <Button variant="outline" onClick={() => context.login()}>Se reconnecter</Button>}</div></Alert>;
 }
 export function CommandFeedback({ outcome, blocked }: { outcome: Outcome; blocked?: string | null | undefined }) {
   const context = useConsole();
