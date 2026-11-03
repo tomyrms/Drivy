@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { Session } from './session.js';
+import { bindOpeningIdentity, type Session } from './session.js';
 import type { ApiResult } from './upstream.js';
 
 export type OpeningRequest={method:'GET'|'POST';path:string;body?:unknown;idempotencyKey?:string};
@@ -37,8 +37,6 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
   call:(session:Session,command:OpeningRequest)=>Promise<ApiResult>;send:(reply:FastifyReply,result:ApiResult)=>unknown;
   error:(status:number,code:string)=>Error}) {
   const requireOpening=(session:Session)=>{if(!session.opening)throw deps.error(404,'OPENING_LINK_MISSING');return session.opening;};
-  // An opening link belongs to the account that opened it: a signed-in admission records that account at once.
-  const bind=(session:Session,opening:OpeningState)=>{if(!opening.identity && session.tokens)opening.identity=session.tokens.principal.subject;};
   const scope=(session:Session,opening:OpeningState)=>{
     if(!session.tokens)throw deps.error(401,'SESSION_EXPIRED');
     // No recorded identity (an intention older than its account) or another account: never used, never guessed.
@@ -60,9 +58,9 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
   app.post('/app/bff/opening',async(request,reply)=>{
     const admitted=deps.admit(request);empty.parse(request.query);const {token}=z.object({token:tokenSchema}).strict().parse(request.body);
     const session=deps.open(reply,admitted),previous=session.opening;
-    if(previous?.token===token){bind(session,previous);return {ok:true};}
+    if(previous?.token===token){bindOpeningIdentity(session,previous);return {ok:true};}
     if(previous?.busy || (previous?.submitted && !previous.result))throw deps.error(409,'OPENING_IN_PROGRESS');
-    const opening:OpeningState={token,operationId:randomUUID()};bind(session,opening);session.opening=opening;return {ok:true};
+    const opening:OpeningState={token,operationId:randomUUID()};bindOpeningIdentity(session,opening);session.opening=opening;return {ok:true};
   });
   app.get('/app/bff/opening',async(request,reply)=>{
     empty.parse(request.query);const session=deps.current(request),opening=requireOpening(session);scope(session,opening);

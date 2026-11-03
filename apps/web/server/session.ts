@@ -15,6 +15,17 @@ export type Session = {
 };
 const random = () => randomBytes(32).toString('base64url');
 
+/**
+ * An opening link belongs to the account that opened it. The identity is recorded once, where the intention is
+ * created or claimed; a later change of account never transfers it. Without a signed-in session, the intention
+ * is claimed by the identity that signs in (or by the explicit fallback, during the rotation itself).
+ */
+export function bindOpeningIdentity(session: Session, opening: OpeningState, fallbackSubject?: string): void {
+  if (opening.identity) return;
+  const owner = session.tokens?.principal.subject ?? fallbackSubject;
+  if (owner) opening.identity = owner;
+}
+
 export function matchesSecret(actual: unknown, expected: string): boolean {
   if (typeof actual !== 'string' || actual.length > 1024) return false;
   const a = Buffer.from(actual); const b = Buffer.from(expected);
@@ -60,7 +71,7 @@ export class SessionStore {
     // An opening link belongs to the account that opened it. The identity recorded at admission is never
     // transferred (the endpoints then refuse with OPENING_IDENTITY_CHANGED). An intention that appears without
     // one belongs to the account of its session, or, before any sign-in, to the identity this browser signs in with.
-    if (opening && !opening.identity) opening.identity = session.tokens?.principal.subject ?? tokens.principal.subject;
+    if (opening) bindOpeningIdentity(session,opening,tokens.principal.subject);
     const createdAt = session.createdAt;
     this.destroy(session);
     const next = this.create();

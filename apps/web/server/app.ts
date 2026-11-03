@@ -6,9 +6,9 @@ import { z, ZodError } from 'zod';
 import type { WebConfig } from './config.js';
 import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { clientKey, RateLimiter } from './rate-limit.js';
-import { SessionStore, matchesSecret, type Session, type Tokens } from './session.js';
+import { SessionStore, bindOpeningIdentity, matchesSecret, type Session, type Tokens } from './session.js';
 import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
-import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest } from './opening-routes.js';
+import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest, type OpeningState } from './opening-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
 class WebError extends Error {
@@ -237,9 +237,12 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     return next;
   };
   const keepOpening = (session: Session, code: string) => {
-    if (session.opening?.token === code) return;
-    if (session.opening?.busy || (session.opening?.submitted && !session.opening.result)) throw new WebError(409,'OPENING_IN_PROGRESS');
-    session.opening = { token: code, operationId: randomUUID() };
+    const previous = session.opening;
+    if (previous?.token === code) { bindOpeningIdentity(session,previous); return; }
+    if (previous?.busy || (previous?.submitted && !previous.result)) throw new WebError(409,'OPENING_IN_PROGRESS');
+    const opening: OpeningState = { token: code, operationId: randomUUID() };
+    // A code typed by a signed-in person, or by the account just created, belongs to that account at once.
+    bindOpeningIdentity(session,opening); session.opening = opening;
   };
   const keepInvitation = (session: Session, token: string, delivery: 'EMAIL' | 'CODE') => {
     const pending = session.invitation;
