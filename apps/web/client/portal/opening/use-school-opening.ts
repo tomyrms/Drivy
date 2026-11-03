@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
+import { clearLogoutNotice, noteSessionClosure, readLogoutNotice } from '../../logout-notice';
 import { endSession, okSchema, request, RequestFailure, sessionSchema, type Session } from '../../protocol';
 import {
   createdOpeningLink, openingFailure, openingFieldErrors, openingLinks, openingLinkSchema, openingPreview, openingReceipt, openingState,
@@ -20,6 +21,7 @@ export function useSchoolOpening(link: OpeningLink, operator: boolean, destinati
   const [items, setItems] = useState<OperatorLink[]>([]), [generated, setGenerated] = useState<z.infer<typeof createdOpeningLink> | null>(null);
   const [revoking, setRevoking] = useState<OperatorLink | null>(null), [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const operation = useRef<string | null>(null), revocation = useRef<{ id: string; operationId: string } | null>(null);
+  const [logoutUnconfirmed, setLogoutUnconfirmed] = useState(readLogoutNotice);
   const running = useRef(false), started = useRef(false), linkStored = useRef(false);
 
   async function list() {
@@ -49,6 +51,7 @@ export function useSchoolOpening(link: OpeningLink, operator: boolean, destinati
         current = await request('session', sessionSchema); setSession(current);
       }
       if (current.authenticated) {
+        clearLogoutNotice(); setLogoutUnconfirmed(false);
         setFields(previous => ({ ...previous, displayName: current.user?.displayName ?? '', contactEmail: current.user?.email ?? '' }));
         if (operator) await list(); else await inspect(current);
       }
@@ -64,7 +67,7 @@ export function useSchoolOpening(link: OpeningLink, operator: boolean, destinati
     finally { running.current = false; setBusy(false); }
   }
   const changeAccount = () => perform(async () => {
-    await endSession(); linkStored.current = false; setUncertain(false); await boot();
+    noteSessionClosure(await endSession()); setLogoutUnconfirmed(readLogoutNotice()); linkStored.current = false; setUncertain(false); await boot();
   });
   const createSchool = () => perform(async () => {
     if (!session || !ready) return;
@@ -128,7 +131,7 @@ export function useSchoolOpening(link: OpeningLink, operator: boolean, destinati
     if (busy || uncertain) return;
     setFields(previous => ({ ...previous, [key]: value })); setFieldErrors(previous => ({ ...previous, [key]: undefined }));
   }
-  return { session, loaded, busy, ready, error, uncertain, result, fields, fieldErrors, invalidField, setInvalidField,
+  return { session, loaded, logoutUnconfirmed, busy, ready, error, uncertain, result, fields, fieldErrors, invalidField, setInvalidField,
     items, generated, copied, revoking, setRevoking, recoverLink: !!operation.current && !generated,
     boot, changeAccount, createSchool, verify, createLink, revoke, copy, update };
 }

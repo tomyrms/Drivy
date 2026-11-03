@@ -1,3 +1,4 @@
+import { logoutNoticeText } from '../../logout-notice';
 import { useEffect, useRef } from 'react';
 import { Copy, Link, Plus } from 'lucide-react';
 import type { OpeningLink, OpeningReceipt } from '../../school-opening-model';
@@ -31,6 +32,7 @@ export function SchoolOpeningPage({ link, operator = false, routes = entryRoutes
       {(state.session?.authenticated || !state.loaded || link.error) && <header className="opening-heading"><h1>{operator ? 'Liens d’ouverture' : 'Créer votre école'}</h1></header>}
       {state.error && <Alert variant="destructive"><AlertTitle>{operator ? 'Action impossible' : 'Ouverture à vérifier'}</AlertTitle>
         <AlertDescription>{state.error}</AlertDescription><Button variant="outline" className="mt-3" disabled={busy} onClick={() => void state.boot()}>Actualiser</Button></Alert>}
+      <p className="entry-notice" role="status">{state.loaded && !state.session?.authenticated && state.logoutUnconfirmed ? logoutNoticeText : ''}</p>
       {!state.loaded && <div className="grid gap-4" role="status" aria-label="Chargement de l’ouverture"><Skeleton className="h-12 w-full" /><Skeleton className="h-48 w-full" /></div>}
       {state.loaded && !state.session?.authenticated && !link.error && <AccountEntryPanel routes={routes}
         {...(!operator && link.token ? { initialCode: link.token } : {})} onSignedIn={() => void state.boot()} />}

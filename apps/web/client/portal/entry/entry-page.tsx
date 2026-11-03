@@ -3,6 +3,7 @@ import type { InvitationLink } from '../../invitation-link';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button, buttonVariants } from '../../components/ui/button';
 import { Skeleton } from '../../components/ui/skeleton';
+import { logoutNoticeText } from '../../logout-notice';
 import { entryPageFromPath, entryRoutes, type EntryPageKind, type EntryRoutes } from './entry-model';
 import { useEntrySession } from './use-entry-session';
 import { EntryFrame } from './entry-frame';
@@ -30,6 +31,8 @@ export function PortalEntryPage({ invitationLink, page = entryPageFromPath(windo
     </header>}
 
     <p className="entry-busy" role="status">{busy && state.loaded && <><Loader2 className="entry-spin" aria-hidden="true" />{state.busy}</>}</p>
+
+    <p className="entry-notice" role="status">{state.loaded && !state.authenticated && state.logoutUnconfirmed ? logoutNoticeText : ''}</p>
 
     {state.error && <Alert variant="destructive">
       <CircleAlert aria-hidden="true" />
