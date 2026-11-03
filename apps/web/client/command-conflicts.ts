@@ -63,8 +63,12 @@ export function commandConflictKeys(command: ConflictSubject): readonly string[]
   if (['createExam', 'updateExam', 'postponeExam'].includes(kind)) return ['exams', 'planning'];
   if (kind === 'setExamResult') return ['exams'];
   if (kind === 'createCourseType') return ['course-types'];
-  // Attendance, payment and completion currently return a common roster projection.
-  if (['recordCourseAttendance', 'recordCoursePayment', 'voidCoursePayment', 'validateCourse', 'revokeCourseCompletion'].includes(kind)) return ['course-facts'];
+  // Attendance, payment and completion each answer a whole sheet, but they only change one participant: two participants are
+  // independent, the same one stays ordered (#99, lot E). Without a named participant, the family stays conservative.
+  if (['recordCourseAttendance', 'recordCoursePayment', 'voidCoursePayment', 'validateCourse', 'revokeCourseCompletion'].includes(kind)) {
+    const participant = lower(command.scope);
+    return [participant ? `course-facts:${participant}` : 'course-facts'];
+  }
   // A learner's dossier is ordered with itself; another learner's dossier does not wait for it. Planning still waits for every one of them.
   if (['createTraining', 'createAssignment', 'transitionTraining', 'endAssignment', 'archiveLearner', 'restoreLearner',
     'recordPermitCheck', 'updateAdministrativeProfile'].includes(kind)) {
