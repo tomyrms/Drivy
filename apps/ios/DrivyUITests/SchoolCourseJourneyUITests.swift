@@ -19,6 +19,9 @@ import XCTest
         XCTAssertTrue(candidates.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(candidates.count, 2, app.debugDescription)
         XCTAssertNotEqual(candidates.element(boundBy: 0).label, candidates.element(boundBy: 1).label)
+        // Les deux homonymes viennent de la dernière page de l'annuaire, pas de la première lue par l'app : la lecture est finie.
+        XCTAssertFalse(app.buttons["course-candidates-retry"].exists, app.debugDescription)
+        XCTAssertFalse(app.descendants(matching: .any)["course-candidates-loading"].exists, app.debugDescription)
         candidates.element(boundBy: 1).tap()
         XCTAssertTrue(app.buttons["Inscrire à toute la série"].waitForExistence(timeout: 10), app.debugDescription)
         dismissConfirmation(in: app, cancelLabel: "Annuler")

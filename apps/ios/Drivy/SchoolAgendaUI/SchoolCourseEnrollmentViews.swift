@@ -82,7 +82,7 @@ struct SchoolCourseLearnerView: View {
                 Label(SchoolPlanningFormat.interval(next.startsAt, next.endsAt, zone: zone), systemImage: "calendar")
                     .monospacedDigit().fixedSize(horizontal: false, vertical: true)
             }
-            if !series.location.isEmpty { Label(series.location, systemImage: "mappin.and.ellipse") }
+            if let location = SchoolCoursePresentation.text(series.location) { Label(location, systemImage: "mappin.and.ellipse") }
             if let language = SchoolCourseLanguage.phrase(for: series.teachingLanguage) {
                 Label(language, systemImage: "character.bubble").accessibilityIdentifier("course-learner-language")
             }
@@ -94,9 +94,9 @@ struct SchoolCourseLearnerView: View {
         }
             .drivyFormRows()
         actions(series, me)
-        if !series.description.isEmpty {
+        if let about = SchoolCoursePresentation.text(series.description) {
             Section {
-                Text(series.description).fixedSize(horizontal: false, vertical: true)
+                Text(about).fixedSize(horizontal: false, vertical: true)
             } header: { Text("À propos").drivyFormSectionHeader() }
             .drivyFormRows()
         }
@@ -113,7 +113,7 @@ struct SchoolCourseLearnerView: View {
             DisclosureGroup("Conditions d’inscription") {
                 Text("Inscription pour \(SchoolCourseEnrollmentFormat.sessions(series.occurrences.count)).")
                 Text("Paiement sur place")
-                if !series.conditions.isEmpty { Text(series.conditions).fixedSize(horizontal: false, vertical: true) }
+                if let conditions = SchoolCoursePresentation.text(series.conditions) { Text(conditions).fixedSize(horizontal: false, vertical: true) }
             }
         } header: { Text("Détails").drivyFormSectionHeader() }
             .drivyFormRows()
@@ -452,7 +452,7 @@ struct SchoolCourseRosterSection: View {
                     }
                 }
                 Button { presented = .enroll } label: { Label("Inscrire un élève", systemImage: "person.badge.plus") }
-                    .disabled(model.isBusy || model.candidates.isEmpty)
+                    .disabled(model.isBusy)
                     .accessibilityIdentifier("course-staff-enroll")
                     // Une Section est aplatie par Form : présenter depuis une ligne réellement rendue.
                     .sheet(item: $presented) { destination in

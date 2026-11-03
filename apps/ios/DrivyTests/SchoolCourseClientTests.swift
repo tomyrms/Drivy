@@ -594,6 +594,192 @@ import Testing
         await transport.finish()
         #expect(await reading.value)
     }
+
+    // MARK: Lot A (#99) : sélecteur complet, cours hors catalogue, texte saisi, annulation de l'élève
+
+    private func directoryLearner(_ index: Int, name: String? = nil, archived: Bool = false) -> SchoolLearner {
+        SchoolLearner(id: UUID(), schoolId: schoolID, personId: UUID(), version: 1, displayName: name ?? "Élève \(index)",
+            contactEmail: nil, contactPhone: nil, archivedAt: archived ? "2030-01-01T00:00:00Z" : nil, profileReadiness: nil, profilePhotoDocumentId: nil)
+    }
+
+    private func readOnlyCourseClient() -> SchoolCourseClient {
+        SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: CourseJourneyReadTransport(responses: [:]))
+    }
+
+    @Test func participantPickerReadsEveryPageOfTheDirectoryAndKeepsBothHomonyms() async throws {
+        let directory = (1...128).map { directoryLearner($0) }
+            + [directoryLearner(129, name: "Zoé Exemple"), directoryLearner(130, name: "Zoé Exemple"), directoryLearner(131, archived: true)]
+        let source = CourseDirectorySource(learners: directory, pageSize: 50)
+        let roster = SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: seriesID, client: readOnlyCourseClient(),
+            learners: Array(directory.prefix(50)), learnerPages: { cursor in try await source.page(cursor) })
+        // L'app ne connaît d'abord que la première page : la liste n'est pas tenue pour complète.
+        #expect(roster.candidateRead == .idle && roster.candidates.count == 50)
+        await roster.loadCandidates()
+        #expect(roster.candidateRead == .complete)
+        // Les 130 dossiers actifs sont proposés, l'archivé jamais.
+        #expect(roster.candidates.count == 130)
+        #expect(source.cursors == [nil, "50", "100"])
+        let matches = SchoolLearnerIndex(learners: roster.candidates).filter("zoe")
+        try #require(matches.count == 2)
+        let references = HomonymReference.references(matches.map { ($0.id, $0.displayName) })
+        #expect(references[matches[0].id] != nil && references[matches[0].id] != references[matches[1].id])
+        // Une lecture complète n'est pas refaite à chaque ouverture du sélecteur.
+        await roster.loadCandidates()
+        #expect(source.cursors.count == 3)
+    }
+
+    @Test func participantPickerKeepsWhatItReadWhenAPageFailsThenResumesFromTheStart() async throws {
+        let directory = (1...120).map { directoryLearner($0) }
+        let source = CourseDirectorySource(learners: directory, pageSize: 50)
+        source.failing = [2]
+        let roster = SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: seriesID, client: readOnlyCourseClient(),
+            learners: Array(directory.prefix(10)), learnerPages: { cursor in try await source.page(cursor) })
+        await roster.loadCandidates()
+        #expect(roster.candidateRead == .failed(SchoolPlanningFailure.unavailable.localizedDescription))
+        // Les noms déjà lus restent proposés, sans doublon avec ceux que l'app connaissait.
+        #expect(roster.candidates.count == 50)
+        await roster.retryCandidates()
+        #expect(roster.candidateRead == .complete && roster.candidates.count == 120)
+        #expect(source.cursors == [nil, "50", nil, "50", "100"])
+    }
+
+    @Test func participantPickerSaysWhenNobodyIsLeftToEnrol() async throws {
+        let source = CourseDirectorySource(learners: [], pageSize: 50)
+        let roster = SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: seriesID, client: readOnlyCourseClient(), learners: [],
+            learnerPages: { cursor in try await source.page(cursor) })
+        await roster.loadCandidates()
+        #expect(roster.candidateRead == .complete && roster.candidates.isEmpty)
+        #expect(source.cursors.count == 1)
+    }
+
+    @Test func participantPickerStopsOnACursorThatNeverEnds() async throws {
+        let directory = (1...10).map { directoryLearner($0) }
+        let source = CourseDirectorySource(learners: directory, pageSize: 5)
+        source.repeatsCursor = true
+        let roster = SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: seriesID, client: readOnlyCourseClient(), learners: [],
+            learnerPages: { cursor in try await source.page(cursor) })
+        await roster.loadCandidates()
+        #expect(roster.candidateRead == .failed(SchoolPlanningFailure.invalidResponse.localizedDescription))
+        #expect(source.cursors.count == 2)
+    }
+
+    @Test func endedAndCancelledEnrollmentsStayOpenableButAreNeverTheNextCourse() async throws {
+        let now = try #require(SchoolLesson.date("2030-04-01T08:00:00Z"))
+        for status in ["PUBLISHED", "CANCELLED"] {
+            let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON(status: status, publishedAt: "2030-01-01T08:00:00Z"))
+            let enrollment = try JSONDecoder().decode(SchoolCourseEnrollment.self, from: Data(enrollmentJSON().utf8))
+            let responses = ["course-series": Data("{\"items\":[]}".utf8),
+                "course-enrollments/me": try JSONEncoder().encode(SchoolCourseMine(items: [enrollment], offers: [])),
+                "course-series/\(seriesID)": try JSONEncoder().encode(series)]
+            let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+                transport: CourseJourneyReadTransport(responses: responses))
+            let courses = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: "Europe/Zurich", client: client)
+            await courses.load(now: now)
+            // La ligne « Mes inscriptions » existe et ouvre la fiche, sous son vrai titre ; elle n'est ni proposée ni « prochaine ».
+            #expect(courses.activeEnrollments.map(\.seriesId) == [seriesID])
+            #expect(courses.title(for: seriesID) == series.title)
+            #expect(courses.series(for: seriesID)?.status == series.status)
+            #expect(courses.nextOccurrence(for: seriesID, now: now) == nil && courses.nextEnrollment(now: now) == nil)
+            #expect(courses.availableCourses.isEmpty)
+        }
+    }
+
+    @Test func validatedCourseOutsideTheUpcomingCatalogueIsReadByItsIdentifier() async throws {
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON(status: "PUBLISHED", publishedAt: "2030-01-01T08:00:00Z"))
+        let completion = SchoolCourseProgress.Completion(id: UUID(), typeId: typeID, typeTitle: series.typeTitle,
+            validatedAt: "2030-03-12T09:00:00Z", seriesId: seriesID)
+        let responses = ["course-series": Data("{\"items\":[]}".utf8),
+            "course-enrollments/me": try JSONEncoder().encode(SchoolCourseMine(items: [], offers: [])),
+            "course-progress/me": try JSONEncoder().encode(SchoolCourseProgress(completions: [completion], enrollments: [])),
+            "course-series/\(seriesID)": try JSONEncoder().encode(series)]
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseJourneyReadTransport(responses: responses))
+        let courses = SchoolLearnerCoursesWorkspace(schoolID: schoolID, timeZone: "Europe/Zurich", client: client)
+        await courses.load(now: try #require(SchoolLesson.date("2030-04-01T08:00:00Z")))
+        #expect(courses.progress?.completions.first?.seriesId == seriesID)
+        #expect(courses.series(for: seriesID) == series && courses.title(for: seriesID) == series.title)
+        #expect(courses.availableCourses.isEmpty)
+    }
+
+    @Test func organiserTextIsShownOnlyWhenSomethingWasWrittenAndStaysApartFromTheConditions() throws {
+        #expect(SchoolCoursePresentation.text("") == nil)
+        #expect(SchoolCoursePresentation.text(" \n\t ") == nil)
+        #expect(SchoolCoursePresentation.text("  Trois soirs.\n") == "Trois soirs.")
+        let long = String(repeating: "Très long texte. ", count: 200)
+        #expect(SchoolCoursePresentation.text(long) == long.trimmingCharacters(in: .whitespacesAndNewlines))
+        let series = try JSONDecoder().decode(SchoolCourseSeries.self, from: seriesJSON(status: "PUBLISHED", publishedAt: "2030-01-01T08:00:00Z"))
+        #expect(SchoolCoursePresentation.text(series.description) == "Trois soirs")
+        #expect(SchoolCoursePresentation.text(series.conditions) == "Permis d’élève")
+    }
+
+    @Test func learnerCancellationConfirmsOnlyWhatTheSchoolConfirmsAndKeepsARefusalVisible() async throws {
+        let enrolled = replyJSON(state: "ENROLLED", enrollment: enrollmentJSON())
+        let accepted = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseCancelTransport(reply: enrolled, afterCancel: replyJSON(state: "AVAILABLE")))
+        let model = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich", client: accepted)
+        await model.load()
+        #expect(model.me?.state == .enrolled)
+        model.submit(.cancel(enrollmentID: enrollmentID, version: 2))
+        try await HubFixture.wait { model.pending == nil }
+        #expect(model.me?.state == .available && model.confirmation == "Inscription annulée" && model.errorMessage == nil)
+
+        let refused = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseCancelTransport(reply: enrolled, afterCancel: nil))
+        let blocked = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich", client: refused)
+        await blocked.load()
+        blocked.submit(.cancel(enrollmentID: enrollmentID, version: 2))
+        try await HubFixture.wait { blocked.errorMessage != nil }
+        // Refus de l'école : l'inscription reste, aucun faux succès, la raison reste lisible.
+        #expect(blocked.errorMessage == "Le délai d’annulation est passé.")
+        #expect(blocked.me?.state == .enrolled && blocked.confirmation == nil && blocked.pending == nil)
+    }
+}
+
+/// Lecture de l'annuaire des élèves par pages : un numéro de requête peut échouer, un curseur peut ne jamais finir.
+@MainActor private final class CourseDirectorySource {
+    private let learners: [SchoolLearner]
+    private let pageSize: Int
+    private(set) var cursors: [String?] = []
+    /// Numéros de requête (à partir de 1) qui échouent.
+    var failing: Set<Int> = []
+    var repeatsCursor = false
+
+    init(learners: [SchoolLearner], pageSize: Int) { self.learners = learners; self.pageSize = pageSize }
+
+    func page(_ cursor: String?) async throws -> SchoolPage<SchoolLearner> {
+        cursors.append(cursor)
+        if failing.contains(cursors.count) { throw SchoolPlanningFailure.unavailable }
+        let start = cursor.flatMap { Int($0) } ?? 0
+        let end = min(learners.count, start + pageSize)
+        let next: String? = repeatsCursor ? "x" : (end < learners.count ? String(end) : nil)
+        return SchoolPage(items: Array(learners[start..<end]), nextCursor: next)
+    }
+}
+
+/// L'élève annule son inscription : la fiche se relit, puis l'école accepte ou refuse la demande.
+private struct CourseCancelTransport: SchoolHTTPTransport {
+    let reply: Data
+    /// `nil` : l'école refuse l'annulation, délai passé.
+    let afterCancel: Data?
+
+    func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        let url = request.url!
+        if url.lastPathComponent == "cancel" {
+            guard let afterCancel else {
+                return SchoolHTTPResponse(data: Data("{\"code\":\"COURSE_SELF_CANCEL_CLOSED\",\"title\":\"Délai passé\"}".utf8),
+                    status: 409, url: url, contentType: "application/problem+json")
+            }
+            return try Self.response(afterCancel, url: url)
+        }
+        guard url.lastPathComponent == "me", url.path.contains("course-series") else { throw URLError(.notConnectedToInternet) }
+        return try Self.response(reply, url: url)
+    }
+
+    private static func response(_ data: Data, url: URL) throws -> SchoolHTTPResponse {
+        let body: [String: Any] = ["data": try JSONSerialization.jsonObject(with: data), "requestId": "course-cancel",
+                                   "serverTime": "2030-03-01T08:00:00Z"]
+        return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, contentType: "application/json")
+    }
 }
 
 @MainActor private final class CourseCancellationToken: AccessTokenSource {

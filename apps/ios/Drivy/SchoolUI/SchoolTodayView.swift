@@ -348,8 +348,12 @@ struct SchoolTodayView: View {
     private func openCourse(_ item: SchoolAgendaCourseItem) {
         guard let agendaClient, let membership = workspace.membership, instructs,
               item.series.schoolId == membership.schoolId else { return }
-        courseDetail = SchoolCourseDetailWorkspace(schoolID: membership.schoolId, client: agendaClient.courseClient,
-            series: item.series, learners: workspace.learners, selectedOccurrenceID: item.occurrence.id)
+        let schoolID = membership.schoolId
+        let reader = agendaClient.reader
+        courseDetail = SchoolCourseDetailWorkspace(schoolID: schoolID, client: agendaClient.courseClient,
+            series: item.series, learners: workspace.learners,
+            learnerPages: { cursor in try await reader.learners(schoolID: schoolID, query: "", cursor: cursor) },
+            selectedOccurrenceID: item.occurrence.id)
     }
 
     /// Même lecture compacte que l’agenda : horaire, élève, lieu et éventuel état inhabituel.

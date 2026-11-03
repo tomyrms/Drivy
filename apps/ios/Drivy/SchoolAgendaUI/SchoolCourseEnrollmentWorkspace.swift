@@ -472,13 +472,31 @@ struct SchoolCourseLearnerPending: Equatable {
     }
 }
 
+/// Une page de l’annuaire des élèves de l’école, lue au nom du compte : le serveur en filtre le contenu selon ses droits.
+typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async throws -> SchoolPage<SchoolLearner>
+
 /// Inscrits et file d’un cours publié, pour le personnel habilité (droits relus par le serveur).
 @MainActor @Observable final class SchoolCourseRosterWorkspace {
+    /// Lecture de l’annuaire qui alimente le sélecteur d’élèves.
+    enum CandidateRead: Equatable {
+        /// Pas encore commencée.
+        case idle
+        case loading
+        /// Toutes les pages sont lues : la liste est celle que le serveur montre à ce compte.
+        case complete
+        /// Une page a échoué : les noms déjà lus restent proposés, la lecture se reprend.
+        case failed(String)
+    }
+
+    /// Au-delà, la lecture s’arrête plutôt que de boucler sur un curseur.
+    static let maximumDirectory = 10_000
+
     let schoolID: UUID
     let seriesID: UUID
     let client: SchoolCourseClient
-    /// Élèves actifs déjà lus par l’app, proposés à l’inscription.
-    let learners: [SchoolLearner]
+    /// Élèves actifs proposés à l’inscription : ceux que l’app avait déjà, puis tout l’annuaire une fois lu.
+    private(set) var learners: [SchoolLearner]
+    private(set) var candidateRead: CandidateRead
     private(set) var roster: SchoolCourseRoster?
     private(set) var isLoading = false
     private(set) var isBusy = false
@@ -486,16 +504,62 @@ struct SchoolCourseLearnerPending: Equatable {
     private(set) var confirmation: String?
     @ObservationIgnored private var memory = SchoolCourseOperationMemory()
     @ObservationIgnored var onChange: (@MainActor () async -> Void)?
+    /// Les élèves déjà lus par l’app : première page de l’annuaire, parfois filtrée par une recherche. Jamais présumés complets.
+    private let seed: [SchoolLearner]
+    private let learnerPages: SchoolCourseLearnerPageReader?
 
-    init(schoolID: UUID, seriesID: UUID, client: SchoolCourseClient, learners: [SchoolLearner]) {
+    /// Sans `learnerPages` (aperçus, tests), `learners` est tenu pour complet.
+    init(schoolID: UUID, seriesID: UUID, client: SchoolCourseClient, learners: [SchoolLearner],
+         learnerPages: SchoolCourseLearnerPageReader? = nil) {
         self.schoolID = schoolID; self.seriesID = seriesID; self.client = client
-        self.learners = learners.filter { $0.archivedAt == nil }.sorted { $0.displayName.localizedCompare($1.displayName) == .orderedAscending }
+        self.seed = learners; self.learnerPages = learnerPages
+        self.learners = Self.visible(learners)
+        candidateRead = learnerPages == nil ? .complete : .idle
+    }
+
+    /// Dossiers actifs, sans doublon, dans l’ordre alphabétique.
+    static func visible(_ learners: [SchoolLearner]) -> [SchoolLearner] {
+        var seen = Set<UUID>()
+        return learners.filter { $0.archivedAt == nil && seen.insert($0.id).inserted }
+            .sorted { $0.displayName.localizedCompare($1.displayName) == .orderedAscending }
     }
 
     /// Élèves sans inscription active ni place en file.
     var candidates: [SchoolLearner] {
         let taken = Set((roster?.active.map(\.enrollment.learnerId) ?? []) + (roster?.waitlist.map(\.learnerId) ?? []))
         return learners.filter { !taken.contains($0.id) }
+    }
+
+    /// Lit tout l’annuaire, page après page : aucun élève admissible n’est écarté par la taille d’une page. Les noms déjà lus
+    /// restent proposés pendant la suite ; une panne les garde et se reprend. Une lecture complète n’est pas refaite.
+    func loadCandidates() async {
+        guard let learnerPages, candidateRead != .loading, candidateRead != .complete else { return }
+        candidateRead = .loading
+        var read: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
+        do {
+            repeat {
+                let page = try await learnerPages(cursor)
+                try Task.checkCancellation()
+                read.append(contentsOf: page.items); cursor = page.nextCursor
+                guard read.count <= Self.maximumDirectory else { throw SchoolPlanningFailure.invalidResponse }
+                if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
+                if cursor != nil { learners = Self.visible(seed + read) }
+            } while cursor != nil
+            learners = Self.visible(read)
+            candidateRead = .complete
+        } catch {
+            learners = Self.visible(seed + read)
+            // Sélecteur refermé pendant la lecture : ni panne ni lecture complète.
+            if error is CancellationError || Task.isCancelled { candidateRead = .idle; return }
+            candidateRead = .failed(SchoolCourseLearnerWorkspace.message(error))
+        }
+    }
+
+    /// Reprend la lecture après une panne.
+    func retryCandidates() async {
+        guard case .failed = candidateRead else { return }
+        candidateRead = .idle
+        await loadCandidates()
     }
 
     func load() async {
