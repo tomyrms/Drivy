@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import { NotificationPreferenceStore, type PreferenceTransport } from '../client/notification-preferences-store.js';
-import { saveNotificationPreferences, type NotificationPreferences, type SaveOutcome } from '../client/notification-preferences-model.js';
+import { saveNotificationPreferences, visibleNotificationKeys, type NotificationPreferences, type SaveOutcome } from '../client/notification-preferences-model.js';
 
 const initial: NotificationPreferences = { version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true,
-  messagingPrivate: true, messagingGeneral: false, messagingMentions: true };
+  messagingPrivate: true, messagingGeneral: false, messagingMentions: true, lessonRequests: true, examUpdates: true };
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 
@@ -69,6 +69,36 @@ describe('Préférences : projection locale et réconciliation par catégorie', 
     expect(h.store.getSnapshot()).toMatchObject({ phase: 'ready', pendingKeys: [] });
   });
 
+  test('les demandes de leçon et les examens restent transmis sans être remis à zéro (#43/#44)', async () => {
+    const h = harness(); await h.store.refresh();
+    h.store.choose('courseOffers', false); await flush();
+    const { version: _version, ...body } = initial;
+    expect(vi.mocked(h.transport.write).mock.calls[0]![1]).toEqual({ ...body, courseOffers: false });
+    expect(h.server()).toMatchObject({ lessonRequests: true, examUpdates: true, version: 2 });
+  });
+
+  test('un interrupteur de leçon est un choix indépendant : l’autre champ et le reste ne sont pas remis à zéro (#43/#44)', async () => {
+    const h = harness(); await h.store.refresh();
+    h.store.choose('lessonRequests', false); await flush();
+    const { version: _version, ...body } = initial;
+    expect(vi.mocked(h.transport.write).mock.calls[0]![1]).toEqual({ ...body, lessonRequests: false });
+    expect(h.server()).toMatchObject({ lessonRequests: false, examUpdates: true, courseOffers: true, version: 2 });
+    h.store.choose('examUpdates', false); await flush();
+    expect(h.server()).toMatchObject({ lessonRequests: false, examUpdates: false, version: 3 });
+    expect(h.store.getSnapshot()).toMatchObject({ phase: 'ready', pendingKeys: [] });
+  });
+
+  test('ancienne API sans les champs de leçon : le PUT ne les envoie pas', async () => {
+    const h = harness();
+    const { lessonRequests: _a, examUpdates: _b, ...legacy } = initial;
+    h.setServer(legacy as NotificationPreferences); await h.store.refresh();
+    h.store.choose('courseOffers', false); await flush();
+    const body = vi.mocked(h.transport.write).mock.calls[0]![1];
+    expect(body).not.toHaveProperty('lessonRequests');
+    expect(body).not.toHaveProperty('examUpdates');
+    expect(h.server()).toMatchObject({ courseOffers: false, version: 2 });
+  });
+
   test('commit puis réponse perdue : la lecture confirme les choix sans second PUT', async () => {
     const h = harness(); await h.store.refresh();
     vi.mocked(h.transport.write).mockImplementationOnce(async (_person, body, version) => {
@@ -129,6 +159,23 @@ describe('Préférences : projection locale et réconciliation par catégorie', 
   });
 });
 
+describe('Interrupteurs affichés : jamais pour une alerte que l’API n’annonce pas', () => {
+  test('le groupe Leçons apparaît avec les deux libellés quand les champs sont présents', () => {
+    const lessons = visibleNotificationKeys(initial).filter(item => item.group === 'lessons');
+    expect(lessons.map(item => [item.key, item.label])).toEqual([['lessonRequests', 'Demandes de leçon'], ['examUpdates', 'Examens']]);
+  });
+  test('sans les champs, aucun interrupteur de leçon ; les autres restent', () => {
+    const { lessonRequests: _a, examUpdates: _b, ...legacy } = initial;
+    const keys = visibleNotificationKeys(legacy).map(item => item.key);
+    expect(keys).not.toContain('lessonRequests'); expect(keys).not.toContain('examUpdates');
+    expect(keys).toContain('messagingMentions'); expect(keys).toContain('courseOffers');
+  });
+  test('un seul champ annoncé : seulement celui-là', () => {
+    const { examUpdates: _b, ...partial } = initial;
+    expect(visibleNotificationKeys(partial).filter(item => item.group === 'lessons').map(item => item.key)).toEqual(['lessonRequests']);
+  });
+});
+
 describe('Transport PUT : absence de confirmation distincte du refus', () => {
   test.each([
     [200, { data: { ...initial } }],
@@ -143,6 +190,17 @@ describe('Transport PUT : absence de confirmation distincte du refus', () => {
     const { messagingPrivate: _a, messagingGeneral: _b, messagingMentions: _c, ...legacy } = initial;
     const send = vi.fn(async () => new Response(JSON.stringify({ data: { ...legacy, version: 2 } }), { status: 200 }));
     expect(await saveNotificationPreferences({ ...initial, courseOffers: false }, 1, 'csrf', send as typeof fetch)).toMatchObject({ ok: false, kind: 'uncertain' });
+  });
+  test('ancienne API : PUT sans champs de leçon, réponse sans champs de leçon, résultat confirmé', async () => {
+    const { lessonRequests: _a, examUpdates: _b, ...legacy } = initial;
+    const send = vi.fn(async () => new Response(JSON.stringify({ data: { ...legacy, courseOffers: false, version: 2 } }), { status: 200 }));
+    expect(await saveNotificationPreferences({ ...legacy, courseOffers: false } as never, 1, 'csrf', send as typeof fetch)).toMatchObject({ ok: true });
+    expect(JSON.parse(String((send.mock.calls[0] as unknown as [string, RequestInit])[1].body))).not.toHaveProperty('lessonRequests');
+  });
+  test('un champ de leçon renvoyé par le serveur mais non envoyé ne fait pas échouer la confirmation', async () => {
+    const { lessonRequests: _a, examUpdates: _b, ...legacy } = initial;
+    const send = vi.fn(async () => new Response(JSON.stringify({ data: { ...initial, courseOffers: false, version: 2 } }), { status: 200 }));
+    expect(await saveNotificationPreferences({ ...legacy, courseOffers: false } as never, 1, 'csrf', send as typeof fetch)).toMatchObject({ ok: true });
   });
   test('refus sûr et version en conflit ont des résultats distincts', async () => {
     for (const [status, kind] of [[403, 'rejected'], [412, 'conflict']] as const) {

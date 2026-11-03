@@ -2,7 +2,7 @@ import { acknowledgeFields, projectFields, type FieldIntention } from './command
 import { type Choices, type NotificationPreferences, type SaveOutcome } from './notification-preferences-model.js';
 
 type Key = keyof Choices;
-type Intentions = Partial<Record<Key, FieldIntention<boolean>>>;
+type Intentions = Partial<{ [K in Key]: FieldIntention<Choices[K]> }>;
 type Flight = { base: NotificationPreferences; body: Choices; intentions: Intentions };
 export type PreferencePhase = 'loading' | 'ready' | 'saving' | 'uncertain' | 'conflict' | 'unavailable' | 'rejected';
 export interface PreferenceSnapshot {

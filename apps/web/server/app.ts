@@ -361,7 +361,8 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   app.get('/app/bff/me',async (request,reply) => sendApi(reply,await callApi(current(request),'/v1/me')));
   // Messagerie (#74) : facultative à l'écriture, comme côté API, pour qu'un onglet ouvert avant la mise à jour ne soit pas refusé.
   const preferenceBody = z.object({courseOffers:z.boolean(),courseReminders:z.boolean(),courseChanges:z.boolean(),courseStaffAlerts:z.boolean(),
-    messagingPrivate:z.boolean().optional(),messagingGeneral:z.boolean().optional(),messagingMentions:z.boolean().optional()}).strict();
+    messagingPrivate:z.boolean().optional(),messagingGeneral:z.boolean().optional(),messagingMentions:z.boolean().optional(),
+    lessonRequests:z.boolean().optional(),examUpdates:z.boolean().optional()}).strict();
   const callNotification = async (session: Session, command: Parameters<NotificationGateway>[0]) => {
     const result = await notificationGateway(command,await accessToken(session));
     if (!store.isCurrent(session)) throw new WebError(401,command.method === 'GET' ? 'SESSION_EXPIRED' : 'SESSION_LOST_RESULT_UNKNOWN');

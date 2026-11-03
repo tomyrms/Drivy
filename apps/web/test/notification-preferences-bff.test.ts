@@ -72,6 +72,20 @@ test('les catégories de messagerie sont relayées telles quelles, sans clé inc
   expect(gateway).toHaveBeenCalledTimes(1);
 });
 
+test('les demandes de leçon et les examens sont relayés tels quels, sans toucher aux autres choix (#43/#44)', async () => {
+  const pushPrefs = {...messagingPrefs,lessonRequests:true,examUpdates:false};
+  const gateway = vi.fn<NotificationGateway>(async request => request.method === 'GET'
+    ? { status: 200, body: { data: { version: 3, ...pushPrefs } }, etag: '"3"' }
+    : { status: 200, body: { data: { version: 4, ...(request.body as object) } }, etag: '"4"' });
+  const h = await harness(gateway);
+  const saved = await h.put(pushPrefs, { 'if-match': '"3"' });
+  expect(saved.statusCode).toBe(200);
+  expect(gateway).toHaveBeenLastCalledWith({ method: 'PUT', body: pushPrefs, ifMatch: '"3"' }, h.tokens.accessToken);
+  expect((await h.put({ ...pushPrefs, lessonRequests: 'oui' }, { 'if-match': '"3"' })).statusCode).toBe(400);
+  expect((await h.put({ ...pushPrefs, examEverything: true }, { 'if-match': '"3"' })).statusCode).toBe(400);
+  expect(gateway).toHaveBeenCalledTimes(1);
+});
+
 test('un conflit de version API reste un 412', async () => {
   const h = await harness(async () => ({ status: 412, body: { code: 'VERSION_CONFLICT' } }));
   const response = await h.put(prefs, { 'if-match': '"2"' });

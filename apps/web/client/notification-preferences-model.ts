@@ -10,10 +10,17 @@ export const notificationKeys = [
   { key: 'messagingPrivate', label: 'Messages privés', group: 'messages' },
   { key: 'messagingGeneral', label: 'Messages du général', group: 'messages' },
   { key: 'messagingMentions', label: 'Mentions', group: 'messages' },
+  { key: 'lessonRequests', label: 'Demandes de leçon', group: 'lessons' },
+  { key: 'examUpdates', label: 'Examens', group: 'lessons' },
 ] as const;
+/** Un interrupteur n’existe que pour un champ que l’API a annoncé : jamais pour une alerte inexistante. */
+export const visibleNotificationKeys = (value: Partial<Record<(typeof notificationKeys)[number]['key'], boolean | undefined>>) =>
+  notificationKeys.filter(({ key }) => typeof value[key] === 'boolean');
 export const notificationSchema = z.object({ data: z.object({ version: z.number().int().positive(),
   courseOffers: z.boolean(), courseReminders: z.boolean(), courseChanges: z.boolean(), courseStaffAlerts: z.boolean(),
-  messagingPrivate: z.boolean(), messagingGeneral: z.boolean(), messagingMentions: z.boolean() }) });
+  messagingPrivate: z.boolean(), messagingGeneral: z.boolean(), messagingMentions: z.boolean(),
+  // Demandes de leçon et examens (#43/#44) : facultatifs pour les anciennes API ; absents = inchangés côté serveur.
+  lessonRequests: z.boolean().optional(), examUpdates: z.boolean().optional() }) });
 export type NotificationPreferences = z.infer<typeof notificationSchema>['data'];
 export type Choices = Omit<NotificationPreferences, 'version'>;
 const url = '/app/bff/me/notification-preferences';
@@ -38,7 +45,7 @@ export async function saveNotificationPreferences(choices: Choices, version: num
       ? 'rejected' : 'uncertain', status: response.status };
   }
   const parsed = notificationSchema.safeParse(body);
-  return parsed.success && parsed.data.data.version > version && notificationKeys.every(({ key }) => parsed.data.data[key] === choices[key])
+  return parsed.success && parsed.data.data.version > version && notificationKeys.every(({ key }) => choices[key] === undefined || parsed.data.data[key] === choices[key])
     ? { ok: true, value: parsed.data.data } : { ok: false, conflict: false, kind: 'uncertain' };
 }
 

@@ -63,6 +63,11 @@ export function decideMessagingNotification(event: MessagingNotificationEvent, s
   return { allowed: true, category, preferenceVersion: preferences.version };
 }
 
+/** Fenêtre de calme par conversation (#74, 3 novembre 2026) : après un envoi, les alertes suivantes de la même personne
+ * pour la même conversation attendent `sent_at + 60 s` (report de `available_at`, sans consommer de tentative), puis sont
+ * regroupées en un seul envoi. Valeur figée : elle ne dépend d'aucune préférence ni configuration. */
+export const MESSAGING_PUSH_QUIET_WINDOW_SECONDS = 60;
+
 /** Catégories de la file `push_notification.category` portées par la messagerie, et leur catégorie de contrat. */
 export const queuedMessagingCategories = {
   MESSAGE_PRIVATE: 'MESSAGING_PRIVATE',
@@ -72,6 +77,13 @@ export const queuedMessagingCategories = {
 export type QueuedMessagingCategory = keyof typeof queuedMessagingCategories;
 export function isQueuedMessagingCategory(category: string): category is QueuedMessagingCategory {
   return Object.hasOwn(queuedMessagingCategories, category);
+}
+
+/** Alerte retenue pour un groupe (personne, conversation) déjà trié de la plus récente à la plus ancienne (#74).
+ * Une mention autorisée prime sur les messages ordinaires du groupe : une seule alerte part, jamais deux pour le même
+ * événement de messagerie. L'appelant n'appelle cette fonction qu'avec des alertes déjà autorisées par la revalidation. */
+export function chooseCoalescedMessagingAlert<T extends { category: QueuedMessagingCategory }>(allowed: readonly T[]): T | undefined {
+  return allowed.find(alert => queuedMessagingCategories[alert.category] === 'MESSAGING_MENTION') ?? allowed[0];
 }
 
 /** Ligne de `drivy.push_messaging_snapshot` : des faits, aucune décision et aucune donnée de message. */

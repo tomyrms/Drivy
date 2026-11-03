@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:notification-preferences:1",
+  "$comment": "Extension du 3 novembre 2026 (#43, #44). Routes /v1/me/notification-preferences : GET (ETag), PUT (If-Match, ETag). OpenAPI canonique 3.11.0 conservé. Un seul objet versionné par personne, pour toutes ses écoles : les champs de cours (quatre), de messagerie (trois, #74) et, ajoutés ici, les demandes de leçon (lessonRequests) et les examens (examUpdates). Les deux nouveaux champs sont facultatifs à l'écriture, comme ceux de messagerie : une ancienne app ou un ancien onglet qui ne les mentionne pas les laisse inchangés. La réponse les porte toujours. Une version périmée en If-Match donne 412. L'API ne connaît que la personne connectée : ni lecture ni écriture des choix d'un tiers.",
+  "$defs": {
+    "Preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "courseOffers", "courseReminders", "courseChanges", "courseStaffAlerts", "messagingPrivate", "messagingGeneral", "messagingMentions", "lessonRequests", "examUpdates"],
+      "properties": {
+        "version": {"type": "integer", "minimum": 1, "description": "À renvoyer dans If-Match pour écrire."},
+        "courseOffers": {"type": "boolean"},
+        "courseReminders": {"type": "boolean"},
+        "courseChanges": {"type": "boolean"},
+        "courseStaffAlerts": {"type": "boolean"},
+        "messagingPrivate": {"type": "boolean", "description": "Nouveaux messages d'une conversation privée (#74)."},
+        "messagingGeneral": {"type": "boolean", "description": "Nouveaux messages du général hors mention (#74)."},
+        "messagingMentions": {"type": "boolean", "description": "Messages qui mentionnent la personne (#74)."},
+        "lessonRequests": {"type": "boolean", "description": "Demande de l'élève sur une leçon, et réponse à cette demande (#43/#44). Actif par défaut."},
+        "examUpdates": {"type": "boolean", "description": "Examen saisi ou modifié, résultat enregistré (#43/#44). Actif par défaut."}
+      }
+    },
+    "Command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["courseOffers", "courseReminders", "courseChanges", "courseStaffAlerts"],
+      "properties": {
+        "courseOffers": {"type": "boolean"},
+        "courseReminders": {"type": "boolean"},
+        "courseChanges": {"type": "boolean"},
+        "courseStaffAlerts": {"type": "boolean"},
+        "messagingPrivate": {"type": "boolean"},
+        "messagingGeneral": {"type": "boolean"},
+        "messagingMentions": {"type": "boolean"},
+        "lessonRequests": {"type": "boolean", "description": "Absent = inchangé."},
+        "examUpdates": {"type": "boolean", "description": "Absent = inchangé."}
+      }
+    },
+    "Envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {"data": {"$ref": "#/$defs/Preferences"}, "requestId": {"type": "string"}, "serverTime": {"type": "string", "format": "date-time"}}
+    }
+  }
+}
