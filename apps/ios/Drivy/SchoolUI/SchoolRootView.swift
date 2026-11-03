@@ -114,6 +114,9 @@ struct SchoolRootView: View {
             else { captureController.setScope(nil); workspace?.reset() }
             updateCaptureScope()
         }
+        // Toute fin de session révoque l'appareil push (#120), même sans jeton d'accès : la restauration échouée, le
+        // renouvellement refusé et l'échec du Trousseau passent par cette accroche, les deux gestes l'appellent avant.
+        .task { identity.sessionEnded = { await SchoolPushCenter.shared.sessionEnding() } }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
             if !authenticated {
                 captureController.setScope(nil)
@@ -153,7 +156,19 @@ struct SchoolRootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { updateCaptureScope() }
+            if phase == .active {
+                updateCaptureScope()
+                // Révocation restée à faire après une panne réseau (#120) : un essai au retour au premier plan,
+                // seulement hors session ouverte et sans restauration en cours.
+                if !identity.isAuthenticated, !identity.isWorking {
+                    Task { await SchoolPushCenter.shared.resumePendingRevocation() }
+                }
+            }
+        }
+        .onChange(of: identity.isWorking) { _, working in
+            // Fin d'une restauration ou d'une connexion sans session : même reprise, un essai par transition.
+            guard !working, !identity.isAuthenticated else { return }
+            Task { await SchoolPushCenter.shared.resumePendingRevocation() }
         }
         .safeAreaInset(edge: .top) {
             if identity.isAuthenticated, let error = captureController.pendingSynchronizationError {

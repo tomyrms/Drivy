@@ -23,6 +23,10 @@ final class IdentitySession: AccessTokenSource {
     @ObservationIgnored private var restored = false
     @ObservationIgnored private var refreshTask: Task<String, Error>?
     @ObservationIgnored private var refreshID: UUID?
+    /// Fin de session push (#120), posée par la racine de l'app : l'identité ne connaît ni l'interface ni le service de
+    /// notification, elle annonce seulement qu'une session s'est terminée (restauration échouée, renouvellement refusé,
+    /// Trousseau en échec). La déconnexion explicite l'appelle avant `signOut()`, depuis son geste.
+    @ObservationIgnored var sessionEnded: (@MainActor () async -> Void)?
 
     convenience init(configuration: AppConfiguration?) {
         self.init(configuration: configuration, vault: KeychainIdentityVault(), authorizer: AppAuthAuthorization())
@@ -62,7 +66,11 @@ final class IdentitySession: AccessTokenSource {
                 return
             }
             isAuthenticated = false
-            if !(error is CancellationError) { errorMessage = message(for: error) }
+            if !(error is CancellationError) {
+                errorMessage = message(for: error)
+                // Restauration échouée : la session push se termine avec elle, l'appareil inscrit est révoqué (#120).
+                await sessionEnded?()
+            }
         }
     }
 
@@ -186,18 +194,24 @@ final class IdentitySession: AccessTokenSource {
                 return token
             } catch {
                 guard generation == expected else { throw CancellationError() }
+                var ended = false
                 if !state.isAuthorized {
+                    ended = isAuthenticated
                     self.state = nil
                     sessionDisplayName = nil
                     isAuthenticated = false
                     do { try vault.clear() } catch { errorMessage = IdentityFailure.storage.localizedDescription }
                 }
                 if let failure = error as? IdentityFailure, case .storage = failure {
+                    ended = ended || isAuthenticated
                     self.state = nil
                     sessionDisplayName = nil
                     isAuthenticated = false
                 }
                 if !(error is CancellationError) { errorMessage = message(for: error) }
+                // Renouvellement refusé ou Trousseau en échec : la session push se termine avec la session (#120),
+                // une seule fois par fin de session.
+                if ended, !(error is CancellationError) { await sessionEnded?() }
                 if error is CancellationError { throw CancellationError() }
                 throw error as? IdentityFailure ?? IdentityFailure.unavailable
             }
