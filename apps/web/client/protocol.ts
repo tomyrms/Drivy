@@ -48,7 +48,23 @@ export const previewSchema = z.object({ confirmation: z.string().min(1).max(512)
 }) });
 export const acceptedSchema = z.object({ data: memberSchema });
 export const okSchema = z.object({ ok: z.literal(true) });
+/** What a logout confirmed: the local session, and separately whether the provider revoked the refresh token. */
+export const revocationSchema = z.enum(['confirmed', 'failed', 'not-attempted', 'unknown']);
+export const logoutSchema = z.object({
+  sessionClosed: z.boolean().optional(),
+  revocation: z.string().max(32).optional(),
+}).transform((value): SessionClosure => {
+  const revocation = revocationSchema.safeParse(value.revocation);
+  return {
+    // A 2xx logout response is only sent once the local session is destroyed.
+    sessionClosed: value.sessionClosed ?? true,
+    // An older response said nothing about revocation: not attempted is a different fact from unknown.
+    revocation: revocation.success ? revocation.data : 'unknown',
+  };
+});
 export const loginSchema = z.object({ url: z.string().url() });
+
+export type SessionClosure = { sessionClosed: boolean; revocation: z.infer<typeof revocationSchema> };
 
 export type Session = z.infer<typeof sessionSchema>;
 export type Me = z.infer<typeof meSchema>['data'];
@@ -105,9 +121,10 @@ export async function request<T>(path: string, schema: z.ZodType<T>, options?: {
 }
 
 /** A lost response is not proof of logout. Refresh CSRF, then wait for the server. */
-export async function endSession(): Promise<void> {
+export async function endSession(): Promise<SessionClosure> {
   const current = await request('session', sessionSchema);
-  if (current.authenticated) await request('logout', okSchema, { csrf: current.csrfToken, body: {} });
+  if (!current.authenticated) return { sessionClosed: true, revocation: 'not-attempted' };
+  return request('logout', logoutSchema, { csrf: current.csrfToken, body: {} });
 }
 
 export function errorMessage(error: unknown): string {

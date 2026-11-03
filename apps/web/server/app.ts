@@ -344,8 +344,11 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if (session.invitation?.accepting || (session.invitation?.submitted && !session.invitation.accepted)) throw new WebError(409,'INVITATION_IN_PROGRESS');
     store.destroy(session); reply.clearCookie(cookieName,cookieBase);
     reply.setCookie(reloginName,'1',{ ...cookieBase, maxAge: 30 * 24 * 3600 });
-    if (tokens) { try { await identity.revoke(tokens); } catch { /* Local session already destroyed; no token exposed. */ } }
-    return {ok:true};
+    // Deux faits distincts : la session locale est fermée quoi qu'il arrive ; la révocation distante n'est confirmée que si
+    // le fournisseur l'accepte. Ni jeton ni détail du fournisseur ne sortent d'ici.
+    if (!tokens?.refreshToken) return { sessionClosed:true, revocation:'not-attempted' as const };
+    try { await identity.revoke(tokens); return { sessionClosed:true, revocation:'confirmed' as const }; }
+    catch { return { sessionClosed:true, revocation:'failed' as const }; }
   });
   app.post('/app/bff/invitation',async (request,reply) => {
     const admitted = admit(request);
