@@ -1,7 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight, ChevronRight, CircleCheck, CircleSlash, Pencil } from 'lucide-react';
 import { characters, createCommand, filled, isEmail, profilePolicyProblem, type ProfileField } from '../../command-core';
-import { useCommandSnapshot, type SubmitResult } from '../../command-store';
+import { kindsOf } from '../../command-families';
+import { useCommandRevision, type SubmitResult } from '../../command-store';
 import {
   POLICY_TEXT_MINIMUM, catalogPolicySchema, dataPolicySchema, policyImpactSchema, profilePolicySchema, readAll, readSchool, termsSchema, textProposalsSchema,
   type ProfilePolicy, type TextProposals,
@@ -106,7 +107,7 @@ function GpsCard() {
 
 function PolicyTextsCard({ proposals, fieldsPublished, onAdopted }: { proposals: TextProposals | null; fieldsPublished: boolean; onAdopted: () => void }) {
   const { schoolId, school, routeQuery } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(kindsOf('school'));
   const runner = useCommandRunner(() => { setEditing(false); onAdopted(); });
   const loaded = useLoad(() => readSchool(schoolId, 'data-policy', dataPolicySchema), [schoolId, revision, school.version]);
   const policy = loaded.data ?? null;
@@ -274,7 +275,7 @@ function RequestedFields({ proposals, policies, noticeVersionId }: { proposals: 
 
 function ConditionsCard() {
   const { schoolId, school, navigate } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(kindsOf('school', 'catalogue'));
   const loaded = useLoad(async () => {
     const [terms, procedures] = await Promise.all([readAll(schoolId, 'commercial-terms', termsSchema), readAll(schoolId, 'policy-versions', catalogPolicySchema)]);
     return { terms: terms.items, procedures: procedures.items };
@@ -293,7 +294,7 @@ function ConditionsCard() {
 
 function usePrivacyContext() {
   const { schoolId, school } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(kindsOf('school'));
   const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsSchema), [schoolId, school.version]);
   const context = useLoad(async () => {
     const [policy, fields] = await Promise.all([readSchool(schoolId, 'data-policy', dataPolicySchema), readAll(schoolId, 'profile-field-policies', profilePolicySchema)]);

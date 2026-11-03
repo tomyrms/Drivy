@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createCommand, matchesSearch } from '../../command-core';
-import { useCommandSnapshot } from '../../command-store';
+import { catalogueReads } from '../../command-families';
+import { useCommandRevision } from '../../command-store';
 import { readReference, termsListSchema, textProposalsLite, uncategorizedTariffsSchema, type CatalogueReference, type Tariff, type TariffType, type TextProposalsLite } from '../../formation-api';
 import { readSchool } from '../../school-api';
 import { useConsole, useLoad, useUnsavedChanges } from '../../console/context';
@@ -20,7 +21,7 @@ export function consultedTariff(tariffs: readonly Tariff[] | undefined, selectio
 /** Prestations sans permis : mêmes tarifs, même éditeur, sans catégorie. */
 export function useUncategorizedTariffs() {
   const { schoolId } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   const loaded = useLoad(() => readSchool(schoolId, 'formations/uncategorized-tariffs', uncategorizedTariffsSchema), [schoolId, revision]);
   const proposals = useLoad(() => readSchool(schoolId, 'text-proposals', textProposalsLite), [schoolId]);
   return { loaded, proposals };
@@ -29,7 +30,7 @@ export function useUncategorizedTariffs() {
 /** Conditions commerciales : liste versionnée, recherche et filtre d'usage gardés en mémoire pour la session. */
 export function useTermsList() {
   const { schoolId } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   const list = useLoad(() => readSchool(schoolId, 'formations/terms', termsListSchema), [schoolId, revision]);
   const [search, setSearch] = useListState('conditions/search', '');
   const [usage, setUsage] = useListState<'all' | 'used' | 'unused'>('conditions/usage', 'all');
@@ -41,7 +42,7 @@ export function useTermsList() {
 /** Lecture d'une version exacte (tarif, conditions, programme) par son identifiant. */
 export function useReference(selection: string | undefined, extra: readonly unknown[] = []) {
   const { schoolId } = useConsole();
-  const { revision } = useCommandSnapshot();
+  const revision = useCommandRevision(catalogueReads);
   return useLoad(async () => selection ? readReference(schoolId, selection) : null, [schoolId, selection, revision, ...extra], `${schoolId}/${selection ?? ''}`);
 }
 
