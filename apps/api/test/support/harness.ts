@@ -1,6 +1,7 @@
 import {readFile,readdir} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
 import {Pool} from 'pg';
+import type {FastifyServerOptions} from 'fastify';
 import {createLocalJWKSet,exportJWK,generateKeyPair,SignJWT} from 'jose';
 import {Ajv2020} from 'ajv/dist/2020.js';
 import {fullFormats} from 'ajv-formats/dist/formats.js';
@@ -24,7 +25,7 @@ export async function freshDatabase({deferCourseMigrations=false}:{deferCourseMi
  try{
   // Le registre reste cohérent avec le schéma : une suite suivante utilisant scripts/migrations.ts ne réapplique rien.
   await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
-  for(const name of (await readdir(new URL('../../migrations/',import.meta.url))).filter(n=>migrationFilePattern.test(n)&&!(deferCourseMigrations&&/^04[2-6]_|^20261025_messaging_mention_push|^20261031_messaging_message_push|^20261031_pilotage_metrics|^20261101b_exams|^20261103_lesson_exam_push/.test(n))).sort()){
+  for(const name of (await readdir(new URL('../../migrations/',import.meta.url))).filter(n=>migrationFilePattern.test(n)&&!(deferCourseMigrations&&/^04[2-6]_|^20261025_messaging_mention_push|^20261031_messaging_message_push|^20261031_pilotage_metrics|^20261101b_exams|^20261103_lesson_exam_push|^20261103c_push_device_revocation/.test(n))).sort()){
    const db=await migration.connect(),sql=await readFile(new URL(`../../migrations/${name}`,import.meta.url),'utf8');
    try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
    if(name.startsWith('001_'))await seedFixtures(pool,issuer);
@@ -33,7 +34,7 @@ export async function freshDatabase({deferCourseMigrations=false}:{deferCourseMi
  return pool;
 }
 export type Call=(method:'GET'|'POST'|'PUT'|'PATCH',route:string,body?:Record<string,unknown>,version?:number|null,subject?:string,headers?:Record<string,string>)=>Promise<{statusCode:number;json:()=>any;headers:Record<string,unknown>;body:string}>;
-export async function harness(pool:Pool,options:{reauthMaxAgeSeconds?:number;gpsOnlyQualificationSchoolIds?:readonly string[];metricsClock?:()=>Date}={}){
+export async function harness(pool:Pool,options:{reauthMaxAgeSeconds?:number;gpsOnlyQualificationSchoolIds?:readonly string[];metricsClock?:()=>Date;logger?:boolean|FastifyServerOptions['logger']}={}){
  const keys=await generateKeyPair('RS256'),key=await exportJWK(keys.publicKey);
  const app=buildApp({pool,cursorSecret:'harness-test-secret-32-characters!!',...options,verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/jwks`},createLocalJWKSet({keys:[{...key,kid:'harness',alg:'RS256'}]}))});
  const base=`/v1/schools/${id.schoolA}`;

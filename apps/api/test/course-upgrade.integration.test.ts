@@ -7,8 +7,9 @@ import { canRead, eligibleContacts, findOrCreatePrivate, sendEnvelope } from '..
 import { freshDatabase, id, prepareSchool } from './support/harness.js';
 
 // Migrations qui lisent les tables de cours : reportées avec elles (pilotage ne crée que des fonctions de lecture et des index ;
-// les examens (#54) étendent la contrainte d'occupation créée par 042).
-const coursePattern = /^04[2-6]_|^20261025_messaging_mention_push|^20261031_messaging_message_push|^20261031_pilotage_metrics|^20261101b_exams|^20261103_lesson_exam_push/;
+// les examens (#54) étendent la contrainte d'occupation créée par 042 ; la révocation d'appareil (#120/#74) étend push_device,
+// créée par 045).
+const coursePattern = /^04[2-6]_|^20261025_messaging_mention_push|^20261031_messaging_message_push|^20261031_pilotage_metrics|^20261101b_exams|^20261103_lesson_exam_push|^20261103c_push_device_revocation/;
 const migrationDirectory = new URL('../migrations/', import.meta.url);
 const actor = { schoolId: id.schoolA, personId: id.instructor, membershipId: id.instructorMember };
 
@@ -91,7 +92,7 @@ describe('course upgrade after the dated production messaging migrations', () =>
     const names = (await readdir(migrationDirectory)).filter(name => migrationFilePattern.test(name)).sort();
     const courses = names.filter(name => coursePattern.test(name));
     expect(courses).toEqual(['042_collective_courses.sql', '043_course_enrollment_waitlist_cancellation.sql',
-      '044_course_attendance_payment_completion.sql', '045_course_notifications.sql', '046_course_push_revalidation.sql', '20261025_messaging_mention_push.sql', '20261031_messaging_message_push.sql', '20261031_pilotage_metrics.sql', '20261101b_exams.sql', '20261103_lesson_exam_push.sql']);
+      '044_course_attendance_payment_completion.sql', '045_course_notifications.sql', '046_course_push_revalidation.sql', '20261025_messaging_mention_push.sql', '20261031_messaging_message_push.sql', '20261031_pilotage_metrics.sql', '20261101b_exams.sql', '20261103_lesson_exam_push.sql', '20261103c_push_device_revocation.sql']);
     const beforeRegistry = await registry();
     expect(beforeRegistry.map(row => row.name)).toEqual(names.filter(name => !coursePattern.test(name)));
     expect(beforeRegistry.filter(row => /^0\d{2}_/.test(row.name))).toHaveLength(41);
