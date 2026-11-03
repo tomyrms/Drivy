@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, ChevronRight, KeyRound, Monitor, Moon, School, Sun } from 'lucide-react';
 import { meSchema, request, RequestFailure, sessionSchema } from '../../protocol';
-import { load, notificationKeys, saveNotificationPreferences } from '../../notification-preferences-model';
+import { load, saveNotificationPreferences, visibleNotificationKeys } from '../../notification-preferences-model';
 import { NotificationPreferenceStore } from '../../notification-preferences-store';
 import { useTheme, type ThemePreference } from '../../theme';
 import { BrandSymbol } from '../../BrandSymbol';
@@ -66,7 +66,7 @@ export function PortalPreferencesPage({ back = preferencesReturn(window.location
   </div>;
 }
 
-const groups = [{ id: 'courses', title: 'Cours collectifs' }, { id: 'messages', title: 'Messages' }] as const;
+const groups = [{ id: 'courses', title: 'Cours collectifs' }, { id: 'messages', title: 'Messages' }, { id: 'lessons', title: 'Leçons' }] as const;
 
 function NotificationsSection() {
   const uid = useId();
@@ -117,12 +117,12 @@ function NotificationsSection() {
   return <section className="account-section" aria-labelledby={`${uid}-notifications`}>
     <h2 id={`${uid}-notifications`}>Notifications</h2>
     {state.phase === 'loading' && !state.value && <div className="grid gap-3" role="status" aria-label="Chargement des préférences"><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /></div>}
-    {state.value && groups.map(group => <div key={group.id} className="account-switch-group" role="group" aria-labelledby={`${uid}-group-${group.id}`}>
+    {state.value && groups.filter(group => visibleNotificationKeys(state.value!).some(item => item.group === group.id)).map(group => <div key={group.id} className="account-switch-group" role="group" aria-labelledby={`${uid}-group-${group.id}`}>
       <h3 id={`${uid}-group-${group.id}`}>{group.title}</h3>
       <ul className="account-switches">
-        {notificationKeys.filter(item => item.group === group.id).map(item => <li key={item.key}>
+        {visibleNotificationKeys(state.value!).filter(item => item.group === group.id).map(item => <li key={item.key}>
           <Label htmlFor={`${uid}-${item.key}`}>{item.label}{state.pendingKeys.includes(item.key) && <span className="sr-only"> · Choix en attente de confirmation</span>}</Label>
-          <Switch id={`${uid}-${item.key}`} checked={state.value![item.key]} onCheckedChange={value => store.choose(item.key, value)} />
+          <Switch id={`${uid}-${item.key}`} checked={state.value![item.key] === true} onCheckedChange={value => store.choose(item.key, value)} />
         </li>)}
       </ul>
     </div>)}
