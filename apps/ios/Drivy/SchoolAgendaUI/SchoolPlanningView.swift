@@ -24,6 +24,13 @@ struct SchoolPlanningView: View {
         model.pending == nil && !model.writeConfirmed && firstEditedState.map { $0 != model.draftSnapshot } == true
     }
 
+    /// Ce qui interdit de fermer la feuille par glissement : un envoi qui la retient, une préparation d’annulation, une
+    /// saisie non envoyée, ou une saisie modifiée depuis le départ de l’envoi (elle n’est jamais abandonnée en silence).
+    private var blocksInteractiveDismissal: Bool {
+        model.holdsScreen || isPreparingCancellation || hasUnsentChanges
+            || (model.isSendingRequest && model.draftChangedSinceSend)
+    }
+
     private var title: String { cancelling ? "Annuler la leçon" : model.originalLesson == nil ? "Planifier une leçon" : "Déplacer la leçon" }
     var body: some View {
         NavigationStack {
@@ -58,8 +65,14 @@ struct SchoolPlanningView: View {
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { if hasUnsentChanges { confirmsDiscard = true } else { dismiss() } }
-                        .disabled(model.isBusy || isPreparingCancellation)
+                    // Création ou déplacement déjà dans le coffre chiffré : « Fermer » reste actif pendant l’envoi
+                    // (#109). Une annulation, un renvoi ou une vérification retiennent la feuille.
+                    Button("Fermer") {
+                        if model.isSendingRequest { leaveWhileSending() }
+                        else if hasUnsentChanges { confirmsDiscard = true }
+                        else { dismiss() }
+                    }
+                    .disabled(model.holdsScreen || isPreparingCancellation)
                 }
                 // Relecture du planning, nouvel élève ou nouvelle formation : l’attente se lit dans la barre,
                 // le formulaire ne reçoit pas de ligne et ne se décale pas. Le premier chargement garde son squelette.
@@ -126,8 +139,18 @@ struct SchoolPlanningView: View {
             }
             }
         }
-        .interactiveDismissDisabled(model.isBusy || isPreparingCancellation || hasUnsentChanges)
+        .interactiveDismissDisabled(blocksInteractiveDismissal)
         .tint(DrivyTheme.accent)
+    }
+
+    /// Quitter pendant l’envoi d’une création ou d’un déplacement (#109) : la demande est déjà dans le coffre chiffré,
+    /// elle n’est pas perdue. Une saisie modifiée depuis l’envoi n’est jamais abandonnée sans confirmation.
+    private func leaveWhileSending() {
+        guard model.leaveWhileRequestIsSent() else {
+            if model.isSendingRequest { confirmsDiscard = true }
+            return
+        }
+        dismiss()
     }
 
     /// La lecture et la proposition automatique de créneau ne sont pas des modifications de l’utilisateur.
