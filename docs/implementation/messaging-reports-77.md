@@ -127,10 +127,14 @@ Le code de l'app de la tête (`15d8f8fb`) est identique à celui du run métier 
 
 **Défauts encore vus, non corrigés** (pas d'itération supplémentaire décidée) :
 
-- Pendant le choix des messages, le rond d'un message reçu du général est centré sur la ligne entière, auteur compris : il se trouve environ 25 pt au-dessus du centre de la bulle (messages de Léa et de Marc dans `final/06`).
-- Le bouton « Revenir en bas » masque le rond du sondage dans cette capture.
-- La pastille épinglée recouvre la bulle du haut pendant la sélection (comportement existant du fil, hors de ce lot).
+- Rien de ces trois points ne subsiste dans le code (voir « corrigés, non vus sur capture » ci-dessous).
 - Le test de sélection était vert sur `0991774f` (visant les messages par leur texte), mais sa capture montrait la pastille épinglée sur l'un d'eux. En le modifiant pour choisir deux messages hors de la pastille, il est resté rouge sur cinq runs (41302920798, 41304132896, 41305459276, 41306677916, 41307996593) avant le vert de `15d8f8fb`. Cause : à l'ouverture le fil peut rester plus d'un écran au-dessus du bas, la ligne visée était sous l'écran, et un balayage ne fait pas défiler la liste d'Exyte. Le test prend donc les lignes entièrement visibles à cet instant ; il reste sensible à la position initiale du fil et peut être instable.
+
+**Corrigés, non vus sur capture** (ni compilés ni exécutés : aucun compilateur Swift sur la machine de rédaction ; à qualifier en CI puis sur capture) :
+
+- Rond d'un message reçu du général trop haut : la superposition était posée sur toute la ligne (nom d'auteur + bulle + ligne d'état). Elle s'aligne maintenant sur un repère vertical personnalisé (`VerticalAlignment.bubbleCenter`) posé sur la seule bulle, avec compensation de la marge haute de la ligne. Valable pour les messages reçus comme envoyés, avec ou sans nom.
+- « Revenir en bas » masqué pendant la sélection (il recouvrait un rond).
+- Pastille épinglée masquée pendant la sélection ; elle revient à la sortie. L'inset haut du fil est conservé pour ne pas décaler le défilement.
 
 **Non prouvé** : aucun résultat sur deux appareils réels (réception de la clé par un administrateur hors ligne puis en ligne, appareil enregistré après coup, révocation) ; le chiffrement des écrans de la fixture est celui de la fixture, pas du E2EE réel ; iPhone, apparence claire et texte de taille normale seulement (ni sombre, ni iPad, ni grandes tailles) ; `testUnreadableReportedMessageIsStatedPlainly` n'a passé que sur `0991774f` (le correctif de date ne touche pas son écran) ; aucune capture n'a été examinée avec VoiceOver ; la conservation des preuves attend #68. Aucun changement d'API, de contrat ni de migration dans ce lot : un seul fichier de test API ajouté.
 
