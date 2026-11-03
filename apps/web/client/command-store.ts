@@ -88,13 +88,15 @@ class CommandStore {
     if (entry) entries.set(operationId, entry); else entries.delete(operationId);
     const confirmation: Confirmation | null = confirmed
       ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now(), startedAt: confirmed.createdAt } : null;
-    // Les réponses arrivent dans n’importe quel ordre : les confirmations gardent l’ordre des commandes (#106), pour qu’une
-    // section qui les rejoue finisse sur l’intention la plus récente et non sur le dernier paquet reçu.
+    // Les réponses arrivent dans n’importe quel ordre : la liste des confirmations garde l’ordre des commandes (#106), pour
+    // qu’une section qui la rejoue finisse sur l’intention la plus récente et non sur le dernier paquet reçu.
     const confirmations = confirmation
       ? [...this.snapshot.confirmations, confirmation].sort((left, right) => left.startedAt - right.startedAt).slice(-50)
       : this.snapshot.confirmations;
     this.snapshot = { entries, revision: this.snapshot.revision + (confirmed || reread ? 1 : 0),
-      confirmed: confirmation ? confirmations[confirmations.length - 1]! : this.snapshot.confirmed,
+      // `confirmed` reste la confirmation qui vient d’arriver : un éditeur reconnaît sa propre écriture à son opération
+      // (access-controller, setup), même si une commande partie après elle a été confirmée avant.
+      confirmed: confirmation ?? this.snapshot.confirmed,
       confirmations,
       byKind: confirmed ? { ...this.snapshot.byKind, [confirmed.kind]: (this.snapshot.byKind[confirmed.kind] ?? 0) + 1 } : this.snapshot.byKind,
       rereads: this.snapshot.rereads + (reread ? 1 : 0) };

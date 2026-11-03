@@ -157,7 +157,7 @@ describe('#106 · latence, ordre et contexte des commandes web', () => {
     expect(timeout.mock.calls.filter(isEmission)).toHaveLength(1);
   });
 
-  test('critère 5 : réponses inversées — l’état final suit l’ordre des commandes, pas l’arrivée', async () => {
+  test('critère 5 : réponses inversées — la liste des confirmations suit l’ordre des commandes, pas l’arrivée', async () => {
     const store = await loadStore(), older = themes(1_000), newer = policy(2_000);
     const late = gate();
     const fetchMock = vi.fn(async (input: URL | string) => {
@@ -172,10 +172,31 @@ describe('#106 · latence, ordre et contexte des commandes web', () => {
     await expect(first).resolves.toMatchObject({ status: 'confirmed' });
     const snapshot = store.getSnapshot();
     expect(snapshot.entries.size).toBe(0);
-    // La confirmation la plus récente est celle de la commande la plus récente, même répondue en dernier.
+    // L’état rejoué dans l’ordre des commandes finit sur l’intention la plus récente, même répondue en dernier.
     expect(snapshot.confirmations.map(item => item.operationId)).toEqual([older.operationId, newer.operationId]);
-    expect(snapshot.confirmed?.operationId).toBe(newer.operationId);
+    expect(snapshot.confirmations[snapshot.confirmations.length - 1]?.operationId).toBe(newer.operationId);
     expect(revisionOf(snapshot, ['saveObservationThemes', 'saveCoursePolicy'])).toBe(2);
+  });
+
+  test('une commande plus récente confirmée d’abord ne masque pas la confirmation de la sienne', async () => {
+    const store = await loadStore(), mine = themes(1_000), later = policy(2_000);
+    const late = gate();
+    const fetchMock = vi.fn(async (input: URL | string) => {
+      if (String(input).includes('observation-themes')) { await late.opened; return answer(200, envelope({ schoolId, version: 3 }))(input); }
+      return answer(200, envelope({ schoolId, version: 2 }))(input);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const own = store.submit(mine, 'csrf');
+    const newer = store.submit(later, 'csrf');
+    await expect(newer).resolves.toMatchObject({ status: 'confirmed' });
+    late.release();
+    await expect(own).resolves.toMatchObject({ status: 'confirmed' });
+    const snapshot = store.getSnapshot();
+    // `confirmed` est la confirmation qui vient d’arriver : l’éditeur d’accès y reconnaît sa propre écriture
+    // (access-controller : `confirmed?.operationId === operation.current`), sans faux conflit.
+    expect(snapshot.confirmed?.operationId).toBe(mine.operationId);
+    // La liste, elle, reste dans l’ordre de départ.
+    expect(snapshot.confirmations.map(item => item.operationId)).toEqual([mine.operationId, later.operationId]);
   });
 
   test('critère 6 : écriture confirmée puis relecture en échec — confirmée, à actualiser, aucun échec de commande', async () => {
