@@ -660,9 +660,14 @@ import Observation
     private func rereadQueue() throws {
         let queued = try outbox.pendingCommands(for: scope)
         pending = queued.first { belongsToThisScreen($0) }
-        blockingCommand = admissionProbes.lazy.compactMap {
-            queued.refusing($0.kind, in: scope, resourceID: $0.resourceID, routeResourceID: $0.routeResourceID)
-        }.first
+        blockingCommand = nil
+        for probe in admissionProbes {
+            if let blocker = queued.refusing(probe.kind, in: scope, resourceID: probe.resourceID,
+                                             routeResourceID: probe.routeResourceID) {
+                blockingCommand = blocker
+                break
+            }
+        }
     }
 
     /// Demande de cette fiche : cette leçon, son brouillon, ses objectifs, le souhait de sa formation — ou une portée
@@ -673,7 +678,9 @@ import Observation
         switch command.kind {
         case .startLesson, .completeLesson, .markNoShow, .updateLessonSharing: return command.resourceID == lessonID
         case .savePreparation: return command.routeResourceID == lessonID
-        case .saveWish, .recordPermitCheck: return lesson?.trainingId.map { command.routeResourceID == $0 } == true
+        case .saveWish, .recordPermitCheck:
+            guard let training = lesson?.trainingId else { return false }
+            return command.routeResourceID == training
         case .saveReportDraft: return draft.map { command.resourceID == $0.id } == true
         case .publishReportDraft: return draft.map { command.routeResourceID == $0.id } == true
         default: return false
