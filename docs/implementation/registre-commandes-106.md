@@ -484,50 +484,77 @@ par champ, états 5/10 s.
 
 ## Blocages levés (tâches 1-3)
 
-Réalisation des propositions 1 à 3 de la section 5. Aucune route, aucun envoi, aucune idempotence, aucun droit et aucun
-texte d’écran ne change : seules les conditions de déblocage des écrans et le conflit d’admission entre invitations.
+Réalisation des propositions 1 à 3 de la section 5, **corrigée après relecture** : la barrière d’un écran est
+exactement la règle d’admission de la file. Un écran n’ouvre donc jamais une saisie que
+`EncryptedSchoolCommandOutbox.save` refusera (`pendingCommand` après coup). Aucune route, aucun envoi, aucune
+idempotence, aucun droit et aucun texte d’écran ne change.
 
-La lecture filtrée manquante est ajoutée dans `SchoolConfigurationAPI/SchoolCommandOutbox.swift` (`:302-310`) :
+### Mécanisme commun
+
+`SchoolConfigurationAPI/SchoolCommandOutbox.swift:302-313` :
 
 ```swift
-func pending(for scope: SchoolCommandScope,
-             blockedBy blocks: (PendingSchoolCommand) -> Bool) throws -> PendingSchoolCommand?
+func pending(for scope: SchoolCommandScope, refusing kind: SchoolCommandKind,
+             resourceID: UUID? = nil, routeResourceID: UUID? = nil) throws -> PendingSchoolCommand?
 ```
 
-Elle garde la barrière d’époque/adhésion de `pending(for:domain:)` (`$0.scope != scope`) et n’ajoute que le conflit nommé
-par l’appelant. `pending(for:domain:)` reste inchangé.
+La lecture construit la commande que l’écran émettrait (type, portée, ressource) et rend la première commande
+conservée qui la refuserait **selon `blocksQueueEntry`**, la fonction qu’utilise `save` (`:374`) et la relecture du
+coffre (`:411`). L’écran est ouvert quand cette lecture est vide : la règle ne peut plus diverger, c’est la même
+fonction.
 
-| # | Site | Avant | Après | Règle de conflit |
+### Paires desserrées, avec preuve côté API
+
+`blocksQueueEntry` (`:315-345`) ne touche pas à `conflicts(with:)` : il l’appelle d’abord, puis écarte uniquement les
+paires ci-dessous.
+
+| Paire | Preuve (fichier:ligne) | Version écrite ou vérifiée |
+|---|---|---|
+| Deux invitations distinctes ; renvoi ou révocation de la **même** invitation restent séquentiels | `apps/api/src/invitations.ts:385-415` (création : aucun `If-Match`, `INSERT drivy.invitation`) et `:417-444` (renvoi/révocation : `checkVersion(current.version)`, `UPDATE drivy.invitation`) | `drivy.invitation.version` seulement ; aucune version d’école |
+| Une invitation et une écriture de **dossier** de profil (profil administratif, accueil guidé) | `apps/api/src/profiles.ts:122-161` (`checkVersion(row.version)` sur `drivy.learner_profile`, puis `drivy.person` et `drivy.learner_profile` en `version=version+1`) et `:262-283` (accueil : `drivy.onboarding_progress.version`) ; `invitations.ts:385-444` ne lit aucune de ces lignes | `learner_profile.version`, `person.version`, `onboarding_progress.version` ; aucune version d’école |
+| Deux signalements de **leçons différentes** | `apps/api/src/capture-observations.ts:143-165` : aucun `If-Match`, `INSERT drivy.geo_observation`, `touchDraft` sur le brouillon de la leçon | `geo_observation.version` (ligne neuve) et `report_draft.version` de la leçon |
+
+Ce qui **n’est pas** desserré, faute de preuve :
+
+- **Politique de champ de profil** : elle vérifie et avance la version de l’école (`profiles.ts:69`, `:208`, `:221`).
+  Elle reste une barrière pour tout, invitation comprise.
+- **Enregistrement d’un dossier de profil** face à un tarif, une leçon, une observation, un changement d’accès ou une
+  écriture d’école : `saveProfile` relit la politique courante et valide la date de naissance avec le fuseau de
+  l’école (`profiles.ts:123`, `:131`), que ces commandes peuvent changer. Seul le cas « invitation en attente » est
+  prouvé.
+- **Signalement** face à la même leçon (fin de leçon, bilan, partage) : `COMPLETE_LESSON` rattache les observations de
+  la leçon. Face à une autre écriture d’enseignement d’une autre leçon (bilan, examen, tarif), la file les sérialise
+  encore par domaine ; l’écran est donc bloqué, comme `save`. La clé par agrégat est la proposition 4, hors de ces
+  tâches.
+- **Création d’invitation dont l’issue est inconnue** : l’écran reste fermé alors que la file accepterait une autre
+  création (le code de la première serait perdu). C’est la seule barrière volontairement plus stricte que la file,
+  et elle ne peut pas produire le défaut « saisir puis erreur ».
+
+### Site par site
+
+| # | Fichier:ligne | Barrière | Levé | Gardé |
 |---|---|---|---|---|
-| 1 | `SchoolAgendaUI/SchoolStartNowView.swift:78-79` (lecture de la file) ; `:64-65` (`canStart`), `:35` (`blocksStart`) ; `:531`, `:558`, `:600` (désactivation) | `pending(for: scope)` : toute commande de l’école bloquait le départ | `pending(for: scope, domain: .teaching)` : seule une écriture d’enseignement bloque ; la commande à vérifier ici reste celle du départ (`pendingCommands(for: scope).first { $0.kind == .startLessonNow }`, `:78`) | Domaine `teaching` (leçon, bilan, observation, examen : créneau et version de leçon) |
-| 2 | `SchoolProfileUI/SchoolProfileWorkspace.swift:156-158` (lecture) ; `canMutate :63` et `acceptsInput :69` inchangés | `pending(for: scope)` : invitation, tarif ou leçon en attente fermaient le dossier et l’accueil | `pending(for: scope) { $0.kind == .updateMember \|\| ($0.kind.isProfile && ownsRoute($0)) }` | Écriture de profil du même dossier (même politique quand l’écran les administre, via `ownsRoute`), ou `updateMember` (époque d’accès) |
-| 3 | `SchoolObservationUI/SchoolObservationWorkspace.swift:192` (lecture), `:428` (`rereadPending`), `:446` (échec d’enregistrement) ; `canMutate :74` inchangé | `pending(for: scope)` : toute commande bloquait ajout et correction | `pending(for: scope) { $0.routeResourceID == lessonID \|\| $0.resourceID == lessonID }` | Même leçon (route ou ressource) : la même observation, son bilan, sa fin de leçon, son partage. Les corrections restent dans `SchoolObservationCorrections` |
-| 4 | `SchoolInvitationsUI/SchoolInvitationWorkspace.swift:172-184` (lecture), `:90` (`mayEdit`), `:354` (`canManage`) | `mayEdit` exigeait `pending == nil` : un renvoi ou une révocation fermait tout le formulaire | `blocksCreation` (`:39`, `:177`) : seule une écriture qui n’est pas un renvoi ou une révocation d’invitation (création à l’issue inconnue, domaine de l’école, autre portée) ferme le formulaire ; `canManage` retire l’invitation dont un renvoi ou une révocation attend (`pendingInvitationWrites`, `:42`, `:182`) | Même invitation pour renvoi/révocation ; deux invitations distinctes (y compris deux créations) sont indépendantes |
+| 1 | `SchoolAgendaUI/SchoolStartNowView.swift:79` (sonde), `:35` (`blocksStart`), `:64-65` (`canStart`), `:531`, `:558`, `:600` (désactivation) | règle exacte pour `START_LESSON_NOW` | invitation, préférence de planning | tarif, bilan/observation/examen (domaine `teaching`), profil, école, `updateMember`, autre époque |
+| 2 | `SchoolProfileUI/SchoolProfileWorkspace.swift:159-161` (`pending`, qui pilote `canMutate :65` et `acceptsInput :71`) | règle exacte pour `UPDATE_ADMINISTRATIVE_PROFILE` (dossier) ou `CREATE_PROFILE_FIELD_POLICY` (écran des politiques) | invitation, pour un dossier | tarif, leçon/observation, profil d’un autre élève, école, `updateMember`, politique, autre époque |
+| 3 | `SchoolObservationUI/SchoolObservationWorkspace.swift:197` (sonde), `:78` (`canMutate`), `:196` et `:441` (`storedPending` : affichage et reprise de la demande de cette leçon) | règle exacte pour `CREATE_GEO_OBSERVATION` | invitation, préférence de planning, signalement d’une autre leçon | fin de leçon/bilan/examen/tarif, école, autre époque |
+| 4 | `SchoolInvitationsUI/SchoolInvitationWorkspace.swift:176` (`blocksCreation`), `:90-92` (`mayEdit`), `:350-353` (`canManage`) | règle exacte pour `CREATE_INVITATION`, puis la même invitation pour renvoi/révocation | invitations distinctes (création, renvoi ou révocation d’une autre) | même invitation, école, autre époque, création à l’issue inconnue |
 
-**File d’écriture.** `blocksQueueEntry(of:)` (`SchoolCommandOutbox.swift:312-327`) remplace `conflicts(with:)` dans
-`save` (`:374`) et dans la validation de relecture (`:411`). Le conflit d’ordonnancement reste celui de la section 3.2,
-sauf entre invitations : seule la même invitation (même `resourceID`, hors création) reste séquentielle, et une commande
-d’une autre époque d’accès reste une barrière. Le format persisté et sa migration ne changent pas : une file qui porte
-deux invitations distinctes s’écrit en version 3, que la relecture accepte (elle rejetait ces deux commandes avant).
+**Sur le point (b) de la relecture.** Un tarif (`createServiceProduct`) et une écriture de profil étaient déjà
+bloquants pour le départ avec l’ancienne lecture `pending(for:domain:.teaching)`, parce que
+`SchoolCommandDomain.conflicts` rend `.school` conflictuel avec tout (`SchoolCommandScheduling.swift:8`) : le départ
+n’a jamais ouvert sur un tarif ou un profil. Le défaut réel, lui, existait bien pour le profil et les observations
+(l’écran s’ouvrait, `save` refusait) ; il est corrigé par la sonde, et le mécanisme empêche désormais toute nouvelle
+divergence.
 
-**Ce qui reste bloquant.** Une écriture du domaine `school` (école, droits, catalogue), une commande d’une autre époque
-d’accès, une écriture de profil du même dossier, `updateMember`, une écriture de la même leçon (observation, bilan, fin de
-leçon, partage), et le renvoi ou la révocation de la même invitation. L’admission de la file reste celle de
-`conflicts(with:)` pour tout le reste : un bilan et une observation d’une même leçon restent sérialisés.
+### Vérification
 
-**Limites connues.** `publishReportDraft` et `saveReportDraft` ne portent que l’identifiant du brouillon, pas celui de la
-leçon : ils ne sont donc pas reconnus comme « même leçon » par la portée d’observation (la proposition 4 leur donnera une
-clé de leçon). `deactivateMember` n’existe pas dans `SchoolCommandKind` (vérifié) : seule `updateMember` est retenue.
-Deux observations de leçons différentes restent sérialisées par l’admission de la file (`teaching`), alors que l’écran
-n’attend plus leur réponse. La commande d’un autre domaine (école, catalogue) ferme encore le formulaire d’invitation :
-cette barrière n’était pas dans les tâches 1 à 3. Une politique de profil en attente ne ferme plus le dossier d’un élève :
-le serveur relit `policyVersionId` à l’enregistrement.
+`apps/ios/DrivyTests/SchoolCommandScopes106Tests.swift` : pour chacun des quatre écrans, neuf états réels de la file
+chiffrée (invitation, tarif, bilan d’une autre leçon, observation d’une autre leçon, observation de cette leçon, profil
+d’un autre élève, changement d’accès, configuration de l’école, ancienne époque) avec l’assertion
+« écran ouvert == `save` accepte » ; plus un test par paire desserrée et un test du renvoi (même invitation, autre
+invitation, tarif, école). Ajustements : `SchoolCommandSchedulingTests` (deux leçons de signalements indépendantes),
+`SchoolCommandOutboxTests` (l’annulation conservée ferme sa leçon, pas une autre école) et
+`SchoolProfileWorkspaceTests` (une observation en attente bloque de nouveau le dossier, comme `save`).
 
-**Tests.** `apps/ios/DrivyTests/SchoolCommandScopes106Tests.swift` : invitations distinctes admises et même invitation
-séquentielle, barrière `school` conservée, lecture filtrée et barrière d’époque, puis un test par site (départ, dossier,
-politique de profil, observations, invitations). Ajustements : `SchoolCommandSchedulingTests` (deux créations ne
-s’excluent plus ; le conflit testé porte désormais sur la même invitation) et
-`SchoolProfileWorkspaceTests` (un retrait d’observation en attente ne bloque plus le dossier, et ne s’y vérifie plus).
-
-**Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Les tests décrivent le comportement
-attendu et doivent être lancés sur un runner Apple avant de considérer la tâche qualifiée.
+**Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Ces tests doivent être lancés sur
+un runner Apple avant de considérer la tâche qualifiée.
