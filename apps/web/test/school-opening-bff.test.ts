@@ -73,6 +73,32 @@ test('un autre compte OIDC ne peut pas rejouer une intention incertaine',async()
   h.changeSubject('another-account');await h.login();expect((await h.post('opening/create',fields)).json().code).toBe('OPENING_IDENTITY_CHANGED');expect(api).toHaveBeenCalledTimes(1);
 });
 
+test('un lien ouvert puis un autre compte connecté : aucune école créée sous ce compte',async()=>{
+  const api=vi.fn<OpeningGateway>(async command=>({status:201,body:{data:receipt(command.idempotencyKey!)}})),h=await harness(api);
+  await h.post('opening',{token:secret()});await h.login();
+  h.changeSubject('another-account');await h.login();
+  const response=await h.post('opening/create',fields);
+  expect(response.statusCode).toBe(409);expect(response.json().code).toBe('OPENING_IDENTITY_CHANGED');expect(api).not.toHaveBeenCalled();
+});
+test('un lien ouvert depuis une session déjà connectée reste au compte qui l’a ouvert',async()=>{
+  const api=vi.fn<OpeningGateway>(async command=>({status:201,body:{data:receipt(command.idempotencyKey!)}})),h=await harness(api);
+  await h.login();await h.post('opening',{token:secret()});
+  h.changeSubject('another-account');await h.login();
+  const response=await h.post('opening/create',fields);
+  expect(response.statusCode).toBe(409);expect(response.json().code).toBe('OPENING_IDENTITY_CHANGED');expect(api).not.toHaveBeenCalled();
+});
+test('même compte, nouvelle connexion de session : l’ouverture aboutit',async()=>{
+  const api=vi.fn<OpeningGateway>(async command=>({status:201,body:{data:receipt(command.idempotencyKey!)}})),h=await harness(api);
+  await h.post('opening',{token:secret()});await h.login();await h.login();
+  expect((await h.post('opening/create',fields)).statusCode).toBe(201);expect(api).toHaveBeenCalledTimes(1);
+});
+test('une intention sans identité enregistrée est refusée et ne crée rien',async()=>{
+  const api=vi.fn<OpeningGateway>(async command=>({status:201,body:{data:receipt(command.idempotencyKey!)}})),h=await harness(api);
+  await h.post('opening',{token:secret()});await h.login();
+  h.current().opening={token:'K7Q4-MX2P',operationId:randomUUID()};
+  const response=await h.post('opening/create',fields);
+  expect(response.statusCode).toBe(409);expect(response.json().code).toBe('OPENING_IDENTITY_CHANGED');expect(api).not.toHaveBeenCalled();
+});
 test('un reçu conservé relit activation et révocation avant chaque restitution au navigateur',async()=>{
   const result=receipt(randomUUID());let active=false,revoked=false;
   const api=vi.fn(async(command:OpeningRequest)=>{

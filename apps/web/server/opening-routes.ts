@@ -29,7 +29,7 @@ export const openingResult=z.object({data:z.object({schoolId:z.uuid(),schoolName
   membershipId:z.uuid(),roles:z.array(z.string()),grants:z.array(z.string()),accessEpoch:z.number().int().positive(),operationId:z.uuid(),committedAt:z.iso.datetime({offset:true})})});
 const linkResult=z.object({data:z.object({id:z.uuid(),status:z.enum(['AVAILABLE','USED','REVOKED','EXPIRED']),createdAt:z.iso.datetime({offset:true}),expiresAt:z.iso.datetime({offset:true}),usedAt:z.string().nullable(),revokedAt:z.string().nullable()})});
 export type OpeningReceipt=z.infer<typeof openingResult>['data'];
-export type OpeningState={token?:string;operationId:string;body?:OpeningFields;principal?:string;submitted?:boolean;uncertain?:boolean;busy?:boolean;result?:OpeningReceipt};
+export type OpeningState={token?:string;operationId:string;body?:OpeningFields;identity?:string;submitted?:boolean;uncertain?:boolean;busy?:boolean;result?:OpeningReceipt};
 export type OperatorOpeningState={operationId:string;token:string;busy?:boolean};
 
 export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;current:(req:FastifyRequest)=>Session;
@@ -37,9 +37,12 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
   call:(session:Session,command:OpeningRequest)=>Promise<ApiResult>;send:(reply:FastifyReply,result:ApiResult)=>unknown;
   error:(status:number,code:string)=>Error}) {
   const requireOpening=(session:Session)=>{if(!session.opening)throw deps.error(404,'OPENING_LINK_MISSING');return session.opening;};
+  // An opening link belongs to the account that opened it: a signed-in admission records that account at once.
+  const bind=(session:Session,opening:OpeningState)=>{if(!opening.identity && session.tokens)opening.identity=session.tokens.principal.subject;};
   const scope=(session:Session,opening:OpeningState)=>{
     if(!session.tokens)throw deps.error(401,'SESSION_EXPIRED');
-    if(opening.principal && opening.principal!==session.tokens.principal.subject)throw deps.error(409,'OPENING_IDENTITY_CHANGED');
+    // No recorded identity (an intention older than its account) or another account: never used, never guessed.
+    if(opening.identity!==session.tokens.principal.subject)throw deps.error(409,'OPENING_IDENTITY_CHANGED');
   };
   const confirm=(opening:OpeningState,result:ApiResult)=>{
     const parsed=openingResult.safeParse(result.body);
@@ -57,9 +60,9 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
   app.post('/app/bff/opening',async(request,reply)=>{
     const admitted=deps.admit(request);empty.parse(request.query);const {token}=z.object({token:tokenSchema}).strict().parse(request.body);
     const session=deps.open(reply,admitted),previous=session.opening;
-    if(previous?.token===token)return {ok:true};
+    if(previous?.token===token){bind(session,previous);return {ok:true};}
     if(previous?.busy || (previous?.submitted && !previous.result))throw deps.error(409,'OPENING_IN_PROGRESS');
-    session.opening={token,operationId:randomUUID()};return {ok:true};
+    const opening:OpeningState={token,operationId:randomUUID()};bind(session,opening);session.opening=opening;return {ok:true};
   });
   app.get('/app/bff/opening',async(request,reply)=>{
     empty.parse(request.query);const session=deps.current(request),opening=requireOpening(session);scope(session,opening);
@@ -78,11 +81,11 @@ export function registerOpeningRoutes(app:FastifyInstance,deps:{origin:string;cu
     if(opening.busy)throw deps.error(409,'OPENING_IN_PROGRESS');
     if(!opening.token)throw deps.error(404,'OPENING_LINK_MISSING');
     if(opening.submitted && JSON.stringify(opening.body)!==JSON.stringify(body))throw deps.error(409,'OPENING_IN_PROGRESS');
-    opening.body ??= body;opening.principal=session.tokens!.principal.subject;opening.busy=true;opening.submitted=true;
+    opening.body ??= body;opening.busy=true;opening.submitted=true;
     try {
       const result=await deps.call(session,{method:'POST',path:'/v1/school-openings',body:{...opening.body,token:opening.token,operationId:opening.operationId},idempotencyKey:opening.operationId});
       const parsed=confirm(opening,result);
-      if(result.status>=400 && result.status<500 && !opening.uncertain){delete opening.submitted;delete opening.body;delete opening.principal;}
+      if(result.status>=400 && result.status<500 && !opening.uncertain){delete opening.submitted;delete opening.body;}
       if(result.status<400 && !parsed.success)throw deps.error(503,'INVALID_RESPONSE');
       return deps.send(reply,result);
     } catch(error){if(opening.submitted)opening.uncertain=true;throw error;}finally{delete opening.busy;}

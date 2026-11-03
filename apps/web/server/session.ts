@@ -57,6 +57,10 @@ export class SessionStore {
     const opening = session.opening;
     // Opening-link issuance belongs to its operator: another account starts a separate intention.
     const operatorOpening = session.tokens?.principal.subject === tokens.principal.subject ? session.operatorOpening : undefined;
+    // An opening link belongs to the account that opened it. The identity recorded at admission is never
+    // transferred (the endpoints then refuse with OPENING_IDENTITY_CHANGED). An intention that appears without
+    // one belongs to the account of its session, or, before any sign-in, to the identity this browser signs in with.
+    if (opening && !opening.identity) opening.identity = session.tokens?.principal.subject ?? tokens.principal.subject;
     const createdAt = session.createdAt;
     this.destroy(session);
     const next = this.create();
