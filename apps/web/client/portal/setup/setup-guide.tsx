@@ -20,13 +20,14 @@ const shortLabels: Record<SetupStep, string> = { IDENTITY: 'Votre école', PRIVA
 
 /** Short progression: the current step, what is set aside and what the server asks to review. Editors opened from the summary stay outside it. */
 function GuideProgress({ guide }: { guide: SetupGuideState }) {
-  const { steps, step, content, document, reviewIssues, blocked, jump, secondary } = guide;
+  const { steps, step, content, document, reviewIssues, blocked, jump, secondary, staleStep } = guide;
   if (!content || !document) return null;
   const position = steps.indexOf(step);
   return <nav className="setup-progress" aria-label="Étapes de préparation">
     <p className="setup-progress-count">{secondary ? 'Depuis le résumé' : `Étape ${position + 1} sur ${steps.length}`}</p>
     <ol>{steps.map((item, index) => {
-      const state = setupStepState(item, content, document.currentStep, reviewIssues);
+      // A draft that changed at the school is marked on the step whose save met it; a saved step is not a validated one.
+      const state = setupStepState(item, content, document.currentStep, reviewIssues) ?? (item === staleStep ? 'À relire' : null);
       const passed = !secondary && index < position;
       return <li key={item} data-current={item === step || undefined} data-passed={passed || undefined}>
         <button type="button" aria-label={shortLabels[item]} aria-current={item === step ? 'step' : undefined} disabled={blocked} onClick={() => jump(item)}>
@@ -42,12 +43,13 @@ function GuideProgress({ guide }: { guide: SetupGuideState }) {
 /**
  * The single preparation guide (#320): Permis → Prix et règles → Résumé, editors opened from the summary, catalogue mode
  * (`from=formations`) that never re-adopts the school's texts. Commands, versions and receipts are those of the historical guide.
+ * « Enregistrer et continuer » hands the draft to the background queue (#123) and opens the next step at once.
  */
 export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
   const { routeQuery, canConfigureCatalog, navigate } = useConsole();
   const exitTo: SectionKey = routeQuery?.from === 'prestations' ? 'prestations' : 'formations';
   const guide = useSetupGuide({ catalogueOnly, initialCategory: routeQuery?.category, exitTo });
-  const { loaded, content, document, step, steps, dirty, saving, blocked, reviewing, preview, acknowledged, runner, focusField } = guide;
+  const { loaded, content, document, step, steps, dirty, saving, blocked, reviewing, preview, acknowledged, runner, focusField, saveState } = guide;
   const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -77,13 +79,16 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
   const position = steps.indexOf(step);
   const primary = step === 'REVIEW' ? preview?.activate ? 'Adopter les textes et activer l’école' : 'Confirmer la préparation'
     : guide.secondary ? 'Enregistrer et revenir au résumé' : 'Enregistrer et continuer';
+  // Nothing is announced before the school's answer: « Enregistrement… » while a draft is in flight, then nothing at all.
+  const storing = saveState.phase === 'saving' || saving || runner.busy;
+  const status = storing ? 'Enregistrement…' : dirty ? 'Modifications non enregistrées' : '';
 
   return <section className="setup-page" aria-labelledby="setup-title">
     <header className="setup-heading">
       {catalogueOnly && <Button variant="ghost" size="sm" className="setup-back" onClick={() => navigate(exitTo)}><ArrowLeft aria-hidden="true" />{exitTo === 'prestations' ? 'Prestations' : 'Formations'}</Button>}
       <div className="setup-heading-row">
         <h1 id="setup-title">{catalogueOnly ? 'Préparer une formation' : 'Préparer votre école'}</h1>
-        {content && <span className="setup-saved" role="status" data-dirty={dirty || undefined}>{saving || runner.busy ? 'Enregistrement…' : dirty ? 'Modifications non enregistrées' : 'Enregistré'}</span>}
+        {content && <span className="setup-saved" role="status" data-saving={storing || undefined} data-dirty={!storing && dirty || undefined}>{status}</span>}
       </div>
     </header>
     <ReadFeedback loaded={loaded} label="Lecture de votre préparation" />
@@ -93,7 +98,7 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
       <GuideProgress guide={guide} />
       <div className="setup-workspace">
         <h2 ref={heading} tabIndex={-1} className="setup-step-title">{title}</h2>
-        <form noValidate onSubmit={event => { event.preventDefault(); if (step === 'REVIEW') void guide.finish(); else void guide.save(guide.nextStep); }}>
+        <form noValidate onSubmit={event => { event.preventDefault(); if (step === 'REVIEW') void guide.finish(); else guide.continueStep(guide.nextStep); }}>
           <fieldset className="setup-fieldset" disabled={blocked}>
             {step === 'IDENTITY' && <IdentityEditor content={content} onChange={guide.update} errorFor={guide.errorFor} />}
             {step === 'PRIVACY' && <PrivacyEditor content={content} templates={loaded.data.templates} onChange={guide.update} errorFor={guide.errorFor} />}
@@ -102,7 +107,8 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
               today={guide.today} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
             {step === 'PRICING' && <PricingStep key={`${document.version}:${guide.editorRevision}`} content={content} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
             {step === 'REVIEW' && <div className="setup-step-body">
-              {!preview && !reviewing && <Button type="button" variant="outline" className="setup-start" onClick={() => dirty ? void guide.save('REVIEW') : void guide.refreshReview(document)}>Vérifier la préparation</Button>}
+              {!preview && !reviewing && <Button type="button" variant="outline" className="setup-start" onClick={() => void guide.refreshReview()} disabled={!guide.synced}
+                aria-describedby={guide.reviewReason ? 'setup-review-reason' : undefined}>Vérifier la préparation</Button>}
               {!preview && reviewing && <div className="grid gap-3" role="status" aria-label="Vérification de la préparation"><Skeleton className="h-16 w-full" /><Skeleton className="h-28 w-full" /></div>}
               {preview && <SetupSummary preview={preview} onEdit={guide.jump} />}
               {preview?.ready && <div className="setup-ack"><CheckRow checked={acknowledged} onChange={guide.setAcknowledged} label={preview.activate
@@ -112,6 +118,15 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
           </fieldset>
           <div className="setup-feedback">
             <CommandFeedback runner={runner} showSuccess={false} />
+            {saveState.phase === 'refused' && <Alert variant="destructive"><AlertTitle>Enregistrement impossible</AlertTitle>
+              <AlertDescription>{saveState.message ?? 'La préparation n’a pas été enregistrée. Votre saisie est conservée.'}</AlertDescription>
+              <Button type="button" variant="outline" className="setup-start mt-3" onClick={guide.retrySave}>Réessayer</Button></Alert>}
+            {saveState.phase === 'unknown' && <Alert><AlertTitle>Enregistrement à vérifier</AlertTitle>
+              <AlertDescription>{saveState.message ?? 'La préparation n’a pas été confirmée. Votre saisie est conservée.'}</AlertDescription>
+              <Button type="button" variant="outline" className="setup-start mt-3" onClick={guide.retrySave}>Réessayer</Button></Alert>}
+            {saveState.phase === 'conflict' && <Alert><AlertTitle>Préparation modifiée à l’école</AlertTitle>
+              <AlertDescription>Votre saisie est conservée. Relisez l’étape signalée avant d’enregistrer.</AlertDescription></Alert>}
+            {step === 'REVIEW' && guide.reviewReason && <p id="setup-review-reason" className="setup-reason">{guide.reviewReason}</p>}
             {runner.outcome?.code === 'VERSION_CONFLICT' && <Button type="button" variant="outline" className="setup-start" onClick={() => guide.setDiscard(true)}>Relire la version enregistrée</Button>}
           </div>
           <div className="setup-actions">
@@ -121,7 +136,9 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
             </div>
             <div className="setup-actions-main">
               <Button type="button" variant="outline" disabled={blocked} onClick={() => void guide.save(step, content, true)}>Enregistrer et quitter</Button>
-              <Button type="submit" disabled={blocked || (step === 'REVIEW' && (!preview?.ready || !acknowledged || dirty))} aria-busy={saving || runner.busy || undefined}>{primary}</Button>
+              <Button type="submit" disabled={blocked || (step === 'REVIEW' && (!preview?.ready || !acknowledged || !guide.synced))}
+                aria-describedby={step === 'REVIEW' && guide.reviewReason ? 'setup-review-reason' : undefined}
+                aria-busy={saving || runner.busy || undefined}>{primary}</Button>
             </div>
           </div>
         </form>
