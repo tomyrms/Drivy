@@ -303,16 +303,24 @@ protocol SchoolCommandOutbox: AnyObject {
     func remove(_ command: PendingSchoolCommand) throws
 }
 
-extension SchoolCommandOutbox {
+extension Array where Element == PendingSchoolCommand {
     /// Première commande conservée qui refuserait cette écriture, selon exactement la règle de `save`
     /// (`blocksQueueEntry`). L'écran n'ouvre une action que si cette lecture est vide : il ne propose donc jamais
-    /// une saisie que la file refusera (#106). La sonde n'est jamais écrite ; seuls son type, sa portée et sa
-    /// ressource sont comparés.
-    func pending(for scope: SchoolCommandScope, refusing kind: SchoolCommandKind,
-                 resourceID: UUID? = nil, routeResourceID: UUID? = nil) throws -> PendingSchoolCommand? {
+    /// une saisie que la file refusera (#106). La sonde n'est jamais écrite ; seuls son type, sa portée, sa
+    /// ressource et son empreinte sont comparés.
+    func refusing(_ kind: SchoolCommandKind, in scope: SchoolCommandScope,
+                  resourceID: UUID? = nil, routeResourceID: UUID? = nil) -> PendingSchoolCommand? {
         let probe = PendingSchoolCommand(id: UUID(), scope: scope, kind: kind, resourceVersion: 0, createdAt: Date(),
             body: Data(), resourceID: resourceID, routeResourceID: routeResourceID)
-        return try pendingCommands(for: scope).first { $0.blocksQueueEntry(of: probe) }
+        return first { $0.blocksQueueEntry(of: probe) }
+    }
+}
+
+extension SchoolCommandOutbox {
+    /// Même lecture, sur la file entière de la portée.
+    func pending(for scope: SchoolCommandScope, refusing kind: SchoolCommandKind,
+                 resourceID: UUID? = nil, routeResourceID: UUID? = nil) throws -> PendingSchoolCommand? {
+        try pendingCommands(for: scope).refusing(kind, in: scope, resourceID: resourceID, routeResourceID: routeResourceID)
     }
 }
 
@@ -320,7 +328,8 @@ extension PendingSchoolCommand {
     /// Une entrée déjà conservée empêche-t-elle celle-ci d'entrer dans la file (#106) ? Le conflit reste celui de
     /// l'ordonnancement, sauf pour les paires dont les deux routes ne lisent ni n'écrivent la même version :
     /// deux invitations distinctes, une invitation et une écriture de dossier de profil, deux signalements de
-    /// leçons différentes. Tout le reste garde la règle de `conflicts(with:)`.
+    /// leçons différentes, et — tâche 4 — deux commandes d'enseignement d'agrégats disjoints. Tout le reste garde la
+    /// règle de `conflicts(with:)`.
     func blocksQueueEntry(of other: Self) -> Bool {
         guard conflicts(with: other) else { return false }
         // Même commande, ou commande d'une autre époque d'accès (ou d'une autre adhésion) : elle reste à résoudre.
@@ -340,6 +349,9 @@ extension PendingSchoolCommand {
         // brouillon et ses captures (capture-observations.ts:143-165).
         if kind == .createObservation, other.kind == .createObservation,
            let lesson = routeResourceID, let otherLesson = other.routeResourceID, lesson != otherLesson { return false }
+        // Enseignement (#106, tâche 4) : deux routes d'agrégats disjoints — leçon, examen, formation relue, occupation —
+        // attendent ensemble. Une empreinte incomplète garde la sérialisation du domaine : aucune preuve, aucun desserrement.
+        if let mine = teachingFootprint, let theirs = other.teachingFootprint { return mine.conflicts(with: theirs) }
         return true
     }
 }

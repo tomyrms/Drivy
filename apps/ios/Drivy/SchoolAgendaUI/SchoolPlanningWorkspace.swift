@@ -58,6 +58,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     private(set) var availabilityLoaded = false
     private(set) var availabilityError: String?
     private(set) var pending: PendingSchoolCommand?
+    /// Commande conservée qui refuserait le geste de cette feuille, lue avec la règle exacte de la file (#106) : la
+    /// feuille n'ouvre jamais une saisie que `save` refusera. Distincte de `pending`, qui reste la demande affichée.
+    private(set) var blockingCommand: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
     /// Création ou déplacement dont l’envoi est parti (#109) : l’intention est déjà dans le coffre chiffré, la feuille
@@ -182,7 +185,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         return SchoolPlanningWorkspace(scope: scope, client: client, date: marker.requestedStart ?? Date(),
                                        lesson: marker.kind == .creation ? nil : lesson, outbox: outbox)
     }
-    var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && !writeConfirmed && storageAvailable && pending == nil && school?.status == "ACTIVE" }
+    var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && !writeConfirmed && storageAvailable && blockingCommand == nil && school?.status == "ACTIVE" }
     /// Ce qui retient la feuille pendant un envoi (#109) : une annulation, un renvoi d’une demande déjà conservée ou une
     /// vérification. Une création ou un déplacement, eux, sont déjà dans le coffre chiffré et ne la retiennent pas.
     var holdsScreen: Bool { isBusy && !isSendingRequest }
@@ -346,6 +349,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     private func clear() {
         school = nil; defaults = nil; learners = []; trainings = []; offerings = []; policies = []; products = []; terms = []
         instructors = []; assignments = []; clearAvailability(); clearSlot(); clearSuggestion(); pending = nil
+        blockingCommand = nil
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
         confirmedLesson = nil; confirmedLessonReference = nil
         isSendingRequest = false; sentDraft = nil
@@ -364,7 +368,11 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         confirmedLesson = nil; confirmedLessonReference = nil
         defer { if request == generation { isLoading = false } }
         var storageError: String?
-        do { pending = try outbox.pending(for: scope, domain: .teaching); storageAvailable = true }
+        do {
+            pending = try outbox.pending(for: scope, domain: .teaching)
+            blockingCommand = try admissionBlocker()
+            storageAvailable = true
+        }
         catch { storageError = SchoolConfigurationFailure.storage.localizedDescription }
         do {
             let person = try await client.reader.me()
@@ -436,6 +444,25 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             guard request == generation, !(error is CancellationError) else { return }
             fail(error)
         }
+    }
+    /// Le geste que cette feuille émettrait — annuler, déplacer ou créer la leçon — comparé à la file avec exactement
+    /// la règle de `save` (#106, tâche 4) : une écriture d'agrégats disjoints ne ferme plus la feuille.
+    private func admissionBlocker() throws -> PendingSchoolCommand? {
+        if readsForCancellation, let lesson = originalLesson {
+            // `lessons.ts:414` : la version de cette leçon, puis la libération de ses occupations (`:422`).
+            return try outbox.pending(for: scope, refusing: .cancelLesson, resourceID: lesson.id)
+        }
+        if let lesson = originalLesson {
+            // `lessons.ts:390-405` : la version de cette leçon, ses occupations réécrites.
+            return try outbox.pending(for: scope, refusing: .moveLesson, resourceID: lesson.id)
+        }
+        // `lessons.ts:316-327` : une leçon neuve et ses occupations ; aucune version n'est lue.
+        return try outbox.pending(for: scope, refusing: .createLesson, routeResourceID: trainingID)
+    }
+    /// Relit la barrière après une résolution : la feuille ne reste jamais fermée par une demande déjà répondue.
+    private func rereadBlocker() {
+        do { blockingCommand = try admissionBlocker() }
+        catch { blockingCommand = nil; storageAvailable = false }
     }
     private func readOriginalLesson() async throws -> SchoolLesson? {
         guard let originalLesson else { return nil }
@@ -703,10 +730,14 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             let command = PendingSchoolCommand(id: id, scope: scope, kind: kind, resourceVersion: version,
                 createdAt: Date(), body: data, resourceID: resourceID, routeResourceID: routeID)
             pending = command; pendingRequiresReview = false
-            do { try outbox.save(command) }
+            do {
+                try outbox.save(command)
+                // Le geste conservé est celui de cette feuille : la file le refuse tant qu'il attend sa réponse.
+                blockingCommand = command
+            }
             catch {
                 storageAvailable = false
-                if let existing = try? outbox.pending(for: scope, domain: .teaching) { pending = existing }
+                if let existing = try? outbox.pending(for: scope, domain: .teaching) { pending = existing; blockingCommand = existing }
                 throw error
             }
         } catch { fail(error); return false }
@@ -734,6 +765,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             let receipt = try await client.receipt(for: command); try outbox.remove(command)
             guard request == generation else { return }
             pending = nil; isBusy = false; pendingRequiresReview = false
+            rereadBlocker()
             if command.kind == .cancelLesson {
                 confirmedCancellationLessonID = command.resourceID; writeConfirmed = true
             }
@@ -795,6 +827,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                 return true
             }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
+            rereadBlocker()
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
             // La feuille se ferme sur ce résultat : relire tout le planning derrière elle ne faisait que retarder sa
             // fermeture et changer le formulaire sous les yeux. Une nouvelle saisie exigerait une relecture.
@@ -811,7 +844,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                 // Une demande que l’école ne connaît pas se renvoie comme neuve : son refus est alors définitif.
                 // Un 404 est aussi une réponse de l’école : rien n’a été enregistré.
                 if firstAttempt || command.id == absentPendingID {
-                    do { try outbox.remove(command); pending = nil; absentPendingID = nil; needsReload = true }
+                    do { try outbox.remove(command); pending = nil; absentPendingID = nil; needsReload = true; rereadBlocker() }
                     catch { storageAvailable = false; isBusy = false; fail(error); return false }
                 } else { pendingRequiresReview = true }
             }

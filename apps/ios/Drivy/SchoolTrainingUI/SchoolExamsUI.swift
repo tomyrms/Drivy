@@ -15,6 +15,9 @@ import SwiftUI
     private(set) var isSending = false
     /// Geste conservé sur l'appareil, pas encore confirmé par l'école.
     private(set) var pending: PendingSchoolCommand?
+    /// File de cette portée, relue avec les examens : chaque geste est comparé à elle avec la règle exacte de `save`
+    /// (#106, tâche 4).
+    private(set) var queued: [PendingSchoolCommand] = []
     var errorMessage: String?
 
     var schoolID: UUID { scope.schoolID }
@@ -28,7 +31,8 @@ import SwiftUI
         guard !isLoading else { return }
         isLoading = true
         do {
-            pending = try outbox.pendingCommands(for: scope).first { $0.kind.isExam && $0.scope == scope && $0.routeResourceID == trainingID }
+            queued = try outbox.pendingCommands(for: scope)
+            pending = queued.first { $0.kind.isExam && $0.scope == scope && $0.routeResourceID == trainingID }
         } catch {
             errorMessage = "Cet appareil ne peut pas relire les demandes conservées."
         }
@@ -66,10 +70,18 @@ import SwiftUI
             reason: reason.trimmingCharacters(in: .whitespacesAndNewlines)), exam: exam)
     }
 
+    /// La file refuserait-elle ce geste ? Même règle que `save` (#106, tâche 4) : même examen, même épreuve prévue de
+    /// la formation, même accompagnement, même leçon. Une épreuve voisine ne ferme plus le geste.
+    func blocks(_ kind: SchoolCommandKind, exam: SchoolExam? = nil) -> Bool {
+        var commands = queued
+        if let pending, !commands.contains(where: { $0.id == pending.id }) { commands.append(pending) }
+        return commands.refusing(kind, in: scope, resourceID: exam?.id, routeResourceID: trainingID) != nil
+    }
+
     /// Écrit le geste dans la file, puis l'envoie. Vrai quand il est confirmé ou conservé en attente de réponse : la feuille se ferme et
     /// la section dit où il en est. Faux quand il est refusé ou n'a pas pu être conservé : la saisie reste à l'écran avec sa raison.
     private func enqueue(_ kind: SchoolCommandKind, id: UUID, body: SchoolExamBody, exam: SchoolExam?) async -> Bool {
-        guard pending == nil, !isSending else {
+        guard !isSending, !blocks(kind, exam: exam) else {
             errorMessage = "Un geste précédent attend encore la réponse de l’école."
             return false
         }
@@ -78,7 +90,7 @@ import SwiftUI
             let command = PendingSchoolCommand(id: id, scope: scope, kind: kind, resourceVersion: exam?.version ?? 0, createdAt: Date(),
                 body: try body.encoded(), resourceID: exam?.id, routeResourceID: trainingID)
             try outbox.save(command)
-            pending = command
+            pending = command; queued.append(command)
         } catch SchoolConfigurationFailure.pendingCommand {
             errorMessage = "Une autre demande de cette école attend sa réponse. Réessaie dans un instant."
             return false
@@ -97,6 +109,7 @@ import SwiftUI
         do {
             let next = try await client.replay(command)
             try? outbox.remove(command)
+            queued.removeAll { $0.id == command.id }
             state = next; pending = nil
             return true
         } catch is CancellationError {
@@ -106,6 +119,7 @@ import SwiftUI
             // garde le geste pour le prochain essai.
             if (error as? SchoolPlanningFailure)?.definitiveRejection == true {
                 try? outbox.remove(command); pending = nil
+                queued.removeAll { $0.id == command.id }
                 if let fresh = try? await client.state(schoolID: schoolID, trainingID: trainingID) { state = fresh }
             }
             errorMessage = Self.message(error)
@@ -117,6 +131,7 @@ import SwiftUI
     func abandon() async {
         guard let command = pending, !isSending else { return }
         do { try outbox.remove(command) } catch { errorMessage = "Cet appareil ne peut pas retirer la demande conservée."; return }
+        queued.removeAll { $0.id == command.id }
         pending = nil; errorMessage = nil
         await load()
     }
@@ -200,7 +215,7 @@ struct SchoolTrainingExamsSection: View {
                 }
                 Spacer(minLength: 0)
                 let kinds = SchoolExam.Kind.allCases.filter { state.canSchedule($0) }
-                if state.canManage && !kinds.isEmpty && model.pending == nil {
+                if state.canManage, !kinds.isEmpty, !model.blocks(.createExam) {
                     Menu("Prévoir") {
                         ForEach(kinds, id: \.self) { kind in
                             Button(examKindTitle(kind)) { sheet = .create(kind) }
@@ -225,7 +240,7 @@ struct SchoolTrainingExamsSection: View {
                 .background(DrivyTheme.surfaceCard, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
                 .accessibilityIdentifier("exams-next-step")
         }
-        ForEach(state.exams) { exam in row(exam, canManage: state.canManage && model.pending == nil) }
+        ForEach(state.exams) { exam in row(model, exam, canManage: state.canManage) }
         if let message = model.errorMessage, model.pending == nil { DrivyActionNote(text: message, isError: true) }
     }
 
@@ -251,7 +266,7 @@ struct SchoolTrainingExamsSection: View {
         .accessibilityIdentifier("exams-pending")
     }
 
-    private func row(_ exam: SchoolExam, canManage: Bool) -> some View {
+    private func row(_ model: SchoolExamModel, _ exam: SchoolExam, canManage: Bool) -> some View {
         HStack(alignment: .top, spacing: DrivySpacing.s) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(rowTitle(exam)).font(.body.weight(.semibold))
@@ -266,7 +281,7 @@ struct SchoolTrainingExamsSection: View {
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: DrivySpacing.xs) {
                 statusText(exam, canManage: canManage)
-                if canManage { actions(exam) }
+                if canManage { actions(model, exam) }
             }
         }
         .accessibilityElement(children: .contain)
@@ -295,17 +310,27 @@ struct SchoolTrainingExamsSection: View {
         }
     }
 
-    @ViewBuilder private func actions(_ exam: SchoolExam) -> some View {
+    /// Un geste n'est proposé que si la file l'accepterait : la même épreuve, la même formation pour une épreuve
+    /// prévue, le même accompagnement. Le résultat d'une autre épreuve ne ferme plus la modification d'une voisine.
+    @ViewBuilder private func actions(_ model: SchoolExamModel, _ exam: SchoolExam) -> some View {
         let scheduled = exam.examStatus == .scheduled
         let started = (exam.date ?? .distantFuture) <= Date()
         if scheduled || exam.hasResult {
             Menu {
-                if scheduled && started { Button("Renseigner le résultat") { sheet = .result(exam) } }
+                if scheduled && started {
+                    Button("Renseigner le résultat") { sheet = .result(exam) }
+                        .disabled(model.blocks(.setExamResult, exam: exam))
+                }
                 if scheduled {
                     Button("Modifier la date") { sheet = .edit(exam) }
+                        .disabled(model.blocks(.updateExam, exam: exam))
                     Button("Reporter") { sheet = .postpone(exam) }
+                        .disabled(model.blocks(.postponeExam, exam: exam))
                 }
-                if exam.hasResult { Button("Corriger le résultat") { sheet = .result(exam) } }
+                if exam.hasResult {
+                    Button("Corriger le résultat") { sheet = .result(exam) }
+                        .disabled(model.blocks(.setExamResult, exam: exam))
+                }
             } label: {
                 Label("Actions", systemImage: "ellipsis")
             }
