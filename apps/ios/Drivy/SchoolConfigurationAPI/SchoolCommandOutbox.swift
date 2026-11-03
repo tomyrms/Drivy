@@ -101,6 +101,10 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
+    /// Écriture d'un dossier de profil (profil administratif, accueil guidé), hors politique de champ : elle ne
+    /// vérifie et n'avance que la version du dossier et de la personne (profiles.ts:122-161, :262-283).
+    var isProfileRecord: Bool { self == .updateProfile || self == .saveOnboarding || self == .completeOnboarding }
+
     var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation && !isExam && !isCourse }
 
     var isInvitation: Bool {
@@ -299,6 +303,47 @@ protocol SchoolCommandOutbox: AnyObject {
     func remove(_ command: PendingSchoolCommand) throws
 }
 
+extension SchoolCommandOutbox {
+    /// Première commande conservée qui refuserait cette écriture, selon exactement la règle de `save`
+    /// (`blocksQueueEntry`). L'écran n'ouvre une action que si cette lecture est vide : il ne propose donc jamais
+    /// une saisie que la file refusera (#106). La sonde n'est jamais écrite ; seuls son type, sa portée et sa
+    /// ressource sont comparés.
+    func pending(for scope: SchoolCommandScope, refusing kind: SchoolCommandKind,
+                 resourceID: UUID? = nil, routeResourceID: UUID? = nil) throws -> PendingSchoolCommand? {
+        let probe = PendingSchoolCommand(id: UUID(), scope: scope, kind: kind, resourceVersion: 0, createdAt: Date(),
+            body: Data(), resourceID: resourceID, routeResourceID: routeResourceID)
+        return try pendingCommands(for: scope).first { $0.blocksQueueEntry(of: probe) }
+    }
+}
+
+extension PendingSchoolCommand {
+    /// Une entrée déjà conservée empêche-t-elle celle-ci d'entrer dans la file (#106) ? Le conflit reste celui de
+    /// l'ordonnancement, sauf pour les paires dont les deux routes ne lisent ni n'écrivent la même version :
+    /// deux invitations distinctes, une invitation et une écriture de dossier de profil, deux signalements de
+    /// leçons différentes. Tout le reste garde la règle de `conflicts(with:)`.
+    func blocksQueueEntry(of other: Self) -> Bool {
+        guard conflicts(with: other) else { return false }
+        // Même commande, ou commande d'une autre époque d'accès (ou d'une autre adhésion) : elle reste à résoudre.
+        guard id != other.id, scope == other.scope else { return true }
+        if kind.isInvitation, other.kind.isInvitation {
+            // Création : aucune version. Renvoi ou révocation : la même invitation attend sa réponse, et elle seule
+            // (invitations.ts:385-444 : aucune version d'école, une ligne d'invitation).
+            guard kind != .createInvitation, other.kind != .createInvitation,
+                  let target = resourceID, let otherTarget = other.resourceID else { return false }
+            return target == otherTarget
+        }
+        // Invitation et dossier de profil : l'invitation ne vérifie ni n'avance aucune version d'école, le dossier ne
+        // vérifie que la version du dossier et de la personne (profiles.ts:122-161). Aucune des deux ne relit l'autre.
+        if kind.isInvitation != other.kind.isInvitation,
+           kind.isProfileRecord || other.kind.isProfileRecord { return false }
+        // Signalements de leçons différentes : la création ne vérifie aucune version et n'écrit que la leçon, son
+        // brouillon et ses captures (capture-observations.ts:143-165).
+        if kind == .createObservation, other.kind == .createObservation,
+           let lesson = routeResourceID, let otherLesson = other.routeResourceID, lesson != otherLesson { return false }
+        return true
+    }
+}
+
 /// Persist before emission. Only encrypted bytes reach disk; an uncertain
 /// command keeps the exact request and operation identifier across launches.
 @MainActor
@@ -344,7 +389,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             try synchronize()
             return
         }
-        guard !commands.contains(where: { $0.conflicts(with: command) }) else { throw SchoolConfigurationFailure.pendingCommand }
+        guard !commands.contains(where: { $0.blocksQueueEntry(of: command) }) else { throw SchoolConfigurationFailure.pendingCommand }
         guard commands.count < 50 else { throw SchoolConfigurationFailure.storage }
         commands.append(command)
         try write(commands)
@@ -381,7 +426,7 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             for (index, command) in archive.commands.enumerated() {
                 try validate(command)
                 guard !archive.commands.prefix(index).contains(where: {
-                    archive.version < 3 ? $0.scope.belongsToWorkspace(command.scope) : $0.conflicts(with: command)
+                    archive.version < 3 ? $0.scope.belongsToWorkspace(command.scope) : $0.blocksQueueEntry(of: command)
                 }) else {
                     throw SchoolConfigurationFailure.storage
                 }
