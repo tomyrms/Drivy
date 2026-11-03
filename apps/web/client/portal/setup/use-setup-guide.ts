@@ -11,6 +11,7 @@ import {
 import { readError, useCommandLane, useCommandRunner, useConsole, useLoad } from '../../console/context';
 import type { SectionKey } from '../../console/sections';
 import { guideNextStep, matchesReviewedField, templatePrivacy, type StoredSetupDraft } from './setup-guide-model';
+import { reviewGate } from './setup-review-gate';
 import { contentKey, SetupSaveQueue, type SetupDraftBody, type SetupSaveSend } from './setup-save-queue';
 
 const focusPendingRequest = () => window.requestAnimationFrame(() => window.document.getElementById('pending-title')?.focus());
@@ -115,11 +116,10 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
   const key = `setup-draft:${catalogueOnly ? 'catalogue' : 'initial'}`;
   const today = civilDateIn(school.timeZone);
   const finished = () => navigate(catalogueOnly ? exitTo : 'agenda');
-  const reviewReason = saveState.synced ? null
-    : saveState.phase === 'saving' ? 'Enregistrement en cours.'
-      : saveState.phase === 'conflict' ? 'La préparation a changé à l’école : relisez l’étape.'
-        : saveState.phase === 'unknown' ? 'Enregistrement à vérifier.'
-          : 'Modifications non enregistrées.';
+  // Le résumé se lit sur un geste de cette visite : naviguer vers « Résumé », ou enregistrer une étape qui y conduit.
+  const reviewWanted = useRef(false);
+  const review = reviewGate({ step, requested: reviewWanted.current, synced: saveState.synced, blocked, reviewing,
+    preview, acknowledged, readFailure: readFailure !== null, phase: saveState.phase });
 
   // A receipt may settle a command restored after a page reload, with no local runner.
   useEffect(() => {
@@ -163,6 +163,8 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     const availableSteps = setupNavigationSteps(next, catalogueOnly);
     if (nextStep === 'PRICING' && !availableSteps.includes('PRICING')) nextStep = 'REVIEW';
     needsAdoption.current = false;
+    // Un brouillon relu ne vaut pas relecture : la revue se redemande par un geste.
+    reviewWanted.current = false;
     setDocument(saved); setContent(next);
     setStep(availableSteps.includes(nextStep) || !catalogueOnly && secondarySteps.includes(nextStep) ? nextStep : availableSteps[0]!);
     setEditorRevision(revision => revision + 1);
@@ -205,11 +207,12 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     return () => setNavigationGuard?.(null);
   }, [setNavigationGuard]);
 
-  // The summary reads what the school holds: it opens only on the confirmed draft, once nothing is being sent.
+  // The summary reads what the school holds: it opens on an explicit gesture, once nothing is being sent.
   useEffect(() => {
-    if (step !== 'REVIEW' || !document || !saveState.synced || reviewing || preview || readFailure) return;
-    void refreshReview(document.version);
-  }, [step, saveState.synced, document?.version, reviewing, preview, readFailure]);
+    if (!review.read) return;
+    reviewWanted.current = false;
+    void refreshReview(document?.version);
+  }, [review.read, document?.version]);
 
   const update = (next: SetupContent) => {
     setContent(content && loaded.data ? refreshSetupExamples(content, next, loaded.data.templates) : next);
@@ -233,6 +236,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
   function continueStep(nextStep: SetupStep, value = content) {
     if (!value || !document || blocked) return;
     setReadFailure(null); setAcknowledged(false);
+    if (nextStep === 'REVIEW') reviewWanted.current = true;
     queue.enqueue({ currentStep: nextStep, content: value });
     setStep(nextStep);
     setFocusField(null);
@@ -254,7 +258,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
   }
 
   async function finish() {
-    if (!preview?.ready || !acknowledged || !document || blocked || !saveState.synced || preview.draftVersion !== document.version) return;
+    if (!preview || !document || !review.activate || preview.draftVersion !== document.version) return;
     const command = createCommand({ schoolId, kind: 'applySetupDraft', path: 'setup-draft/complete', ifMatch: document.version,
       resourceVersion: document.version, body: { expectedSchoolVersion: preview.schoolVersion, expectedConfigurationVersion: preview.configurationVersion,
         reviewDigest: preview.reviewDigest, reviewAcknowledged: true, activate: preview.activate } });
@@ -276,22 +280,23 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
   }
 
   /**
-   * Moving between steps never waits for the school. Only the summary needs a draft the school holds, so anything typed
-   * there is handed to the same queue and the summary opens once confirmed.
+   * Moving between steps never waits for the school. Reaching the summary is an explicit gesture: it is read on the
+   * draft the school holds, so anything typed is handed to the same queue and the summary opens once confirmed.
    */
   function jump(target: SetupStep, field?: string) {
     if (blocked || !steps.includes(target) && (catalogueOnly || !secondarySteps.includes(target))) return;
     setFocusField(field ?? null);
     setReadFailure(null);
+    if (target === 'REVIEW') reviewWanted.current = true;
     setStep(target);
     if (target === 'REVIEW' && content && document) queue.enqueue({ currentStep: target, content });
   }
 
   function discardAndReload() {
-    setDiscard(false); queue.forgetLocal(); runner.clearOutcome(); drafts?.delete(key); needsAdoption.current = true; setReadFailure(null); loaded.reload();
+    setDiscard(false); reviewWanted.current = false; queue.forgetLocal(); runner.clearOutcome(); drafts?.delete(key); needsAdoption.current = true; setReadFailure(null); loaded.reload();
   }
   function leaveWithoutSaving() {
-    const proceed = leave; setLeave(null); queue.forgetLocal(); drafts?.delete(key); proceed?.();
+    const proceed = leave; setLeave(null); reviewWanted.current = false; queue.forgetLocal(); drafts?.delete(key); proceed?.();
   }
   function retryRead() {
     if (needsAdoption.current) loaded.reload(); else void refreshReview();
@@ -301,7 +306,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     loaded, document, content, step, steps, dirty, saving, blocked, reviewing, preview, reviewIssues, acknowledged, setAcknowledged,
     readFailure, discard, setDiscard, leave, setLeave, focusField, setFocusField, editorRevision, runner, today, routeQuery,
     nextStep: guideNextStep(steps, step), secondary: !steps.includes(step),
-    saveState, synced: saveState.synced, staleStep: saveState.conflictStep, reviewReason,
+    saveState, synced: saveState.synced, staleStep: saveState.conflictStep, review,
     update, errorFor, save, continueStep, finish, skip, jump, refreshReview, discardAndReload, leaveWithoutSaving, retryRead,
     retrySave: () => queue.retry(),
     stepField: (field: string) => issueStep(field),

@@ -214,4 +214,31 @@ describe('Enregistrement coalescé du brouillon (#123)', () => {
     await flush();
     expect(h.send).toHaveBeenCalledTimes(1); // rien n'est rejoué dans la nouvelle portée
   });
+
+  test('sauvegarde perdue, rechargement puis reçu : la file repart synchronisée sur le brouillon relu', async () => {
+    const h = harness();
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const typed = content('École A');
+    // « Enregistrer et revenir au résumé » : la réponse est perdue, le magasin garde la demande au résultat inconnu.
+    h.queue.enqueue(draft(typed, 'REVIEW'));
+    expect(h.queue.getSnapshot().phase).toBe('saving');
+
+    // Rechargement de la page : la portée précédente est abandonnée, une file neuve relit le brouillon que le PUT a écrit.
+    h.queue.dispose();
+    const reloaded = new SetupSaveQueue({ send: h.send });
+    reloaded.adopt(2, { currentStep: 'REVIEW', content: typed });
+    reloaded.track({ currentStep: 'REVIEW', content: typed });
+    expect(reloaded.getSnapshot()).toMatchObject({ phase: 'idle', synced: true, heldVersion: 2, conflictStep: null });
+
+    // Reçu AP72 : il confirme l'opération sans contenu, la relecture du brouillon garde la même version et la même saisie.
+    reloaded.adopt(2, { currentStep: 'REVIEW', content: typed });
+    expect(reloaded.getSnapshot()).toMatchObject({ phase: 'idle', synced: true, heldVersion: 2 });
+
+    // La réponse tardive de la page précédente n'atteint jamais la nouvelle portée.
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(typed, 'REVIEW') });
+    await flush();
+    expect(reloaded.getSnapshot()).toMatchObject({ phase: 'idle', synced: true, heldVersion: 2 });
+    expect(h.send).toHaveBeenCalledTimes(1);
+  });
 });
