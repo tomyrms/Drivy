@@ -61,7 +61,7 @@ function Preparation() {
   const loaded = useLoad(async () => {
     const [next, draft] = await Promise.all([readSchool(schoolId, 'setup-draft/next-actions', nextActionsSchema), readSchool(schoolId, 'setup-draft', deferredSchema)]);
     return { next, deferred: draft.content.formations.filter(item => !item.apply).length };
-  }, [schoolId, school.version, revision]);
+  }, [schoolId, school.version, revision], schoolId, 'apercu/preparation');
   return <section className="overview-page">
     <header className="overview-heading"><h1>Préparation de l’école</h1><Button onClick={() => navigate('agenda')}>Ouvrir le planning</Button></header>
     <ReadFeedback loaded={loaded} label="Lecture de la préparation" />

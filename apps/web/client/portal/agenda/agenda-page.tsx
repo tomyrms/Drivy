@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Field, FieldGroup, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { Skeleton } from '../../components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { addDays, civilDateIn, formatDayHeading, formatTimeRange, formatWeek, lessonPhase } from '../../agenda-model';
 import type { AgendaEvent } from '../../console/agenda-projection';
@@ -62,11 +63,13 @@ export function AgendaPilot() {
       {(state.search || state.instructor) && <Button variant="ghost" onClick={() => { state.setSearch(''); state.chooseInstructor(''); }}>Effacer les filtres</Button>}
     </FieldGroup>}
     {!state.filtersOpen && (state.search || state.instructor) && <div className="agenda-active-filters"><Badge variant="secondary">{state.search ? `Élève : ${state.search}` : ''}{state.search && state.instructor ? ' · ' : ''}{state.instructor ? state.memberName(state.instructor) : ''}</Badge><Button variant="ghost" onClick={() => { state.setSearch(''); state.chooseInstructor(''); }}>Effacer</Button></div>}
-    <div className="agenda-notices"><ReadFeedback loaded={state.lessons} label="Lecture des leçons" /><ReadFeedback loaded={state.directory} label="Lecture de l’annuaire" /><ReadFeedback loaded={state.courses} label="Lecture des cours" />
+    <div className="agenda-notices">{state.lessons.status !== 'loading' && <ReadFeedback loaded={state.lessons} label="Lecture des leçons" stale={state.lessons.data !== undefined} />}<ReadFeedback loaded={state.directory} label="Lecture de l’annuaire" stale={state.directory.data !== undefined} /><ReadFeedback loaded={state.courses} label="Lecture des cours" stale={state.courses.data !== undefined} />
       {state.partial && <Alert><AlertTitle>Vue partielle</AlertTitle><AlertDescription>Tous les rendez-vous n’ont pas pu être lus. Les créneaux vides ne prouvent pas une disponibilité.</AlertDescription></Alert>}
       {state.searching && state.directory.status !== 'ready' && <Alert><AlertTitle>Recherche en attente</AlertTitle><AlertDescription>Les leçons restent affichées jusqu’à la lecture de l’annuaire.</AlertDescription></Alert>}
     </div>
-    {dayView ? <><nav className="agenda-day-strip" aria-label="Jours de la semaine">{state.days.map(day => <Button variant="ghost" key={day.day} data-today={day.day === today} aria-current={day.day === state.day ? 'date' : undefined} onClick={() => state.chooseDay(day.day)}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong><span className="agenda-day-dot" data-has-events={day.items.length > 0} /></Button>)}</nav>
+    {state.lessons.data === undefined
+      ? state.lessons.status === 'loading' ? <PeriodLoading /> : null
+      : dayView ? <><nav className="agenda-day-strip" aria-label="Jours de la semaine">{state.days.map(day => <Button variant="ghost" key={day.day} data-today={day.day === today} aria-current={day.day === state.day ? 'date' : undefined} onClick={() => state.chooseDay(day.day)}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong><span className="agenda-day-dot" data-has-events={day.items.length > 0} /></Button>)}</nav>
       <div className="agenda-day-list">{events.map(event => <EventEntry key={event.key} event={event} state={state} />)}{events.length === 0 && state.emptyConfirmed && <div className="agenda-empty"><CalendarDays aria-hidden="true" /><h3>{state.searching ? 'Aucune leçon pour cet élève' : 'Aucun rendez-vous ce jour'}</h3>{canPlan && !state.searching && <Button variant="outline" onClick={() => state.openLesson(null)}>Planifier une leçon</Button>}</div>}</div>
     </> : <div className="agenda-week"><div className="agenda-week-head"><span className="agenda-time-zone">{school.timeZone.split('/').at(-1)}</span>{state.days.map(day => <Button key={day.day} variant="ghost" onClick={() => { state.chooseDay(day.day); state.setPresentation('day'); }} data-today={day.day === today}><span>{weekday(day.day)}</span><strong>{Number(day.day.slice(-2))}</strong></Button>)}</div>
       <div className="agenda-grid-scroll" id="agenda-grid-scroll"><div className="agenda-time-grid" style={{ height: `${(endHour - startHour) * 60}px` }}><div className="agenda-hour-rail">{Array.from({ length: endHour - startHour }, (_, index) => <span key={index} style={{ top: index * 60 }}>{String((startHour + index) % 24).padStart(2, '0')}:00</span>)}</div>
@@ -76,6 +79,11 @@ export function AgendaPilot() {
     {state.canManageCourses && state.catalogue.data && <CoursePolicyDialog open={policyOpen} catalogue={state.catalogue.data} onClose={() => setPolicyOpen(false)} onSaved={state.catalogue.reload} onReread={state.catalogue.reload} />}
     <footer className="agenda-read-time">{state.freshness.complete && state.freshness.readAt ? `Actualisé à ${new Intl.DateTimeFormat('fr-CH', { timeZone: school.timeZone, timeStyle: 'short' }).format(state.freshness.readAt)}` : 'La lecture complète de l’agenda n’est pas confirmée.'}<span>{school.timeZone}</span></footer>
   </section>;
+}
+
+/** Une période jamais lue : squelette honnête, jamais une grille vide qui se lirait comme « rien de prévu ». */
+function PeriodLoading() {
+  return <div className="agenda-period-loading" role="status" aria-label="Lecture de la période"><Skeleton className="h-10 w-full" /><Skeleton className="h-72 w-full" /></div>;
 }
 
 function EventEntry({ event, state }: { event: AgendaEvent; state: AgendaState }) {
