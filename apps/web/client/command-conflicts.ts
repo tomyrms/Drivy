@@ -37,7 +37,13 @@ export function commandConflictKeys(command: ConflictSubject): readonly string[]
     return [target ? `invitations:${target}` : 'invitations'];
   }
   if (['createOffering', 'createCurriculum', 'createCatalogPolicy', 'createCommercialTerms', 'createServiceProduct',
-    'createFormation', 'saveFormationProgramme'].includes(kind)) return ['catalogue'];
+    'createFormation'].includes(kind)) return ['catalogue'];
+  // Un enregistrement de programme s'ordonne par formation (#124) ; sans portée — une création, qui n'a pas encore d'identifiant
+  // d'école — la clé reste la famille entière.
+  if (kind === 'saveFormationProgramme') {
+    const offering = lower(command.scope);
+    return [offering ? `catalogue:offering:${offering}` : 'catalogue'];
+  }
   // Un tarif s'ordonne par produit, une révision de conditions par jeu de conditions (#124). Sans agrégat nommé — une création,
   // qui n'a pas encore d'identifiant d'école, ou un tarif qui partage ses conditions — la clé reste la famille entière.
   if (kind === 'saveTariff') {
