@@ -99,6 +99,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     @ObservationIgnored private let notifications: NotificationCenter
     /// Saisie au moment où l’envoi est parti : modifiée depuis, elle n’est jamais abandonnée par une sortie.
     @ObservationIgnored private var sentDraft: SchoolPlanningDraftSnapshot?
+    /// La feuille a été quittée volontairement pendant l’envoi (#109). Seul ce cas autorise une annonce après coup :
+    /// un changement de compte, d’école ou d’époque d’accès, ou un accès retiré, n’annonce rien dans l’ancienne portée.
+    @ObservationIgnored private var leftWhileSending = false
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var selectionGeneration = UUID()
     @ObservationIgnored private var availabilityGeneration = UUID()
@@ -335,6 +338,8 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     /// reste ouverte et c’est l’avertissement de saisie non conservée qui s’applique.
     @discardableResult func leaveWhileRequestIsSent() -> Bool {
         guard isSendingRequest, !invalidated, !draftChangedSinceSend else { return false }
+        // Une sortie volontaire, et elle seule, autorise l’annonce d’une réponse arrivée après la fermeture.
+        leftWhileSending = true
         close()
         return true
     }
@@ -344,6 +349,8 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
         confirmedLesson = nil; confirmedLessonReference = nil
         isSendingRequest = false; sentDraft = nil
+        // Changement de portée ou accès retiré : plus aucune annonce ne part dans l’ancienne portée.
+        leftWhileSending = false
     }
     func load() async {
         guard !invalidated, !isBusy else { return }
@@ -768,6 +775,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         // Création ou déplacement : la demande est déjà écrite dans le coffre chiffré, la feuille peut être quittée
         // avant la réponse. Ce qui suit ne réécrit alors plus rien à l’écran ; seule la preuve de l’école est annoncée.
         isSendingRequest = command.kind == .createLesson || command.kind == .moveLesson
+        leftWhileSending = false
         defer { isSendingRequest = false }
         do {
             try outbox.save(command)
@@ -780,7 +788,12 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             try outbox.remove(command)
             // Feuille quittée pendant l’envoi (#109) : l’école a répondu et sa preuve est vérifiée. Rien n’est écrit
             // dans une feuille qui n’existe plus, mais les écrans qui montrent la leçon se relisent, une seule fois.
-            guard request == generation, !invalidated else { announceConfirmedWrite(); return false }
+            // Seule une sortie volontaire annonce : un changement de compte, d’école ou d’époque d’accès, ou un accès
+            // retiré pendant l’envoi, ne publie rien dans l’ancienne portée (même règle que `verify()`).
+            guard request == generation, !invalidated else {
+                if leftWhileSending, !accessRevoked { announceConfirmedWrite(); return false }
+                return true
+            }
             pending = nil; isBusy = false; successMessage = "Enregistrement confirmé par l’école."
             if command.kind == .cancelLesson { confirmedCancellationLessonID = command.resourceID }
             // La feuille se ferme sur ce résultat : relire tout le planning derrière elle ne faisait que retarder sa

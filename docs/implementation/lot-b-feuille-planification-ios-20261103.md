@@ -60,12 +60,15 @@ l’annulation reste verrouillée. Aucun hôte n’est exclu.
    - `close()` : la feuille se ferme, plus aucune lecture ni écriture ne s’applique, mais ce qui est affiché reste en
      place pendant que la feuille descend (même choix que `SchoolLessonReportWorkspace.close()` de #114).
    - `leaveWhileRequestIsSent()` : refuse hors envoi, refuse si la feuille est déjà fermée, refuse si la saisie a changé
-     depuis l’envoi ; sinon `close()` et `true`. Il n’écrit rien, ne renvoie rien, ne supprime rien du coffre.
+     depuis l’envoi ; sinon il lève `leftWhileSending` (une sortie **volontaire**, et elle seule), `close()`, et `true`.
+     Il n’écrit rien, ne renvoie rien, ne supprime rien du coffre.
    - `transmit` : lève `isSendingRequest` avant l’envoi (`defer` le baisse), et **annonce une seule fois** la preuve
-     quand elle arrive, y compris si la feuille a été quittée entre-temps (`guard request == generation, !invalidated
-     else { announceConfirmedWrite(); return false }`). Rien n’est réécrit dans une feuille qui n’existe plus :
-     `pending`, `writeConfirmed`, `successMessage`, `confirmedLesson` restent intacts, et la relecture de la leçon
-     n’est pas lancée pour personne.
+     quand elle arrive, y compris si la feuille a été quittée entre-temps — mais **seulement** si `leftWhileSending` est
+     vrai et que ni `invalidate()` ni un accès retiré ne sont intervenus depuis (`clear()` remet le drapeau à faux, donc
+     un changement de compte, d’école ou d’époque d’accès n’annonce rien dans l’ancienne portée, comme `verify()`).
+     Rien n’est réécrit dans une feuille qui n’existe plus : `pending`, `writeConfirmed`, `successMessage`,
+     `confirmedLesson` restent intacts, et la relecture de la leçon n’est pas lancée pour personne. Hors sortie
+     volontaire, la garde de génération rend `true` sans annonce, exactement comme avant.
    - `announceConfirmedWrite()` : un seul point de publication de `.drivyLessonsDidChange` (les trois appels de
      `verify`/`transmit` passent par lui, même comportement qu’avant).
    - `notifications: NotificationCenter = .default` à l’initialisation (comme `SchoolLessonReportWorkspace`) : permet
@@ -92,6 +95,7 @@ l’annulation reste verrouillée. Aucun hôte n’est exclu.
 | Annulation non quittable (capture en direct) | `aCancellationBeingSentKeepsTheSheetLocked` (`holdsScreen`, `!isSendingRequest`, sortie refusée, `confirmedCancellationLessonID` posé à la réponse) | écrit, `NOT_EXECUTED` |
 | Rien de confirmé avant la preuve | `aCreationBeingSentLeavesTheSheetFreeButConfirmsNothing` (`!writeConfirmed`, `confirmedLesson == nil`, `successMessage == nil` pendant l’envoi) | écrit, `NOT_EXECUTED` |
 | Confirmation après fermeture publiée une fois | `leavingWhileTheSchoolAnswersPublishesTheConfirmationOnce` (0 annonce avant la réponse, 1 après, 1 POST, coffre vidé une fois, feuille fermée sans état confirmé) | écrit, `NOT_EXECUTED` |
+| Changement de portée après la sortie : aucune annonce dans l’ancienne portée | `aScopeChangeAfterLeavingNeverAnnouncesInTheOldScope` (sortie, puis `invalidate()`, puis réponse : 0 annonce, coffre vidé une seule fois par le reçu, 1 POST) | écrit, `NOT_EXECUTED` |
 | Réponse perdue après fermeture : demande au coffre, aucun second POST | `aLostProofAfterLeavingKeepsTheRequestWithoutASecondPost` (coffre intact, 0 annonce, repère « À vérifier », réouverture en lecture seule, toujours 1 POST) | écrit, `NOT_EXECUTED` |
 | Brouillon modifié non envoyé : sortie refusée | `aDraftChangedDuringTheSendIsNeverAbandonedByLeaving` (sortie refusée, feuille intacte, confirmation reçue ensuite, saisie gardée) | écrit, `NOT_EXECUTED` |
 | Aucune sortie sans envoi | `nothingCanBeLeftBeforeARequestIsBeingSent` | écrit, `NOT_EXECUTED` |

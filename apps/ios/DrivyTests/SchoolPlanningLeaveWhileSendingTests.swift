@@ -176,6 +176,34 @@ import Testing
         #expect(outbox.value == nil && posts == 1)
     }
 
+    @Test func aScopeChangeAfterLeavingNeverAnnouncesInTheOldScope() async throws {
+        let server = PlanningLeaveServer(), outbox = ConfigurationOutboxStub()
+        let notifications = NotificationCenter(), log = PlanningLeaveNotificationLog()
+        let observer = notifications.addObserver(forName: .drivyLessonsDidChange, object: nil, queue: nil) { _ in
+            log.increment()
+        }
+        defer { notifications.removeObserver(observer) }
+        let model = workspace(server, outbox: outbox, notifications: notifications)
+        await model.load(); await model.selectLearner(HubFixture.learnerID); await model.validateSlot()
+        try #require(model.validBooking)
+
+        await server.hold()
+        let booking = Task { await model.saveBooking() }
+        try await HubFixture.wait { await server.isHolding() }
+        #expect(model.leaveWhileRequestIsSent())
+        // Changement de compte, d’école ou d’époque d’accès avant la réponse : l’ancienne portée ne doit rien annoncer,
+        // même si la feuille avait été quittée juste avant (même règle que `verify()`).
+        model.invalidate()
+
+        await server.release()
+        // La preuve est vérifiée et la demande quitte le coffre par le reçu comme avant, mais aucune annonce ne part.
+        #expect(await booking.value)
+        #expect(log.value == 0 && outbox.value == nil && outbox.removals.count == 1)
+        #expect(model.pending == nil && !model.writeConfirmed && model.confirmedLesson == nil && model.successMessage == nil)
+        let posts = await server.posts()
+        #expect(posts == 1)
+    }
+
     private func workspace(_ server: PlanningLeaveServer, outbox: ConfigurationOutboxStub, lesson: SchoolLesson? = nil,
                            notifications: NotificationCenter = .default) -> SchoolPlanningWorkspace {
         let client = SchoolPlanningClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
