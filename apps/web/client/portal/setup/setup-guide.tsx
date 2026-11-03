@@ -105,7 +105,7 @@ export function SetupGuide({ catalogueOnly }: { catalogueOnly: boolean }) {
             {step === 'PROFILE' && <ProfileEditor content={content} onChange={guide.update} errorFor={guide.errorFor} />}
             {step === 'FORMATIONS' && <FormationsStep content={content} templates={loaded.data.templates} offerings={loaded.data.offerings} initialOfferingId={routeQuery?.selection}
               today={guide.today} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
-            {step === 'PRICING' && <PricingStep key={`${document.version}:${guide.editorRevision}`} content={content} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
+            {step === 'PRICING' && <PricingStep key={guide.editorRevision} content={content} onChange={guide.update} canWrite={canConfigureCatalog} errorFor={guide.errorFor} />}
             {step === 'REVIEW' && <div className="setup-step-body">
               {!preview && !reviewing && <Button type="button" variant="outline" className="setup-start" onClick={() => void guide.refreshReview()} disabled={!guide.review.verify}
                 aria-describedby={guide.review.reason ? 'setup-review-reason' : undefined}>Vérifier la préparation</Button>}

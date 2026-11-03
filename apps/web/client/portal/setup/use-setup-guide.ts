@@ -12,7 +12,7 @@ import { readError, useCommandLane, useCommandRunner, useConsole, useLoad } from
 import type { SectionKey } from '../../console/sections';
 import { guideNextStep, matchesReviewedField, templatePrivacy, type StoredSetupDraft } from './setup-guide-model';
 import { reviewGate } from './setup-review-gate';
-import { contentKey, SetupSaveQueue, type SetupDraftBody, type SetupSaveSend } from './setup-save-queue';
+import { contentKey, saveOutcome, SetupSaveQueue, type SetupDraftBody, type SetupSaveSend } from './setup-save-queue';
 
 const focusPendingRequest = () => window.requestAnimationFrame(() => window.document.getElementById('pending-title')?.focus());
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -183,6 +183,8 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     setDocument(previous => previous ? { ...previous, ...saved } : previous);
     // A summary read is bound to one draft version: it is read again on the new one.
     setPreview(null); setReviewIssues([]); setReviewContent(null); setAcknowledged(false);
+    // Les éditeurs à état local (prix) repartent du contenu relu, pas d'une confirmation de notre propre saisie.
+    setEditorRevision(revision => revision + 1);
     if (!edited) setContent(clone(saved.content));
   }, [loaded.data, loaded.status, document]);
 
@@ -244,14 +246,21 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
 
   /**
    * Explicit save, waited for (« Enregistrer et quitter ») : the same queue, so a request already in flight is awaited
-   * instead of being doubled. Nothing is announced unless the school confirmed this exact draft.
+   * instead of being doubled. Nothing is announced unless the school confirmed this exact draft; a lost reply keeps the
+   * durable command followed by the store, closes the exit dialog and leaves the verification to the pending panel.
    */
   async function save(nextStep: SetupStep, value = content, exit = false, afterSave?: () => void) {
     if (!value || !document || blocked) return;
     setSaving(true); setReadFailure(null); setAcknowledged(false);
     try {
-      const settled = await queue.flush({ currentStep: nextStep, content: value });
-      if (settled.phase !== 'idle' || !settled.held || contentKey(settled.held.content) !== contentKey(value)) return;
+      const body: SetupDraftBody = { currentStep: nextStep, content: value };
+      const outcome = saveOutcome(await queue.flush(body), body);
+      if (outcome !== 'confirmed') {
+        // Un refus, un conflit ou un résultat inconnu se lit sur la page, jamais derrière un dialogue qui bloque la sortie.
+        if (afterSave) setLeave(null);
+        if (outcome === 'pending') focusPendingRequest();
+        return;
+      }
       if (afterSave) { setLeave(null); afterSave(); }
       else if (exit) navigate(catalogueOnly ? exitTo : 'configuration');
     } finally { setSaving(false); }

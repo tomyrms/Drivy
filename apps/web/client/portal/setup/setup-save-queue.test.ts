@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { setupContentSchema, type SetupContent, type SetupStep } from '../../setup-model';
-import { SetupSaveQueue, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
+import { SetupSaveQueue, saveOutcome, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
 
 const content = (name = 'École synthétique'): SetupContent => setupContentSchema.parse({
   selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE'],
@@ -240,5 +240,36 @@ describe('Enregistrement coalescé du brouillon (#123)', () => {
     await flush();
     expect(reloaded.getSnapshot()).toMatchObject({ phase: 'idle', synced: true, heldVersion: 2 });
     expect(h.send).toHaveBeenCalledTimes(1);
+  });
+
+  test('une réponse perdue n’est pas un refus : la sortie attend la vérification au lieu d’abandonner la commande', async () => {
+    const h = harness();
+    h.send.mockResolvedValueOnce({ status: 'unknown', message: 'Enregistrement non confirmé. Vérifiez son résultat.' });
+    const typed = content('École A');
+    // Dialogue de sortie : « Enregistrer et quitter ».
+    const settled = await h.queue.flush(draft(typed, 'PROFILE'));
+
+    expect(settled).toMatchObject({ phase: 'unknown', synced: false });
+    expect(saveOutcome(settled, draft(typed, 'PROFILE'))).toBe('pending');
+    // La saisie reste retenue et la commande reste suivie : rien n'est abandonné, rien n'est renvoyé.
+    expect(h.queue.getSnapshot().held?.content.identity.name).toBe('École synthétique');
+    expect(h.send).toHaveBeenCalledTimes(1);
+  });
+
+  test('la sortie ne se fait que sur le brouillon exactement détenu par l’école', async () => {
+    const h = harness();
+    const typed = content('École A');
+    const settled = await h.queue.flush(draft(typed, 'PROFILE'));
+    expect(settled).toMatchObject({ phase: 'idle', synced: true });
+    expect(saveOutcome(settled, draft(typed, 'PROFILE'))).toBe('confirmed');
+    // Même contenu, autre étape : l'école détient bien la saisie.
+    expect(saveOutcome(settled, draft(typed, 'REVIEW'))).toBe('confirmed');
+    // Une saisie plus récente n'est pas ce que l'école détient : pas de sortie.
+    expect(saveOutcome(settled, draft(content('École B'), 'PROFILE'))).toBe('failed');
+
+    h.send.mockResolvedValueOnce({ status: 'refused', message: 'La préparation n’a pas été enregistrée.' });
+    const refused = await h.queue.flush(draft(content('École B'), 'PROFILE'));
+    expect(refused).toMatchObject({ phase: 'refused' });
+    expect(saveOutcome(refused, draft(content('École B'), 'PROFILE'))).toBe('failed');
   });
 });
