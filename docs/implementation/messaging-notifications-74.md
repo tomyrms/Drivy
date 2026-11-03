@@ -165,7 +165,7 @@ Les tests ajoutés sont dans `apps/api/test/messaging-push-a55.integration.test.
    n'était appelé que par les deux gestes de déconnexion de `SchoolRootView` (ligne « Se déconnecter » et bouton
    « Se reconnecter »). Quand `IdentitySession` passait `isAuthenticated` à `false` sans passer par `signOut()` — restauration
    échouée (`IdentitySession.restore`), renouvellement refusé, échec d'écriture du Trousseau — le jeton d'appareil restait
-   **actif côté serveur**. Trois choses ont été ajoutées, sans nouvelle autorisation locale ni changement de la logique
+   **actif côté serveur**. Quatre points ont été ajoutés, sans nouvelle autorisation locale ni changement de la logique
    d'identité :
    - **Secret au Trousseau.** `PUT /v1/me/push-devices` rend `data.revocationSecret` une fois (`SchoolNotificationClient.register`
      le décode, facultatif : une API plus ancienne ne le renvoie pas). `SchoolPushCenter` le garde avec son jeton
@@ -175,20 +175,26 @@ Les tests ajoutés sont dans `apps/api/test/messaging-push-a55.integration.test.
    - **Route anonyme.** `SchoolNotificationClient.revokeAnonymously(token:secret:)` appelle `POST /v1/push-devices/revoke`
      sur la même base que l'API, **sans** en-tête `Authorization` et sans passer par « /me » ni par le renouvellement du
      jeton d'accès. À toute fin de session, la révocation authentifiée est tentée d'abord (comportement d'avant #120) ; si
-     l'école ne reconnaît plus la session (`unauthorized`), le secret prend le relais. Une panne réseau laisse la révocation
-     à faire : le secret reste marqué `pending` et un nouvel essai a lieu au lancement suivant ou au retour au premier plan
-     (`resumePendingRevocation`, une fois par transition, jamais en boucle).
+     l'école ne reconnaît plus la session (`unauthorized`), le secret prend le relais. Tant que l'école n'a pas confirmé la
+     révocation, l'enregistrement (jeton + secret) reste au Trousseau : sa présence **est** la marque d'une révocation due.
+     Un nouvel essai part à la première transition d'identité (fin de restauration ou de connexion) et à chaque retour au
+     premier plan, une fois par transition, hors session ouverte et hors restauration en cours : jamais de boucle.
    - **Accroches.** `IdentitySession.sessionEnded` est appelée aux trois passages à `false` (restauration échouée,
-     renouvellement refusé, Trousseau en échec) et posée par `SchoolRootView` sur `SchoolPushCenter.shared.sessionEnding()` ;
-     les deux gestes de déconnexion continuent de l'appeler avant `signOut()`, sans doublon. `SchoolRootView` reprend aussi
-     une révocation restée à faire quand une restauration se termine sans session et à chaque retour au premier plan hors
-     session.
+     renouvellement refusé, Trousseau en échec) ; elle est posée par `DrivyApp` **avant** `identity.restore()`, pour que
+     l'échec de la restauration du lancement soit annoncé. Si une fin de session survient avant la pose, l'identité la
+     retient et l'annonce dès que l'accroche est posée. Les deux gestes de déconnexion continuent de l'appeler avant
+     `signOut()`, sans doublon. `SchoolRootView` reprend une révocation restée à faire après le verdict du lancement
+     (`identitySettled`), à chaque fin de restauration ou de connexion sans session, et à chaque retour au premier plan
+     hors session ; `resumePendingRevocation(identityIsBusy:)` refuse de partir pendant une session ouverte ou une
+     restauration en cours.
    - **Tests.** `apps/ios/DrivyTests/SchoolPushCenterTests.swift` (nouveau) : secret conservé puis remplacé, secret effacé
      après succès, révocation authentifiée quand le jeton vaut, révocation anonyme sur les trois chemins d'identité,
-     retentative unique après une panne réseau, école plus ancienne sans secret (comportement inchangé), forme exacte de la
-     requête anonyme. **Ces tests n'ont pas été compilés ni exécutés dans cette passe** (pas de chaîne Apple sur la machine
-     de rédaction) : ils ne qualifient rien tant que la CI Apple ne les a pas passés, et aucune réception APNs réelle n'est
-     apportée. Le frein `429 PUSH_REVOCATION_ATTEMPTS` laisse la révocation en attente, comme une panne.
+     fin de session annoncée après la pose de l'accroche (restauration du lancement), secret présent au lancement sans
+     session, reprise refusée pendant une session ouverte ou une restauration, retentative unique après une panne réseau,
+     école plus ancienne sans secret (comportement inchangé), forme exacte de la requête anonyme. **Ces tests n'ont pas été
+     compilés ni exécutés dans cette passe** (pas de chaîne Apple sur la machine de rédaction) : ils ne qualifient rien tant
+     que la CI Apple ne les a pas passés, et aucune réception APNs réelle n'est apportée. Le frein `429
+     PUSH_REVOCATION_ATTEMPTS` laisse la révocation en attente, comme une panne.
 2. **Changement de compte sans déconnexion.** Si un autre compte se connecte sur le même appareil sans que le premier se soit
    déconnecté, la sécurité repose uniquement sur `push_device_claim` (le nouveau compte reprend le jeton à l'enregistrement),
    et un nouvel enregistrement remplace le secret de révocation de l'appareil. C'est prouvé côté serveur (test ci-dessus),
@@ -202,7 +208,7 @@ Les tests ajoutés sont dans `apps/api/test/messaging-push-a55.integration.test.
 - Le général peut compter beaucoup de membres : sa catégorie étant désactivée par défaut, la file n'écrit une ligne que pour ceux qui l'ont activée et qui ont un appareil.
 - **Réception APNs réelle non vérifiée** : les tests utilisent un collecteur local, jamais APNs. Aucune preuve de réception sur appareil (STATUS.md). Le regroupement est vérifié sur PostgreSQL réelle (rafale, mention, deux conversations, report de 60 s, expiration et préférence coupée pendant le report), pas sur un appareil.
 - Les alertes de messagerie sont désactivées pour les écoles hors qualification comme la messagerie elle-même : aucun message n'existe, donc aucune alerte.
-- **Matrice A55 et trou iOS** : la matrice de bout en bout ci-dessus nomme la preuve de chaque maillon. Deux points restent ouverts : la réception APNs réelle, et la fin de session sans déconnexion explicite, qui laisse le jeton d'appareil actif côté serveur faute de pouvoir appeler la révocation.
+- **Matrice A55 et trou iOS** : la matrice de bout en bout ci-dessus nomme la preuve de chaque maillon. Deux points restent ouverts : la réception APNs réelle, et la qualification de la fin de session sans déconnexion explicite — comblée côté app (#120, voir « Trous constatés côté iOS ») mais non compilée ni exécutée ici.
 
 ## Déploiement
 

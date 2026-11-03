@@ -5,15 +5,14 @@ import UserNotifications
 
 /// Secret de révocation d'un appareil push (#120) : rendu une seule fois à l'enregistrement, la base n'en garde que
 /// l'empreinte. Il est conservé au Trousseau avec le jeton qu'il désigne, et effacé dès que l'école a confirmé la
-/// révocation. `pending` : une fin de session n'a pas pu révoquer (réseau absent), l'essai reprend au prochain lancement.
+/// révocation. Tant qu'un enregistrement existe, une révocation reste donc due : c'est ce que la reprise vérifie.
 struct SchoolPushRevocationRecord: Codable, Equatable, Sendable {
     let version: Int
     let token: String
     let secret: String
-    var pending: Bool
 
-    init(token: String, secret: String, pending: Bool = false) {
-        version = 1; self.token = token; self.secret = secret; self.pending = pending
+    init(token: String, secret: String) {
+        version = 1; self.token = token; self.secret = secret
     }
 
     var isValid: Bool {
@@ -165,10 +164,12 @@ struct SchoolPushRevocationStorageError: Error {}
         await revoke(token: token)
     }
 
-    /// Reprise d’une révocation que le réseau a empêchée : un essai par lancement et par retour au premier plan,
-    /// seulement hors session ouverte — une session retrouvée se réenregistre d’elle-même. Jamais de boucle.
-    func resumePendingRevocation() async {
-        guard !hasSession, !isRevoking, let record = try? revocations.load(), record.pending else { return }
+    /// Reprise d'une révocation restée à faire : un enregistrement conservé hors session désigne un appareil encore
+    /// inscrit pour une session terminée, que la révocation ait échoué ou que l'app ait été arrêtée entre-temps.
+    /// Un essai par transition, jamais pendant une session ouverte (`hasSession`), jamais pendant une restauration ou
+    /// une connexion (`identityIsBusy`) : une session retrouvée ne révoque rien. Jamais de boucle.
+    func resumePendingRevocation(identityIsBusy: Bool) async {
+        guard !hasSession, !identityIsBusy, !isRevoking, let record = try? revocations.load() else { return }
         await revoke(token: record.token)
     }
 
@@ -207,17 +208,15 @@ struct SchoolPushRevocationStorageError: Error {}
     private func upload() async {
         guard hasSession, authorization == .allowed, let token = deviceToken, token != registeredToken else { return }
         guard await registerDevice(token: token) else { return }
-        guard hasSession else {
-            // Session terminée pendant l’enregistrement : l’appareil est inscrit, la révocation reste à faire.
-            let stored = try? revocations.load()
-            if stored?.token == token { markPending(token: token, secret: stored?.secret) }
-            return
-        }
+        // Session terminée pendant l'enregistrement : le secret reste sur l'appareil, la révocation reprendra hors
+        // session, au lancement suivant ou au retour au premier plan.
+        guard hasSession else { return }
         registeredToken = token
     }
 
-    /// Révocation d’un appareil : authentifiée d’abord, puis le secret de l’appareil quand l’école ne reconnaît plus
-    /// la session. Chaque tentative est bornée ; un échec laisse la révocation à faire, sans boucle.
+    /// Révocation d'un appareil : authentifiée d'abord, puis le secret de l'appareil quand l'école ne reconnaît plus
+    /// la session. Chaque tentative est bornée. Tant qu'aucune réponse ne confirme la révocation, l'enregistrement
+    /// reste au Trousseau : un essai de plus aura lieu à la prochaine transition, sans boucle.
     private func revoke(token: String) async {
         guard !isRevoking, let client else { return }
         isRevoking = true
@@ -235,16 +234,13 @@ struct SchoolPushRevocationStorageError: Error {}
             return
         }
         // Une session sans jeton d’accès n’a plus que le secret pour se révoquer ; toute autre panne attendra.
-        guard (failure as? SchoolPlanningFailure) == .unauthorized, let secret else {
-            markPending(token: token, secret: secret)
-            return
-        }
+        guard (failure as? SchoolPlanningFailure) == .unauthorized, let secret else { return }
         let anonymous = Task { try await client.revokeAnonymously(token: token, secret: secret) }
         let anonymousDeadline = Task { try? await Task.sleep(for: revocationBudget); anonymous.cancel() }
         var anonymousFailure: Error?
         do { try await anonymous.value } catch { anonymousFailure = error }
         anonymousDeadline.cancel()
-        if anonymousFailure == nil { clearRecord(for: token) } else { markPending(token: token, secret: secret) }
+        if anonymousFailure == nil { clearRecord(for: token) }
     }
 
     /// Efface le secret de ce jeton seulement : un enregistrement plus récent n’est jamais effacé par une révocation
@@ -253,11 +249,6 @@ struct SchoolPushRevocationStorageError: Error {}
         let recorded = try? revocations.load()
         guard recorded == nil || recorded?.token == token else { return }
         try? revocations.clear()
-    }
-
-    private func markPending(token: String, secret: String?) {
-        guard let secret else { return }
-        try? revocations.save(SchoolPushRevocationRecord(token: token, secret: secret, pending: true))
     }
 
     static func authorization(_ status: UNAuthorizationStatus) -> Authorization {

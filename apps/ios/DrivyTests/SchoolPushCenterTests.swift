@@ -139,7 +139,7 @@ struct SchoolPushCenterTests {
         #expect(store.record == nil)
     }
 
-    @Test func aNetworkFailureLeavesTheRevocationPendingAndItIsRetriedOnce() async {
+    @Test func aNetworkFailureLeavesTheRevocationToDoAndItIsRetriedOnce() async {
         let server = PushServer(secret: firstSecret, validAccessToken: nil)
         let store = SchoolPushRevocationMemoryStore()
         let center = SchoolPushCenter(revocations: store)
@@ -148,33 +148,70 @@ struct SchoolPushCenterTests {
 
         await server.setUnreachable(true)
         await center.sessionEnding()
-        // Le secret reste, marqué à reprendre : l'appareil est peut-être encore inscrit côté école.
-        #expect(store.record == SchoolPushRevocationRecord(token: deviceToken, secret: firstSecret, pending: true))
+        // Le secret reste : l'appareil est peut-être encore inscrit côté école, la révocation est due.
+        #expect(store.record == SchoolPushRevocationRecord(token: deviceToken, secret: firstSecret))
         #expect(await anonymousCalls(server).isEmpty)
 
         await server.setUnreachable(false)
-        // Reprise au premier plan : un essai, puis plus rien tant qu'aucune nouvelle fin de session n'a échoué.
-        await center.resumePendingRevocation()
+        // Reprise au premier plan : un essai, puis plus rien tant que le secret n'est pas revenu.
+        await center.resumePendingRevocation(identityIsBusy: false)
         #expect(store.record == nil)
         #expect(await anonymousCalls(server).count == 1)
-        await center.resumePendingRevocation()
-        await center.resumePendingRevocation()
+        await center.resumePendingRevocation(identityIsBusy: false)
+        await center.resumePendingRevocation(identityIsBusy: false)
         #expect(await anonymousCalls(server).count == 1)
     }
 
-    @Test func aPendingRevocationWaitsWhileASessionIsOpen() async {
+    @Test func aSecretStoredAtLaunchWithoutASessionIsRevoked() async {
         let server = PushServer(secret: firstSecret, validAccessToken: nil)
         let store = SchoolPushRevocationMemoryStore()
         let center = SchoolPushCenter(revocations: store)
         center.configure(client: notificationClient(token: "synthetic-push-access", server: server))
-        try? store.save(SchoolPushRevocationRecord(token: deviceToken, secret: firstSecret, pending: true))
+        // App arrêtée avec un appareil inscrit, relancée sans session : le secret désigne un appareil encore inscrit.
+        try? store.save(SchoolPushRevocationRecord(token: deviceToken, secret: firstSecret))
 
-        // Une session ouverte se réenregistre d'elle-même : aucune révocation ne doit partir d'une reprise.
-        center.sessionStarted()
-        await center.resumePendingRevocation()
+        await center.resumePendingRevocation(identityIsBusy: false)
 
+        #expect(store.record == nil)
+        #expect(await anonymousCalls(server).count == 1)
+        await center.resumePendingRevocation(identityIsBusy: false)
+        #expect(await anonymousCalls(server).count == 1)
+    }
+
+    @Test func aRevocationWaitsWhileASessionIsOpenOrBeingRestored() async {
+        let server = PushServer(secret: firstSecret, validAccessToken: nil)
+        let store = SchoolPushRevocationMemoryStore()
+        let center = SchoolPushCenter(revocations: store)
+        center.configure(client: notificationClient(token: "synthetic-push-access", server: server))
+        try? store.save(SchoolPushRevocationRecord(token: deviceToken, secret: firstSecret))
+
+        // Restauration ou connexion en cours : elle peut aboutir à une session à conserver.
+        await center.resumePendingRevocation(identityIsBusy: true)
+        #expect(store.record != nil)
         #expect(await anonymousCalls(server).isEmpty)
-        #expect(store.record?.pending == true)
+
+        // Session ouverte : elle se réenregistre d'elle-même, rien n'est dû.
+        center.sessionStarted()
+        await center.resumePendingRevocation(identityIsBusy: false)
+        #expect(store.record != nil)
+        #expect(await anonymousCalls(server).isEmpty)
+    }
+
+    @Test func aRestoredSessionReplacesTheSecretInsteadOfRevoking() async {
+        let server = PushServer(secret: secondSecret, validAccessToken: "synthetic-push-access")
+        let store = SchoolPushRevocationMemoryStore()
+        let center = SchoolPushCenter(revocations: store)
+        center.configure(client: notificationClient(token: "synthetic-push-access", server: server))
+        // Un ancien secret traîne depuis une session précédente, puis la session est retrouvée.
+        try? store.save(SchoolPushRevocationRecord(token: deviceToken, secret: firstSecret))
+        center.sessionStarted()
+
+        // L'appareil se réenregistre : le secret est remplacé, rien n'est révoqué.
+        #expect(await center.registerDevice(token: deviceToken))
+        await center.resumePendingRevocation(identityIsBusy: false)
+
+        #expect(store.record == SchoolPushRevocationRecord(token: deviceToken, secret: secondSecret))
+        #expect(await anonymousCalls(server).isEmpty)
     }
 
     // MARK: Chaque fin de session d'identité, même sans jeton d'accès
@@ -191,6 +228,27 @@ struct SchoolPushCenterTests {
 
         #expect(!session.isAuthenticated)
         await expectRevokedWithoutAccessToken(wiring)
+    }
+
+    @Test func aSessionEndBeforeTheHookIsSetIsAnnouncedWhenItIsSet() async throws {
+        let wiring = try await registeredCenter()
+        let vault = PushIdentityVault()
+        vault.failReads = true
+        let session = IdentitySession(configuration: pushIdentityConfiguration, vault: vault,
+                                      authorizer: PushIdentityAuthorizer(state: try pushIdentityState()))
+
+        // Restauration du lancement échouée avant que l'app ait posé l'accroche : l'annonce est retenue, rien ne part.
+        await session.restore()
+        #expect(!session.isAuthenticated)
+        #expect(wiring.store.record != nil)
+        #expect(await anonymousCalls(wiring.server).isEmpty)
+
+        // La pose de l'accroche annonce la fin de session retenue, une seule fois.
+        session.sessionEnded = { await wiring.center.sessionEnding() }
+        let revoked = await waitUntil { wiring.store.record == nil }
+        #expect(revoked)
+        #expect(wiring.store.record == nil)
+        #expect(await anonymousCalls(wiring.server).count == 1)
     }
 
     @Test func aRefusedRefreshRevokesTheRegisteredDevice() async throws {
@@ -252,6 +310,15 @@ struct SchoolPushCenterTests {
     private func anonymousCalls(_ server: PushServer) async -> [PushServer.Call] {
         let calls = await server.calls
         return calls.filter { $0.path == "/v1/push-devices/revoke" }
+    }
+
+    /// Attend le travail lancé dans une tâche par l'app (annonce retenue, pose de l'accroche) : au plus une seconde.
+    private func waitUntil(_ condition: () -> Bool) async -> Bool {
+        for _ in 0..<1_000 {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return false
     }
 
     /// Centre avec un appareil déjà inscrit, porteur d'un secret : ce qu'une session laisse derrière elle.

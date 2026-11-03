@@ -53,6 +53,9 @@ struct SchoolRootView: View {
     @State private var openingRoute: SchoolWorkspaceSheet<SchoolOpeningWorkspace>?
     @State private var selectedHomeTab: SchoolHomeTab = .session
     @State private var captureController = SchoolCaptureSessionController()
+    /// Vrai dès qu'une restauration ou une connexion a rendu son verdict : une reprise de révocation attend ce verdict,
+    /// sinon elle révoquerait l'appareil d'une session sur le point d'être retrouvée (#120).
+    @State private var identitySettled = false
     @Environment(\.scenePhase) private var scenePhase
     /// The profile sheet shows the guided welcome only when it was opened for it.
     @State private var onboardingWorkspaceID: UUID?
@@ -114,9 +117,6 @@ struct SchoolRootView: View {
             else { captureController.setScope(nil); workspace?.reset() }
             updateCaptureScope()
         }
-        // Toute fin de session révoque l'appareil push (#120), même sans jeton d'accès : la restauration échouée, le
-        // renouvellement refusé et l'échec du Trousseau passent par cette accroche, les deux gestes l'appellent avant.
-        .task { identity.sessionEnded = { await SchoolPushCenter.shared.sessionEnding() } }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
             if !authenticated {
                 captureController.setScope(nil)
@@ -158,17 +158,16 @@ struct SchoolRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 updateCaptureScope()
-                // Révocation restée à faire après une panne réseau (#120) : un essai au retour au premier plan,
-                // seulement hors session ouverte et sans restauration en cours.
-                if !identity.isAuthenticated, !identity.isWorking {
-                    Task { await SchoolPushCenter.shared.resumePendingRevocation() }
-                }
+                // Révocation restée à faire (#120) : un essai au retour au premier plan, jamais avant le verdict du
+                // lancement — une session sur le point d'être retrouvée ne se révoque pas.
+                retryPushRevocationIfSettled()
             }
         }
         .onChange(of: identity.isWorking) { _, working in
-            // Fin d'une restauration ou d'une connexion sans session : même reprise, un essai par transition.
-            guard !working, !identity.isAuthenticated else { return }
-            Task { await SchoolPushCenter.shared.resumePendingRevocation() }
+            // Une restauration ou une connexion vient de rendre son verdict : la reprise peut partir, une fois.
+            guard !working else { return }
+            identitySettled = true
+            retryPushRevocationIfSettled()
         }
         .safeAreaInset(edge: .top) {
             if identity.isAuthenticated, let error = captureController.pendingSynchronizationError {
@@ -773,6 +772,13 @@ struct SchoolRootView: View {
         }
         if let model = profileWorkspace, !current(model.scope) { closeProfile() }
         if let model = invitations, !canManageInvitations || !current(model.scope) { closeInvitations() }
+    }
+
+    /// Reprise d'une révocation restée à faire (#120) : hors session, sans restauration ni connexion en cours, et
+    /// seulement après le verdict du lancement. Un essai par transition, le centre de notifications ne boucle pas.
+    private func retryPushRevocationIfSettled() {
+        guard identitySettled, !identity.isAuthenticated else { return }
+        Task { await SchoolPushCenter.shared.resumePendingRevocation(identityIsBusy: identity.isWorking) }
     }
 
     private func updateCaptureScope() {

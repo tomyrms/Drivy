@@ -23,10 +23,18 @@ final class IdentitySession: AccessTokenSource {
     @ObservationIgnored private var restored = false
     @ObservationIgnored private var refreshTask: Task<String, Error>?
     @ObservationIgnored private var refreshID: UUID?
-    /// Fin de session push (#120), posée par la racine de l'app : l'identité ne connaît ni l'interface ni le service de
-    /// notification, elle annonce seulement qu'une session s'est terminée (restauration échouée, renouvellement refusé,
-    /// Trousseau en échec). La déconnexion explicite l'appelle avant `signOut()`, depuis son geste.
-    @ObservationIgnored var sessionEnded: (@MainActor () async -> Void)?
+    /// Fin de session push (#120), posée par l'app avant `restore()` : l'identité ne connaît ni l'interface ni le service
+    /// de notification, elle annonce seulement qu'une session s'est terminée (restauration échouée, renouvellement refusé,
+    /// Trousseau en échec). La déconnexion explicite l'appelle avant `signOut()`, depuis son geste. Une fin de session
+    /// survenue avant la pose est retenue et annoncée à la pose : une restauration qui échoue au lancement ne se perd pas.
+    @ObservationIgnored var sessionEnded: (@MainActor () async -> Void)? {
+        didSet {
+            guard sessionEndUnannounced, let sessionEnded else { return }
+            sessionEndUnannounced = false
+            Task { await sessionEnded() }
+        }
+    }
+    @ObservationIgnored private var sessionEndUnannounced = false
 
     convenience init(configuration: AppConfiguration?) {
         self.init(configuration: configuration, vault: KeychainIdentityVault(), authorizer: AppAuthAuthorization())
@@ -69,9 +77,19 @@ final class IdentitySession: AccessTokenSource {
             if !(error is CancellationError) {
                 errorMessage = message(for: error)
                 // Restauration échouée : la session push se termine avec elle, l'appareil inscrit est révoqué (#120).
-                await sessionEnded?()
+                await announceSessionEnd()
             }
         }
+    }
+
+    /// Annonce une fin de session à qui de droit. Sans accroche posée, l'annonce est retenue : la restauration du
+    /// lancement peut échouer avant que l'app ait posé `sessionEnded`, et l'appareil doit tout de même être révoqué.
+    private func announceSessionEnd() async {
+        guard let sessionEnded else {
+            sessionEndUnannounced = true
+            return
+        }
+        await sessionEnded()
     }
 
     func signIn(presenting: UIViewController) async {
@@ -211,7 +229,7 @@ final class IdentitySession: AccessTokenSource {
                 if !(error is CancellationError) { errorMessage = message(for: error) }
                 // Renouvellement refusé ou Trousseau en échec : la session push se termine avec la session (#120),
                 // une seule fois par fin de session.
-                if ended, !(error is CancellationError) { await sessionEnded?() }
+                if ended, !(error is CancellationError) { await announceSessionEnd() }
                 if error is CancellationError { throw CancellationError() }
                 throw error as? IdentityFailure ?? IdentityFailure.unavailable
             }
