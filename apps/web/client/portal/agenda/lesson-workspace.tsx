@@ -18,6 +18,7 @@ import { readPlanningCatalogue, useLesson, useLessonEditor, type PlanningCatalog
 import { cancellationReasons, useCancellation } from './use-cancellation';
 import { useHeadingFocus } from './use-heading-focus';
 import { LessonRequestCard, useLessonRequest } from './lesson-request-card';
+import { LessonRefusals } from './lesson-intentions';
 import type { LessonRefusal, LessonRestored } from './lesson-intentions-model';
 import { acceptingRequestId, type LessonChangeRequest } from '../../lesson-change-model';
 
@@ -26,10 +27,11 @@ import { acceptingRequestId, type LessonChangeRequest } from '../../lesson-chang
  * libère dès que la demande est conservée, la consultation reste possible et rien n'est annoncé réservé ou annulé avant la
  * réponse vérifiée ou le reçu. Un refus rend la saisie avec sa raison.
  */
-export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restored, moving, onQueued, onRefused, onClearRestored }: {
+export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restored, moving, refusals, onQueued, onRefused, onClearRestored, onResumeRefusal, onDismissRefusal }: {
   lessonId: string | null; onClose: () => void; onSaved: () => void; onDossier: (learnerId: string, lessonId: string) => void;
-  restored: LessonRestored | null; moving: boolean;
+  restored: LessonRestored | null; moving: boolean; refusals: readonly LessonRefusal[];
   onQueued: (intention: LessonIntention) => void; onRefused: (refusal: LessonRefusal) => void; onClearRestored: () => void;
+  onResumeRefusal: (refusal: LessonRefusal) => void; onDismissRefusal: (refusal: LessonRefusal) => void;
 }) {
   const context = useConsole();
   const state = useLesson(lessonId, onSaved);
@@ -42,6 +44,8 @@ export function LessonWorkspace({ lessonId, onClose, onSaved, onDossier, restore
   if ((state.editing || restoredHere) && canWrite && (!lessonId || lesson && canEditPlannedLesson(lesson))) return <LessonEditorLoader original={lesson ?? undefined} request={request} restored={restoredHere}
     onClose={closeEditor} onQueued={intention => { onQueued(intention); closeEditor(); }} onRefused={onRefused} />;
   return <section className="agenda-page"><ReadFeedback loaded={state.loaded} label="Lecture de la leçon" />
+    <LessonRefusals refusals={refusals.filter(refusal => refusal.intention.kind !== 'lesson-create' && refusal.intention.lessonId === lessonId)}
+      onResume={onResumeRefusal} onDismiss={onDismissRefusal} />
     {state.refreshing && <Alert><AlertTitle>Changement confirmé</AlertTitle><AlertDescription>Actualisation de la fiche en cours.</AlertDescription></Alert>}
     {lesson ? <LessonDetail lesson={lesson} request={request} refreshing={state.refreshing} moving={moving} onClose={onClose} onEdit={() => state.setEditing(true)} onSaved={() => state.saved(lesson)} onDossier={() => onDossier(lesson.learnerId, lesson.id)} /> : <Button variant="ghost" className="agenda-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>}
     {!canWrite && !lessonId && <Alert><AlertTitle>Planification indisponible</AlertTitle><AlertDescription>Votre rôle ne permet pas de planifier une leçon.</AlertDescription></Alert>}

@@ -35,6 +35,7 @@ export function AgendaPilot() {
   if (selection && 'lesson' in selection) return <LessonWorkspace key={selection.lesson ?? 'new'} lessonId={selection.lesson ?? null} onClose={state.close} onSaved={refresh}
     onDossier={(learnerId, lessonId) => state.context.navigate('eleves', { selection: learnerId, lesson: lessonId, from: 'agenda', week: state.monday, day: state.day, instructor: state.instructor || undefined })}
     restored={state.restored} onQueued={state.queueLesson} onRefused={state.refuseLesson} onClearRestored={state.clearRestored}
+    refusals={state.refusals} onResumeRefusal={state.resume} onDismissRefusal={state.dismissRefusal}
     moving={state.intentions.some(intention => intention.kind === 'lesson-move' && intention.lessonId === selection.lesson && intention.settledAt === undefined)} />;
   if (selection && 'course' in selection) return <CourseWorkspace key="course" courseId={selection.course ?? null} occurrenceId={selection.occurrence} catalogue={state.catalogue} onClose={state.close} onShow={state.showCourse} onChanged={refresh} />;
   const dayView = state.compact || state.presentation === 'day';
