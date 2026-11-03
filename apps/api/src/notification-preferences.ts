@@ -4,6 +4,7 @@ import {z} from 'zod';
 import type {TokenVerifier,Identity} from './auth.js';
 import {rollbackQuietly,withActor} from './database.js';
 import {ApiError,forbidden,notFound} from './errors.js';
+import {newRevocationSecret,revocationDigest} from './push-device-revocation.js';
 
 /**
  * Préférences de notification (#44), appareils push et abonnement aux prochaines sessions (#40). La personne connectée
@@ -66,12 +67,13 @@ export function registerNotificationPreferences(app:FastifyInstance,options:{poo
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
  // Enregistrement d'un appareil : idempotent par jeton ; un jeton repris par une autre personne est réattribué.
+ // Le secret de révocation n'est rendu qu'ici, une fois ; la base n'en garde que l'empreinte.
  app.put('/v1/me/push-devices',{bodyLimit:1_024},async r=>{
   empty.parse(r.query);const body=deviceBody.parse(r.body),identity=await options.verifyToken(r.headers.authorization);
-  const token=body.token.toLowerCase();
+  const token=body.token.toLowerCase(),revocationSecret=newRevocationSecret();
   return envelope(await own(identity,null,async(db,personId)=>{
-   await db.query('SELECT drivy.push_device_claim($1,$2,$3)',[personId,token,body.environment]);
-   return {registered:true};
+   await db.query('SELECT drivy.push_device_claim_secret($1,$2,$3,$4)',[personId,token,body.environment,revocationDigest(revocationSecret)]);
+   return {registered:true,revocationSecret};
   }),r);
  });
  app.post('/v1/me/push-devices/revoke',{bodyLimit:1_024},async r=>{
