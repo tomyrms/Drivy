@@ -545,6 +545,9 @@ import Observation
     func invalidate() {
         cancelPreview()
         previewCaptureIDs = []; previewMemo = [:]
+        // Refus mémorisé d’une fin ou d’une absence (#114) : la fiche est fermée ou l’accès est perdu, il ne
+        // représente plus rien d’ouvrable.
+        SchoolRefusedClosureMemory.forget(lessonID: lessonID, scope: scope)
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
         competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
         sharedReportWasRead = false
@@ -755,6 +758,9 @@ import Observation
             if !preparationUnread { confirmedPreparation = nil }
             if wishRead.message == nil { confirmedWish = nil }
             var conflict = draftPolicy == .conflict || preparationPolicy == .conflict || wishPolicy == .conflict
+            // Fiche relue : un refus de fin ou d’absence mémorisé pour cette leçon a rempli son rôle (#114),
+            // la raison se lit désormais ici. Aucun repère n’est conservé quand la leçon est prouvée terminée.
+            SchoolRefusedClosureMemory.forget(lessonID: lessonID, scope: scope)
             self.lesson = lesson
             if preparationPolicy != .conflict, !preparationUnread { preparation = preparationRead.value }
             if wishPolicy != .conflict { wish = wishRead.value }
@@ -1094,6 +1100,13 @@ import Observation
             if fresh, let failure = error as? SchoolReportFailure, failure.permitsFreshCorrection || refused {
                 do { try outbox.remove(command) }
                 catch { guard request == generation else { return false }; isBusy = false; storageAccessible = false; fail(error); return false }
+                // Refus définitif reçu alors que la fiche est fermée (#114) : la demande a quitté le coffre et ne sera
+                // plus vérifiable. Un repère en mémoire seulement dit à Aujourd’hui que cette fin ou cette absence a
+                // été refusée ; la raison se lit dans la fiche, rien n’est confirmé.
+                if invalidated || request != generation {
+                    rememberRefusedClosure(command)
+                    return false
+                }
                 guard request == generation, !invalidated else { return false }
                 pending = nil; absentPendingID = nil; needsReload = failure == .conflict || refused
                 if failure == .notFound {
@@ -1129,6 +1142,23 @@ import Observation
         return .init(id: id, workedOn: content.workedOn, observationText: content.observationText,
             nextStep: content.nextStep, observations: content.observations)
     }
+    /// Refus définitif d’une fin de leçon ou d’une absence après la fermeture de la fiche (#114) : le coffre ne garde
+    /// plus la demande, la mémoire de l’app retient seulement qu’elle a été refusée. Aucun détail, aucun disque.
+    private func rememberRefusedClosure(_ command: PendingSchoolCommand) {
+        guard command.scope == scope, command.resourceID == lessonID else { return }
+        let kind: SchoolPendingClosureMarker.Kind
+        switch command.kind {
+        case .completeLesson: kind = .completion
+        case .markNoShow: kind = .absence
+        default: return
+        }
+        SchoolRefusedClosureMemory.remember(lessonID: lessonID, scope: scope, kind: kind)
+        // La notification ne confirme rien (pas de `kind`) : elle demande seulement aux écrans qui montrent la leçon
+        // de relire leurs repères. La leçon n’est jamais annoncée terminée sans la preuve de l’école.
+        let change = lesson.map { SchoolLessonChange(schoolID: scope.schoolID, trainingID: $0.trainingId, lessonID: lessonID) }
+        notifications.post(name: .drivyLessonsDidChange, object: change)
+    }
+
     private func announceConfirmedChange(_ command: PendingSchoolCommand) {
         let affectsThisLesson = command.scope == scope && command.resourceID != nil && (
             command.resourceID == lessonID || command.resourceID == draft?.id
