@@ -109,6 +109,20 @@ export function accountProblems(draft: AccountDraft): DraftProblems<AccountDraft
 export function codeProblem(code: string): string | null {
   return code.trim() ? null : 'Saisissez le code ou collez le lien reçu.';
 }
+/** The typed problem comes first; a refusal of the server is attached to the same field, never lost in a banner. */
+export function codeFieldError(problem: string | null, serverError: string | null): string | undefined {
+  return problem ?? serverError ?? undefined;
+}
+
+/** One operation at a time: a second call made while the first waits for the server is ignored, never queued or repeated. */
+export function singleFlight() {
+  let running = false;
+  return async (operation: () => Promise<void>): Promise<void> => {
+    if (running) return;
+    running = true;
+    try { await operation(); } finally { running = false; }
+  };
+}
 export const hasProblems = (problems: object) => Object.keys(problems).length > 0;
 
 /** An e-mail invitation is accepted only with an address the identity provider verified. A code does not need it. */
