@@ -101,6 +101,10 @@ enum SchoolCommandKind: String, Codable, Sendable {
         }
     }
 
+    /// Écriture d'un dossier de profil (profil administratif, accueil guidé), hors politique de champ : elle ne
+    /// vérifie et n'avance que la version du dossier et de la personne (profiles.ts:122-161, :262-283).
+    var isProfileRecord: Bool { self == .updateProfile || self == .saveOnboarding || self == .completeOnboarding }
+
     var isConfiguration: Bool { !isInvitation && !isProfile && !isCatalog && !isPlanning && !isReport && !isObservation && !isExam && !isCourse }
 
     var isInvitation: Bool {
@@ -313,10 +317,6 @@ extension SchoolCommandOutbox {
 }
 
 extension PendingSchoolCommand {
-    /// Écriture d'un dossier de profil (profil administratif, accueil guidé), hors politique de champ : elle ne
-    /// vérifie et n'avance que la version du dossier et de la personne (profiles.ts:122-161, :262-283).
-    var isProfileRecord: Bool { self == .updateProfile || self == .saveOnboarding || self == .completeOnboarding }
-
     /// Une entrée déjà conservée empêche-t-elle celle-ci d'entrer dans la file (#106) ? Le conflit reste celui de
     /// l'ordonnancement, sauf pour les paires dont les deux routes ne lisent ni n'écrivent la même version :
     /// deux invitations distinctes, une invitation et une écriture de dossier de profil, deux signalements de
