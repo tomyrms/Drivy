@@ -23,8 +23,9 @@ Elle est construite par `messagingPushPayload` (`apps/api/src/messaging-notifica
 1. **Mise en file** à l'acceptation d'un message : le déclencheur `drivy.push_message_enqueue` (migration `20261031_messaging_message_push.sql`) écrit une ligne `push_notification` par destinataire (lien ouvert, jamais l'auteur, jamais une personne mentionnée : elle reçoit l'alerte de mention du déclencheur existant). Il ne retient que les personnes dont la préférence de la catégorie est active (valeur par défaut comprise) et qui ont un appareil enregistré. Catégories de la file : `MESSAGE_PRIVATE`, `MESSAGE_GENERAL`, `MESSAGE_MENTION`.
 2. **Relecture juste avant l'envoi**, dans le service d'envoi commun (`processPushBatch`, `apps/api/src/course-push.ts`) : `drivy.push_messaging_snapshot` rend des faits (adhésion active, retrait du général, attribution moniteur/élève, lien ouvert, message présent non supprimé et non lu, sourdine, préférences et leur version). `decideMessagingNotification` décide à partir de ces faits ; la ligne passe à `SKIPPED` avec un code (`PREFERENCE_DISABLED`, `SILENCED`, `RECIPIENT_INELIGIBLE`, `EVENT_OBSOLETE`, `NO_DEVICE`) sinon la charge part. Le service d'envoi n'a toujours aucun accès direct aux tables métier.
 3. **Durée de vie** : une alerte de message périme au bout de 15 minutes (`valid_until`, aussi transmis à APNs). Une reprise tardive du service ne rejoue donc pas un arriéré de messages ; les alertes de mention déjà déployées n'ont pas d'échéance et ne changent pas.
-4. **Aucun faux « lu »** : recevoir ou envoyer une alerte ne modifie aucune position de lecture. Un message déjà lu sur un autre appareil n'est plus alerté.
-5. **Autorisation iOS** : l'app n'enregistre un jeton qu'une fois l'autorisation système accordée. Le serveur traite donc un appareil actif comme « autorisé » ; sans appareil actif il n'envoie rien (`NO_DEVICE`).
+4. **Regroupement à l'envoi** : une seule alerte part par personne et par conversation (voir la section suivante).
+5. **Aucun faux « lu »** : recevoir ou envoyer une alerte ne modifie aucune position de lecture. Un message déjà lu sur un autre appareil n'est plus alerté.
+6. **Autorisation iOS** : l'app n'enregistre un jeton qu'une fois l'autorisation système accordée. Le serveur traite donc un appareil actif comme « autorisé » ; sans appareil actif il n'envoie rien (`NO_DEVICE`).
 
 ## Préférences
 
@@ -58,13 +59,42 @@ La messagerie n'a pas de client web : ces choix s'appliquent aux alertes de l'ap
 - **Aucun faux « lu »** : toucher une alerte n'envoie aucune position de lecture ; la lecture suit l'ouverture normale du fil.
 - Hors périmètre : suppression de l'alerte au premier plan et nettoyage des alertes lues restent ceux de #103.
 
+## Regroupement anti-rafale (3 novembre 2026)
+
+Critère de l'issue : « Pas de double alerte message + mention, ni rattrapage massif après reconnexion. » Le regroupement vit
+dans le service d'envoi existant (`processPushBatch`, `apps/api/src/course-push.ts`), pas dans un second moteur : la file
+`drivy.push_notification`, la revalidation `drivy.push_messaging_snapshot` et `decideMessagingNotification` restent seules
+sources. Aucune table, colonne, fonction SQL, préférence, route ni charge n'a changé : **aucune migration n'a été nécessaire**.
+
+- **Un envoi au plus par groupe** (personne, conversation). Le service liste les groupes dus, pose un verrou consultatif par
+  groupe (`pg_try_advisory_xact_lock`, clé `messaging-push:<personne>:<conversation>`), puis verrouille dans la même
+  transaction toutes les alertes `PENDING` dues de ce groupe. Un deuxième passage du service saute le groupe au lieu de
+  l'attendre ; les autres personnes et conversations ne sont jamais bloquées.
+- **Choix de l'alerte** : chaque alerte du groupe passe la revalidation existante, alerte par alerte. Une mention autorisée
+  prime sur les messages ordinaires ; sinon c'est la plus récente autorisée qui part. Les autres alertes autorisées du
+  groupe passent en `SKIPPED` avec `failure_code='COALESCED'`. Une alerte refusée garde son motif de refus existant
+  (`PREFERENCE_DISABLED`, `SILENCED`, `RECIPIENT_INELIGIBLE`, `EVENT_OBSOLETE`, `NO_DEVICE`) et, si aucune ne passe, rien
+  n'est envoyé.
+- **Fenêtre de calme** : `MESSAGING_PUSH_QUIET_WINDOW_SECONDS = 60` (exportée par `apps/api/src/messaging-notifications.ts`).
+  Si une alerte de messagerie a été `SENT` à la même personne pour la même conversation il y a moins de 60 secondes, les
+  nouvelles ne partent pas : leur `available_at` est reporté à `sent_at + 60 s` et `attempts` n'est pas incrémenté. À
+  l'échéance, elles sont regroupées en un seul envoi par la règle ci-dessus.
+- **Échéance intacte** : une alerte expirée pendant le report (`valid_until` dépassé) est marquée `EXPIRED` et n'est jamais
+  envoyée ; un message déjà lu ou supprimé, une préférence coupée ou une conversation en sourdine pendant le report
+  produisent le même refus qu'avant, sans envoi.
+- **Charge inchangée** : titre générique, corps vide, mêmes identifiants techniques, même `thread-id`
+  (`messaging:<école>:<conversation>`) ; les alertes de cours gardent leur traitement une par une.
+
 ## Limites connues
 
-- **Pas de regroupement anti-rafale côté serveur** : une alerte par message (une par message mentionnant, une par message privé ou du général activé). Seul `thread-id` regroupe l'affichage sur iOS, et les 15 minutes de validité bornent le rattrapage. Un regroupement (compteur par conversation, fenêtre glissante) demanderait un moteur d'agrégation dans la file ; il n'est pas fait.
+- Le regroupement ne crée aucun compteur ni résumé : iOS affiche une alerte générique par conversation et par fenêtre de
+  60 secondes. Rien n'est agrégé côté appareil au-delà du `thread-id` existant.
 - Le général peut compter beaucoup de membres : sa catégorie étant désactivée par défaut, la file n'écrit une ligne que pour ceux qui l'ont activée et qui ont un appareil.
-- **Réception APNs réelle non vérifiée** : les tests utilisent un collecteur local, jamais APNs. Aucune preuve de réception sur appareil (STATUS.md).
+- **Réception APNs réelle non vérifiée** : les tests utilisent un collecteur local, jamais APNs. Aucune preuve de réception sur appareil (STATUS.md). Le regroupement est vérifié sur PostgreSQL réelle (rafale, mention, deux conversations, report de 60 s, expiration et préférence coupée pendant le report), pas sur un appareil.
 - Les alertes de messagerie sont désactivées pour les écoles hors qualification comme la messagerie elle-même : aucun message n'existe, donc aucune alerte.
 
 ## Déploiement
 
 Ordre : migration et API (le service d'envoi relit les nouvelles colonnes), puis web, puis app. Une API ancienne ignore les nouvelles catégories et saute leurs lignes (`course_push_revalidate` refuse les catégories inconnues). Le web et l'app lisent les trois nouveaux champs : ils exigent l'API à jour.
+
+Le regroupement anti-rafale du 3 novembre 2026 ne change ni le schéma, ni la charge, ni le contrat : il suffit de redéployer l'API et son service d'envoi (même image, processus `course:worker`), sans coordination avec le web ni l'app.

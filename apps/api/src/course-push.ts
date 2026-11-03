@@ -3,7 +3,7 @@ import { importPKCS8, SignJWT } from 'jose';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { rollbackQuietly } from './database.js';
-import { decideMessagingNotification, isQueuedMessagingCategory, messagingNotificationInputs, messagingPushPayload, messagingSkipCode, queuedMessagingCategories, type MessagingSnapshotRow } from './messaging-notifications.js';
+import { chooseCoalescedMessagingAlert, decideMessagingNotification, MESSAGING_PUSH_QUIET_WINDOW_SECONDS, messagingNotificationInputs, messagingPushPayload, messagingSkipCode, queuedMessagingCategories, type MessagingSnapshotRow, type QueuedMessagingCategory } from './messaging-notifications.js';
 
 /**
  * Notifications push des cours (#43). APNs en HTTP/2 avec jeton de fournisseur ES256 (clé .p8 d'Apple). Aucun e-mail.
@@ -69,39 +69,31 @@ export function apnsSender(config:PushConfig):PushSender{
  };
 }
 
-/** Un passage : tâches temporelles et outbox (SQL), puis envoi d'au plus `limit` notifications dues. Idempotent. */
+/** Catégories de la file portées par la messagerie, pour les sélections SQL du service d'envoi. */
+const messagingQueuedCategories:string[]=Object.keys(queuedMessagingCategories);
+
+/** Un passage : tâches temporelles et outbox (SQL), puis envoi d'au plus `limit` notifications dues. Idempotent.
+ * Les alertes de cours partent une par une ; les alertes de messagerie sont regroupées par personne et conversation
+ * (une au plus par groupe) et freinées par une fenêtre de calme de `MESSAGING_PUSH_QUIET_WINDOW_SECONDS` (#74). */
 export async function processPushBatch(pool:Pool,sender:PushSender|undefined,limit=50):Promise<number>{
  const db:PoolClient=await pool.connect();let broken=false;
  try{
   await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_course_worker');await db.query('SELECT drivy.course_notifications_tick()');await db.query('COMMIT');
   if(!sender)return 0;
   await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_course_worker');
-  const due=(await db.query<{id:string;person_id:string;title:string;body:string;series_id:string|null;conversation_id:string|null;message_id:string|null;school_id:string;message_sequence:string|null;valid_until:Date|null;category:string;dedupe_key:string;attempts:number}>(
-   `SELECT id,person_id,title,body,series_id,conversation_id,message_id,school_id,message_sequence,valid_until,category,dedupe_key,attempts FROM drivy.push_notification WHERE status='PENDING' AND available_at<=now() ORDER BY available_at LIMIT $1 FOR UPDATE SKIP LOCKED`,[limit])).rows;
+  // Alertes de cours : comportement inchangé (une par une). La messagerie suit son propre regroupement ci-dessous et ne
+  // consomme donc pas leur quota.
+  const due=(await db.query<PushNotificationRow>(
+   `SELECT id,person_id,title,body,series_id,conversation_id,message_id,school_id,message_sequence,valid_until,category,dedupe_key,attempts FROM drivy.push_notification WHERE status='PENDING' AND available_at<=now() AND category<>ALL($2::text[]) ORDER BY available_at LIMIT $1 FOR UPDATE SKIP LOCKED`,[limit,messagingQueuedCategories])).rows;
+  let processed=due.length;
   for(const n of due){
    const devices=(await db.query<{id:string;token:string;environment:'SANDBOX'|'PRODUCTION'}>('SELECT id,token,environment FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL',[n.person_id])).rows;
-   // Messagerie : faits relus ici, décision par decideMessagingNotification (messaging-notifications.ts). Aucun accès direct aux tables métier.
-   let messagingPayload:ReturnType<typeof messagingPushPayload>|undefined;
-   if(isQueuedMessagingCategory(n.category)){
-    const facts=(await db.query<MessagingSnapshotRow>('SELECT * FROM drivy.push_messaging_snapshot($1::uuid)',[n.id])).rows[0];
-    // Plus en attente ou périmée (la fonction l'a alors marquée) : rien à envoyer.
-    if(!facts)continue;
-    const {event,snapshot}=messagingNotificationInputs({person_id:n.person_id,school_id:n.school_id,conversation_id:n.conversation_id??'',message_id:n.message_id},facts,devices.length>0);
-    const decision=decideMessagingNotification(event,snapshot),sequence=Number(n.message_sequence);
-    // La catégorie mise en file doit rester celle de l'événement relu : une mention ne devient jamais une alerte du général.
-    const skip=!decision.allowed?messagingSkipCode(decision.reason)
-     :queuedMessagingCategories[n.category]!==decision.category||!Number.isSafeInteger(sequence)||sequence<1?'EVENT_OBSOLETE':undefined;
-    if(skip!==undefined||!decision.allowed){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code=$2 WHERE id=$1",[n.id,skip??'EVENT_OBSOLETE']);continue;}
-    // Titre générique de la ligne en file, corps vide : ni contenu ni nom d'auteur ni nom de conversation.
-    messagingPayload=messagingPushPayload(event,decision,sequence,{title:n.title,body:n.body});
-   }else{
-    // Relecture à chaque notification, y compris après un tick ancien ou une reprise.
-    if(!(await db.query<{allowed:boolean}>('SELECT drivy.push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed)continue;
-    if(!devices.length){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code='NO_DEVICE' WHERE id=$1",[n.id]);continue;}
-   }
+   // Relecture à chaque notification, y compris après un tick ancien ou une reprise.
+   if(!(await db.query<{allowed:boolean}>('SELECT drivy.push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed)continue;
+   if(!devices.length){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code='NO_DEVICE' WHERE id=$1",[n.id]);continue;}
    let sent=false,retry=false;
    for(const d of devices){
-    const payload=messagingPayload??{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category};
+    const payload={aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category};
     const result=await sender.send(d.token,d.environment,payload,n.valid_until,n.dedupe_key);
     if(result==='SENT')sent=true;else if(result==='INVALID_TOKEN')await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE id=$1',[d.id]);else retry=true;
    }
@@ -110,6 +102,83 @@ export async function processPushBatch(pool:Pool,sender:PushSender|undefined,lim
    else if(retry&&n.attempts<4)await db.query("UPDATE drivy.push_notification SET attempts=attempts+1,available_at=now()+make_interval(mins=>power(2,attempts+1)::int) WHERE id=$1",[n.id]);
    else await db.query("UPDATE drivy.push_notification SET status='FAILED',attempts=attempts+1,failure_code=$2 WHERE id=$1",[n.id,retry?'APNS_UNAVAILABLE':'NO_VALID_DEVICE']);
   }
-  await db.query('COMMIT');return due.length;
+  // Messagerie : un groupe par personne et conversation. Le quota porte sur les groupes, pas sur les messages en attente.
+  const groups=(await db.query<{person_id:string;school_id:string;conversation_id:string}>(
+   `SELECT person_id,school_id,conversation_id FROM drivy.push_notification
+    WHERE status='PENDING' AND available_at<=now() AND category=ANY($1::text[])
+    GROUP BY person_id,school_id,conversation_id ORDER BY min(available_at) LIMIT $2`,[messagingQueuedCategories,limit])).rows;
+  for(const group of groups)processed+=await sendCoalescedMessaging(db,sender,group.person_id,group.school_id,group.conversation_id);
+  await db.query('COMMIT');return processed;
  }catch(error){broken=!(await rollbackQuietly(db));throw error;}finally{db.release(broken);}
+}
+
+/** Ligne de `push_notification` lue par le service d'envoi. */
+interface PushNotificationRow{
+ id:string;person_id:string;title:string;body:string;series_id:string|null;conversation_id:string|null;message_id:string|null;
+ school_id:string;message_sequence:string|null;valid_until:Date|null;category:string;dedupe_key:string;attempts:number;
+}
+interface LockedMessagingAlert{
+ id:string;title:string;body:string;category:QueuedMessagingCategory;message_id:string|null;message_sequence:string|null;
+ valid_until:Date|null;dedupe_key:string;attempts:number;
+}
+
+/** Regroupement anti-rafale de la messagerie (#74) : au plus une alerte par personne et par conversation.
+ * Toutes les alertes PENDING dues de ce groupe sont verrouillées dans la transaction courante ; un verrou consultatif par
+ * groupe empêche deux passages du service de traiter le même groupe, sans jamais bloquer les autres personnes.
+ * Ordre : la plus récente alerte autorisée par la revalidation existante part ; une mention autorisée prime. Les autres
+ * passent en SKIPPED/COALESCED, et une alerte refusée garde son motif de refus. Un envoi récent pour la conversation
+ * reporte le groupe à `sent_at + MESSAGING_PUSH_QUIET_WINDOW_SECONDS` sans consommer de tentative.
+ * Retourne le nombre d'alertes examinées (envoyées, regroupées, refusées ou reportées). */
+async function sendCoalescedMessaging(db:PoolClient,sender:PushSender,personId:string,schoolId:string,conversationId:string):Promise<number>{
+ const locked=(await db.query<{locked:boolean}>('SELECT pg_try_advisory_xact_lock(hashtextextended($1,0)) AS locked',
+  [`messaging-push:${personId}:${conversationId}`])).rows[0]?.locked===true;
+ if(!locked)return 0;
+ const rows=(await db.query<LockedMessagingAlert>(
+  `SELECT id,title,body,category::text AS category,message_id,message_sequence,valid_until,dedupe_key,attempts FROM drivy.push_notification
+   WHERE person_id=$1 AND conversation_id=$2 AND status='PENDING' AND available_at<=now() AND category=ANY($3::text[])
+   ORDER BY message_sequence DESC NULLS LAST,created_at DESC,id DESC FOR UPDATE`,[personId,conversationId,messagingQueuedCategories])).rows;
+ if(!rows.length)return 0;
+ // Fenêtre de calme : un envoi récent de la même conversation reporte le groupe, sans incrémenter attempts.
+ const lastSentAt=(await db.query<{sent_at:Date}>(
+  `SELECT max(sent_at) AS sent_at FROM drivy.push_notification WHERE person_id=$1 AND conversation_id=$2
+    AND category=ANY($3::text[]) AND status='SENT' AND sent_at>statement_timestamp()-make_interval(secs=>$4)`,
+  [personId,conversationId,messagingQueuedCategories,MESSAGING_PUSH_QUIET_WINDOW_SECONDS])).rows[0]?.sent_at;
+ if(lastSentAt){
+  await db.query(
+   `UPDATE drivy.push_notification SET available_at=$3::timestamptz+make_interval(secs=>$4)
+    WHERE person_id=$1 AND conversation_id=$2 AND status='PENDING' AND available_at<=now() AND category=ANY($5::text[])`,
+   [personId,conversationId,lastSentAt,MESSAGING_PUSH_QUIET_WINDOW_SECONDS,messagingQueuedCategories]);
+  return rows.length;
+ }
+ const devices=(await db.query<{id:string;token:string;environment:'SANDBOX'|'PRODUCTION'}>('SELECT id,token,environment FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL',[personId])).rows;
+ // Messagerie : faits relus alerte par alerte ici, décision par decideMessagingNotification. Aucun accès direct aux tables métier.
+ const allowed:{alert:LockedMessagingAlert;payload:ReturnType<typeof messagingPushPayload>}[]=[];
+ for(const alert of rows){
+  const facts=(await db.query<MessagingSnapshotRow>('SELECT * FROM drivy.push_messaging_snapshot($1::uuid)',[alert.id])).rows[0];
+  // Plus en attente ou périmée (la fonction l'a alors marquée) : rien à envoyer.
+  if(!facts)continue;
+  const {event,snapshot}=messagingNotificationInputs({person_id:personId,school_id:schoolId,conversation_id:conversationId,message_id:alert.message_id},facts,devices.length>0);
+  const decision=decideMessagingNotification(event,snapshot),sequence=Number(alert.message_sequence);
+  // La catégorie mise en file doit rester celle de l'événement relu : une mention ne devient jamais une alerte du général.
+  const skip=!decision.allowed?messagingSkipCode(decision.reason)
+   :queuedMessagingCategories[alert.category]!==decision.category||!Number.isSafeInteger(sequence)||sequence<1?'EVENT_OBSOLETE':undefined;
+  if(skip!==undefined||!decision.allowed){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code=$2 WHERE id=$1",[alert.id,skip??'EVENT_OBSOLETE']);continue;}
+  allowed.push({alert,payload:messagingPushPayload(event,decision,sequence,{title:alert.title,body:alert.body})});
+ }
+ const chosen=chooseCoalescedMessagingAlert(allowed.map(item=>({...item,category:item.alert.category})));
+ if(!chosen)return rows.length;
+ // Les autres alertes autorisées du groupe ne partent pas : elles sont regroupées dans celle qui part.
+ for(const other of allowed)if(other.alert.id!==chosen.alert.id)
+  await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code='COALESCED' WHERE id=$1",[other.alert.id]);
+ let sent=false,retry=false;
+ for(const d of devices){
+  const result=await sender.send(d.token,d.environment,chosen.payload,chosen.alert.valid_until,chosen.alert.dedupe_key);
+  if(result==='SENT')sent=true;else if(result==='INVALID_TOKEN')await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE id=$1',[d.id]);else retry=true;
+ }
+ // `statement_timestamp()` plutôt que `now()` : la fenêtre de calme se mesure à l'instant réel de l'envoi, pas au début
+ // d'un lot qui peut durer plusieurs secondes.
+ if(sent)await db.query("UPDATE drivy.push_notification SET status='SENT',sent_at=statement_timestamp(),attempts=attempts+1 WHERE id=$1",[chosen.alert.id]);
+ else if(retry&&chosen.alert.attempts<4)await db.query("UPDATE drivy.push_notification SET attempts=attempts+1,available_at=now()+make_interval(mins=>power(2,attempts+1)::int) WHERE id=$1",[chosen.alert.id]);
+ else await db.query("UPDATE drivy.push_notification SET status='FAILED',attempts=attempts+1,failure_code=$2 WHERE id=$1",[chosen.alert.id,retry?'APNS_UNAVAILABLE':'NO_VALID_DEVICE']);
+ return rows.length;
 }
