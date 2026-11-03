@@ -160,6 +160,16 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             meetingPoint = lesson.meetingPoint; bufferMinutes = lesson.bufferMinutesSnapshot
         }
     }
+    /// Ouvre la feuille sur une demande conservée (#108) : la portée doit être exactement celle de la demande, et la
+    /// leçon n’est reprise que par un déplacement ou une annulation — une création n’en a pas encore. La demande
+    /// elle-même est relue du coffre par `load()`, avec ses gestes existants : Vérifier, Réessayer, Abandonner.
+    static func opening(_ marker: SchoolPendingPlanningMarker, scope: SchoolCommandScope, client: SchoolPlanningClient,
+                        lesson: SchoolLesson? = nil,
+                        outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) -> SchoolPlanningWorkspace? {
+        guard marker.scope == scope else { return nil }
+        return SchoolPlanningWorkspace(scope: scope, client: client, date: marker.requestedStart ?? Date(),
+                                       lesson: marker.kind == .creation ? nil : lesson, outbox: outbox)
+    }
     var canMutate: Bool { !invalidated && !accessRevoked && !isBusy && !isLoading && !needsReload && !writeConfirmed && storageAvailable && pending == nil && school?.status == "ACTIVE" }
     var selectedTraining: SchoolTraining? { trainings.first { $0.id == trainingID } }
     var selectedOffering: SchoolOffering? { offerings.first { $0.id == selectedTraining?.offeringId } }
