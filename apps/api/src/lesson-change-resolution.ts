@@ -8,6 +8,8 @@ import {ApiError,notFound} from './errors.js';
  */
 export type ChangeOutcome='MOVED'|'CANCELLED';
 const kindFor:Record<ChangeOutcome,'RESCHEDULE'|'CANCEL'>={MOVED:'RESCHEDULE',CANCELLED:'CANCEL'};
+/** Texte générique de la réponse (#43/#44) : ni nom, ni motif, ni résultat sur l'écran verrouillé. */
+export const changeAnswerPushText=['Demande traitée','Votre demande a reçu une réponse.'] as const;
 
 /** À appeler avant d'écrire : la demande désignée doit exister pour cette leçon, être en attente et porter sur la même action. */
 export async function requireChangeRequest(db:PoolClient,schoolId:string,lessonId:string,requestId:string,outcome:ChangeOutcome){
@@ -21,10 +23,16 @@ export async function requireChangeRequest(db:PoolClient,schoolId:string,lessonI
  * À appeler après l'écriture de la leçon. La demande désignée devient ACCEPTED ; une autre demande en attente que le changement rend
  * caduque devient SUPERSEDED (toute demande si la leçon est annulée, les demandes de déplacement si elle est déplacée). Une demande
  * d'annulation survit à un déplacement du personnel : l'élève veut toujours annuler.
+ * Une demande acceptée notifie son auteur dans la même transaction ; une demande rendue caduque n'alerte personne.
  */
 export async function settleChangeRequests(db:PoolClient,value:{schoolId:string;lessonId:string;membershipId:string;outcome:ChangeOutcome;acceptedId?:string|null|undefined}){
- await db.query(`UPDATE drivy.lesson_change_request SET status=CASE WHEN id=$3::uuid THEN 'ACCEPTED' ELSE 'SUPERSEDED' END,version=version+1,
+ const resolved=(await db.query<{id:string;requester_person_id:string;status:string}>(`UPDATE drivy.lesson_change_request SET status=CASE WHEN id=$3::uuid THEN 'ACCEPTED' ELSE 'SUPERSEDED' END,version=version+1,
    resolved_by_membership_id=$4,resolved_at=statement_timestamp(),updated_at=statement_timestamp()
-  WHERE school_id=$1 AND lesson_id=$2 AND status='PENDING' AND ($5::text='CANCELLED' OR kind='RESCHEDULE' OR id=$3::uuid)`,
-  [value.schoolId,value.lessonId,value.acceptedId??null,value.membershipId,value.outcome]);
+  WHERE school_id=$1 AND lesson_id=$2 AND status='PENDING' AND ($5::text='CANCELLED' OR kind='RESCHEDULE' OR id=$3::uuid)
+  RETURNING id,requester_person_id,status`,
+  [value.schoolId,value.lessonId,value.acceptedId??null,value.membershipId,value.outcome])).rows;
+ const author=(await db.query<{person_id:string}>('SELECT person_id FROM drivy.membership WHERE school_id=$1 AND id=$2',[value.schoolId,value.membershipId])).rows[0]?.person_id;
+ for(const row of resolved.filter(entry=>entry.status==='ACCEPTED'&&entry.requester_person_id!==author))
+  await db.query('SELECT drivy.push_lesson_exam_enqueue($1,$2,$3,$4,$5,$6,$7,NULL)',
+   [row.requester_person_id,value.schoolId,'LESSON_REQUEST_ANSWER',`LessonRequestAnswer:${row.id}`,changeAnswerPushText[0],changeAnswerPushText[1],value.lessonId]);
 }

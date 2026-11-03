@@ -117,6 +117,53 @@ import Testing
         #expect(object["messagingPrivate"] as? Bool == false && object["messagingGeneral"] as? Bool == true)
     }
 
+    // MARK: Demandes de leçon et examens (#43, #44)
+
+    @Test func decodesLessonPreferencesWhenTheAPIAnnouncesThem() throws {
+        let json = Data(#"{"version":2,"courseOffers":true,"courseReminders":true,"courseChanges":true,"courseStaffAlerts":true,"lessonRequests":true,"examUpdates":false}"#.utf8)
+        let preferences = try JSONDecoder().decode(SchoolNotificationPreferences.self, from: json)
+        #expect(preferences.supportsLessonNotifications)
+        #expect(SchoolNotificationCategory.lessonRequests.value(in: preferences))
+        #expect(!SchoolNotificationCategory.examUpdates.value(in: preferences))
+    }
+
+    @Test func oneAnnouncedLessonFieldIsNotEnoughToShowTheToggles() throws {
+        let json = Data(#"{"version":2,"courseOffers":true,"courseReminders":true,"courseChanges":true,"courseStaffAlerts":true,"lessonRequests":true}"#.utf8)
+        let preferences = try JSONDecoder().decode(SchoolNotificationPreferences.self, from: json)
+        #expect(!preferences.supportsLessonNotifications)
+    }
+
+    @Test func anOlderAPIAnswerKeepsTheLessonDefaultsAndHidesTheToggles() throws {
+        let json = Data(#"{"version":3,"courseOffers":true,"courseReminders":false,"courseChanges":true,"courseStaffAlerts":false}"#.utf8)
+        let preferences = try JSONDecoder().decode(SchoolNotificationPreferences.self, from: json)
+        #expect(!preferences.supportsLessonNotifications)
+        #expect(SchoolNotificationCategory.lessonRequests.value(in: preferences))
+        #expect(SchoolNotificationCategory.examUpdates.value(in: preferences))
+    }
+
+    @Test func encodesLessonChoicesOnlyWhenTheyAreKnown() throws {
+        let legacy = SchoolNotificationPreferences(version: 1, courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true)
+        let legacyObject = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(legacy.body)) as? [String: Any])
+        #expect(legacyObject["lessonRequests"] == nil && legacyObject["examUpdates"] == nil)
+        let full = SchoolNotificationPreferences(version: 5, courseOffers: true, courseReminders: true, courseChanges: true,
+            courseStaffAlerts: true, lessonRequests: false, examUpdates: true)
+        let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(full.body)) as? [String: Any])
+        #expect(Set(object.keys) == ["courseOffers", "courseReminders", "courseChanges", "courseStaffAlerts", "lessonRequests", "examUpdates"])
+        #expect(object["lessonRequests"] as? Bool == false && object["examUpdates"] as? Bool == true)
+    }
+
+    @Test func aSavedAnswerMustReflectTheLessonFieldsThatWereSent() {
+        let sent = SchoolNotificationPreferencesBody(courseOffers: true, courseReminders: true, courseChanges: true,
+            courseStaffAlerts: true, lessonRequests: false, examUpdates: true)
+        var saved = sent
+        #expect(sent.isReflected(in: saved))
+        saved.lessonRequests = true
+        #expect(!sent.isReflected(in: saved))
+        let without = SchoolNotificationPreferencesBody(courseOffers: true, courseReminders: true, courseChanges: true, courseStaffAlerts: true)
+        #expect(!sent.isReflected(in: without))
+        #expect(without.isReflected(in: sent))
+    }
+
     @Test func aSavedAnswerMustReflectEveryFieldThatWasSent() {
         let sent = SchoolNotificationPreferencesBody(courseOffers: true, courseReminders: true, courseChanges: true,
             courseStaffAlerts: true, messagingPrivate: false, messagingGeneral: false, messagingMentions: true)

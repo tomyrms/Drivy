@@ -6,16 +6,18 @@ struct SchoolNotificationSettingsView: View {
     @State private var model: SchoolNotificationSettingsModel
     /// Moniteur ou administration de l’école ouverte : seule condition pour voir les alertes d’équipe.
     let isStaff: Bool
+    /// Rôles de l'appartenance ouverte : « Examens » est réservé à l'élève, « Demandes de leçon » à l'élève, au moniteur et à l'administration.
+    let roles: Set<String>
     @State private var push = SchoolPushCenter.shared
     @State private var showsMessagingSettings = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.schoolMessagingEntry) private var messagingEntry
 
-    init(client: SchoolNotificationClient, scope: AccountIntentScope, isStaff: Bool,
+    init(client: SchoolNotificationClient, scope: AccountIntentScope, isStaff: Bool, roles: Set<String> = [],
          contextIsCurrent: @escaping @MainActor () -> Bool) {
         _model = State(initialValue: SchoolNotificationSettingsCache.model(scope: scope, client: client,
                                                                            contextIsCurrent: contextIsCurrent))
-        self.isStaff = isStaff
+        self.isStaff = isStaff; self.roles = roles
     }
 
     var body: some View {
@@ -49,6 +51,7 @@ struct SchoolNotificationSettingsView: View {
             } else if model.errorMessage == nil {
                 Section { DrivyLoadingState(title: "Chargement…") }.drivyFormRows()
             }
+            lessonsSection
             messagingSection
         }
         .scrollContentBackground(.hidden)
@@ -97,6 +100,35 @@ struct SchoolNotificationSettingsView: View {
             }
         } header: { Text("Cet appareil").drivyFormSectionHeader() }
         .drivyFormRows()
+    }
+
+    /// Demandes de leçon et examens (#43, #44) : seulement quand l'API annonce les deux champs, et selon le rôle.
+    static func lessonToggles(supportsLessonNotifications: Bool, roles: Set<String>) -> [SchoolNotificationCategory] {
+        guard supportsLessonNotifications else { return [] }
+        var categories: [SchoolNotificationCategory] = []
+        if !roles.isDisjoint(with: ["LEARNER", "INSTRUCTOR", "ADMIN"]) { categories.append(.lessonRequests) }
+        if roles.contains("LEARNER") { categories.append(.examUpdates) }
+        return categories
+    }
+
+    @ViewBuilder private var lessonsSection: some View {
+        if let preferences = model.preferences {
+            let categories = Self.lessonToggles(supportsLessonNotifications: preferences.supportsLessonNotifications, roles: roles)
+            if !categories.isEmpty {
+                Section {
+                    if categories.contains(.lessonRequests) {
+                        toggle("Demandes de leçon", .lessonRequests, preferences, id: "notification-lesson-requests")
+                    }
+                    if categories.contains(.examUpdates) {
+                        toggle("Examens", .examUpdates, preferences, id: "notification-exam-updates")
+                    }
+                } header: {
+                    Text("Leçons · Toutes mes écoles").drivyFormSectionHeader()
+                        .accessibilityLabel("Leçons, préférences du compte pour toutes mes écoles")
+                }
+                .drivyFormRows()
+            }
+        }
     }
 
     /// Les trois catégories de messagerie (#74) : seulement quand Messages est ouvert ici et que l'API les annonce,
@@ -203,6 +235,7 @@ struct SchoolNotificationSettingsDestination: View {
             SchoolNotificationSettingsView(client: client,
                 scope: AccountIntentScope(personID: personID, apiBaseURL: client.baseURL.absoluteString),
                 isStaff: workspace.membership?.roles.contains(where: { ["ADMIN", "INSTRUCTOR"].contains($0) }) == true,
+                roles: Set(workspace.membership?.roles ?? []),
                 contextIsCurrent: { workspace.person?.personId == personID && !workspace.requiresAuthentication && !workspace.accessRevoked })
         }
     }

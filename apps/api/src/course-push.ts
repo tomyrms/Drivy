@@ -69,6 +69,10 @@ export function apnsSender(config:PushConfig):PushSender{
  };
 }
 
+/** Demandes de leçon et examens (#43/#44) : la charge ne porte que le texte générique et la catégorie. */
+export const lessonExamCategories=Object.freeze(['LESSON_REQUEST','LESSON_REQUEST_ANSWER','EXAM'] as const);
+export const isLessonExamCategory=(category:string)=>lessonExamCategories.some(value=>value===category);
+
 /** Un passage : tâches temporelles et outbox (SQL), puis envoi d'au plus `limit` notifications dues. Idempotent. */
 export async function processPushBatch(pool:Pool,sender:PushSender|undefined,limit=50):Promise<number>{
  const db:PoolClient=await pool.connect();let broken=false;
@@ -101,7 +105,9 @@ export async function processPushBatch(pool:Pool,sender:PushSender|undefined,lim
    }
    let sent=false,retry=false;
    for(const d of devices){
-    const payload=messagingPayload??{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category};
+    // Cours et messagerie gardent leur charge déployée ; demandes et examens n'emportent que le texte et la catégorie.
+    const payload=messagingPayload??(isLessonExamCategory(n.category)?{aps:{alert:{title:n.title,body:n.body}},category:n.category}
+     :{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category});
     const result=await sender.send(d.token,d.environment,payload,n.valid_until,n.dedupe_key);
     if(result==='SENT')sent=true;else if(result==='INVALID_TOKEN')await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE id=$1',[d.id]);else retry=true;
    }

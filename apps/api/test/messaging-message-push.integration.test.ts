@@ -202,14 +202,16 @@ describe('préférences de messagerie dans l’objet versionné (#74)', () => {
   it('sans ligne : privés et mentions actifs, général désactivé, version 1', async () => {
     const read = await get('demo-alice');
     expect(read.statusCode, read.body).toBe(200);
-    expect(read.json().data).toEqual({ version: 1, ...course, messagingPrivate: true, messagingGeneral: false, messagingMentions: true });
+    expect(read.json().data).toEqual({ version: 1, ...course, messagingPrivate: true, messagingGeneral: false, messagingMentions: true,
+      lessonRequests: true, examUpdates: true });
     expect(read.headers.etag).toBe('"1"');
   });
 
   it('enregistre les trois catégories avec les cours, versionne et refuse une version périmée', async () => {
     const saved = await put('demo-alice', { ...course, messagingPrivate: false, messagingGeneral: true, messagingMentions: false }, 1);
     expect(saved.statusCode, saved.body).toBe(200);
-    expect(saved.json().data).toEqual({ version: 2, ...course, messagingPrivate: false, messagingGeneral: true, messagingMentions: false });
+    expect(saved.json().data).toEqual({ version: 2, ...course, messagingPrivate: false, messagingGeneral: true, messagingMentions: false,
+      lessonRequests: true, examUpdates: true });
     expect((await put('demo-alice', { ...course, messagingPrivate: true }, 1)).statusCode).toBe(412);
     expect((await get('demo-alice')).json().data).toMatchObject({ version: 2, messagingPrivate: false, messagingGeneral: true, messagingMentions: false });
     const row = (await pool.query('SELECT messaging_private,messaging_general,messaging_mentions FROM drivy.notification_preference WHERE person_id=$1', [id.alice])).rows;
@@ -220,7 +222,8 @@ describe('préférences de messagerie dans l’objet versionné (#74)', () => {
     expect((await put('demo-alice', { ...course, messagingPrivate: false, messagingMentions: false }, 1)).statusCode).toBe(200);
     const legacy = await put('demo-alice', { ...course, courseReminders: false }, 2);
     expect(legacy.statusCode, legacy.body).toBe(200);
-    expect(legacy.json().data).toEqual({ version: 3, ...course, courseReminders: false, messagingPrivate: false, messagingGeneral: false, messagingMentions: false });
+    expect(legacy.json().data).toEqual({ version: 3, ...course, courseReminders: false, messagingPrivate: false, messagingGeneral: false, messagingMentions: false,
+      lessonRequests: true, examUpdates: true });
   });
 
   it('refuse une clé inconnue, un type invalide et ne touche jamais les choix d’un tiers', async () => {
