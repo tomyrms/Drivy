@@ -32,6 +32,8 @@ Constat qui motivait la tâche : hors de la feuille de planification, aucune dem
    - Toucher la ligne ou le repère ouvre `SchoolPlanningView` sur la demande (`planningCancels` pour une annulation) ; aucun envoi ne part du repère.
 4. **`SchoolAgendaView.swift`** : mêmes relectures et même purge ; mêmes repères dans la liste du jour ; une journée qui ne contient qu’une demande conservée n’affiche plus « Aucun rendez-vous ce jour » ; la feuille existante reçoit `cancelling`.
 
+La présentation réutilise le composant d’état inhabituel du dépôt : le mot de `DrivyRowNote` en tête de la ligne de `DrivyLessonRow` (texte semi-gras, encre du ton), jamais une pastille, et l’état ne repose pas sur la seule couleur.
+
 ## Preuve par critère
 
 | Critère de la tâche | Preuve | État |
@@ -51,6 +53,7 @@ Constat qui motivait la tâche : hors de la feuille de planification, aucune dem
 ## Écarts, limites, décisions
 
 - **« En cours » repose sur une fenêtre d’horodatage (60 s)**, pas sur un état d’envoi partagé : la feuille détient ce savoir, les deux écrans lisent le coffre. C’est une approximation assumée, documentée dans le code ; elle ne dit jamais que l’école a enregistré. Un état d’envoi partagé (propriétaire de la demande survivant à la feuille) reste le vrai correctif de fond, hors de cette tâche.
+- **La ligne provisoire d’une création se pose après les engagements confirmés du jour**, pas à sa place chronologique : elle ne prend ni rail, ni position, ni total, et les lignes confirmées gardent leur ordre. Son horaire voulu reste lisible dans la colonne de gauche. Un déplacement ou une annulation, eux, restent attachés à la leçon qu’ils visent.
 - **Une demande dont la leçon n’est pas dans la fenêtre lue n’a pas de ligne** : pour une annulation, le coffre ne porte aucun horaire ; pour un déplacement hors période, la ligne provisoire serait posée à un autre jour. La demande reste alors visible depuis Aujourd’hui si elle concerne aujourd’hui, sinon en rouvrant la feuille. Non traité.
 - **Toucher une leçon qui porte un repère ouvre la demande, plus la fiche de la leçon** : c’est le geste demandé (« toucher un repère ouvre la feuille »). Après vérification ou abandon, le repère disparaît et la ligne rouvre la leçon. La fiche reste accessible par la recherche de l’agenda et le dossier.
 - **Recherche de l’agenda** : les résultats de recherche ne portent pas les repères ; seule la liste du jour les affiche. Hors périmètre de la tâche.
@@ -61,5 +64,5 @@ Constat qui motivait la tâche : hors de la feuille de planification, aucune dem
 ## Vérifications lancées
 
 - `git log -1 --format=%h` avant modification : `34d4c01a` (conforme).
-- Lecture du diff complet `git diff 34d4c01a` (accolades, `try`/`await`, types, libellés d’arguments, `@MainActor`, `switch` exhaustifs).
+- Lecture du diff complet `git diff 34d4c01a` (accolades, `try`/`await`, types, libellés d’arguments, `@MainActor`, `switch` exhaustifs) : six tests écrits dans `SchoolPendingPlanningProjectionTests`.
 - Compilation Swift, tests, IPA : `NOT_EXECUTED` (pas de chaîne Apple sur cette machine ; à faire sur GitHub Actions).
