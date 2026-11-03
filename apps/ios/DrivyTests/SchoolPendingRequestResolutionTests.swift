@@ -39,6 +39,8 @@ import Testing
         #expect(model.pending == stale && outbox.value == stale)
     }
 
+    /// Le départ ne partage aucune version avec le début d'une leçon déjà conservé par la fiche : la file l'accepte et
+    /// l'écran l'ouvre (#106, tâche 4). La demande de l'autre écran reste conservée telle quelle, hors de cet écran.
     @Test func aRequestFromAnotherScreenNoLongerBlocksStartingALesson() async throws {
         let stale = try staleStart()
         let server = MissingOperationServer(fallback: LessonFinishServer()), outbox = ConfigurationOutboxStub(value: stale)
@@ -46,11 +48,8 @@ import Testing
             tokenSource: HubToken(), transport: server)
         let model = SchoolStartNowWorkspace(scope: ConfigurationFixture.scope(), client: client, outbox: outbox)
         await model.load()
-        #expect(model.pending == stale && !model.canStart)
-        #expect(await model.verify() == nil)
-        #expect(model.pendingAbsent && model.pending == stale && outbox.value == stale)
-        await model.abandon()
-        #expect(model.pending == nil && outbox.value == nil && model.errorMessage == nil)
+        #expect(model.pending == nil && !model.blocksStart)
+        #expect(outbox.value == stale && outbox.removals.isEmpty)
     }
 
     @Test func theNoticeNamesTheRequestAndWhatTheSchoolKnows() throws {

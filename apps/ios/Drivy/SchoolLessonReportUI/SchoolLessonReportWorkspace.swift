@@ -33,6 +33,10 @@ import Observation
     private(set) var permitRecorded = false
     private(set) var permitReviewDenied = false
     private(set) var pending: PendingSchoolCommand?
+    /// Commande conservée qui refuserait un geste de cette fiche, lue avec la règle exacte de la file (#106) : même
+    /// leçon, même brouillon, même formation d'examen ou de permis, même créneau. Distincte de `pending`, qui reste la
+    /// demande de cette fiche affichée et reprise.
+    private(set) var blockingCommand: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
     private(set) var isOwnLearner = false
@@ -122,7 +126,7 @@ import Observation
     var canReadLessonContent: Bool { isAuthor || isOwnLearner || membership.roles.contains("ADMIN") || membership.roles.contains("INSTRUCTOR") }
     var canReadSharedReport: Bool { isAuthor || isOwnLearner || membership.roles.contains("INSTRUCTOR") }
     var replayableCaptures: [SchoolCaptureSession] { captures.filter(SchoolTripsWorkspace.isReplayable) }
-    var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && pending == nil && !localDraftReadFailed }
+    var canMutate: Bool { !invalidated && !isLoading && !isBusy && !needsReload && storageAccessible && blockingCommand == nil && !localDraftReadFailed }
     /// Réglage de partage tout juste demandé, en cours d’envoi : la saisie n’en dépend pas.
     private var isSendingSharing: Bool { isBusy && isFirstSend && pending?.kind == .updateLessonSharing }
     /// Objectifs ou souhait tout juste envoyés (#113) : la saisie continue, la révision suivante attendra leur résultat.
@@ -558,7 +562,7 @@ import Observation
         // représente plus rien d’ouvrable.
         SchoolRefusedClosureMemory.forget(lessonID: lessonID, scope: scope)
         invalidated = true; generation = UUID(); lesson = nil; preparation = nil; wish = nil; draft = nil; revisions = []
-        competencies = []; pending = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
+        competencies = []; pending = nil; blockingCommand = nil; goals = []; administrativeNote = ""; wishText = ""; optimisticSharing = nil
         sharedReportWasRead = false
         workedOn = ""; observationText = ""; nextStep = ""; observations = []
         workedOnProposal = nil; proposesWorkedOn = false
@@ -603,6 +607,85 @@ import Observation
         init(_ value: SchoolLessonPreparation) { goals = value.goals; note = value.administrativeCheckNote ?? "" }
         init(goals: [SchoolLessonGoal], note: String) { self.goals = goals; self.note = note }
     }
+    /// Un geste que cette fiche peut écrire, avec les identifiants qu'elle lui donne : la sonde comparée à la file.
+    private struct AdmissionProbe {
+        let kind: SchoolCommandKind
+        let resourceID: UUID?
+        let routeResourceID: UUID?
+    }
+
+    /// Gestes possibles dans l'état de la leçon affichée. La saisie n'est ouverte que si la file les accepterait tous.
+    private var admissionProbes: [AdmissionProbe] {
+        guard let lesson else { return [] }
+        switch lesson.status {
+        case "PLANNED":
+            // `lessons.ts:368-370`, `:390`, `:414`, `lesson-reports.ts:137-138`, `:158`, `lesson-outcomes.ts:73-74` :
+            // ces routes n'écrivent que sur une leçon planifiée.
+            var probes = [
+                AdmissionProbe(kind: .startLesson, resourceID: lessonID, routeResourceID: nil),
+                AdmissionProbe(kind: .completeLesson, resourceID: lessonID, routeResourceID: nil),
+                AdmissionProbe(kind: .markNoShow, resourceID: lessonID, routeResourceID: nil)
+            ]
+            if let preparation {
+                probes.append(AdmissionProbe(kind: .savePreparation, resourceID: preparation.id, routeResourceID: lessonID))
+            }
+            if let wish, isOwnLearner {
+                probes.append(AdmissionProbe(kind: .saveWish, resourceID: wish.id, routeResourceID: wish.trainingId))
+            }
+            if mayRecordPermit {
+                probes.append(AdmissionProbe(kind: .recordPermitCheck, resourceID: nil, routeResourceID: lesson.trainingId))
+            }
+            return probes
+        case "COMPLETED":
+            // `lesson-reports.ts:197`, `:209-210` : le bilan et sa publication exigent une leçon réalisée. La fiche
+            // n'émet que l'enregistrement du brouillon (la publication suit `syncSharedReport`) et le partage.
+            var probes: [AdmissionProbe] = []
+            if sharing != nil {
+                // `sharing.ts:42-60` : le réglage n'existe qu'une fois la leçon réalisée (`when: completed && author`).
+                probes.append(AdmissionProbe(kind: .updateLessonSharing, resourceID: lessonID, routeResourceID: nil))
+            }
+            if let draft {
+                probes.append(AdmissionProbe(kind: .saveReportDraft, resourceID: draft.id, routeResourceID: nil))
+            }
+            return probes
+        default:
+            // Leçon annulée ou manquée : seul le partage reste modifiable (`sharing.ts:48`, sans condition d'état).
+            guard sharing != nil else { return [] }
+            return [AdmissionProbe(kind: .updateLessonSharing, resourceID: lessonID, routeResourceID: nil)]
+        }
+    }
+
+    /// Relecture unique de la file (#106, tâche 4) : la demande de cette fiche, puis la première commande conservée qui
+    /// refuserait un de ses gestes, selon exactement la règle de `save`.
+    private func rereadQueue() throws {
+        let queued = try outbox.pendingCommands(for: scope)
+        pending = queued.first { belongsToThisScreen($0) }
+        blockingCommand = admissionProbes.lazy.compactMap {
+            queued.refusing($0.kind, in: scope, resourceID: $0.resourceID, routeResourceID: $0.routeResourceID)
+        }.first
+    }
+
+    /// Demande de cette fiche : cette leçon, son brouillon, ses objectifs, le souhait de sa formation — ou une portée
+    /// d'accès qui n'est plus la sienne, à résoudre ici. Une commande d'une autre leçon n'est pas la sienne.
+    private func belongsToThisScreen(_ command: PendingSchoolCommand) -> Bool {
+        guard command.scope == scope else { return true }
+        guard command.kind.isReport else { return false }
+        switch command.kind {
+        case .startLesson, .completeLesson, .markNoShow, .updateLessonSharing: return command.resourceID == lessonID
+        case .savePreparation: return command.routeResourceID == lessonID
+        case .saveWish, .recordPermitCheck: return lesson?.trainingId.map { command.routeResourceID == $0 } == true
+        case .saveReportDraft: return draft.map { command.resourceID == $0.id } == true
+        case .publishReportDraft: return draft.map { command.routeResourceID == $0.id } == true
+        default: return false
+        }
+    }
+
+    /// Relit la barrière après une résolution : la fiche ne reste jamais fermée par une demande déjà répondue.
+    private func rereadBlockingCommand() {
+        do { try rereadQueue() }
+        catch { storageAccessible = false }
+    }
+
     /// La saisie survit aussi à une panne secondaire ou une modification concurrente. Dans ce dernier
     /// cas, la version ancienne reste attachée au texte et toute écriture attend une relecture explicite.
     func load(discardingEdits: Bool = false) async {
@@ -617,7 +700,10 @@ import Observation
         // Une relecture garde l’état affiché : `needsReload`, les notes et la saisie ne changent qu’à son résultat.
         isLoading = true; errorMessage = nil; pendingReviewed = false
         defer { wake() }
-        do { pending = try outbox.pending(for: scope, domain: .teaching); storageAccessible = true }
+        do {
+            try rereadQueue()
+            storageAccessible = true
+        }
         catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         do {
             // Le compte et la leçon se lisent ensemble ; rien n’est montré avant que les droits du compte soient relus.
@@ -780,6 +866,10 @@ import Observation
             isOwnLearner = isOwn
             training = trainingRead.value
             account = accountRead.value
+            // Leçon, brouillon et objectifs connus : la demande de cette fiche et la barrière de ses gestes se relisent
+            // une fois (#106, tâche 4). Une écriture d'une autre leçon ne les ferme plus.
+            do { try rereadQueue() }
+            catch { storageAccessible = false }
             if preparationPolicy == .replace { goals = preparation?.goals ?? []; administrativeNote = preparation?.administrativeCheckNote ?? "" }
             if wishPolicy == .replace { wishText = wish?.text ?? "" }
             if draftPolicy == .replace {
@@ -1023,6 +1113,7 @@ import Observation
             try outbox.remove(pending)
             guard request == generation, !invalidated else { return }
             self.pending = nil; isBusy = false; confirmation = "L’école confirme l’enregistrement de la demande."
+            rereadBlockingCommand()
             if !rememberConfirmedText(pending), pending.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(pending)
             if confirmsThisReport(pending) {
@@ -1058,6 +1149,8 @@ import Observation
             guard body.count <= 200_000 else { errorMessage = "Le contenu dépasse la taille de sauvegarde protégée. Raccourcis les textes avant de confirmer."; return false }
             let command = PendingSchoolCommand(id: id, scope: scope, kind: kind, resourceVersion: version, createdAt: Date(), body: body, resourceID: resourceID, routeResourceID: routeID, expectedVersion: expectedVersion)
             try outbox.save(command); pending = command; pendingReviewed = true
+            // Le geste conservé est celui de cette fiche : la file le refuse tant qu'il attend sa réponse.
+            blockingCommand = command
         } catch { storageAccessible = false; fail(error); return false }
         return await transmit(firstAttempt: true)
     }
@@ -1079,6 +1172,7 @@ import Observation
             }
             pending = nil; isBusy = false
             // Objectifs et souhait : la saisie continue jusqu’à la relecture, qui reconnaît la révision confirmée.
+            rereadBlockingCommand()
             if !rememberConfirmedText(command), command.kind != .updateLessonSharing { awaitsRereadAfterWrite = true }
             announceConfirmedChange(command)
             if confirmsThisReport(command) {
