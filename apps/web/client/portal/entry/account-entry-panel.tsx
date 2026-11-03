@@ -1,10 +1,11 @@
 import { useId, type ComponentProps, type FormEvent, type ReactNode } from 'react';
 import { Building2, CircleAlert, Loader2 } from 'lucide-react';
 import { Alert, AlertTitle } from '../../components/ui/alert';
+import { Skeleton } from '../../components/ui/skeleton';
 import { Button } from '../../components/ui/button';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSeparator } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
-import { passwordMinimum, type AccessKind, type EntryRoutes } from './entry-model';
+import { codeFieldError, passwordMinimum, type AccessKind, type EntryRoutes } from './entry-model';
 import { useAccountEntry, type AccountEntryState } from './use-account-entry';
 
 const titles = { login: 'Se connecter', code: 'J’ai un code', register: 'Créer votre compte' } as const;
@@ -48,10 +49,14 @@ function EntryError({ message }: { message: string | null }) {
  * Sign-in, code and account creation of a signed-out person (#319). Each action is distinct: sign in, type a code,
  * recover the password in another tab. Only a valid code or link creates an account.
  */
-export function AccountEntryPanel({ routes, invitation = false, initialCode, onSignedIn }: {
-  routes: EntryRoutes; invitation?: boolean; initialCode?: string; onSignedIn: (kind: AccessKind | null) => void;
+export function AccountEntryPanel({ routes, invitation = false, initialCode, pending = false, typedCode, onSignedIn }: {
+  routes: EntryRoutes; invitation?: boolean; initialCode?: string;
+  /** The session is not known yet: the sign-in form waits for it, the code form does not (it grants nothing by itself). */
+  pending?: boolean;
+  typedCode?: { value: string; set: (value: string) => void };
+  onSignedIn: (kind: AccessKind | null) => void;
 }) {
-  const state = useAccountEntry({ invitation, onSignedIn, ...(initialCode ? { initialCode } : {}) });
+  const state = useAccountEntry({ invitation, onSignedIn, ...(initialCode ? { initialCode } : {}), ...(typedCode ? { typedCode } : {}) });
   const uid = useId();
   const titleId = `${uid}-title`;
   const context = state.step === 'register' && (state.schoolName || state.canChangeCode);
@@ -64,8 +69,11 @@ export function AccountEntryPanel({ routes, invitation = false, initialCode, onS
       <h1 id={titleId} ref={state.heading} tabIndex={-1}>{titles[state.step]}</h1>
     </header>
     <div className="entry-card">
-      <EntryError message={state.error} />
-      {state.step === 'login' && <SignInForm uid={uid} state={state} routes={routes} />}
+      {state.step !== 'code' && <EntryError message={state.error} />}
+      {state.step === 'login' && pending && <div className="entry-loading" aria-busy="true" role="status" aria-label="Chargement">
+        <Skeleton className="h-9 w-full" /><Skeleton className="h-9 w-full" /><Skeleton className="h-12 w-full" />
+      </div>}
+      {state.step === 'login' && !pending && <SignInForm uid={uid} state={state} routes={routes} />}
       {state.step === 'code' && <CodeForm uid={uid} state={state} />}
       {state.step === 'register' && <RegisterForm uid={uid} state={state} />}
     </div>
@@ -93,15 +101,16 @@ function SignInForm({ uid, state, routes }: { uid: string; state: AccountEntrySt
   </form>;
 }
 
-function CodeField({ uid, state, autoFocus = false }: { uid: string; state: AccountEntryState; autoFocus?: boolean }) {
-  return <TextField id={`${uid}-code`} autoFocus={autoFocus} name="code" label="Code ou lien reçu" placeholder="XXXX-XXXX" autoComplete="one-time-code" autoCapitalize="off" autoCorrect="off"
-    spellCheck={false} maxLength={300} value={state.code} onChange={event => state.setCode(event.target.value)} readOnly={state.busy} error={state.codeProblem ?? undefined} />;
+function CodeField({ uid, state }: { uid: string; state: AccountEntryState }) {
+  return <TextField id={`${uid}-code`} ref={state.codeInput} autoFocus name="code" label="Code ou lien reçu" placeholder="XXXX-XXXX" autoComplete="one-time-code" autoCapitalize="off" autoCorrect="off"
+    spellCheck={false} maxLength={300} value={state.code} onChange={event => state.setCode(event.target.value)} readOnly={state.busy} error={codeFieldError(state.codeProblem, state.error)} />;
 }
 
 function CodeForm({ uid, state }: { uid: string; state: AccountEntryState }) {
   return <form className="entry-form" method="post" noValidate onSubmit={submitWith(state.submitCode)}>
     <CodeField uid={uid} state={state} />
     <Submit busy={state.busy} label="Continuer" busyLabel="Vérification…" />
+    <span className="sr-only" role="status">{state.busy ? 'Vérification du code…' : ''}</span>
   </form>;
 }
 
@@ -125,18 +134,20 @@ function RegisterForm({ uid, state }: { uid: string; state: AccountEntryState })
 }
 
 /** « J’ai un code » of a signed-in person, inside the list of schools. */
-export function SignedInCodePanel({ onSignedIn, onCancel }: { onSignedIn: (kind: AccessKind | null) => void; onCancel: () => void }) {
-  const state = useAccountEntry({ signedIn: true, onSignedIn });
+export function SignedInCodePanel({ typedCode, onSignedIn, onCancel }: {
+  typedCode?: { value: string; set: (value: string) => void }; onSignedIn: (kind: AccessKind | null) => void; onCancel: () => void;
+}) {
+  const state = useAccountEntry({ signedIn: true, onSignedIn, ...(typedCode ? { typedCode } : {}) });
   const uid = useId();
   return <section className="entry-inline-code" aria-labelledby={`${uid}-title`}>
     <h2 id={`${uid}-title`} ref={state.heading} tabIndex={-1}>J’ai un code</h2>
-    <EntryError message={state.error} />
     <form className="entry-form" method="post" noValidate onSubmit={submitWith(state.submitCode)}>
-      <CodeField uid={uid} state={state} autoFocus />
+      <CodeField uid={uid} state={state} />
       <div className="entry-actions">
         <Submit busy={state.busy} label="Continuer" busyLabel="Vérification…" />
         <Button variant="ghost" size="lg" disabled={state.busy} onClick={onCancel}>Annuler</Button>
       </div>
+      <span className="sr-only" role="status">{state.busy ? 'Vérification du code…' : ''}</span>
     </form>
   </section>;
 }

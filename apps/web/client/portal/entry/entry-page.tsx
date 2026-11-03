@@ -7,7 +7,7 @@ import { entryPageFromPath, entryRoutes, type EntryPageKind, type EntryRoutes } 
 import { useEntrySession } from './use-entry-session';
 import { EntryFrame } from './entry-frame';
 import { AccountEntryPanel } from './account-entry-panel';
-import { SchoolsView } from './schools-view';
+import { SchoolsPending, SchoolsView } from './schools-view';
 import { InvitationView } from './invitation-view';
 
 /**
@@ -21,6 +21,8 @@ export function PortalEntryPage({ invitationLink, page = entryPageFromPath(windo
   const state = useEntrySession({ invitationLink, initialPage: page, routes });
   const busy = state.busy !== null;
   const invitationClosed = state.page === 'invitation' && (state.linkMustReopen || state.linkError);
+  // The code form opens at once: it grants nothing, and the server alone says (on sending) whether the session is signed in.
+  const showAuthPanel = !state.authenticated && (state.page === 'account' || (state.loaded && !invitationClosed));
   const showHeading = state.authenticated || invitationClosed;
   return <EntryFrame home={routes.account} width={state.authenticated ? 'wide' : 'narrow'} busy={!state.loaded}
     account={state.authenticated ? { name: state.personName, preferences: routes.preferences, busy: busy || state.uncertain, onLogout: state.logout } : null}>
@@ -48,12 +50,12 @@ export function PortalEntryPage({ invitationLink, page = entryPageFromPath(windo
 
     {invitationClosed && !state.authenticated && state.loaded && <a className={buttonVariants({ size: 'lg' })} href={routes.account}>Se connecter</a>}
 
-    {!state.loaded && <div className="entry-loading" role="status" aria-label={state.busy ?? 'Chargement'}>
+    {!state.loaded && state.page === 'invitation' && <div className="entry-loading" role="status" aria-label={state.busy ?? 'Chargement'}>
       <Skeleton className="h-9 w-2/3" /><Skeleton className="h-48 w-full" /><Skeleton className="h-12 w-full" />
     </div>}
 
-    {state.loaded && !state.authenticated && state.page === 'account' && <AccountEntryPanel routes={routes} onSignedIn={state.signedIn} />}
-    {state.loaded && !state.authenticated && state.page === 'invitation' && !invitationClosed && <AccountEntryPanel routes={routes} invitation onSignedIn={state.signedIn} />}
+    {showAuthPanel && <AccountEntryPanel routes={routes} invitation={state.page === 'invitation'} pending={!state.loaded} typedCode={state.typedCode} onSignedIn={state.signedIn} />}
+    {!state.loaded && state.authenticated && state.page === 'account' && <SchoolsPending state={state} />}
     {state.loaded && state.authenticated && state.page === 'invitation' && <InvitationView state={state} routes={routes} />}
     {state.loaded && state.authenticated && state.page === 'account' && <SchoolsView state={state} routes={routes} />}
   </EntryFrame>;
