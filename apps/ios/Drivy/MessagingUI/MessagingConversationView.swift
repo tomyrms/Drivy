@@ -1,5 +1,7 @@
 import ExyteChat
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Actions du menu Exyte, calculées par message à partir des droits Drivy puis revérifiées à l'exécution.
 /// Le menu natif Drivy porte les rôles destructifs ; le menu interne d'Exyte n'est jamais ouvert.
@@ -61,6 +63,7 @@ private enum ExyteBubbleMetrics {
 @Observable final class MessagingThreadModel {
     let workspace: MessagingWorkspace
     let composer: MessagingComposerModel
+    let mediaComposer: MessagingMediaComposerModel?
     let conversationID: UUID
     let isGeneral: Bool
     /// Mise en évidence brève après une citation, une épingle ou une recherche (identifiant serveur).
@@ -92,10 +95,39 @@ private enum ExyteBubbleMetrics {
         self.composer = composer
         self.conversationID = conversationID
         self.isGeneral = isGeneral
+        self.mediaComposer = workspace.mediaRuntime.map { MessagingMediaComposerModel(runtime: $0, conversationID: conversationID) }
     }
 
     private var access: MessagingConversationAccess { workspace.access(for: conversationID) }
     private var accountID: UUID { workspace.scope.accountID }
+
+    func mediaAttachment(_ message: MessagingWireMessage) -> MessagingMediaAttachment? {
+        guard !message.meta.deletedForEveryone, message.meta.media?.deleted == false,
+              workspace.mutation(.deleteForEveryone, on: message) == nil,
+              workspace.visibleMessages(conversationID).contains(where: { $0.id == message.id }),
+              let attachment = workspace.contents[message.id]?.media,
+              attachment.id == message.meta.media?.mediaID,
+              attachment.size == message.meta.media?.byteSize else { return nil }
+        return attachment
+    }
+
+    var visibleMediaIDs: Set<UUID> {
+        Set(workspace.visibleMessages(conversationID).filter { mediaAttachment($0) != nil }.map(\.id))
+    }
+
+    func openMedia(_ message: MessagingWireMessage) async {
+        guard let current = workspace.message(message.id, in: conversationID), mediaAttachment(current) != nil else { return }
+        await mediaComposer?.open(current) {
+            guard let fresh = self.workspace.message(message.id, in: self.conversationID) else { return false }
+            return self.mediaAttachment(fresh) != nil
+        }
+    }
+
+    func refreshAfterMediaSend() async {
+        guard mediaComposer?.confirmation != nil else { return }
+        await workspace.refreshVisible(conversationID: conversationID)
+        scrollToNewest()
+    }
 
     var items: [MessagingThreadItem] {
         MessagingThreadProjection.items(messages: workspace.visibleMessages(conversationID),
@@ -149,6 +181,8 @@ private enum ExyteBubbleMetrics {
             hasher.combine(wire.meta.pinned)
             hasher.combine(wire.meta.replyToMessageID)
             hasher.combine(wire.meta.poll != nil)
+            hasher.combine(wire.meta.media?.mediaID)
+            hasher.combine(wire.meta.media?.deleted)
         }
         message.triggerRedraw = Self.revision(hasher.finalize())
         return message
@@ -555,6 +589,9 @@ struct MessagingConversationView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .modifier(lifecycle)
+        .sheet(item: Binding(get: { thread.mediaComposer?.preview }, set: { thread.mediaComposer?.preview = $0 })) { preview in
+            MessagingMediaPreview(media: preview.media)
+        }
         .sheet(item: $thread.menuTarget, onDismiss: { thread.completeMenuChoice() }) { target in
             MessagingMessageMenu(thread: thread, displayID: target.id)
         }
@@ -748,7 +785,8 @@ private struct MessagingThreadLifecycle: ViewModifier {
                                                 atBottom: thread.atBottom)
             }
             .onAppear { connectivity.start() }
-            .onDisappear { thread.cancelMenu(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
+            .onDisappear { thread.cancelMenu(); thread.mediaComposer?.suspend(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
+            .onChange(of: thread.visibleMediaIDs) { _, ids in thread.mediaComposer?.dismissRemovedPreview(visibleIDs: ids) }
             .onChange(of: lastDelivered?.id) { _, _ in
                 guard let last = lastDelivered else { return }
                 if last.senderID == workspace.scope.accountID {
@@ -765,13 +803,19 @@ private struct MessagingThreadLifecycle: ViewModifier {
                 if available { Task { await workspace.refreshVisible(conversationID: conversationID) } }
             }
             .onChange(of: workspace.error) { _, failure in
-                if failure == .contextChanged || failure == .accessChanged { thread.cancelMenu(); composer.reset() }
+                if failure == .contextChanged || failure == .accessChanged {
+                    thread.cancelMenu(); composer.reset(); thread.mediaComposer?.suspend()
+                    Task { await workspace.mediaRuntime?.invalidate() }
+                }
             }
             .onChange(of: workspace.resumeGeneration) { _, _ in Task { await composer.resume() } }
             .task {
                 if thread.isGeneral { await workspace.loadGeneralMembers(); await workspace.loadMembers() }
                 if !workspace.hasLoadedMessages(conversationID) { await workspace.loadMessages(conversationID) }
                 await composer.load()
+                if workspace.error != .contextChanged && workspace.error != .accessChanged {
+                    await thread.mediaComposer?.load()
+                }
             }
             .task(id: composer.draft) {
                 try? await Task.sleep(for: .milliseconds(250))
@@ -812,6 +856,18 @@ private struct MessagingThreadRow: View {
                         // Repère du rond de sélection : le centre de la bulle elle-même, hors nom d'auteur, ligne d'état et
                         // marge haute de la ligne (la bulle occupe la hauteur restante, donc son centre est à `marge / 2` plus bas).
                         .alignmentGuide(.bubbleCenter) { $0[VerticalAlignment.center] + bubbleTop / 2 }
+                    if let wire = item.message, let media = thread.mediaAttachment(wire), thread.mediaComposer != nil {
+                        Button { Task { await thread.openMedia(wire) } } label: {
+                            MessagingMediaFileLabel(name: media.name, mime: media.mime, byteSize: media.size)
+                                .padding(DrivySpacing.s)
+                                .frame(minHeight: DrivyLayout.tapTarget)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(thread.reporting || thread.mediaComposer?.opening == true)
+                        .accessibilityLabel("Ouvrir \(media.name)")
+                        .accessibilityIdentifier("messaging.media.received.open")
+                        .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
+                    }
                     MessagingThreadStateLine(thread: thread, item: item)
                         .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
                 }
@@ -1442,10 +1498,18 @@ private struct MessagingThreadFooter: View {
                 reportBar
             } else if workspace.access(for: thread.conversationID).isReadOnly {
                 // Fin du lien : l'historique reste lisible, aucun envoi possible.
+                VStack(spacing: DrivySpacing.xs) {
                 Label("Lecture seule", systemImage: "lock")
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .frame(maxWidth: .infinity).padding()
                     .accessibilityIdentifier("messaging.readonly")
+                    if thread.mediaComposer?.opening == true { ProgressView("Ouverture…") }
+                    if let error = thread.mediaComposer?.error {
+                        Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, DrivySpacing.s)
+                    }
+                }
             } else {
                 MessagingThreadComposer(thread: thread, composer: thread.composer)
             }
@@ -1500,11 +1564,20 @@ private struct MessagingThreadComposer: View {
     @Bindable var composer: MessagingComposerModel
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showPhotos = false
+    @State private var showDocument = false
+    @State private var photo: PhotosPickerItem?
+    @State private var pickerGeneration: UUID?
 
     private var workspace: MessagingWorkspace { thread.workspace }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
+            if let media = thread.mediaComposer {
+                MessagingMediaComposerPanel(model: media, replyTo: composer.replyTo?.id) {
+                    await thread.refreshAfterMediaSend()
+                }
+            }
             if let failure = composer.deliveryLabel ?? composer.draftFailure {
                 Text(failure)
                     .font(.footnote).foregroundStyle(DrivyTheme.danger)
@@ -1516,6 +1589,21 @@ private struct MessagingThreadComposer: View {
             HStack(alignment: .bottom, spacing: DrivySpacing.xs) {
                 Menu {
                     Button("Sondage", systemImage: "chart.bar.xaxis") { thread.showPollComposer = true }
+                    if let media = thread.mediaComposer {
+                        Button("Photo", systemImage: "photo") { pickerGeneration = media.contextGeneration; showPhotos = true }
+                            .disabled(media.sending || media.preparing)
+                        Button("Fichier", systemImage: "doc") { pickerGeneration = media.contextGeneration; showDocument = true }
+                            .disabled(media.sending || media.preparing)
+#if DEBUG && targetEnvironment(simulator)
+                        if ProcessInfo.processInfo.arguments.contains("-messaging-ui-fixture"),
+                           ProcessInfo.processInfo.arguments.contains("-messaging-ui-media") {
+                            Button("Photo synthétique") { Task { await media.select { try MessagingMediaQualificationSamples.photo() } } }
+                                .accessibilityIdentifier("messaging.media.fixture.photo")
+                            Button("PDF synthétique") { Task { await media.select { try MessagingMediaQualificationSamples.pdf() } } }
+                                .accessibilityIdentifier("messaging.media.fixture.pdf")
+                        }
+#endif
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.body.weight(.semibold))
@@ -1527,6 +1615,7 @@ private struct MessagingThreadComposer: View {
                 }
                 .accessibilityLabel("Plus d'options")
                 .accessibilityIdentifier("messaging.compose.more")
+                if thread.mediaComposer?.selection == nil && thread.mediaComposer?.preparing != true {
                 TextField("Message", text: $composer.draft, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
@@ -1551,6 +1640,7 @@ private struct MessagingThreadComposer: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Envoyer")
                 .disabled(!composer.canSend)
+                }
             }
         }
         .padding(.horizontal, DrivySpacing.xs)
@@ -1559,6 +1649,36 @@ private struct MessagingThreadComposer: View {
         .onChange(of: composer.focusRequest) { _, _ in focused = true }
         .onChange(of: composer.blurRequest) { _, _ in focused = false }
         .onChange(of: focused) { _, value in composer.isFocused = value }
+        .onChange(of: thread.mediaComposer?.selection != nil) { _, selected in if selected { composer.blur() } }
+        .onChange(of: thread.mediaComposer?.lastEnqueuedID) { _, id in
+            if id != nil, composer.replyTo?.id == thread.mediaComposer?.enqueuedReplyTo { composer.replyTo = nil }
+        }
+        // Preserve the original representation: compatible could silently transcode HEIC.
+        .photosPicker(isPresented: $showPhotos, selection: $photo, matching: .images,
+                      preferredItemEncoding: .current)
+        .onChange(of: photo) { _, item in
+            guard let item, let media = thread.mediaComposer else { return }
+            let expected = pickerGeneration
+            Task {
+                await media.select(expectedGeneration: expected) {
+                    guard item.supportedContentTypes.contains(where: { $0.conforms(to: .jpeg) || $0.conforms(to: .png) }) else {
+                        throw MessagingMediaRuntimeFailure.invalidFormat
+                    }
+                    guard let imported = try await item.loadTransferable(type: MessagingImportedMedia.self) else {
+                        throw MessagingMediaImportFailure.unreadable
+                    }
+                    return imported
+                }
+                photo = nil
+            }
+        }
+        .fileImporter(isPresented: $showDocument, allowedContentTypes: [.jpeg, .png, .pdf]) { result in
+            guard let media = thread.mediaComposer else { return }
+            let expected = pickerGeneration
+            if case .failure(let error) = result,
+               (error as NSError).domain == NSCocoaErrorDomain, (error as NSError).code == NSUserCancelledError { return }
+            Task { await media.select(expectedGeneration: expected) { try await MessagingMediaImport.document(result.get()) } }
+        }
     }
 
     /// Même dessin que la citation dans la bulle : on voit déjà la réponse telle qu'elle partira.

@@ -20,12 +20,18 @@ struct MessagingQualificationFixture: View {
         let http = MessagingHTTPTransport(baseURL: URL(string: scope.apiBaseURL)!, transport: transport,
             token: { "synthetic-ui-only" }, invalidate: { _ in false }, currentScope: { scope })
         let memory = MessagingQualificationMemory()
-        // Decrypt-only: encrypt always throws, so the UI can never report a false successful send.
+        let mediaScenario = arguments.contains("-messaging-ui-media")
+        let crypto: any MessagingCryptography = mediaScenario
+            ? MessagingMediaQualificationCrypto(fallback: MessagingQualificationCrypto()) : MessagingQualificationCrypto()
+        let mediaRuntime: (any MessagingMediaRuntime)? = mediaScenario
+            ? MessagingMediaQualificationRuntime(scope: scope, arguments: arguments) : nil
+        // Text crypto remains decrypt-only. The opt-in media runtime can inject synthetic
+        // UI confirmations; these never qualify a real encrypted or server-accepted send.
         _workspace = State(initialValue: MessagingWorkspace(scope: scope,
-            service: MessagingAPIClient(transport: http), cryptography: MessagingQualificationCrypto(),
+            service: MessagingAPIClient(transport: http), cryptography: crypto,
             outbox: memory, drafts: memory, directory: http, actions: http,
             history: MessagingQualificationHistory(seed: seed), mutations: memory, notifications: MessagingQualificationNotifications(),
-            currentScope: { scope }))
+            mediaRuntime: mediaRuntime, currentScope: { scope }))
     }
 
     var body: some View {
@@ -308,6 +314,10 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
                 "pinned": pinned.contains(message.id), "reactions": reactionRows,
             ]
             row["replyToMessageId"] = message.replyTo.map { $0.uuidString.lowercased() as Any } ?? NSNull()
+            if ProcessInfo.processInfo.arguments.contains("-messaging-ui-media"),
+               let media = try? MessagingMediaQualificationSamples.attachment(message.id) {
+                row["media"] = ["mediaId": media.id.uuidString.lowercased(), "byteSize": media.size, "deleted": false]
+            }
             if message.poll != nil {
                 let current = pollVotesByMessage[message.id] ?? message.pollVotes
                 let votes: [[String: Any]] = current.enumerated().map { index, people in
