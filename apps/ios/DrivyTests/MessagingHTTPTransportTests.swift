@@ -213,6 +213,80 @@ final class MessagingHTTPTransportTests: XCTestCase {
         let requests = await wire.requests()
         XCTAssertEqual(requests, 0)
     }
+
+    // MARK: Borne de l'enveloppe réellement sérialisée (#97, T2b1)
+
+    private func sendFixture(payload: Data, intent: UUID = UUID()) -> MessagingSendDTO {
+        MessagingSendDTO(clientMessageId: intent,
+            ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture", payload: payload,
+                                            expectedMembersEpoch: 3),
+            mentionPersonIds: [])
+    }
+
+    /// Un corps au-delà de 16 Kio est refusé avant le jeton et le transport : zéro requête réseau.
+    func testSendBodyBeyondSixteenKilobytesIsRefusedBeforeAnyRequest() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            XCTFail("Aucune requête ne doit partir pour une enveloppe trop grande")
+            return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                     transport: wire, currentScope: { scope })
+        do {
+            _ = try await transport.send(scope: scope, conversationID: UUID(),
+                                         body: sendFixture(payload: Data(repeating: 0x41, count: 12_200)))
+            XCTFail("Un corps au-delà de 16 Kio doit être refusé avant émission")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 0, "Aucun octet ni jeton consommé au refus")
+    }
+
+    /// Juste sous la borne, le même corps part réellement : la garde ne refuse pas un message ordinaire valide.
+    func testSendBodyUnderTheBoundIsAccepted() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID()
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
+        let payload = Data(repeating: 0x41, count: 11_000)
+        let wire = RecordingMessagingHTTP { request in
+            let raw = try XCTUnwrap(request.httpBody)
+            XCTAssertLessThanOrEqual(raw.count, 16_384)
+            let response = """
+            {"data":{"id":"\(UUID())","schoolId":"\(school)","conversationId":"\(conversation)","sequence":1,"clientMessageId":"\(intent)","senderId":"\(account)","ciphertext":{"scheme":"megolm.v1","keyId":"fixture","payload":"\(payload.base64EncodedString())"},"mentionPersonIds":[],"acceptedAt":"2026-11-04T00:00:00Z"},"context":{"schoolId":"\(school)","actorPersonId":"\(account)","accessEpoch":3}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                     transport: wire, currentScope: { scope })
+        let ack = try await transport.send(scope: scope, conversationID: conversation,
+                                           body: sendFixture(payload: payload, intent: intent))
+        XCTAssertEqual(ack.clientMessageId, intent)
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 1)
+    }
+
+    /// Le signalement garde sa propre limite : un corps de 20 Kio de payload n'est pas refusé par la garde du message.
+    func testReportEnvelopeKeepsItsOwnLimitAndIsNotRefusedByTheSendGuard() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            let raw = try XCTUnwrap(request.httpBody)
+            XCTAssertGreaterThan(raw.count, 16_384, "Le corps du signalement dépasse la borne d'un message ordinaire")
+            let response = """
+            {"data":{},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":1}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                     transport: wire, currentScope: { scope })
+        try await transport.report(scope: scope, conversationID: UUID(), clientReportID: UUID(), items: [
+            MessagingReportItem(messageID: UUID(),
+                ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture",
+                                                payload: Data(repeating: 0x42, count: 20_000), expectedMembersEpoch: 9)),
+        ])
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 1)
+    }
 }
 
 @MainActor private final class MessagingFixtureToken: AccessTokenSource {

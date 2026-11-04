@@ -48,17 +48,41 @@ struct MessagingPlainContent: Codable, Sendable, Equatable {
     }
     var text: String?
     var poll: Poll?
+    /// Pièce jointe chiffrée (#97) : optionnelle, `nil` pour tous les messages existants.
+    /// Exclusivité média/sondage : les deux ne coexistent jamais dans un même contenu.
+    var media: MessagingMediaAttachment? = nil
 
     static let version = 2
+    /// Plafond du contenu v3 média encodé (contrat §4.2). La borne réellement contraignante est
+    /// mesurée après chiffrement, sur l'enveloppe transportée, et non sur le clair.
+    static let maximumV3ByteCount = MessagingMediaContent.maximumByteCount
 
     func encoded() throws -> Data {
+        if let media {
+            guard poll == nil else { throw MessagingFailure.invalidResponse }
+            let value = try MessagingMediaContentV3(text: text, media: media)
+            let data = try MessagingMediaContent.messageContent(value, mentions: nil)
+            guard data.count <= Self.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
+            return data
+        }
         let data = try JSONEncoder().encode(Envelope(v: Self.version, text: text, poll: poll))
         guard data.count <= 16_384 else { throw MessagingFailure.invalidResponse }
         return data
     }
 
-    /// Les messages v1 sont du texte UTF-8 brut ; ils restent lisibles.
+    /// Deux formes acceptées en lecture :
+    /// - legacy : les octets de `body` (texte brut v1, enveloppe applicative v2 JSON) ;
+    /// - v3 : le contenu Matrix complet porteur de `ch.drivy.messaging`.
+    ///
+    /// Une version namespacée inconnue rend le `body` de repli ; un v3 connu mais illisible
+    /// échoue fermé (`nil`) sans exposer le JSON technique.
     static func decode(_ bytes: Data) -> MessagingPlainContent? {
+        switch MessagingMediaContent.reading(bytes) {
+        case .v3(let value): return MessagingPlainContent(text: value.text, media: value.media)
+        case .fallbackBody(let body): return MessagingPlainContent(text: body)
+        case .invalid: return nil
+        case .notNamespaced: break
+        }
         if let envelope = try? JSONDecoder().decode(Envelope.self, from: bytes), envelope.v == version {
             return MessagingPlainContent(text: envelope.text, poll: envelope.poll)
         }
@@ -67,6 +91,10 @@ struct MessagingPlainContent: Codable, Sendable, Equatable {
 
     var summary: String {
         if let poll { return "Sondage : \(poll.question)" }
+        if let media {
+            if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return text }
+            return media.mime.fallbackBody
+        }
         return text ?? ""
     }
 

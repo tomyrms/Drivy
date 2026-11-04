@@ -94,6 +94,41 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertEqual(MessagingPlainContent.decode(try poll.encoded()), poll)
     }
 
+    /// #97 : les trois formes lues — texte v1, enveloppe v2 dans `body`, contenu Matrix v3 namespacé.
+    func testPlainContentDecodesTheThreeAcceptedForms() throws {
+        let legacyText = Data("bonjour".utf8)
+        XCTAssertEqual(MessagingPlainContent.decode(legacyText), MessagingPlainContent(text: "bonjour"))
+        let envelope = Data(#"{"v":2,"text":"texte v2","poll":null}"#.utf8)
+        XCTAssertEqual(MessagingPlainContent.decode(envelope)?.text, "texte v2")
+
+        let file = MessagingMediaEncryptionInfo(key: Data(repeating: 1, count: 32), iv: Data(repeating: 0, count: 16),
+                                                sha256: Data(repeating: 2, count: 32))
+        let media = try MessagingMediaAttachment(id: UUID(uuidString: "5c1f0000-0000-4000-8000-000000000001")!,
+            size: 1_024, mime: .png, name: "capture.png", width: 800, height: 600, file: file)
+        let mediaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(media))
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "msgtype": "m.text", "body": "Photo",
+            "ch.drivy.messaging": ["v": 3, "text": NSNull(), "media": mediaJSON],
+        ])
+        let content = try XCTUnwrap(MessagingPlainContent.decode(payload))
+        XCTAssertNil(content.text)
+        XCTAssertEqual(content.media?.mime, .png)
+        XCTAssertEqual(content.media?.size, 1_024)
+        XCTAssertEqual(content.summary, "Photo")
+    }
+
+    /// Le contenu de récupération local suit le même décodeur, sans changement de forme.
+    func testRecoveryContentOfAMediaIntentStaysDecodable() throws {
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 3, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 5, count: 32)))
+        let content = MessagingPlainContent(text: "Le bilan", media: media)
+        let recovery = try content.encoded()
+        XCTAssertEqual(MessagingPlainContent.decode(recovery), content)
+        XCTAssertEqual(MessagingPlainContent.decode(recovery)?.summary, "Le bilan")
+    }
+
     func testPermissionsFollowServerAccessAndRoles() {
         let other = UUID()
         let member = MessagingConversationAccess(canWrite: true, readableUntilSequence: nil, isGroupAdmin: false)

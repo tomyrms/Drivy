@@ -130,6 +130,9 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             mentionPersonIds: body.mentionPersonIds,
             replyToMessageId: body.replyToMessageId,
             poll: body.poll.map { SendBody.Poll(optionCount: $0.optionIDs.count, multiple: $0.allowsMultiple) }))
+        // Borne mesurée sur le corps réellement sérialisé, avant tout jeton et toute requête (#97 §4.2).
+        // Le signalement garde sa propre limite : cette garde ne s'applique qu'à `send`.
+        guard payload.count <= Self.maximumSendBodyByteCount else { throw MessagingFailure.invalidResponse }
         let receipt: MessageReceipt = try await request(scope: scope, method: "POST",
             path: ["conversations", conversationID.uuidString, "messages"], body: payload)
         guard receipt.clientMessageId == body.clientMessageId, receipt.conversationId == conversationID,
@@ -151,6 +154,9 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         let replyToMessageId: UUID?
         let poll: Poll?
     }
+
+    /// Plafond du corps JSON réellement émis pour un message ordinaire (#97 §4.2, 12 000 caractères de payload).
+    private static let maximumSendBodyByteCount = 16_384
 
     /// Le contrat opaque exclut les métadonnées de file locales, y compris pour les signalements.
     private struct WireCiphertext: Encodable, Equatable {

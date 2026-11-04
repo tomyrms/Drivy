@@ -46,6 +46,9 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     /// Rotation périodique en plus de la rotation à chaque départ.
     static let rotationSeconds: UInt64 = 7 * 24 * 3_600
     static let rotationMessages: UInt64 = 100
+    /// Longueur base64 maximale du chiffré Megolm d'un message **ordinaire** (#97 §4.2) : la borne se
+    /// mesure sur l'enveloppe réellement produite. Un signalement garde sa propre limite (640 Kio côté corps).
+    static let maximumOrdinaryPayloadBase64Length = 12_000
 
     private let scope: MessagingScope
     private let relay: any MessagingCryptoRelay
@@ -107,7 +110,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         try guardScope(scope)
         diagnostics.clear()
-        guard let text = String(data: plaintext, encoding: .utf8), !text.isEmpty else { throw MessagingFailure.invalidResponse }
+        guard String(data: plaintext, encoding: .utf8)?.isEmpty == false else { throw MessagingFailure.invalidResponse }
         return try await shielded {
             let machine = try await open()
             let room = Self.roomID(conversationID)
@@ -133,10 +136,15 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             state.members[conversationID] = members.sorted { $0.uuidString < $1.uuidString }
             if let epoch = listed.membersEpoch { state.membersEpoch[conversationID] = epoch }
             try vault.save(state)
-            let content = try Self.messageContent(text: text, mentions: mentions)
+            let content = try Self.messageContent(plaintext: plaintext, mentions: mentions)
             let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
-            try await backupOrMarkPending(machine)
             let envelope = try Self.envelope(fromEncryptedContent: encrypted)
+            // La taille se mesure sur l'enveloppe réellement produite par le chiffrement officiel,
+            // jamais sur une estimation de la longueur du clair.
+            guard envelope.payload.base64EncodedString().utf8.count <= Self.maximumOrdinaryPayloadBase64Length else {
+                throw MessagingFailure.invalidResponse
+            }
+            try await backupOrMarkPending(machine)
             return MessagingCiphertext(scheme: envelope.scheme, keyID: envelope.keyID, payload: envelope.payload,
                                        expectedMembersEpoch: listed.membersEpoch)
         }
@@ -651,6 +659,27 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         return String(decoding: try JSONSerialization.data(withJSONObject: content, options: [.sortedKeys]), as: UTF8.self)
     }
 
+    /// Contenu réellement passé à `machine.encrypt` : namespace v3 pour un contenu média, corps legacy sinon.
+    ///
+    /// Un contenu média connu mais illisible est refusé : ni namespace partielle, ni JSON technique dans `body`.
+    /// Les messages sans média gardent exactement la forme d'avant (`body` = octets applicatifs reçus).
+    static func messageContent(plaintext: Data, mentions: [UUID]) throws -> String {
+        guard let text = String(data: plaintext, encoding: .utf8), !text.isEmpty else {
+            throw MessagingFailure.invalidResponse
+        }
+        switch MessagingMediaContent.reading(plaintext) {
+        case .v3(let value):
+            let data = try MessagingMediaContent.messageContent(value, mentions: mentions.map(userID))
+            guard data.count <= MessagingPlainContent.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
+            return String(decoding: data, as: UTF8.self)
+        case .invalid, .fallbackBody(_):
+            // Un contenu porteur d'une namespace non comprise ne part pas comme texte : aucun envoi ambigu.
+            throw MessagingFailure.invalidResponse
+        case .notNamespaced:
+            return try messageContent(text: text, mentions: mentions)
+        }
+    }
+
     /// keyId = session_id Megolm en base64url (jeu de caractères accepté par l'enveloppe).
     static func envelope(fromEncryptedContent content: String) throws -> MessagingCiphertext {
         let data = Data(content.utf8)
@@ -694,13 +723,25 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         }
     }
 
+    /// Extraction du contenu après déchiffrement. Deux formes acceptées, documentées ensemble :
+    ///
+    /// - **legacy** : les octets de `body` (texte brut v1, enveloppe applicative v2 JSON) — c'est ce que
+    ///   reçoivent les messages déjà stockés, et ces octets ne changent pas ;
+    /// - **v3** : le JSON du `content` Matrix complet quand il porte `ch.drivy.messaging`, ce qui rend
+    ///   la légende, la pièce jointe et ses métadonnées au décodeur applicatif.
+    ///
+    /// La garde d'expéditeur Megolm (`mismatchedSender`) et le type `m.room.message` restent obligatoires.
     static func plaintext(from decrypted: DecryptedEvent) throws -> Data {
         if decrypted.shieldState.code == .mismatchedSender { throw MessagingFailure.protectionUnavailable }
         guard let event = try JSONSerialization.jsonObject(with: Data(decrypted.clearEvent.utf8)) as? [String: Any],
               event["type"] as? String == "m.room.message",
               let content = event["content"] as? [String: Any],
               let body = content["body"] as? String else { throw MessagingFailure.protectionUnavailable }
-        return Data(body.utf8)
+        guard content[MessagingMediaContent.namespacedKey] != nil else { return Data(body.utf8) }
+        guard let data = try? JSONSerialization.data(withJSONObject: content, options: [.sortedKeys]) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        return data
     }
 
     struct SyncPage: Equatable {
