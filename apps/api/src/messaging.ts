@@ -2,6 +2,8 @@ import type { PoolClient } from 'pg';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, forbidden, notFound } from './errors.js';
 import { messageColumns, notHiddenForActor, syncLinks, toView, type MessageView } from './messaging-view.js';
+import { attachMedia, invalidMedia, mediaId, mediaSize, type MediaIntent } from './messaging-media.js';
+import { mediaMessageIntentSchema } from './messaging-media-contract.js';
 
 /** Transport format only, not a cryptographic protocol or claim of E2EE. */
 export interface OpaqueEnvelope { scheme: string; keyId: string; payload: string }
@@ -131,6 +133,12 @@ function validEnvelope(envelope: OpaqueEnvelope | undefined): boolean {
     && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(envelope.payload)
     && envelope.payload.length >= 4 && envelope.payload.length <= 12000;
 }
+/** Intention média validée à la frontière du domaine avec le schéma du contrat : refus en INVALID_MEDIA. */
+function parseMediaIntent(value: unknown): MediaIntent {
+  const parsed = mediaMessageIntentSchema.safeParse(value);
+  if (!parsed.success) throw invalidMedia();
+  return parsed.data;
+}
 /** Droits de l'acteur dans la conversation, recalculés après synchronisation des liens. */
 async function access(db: PoolClient, actor: MessagingActor, conversationId: string) {
   const result = await db.query<{ canWrite: boolean; readableUntilSequence: string | null; isGroupAdmin: boolean }>(`SELECT
@@ -203,7 +211,7 @@ async function lockForWrite(db: PoolClient, actor: MessagingActor, conversationI
 export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conversationId: string,
   intentId: string, envelope: OpaqueEnvelope, mentionPersonIds: string[] = [],
   replyToMessageId: string | null = null, poll: PollCreation | null = null,
-  expectedMembersEpoch?: number): Promise<StoredMessage> {
+  expectedMembersEpoch?: number, media: unknown = null): Promise<StoredMessage> {
   if (expectedMembersEpoch !== undefined && (!Number.isSafeInteger(expectedMembersEpoch) || expectedMembersEpoch < 0))
     throw new ApiError(400, 'INVALID_REQUEST', 'Époque de chiffrement invalide.');
   if (mentionPersonIds.length > 8 || new Set(mentionPersonIds.map(id => id.toLowerCase())).size !== mentionPersonIds.length)
@@ -212,10 +220,19 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
   if ((replyToMessageId !== null && !uuidPattern.test(replyToMessageId))
     || (poll && (!Number.isSafeInteger(poll.optionCount) || poll.optionCount < 2 || poll.optionCount > 12 || typeof poll.multiple !== 'boolean')))
     throw new ApiError(400, 'INVALID_REQUEST', 'Message invalide.');
+  // Intention média validée à la frontière du domaine : identifiant ou taille invalides répondent INVALID_MEDIA.
+  const intent = media === null || media === undefined ? null : parseMediaIntent(media);
+  // Une seule pièce par message en v1, exclusive d'un sondage : aucune ambiguïté d'empreinte ni d'affichage.
+  if (intent && poll) throw new ApiError(400, 'INVALID_REQUEST', 'Un message ne peut pas porter un sondage et une pièce jointe.');
+  if (intent) { mediaId(intent.mediaId); mediaSize(intent.byteSize); }
   await lockForWrite(db, actor, conversationId, mentionPersonIds);
   const canonical = JSON.stringify(envelope);
-  const fingerprint = createHash('sha256').update(JSON.stringify([envelope, mentionPersonIds.map(id => id.toLowerCase()),
-    replyToMessageId?.toLowerCase() ?? null, poll ? [poll.optionCount, poll.multiple] : null])).digest('hex');
+  // L'empreinte garde EXACTEMENT sa forme historique à quatre éléments pour tout message sans média : un rejeu
+  // d'intention enregistrée avant l'ajout des médias retrouve le même reçu. Le couple média n'est ajouté que s'il existe.
+  const parts: unknown[] = [envelope, mentionPersonIds.map(id => id.toLowerCase()),
+    replyToMessageId?.toLowerCase() ?? null, poll ? [poll.optionCount, poll.multiple] : null];
+  if (intent) parts.push([intent.mediaId.toLowerCase(), intent.byteSize]);
+  const fingerprint = createHash('sha256').update(JSON.stringify(parts)).digest('hex');
   // Le verrou de la conversation rend l'allocation de séquence atomique ; la RLS de mise à jour exige un lien ouvert.
   const conversation = await db.query<{ lastSequence: string }>(`SELECT last_sequence AS "lastSequence" FROM drivy.messaging_conversation
     WHERE school_id=$1 AND id=$2 FOR UPDATE`, [actor.schoolId, conversationId]);
@@ -252,6 +269,8 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
       mentionPersonIds, fingerprint, replyToMessageId]);
   if (poll) await db.query(`INSERT INTO drivy.messaging_poll(school_id,conversation_id,message_id,creator_person_id,option_count,multiple)
     VALUES($1,$2,$3,$4,$5,$6)`, [actor.schoolId, conversationId, messageId, actor.personId, poll.optionCount, poll.multiple]);
+  // Attache dans la même transaction que l'insertion : un refus d'attache annule le message (aucun succès partiel).
+  if (intent) await attachMedia(db, actor, conversationId, messageId, intent);
   return messageById(db, actor, conversationId, messageId);
 }
 
